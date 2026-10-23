@@ -69,6 +69,14 @@ struct SessionChatRow: Identifiable, Equatable {
 }
 
 extension SessionChatRow: MessageListTimelineHeightEstimating {
+    /// A folder move recorded as its own timeline row.
+    var isLocationMove: Bool {
+        blocks.contains { block in
+            if case let .notice(_, notice) = block, case .moved = notice.kind { return true }
+            return false
+        }
+    }
+
     var timelineRowHeightEstimate: CGFloat {
         if id == SessionChatStatusChrome.workingRowID {
             if isLayoutCollapsed { return 0 }
@@ -373,6 +381,30 @@ struct SessionChatUiState: Equatable {
         return latest
     }
 
+    /// The server rejects a last-turn diff when a folder move sits between assistant steps of
+    /// that turn. Snapshots from the two folders cannot be compared, so callers should not open
+    /// Changes. The span ends at the next prompt: a steered follow-up in the same server turn
+    /// is not visible here, and the Changes screen still explains that rejection.
+    func lastTurnSpansLocationChange(messageID: String) -> Bool {
+        guard let start = messages.firstIndex(where: { $0.id == messageID && $0.role == .user }) else { return false }
+        let rest = messages.index(after: start)
+        guard rest < messages.endIndex else { return false }
+        var sawAssistant = false
+        var sawMoveAfterAssistant = false
+        for message in messages[rest...] {
+            if message.role == .user { break }
+            if message.isLocationMove {
+                if sawAssistant { sawMoveAfterAssistant = true }
+                continue
+            }
+            if message.role == .assistant {
+                if sawMoveAfterAssistant { return true }
+                sawAssistant = true
+            }
+        }
+        return false
+    }
+
     func changesNavigationTarget(worktree: String) -> ChangesNavigationTarget {
         ChangesNavigationTarget(
             sessionID: sessionID,
@@ -536,6 +568,23 @@ struct ReviewChangesSummary: Equatable {
             deletions: files.reduce(0) { $0 + $1.deletions },
             messageID: messageID
         )
+    }
+}
+
+/// Copy for a last-turn diff the server will not build because the turn moved folders.
+enum TurnDiffUnavailable {
+    static let message = "This turn moved folders, so its changes can't be shown together."
+    private static let serverMarker = "Turn range spans a location change"
+
+    static func userFacing(_ error: Error) -> String? {
+        let text: String?
+        if case let .http(_, message) = error as? SessionError {
+            text = message
+        } else {
+            text = error.localizedDescription
+        }
+        guard let text, text.contains(serverMarker) else { return nil }
+        return message
     }
 }
 

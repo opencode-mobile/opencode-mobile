@@ -37,6 +37,7 @@ internal fun SessionChatToolGroupTarget.toRoute(
     parentId: String?,
     owningTurnMessageId: String?,
     supportsSessionMessageDiff: Boolean,
+    lastTurnDiffUnavailable: Boolean = false,
 ): SessionToolGroup =
     SessionToolGroup(
         sessionId = sessionId,
@@ -48,6 +49,7 @@ internal fun SessionChatToolGroupTarget.toRoute(
         messageId = messageId,
         owningTurnMessageId = owningTurnMessageId,
         supportsSessionMessageDiff = supportsSessionMessageDiff,
+        lastTurnDiffUnavailable = lastTurnDiffUnavailable,
         members = members.map { it.toRouteMember() },
     )
 

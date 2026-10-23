@@ -1,13 +1,21 @@
 package dev.opencode.mobile
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.EntryProviderScope
 import androidx.navigation3.runtime.NavKey
 import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.changes.ChangesScreen
+import dev.opencode.mobile.ui.changes.TurnDiffUnavailable
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
 import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
 import dev.opencode.mobile.ui.files.FilesScreen
 import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
@@ -175,55 +183,71 @@ internal fun EntryProviderScope<NavKey>.chatFlowEntries(
             var toolDetailTarget by remember {
                 mutableStateOf<SessionChatToolDetailTarget?>(null)
             }
-            SessionChatToolGroupScreen(
-                target = key.toTarget(),
-                supportsSessionMessageDiff = key.supportsSessionMessageDiff,
-                onNavigateBack = navigator.navigateBack,
-                onToolDetailTap = {
-                    ProductAnalytics.logUserAction(
-                        screenId = ProductAnalytics.Screen.SESSION_CHAT,
-                        actionId = ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL,
-                    )
-                    toolDetailTarget = it
-                },
-                onChildSessionTap = { childSessionId, childTitle ->
-                    ProductAnalytics.logUserAction(
-                        screenId = ProductAnalytics.Screen.SESSION_CHAT,
-                        actionId = ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION,
-                    )
-                    navigator.push(
-                        SessionChat(
-                            sessionId = childSessionId,
-                            sessionTitle = childTitle,
-                            worktree = key.worktree,
-                            parentId = key.sessionId,
-                        ),
-                    )
-                },
-                onChangesReviewTap = changesReview@{ _, initialFilePath ->
-                    val owningTurn = key.owningTurnMessageId
-                    if (!key.supportsSessionMessageDiff || owningTurn == null) {
-                        return@changesReview
-                    }
-                    ProductAnalytics.logUserAction(
-                        screenId = ProductAnalytics.Screen.SESSION_CHAT,
-                        actionId = ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL,
-                    )
-                    navigator.push(
-                        Changes(
-                            sessionId = key.sessionId,
-                            worktree = key.worktree,
-                            messageId = owningTurn,
-                            initialSource = ChangeSource.LastTurn,
-                            initialFilePath = initialFilePath,
-                        ),
-                    )
-                },
-            )
-            SessionChatToolDetailSheet(
-                target = toolDetailTarget,
-                onDismiss = { toolDetailTarget = null },
-            )
+            var blockedTurnDiff by remember { mutableStateOf<OpenCodeSnackbarMessage?>(null) }
+            Box(Modifier.fillMaxSize()) {
+                SessionChatToolGroupScreen(
+                    target = key.toTarget(),
+                    supportsSessionMessageDiff = key.supportsSessionMessageDiff,
+                    onNavigateBack = navigator.navigateBack,
+                    onToolDetailTap = {
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                            actionId = ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL,
+                        )
+                        toolDetailTarget = it
+                    },
+                    onChildSessionTap = { childSessionId, childTitle ->
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                            actionId = ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION,
+                        )
+                        navigator.push(
+                            SessionChat(
+                                sessionId = childSessionId,
+                                sessionTitle = childTitle,
+                                worktree = key.worktree,
+                                parentId = key.sessionId,
+                            ),
+                        )
+                    },
+                    onChangesReviewTap = changesReview@{ _, initialFilePath ->
+                        val owningTurn = key.owningTurnMessageId
+                        if (!key.supportsSessionMessageDiff || owningTurn == null) {
+                            return@changesReview
+                        }
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                            actionId = ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL,
+                        )
+                        if (key.lastTurnDiffUnavailable) {
+                            blockedTurnDiff =
+                                OpenCodeSnackbarMessage(
+                                    text = TurnDiffUnavailable.MESSAGE,
+                                    variant = OpenCodeSnackbarVariant.Error,
+                                )
+                            return@changesReview
+                        }
+                        navigator.push(
+                            Changes(
+                                sessionId = key.sessionId,
+                                worktree = key.worktree,
+                                messageId = owningTurn,
+                                initialSource = ChangeSource.LastTurn,
+                                initialFilePath = initialFilePath,
+                            ),
+                        )
+                    },
+                )
+                SessionChatToolDetailSheet(
+                    target = toolDetailTarget,
+                    onDismiss = { toolDetailTarget = null },
+                )
+                OpenCodeSnackbarHost(
+                    message = blockedTurnDiff,
+                    onDismissed = { blockedTurnDiff = null },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
         }
     }
 }

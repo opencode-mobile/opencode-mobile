@@ -298,11 +298,11 @@ final class ChangesViewModel {
                     phase: restoredPhase,
                     selectedSource: requestedSource,
                     availableSources: availableSources,
-                    refreshError: error.localizedDescription
+                    refreshError: TurnDiffUnavailable.userFacing(error) ?? error.localizedDescription
                 )
             } else {
                 state = ChangesState(
-                    phase: .error(error.localizedDescription),
+                    phase: .error(TurnDiffUnavailable.userFacing(error) ?? error.localizedDescription),
                     selectedSource: activeSource,
                     availableSources: availableSources
                 )

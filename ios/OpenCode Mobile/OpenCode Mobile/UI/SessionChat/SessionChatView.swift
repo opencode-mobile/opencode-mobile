@@ -352,8 +352,7 @@ struct SessionChatView: View {
                     },
                     onChangesReviewTap: { assistantMessageID, initialFilePath in
                         logChatAction(ProductAnalytics.Action.chatOpenChangesFromTool)
-                        changesTarget = viewModel.uiState.fileChangeNavigationTarget(
-                            worktree: boundSession.worktree,
+                        openLastTurnChanges(
                             assistantMessageID: assistantMessageID,
                             initialFilePath: initialFilePath
                         )
@@ -655,7 +654,8 @@ struct SessionChatView: View {
                             assistantMessageID: assistantMessageID,
                             initialFilePath: initialFilePath
                         )
-                    }
+                    },
+                    lastTurnDiffUnavailable: lastTurnDiffUnavailable(assistantMessageID: target.messageID)
                 )
             }
             .navigationDestination(item: $childSessionTarget) { target in
@@ -1669,6 +1669,26 @@ struct SessionChatView: View {
         } catch {
             viewModel.reportAttachmentReadFailure()
         }
+    }
+
+    private func openLastTurnChanges(assistantMessageID: String, initialFilePath: String?) {
+        guard let target = viewModel.uiState.fileChangeNavigationTarget(
+            worktree: boundSession.worktree,
+            assistantMessageID: assistantMessageID,
+            initialFilePath: initialFilePath
+        ) else { return }
+        if let messageID = target.messageID, viewModel.uiState.lastTurnSpansLocationChange(messageID: messageID) {
+            viewModel.presentTurnDiffUnavailable()
+            return
+        }
+        changesTarget = target
+    }
+
+    private func lastTurnDiffUnavailable(assistantMessageID: String) -> Bool {
+        guard let messageID = viewModel.uiState.owningTurnMessageID(assistantMessageID: assistantMessageID) else {
+            return false
+        }
+        return viewModel.uiState.lastTurnSpansLocationChange(messageID: messageID)
     }
 
     private func logChatAction(_ actionId: String) {

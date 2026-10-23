@@ -27,8 +27,11 @@ struct SessionChatToolGroupView: View {
     let parentSessionID: String
     let supportsSessionMessageDiff: Bool
     let makeChangesTarget: (String, String?) -> ChangesNavigationTarget?
+    /// The group's turn moved folders, so a file tap must not open Changes.
+    var lastTurnDiffUnavailable = false
 
     @State private var changesTarget: ChangesNavigationTarget?
+    @State private var blockedTurnDiffMessage: OpenCodeSnackbarMessage?
     @State private var childSessionTarget: ChildSessionNavigationTarget?
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
 
@@ -67,6 +70,11 @@ struct SessionChatToolGroupView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
+        .overlay {
+            OpenCodeSnackbarHost(message: blockedTurnDiffMessage) {
+                blockedTurnDiffMessage = nil
+            }
+        }
         .toolbar(.hidden, for: .navigationBar)
         .navigationBarBackButtonHidden(true)
         .sessionChatToolDetailSheet(target: $toolDetailTarget)
@@ -112,6 +120,13 @@ struct SessionChatToolGroupView: View {
                     screenId: ProductAnalytics.Screen.sessionChat,
                     actionId: ProductAnalytics.Action.chatOpenChangesFromTool
                 )
+                if lastTurnDiffUnavailable {
+                    blockedTurnDiffMessage = OpenCodeSnackbarMessage(
+                        text: TurnDiffUnavailable.message,
+                        variant: .error
+                    )
+                    return
+                }
                 changesTarget = makeChangesTarget(target.messageID, card.changesInitialFilePath)
             }
         }

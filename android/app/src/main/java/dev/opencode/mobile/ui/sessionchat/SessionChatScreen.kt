@@ -828,6 +828,9 @@ fun SessionChatScreen(
                                         parentId = parentId ?: uiState.sessionParentId,
                                         owningTurnMessageId = uiState.owningTurnMessageId(target.messageId),
                                         supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
+                                        lastTurnDiffUnavailable =
+                                            uiState.owningTurnMessageId(target.messageId)
+                                                ?.let(uiState::lastTurnSpansLocationChange) == true,
                                     ),
                                 )
                             },
@@ -841,14 +844,19 @@ fun SessionChatScreen(
                                     ),
                                 )
                             },
-                            onChangesReviewTap = { assistantMessageId, initialFilePath ->
+                            onChangesReviewTap = changesReview@{ assistantMessageId, initialFilePath ->
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL)
-                                uiState
-                                    .fileChangeNavigationTarget(
+                                val target =
+                                    uiState.fileChangeNavigationTarget(
                                         worktree = currentWorktree,
                                         assistantMessageId = assistantMessageId,
                                         initialFilePath = initialFilePath,
-                                    )?.let(onReviewChangesClick)
+                                    ) ?: return@changesReview
+                                if (target.messageId?.let(uiState::lastTurnSpansLocationChange) == true) {
+                                    viewModel.presentTurnDiffUnavailable()
+                                    return@changesReview
+                                }
+                                onReviewChangesClick(target)
                             },
                             supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
                             expandedStepParagraphs = uiState.expandedStepParagraphs,

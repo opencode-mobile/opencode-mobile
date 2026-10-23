@@ -14,7 +14,9 @@ import dev.opencode.mobile.domain.mcp.McpServerSummary
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
+
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.FileDiff
@@ -315,6 +317,31 @@ data class SessionChatUiState(
             }
             return latest
         }
+
+    /**
+     * The server rejects a last-turn diff when a folder move sits between assistant steps of
+     * that turn. Snapshots from the two folders cannot be compared, so callers should not open
+     * Changes. The span ends at the next prompt: a steered follow-up in the same server turn
+     * is not visible here, and the Changes screen still explains that rejection.
+     */
+    fun lastTurnSpansLocationChange(messageId: String): Boolean {
+        val start = messages.indexOfFirst { it.id == messageId && it.role == MessageRole.User }
+        if (start < 0) return false
+        var sawAssistant = false
+        var sawMoveAfterAssistant = false
+        for (message in messages.drop(start + 1)) {
+            if (message.role == MessageRole.User) break
+            if (message.isLocationMove) {
+                if (sawAssistant) sawMoveAfterAssistant = true
+                continue
+            }
+            if (message.role == MessageRole.Assistant) {
+                if (sawMoveAfterAssistant) return true
+                sawAssistant = true
+            }
+        }
+        return false
+    }
 
     fun changesNavigationTarget(worktree: String) =
         ChangesNavigationTarget(
@@ -791,6 +818,11 @@ data class PendingPrompt(
     val delivery: FollowUpDelivery,
     val isSettling: Boolean = false,
 )
+
+private val SessionChatMessageItem.isLocationMove: Boolean
+    get() = blocks.any { block ->
+        block is SessionChatTimelineBlock.Notice && block.notice is TimelineNotice.Moved
+    }
 
 data class SessionChatMessageItem(
     val id: String,
