@@ -19,6 +19,13 @@ struct SessionChatToolDetailTarget: Equatable {
     /// Live retry link, shown when this sheet was opened from the composer status.
     var sheetLinkLabel: String? = nil
     var sheetLink: String? = nil
+    /// Typed inspector body. Failure sheets and compaction summaries leave this nil.
+    var presentation: ToolResultPresentation? = nil
+
+    /// Inspector layout, unless this sheet is a markdown compaction summary.
+    var inspectorPresentation: ToolResultPresentation? {
+        bodyIsMarkdown ? nil : presentation
+    }
 
     /// Sheet for a failure mark. Copy of a provider body stays on the monospace body.
     /// Copy with no body, Compact, and Pick a model are the sheet action.
@@ -70,23 +77,51 @@ struct SessionChatToolDetailSheetModifier: ViewModifier {
         content
             .openCodeBottomSheet(
                 isPresented: sheetPresentedBinding,
-                title: target?.title ?? "Tool",
+                title: sheetTitle,
+                pinnedTop: {
+                    if let presentation = inspector {
+                        ToolResultPinnedHeader(presentation: presentation)
+                            .openCodeBottomSheetContentInset()
+                    }
+                },
                 content: {
                     SessionChatToolDetailSheetBody(target: target)
                 },
                 pinnedBottom: {
-                    SessionChatToolDetailSheetActions(
-                        target: target,
-                        onFailureAction: { action in
-                            if action != .copy {
-                                target = nil
-                            }
-                            onFailureAction(action)
-                        },
-                        onOpenLink: onOpenLink
-                    )
+                    if showsCopy, let presentation = inspector {
+                        ToolResultCopyFooter(raw: presentation.raw)
+                    } else {
+                        SessionChatToolDetailSheetActions(
+                            target: target,
+                            onFailureAction: { action in
+                                if action != .copy {
+                                    target = nil
+                                }
+                                onFailureAction(action)
+                            },
+                            onOpenLink: onOpenLink
+                        )
+                    }
                 }
             )
+    }
+
+    private var inspector: ToolResultPresentation? {
+        target?.inspectorPresentation
+    }
+
+    private var sheetTitle: String {
+        inspector?.title ?? target?.title ?? "Tool"
+    }
+
+    /// Copy stays off a failure sheet so Compact, Pick a model, and the caption copy are unchanged.
+    private var showsCopy: Bool {
+        guard inspector?.copiesOriginal == true else { return false }
+        let label = target?.sheetActionLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasAction = target?.sheetAction != nil && label?.isEmpty == false
+        let link = target?.sheetLinkLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasLink = link?.isEmpty == false && target?.sheetLink?.isEmpty == false
+        return !hasAction && !hasLink
     }
 
     private var sheetPresentedBinding: Binding<Bool> {
@@ -156,21 +191,27 @@ struct SessionChatToolDetailSheetBody: View {
     let target: SessionChatToolDetailTarget?
 
     var body: some View {
-        let text = target?.body ?? ""
-        let showsMonospace = target?.monospace == true && !text.isEmpty
-        let showsBody = target?.bodyIsMarkdown == true || showsMonospace || !text.isEmpty
-        Group {
-            if showsBody {
-                SessionChatToolDetailBody(
-                    text: text,
-                    isMarkdown: target?.bodyIsMarkdown ?? false,
-                    monospace: showsMonospace
-                )
+        if let presentation = target?.inspectorPresentation {
+            ToolResultBody(presentation: presentation)
                 .padding(.vertical, 12)
+                .modifier(ToolResultBodyInset(fullBleed: presentation.isFullBleed))
+        } else {
+            let text = target?.body ?? ""
+            let showsMonospace = target?.monospace == true && !text.isEmpty
+            let showsBody = target?.bodyIsMarkdown == true || showsMonospace || !text.isEmpty
+            Group {
+                if showsBody {
+                    SessionChatToolDetailBody(
+                        text: text,
+                        isMarkdown: target?.bodyIsMarkdown ?? false,
+                        monospace: showsMonospace
+                    )
+                    .padding(.vertical, 12)
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .openCodeBottomSheetContentInset()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .openCodeBottomSheetContentInset()
     }
 }
 

@@ -166,6 +166,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     /// v2 is still streaming this tool's arguments: `subtitle` is the value
     /// read so far from the partial input, or a placeholder until one appears.
     let isReceivingArguments: Bool
+    /// Inspector body for the tool-result sheet. Nil when there is nothing to classify.
+    let presentation: ToolResultPresentation?
 
     init(
         toolName: String,
@@ -182,7 +184,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         changesInitialFilePath: String? = nil,
         isInterrupted: Bool = false,
         isMalformed: Bool = false,
-        isReceivingArguments: Bool = false
+        isReceivingArguments: Bool = false,
+        presentation: ToolResultPresentation? = nil
     ) {
         self.toolName = toolName
         self.status = status
@@ -199,6 +202,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.isInterrupted = isInterrupted
         self.isMalformed = isMalformed
         self.isReceivingArguments = isReceivingArguments
+        self.presentation = presentation
     }
 
     func markingFailed(_ errorText: String) -> SessionChatToolCardBlock {
@@ -216,7 +220,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
             opensChangesReview: opensChangesReview,
             changesInitialFilePath: changesInitialFilePath,
             isInterrupted: isInterrupted,
-            isMalformed: isMalformed
+            isMalformed: isMalformed,
+            presentation: presentation
         )
     }
 }
@@ -2649,9 +2654,70 @@ nonisolated enum SessionChatTimelineBlocks {
                 changesInitialFilePath: chrome.changesInitialFilePath,
                 isInterrupted: interrupted,
                 isMalformed: tool.isMalformed,
-                isReceivingArguments: receivingArguments
+                isReceivingArguments: receivingArguments,
+                presentation: toolResultPresentation(tool, fallbackTitle: chrome.title)
             )
         )
+    }
+
+    /// Classifies the part for the inspector sheet. Duration is omitted: a tool
+    /// part has a start but no end, and an exit is taken only from metadata.
+    private static func toolResultPresentation(
+        _ tool: ToolPart,
+        fallbackTitle: String
+    ) -> ToolResultPresentation? {
+        ToolResultInspector.classify(
+            ToolResultRequest(
+                toolName: tool.toolName,
+                fallbackTitle: fallbackTitle,
+                command: inputString(tool.input, keys: "command"),
+                path: inputString(tool.input, keys: "filePath", "file", "path"),
+                pattern: inputString(tool.input, keys: "pattern"),
+                searchPath: inputString(tool.input, keys: "path", "directory"),
+                offset: inputInt(tool.input, key: "offset"),
+                limit: inputInt(tool.input, key: "limit"),
+                content: inputString(tool.input, keys: "content"),
+                output: nonBlank(tool.output),
+                error: nonBlank(tool.error),
+                exitCode: metadataInt(tool.metadata, key: "exit"),
+                patch: toolPatch(tool),
+                oldString: inputString(tool.input, keys: "oldString"),
+                newString: inputString(tool.input, keys: "newString")
+            )
+        )
+    }
+
+    private static func toolPatch(_ tool: ToolPart) -> String? {
+        if let patch = metadataFilediffString(tool.metadata, key: "patch") {
+            return patch
+        }
+        if case let .array(files)? = tool.metadata?["files"] {
+            for element in files {
+                guard case let .dictionary(object) = element else { continue }
+                if let patch = stringFromObject(object, keys: "patch") {
+                    return patch
+                }
+            }
+        }
+        if let output = tool.output, output.contains("@@") {
+            return output
+        }
+        return nil
+    }
+
+    private static func inputInt(_ input: [String: AnyCodable]?, key: String) -> Int? {
+        guard let value = input?[key] else { return nil }
+        return intValue(value)
+    }
+
+    private static func metadataInt(_ metadata: [String: AnyCodable]?, key: String) -> Int? {
+        guard let value = metadata?[key] else { return nil }
+        return intValue(value)
+    }
+
+    private static func nonBlank(_ value: String?) -> String? {
+        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return value
     }
 
     /// What a card says while its arguments stream in and none can be read yet (TUI v2 copy).

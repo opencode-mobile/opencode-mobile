@@ -884,9 +884,9 @@ private struct AssistantMessageContent: View {
                             ? nil
                             : {
                                 onToolDetailTap(
-                                    SessionChatToolDetailTarget(
-                                        title: "Thought",
-                                        body: text
+                                    SessionChatStepTapActions.thoughtDetail(
+                                        text: text,
+                                        durationLabel: SessionChatTimelineBlocks.thoughtDurationLabel(durationMs)
                                     )
                                 )
                             }
@@ -1050,7 +1050,8 @@ struct SessionChatStepTapActions {
     /// nil when the tap navigates or there is nothing to show.
     static func detailTarget(for step: SessionChatStep, supportsSessionMessageDiff: Bool) -> SessionChatToolDetailTarget? {
         if step.kind == .thought {
-            return step.thoughtText.map { SessionChatToolDetailTarget(title: "Thought", body: $0) }
+            guard let text = step.thoughtText else { return nil }
+            return thoughtDetail(text: text, durationLabel: thoughtDurationLabel(for: step))
         }
         guard let card = step.card, !navigates(step, supportsSessionMessageDiff: supportsSessionMessageDiff) else {
             return nil
@@ -1058,10 +1059,30 @@ struct SessionChatStepTapActions {
         return detailTarget(for: card)
     }
 
-    private static func detailTarget(for card: SessionChatToolCardBlock) -> SessionChatToolDetailTarget? {
-        card.detailText.map {
-            SessionChatToolDetailTarget(title: card.title, body: $0, bodyIsMarkdown: card.detailIsMarkdown)
-        }
+    static func thoughtDetail(text: String, durationLabel: String?) -> SessionChatToolDetailTarget {
+        let thought = ToolResultInspector.thought(text: text, durationLabel: durationLabel)
+        return SessionChatToolDetailTarget(
+            title: thought?.title ?? "Thought",
+            body: text,
+            presentation: thought.map(ToolResultPresentation.thought)
+        )
+    }
+
+    static func detailTarget(for card: SessionChatToolCardBlock) -> SessionChatToolDetailTarget? {
+        let presentation = card.detailIsMarkdown ? nil : card.presentation
+        let text = card.detailText
+        guard presentation != nil || text != nil else { return nil }
+        return SessionChatToolDetailTarget(
+            title: presentation?.title ?? card.title,
+            body: text ?? presentation?.raw ?? "",
+            bodyIsMarkdown: card.detailIsMarkdown,
+            presentation: presentation
+        )
+    }
+
+    private static func thoughtDurationLabel(for step: SessionChatStep) -> String? {
+        guard let start = step.startedAtMs, let end = step.endedAtMs, end >= start else { return nil }
+        return SessionChatTimelineBlocks.thoughtDurationLabel(end - start)
     }
 }
 

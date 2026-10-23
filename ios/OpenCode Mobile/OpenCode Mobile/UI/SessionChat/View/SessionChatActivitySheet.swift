@@ -30,7 +30,8 @@ extension View {
         }
         let count = card?.steps.count ?? 0
         let isLive = card?.isLive == true
-        let title = detail?.target.title ?? (isLive ? "Working \(count)" : OpenCodeActivityCard.stepsLabel(count))
+        let inspector = detail?.target.inspectorPresentation
+        let title = inspector?.title ?? detail?.target.title ?? (isLive ? "Working \(count)" : OpenCodeActivityCard.stepsLabel(count))
         let titleState: OpenCodeBottomSheetTitleState = detail == nil && isLive
             ? .running(startedAtMs: ToolStartTime.normalizeEpochMs(card?.startedAtMs))
             : .plain
@@ -46,27 +47,39 @@ extension View {
                 accessibilityLabel: "Back to steps",
                 action: onCloseStep
             ),
-            height: .half
-        ) {
-            if let detail {
-                SessionChatToolDetailSheetBody(target: detail.target)
-                    .id(detail.step.id)
-            } else if let card, let rowID = resolved?.rowID {
-                SessionChatActivitySheetContent(
-                    card: card,
-                    childActivities: childActivities,
-                    actions: SessionChatStepTapActions(
-                        messageID: rowID,
-                        supportsSessionMessageDiff: supportsSessionMessageDiff,
-                        onToolDetailTap: { _ in },
-                        onChildSessionTap: onChildSessionTap,
-                        onChangesReviewTap: onChangesReviewTap
-                    ),
-                    onOpenStep: onOpenStep,
-                    onDismiss: onDismiss
-                )
+            height: .half,
+            pinnedTop: {
+                if let inspector {
+                    ToolResultPinnedHeader(presentation: inspector)
+                        .openCodeBottomSheetContentInset()
+                }
+            },
+            content: {
+                if let detail {
+                    SessionChatToolDetailSheetBody(target: detail.target)
+                        .id(detail.step.id)
+                } else if let card, let rowID = resolved?.rowID {
+                    SessionChatActivitySheetContent(
+                        card: card,
+                        childActivities: childActivities,
+                        actions: SessionChatStepTapActions(
+                            messageID: rowID,
+                            supportsSessionMessageDiff: supportsSessionMessageDiff,
+                            onToolDetailTap: { _ in },
+                            onChildSessionTap: onChildSessionTap,
+                            onChangesReviewTap: onChangesReviewTap
+                        ),
+                        onOpenStep: onOpenStep,
+                        onDismiss: onDismiss
+                    )
+                }
+            },
+            pinnedBottom: {
+                if let inspector, inspector.copiesOriginal {
+                    ToolResultCopyFooter(raw: inspector.raw)
+                }
             }
-        }
+        )
     }
 }
 
