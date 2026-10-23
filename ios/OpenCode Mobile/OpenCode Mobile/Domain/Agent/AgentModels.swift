@@ -54,6 +54,25 @@ struct FileMention: Equatable, Sendable, Identifiable, Codable {
     var token: String { "@\(path)" }
 }
 
+/// A v2 skill placed in the composer as a `/name` span. `skillID` is the wire id; `id` is the span id.
+struct SkillMention: Equatable, Sendable, Identifiable, Codable {
+    let id: String
+    let skillID: String
+    let name: String
+    let start: Int
+    let end: Int
+
+    var token: String { "/\(name)" }
+}
+
+struct SkillPartPayload: Equatable, Sendable {
+    let skillID: String
+    let name: String
+    let sourceValue: String
+    let start: Int
+    let end: Int
+}
+
 struct AgentPartPayload: Equatable, Sendable {
     let name: String
     let sourceValue: String
@@ -74,17 +93,20 @@ struct MentionInsertResult: Equatable, Sendable {
     let cursor: Int
     let mentions: [AgentMention]
     let fileMentions: [FileMention]
+    let skillMentions: [SkillMention]
 
     init(
         text: String,
         cursor: Int,
         mentions: [AgentMention],
-        fileMentions: [FileMention] = []
+        fileMentions: [FileMention] = [],
+        skillMentions: [SkillMention] = []
     ) {
         self.text = text
         self.cursor = cursor
         self.mentions = mentions
         self.fileMentions = fileMentions
+        self.skillMentions = skillMentions
     }
 }
 
@@ -93,17 +115,20 @@ struct MentionReconcileResult: Equatable, Sendable {
     let cursor: Int
     let mentions: [AgentMention]
     let fileMentions: [FileMention]
+    let skillMentions: [SkillMention]
 
     init(
         text: String,
         cursor: Int,
         mentions: [AgentMention],
-        fileMentions: [FileMention] = []
+        fileMentions: [FileMention] = [],
+        skillMentions: [SkillMention] = []
     ) {
         self.text = text
         self.cursor = cursor
         self.mentions = mentions
         self.fileMentions = fileMentions
+        self.skillMentions = skillMentions
     }
 }
 
@@ -111,15 +136,18 @@ struct TrimmedPrompt: Equatable, Sendable {
     let text: String
     let agentMentions: [AgentMention]
     let fileMentions: [FileMention]
+    let skillMentions: [SkillMention]
 
     init(
         text: String,
         agentMentions: [AgentMention],
-        fileMentions: [FileMention] = []
+        fileMentions: [FileMention] = [],
+        skillMentions: [SkillMention] = []
     ) {
         self.text = text
         self.agentMentions = agentMentions
         self.fileMentions = fileMentions
+        self.skillMentions = skillMentions
     }
 }
 

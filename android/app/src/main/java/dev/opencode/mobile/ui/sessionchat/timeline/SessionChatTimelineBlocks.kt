@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.command.CommandInvocationCollapser
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.message.FailureAction
@@ -66,6 +67,8 @@ sealed class SessionChatTimelineBlock {
          * read so far from the partial input, or a placeholder until one appears.
          */
         val isReceivingArguments: Boolean = false,
+        /** Inspector body for the tool-result sheet. Null when the card does not open one. */
+        val presentation: ToolResultPresentation? = null,
     ) : SessionChatTimelineBlock()
 
     /** Persistent note that the reply ended early (cut off or interrupted). */
@@ -1541,8 +1544,28 @@ object SessionChatTimelineBlocks {
             role = message.role,
             blocks = admitPromptSkills(message.role, built, message.promptSkills, commands),
             commands = commands,
+            skillMentions = skillMentions(message.promptSkills, commands),
         )
     }
+
+    /**
+     * The `/name` spans a user prompt carries, for `[/name]` collapse. A skill sent without
+     * offsets (an older client, or one `admitPromptSkills` just prefixed) is placed by token search.
+     */
+    fun skillMentions(
+        skills: List<PromptSkill>,
+        commands: List<ServerCommand>,
+    ): List<SkillMention> =
+        skills.mapIndexedNotNull { index, skill ->
+            val name = slashName(skill, commands) ?: return@mapIndexedNotNull null
+            SkillMention(
+                id = "prompt-skill:$index",
+                skillId = skill.id,
+                name = name,
+                start = skill.mentionStart ?: -1,
+                end = skill.mentionEnd ?: -1,
+            )
+        }
 
     /**
      * A v2 skill prompt stores the user's arguments as the message text and the
@@ -1633,8 +1656,20 @@ object SessionChatTimelineBlocks {
         role: MessageRole,
         blocks: List<SessionChatTimelineBlock>,
         commands: List<ServerCommand>,
+        skillMentions: List<SkillMention> = emptyList(),
     ): List<SessionChatTimelineBlock> {
-        if (role != MessageRole.User || commands.isEmpty() || blocks.isEmpty()) return blocks
+        if (role != MessageRole.User || blocks.isEmpty()) return blocks
+        if (skillMentions.isNotEmpty()) {
+            // Only the first text block carries the prompt the spans were measured against.
+            val firstText = blocks.indexOfFirst { it is SessionChatTimelineBlock.Text }
+            if (firstText < 0) return blocks
+            val block = blocks[firstText] as SessionChatTimelineBlock.Text
+            val collapsed = CommandInvocationCollapser.collapseSkillMentions(block.text, skillMentions) ?: return blocks
+            return blocks.toMutableList().apply {
+                this[firstText] = block.copy(text = collapsed.text, renderedMarkdown = null)
+            }
+        }
+        if (commands.isEmpty()) return blocks
         return blocks.map { block ->
             if (block !is SessionChatTimelineBlock.Text) return@map block
             val collapsed = CommandInvocationCollapser.collapse(block.text, commands) ?: return@map block
@@ -1907,6 +1942,7 @@ object SessionChatTimelineBlocks {
             isInterrupted = interrupted,
             isMalformed = tool.isMalformed,
             isReceivingArguments = receivingArguments,
+            presentation = ToolResultInspector.fromTool(tool, chrome.title),
         )
     }
 

@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.agent.MentionableAgent
 import dev.opencode.mobile.domain.agent.SelectableAgent
+import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.ComposerShellCommand
 import dev.opencode.mobile.domain.command.ServerCommand
@@ -45,6 +46,7 @@ data class SessionChatComposerState(
     val modelCatalogError: String? = null,
     val agentMentions: List<AgentMention> = emptyList(),
     val fileMentions: List<FileMention> = emptyList(),
+    val skillMentions: List<SkillMention> = emptyList(),
     val cursor: Int = 0,
     val selectionRevision: Int = 0,
     val followUpDelivery: FollowUpDelivery = FollowUpDelivery.Steer,
@@ -84,8 +86,11 @@ data class SessionChatComposerState(
 
     val mentionRanges: List<IntRange>
         get() =
-            (agentMentions.map { it.start until it.end } + fileMentions.map { it.start until it.end })
-                .sortedBy { it.first }
+            (
+                agentMentions.map { it.start until it.end } +
+                    fileMentions.map { it.start until it.end } +
+                    skillMentions.map { it.start until it.end }
+            ).sortedBy { it.first }
 
     val canAttachPhotos: Boolean
         get() = selectedModel?.option?.canAttachPhotos == true

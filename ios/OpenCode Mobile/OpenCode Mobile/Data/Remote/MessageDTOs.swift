@@ -288,6 +288,12 @@ nonisolated struct V2PromptFileMentionDTO: Sendable, Equatable {
 
 nonisolated struct V2PromptSkillDTO: Codable, Sendable, Equatable {
     let id: String
+    let mention: V2PromptSourceDTO?
+
+    init(id: String, mention: V2PromptSourceDTO? = nil) {
+        self.id = id
+        self.mention = mention
+    }
 }
 
 nonisolated struct V2PromptFileDTO: Codable, Sendable {

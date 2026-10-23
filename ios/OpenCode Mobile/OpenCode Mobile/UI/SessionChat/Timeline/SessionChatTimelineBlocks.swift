@@ -166,6 +166,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     /// v2 is still streaming this tool's arguments: `subtitle` is the value
     /// read so far from the partial input, or a placeholder until one appears.
     let isReceivingArguments: Bool
+    /// Inspector body for the tool-result sheet. Nil when there is nothing to classify.
+    let presentation: ToolResultPresentation?
 
     init(
         toolName: String,
@@ -182,7 +184,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         changesInitialFilePath: String? = nil,
         isInterrupted: Bool = false,
         isMalformed: Bool = false,
-        isReceivingArguments: Bool = false
+        isReceivingArguments: Bool = false,
+        presentation: ToolResultPresentation? = nil
     ) {
         self.toolName = toolName
         self.status = status
@@ -199,6 +202,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.isInterrupted = isInterrupted
         self.isMalformed = isMalformed
         self.isReceivingArguments = isReceivingArguments
+        self.presentation = presentation
     }
 
     func markingFailed(_ errorText: String) -> SessionChatToolCardBlock {
@@ -216,7 +220,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
             opensChangesReview: opensChangesReview,
             changesInitialFilePath: changesInitialFilePath,
             isInterrupted: isInterrupted,
-            isMalformed: isMalformed
+            isMalformed: isMalformed,
+            presentation: presentation
         )
     }
 }
@@ -2280,8 +2285,24 @@ nonisolated enum SessionChatTimelineBlocks {
                 skills: message.promptSkills,
                 commands: commands
             ),
-            commands: commands
+            commands: commands,
+            skillMentions: skillMentions(message.promptSkills, commands: commands)
         )
+    }
+
+    /// The `/name` spans a user prompt carries, for `[/name]` collapse. A skill sent without
+    /// offsets (an older client, or one `admitPromptSkills` just prefixed) is placed by token search.
+    static func skillMentions(_ skills: [PromptSkill], commands: [ServerCommand]) -> [SkillMention] {
+        skills.enumerated().compactMap { index, skill in
+            guard let name = slashName(skill, commands: commands) else { return nil }
+            return SkillMention(
+                id: "prompt-skill:\(index)",
+                skillID: skill.id,
+                name: name,
+                start: skill.mentionStart ?? -1,
+                end: skill.mentionEnd ?? -1
+            )
+        }
     }
 
     /// A v2 skill prompt stores the user's arguments as the message text and the
@@ -2367,16 +2388,28 @@ nonisolated enum SessionChatTimelineBlocks {
 
     /// Rewrites user text blocks that are expanded slash-command / skill
     /// templates into `[/name] args` for Session Chat display.
+    /// `/name` skill spans (from the message) and server-command templates both collapse into
+    /// `[/name]` plain text so the bubble can highlight them. Skill spans apply to the first text
+    /// block, where the prompt text lives.
     static func collapseCommandInvocations(
         role: MessageRole,
         blocks: [SessionChatTimelineBlock],
-        commands: [ServerCommand]
+        commands: [ServerCommand],
+        skillMentions: [SkillMention] = []
     ) -> [SessionChatTimelineBlock] {
-        guard role == .user, !commands.isEmpty, !blocks.isEmpty else { return blocks }
+        guard role == .user, !blocks.isEmpty, !commands.isEmpty || !skillMentions.isEmpty else { return blocks }
+        var skillsPending = !skillMentions.isEmpty
         return blocks.map { block in
-            guard case .text(let blockID, let text, _) = block,
-                  let collapsed = CommandInvocationCollapser.collapse(text: text, commands: commands)
-            else { return block }
+            guard case .text(let blockID, let text, _) = block else { return block }
+            let collapsed: CommandInvocationCollapser.Display?
+            if skillsPending {
+                skillsPending = false
+                collapsed = CommandInvocationCollapser.collapseSkillMentions(text: text, skillMentions: skillMentions)
+                    ?? CommandInvocationCollapser.collapse(text: text, commands: commands)
+            } else {
+                collapsed = CommandInvocationCollapser.collapse(text: text, commands: commands)
+            }
+            guard let collapsed else { return block }
             return .text(
                 blockID: blockID,
                 text: collapsed.text,
@@ -2649,9 +2682,70 @@ nonisolated enum SessionChatTimelineBlocks {
                 changesInitialFilePath: chrome.changesInitialFilePath,
                 isInterrupted: interrupted,
                 isMalformed: tool.isMalformed,
-                isReceivingArguments: receivingArguments
+                isReceivingArguments: receivingArguments,
+                presentation: toolResultPresentation(tool, fallbackTitle: chrome.title)
             )
         )
+    }
+
+    /// Classifies the part for the inspector sheet. Duration is omitted: a tool
+    /// part has a start but no end, and an exit is taken only from metadata.
+    private static func toolResultPresentation(
+        _ tool: ToolPart,
+        fallbackTitle: String
+    ) -> ToolResultPresentation? {
+        ToolResultInspector.classify(
+            ToolResultRequest(
+                toolName: tool.toolName,
+                fallbackTitle: fallbackTitle,
+                command: inputString(tool.input, keys: "command"),
+                path: inputString(tool.input, keys: "filePath", "file", "path"),
+                pattern: inputString(tool.input, keys: "pattern"),
+                searchPath: inputString(tool.input, keys: "path", "directory"),
+                offset: inputInt(tool.input, key: "offset"),
+                limit: inputInt(tool.input, key: "limit"),
+                content: inputString(tool.input, keys: "content"),
+                output: nonBlank(tool.output),
+                error: nonBlank(tool.error),
+                exitCode: metadataInt(tool.metadata, key: "exit"),
+                patch: toolPatch(tool),
+                oldString: inputString(tool.input, keys: "oldString"),
+                newString: inputString(tool.input, keys: "newString")
+            )
+        )
+    }
+
+    private static func toolPatch(_ tool: ToolPart) -> String? {
+        if let patch = metadataFilediffString(tool.metadata, key: "patch") {
+            return patch
+        }
+        if case let .array(files)? = tool.metadata?["files"] {
+            for element in files {
+                guard case let .dictionary(object) = element else { continue }
+                if let patch = stringFromObject(object, keys: "patch") {
+                    return patch
+                }
+            }
+        }
+        if let output = tool.output, output.contains("@@") {
+            return output
+        }
+        return nil
+    }
+
+    private static func inputInt(_ input: [String: AnyCodable]?, key: String) -> Int? {
+        guard let value = input?[key] else { return nil }
+        return intValue(value)
+    }
+
+    private static func metadataInt(_ metadata: [String: AnyCodable]?, key: String) -> Int? {
+        guard let value = metadata?[key] else { return nil }
+        return intValue(value)
+    }
+
+    private static func nonBlank(_ value: String?) -> String? {
+        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return value
     }
 
     /// What a card says while its arguments stream in and none can be read yet (TUI v2 copy).

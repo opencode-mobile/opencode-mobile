@@ -73,10 +73,10 @@ struct SessionListSession: Identifiable, Hashable {
     let directory: String
     /// Worktree scope this row belongs to, when its project lists more than one worktree.
     let worktreeScopeID: String?
-    /// Git project subtitle in the All scope (project · branch · folder). Nil keeps `subtitle`.
+    /// Worktree line of a git project row (branch · folder). Nil keeps the `subtitle` path.
     let location: HomeRowLocation?
-    /// Git project subtitle inside a project or worktree scope (branch · folder).
-    let scopedLocation: HomeRowLocation?
+    /// Project name shown on the line above `location`.
+    let projectName: String?
 
     init(
         id: String,
@@ -92,7 +92,7 @@ struct SessionListSession: Identifiable, Hashable {
         directory: String? = nil,
         worktreeScopeID: String? = nil,
         location: HomeRowLocation? = nil,
-        scopedLocation: HomeRowLocation? = nil
+        projectName: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -107,11 +107,7 @@ struct SessionListSession: Identifiable, Hashable {
         self.directory = directory ?? worktree
         self.worktreeScopeID = worktreeScopeID
         self.location = location
-        self.scopedLocation = scopedLocation
-    }
-
-    func location(inAllScope: Bool) -> HomeRowLocation? {
-        inAllScope ? location : scopedLocation
+        self.projectName = projectName
     }
 }
 
@@ -540,9 +536,9 @@ struct SessionList<EmptyContent: View>: View {
                 ) { section in
                     switch section.kind {
                     case .recent:
-                        recentStack(section, filterId: filterId)
+                        recentStack(section)
                     case .day, .week:
-                        dayOrWeekSection(section, filterId: filterId)
+                        dayOrWeekSection(section)
                     }
                 }
                 .id(filterId)
@@ -578,11 +574,11 @@ struct SessionList<EmptyContent: View>: View {
     }
 
     @ViewBuilder
-    private func recentStack(_ section: HomeSessionLadderSection<SessionListSession>, filterId: String) -> some View {
+    private func recentStack(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
         OpenCodeSectionHeader(title: "Recent")
 
         ForEach(Array(section.items.enumerated()), id: \.element.id) { index, session in
-            sessionRow(session, showStatusDot: true, filterId: filterId)
+            sessionRow(session, showStatusDot: true)
             if sessionListShowsDivider(after: index, in: section.items, selectedSessionId: selectedSessionId) {
                 Divider()
                     .overlay(OpenCodeColors.borderWeakerBase)
@@ -592,11 +588,11 @@ struct SessionList<EmptyContent: View>: View {
     }
 
     @ViewBuilder
-    private func dayOrWeekSection(_ section: HomeSessionLadderSection<SessionListSession>, filterId: String) -> some View {
+    private func dayOrWeekSection(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
         OpenCodeSectionHeader(title: section.title)
 
         ForEach(Array(section.items.enumerated()), id: \.element.id) { index, session in
-            sessionRow(session, showStatusDot: false, filterId: filterId)
+            sessionRow(session, showStatusDot: false)
             if sessionListShowsDivider(after: index, in: section.items, selectedSessionId: selectedSessionId) {
                 Divider()
                     .overlay(OpenCodeColors.borderWeakerBase)
@@ -605,17 +601,18 @@ struct SessionList<EmptyContent: View>: View {
         }
     }
 
-    private func sessionRow(_ session: SessionListSession, showStatusDot: Bool, filterId: String) -> some View {
-        let location = session.location(inAllScope: filterId == SessionListFilterTab.allId)
+    private func sessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
+        let lines = session.locationLines
         return OpenCodeListItem(
             title: session.title,
-            subtitle: location == nil
+            subtitle: lines == nil
                 ? compactHomePath(
                     session.subtitle,
                     hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
                 )
                 : nil,
-            subtitleSegments: location.map(Self.subtitleSegments),
+            subtitleSegments: lines?.subtitle,
+            detailSegments: lines?.detail,
             status: listItemStatus(session.status, isStale: session.statusIsStale),
             caption: session.caption.isEmpty ? nil : session.caption,
             selected: selectedSessionId == session.id,
@@ -641,24 +638,6 @@ struct SessionList<EmptyContent: View>: View {
 
     private func listItemStatus(_ status: SessionListStatus, isStale: Bool) -> OpenCodeListItemStatus {
         status.listItemStatus(isStale: isStale)
-    }
-
-    /// Project, branch (with the branch icon), and folder, joined with " · ".
-    static func subtitleSegments(_ location: HomeRowLocation) -> [OpenCodeListItemSubtitleSegment] {
-        var segments: [OpenCodeListItemSubtitleSegment] = []
-        for (index, part) in location.parts.enumerated() {
-            let prefix = index == 0 ? "" : HomeRowLocation.separator
-            switch part {
-            case let .text(text):
-                segments.append(OpenCodeListItemSubtitleSegment(text: prefix + text, tone: .secondary))
-            case let .branch(branch):
-                if !prefix.isEmpty {
-                    segments.append(OpenCodeListItemSubtitleSegment(text: prefix, tone: .secondary))
-                }
-                segments.append(OpenCodeListItemSubtitleSegment(text: branch, tone: .secondary, icon: .callSplit))
-            }
-        }
-        return segments
     }
 
     private func scheduleListCrossfade(to newId: String) {
@@ -1054,6 +1033,49 @@ private func remoteUnixHomePrefix(_ path: String) -> String? {
     let user = parts[2]
     guard !user.isEmpty else { return nil }
     return "/\(root)/\(user)"
+}
+
+/// Row lines of a session on Home.
+struct SessionListLocationLines: Equatable {
+    let subtitle: [OpenCodeListItemSubtitleSegment]
+    let detail: [OpenCodeListItemSubtitleSegment]?
+}
+
+extension SessionListSession {
+    /// Git project rows: the project name (folder icon) on the subtitle line, and the worktree
+    /// (branch icon, then folder) on the detail line under it, in every scope. Each line cuts on
+    /// its own, so a long project name never hides the branch. Nil keeps the path subtitle.
+    var locationLines: SessionListLocationLines? {
+        guard let location else { return nil }
+        guard let projectName, !projectName.isEmpty else {
+            return SessionListLocationLines(subtitle: location.listItemSegments(tone: .secondary), detail: nil)
+        }
+        let worktree = location.listItemSegments(tone: .tertiary)
+        return SessionListLocationLines(
+            subtitle: [OpenCodeListItemSubtitleSegment(text: projectName, tone: .secondary, icon: .folder)],
+            detail: worktree.isEmpty ? nil : worktree
+        )
+    }
+}
+
+extension HomeRowLocation {
+    /// Branch (with the branch icon) and folder, joined with " · ".
+    func listItemSegments(tone: OpenCodeListItemSubtitleTone) -> [OpenCodeListItemSubtitleSegment] {
+        var segments: [OpenCodeListItemSubtitleSegment] = []
+        for (index, part) in parts.enumerated() {
+            let prefix = index == 0 ? "" : Self.separator
+            switch part {
+            case let .text(text):
+                segments.append(OpenCodeListItemSubtitleSegment(text: prefix + text, tone: tone))
+            case let .branch(branch):
+                if !prefix.isEmpty {
+                    segments.append(OpenCodeListItemSubtitleSegment(text: prefix, tone: tone))
+                }
+                segments.append(OpenCodeListItemSubtitleSegment(text: branch, tone: tone, icon: .callSplit))
+            }
+        }
+        return segments
+    }
 }
 
 extension Array where Element == SessionListSession {

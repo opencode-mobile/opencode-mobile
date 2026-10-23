@@ -71,6 +71,7 @@ private fun SessionChatTimelineBlock.ToolCard.toRouteMember(): SessionToolGroupM
         additions = additions,
         deletions = deletions,
         detailText = detailText,
+        presentation = presentation,
         childSessionId = childSessionId,
         opensChangesReview = opensChangesReview,
         changesInitialFilePath = changesInitialFilePath,
@@ -87,6 +88,7 @@ private fun SessionToolGroupMember.toToolCard(): SessionChatTimelineBlock.ToolCa
         additions = additions,
         deletions = deletions,
         detailText = detailText,
+        presentation = presentation,
         childSessionId = childSessionId,
         opensChangesReview = opensChangesReview,
         changesInitialFilePath = changesInitialFilePath,
@@ -175,12 +177,13 @@ private fun toolGroupMemberOnClick(
         card.opensChangesReview && supportsSessionMessageDiff -> {
             { onChangesReviewTap(messageId, card.changesInitialFilePath) }
         }
-        card.detailText != null -> {
+        card.detailText != null || card.presentation != null -> {
             {
                 onToolDetailTap(
                     SessionChatToolDetailTarget(
-                        title = card.title,
-                        body = card.detailText,
+                        title = card.presentation?.title ?: card.title,
+                        body = card.detailText ?: card.presentation?.raw.orEmpty(),
+                        presentation = card.presentation,
                     ),
                 )
             }

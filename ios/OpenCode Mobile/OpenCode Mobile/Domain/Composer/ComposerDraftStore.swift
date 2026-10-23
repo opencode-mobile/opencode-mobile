@@ -4,22 +4,25 @@ struct ComposerDraft: Equatable, Sendable, Codable {
     var text: String
     var agentMentions: [AgentMention]
     var fileMentions: [FileMention]
+    var skillMentions: [SkillMention]
     var savedAtEpochMs: Int64?
 
     init(
         text: String,
         agentMentions: [AgentMention] = [],
         fileMentions: [FileMention] = [],
+        skillMentions: [SkillMention] = [],
         savedAtEpochMs: Int64? = nil
     ) {
         self.text = text
         self.agentMentions = agentMentions
         self.fileMentions = fileMentions
+        self.skillMentions = skillMentions
         self.savedAtEpochMs = savedAtEpochMs
     }
 
     private enum CodingKeys: String, CodingKey {
-        case text, agentMentions, fileMentions, savedAtEpochMs
+        case text, agentMentions, fileMentions, skillMentions, savedAtEpochMs
     }
 
     init(from decoder: Decoder) throws {
@@ -27,6 +30,7 @@ struct ComposerDraft: Equatable, Sendable, Codable {
         text = try container.decode(String.self, forKey: .text)
         agentMentions = try container.decodeIfPresent([AgentMention].self, forKey: .agentMentions) ?? []
         fileMentions = try container.decodeIfPresent([FileMention].self, forKey: .fileMentions) ?? []
+        skillMentions = try container.decodeIfPresent([SkillMention].self, forKey: .skillMentions) ?? []
         savedAtEpochMs = try container.decodeIfPresent(Int64.self, forKey: .savedAtEpochMs)
     }
 
@@ -35,6 +39,7 @@ struct ComposerDraft: Equatable, Sendable, Codable {
         try container.encode(text, forKey: .text)
         try container.encode(agentMentions, forKey: .agentMentions)
         try container.encode(fileMentions, forKey: .fileMentions)
+        try container.encode(skillMentions, forKey: .skillMentions)
         try container.encodeIfPresent(savedAtEpochMs, forKey: .savedAtEpochMs)
     }
 }

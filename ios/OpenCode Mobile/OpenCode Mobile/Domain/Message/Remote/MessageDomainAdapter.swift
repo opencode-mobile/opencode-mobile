@@ -287,11 +287,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 mention: V2PromptSourceDTO(start: part.start, end: part.end, text: part.sourceValue)
             )
         }
-        var seen = Set<String>()
-        let skills = options.skillIDs.compactMap { raw -> V2PromptSkillDTO? in
-            let id = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !id.isEmpty, seen.insert(id).inserted else { return nil }
-            return V2PromptSkillDTO(id: id)
+        let skills = ComposerMentionRouting.skillParts(text: options.text, mentions: options.skillMentions).map { part in
+            V2PromptSkillDTO(
+                id: part.skillID,
+                mention: V2PromptSourceDTO(start: part.start, end: part.end, text: part.sourceValue)
+            )
         }
         return V2PromptRequestDTO(
             id: options.messageID,
@@ -492,6 +492,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 userCharacters: text.count
                     + dto.files.reduce(0) { $0 + ($1.mention?.text?.count ?? $1.source?.text?.count ?? 0) }
                     + dto.agents.reduce(0) { $0 + ($1.mention?.text?.count ?? $1.source?.text?.count ?? 0) }
+                    + dto.skills.reduce(0) { $0 + ($1.mention?.text?.count ?? 0) }
             )
         )
     }
@@ -691,7 +692,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
             return PromptSkill(
                 id: id ?? name,
                 name: name,
-                mentionText: skill.mention?.text?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                mentionText: skill.mention?.text?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                mentionStart: skill.mention?.start,
+                mentionEnd: skill.mention?.end
             )
         }
     }

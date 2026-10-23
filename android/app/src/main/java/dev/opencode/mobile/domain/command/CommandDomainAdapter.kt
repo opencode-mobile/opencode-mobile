@@ -6,6 +6,7 @@ import dev.opencode.mobile.data.remote.dto.RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CommandDto
 import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
+import dev.opencode.mobile.data.remote.dto.V2PromptSkillDto
 import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SkillDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
@@ -111,6 +112,13 @@ class CommandDomainAdapter {
                         )
                     }.takeIf { it.isNotEmpty() },
             delivery = options.delivery.wireValue,
+            skills =
+                options.skillIds
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .map { V2PromptSkillDto(id = it) }
+                    .takeIf { it.isNotEmpty() },
         )
 
     fun toV2SwitchModelRequest(options: CommandRunOptions): V2SwitchModelRequestDto? {

@@ -1,12 +1,9 @@
 package dev.opencode.mobile.domain.command
 
+private val commandTokenPattern = Regex("""\[/[^\]\s]+\]""")
+
 /**
- * UTF-16 range covering a leading `[/command]` token in collapsed slash-command
- * chat text, or null when the text is not in that display form.
+ * UTF-16 ranges covering every `[/token]` occurrence in collapsed slash-command /
+ * skill chat text; empty when the text carries none.
  */
-fun commandTokenHighlightRange(text: String): IntRange? {
-    if (!text.startsWith("[/")) return null
-    val end = text.indexOf(']')
-    if (end <= 1) return null
-    return 0..end
-}
+fun commandTokenHighlightRanges(text: String): List<IntRange> = commandTokenPattern.findAll(text).map { it.range }.toList()

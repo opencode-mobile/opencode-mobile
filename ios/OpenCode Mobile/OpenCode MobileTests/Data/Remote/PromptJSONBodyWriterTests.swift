@@ -104,6 +104,27 @@ struct PromptJSONBodyWriterTests {
         #expect(dataURL != nil && fileURL != nil && dataURL!.lowerBound < fileURL!.lowerBound)
     }
 
+    @Test func writeV2Prompt_writesSkillWithMention() throws {
+        let body = V2PromptRequestDTO(
+            text: "fix /tdd now",
+            skills: [
+                V2PromptSkillDTO(id: "tdd", mention: V2PromptSourceDTO(start: 4, end: 8, text: "/tdd")),
+                V2PromptSkillDTO(id: "bare"),
+            ],
+            delivery: "steer"
+        )
+        let file = try PromptJSONBodyWriter.writeV2Prompt(body, attachments: [])
+        let json = try String(contentsOf: file, encoding: .utf8)
+        #expect(json.contains("\"skills\":[{\"id\":\"tdd\",\"mention\":{\"start\":4,\"end\":8,\"text\":\"/tdd\"}},{\"id\":\"bare\"}]"))
+    }
+
+    @Test func writeV2Command_writesSkillIDs() throws {
+        let body = V2RunCommandRequestDTO(name: "init", text: "go", skills: [V2PromptSkillDTO(id: "tdd")], delivery: "steer")
+        let file = try PromptJSONBodyWriter.writeV2Command(body, attachments: [])
+        let json = try String(contentsOf: file, encoding: .utf8)
+        #expect(json.contains("\"skills\":[{\"id\":\"tdd\"}]"))
+    }
+
     @Test func load_rejectsDecodedBytesOverTwentyMebibytes() {
         let data = Data(count: Int(AttachmentLimits.maxDecodedBytes) + 1)
         #expect(throws: AttachmentLoadError.tooLarge) {

@@ -40,6 +40,8 @@ internal data class SessionChatToolDetailTarget(
     val body: String,
     /** Render [body] as markdown (a compaction summary) instead of plain tool output. */
     val bodyIsMarkdown: Boolean = false,
+    /** Typed inspector body. Failure sheets and compaction summaries leave this null. */
+    val presentation: dev.opencode.mobile.ui.sessionchat.ToolResultPresentation? = null,
     /** Provider error bodies are monospace and copyable. */
     val monospace: Boolean = false,
     val sheetAction: SessionFailureSheetAction? = null,
@@ -106,10 +108,12 @@ internal fun SessionChatToolDetailSheet(
     val link = target?.sheetLink?.takeIf { it.isNotBlank() }
     val hasAction = action != null && actionLabel != null
     val hasLink = linkLabel != null && link != null
+    val presentation = target?.presentation?.takeIf { target.bodyIsMarkdown.not() }
+    val copies = presentation?.copiesOriginal == true && !hasAction && !hasLink
 
     OpenCodeBottomSheet(
         visible = target != null,
-        title = target?.title ?: "Tool",
+        title = presentation?.title ?: target?.title ?: "Tool",
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.SESSION_TOOL_DETAIL,
@@ -117,8 +121,20 @@ internal fun SessionChatToolDetailSheet(
             )
             onDismiss()
         },
+        pinnedTop = {
+            if (presentation != null) {
+                ToolResultPinnedHeader(presentation)
+            }
+        },
         pinnedBottom =
-            if (hasAction || hasLink) {
+            if (copies) {
+                {
+                    OpenCodeButton(
+                        variant = OpenCodeButtonVariant.FullWidthText("Copy output"),
+                        onClick = { clipboard.setText(AnnotatedString(presentation.raw)) },
+                    )
+                }
+            } else if (hasAction || hasLink) {
                 {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (action != null && actionLabel != null) {
@@ -152,7 +168,19 @@ internal fun SessionChatToolDetailSheet(
                 null
             },
     ) {
-        if (target != null) SessionChatToolDetailBody(target)
+        when {
+            presentation != null ->
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .openCodeBottomSheetContentInset()
+                            .padding(bottom = 12.dp),
+                ) {
+                    ToolResultBody(presentation)
+                }
+            target != null -> SessionChatToolDetailBody(target)
+        }
     }
 }
 
@@ -163,6 +191,20 @@ internal fun SessionChatToolDetailSheet(
  */
 @Composable
 internal fun SessionChatToolDetailBody(target: SessionChatToolDetailTarget) {
+    val presentation = target.presentation?.takeUnless { target.bodyIsMarkdown }
+    if (presentation != null) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .openCodeBottomSheetContentInset()
+                    .padding(vertical = 12.dp),
+        ) {
+            ToolResultPinnedHeader(presentation)
+            ToolResultBody(presentation)
+        }
+        return
+    }
     val clipboard = LocalClipboardManager.current
     val body = target.body
     val document by produceState<MarkdownDocument?>(initialValue = null, body, target.bodyIsMarkdown) {

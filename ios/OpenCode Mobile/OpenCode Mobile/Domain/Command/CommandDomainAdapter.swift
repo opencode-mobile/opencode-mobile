@@ -90,6 +90,7 @@ struct CommandDomainAdapter: Sendable {
             files: options.attachments.isEmpty ? nil : options.attachments.map { attachment in
                 V2PromptFileDTO(uri: attachment.dataURL, name: attachment.filename, mime: attachment.mime)
             },
+            skills: options.skillIDs.isEmpty ? nil : options.skillIDs.map { V2PromptSkillDTO(id: $0) },
             delivery: options.delivery.wireValue
         )
     }

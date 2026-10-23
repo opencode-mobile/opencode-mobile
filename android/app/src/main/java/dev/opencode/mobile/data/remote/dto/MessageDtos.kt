@@ -209,6 +209,7 @@ data class V2PromptFileMentionDto(
 @Serializable
 data class V2PromptSkillDto(
     val id: String,
+    val mention: V2PromptSourceDto? = null,
 )
 
 @Serializable

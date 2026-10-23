@@ -127,13 +127,20 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             )
         } else if (subtitleKind == GallerySubtitleKind.Branch) {
             listOf(
-                OpenCodeListItemSubtitleSegment("opencode-mobile · ", OpenCodeListItemSubtitleTone.Secondary),
+                OpenCodeListItemSubtitleSegment("opencode-mobile", OpenCodeListItemSubtitleTone.Secondary, icon = OpenCodeIcons.Folder),
+            )
+        } else {
+            null
+        }
+    val detailSegments =
+        if (subtitleKind == GallerySubtitleKind.Branch) {
+            listOf(
                 OpenCodeListItemSubtitleSegment(
                     "feature/723-iphone-duo",
-                    OpenCodeListItemSubtitleTone.Secondary,
+                    OpenCodeListItemSubtitleTone.Tertiary,
                     icon = OpenCodeIcons.CallSplit,
                 ),
-                OpenCodeListItemSubtitleSegment(" · opencode-mobile-723", OpenCodeListItemSubtitleTone.Secondary),
+                OpenCodeListItemSubtitleSegment(" · opencode-mobile-723", OpenCodeListItemSubtitleTone.Tertiary),
             )
         } else {
             null
@@ -257,6 +264,7 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             title = "Material Design Icons integration plan",
             subtitle = subtitle,
             subtitleSegments = subtitleSegments,
+            detailSegments = detailSegments,
             status = status,
             caption = caption,
             titleTag = if (showTitleTag) "git" else null,
@@ -265,6 +273,53 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             style = if (cardStyle) OpenCodeListItemStyle.Card else OpenCodeListItemStyle.Plain,
             startDecorator = startDecorator,
         )
+
+        Text(text = "Detail line", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        Column {
+            OpenCodeListItem(
+                title = "Code samples request",
+                subtitleSegments =
+                    listOf(
+                        OpenCodeListItemSubtitleSegment(
+                            "opencode-mobile",
+                            OpenCodeListItemSubtitleTone.Secondary,
+                            icon = OpenCodeIcons.Folder,
+                        ),
+                    ),
+                detailSegments =
+                    listOf(
+                        OpenCodeListItemSubtitleSegment("main", OpenCodeListItemSubtitleTone.Tertiary, icon = OpenCodeIcons.CallSplit),
+                    ),
+                status = OpenCodeListItemStatus(text = "Done", tone = OpenCodeListItemStatusTone.Success),
+                caption = "1h ago",
+                startDecorator = StartDecorator.Letter('O', LetterAccent.Red),
+                onClick = {},
+            )
+            OpenCodeListItem(
+                title = "Keep split pane in step with the sidebar",
+                subtitleSegments =
+                    listOf(
+                        OpenCodeListItemSubtitleSegment(
+                            "opencode-mobile-enterprise-edition",
+                            OpenCodeListItemSubtitleTone.Secondary,
+                            icon = OpenCodeIcons.Folder,
+                        ),
+                    ),
+                detailSegments =
+                    listOf(
+                        OpenCodeListItemSubtitleSegment(
+                            "feature/ope-1042-show-worktree-and-project-on-home-rows",
+                            OpenCodeListItemSubtitleTone.Tertiary,
+                            icon = OpenCodeIcons.CallSplit,
+                        ),
+                        OpenCodeListItemSubtitleSegment(" · opencode-mobile-1042", OpenCodeListItemSubtitleTone.Tertiary),
+                    ),
+                status = OpenCodeListItemStatus(text = "Running", tone = OpenCodeListItemStatusTone.Interactive),
+                caption = "13m ago",
+                startDecorator = StartDecorator.Letter('O', LetterAccent.Red, worktree = true),
+                onClick = {},
+            )
+        }
 
         Text(text = "Title tag", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
         Column {
