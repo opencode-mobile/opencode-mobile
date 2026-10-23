@@ -16,6 +16,9 @@ private let bottomSheetEntryHorizontalPadding: CGFloat = 20
 private let bottomSheetEntryVerticalPadding: CGFloat = 12
 private let bottomSheetEntryDecoratorSize: CGFloat = 24
 private let bottomSheetEntryIconSize: CGFloat = 20
+private let bottomSheetEntryIllustrationWidth: CGFloat = 72
+private let bottomSheetEntryIllustrationHeight: CGFloat = 44
+private let bottomSheetEntryIllustrationCornerRadius: CGFloat = 8
 private let bottomSheetEstimatedHeaderHeight: CGFloat =
     bottomSheetHeaderTopPadding + bottomSheetHeaderBottomPadding + 40
 private let bottomSheetEnterDuration: TimeInterval = 0.32
@@ -28,6 +31,8 @@ private let bottomSheetEntryMaxLines = 2
 enum BottomSheetEntryDecorator {
     case none
     case icon(OpenCodeIcon)
+    /// Small skeleton illustration thumbnail, for pickers whose options are easier to see than read.
+    case illustration(OpenCodeSkeletonIllustrationTopic)
 }
 
 /// How a bottom sheet's title reads.
@@ -45,6 +50,10 @@ enum OpenCodeBottomSheetHeight: Equatable {
     case fitContent
     /// Fixed at the scrollable 50% detent from the first frame.
     case half
+    /// Wraps all content up to the tallest card the screen allows (the top
+    /// limit an expanded sheet uses); only taller content scrolls, resting at
+    /// that limit. For pickers whose every option should be in view.
+    case fitAllContent
 }
 
 /// How a bottom sheet treats the software keyboard.
@@ -181,6 +190,34 @@ enum OpenCodeBottomSheetLayoutMath {
     /// Whether a `.fitContent` card of `fitContentHeight` still wraps its content.
     static func fitsCompact(fitContentHeight: CGFloat) -> Bool {
         fitContentHeight <= compactMaxHeight
+    }
+
+    /// Tallest card a `.fitAllContent` sheet wraps: the space an expanded card gets.
+    static func fitAllMaxHeight(availableHeight: CGFloat, topSafeArea: CGFloat) -> CGFloat {
+        max(0, availableHeight - topSafeArea - expandedTopGap)
+    }
+
+    /// Tallest card that still wraps its content under `height`.
+    static func compactLimit(
+        height: OpenCodeBottomSheetHeight,
+        availableHeight: CGFloat,
+        topSafeArea: CGFloat
+    ) -> CGFloat {
+        height == .fitAllContent
+            ? fitAllMaxHeight(availableHeight: availableHeight, topSafeArea: topSafeArea)
+            : compactMaxHeight
+    }
+
+    /// Resting height once the card scrolls: the 50% detent, or for
+    /// `.fitAllContent` the same limit it wraps up to.
+    static func restingScrollableHeight(
+        height: OpenCodeBottomSheetHeight,
+        availableHeight: CGFloat,
+        topSafeArea: CGFloat
+    ) -> CGFloat {
+        height == .fitAllContent
+            ? fitAllMaxHeight(availableHeight: availableHeight, topSafeArea: topSafeArea)
+            : scrollableHeight(availableHeight: availableHeight)
     }
 
     /// Height left for the scrolling body in a fixed-height card: the card
@@ -419,7 +456,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         case .half:
             _mode = State(initialValue: .scrollable)
             _hasLockedScrollable = State(initialValue: true)
-        case .fitContent:
+        case .fitContent, .fitAllContent:
             _mode = State(initialValue: .compact)
             _hasLockedScrollable = State(initialValue: false)
         }
@@ -453,7 +490,11 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             keyboardOverlap: keyboardOverlap
         )
         let presentationMode: BottomSheetPresentationMode = keyboardExpanded ? .scrollable : resolvedMode
-        let restingScrollableHeight = OpenCodeBottomSheetLayoutMath.scrollableHeight(availableHeight: availableHeight)
+        let restingScrollableHeight = OpenCodeBottomSheetLayoutMath.restingScrollableHeight(
+            height: height,
+            availableHeight: availableHeight,
+            topSafeArea: topSafeArea
+        )
         let cardHeight = OpenCodeBottomSheetLayoutMath.cardHeight(
             restingHeight: resolvedMode == .scrollable ? restingScrollableHeight : nil,
             availableHeight: availableHeight,
@@ -528,7 +569,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
                 // the 50% detent. Wrapping to content left iOS shorter than Android.
                 hasLockedScrollable = true
                 mode = .scrollable
-            case .fitContent:
+            case .fitContent, .fitAllContent:
                 hasLockedScrollable = false
                 mode = .compact
             }
@@ -558,7 +599,12 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             pinnedBottomHeight: pinnedBottomHeight,
             bottomClearance: bottomClearance
         )
-        if OpenCodeBottomSheetLayoutMath.fitsCompact(fitContentHeight: fitContentHeight) {
+        let compactLimit = OpenCodeBottomSheetLayoutMath.compactLimit(
+            height: height,
+            availableHeight: availableHeight,
+            topSafeArea: topSafeArea
+        )
+        if fitContentHeight <= compactLimit {
             mode = .compact
         } else {
             hasLockedScrollable = true
@@ -1108,6 +1154,8 @@ struct OpenCodeBottomSheetEntry: View {
     let startDecorator: BottomSheetEntryDecorator
     let endDecorator: BottomSheetEntryDecorator
     let selected: Bool
+    /// Short label after the title, such as "Recommended" or "Current".
+    let tag: String?
     let action: () -> Void
 
     init(
@@ -1118,10 +1166,12 @@ struct OpenCodeBottomSheetEntry: View {
         startDecorator: BottomSheetEntryDecorator = .none,
         endDecorator: BottomSheetEntryDecorator = .none,
         selected: Bool = false,
+        tag: String? = nil,
         action: @escaping () -> Void
     ) {
         self.title = title
         self.subtitle = subtitle
+        self.tag = tag
         self.enabled = enabled
         self.destructive = destructive
         self.startDecorator = startDecorator
@@ -1151,11 +1201,16 @@ struct OpenCodeBottomSheetEntry: View {
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(OpenCodeTypography.body)
-                        .foregroundStyle(titleColor)
-                        .lineLimit(bottomSheetEntryMaxLines)
-                        .multilineTextAlignment(.leading)
+                    HStack(spacing: 6) {
+                        Text(title)
+                            .font(OpenCodeTypography.body)
+                            .foregroundStyle(titleColor)
+                            .lineLimit(bottomSheetEntryMaxLines)
+                            .multilineTextAlignment(.leading)
+                        if let tag, !tag.isEmpty {
+                            OpenCodeTag(tag, size: .small)
+                        }
+                    }
                     if let subtitle, !subtitle.isEmpty {
                         Text(subtitle)
                             .font(OpenCodeTypography.caption)
@@ -1421,6 +1476,18 @@ private struct BottomSheetEntryDecoration: View {
             OpenCodeIconImage(icon: icon, size: bottomSheetEntryIconSize)
                 .foregroundStyle(tint)
                 .frame(width: bottomSheetEntryDecoratorSize, height: bottomSheetEntryDecoratorSize)
+                .accessibilityHidden(true)
+        case let .illustration(topic):
+            OpenCodeSkeletonIllustration(topic: topic)
+                .padding(.top, 4)
+                .frame(width: bottomSheetEntryIllustrationWidth, height: bottomSheetEntryIllustrationHeight)
+                .background(OpenCodeColors.surfaceRaisedBase)
+                .clipShape(RoundedRectangle(cornerRadius: bottomSheetEntryIllustrationCornerRadius, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: bottomSheetEntryIllustrationCornerRadius, style: .continuous)
+                        .strokeBorder(OpenCodeColors.borderWeakBase, lineWidth: 1)
+                }
+                .opacity(enabled ? 1 : 0.5)
                 .accessibilityHidden(true)
         }
     }

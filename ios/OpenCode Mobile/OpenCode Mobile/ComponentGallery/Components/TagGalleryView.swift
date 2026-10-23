@@ -6,6 +6,8 @@ struct TagGalleryView: View {
             OpenCodeTag("Unofficial")
             OpenCodeTag("Beta")
             OpenCodeTag("git", size: .small)
+            OpenCodeTag("Recommended", tone: .accent)
+            OpenCodeTag("Recommended", size: .small, tone: .accent)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

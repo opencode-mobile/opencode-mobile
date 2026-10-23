@@ -55,6 +55,7 @@ nonisolated final class SessionChatDisplayPreferences {
         static let followUpDelivery = "followUpDelivery"
         static let chipTimelineIntroDone = "chipTimelineIntroDone"
         static let chipTimelineIntroSnoozedUntilMs = "chipTimelineIntroSnoozedUntilMs"
+        static let timelineStylePickerDone = "timelineStylePickerDone"
     }
 
     private let defaults: UserDefaults
@@ -111,6 +112,15 @@ nonisolated final class SessionChatDisplayPreferences {
         SessionChatTimelineStyle.allCases.filter { $0 != .chips || chipTimelineAvailable }
     }
 
+    /// One-time Timeline Style picker (#805): nil until this version settles it,
+    /// false while an updated install still has to pick, true once answered.
+    private(set) var timelineStylePickerDone: Bool?
+
+    /// True while an updated install has not answered the Timeline Style picker.
+    var timelineStylePickerPending: Bool {
+        timelineStylePickerDone == false
+    }
+
     private(set) var followUpDelivery: FollowUpDelivery
 
     init(defaults: UserDefaults = .standard, featureFlags: FeatureFlags = .shared) {
@@ -137,6 +147,7 @@ nonisolated final class SessionChatDisplayPreferences {
         chipTimelineIntroDone = defaults.bool(forKey: StorageKeys.chipTimelineIntroDone)
         chipTimelineIntroSnoozedUntilMs =
             (defaults.object(forKey: StorageKeys.chipTimelineIntroSnoozedUntilMs) as? NSNumber)?.int64Value
+        timelineStylePickerDone = (defaults.object(forKey: StorageKeys.timelineStylePickerDone) as? NSNumber)?.boolValue
     }
 
     func setCollapseConsecutiveToolCalls(_ value: Bool) {
@@ -149,10 +160,22 @@ nonisolated final class SessionChatDisplayPreferences {
         setTimelineStyle(value ? .chips : .standard)
     }
 
-    /// Any explicit choice, from Settings or the intro sheet, also ends the intro.
+    /// Any explicit choice, from Settings, the picker, or the intro sheet, also
+    /// ends the Chip intro and the Timeline Style picker.
     func setTimelineStyle(_ style: SessionChatTimelineStyle) {
         storeTimelineStyle(style)
         finishChipTimelineIntro()
+        storeTimelineStylePickerDone(true)
+    }
+
+    /// Picker closed without a choice: the update's default applies.
+    func dismissTimelineStylePicker() {
+        setTimelineStyle(.activityCard)
+    }
+
+    private func storeTimelineStylePickerDone(_ done: Bool) {
+        timelineStylePickerDone = done
+        defaults.set(done, forKey: StorageKeys.timelineStylePickerDone)
     }
 
     private func storeTimelineStyle(_ style: SessionChatTimelineStyle) {
@@ -162,15 +185,20 @@ nonisolated final class SessionChatDisplayPreferences {
         defaults.set(style == .chips, forKey: StorageKeys.chipTimeline)
     }
 
-    /// Settles the starting Chip timeline value once per install (OPE-270).
-    /// `existingInstall` is true when the app opens past App onboarding. A
-    /// stored value, from an earlier launch or a Settings choice, always wins.
-    func resolveChipTimelineForInstall(existingInstall: Bool) {
-        guard defaults.object(forKey: StorageKeys.timelineStyle) == nil,
-              defaults.object(forKey: StorageKeys.chipTimeline) == nil
-        else { return }
-        let value = ChipTimelineIntro.startingChipTimeline(existingInstall: existingInstall)
-        storeTimelineStyle(value ? .chips : .standard)
+    /// Settles the starting Timeline Style and the Timeline Style picker once
+    /// per install (#805). `existingInstall` is true when the app opens past App
+    /// onboarding. A new install starts on Activity Card and never sees the
+    /// picker; an existing one keeps its style and is offered the picker. Stored
+    /// values, from an earlier launch or a Settings choice, always win.
+    func resolveTimelineForInstall(existingInstall: Bool) {
+        if defaults.object(forKey: StorageKeys.timelineStyle) == nil,
+           defaults.object(forKey: StorageKeys.chipTimeline) == nil
+        {
+            storeTimelineStyle(existingInstall ? .standard : .activityCard)
+        }
+        if timelineStylePickerDone == nil {
+            storeTimelineStylePickerDone(!existingInstall)
+        }
     }
 
     /// Intro sheet "Don't show again", or a second Later.
@@ -194,7 +222,9 @@ nonisolated final class SessionChatDisplayPreferences {
 
     /// Whether a finished turn with `turnToolCalls` tool calls should offer the intro sheet.
     func shouldOfferChipTimelineIntro(turnToolCalls: Int, nowMs: Int64) -> Bool {
-        ChipTimelineIntro.shouldShow(
+        // The Timeline Style picker replaces the intro (#805); never pitch Chips before it.
+        guard !timelineStylePickerPending else { return false }
+        return ChipTimelineIntro.shouldShow(
             chipTimelineAvailable: chipTimelineAvailable,
             // Step Rail and Activity Card are explicit style choices too: never pitch Chips over them.
             chipTimelineOn: timelineStyle != .standard,
@@ -217,10 +247,12 @@ nonisolated final class SessionChatDisplayPreferences {
         defaults.removeObject(forKey: StorageKeys.followUpDelivery)
         defaults.removeObject(forKey: StorageKeys.chipTimelineIntroDone)
         defaults.removeObject(forKey: StorageKeys.chipTimelineIntroSnoozedUntilMs)
+        defaults.removeObject(forKey: StorageKeys.timelineStylePickerDone)
         collapseConsecutiveToolCalls = Self.defaultCollapseConsecutiveToolCalls
         timelineStyle = Self.defaultTimelineStyle
         followUpDelivery = Self.defaultFollowUpDelivery
         chipTimelineIntroDone = false
         chipTimelineIntroSnoozedUntilMs = nil
+        timelineStylePickerDone = nil
     }
 }

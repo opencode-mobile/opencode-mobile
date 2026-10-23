@@ -7,6 +7,10 @@ enum OpenCodeSkeletonIllustrationTopic: String, CaseIterable, Hashable {
     case chipTimelineGlance
     case chipTimelineLongRuns
     case chipTimelineDetails
+    case timelineStandard
+    case timelineChips
+    case timelineStepRail
+    case timelineActivityCard
 }
 
 struct OpenCodeSkeletonIllustration: View {
@@ -89,6 +93,14 @@ private extension GraphicsContext {
             drawChipTimelineLongRunsSkeleton(palette: palette)
         case .chipTimelineDetails:
             drawChipTimelineDetailsSkeleton(palette: palette)
+        case .timelineStandard:
+            drawTimelineStandardSkeleton(palette: palette)
+        case .timelineChips:
+            drawChipTimelineGlanceSkeleton(palette: palette)
+        case .timelineStepRail:
+            drawTimelineStepRailSkeleton(palette: palette)
+        case .timelineActivityCard:
+            drawTimelineActivityCardSkeleton(palette: palette)
         }
     }
 
@@ -408,6 +420,126 @@ private extension GraphicsContext {
             }
             skeletonBar(x: 84, y: y, w: line.0, h: 6, color: line.1?.opacity(0.45), palette: palette)
         }
+    }
+
+    /// The user's prompt bubble at the top of a Session Chat skeleton.
+    mutating func skeletonUserBubble(palette: SkeletonIllustrationPalette) {
+        fill(
+            Path(roundedRect: CGRect(x: 160, y: 28, width: 112, height: 22), cornerRadius: 11),
+            with: .color(palette.surfaceInteractiveWeak)
+        )
+        skeletonBar(x: 172, y: 36, w: 84, h: 6, palette: palette)
+    }
+
+    mutating func skeletonDot(cx: CGFloat, cy: CGFloat, radius: CGFloat, color: Color) {
+        fill(
+            Path(ellipseIn: CGRect(x: cx - radius, y: cy - radius, width: radius * 2, height: radius * 2)),
+            with: .color(color)
+        )
+    }
+
+    mutating func skeletonChevron(_ points: [CGPoint], palette: SkeletonIllustrationPalette) {
+        var path = Path()
+        path.addLines(points)
+        stroke(
+            path,
+            with: .color(palette.textWeaker),
+            style: StrokeStyle(lineWidth: 1.8, lineCap: .round, lineJoin: .round)
+        )
+    }
+
+    mutating func skeletonDiffBars(x: CGFloat, y: CGFloat, palette: SkeletonIllustrationPalette) {
+        skeletonBar(x: x, y: y, w: 8, h: 6, color: palette.diffAdd, palette: palette)
+        skeletonBar(x: x + 11, y: y, w: 8, h: 6, color: palette.diffDelete, palette: palette)
+    }
+
+    /// Standard timeline: tool calls as one lit group card between the agent's messages.
+    mutating func drawTimelineStandardSkeleton(palette: SkeletonIllustrationPalette) {
+        skeletonFrame(palette: palette)
+        skeletonUserBubble(palette: palette)
+        skeletonBar(x: 64, y: 62, w: 196, h: 7, palette: palette)
+        skeletonBar(x: 64, y: 75, w: 120, h: 7, palette: palette)
+        skeletonSpotlight(x: 64, y: 90, w: 208, h: 76, palette: palette)
+        skeletonBar(x: 76, y: 99, w: 54, h: 6, color: palette.textWeak, palette: palette)
+        skeletonChevron(
+            [CGPoint(x: 256, y: 99), CGPoint(x: 260, y: 103), CGPoint(x: 264, y: 99)],
+            palette: palette
+        )
+        fill(Path(CGRect(x: 64, y: 113, width: 208, height: 1)), with: .color(palette.borderWeakerBase))
+        let rows: [(y: CGFloat, width: CGFloat, diff: Bool)] = [(121, 92, false), (137, 70, true), (153, 104, false)]
+        for row in rows {
+            fill(
+                Path(roundedRect: CGRect(x: 76, y: row.y, width: 8, height: 8), cornerRadius: 2),
+                with: .color(palette.borderWeakBase)
+            )
+            skeletonBar(x: 90, y: row.y + 1, w: 30, h: 6, color: palette.textWeak, palette: palette)
+            skeletonBar(x: 126, y: row.y + 1, w: row.width, h: 6, palette: palette)
+            if row.diff {
+                skeletonDiffBars(x: 244, y: row.y + 1, palette: palette)
+            }
+        }
+        skeletonBar(x: 64, y: 180, w: 150, h: 7, palette: palette)
+    }
+
+    /// Step Rail timeline: one line per step, the running step lit with live time.
+    mutating func drawTimelineStepRailSkeleton(palette: SkeletonIllustrationPalette) {
+        skeletonFrame(palette: palette)
+        skeletonUserBubble(palette: palette)
+        skeletonBar(x: 64, y: 62, w: 170, h: 7, palette: palette)
+        fill(Path(CGRect(x: 70, y: 82, width: 1.5, height: 104)), with: .color(palette.borderWeakBase))
+        let railX: CGFloat = 70.75
+        let steps: [(y: CGFloat, name: CGFloat, detail: CGFloat, diff: Bool)] = [
+            (88, 40, 70, false), (106, 52, 56, false), (124, 34, 84, true),
+        ]
+        for step in steps {
+            skeletonDot(cx: railX, cy: step.y + 3, radius: 4, color: palette.success)
+            skeletonBar(x: 82, y: step.y, w: step.name, h: 6, color: palette.textWeak, palette: palette)
+            skeletonBar(x: 88 + step.name, y: step.y, w: step.detail, h: 6, palette: palette)
+            if step.diff {
+                skeletonDiffBars(x: 244, y: step.y, palette: palette)
+            }
+        }
+        skeletonSpotlight(x: 80, y: 140, w: 192, h: 18, cornerRadius: 6, palette: palette)
+        skeletonDot(cx: railX, cy: 149, radius: 4, color: palette.interactive)
+        stroke(
+            Path(ellipseIn: CGRect(x: railX - 7, y: 142, width: 14, height: 14)),
+            with: .color(palette.interactive.opacity(0.35)),
+            lineWidth: 2
+        )
+        skeletonBar(x: 88, y: 146, w: 34, h: 6, color: palette.textBase, palette: palette)
+        skeletonBar(x: 128, y: 146, w: 80, h: 6, palette: palette)
+        skeletonBar(x: 240, y: 146, w: 24, h: 6, color: palette.textWeaker, palette: palette)
+        skeletonDot(cx: railX, cy: 175, radius: 4, color: palette.textWeaker)
+        skeletonBar(x: 82, y: 172, w: 60, h: 6, color: palette.borderWeakerBase, palette: palette)
+    }
+
+    /// Activity Card timeline: one lit live card with a header, summary, and running-tool footer.
+    mutating func drawTimelineActivityCardSkeleton(palette: SkeletonIllustrationPalette) {
+        skeletonFrame(palette: palette)
+        skeletonUserBubble(palette: palette)
+        skeletonBar(x: 64, y: 62, w: 196, h: 7, palette: palette)
+        skeletonBar(x: 64, y: 75, w: 120, h: 7, palette: palette)
+        let card = CGRect(x: 64, y: 90, width: 208, height: 80)
+        skeletonGlow(x: card.minX, y: card.minY, w: card.width, h: card.height, cornerRadius: 12, palette: palette)
+        let cardPath = Path(roundedRect: card, cornerRadius: 12)
+        fill(cardPath, with: .color(palette.surfaceRaisedBase))
+        drawLayer { layer in
+            layer.clip(to: cardPath)
+            layer.fill(Path(CGRect(x: 64, y: 146, width: 208, height: 24)), with: .color(palette.borderWeakerBase))
+        }
+        fill(Path(CGRect(x: 64, y: 146, width: 208, height: 1)), with: .color(palette.borderWeakBase))
+        stroke(cardPath, with: .color(palette.interactive), lineWidth: 2)
+        skeletonBar(x: 76, y: 102, w: 52, h: 8, color: palette.textBase, palette: palette)
+        skeletonBar(x: 236, y: 103, w: 26, h: 6, color: palette.textWeaker, palette: palette)
+        skeletonBar(x: 76, y: 120, w: 70, h: 6, color: palette.textWeak, palette: palette)
+        skeletonBar(x: 152, y: 120, w: 46, h: 6, palette: palette)
+        skeletonDot(cx: 80, cy: 158, radius: 4, color: palette.interactive)
+        skeletonBar(x: 90, y: 155, w: 30, h: 6, color: palette.textBase, palette: palette)
+        skeletonBar(x: 126, y: 155, w: 84, h: 6, palette: palette)
+        skeletonChevron(
+            [CGPoint(x: 256, y: 154), CGPoint(x: 260, y: 158), CGPoint(x: 256, y: 162)],
+            palette: palette
+        )
     }
 
     mutating func drawSkeletonCenteredText(

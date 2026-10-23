@@ -22,15 +22,6 @@ import Testing
         )
     }
 
-    @Test func freshInstall_startsOnChipTimeline() {
-        #expect(ChipTimelineIntro.startingChipTimeline(existingInstall: false))
-    }
-
-    @Test func existingInstall_keepsStandardTimelineForTheIntro() {
-        #expect(!ChipTimelineIntro.startingChipTimeline(existingInstall: true))
-        #expect(shouldShow(on: ChipTimelineIntro.startingChipTimeline(existingInstall: true)))
-    }
-
     @Test func longTurn_withChipTimelineOff_shows() {
         #expect(shouldShow())
     }

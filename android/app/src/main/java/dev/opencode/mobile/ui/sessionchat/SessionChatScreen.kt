@@ -127,6 +127,7 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveTags
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroModal
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineStylePickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
@@ -1300,7 +1301,8 @@ fun SessionChatScreen(
             onDismiss = { skillsTarget = null },
         )
 
-        // Waits for any screen-local sheet to close so the intro never stacks on one.
+        // Waits for any screen-local sheet to close so the intro and the Timeline Style
+        // picker never stack on one.
         val screenSheetOpen =
             messageActionsTarget != null ||
                 showPendingPromptsSheet ||
@@ -1315,6 +1317,12 @@ fun SessionChatScreen(
             onEnable = viewModel::enableChipTimelineFromIntro,
             onLater = viewModel::postponeChipTimelineIntro,
             onNever = viewModel::dismissChipTimelineIntro,
+        )
+        SessionChatTimelineStylePickerSheet(
+            visible = uiState.timelineStylePickerVisible && !screenSheetOpen,
+            options = uiState.timelineStylePickerOptions,
+            onUse = viewModel::chooseTimelineStyleFromPicker,
+            onDismiss = viewModel::dismissTimelineStylePicker,
         )
 
         SessionChatTodosSheet(

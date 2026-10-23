@@ -21,6 +21,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -169,6 +170,10 @@ private val BottomSheetEntryHorizontalPadding = OpenCodeLayout.SheetContentHoriz
 private val BottomSheetEntryVerticalPadding = 12.dp
 private val BottomSheetEntryDecoratorSize = 24.dp
 private val BottomSheetEntryIconSize = 20.dp
+private val BottomSheetEntryIllustrationWidth = 72.dp
+private val BottomSheetEntryIllustrationHeight = 44.dp
+private val BottomSheetEntryIllustrationCornerRadius = 8.dp
+private val BottomSheetEntryIllustrationTopPadding = 4.dp
 
 @Suppress("ktlint:standard:property-naming")
 private const val BottomSheetEntryMaxLines = 2
@@ -198,6 +203,14 @@ enum class OpenCodeBottomSheetHeight {
 
     /** Fixed at the scrollable half height from the first frame. */
     Half,
+
+    /**
+     * Like [FitContent], but wraps all content up to the tallest sheet the window allows (the
+     * window less the top inset and the top gap, the same top limit an expanded sheet uses).
+     * Only content taller than that scrolls, and the sheet then rests at that maximum, not at
+     * half height. For short choice lists that must show every option at once.
+     */
+    FitAllContent,
 }
 
 /** How an [OpenCodeBottomSheet] treats the software keyboard. */
@@ -216,12 +229,17 @@ enum class OpenCodeBottomSheetKeyboard {
     Expand,
 }
 
-/** Leading or trailing icon of an [OpenCodeBottomSheetEntry]. Decorative: the entry title is its label. */
+/** Leading or trailing decoration of an [OpenCodeBottomSheetEntry]. Decorative: the entry title is its label. */
 sealed class BottomSheetEntryDecorator {
     data object None : BottomSheetEntryDecorator()
 
     data class Icon(
         val imageVector: ImageVector,
+    ) : BottomSheetEntryDecorator()
+
+    /** 72x44 skeleton illustration thumbnail, for pickers whose options are easier seen than read. */
+    data class Illustration(
+        val topic: OpenCodeSkeletonIllustrationTopic,
     ) : BottomSheetEntryDecorator()
 }
 
@@ -454,6 +472,7 @@ fun OpenCodeBottomSheet(
                         scrollTargetKey = shown.scrollTargetKey,
                         threeButtonNavigation = threeButtonNav,
                         windowHeight = maxHeight,
+                        sheetBottomInset = sheetBottomInset,
                         onDismissRequest = requestDismiss,
                         headerDragModifier =
                             Modifier.draggable(
@@ -616,6 +635,7 @@ private fun BottomSheetContent(
     scrollTargetKey: Any?,
     threeButtonNavigation: Boolean,
     windowHeight: Dp,
+    sheetBottomInset: Dp,
     onDismissRequest: () -> Unit,
     headerDragModifier: Modifier,
     pinnedTop: @Composable ColumnScope.() -> Unit,
@@ -623,7 +643,17 @@ private fun BottomSheetContent(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val density = LocalDensity.current
-    val maxSheetHeight = openCodeBottomSheetHalfHeight(windowHeight)
+    val fitsAllContent = height == OpenCodeBottomSheetHeight.FitAllContent
+    val windowTopInset =
+        WindowInsets.systemBars
+            .union(WindowInsets.displayCutout)
+            .asPaddingValues()
+            .calculateTopPadding()
+    val fitAllMaxHeight = openCodeBottomSheetFitAllMaxHeight(windowHeight, windowTopInset, sheetBottomInset)
+    // Column height (inside its bottom padding) once scrollable, and the compact limit it must pass.
+    val maxSheetHeight =
+        if (fitsAllContent) fitAllMaxHeight - BottomSheetContentBottomPadding else openCodeBottomSheetHalfHeight(windowHeight)
+    val compactMaxHeight = if (fitsAllContent) fitAllMaxHeight else BottomSheetCompactMaxHeight
     var contentHeight by remember { mutableStateOf(0.dp) }
     var headerHeight by remember { mutableStateOf(0.dp) }
     var pinnedTopHeight by remember { mutableStateOf(0.dp) }
@@ -643,7 +673,7 @@ private fun BottomSheetContent(
     }
 
     val layoutMode =
-        remember(height, committedToScrollable, contentHeight, headerHeight, pinnedTopHeight, pinnedBottomHeight) {
+        remember(height, committedToScrollable, contentHeight, headerHeight, pinnedTopHeight, pinnedBottomHeight, compactMaxHeight) {
             openCodeBottomSheetLayoutMode(
                 height = height,
                 committedToScrollable = committedToScrollable,
@@ -651,6 +681,7 @@ private fun BottomSheetContent(
                 pinnedTopHeight = pinnedTopHeight,
                 contentHeight = contentHeight,
                 pinnedBottomHeight = pinnedBottomHeight,
+                compactMaxHeight = compactMaxHeight,
             )
         }
 
@@ -714,7 +745,7 @@ private fun BottomSheetContent(
                                 Modifier.bottomSheetFixedHeight(keyboardSheetHeight)
                             } else {
                                 Modifier
-                                    .heightIn(max = BottomSheetCompactMaxHeight)
+                                    .heightIn(max = if (fitsAllContent) maxSheetHeight else BottomSheetCompactMaxHeight)
                                     .wrapContentHeight()
                             }
                         BottomSheetLayoutMode.Measuring -> Modifier.heightIn(max = maxSheetHeight)
@@ -890,6 +921,19 @@ private fun BottomSheetHeader(
 /** Scrollable half height: half the window, less the gap above the sheet. */
 internal fun openCodeBottomSheetHalfHeight(windowHeight: Dp): Dp = windowHeight * BottomSheetScrollableHeightFraction - BottomSheetInset
 
+/**
+ * Tallest [OpenCodeBottomSheetHeight.FitAllContent] sheet, its column plus bottom padding: the
+ * window less the top system inset, the top gap, and the sheet's bottom inset. Never shorter
+ * than a half-height sheet, so a cramped window still scrolls at half height.
+ */
+internal fun openCodeBottomSheetFitAllMaxHeight(
+    windowHeight: Dp,
+    topInset: Dp,
+    bottomInset: Dp,
+): Dp =
+    (windowHeight - topInset - BottomSheetInset - bottomInset)
+        .coerceAtLeast(openCodeBottomSheetHalfHeight(windowHeight) + BottomSheetContentBottomPadding)
+
 /** The measured header height, or an estimate before the header has laid out. */
 internal fun openCodeBottomSheetResolvedHeaderHeight(headerHeight: Dp): Dp =
     if (headerHeight > 0.dp) headerHeight else BottomSheetEstimatedHeaderHeight
@@ -903,9 +947,10 @@ internal fun openCodeBottomSheetMeasuredHeight(
 ): Dp = openCodeBottomSheetResolvedHeaderHeight(headerHeight) + pinnedTopHeight + contentHeight + pinnedBottomHeight
 
 /**
- * Layout for a sheet of [height]. [OpenCodeBottomSheetHeight.Half] and a FitContent sheet that
- * already reached half height are scrollable; otherwise FitContent stays compact while the
- * measured column and bottom padding fit [BottomSheetCompactMaxHeight].
+ * Layout for a sheet of [height]. [OpenCodeBottomSheetHeight.Half] and a fitting sheet that
+ * already turned scrollable are scrollable; otherwise a fitting sheet stays compact while the
+ * measured column and bottom padding fit [compactMaxHeight]: [BottomSheetCompactMaxHeight] for
+ * FitContent, [openCodeBottomSheetFitAllMaxHeight] for FitAllContent.
  */
 internal fun openCodeBottomSheetLayoutMode(
     height: OpenCodeBottomSheetHeight,
@@ -914,13 +959,14 @@ internal fun openCodeBottomSheetLayoutMode(
     pinnedTopHeight: Dp,
     contentHeight: Dp,
     pinnedBottomHeight: Dp,
+    compactMaxHeight: Dp = BottomSheetCompactMaxHeight,
 ): BottomSheetLayoutMode {
     if (height == OpenCodeBottomSheetHeight.Half || committedToScrollable) return BottomSheetLayoutMode.Scrollable
     if (contentHeight == 0.dp) return BottomSheetLayoutMode.Measuring
     val total =
         openCodeBottomSheetMeasuredHeight(headerHeight, pinnedTopHeight, contentHeight, pinnedBottomHeight) +
             BottomSheetContentBottomPadding
-    return if (total > BottomSheetCompactMaxHeight) BottomSheetLayoutMode.Scrollable else BottomSheetLayoutMode.Compact
+    return if (total > compactMaxHeight) BottomSheetLayoutMode.Scrollable else BottomSheetLayoutMode.Compact
 }
 
 /**
@@ -1106,7 +1152,8 @@ private fun restoreDecorSiblingAccessibility(hiddenSiblings: List<Pair<View, Int
 /**
  * Tappable row in a bottom sheet. [selected] marks the current choice in a picker: it shows a
  * check in the end slot (replacing [endDecorator]) and exposes the selected state to
- * accessibility. Titles wrap to two lines at large font scales.
+ * accessibility. Titles wrap to two lines at large font scales. [tag] adds a small
+ * [OpenCodeTag] right after the title (for example "Recommended" or "Current").
  */
 @Composable
 fun OpenCodeBottomSheetEntry(
@@ -1120,6 +1167,7 @@ fun OpenCodeBottomSheetEntry(
     endDecorator: BottomSheetEntryDecorator = BottomSheetEntryDecorator.None,
     /** Optional second line that explains the entry, for pickers whose options need a description. */
     subtitle: String? = null,
+    tag: String? = null,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -1172,26 +1220,18 @@ fun OpenCodeBottomSheetEntry(
     ) {
         BottomSheetEntryDecoration(decorator = startDecorator, tint = iconColor)
         if (subtitle.isNullOrEmpty()) {
-            Text(
-                text = title,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodyLarge,
+            BottomSheetEntryTitle(
+                title = title,
+                tag = tag,
                 color = contentColor,
-                maxLines = BottomSheetEntryMaxLines,
-                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
             )
         } else {
             Column(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = contentColor,
-                    maxLines = BottomSheetEntryMaxLines,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                BottomSheetEntryTitle(title = title, tag = tag, color = contentColor)
                 Text(
                     text = subtitle,
                     style = MaterialTheme.typography.bodySmall,
@@ -1202,6 +1242,42 @@ fun OpenCodeBottomSheetEntry(
             }
         }
         BottomSheetEntryDecoration(decorator = resolvedEndDecorator, tint = iconColor)
+    }
+}
+
+/** Entry title, with an optional small tag right after it on the same line. */
+@Composable
+private fun BottomSheetEntryTitle(
+    title: String,
+    tag: String?,
+    color: Color,
+    modifier: Modifier = Modifier,
+) {
+    if (tag.isNullOrBlank()) {
+        Text(
+            text = title,
+            modifier = modifier,
+            style = MaterialTheme.typography.bodyLarge,
+            color = color,
+            maxLines = BottomSheetEntryMaxLines,
+            overflow = TextOverflow.Ellipsis,
+        )
+        return
+    }
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text(
+            text = title,
+            modifier = Modifier.weight(1f, fill = false),
+            style = MaterialTheme.typography.bodyLarge,
+            color = color,
+            maxLines = BottomSheetEntryMaxLines,
+            overflow = TextOverflow.Ellipsis,
+        )
+        OpenCodeTag(title = tag, size = OpenCodeTagSize.Small)
     }
 }
 
@@ -1221,6 +1297,19 @@ private fun BottomSheetEntryDecoration(
                     tint = tint,
                 )
             }
+        is BottomSheetEntryDecorator.Illustration -> {
+            val shape = RoundedCornerShape(BottomSheetEntryIllustrationCornerRadius)
+            OpenCodeSkeletonIllustration(
+                topic = decorator.topic,
+                modifier =
+                    Modifier
+                        .size(BottomSheetEntryIllustrationWidth, BottomSheetEntryIllustrationHeight)
+                        .clip(shape)
+                        .background(openCodeColor("surface-raised-base"))
+                        .border(1.dp, openCodeColor("border-weak-base"), shape)
+                        .padding(top = BottomSheetEntryIllustrationTopPadding),
+            )
+        }
     }
 }
 
@@ -1256,6 +1345,30 @@ private fun OpenCodeBottomSheetPinnedBottomPreview() {
             repeat(12) { index ->
                 OpenCodeBottomSheetEntry(title = "Folder ${index + 1}", onClick = {})
             }
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeBottomSheetIllustrationEntryPreview() {
+    OpenCodeTheme(darkTheme = true) {
+        OpenCodeBottomSheet(visible = true, title = "New: choose your timeline", onDismissRequest = {}) {
+            OpenCodeBottomSheetEntry(
+                title = "Activity Card",
+                subtitle = "Running steps on one live card that folds into a summary",
+                tag = "Recommended",
+                selected = true,
+                startDecorator = BottomSheetEntryDecorator.Illustration(OpenCodeSkeletonIllustrationTopic.TimelineActivityCard),
+                onClick = {},
+            )
+            OpenCodeBottomSheetEntry(
+                title = "Standard",
+                subtitle = "Tool cards and groups between the agent's messages",
+                tag = "Current",
+                startDecorator = BottomSheetEntryDecorator.Illustration(OpenCodeSkeletonIllustrationTopic.TimelineStandard),
+                onClick = {},
+            )
         }
     }
 }

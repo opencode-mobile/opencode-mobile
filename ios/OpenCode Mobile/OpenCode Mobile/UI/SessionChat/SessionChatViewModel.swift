@@ -79,6 +79,11 @@ final class SessionChatViewModel {
     private var chipTimelineIntroNotice: String?
     private var chipTimelineIntroTurnActive: Bool?
     private var chipTimelineIntroTask: Task<Void, Never>?
+    // One-time Timeline Style picker (#805): offered once per chat when history loads.
+    private var timelineStylePickerVisible = false
+    private var timelineStylePickerOffered = false
+    private var timelineStylePickerNotice: String?
+    private var timelineStylePickerTask: Task<Void, Never>?
     /// Composer dictation card. Kept off `uiState` so a republish does not drop it.
     private var dictation: ComposerDictationUiState?
     private var dictationInsertGeneration: UInt64 = 0
@@ -799,6 +804,7 @@ final class SessionChatViewModel {
         }
         suppressedSnackbarKey = lastSnackbarKey
         chipTimelineIntroNotice = nil
+        timelineStylePickerNotice = nil
         moveErrorMessage = nil
         moveNotice = nil
         turnDiffNotice = nil
@@ -828,6 +834,63 @@ final class SessionChatViewModel {
         hideChipTimelineIntro(ProductAnalytics.Action.chipTimelineIntroNever)
         SessionChatDisplayPreferences.shared.finishChipTimelineIntro()
         publishUiState()
+    }
+
+    /// Use button of the Timeline Style picker.
+    func chooseTimelineStyleFromPicker(_ style: SessionChatTimelineStyle) {
+        hideTimelineStylePicker(
+            ProductAnalytics.Action.timelineStylePickerUse,
+            parameters: [ProductAnalytics.Param.mode: style.wireValue]
+        )
+        SessionChatDisplayPreferences.shared.setTimelineStyle(style)
+        timelineStylePickerNotice = Self.timelineStylePickerNotice(style)
+        publishUiState()
+    }
+
+    /// Swipe, scrim, or back on the Timeline Style picker: the update's default applies.
+    func dismissTimelineStylePicker() {
+        // The sheet also reports a close after Use hid it; that is not a dismiss.
+        guard timelineStylePickerVisible else { return }
+        hideTimelineStylePicker(ProductAnalytics.Action.timelineStylePickerDismiss, parameters: [:])
+        let preferences = SessionChatDisplayPreferences.shared
+        preferences.dismissTimelineStylePicker()
+        timelineStylePickerNotice = Self.timelineStylePickerNotice(preferences.effectiveTimelineStyle)
+        publishUiState()
+    }
+
+    private func hideTimelineStylePicker(_ actionId: String, parameters: [String: String]) {
+        guard timelineStylePickerVisible else { return }
+        timelineStylePickerVisible = false
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionTimelineStylePicker,
+            actionId: actionId,
+            parameters: parameters
+        )
+    }
+
+    private func resetTimelineStylePicker() {
+        timelineStylePickerTask?.cancel()
+        timelineStylePickerTask = nil
+        timelineStylePickerVisible = false
+        timelineStylePickerOffered = false
+        timelineStylePickerNotice = nil
+    }
+
+    /// Offers the picker once, a moment after this chat's history first loads,
+    /// while an updated install has not picked a Timeline Style. Anything already
+    /// open on the chat skips it until the next session open.
+    private func offerTimelineStylePickerIfPending() {
+        guard !timelineStylePickerOffered, isSessionBound else { return }
+        let preferences = SessionChatDisplayPreferences.shared
+        guard preferences.timelineStylePickerPending else { return }
+        timelineStylePickerOffered = true
+        timelineStylePickerTask = Task { [clock] in
+            await clock.sleep(milliseconds: Self.timelineStylePickerDelayMs)
+            guard !Task.isCancelled, isSessionBound, preferences.timelineStylePickerPending,
+                  !chipTimelineIntroVisible, !uiState.blocksChipTimelineIntro else { return }
+            timelineStylePickerVisible = true
+            publishUiState()
+        }
     }
 
     private func hideChipTimelineIntro(_ actionId: String) {
@@ -1313,6 +1376,7 @@ final class SessionChatViewModel {
         isSessionBound = false
         resetWorkingFooter()
         resetChipTimelineIntro()
+        resetTimelineStylePicker()
         composer.flushDraft()
         pendingSend = nil
         optimisticCreateTask?.cancel()
@@ -1603,6 +1667,15 @@ final class SessionChatViewModel {
             repoStrip.updateTurnActive(isTurnActive)
             updateChipTimelineIntroTurnActive(isTurnActive)
         }
+        switch timelineState.timeline {
+        case .ready:
+            offerTimelineStylePickerIfPending()
+        case .creating, .empty:
+            // A new or empty chat uses up the offer, so it never pops mid-turn.
+            timelineStylePickerOffered = true
+        case .loading, .error:
+            break
+        }
         let reviewChangesState = reviewChanges.state
         let repoStripState = repoStrip.state
         let visibleQuestion = inboxState.visibleQuestionRequest
@@ -1626,6 +1699,7 @@ final class SessionChatViewModel {
                 ?? commandsState.actionSuccessMessage
                 ?? moveNotice
                 ?? chipTimelineIntroNotice
+                ?? timelineStylePickerNotice
         )
         // Reuse the current TimelineFrame when only composer / session-info /
         // review / command republish (same revision → no O(n) remap).
@@ -1775,6 +1849,7 @@ final class SessionChatViewModel {
             activityCardFooters: timelineState.activityCardFooters,
             debouncedStepIDs: timelineState.debouncedStepIDs,
             chipTimelineIntroVisible: chipTimelineIntroVisible,
+            timelineStylePickerVisible: timelineStylePickerVisible,
             dictation: dictation
         )
     }
@@ -1899,6 +1974,12 @@ final class SessionChatViewModel {
 
     private static let pendingPromptFailure = "Couldn't update pending prompt"
     static let chipTimelineIntroEnabledNotice = "Chip timeline is on. Turn it off in Settings."
+    /// Pause after history loads so the chat is on screen before the picker.
+    static let timelineStylePickerDelayMs = 600
+
+    static func timelineStylePickerNotice(_ style: SessionChatTimelineStyle) -> String {
+        "Timeline: \(style.title). Change it any time in Settings."
+    }
 
     private struct ArmedSendAcceptance {
         let sessionID: String

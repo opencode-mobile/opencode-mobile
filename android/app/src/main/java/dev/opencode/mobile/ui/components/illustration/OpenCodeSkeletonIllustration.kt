@@ -8,11 +8,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextMeasurer
@@ -36,6 +40,18 @@ enum class OpenCodeSkeletonIllustrationTopic {
     ChipTimelineGlance,
     ChipTimelineLongRuns,
     ChipTimelineDetails,
+
+    /** Timeline Style picker (#805): tool cards and groups between the agent's messages. */
+    TimelineStandard,
+
+    /** Timeline Style picker: tools as chips under the narration (same drawing as [ChipTimelineGlance]). */
+    TimelineChips,
+
+    /** Timeline Style picker: one line per step on a rail, the running step lit. */
+    TimelineStepRail,
+
+    /** Timeline Style picker: one live activity card with a footer band. */
+    TimelineActivityCard,
 }
 
 @Composable
@@ -84,6 +100,10 @@ fun OpenCodeSkeletonIllustration(
                 OpenCodeSkeletonIllustrationTopic.ChipTimelineGlance -> drawChipTimelineGlance(colors)
                 OpenCodeSkeletonIllustrationTopic.ChipTimelineLongRuns -> drawChipTimelineLongRuns(colors)
                 OpenCodeSkeletonIllustrationTopic.ChipTimelineDetails -> drawChipTimelineDetails(colors)
+                OpenCodeSkeletonIllustrationTopic.TimelineStandard -> drawTimelineStandard(colors)
+                OpenCodeSkeletonIllustrationTopic.TimelineChips -> drawChipTimelineGlance(colors)
+                OpenCodeSkeletonIllustrationTopic.TimelineStepRail -> drawTimelineStepRail(colors)
+                OpenCodeSkeletonIllustrationTopic.TimelineActivityCard -> drawTimelineActivityCard(colors)
             }
         }
     }
@@ -214,13 +234,7 @@ private fun DrawScope.drawSessionsLive(
 /** Narration with its tools as chips underneath; the first chip row is lit. */
 private fun DrawScope.drawChipTimelineGlance(colors: SkeletonIllustrationColors) {
     frame(colors)
-    drawRoundRect(
-        color = colors.surfaceInteractiveWeak,
-        topLeft = Offset(160f, 28f),
-        size = Size(112f, 22f),
-        cornerRadius = CornerRadius(11f),
-    )
-    bar(colors, x = 172f, y = 36f, w = 84f, h = 6f)
+    userBubble(colors)
     bar(colors, x = 64f, y = 62f, w = 196f, h = 7f)
     bar(colors, x = 64f, y = 75f, w = 138f, h = 7f)
     glow(colors, x = 64f, y = 90f, w = 206f, h = 18f, cornerRadius = 6f)
@@ -285,6 +299,152 @@ private fun DrawScope.drawChipTimelineDetails(colors: SkeletonIllustrationColors
         }
         bar(colors, x = 84f, y = y, w = width, h = 6f, color = marker?.copy(alpha = 0.45f) ?: colors.borderWeakBase)
     }
+}
+
+/** Tool cards and groups between the agent's messages: one lit group card with three rows. */
+private fun DrawScope.drawTimelineStandard(colors: SkeletonIllustrationColors) {
+    frame(colors)
+    userBubble(colors)
+    bar(colors, x = 64f, y = 62f, w = 196f, h = 7f)
+    bar(colors, x = 64f, y = 75f, w = 120f, h = 7f)
+    spotlight(colors, x = 64f, y = 90f, w = 208f, h = 76f, cornerRadius = 10f)
+    bar(colors, x = 76f, y = 99f, w = 54f, h = 6f, color = colors.textWeak)
+    chevron(colors, Offset(256f, 99f), Offset(260f, 103f), Offset(264f, 99f))
+    drawRect(color = colors.borderWeakerBase, topLeft = Offset(64f, 113f), size = Size(208f, 1f))
+    listOf(Triple(121f, 92f, false), Triple(137f, 70f, true), Triple(153f, 104f, false)).forEach { (y, w, diff) ->
+        toolIcon(colors, x = 76f, y = y)
+        bar(colors, x = 90f, y = y + 1f, w = 30f, h = 6f, color = colors.textWeak)
+        bar(colors, x = 126f, y = y + 1f, w = w, h = 6f)
+        if (diff) diffBars(colors, y = y + 1f)
+    }
+    bar(colors, x = 64f, y = 180f, w = 150f, h = 7f)
+}
+
+/** One line per step on a rail; the running step is lit with a ringed dot and elapsed time. */
+private fun DrawScope.drawTimelineStepRail(colors: SkeletonIllustrationColors) {
+    frame(colors)
+    userBubble(colors)
+    bar(colors, x = 64f, y = 62f, w = 170f, h = 7f)
+    val railX = 70.75f
+    drawRect(color = colors.borderWeakBase, topLeft = Offset(70f, 82f), size = Size(1.5f, 104f))
+    listOf(
+        StepRailRow(y = 88f, label = 40f, detail = 70f),
+        StepRailRow(y = 106f, label = 52f, detail = 56f),
+        StepRailRow(y = 124f, label = 34f, detail = 84f, diff = true),
+    ).forEach { row ->
+        drawCircle(color = colors.success, radius = 4f, center = Offset(railX, row.y + 3f))
+        bar(colors, x = 82f, y = row.y, w = row.label, h = 6f, color = colors.textWeak)
+        bar(colors, x = 88f + row.label, y = row.y, w = row.detail, h = 6f)
+        if (row.diff) diffBars(colors, y = row.y)
+    }
+    glow(colors, x = 80f, y = 140f, w = 192f, h = 18f, cornerRadius = 6f)
+    card(colors, x = 80f, y = 140f, w = 192f, h = 18f, lit = true, cornerRadius = 6f)
+    drawCircle(color = colors.interactive, radius = 4f, center = Offset(railX, 149f))
+    drawCircle(
+        color = colors.interactive.copy(alpha = 0.35f),
+        radius = 7f,
+        center = Offset(railX, 149f),
+        style = Stroke(width = 2f),
+    )
+    bar(colors, x = 88f, y = 146f, w = 34f, h = 6f, color = colors.textBase)
+    bar(colors, x = 128f, y = 146f, w = 80f, h = 6f)
+    bar(colors, x = 240f, y = 146f, w = 24f, h = 6f, color = colors.textWeaker)
+    drawCircle(color = colors.textWeaker, radius = 4f, center = Offset(railX, 175f))
+    bar(colors, x = 82f, y = 172f, w = 60f, h = 6f, color = colors.borderWeakerBase)
+}
+
+private data class StepRailRow(
+    val y: Float,
+    val label: Float,
+    val detail: Float,
+    val diff: Boolean = false,
+)
+
+/** One live card per segment: Working header, summary line, footer band with the running tool. */
+private fun DrawScope.drawTimelineActivityCard(colors: SkeletonIllustrationColors) {
+    frame(colors)
+    userBubble(colors)
+    bar(colors, x = 64f, y = 62f, w = 196f, h = 7f)
+    bar(colors, x = 64f, y = 75f, w = 120f, h = 7f)
+    glow(colors, x = 64f, y = 90f, w = 208f, h = 80f, cornerRadius = 12f)
+    val cardShape =
+        Path().apply {
+            addRoundRect(RoundRect(left = 64f, top = 90f, right = 272f, bottom = 170f, cornerRadius = CornerRadius(12f)))
+        }
+    clipPath(cardShape) {
+        drawRect(color = colors.surfaceRaisedBase, topLeft = Offset(64f, 90f), size = Size(208f, 80f))
+        drawRect(color = colors.borderWeakerBase, topLeft = Offset(64f, 146f), size = Size(208f, 24f))
+    }
+    drawRoundRect(
+        color = colors.interactive,
+        topLeft = Offset(64f, 90f),
+        size = Size(208f, 80f),
+        cornerRadius = CornerRadius(12f),
+        style = Stroke(width = 2f),
+    )
+    bar(colors, x = 76f, y = 102f, w = 52f, h = 8f, color = colors.textBase)
+    bar(colors, x = 236f, y = 103f, w = 26f, h = 6f, color = colors.textWeaker)
+    bar(colors, x = 76f, y = 120f, w = 70f, h = 6f, color = colors.textWeak)
+    bar(colors, x = 152f, y = 120f, w = 46f, h = 6f)
+    drawRect(color = colors.borderWeakBase, topLeft = Offset(64f, 146f), size = Size(208f, 1f))
+    drawCircle(color = colors.interactive, radius = 4f, center = Offset(80f, 158f))
+    bar(colors, x = 90f, y = 155f, w = 30f, h = 6f, color = colors.textBase)
+    bar(colors, x = 126f, y = 155f, w = 84f, h = 6f)
+    chevron(colors, Offset(256f, 154f), Offset(260f, 158f), Offset(256f, 162f))
+}
+
+/** The user's message bubble at the top of a Session Chat drawing. */
+private fun DrawScope.userBubble(colors: SkeletonIllustrationColors) {
+    drawRoundRect(
+        color = colors.surfaceInteractiveWeak,
+        topLeft = Offset(160f, 28f),
+        size = Size(112f, 22f),
+        cornerRadius = CornerRadius(11f),
+    )
+    bar(colors, x = 172f, y = 36f, w = 84f, h = 6f)
+}
+
+/** Small tool icon square on a timeline row. */
+private fun DrawScope.toolIcon(
+    colors: SkeletonIllustrationColors,
+    x: Float,
+    y: Float,
+) {
+    drawRoundRect(
+        color = colors.borderWeakBase,
+        topLeft = Offset(x, y),
+        size = Size(8f, 8f),
+        cornerRadius = CornerRadius(2f),
+    )
+}
+
+/** Green/red diff count bars at the trailing edge of a 208-wide row. */
+private fun DrawScope.diffBars(
+    colors: SkeletonIllustrationColors,
+    y: Float,
+) {
+    bar(colors, x = 244f, y = y, w = 8f, h = 6f, color = colors.diffAdd)
+    bar(colors, x = 255f, y = y, w = 8f, h = 6f, color = colors.diffDelete)
+}
+
+/** Two-segment chevron stroke through [start], [corner], and [end]. */
+private fun DrawScope.chevron(
+    colors: SkeletonIllustrationColors,
+    start: Offset,
+    corner: Offset,
+    end: Offset,
+) {
+    val path =
+        Path().apply {
+            moveTo(start.x, start.y)
+            lineTo(corner.x, corner.y)
+            lineTo(end.x, end.y)
+        }
+    drawPath(
+        path = path,
+        color = colors.textWeaker,
+        style = Stroke(width = 1.8f, cap = StrokeCap.Round, join = StrokeJoin.Round),
+    )
 }
 
 /** A tool chip: icon square plus label bar; [diff] adds green/red count bars. */

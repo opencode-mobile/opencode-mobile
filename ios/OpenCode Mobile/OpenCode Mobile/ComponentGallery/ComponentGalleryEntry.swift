@@ -43,6 +43,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case snackbar
     case listItem
     case selectableCard
+    case optionCard
     case listGroup
     case sectionHeader
     case reorderableList
@@ -241,6 +242,12 @@ let componentGalleryEntries = [
         id: .selectableCard,
         title: "Selectable Card",
         description: "Title, blurb, and preview slot that can be selected.",
+        category: .lists
+    ),
+    ComponentGalleryEntry(
+        id: .optionCard,
+        title: "Option Card",
+        description: "Single-choice card with a radio, tag, subtitle, and preview illustration.",
         category: .lists
     ),
     ComponentGalleryEntry(

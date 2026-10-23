@@ -15,6 +15,7 @@ class OpenCodeBottomSheetLayoutTest {
         pinnedTop: Dp = 0.dp,
         pinnedBottom: Dp = 0.dp,
         headerHeight: Dp = header,
+        compactMaxHeight: Dp = BottomSheetCompactMaxHeight,
     ): BottomSheetLayoutMode =
         openCodeBottomSheetLayoutMode(
             height = height,
@@ -23,7 +24,58 @@ class OpenCodeBottomSheetLayoutTest {
             pinnedTopHeight = pinnedTop,
             contentHeight = content,
             pinnedBottomHeight = pinnedBottom,
+            compactMaxHeight = compactMaxHeight,
         )
+
+    @Test
+    fun fitAllMaxHeight_isTheWindowLessTopInsetTopGapAndBottomInset() {
+        // 800 window - 24 status bar - 8 top gap - 8 bottom inset = 760.
+        assertEquals(760f, openCodeBottomSheetFitAllMaxHeight(800.dp, 24.dp, 8.dp).value, 0.01f)
+        // Three-button navigation pads the bottom inset by the bar: 800 - 24 - 8 - (48 + 8) = 712.
+        assertEquals(712f, openCodeBottomSheetFitAllMaxHeight(800.dp, 24.dp, 56.dp).value, 0.01f)
+    }
+
+    @Test
+    fun fitAllMaxHeight_neverDropsBelowAHalfHeightSheet() {
+        // A cramped window still rests at half height (192 column + 20 bottom padding).
+        assertEquals(212f, openCodeBottomSheetFitAllMaxHeight(400.dp, 200.dp, 100.dp).value, 0.01f)
+    }
+
+    @Test
+    fun fitAllContent_staysCompactPastTheFitContentThresholdUpToTheWindowLimit() {
+        val limit = openCodeBottomSheetFitAllMaxHeight(800.dp, 24.dp, 8.dp)
+        val fitAll = OpenCodeBottomSheetHeight.FitAllContent
+        // 64 header + 500 body + 20 bottom padding = 584: past 420, still under the 760 limit.
+        assertEquals(BottomSheetLayoutMode.Scrollable, mode(content = 500.dp))
+        assertEquals(BottomSheetLayoutMode.Compact, mode(height = fitAll, content = 500.dp, compactMaxHeight = limit))
+        // 64 + 676 + 20 = 760 fits exactly; one more dp scrolls.
+        assertEquals(BottomSheetLayoutMode.Compact, mode(height = fitAll, content = 676.dp, compactMaxHeight = limit))
+        assertEquals(BottomSheetLayoutMode.Scrollable, mode(height = fitAll, content = 677.dp, compactMaxHeight = limit))
+    }
+
+    @Test
+    fun fitAllContent_measuresFirstAndStaysScrollableOnceCommitted() {
+        val fitAll = OpenCodeBottomSheetHeight.FitAllContent
+        assertEquals(BottomSheetLayoutMode.Measuring, mode(height = fitAll, content = 0.dp, compactMaxHeight = 760.dp))
+        assertEquals(
+            BottomSheetLayoutMode.Scrollable,
+            mode(height = fitAll, committed = true, content = 40.dp, compactMaxHeight = 760.dp),
+        )
+    }
+
+    @Test
+    fun fitAllContent_countsPinnedSlotsTowardTheLimit() {
+        val fitAll = OpenCodeBottomSheetHeight.FitAllContent
+        // 64 + 40 + 500 + 136 + 20 = 760.
+        assertEquals(
+            BottomSheetLayoutMode.Compact,
+            mode(height = fitAll, content = 500.dp, pinnedTop = 40.dp, pinnedBottom = 136.dp, compactMaxHeight = 760.dp),
+        )
+        assertEquals(
+            BottomSheetLayoutMode.Scrollable,
+            mode(height = fitAll, content = 500.dp, pinnedTop = 40.dp, pinnedBottom = 137.dp, compactMaxHeight = 760.dp),
+        )
+    }
 
     @Test
     fun half_isScrollableFromTheFirstFrame() {

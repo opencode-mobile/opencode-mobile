@@ -4732,6 +4732,131 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.chipTimelineIntroVisible == false)
     }
 
+    // MARK: - Timeline Style picker (#805)
+
+    private func openChatWithHistory(
+        clock: ChatTestSyncClock,
+        permissionLiveStore: FakePermissionLiveStore? = nil
+    ) async -> SessionChatViewModel {
+        let repository = FakeMessageRepository(messages: [
+            Message(id: "msg-1", role: .user, text: "Fix it", model: nil, mode: nil, sentAtEpochMs: nil),
+            Message(id: "msg-2", role: .assistant, text: "Done.", model: nil, mode: nil, sentAtEpochMs: nil),
+        ])
+        let viewModel = makeViewModel(
+            messageRepository: repository,
+            permissionLiveStore: permissionLiveStore,
+            clock: clock
+        )
+        await viewModel.loadMessages()
+        return viewModel
+    }
+
+    @Test func timelineStylePicker_pending_showsAfterHistoryLoadsThenUseStoresTheStyle() async throws {
+        let preferences = SessionChatDisplayPreferences.shared
+        preferences.clear()
+        defer { preferences.clear() }
+        preferences.resolveTimelineForInstall(existingInstall: true)
+        let clock = ChatTestSyncClock(now: 1_000)
+        let viewModel = await openChatWithHistory(clock: clock)
+        defer { viewModel.stopObserving() }
+        #expect(viewModel.uiState.timelineStylePickerVisible == false)
+
+        try await clock.awaitWaiter(milliseconds: SessionChatViewModel.timelineStylePickerDelayMs)
+        clock.release(milliseconds: SessionChatViewModel.timelineStylePickerDelayMs)
+        await waitUntil { viewModel.uiState.timelineStylePickerVisible }
+        #expect(viewModel.uiState.timelineStylePickerVisible)
+
+        viewModel.chooseTimelineStyleFromPicker(.stepRail)
+
+        #expect(viewModel.uiState.timelineStylePickerVisible == false)
+        #expect(preferences.timelineStyle == .stepRail)
+        #expect(!preferences.timelineStylePickerPending)
+        #expect(viewModel.uiState.snackbar?.message == SessionChatViewModel.timelineStylePickerNotice(.stepRail))
+
+        // The sheet's own close after Use is not a dismiss.
+        viewModel.dismissTimelineStylePicker()
+        #expect(preferences.timelineStyle == .stepRail)
+    }
+
+    @Test func timelineStylePicker_dismissStoresActivityCard() async throws {
+        let preferences = SessionChatDisplayPreferences.shared
+        preferences.clear()
+        defer { preferences.clear() }
+        preferences.resolveTimelineForInstall(existingInstall: true)
+        let clock = ChatTestSyncClock(now: 1_000)
+        let viewModel = await openChatWithHistory(clock: clock)
+        defer { viewModel.stopObserving() }
+        try await clock.awaitWaiter(milliseconds: SessionChatViewModel.timelineStylePickerDelayMs)
+        clock.release(milliseconds: SessionChatViewModel.timelineStylePickerDelayMs)
+        await waitUntil { viewModel.uiState.timelineStylePickerVisible }
+
+        viewModel.dismissTimelineStylePicker()
+
+        #expect(viewModel.uiState.timelineStylePickerVisible == false)
+        #expect(preferences.timelineStyle == .activityCard)
+        #expect(!preferences.timelineStylePickerPending)
+        #expect(viewModel.uiState.snackbar?.message == SessionChatViewModel.timelineStylePickerNotice(.activityCard))
+    }
+
+    @Test func timelineStylePicker_notPending_neverWaitsToShow() async {
+        let preferences = SessionChatDisplayPreferences.shared
+        preferences.clear()
+        defer { preferences.clear() }
+        preferences.resolveTimelineForInstall(existingInstall: false)
+        let clock = ChatTestSyncClock(now: 1_000)
+        let viewModel = await openChatWithHistory(clock: clock)
+        defer { viewModel.stopObserving() }
+
+        await #expect(throws: (any Error).self) {
+            try await clock.awaitWaiter(
+                milliseconds: SessionChatViewModel.timelineStylePickerDelayMs,
+                timeout: .milliseconds(300)
+            )
+        }
+        #expect(viewModel.uiState.timelineStylePickerVisible == false)
+    }
+
+    @Test func timelineStylePicker_emptySession_neverWaitsToShow() async {
+        let preferences = SessionChatDisplayPreferences.shared
+        preferences.clear()
+        defer { preferences.clear() }
+        preferences.resolveTimelineForInstall(existingInstall: true)
+        let clock = ChatTestSyncClock(now: 1_000)
+        let viewModel = makeViewModel(messageRepository: FakeMessageRepository(messages: []), clock: clock)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        await #expect(throws: (any Error).self) {
+            try await clock.awaitWaiter(
+                milliseconds: SessionChatViewModel.timelineStylePickerDelayMs,
+                timeout: .milliseconds(300)
+            )
+        }
+        #expect(viewModel.uiState.timelineStylePickerVisible == false)
+        #expect(preferences.timelineStylePickerPending)
+    }
+
+    @Test func timelineStylePicker_openPermission_skipsItAndStaysPending() async throws {
+        let preferences = SessionChatDisplayPreferences.shared
+        preferences.clear()
+        defer { preferences.clear() }
+        preferences.resolveTimelineForInstall(existingInstall: true)
+        let clock = ChatTestSyncClock(now: 1_000)
+        let viewModel = await openChatWithHistory(
+            clock: clock,
+            permissionLiveStore: FakePermissionLiveStore(requests: [permissionRequest(id: "permission-1", sessionID: "ses-1")])
+        )
+        defer { viewModel.stopObserving() }
+        await waitUntil { viewModel.uiState.permissionRequest != nil }
+
+        try await clock.awaitWaiter(milliseconds: SessionChatViewModel.timelineStylePickerDelayMs)
+        clock.release(milliseconds: SessionChatViewModel.timelineStylePickerDelayMs)
+        try await Task.sleep(for: .milliseconds(50))
+
+        #expect(viewModel.uiState.timelineStylePickerVisible == false)
+        #expect(preferences.timelineStylePickerPending)
+    }
+
     @Test func runClientSlashAction_compact_failureClearsCompactingAndShowsError() async {
         let sessionRepository = FakeChatSessionRepository(
             summarizeError: .http(statusCode: 500, message: "boom")

@@ -102,6 +102,7 @@ import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGaller
 import dev.opencode.mobile.ui.componentgallery.components.ReorderableListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SectionHeaderGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.OptionCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SelectableCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionBranchPillGalleryScreen
@@ -759,6 +760,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
                                                         ComponentGalleryEntryId.SelectableCard ->
                                                             SelectableCardGalleryScreen()
+                                                        ComponentGalleryEntryId.OptionCard -> OptionCardGalleryScreen()
                                                         ComponentGalleryEntryId.ListGroup -> ListGroupGalleryScreen()
                                                         ComponentGalleryEntryId.SectionHeader -> SectionHeaderGalleryScreen()
                                                         ComponentGalleryEntryId.ReorderableList -> ReorderableListGalleryScreen()

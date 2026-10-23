@@ -47,7 +47,7 @@ final class AppRootViewModel {
         await activeConnectionManager.ensureLoaded(from: connectionProfileStore)
         let hasProfile = await connectionProfileStore.activeProfile() != nil
         let existingInstall = appOnboardingPreferences.isCompleted || hasProfile
-        sessionChatDisplayPreferences.resolveChipTimelineForInstall(existingInstall: existingInstall)
+        sessionChatDisplayPreferences.resolveTimelineForInstall(existingInstall: existingInstall)
         if !existingInstall {
             state = .appOnboarding
         } else {

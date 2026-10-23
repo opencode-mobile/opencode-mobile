@@ -385,7 +385,10 @@ struct MessageSyncTests {
         }
         let painted = await waitUntil { collector.latest()?.first?.text == "Hello" }
         #expect(painted)
-        #expect(repo.isListBlocked)
+        // The cache can paint before the REST call starts; resuming before it is
+        // held would leave that call held and the confirm never comes.
+        let held = await waitUntil { repo.isListBlocked }
+        #expect(held)
         repo.resumeListMessages()
         let confirmed = await waitUntil { collector.sawCacheSyncConfirmed }
         task.cancel()

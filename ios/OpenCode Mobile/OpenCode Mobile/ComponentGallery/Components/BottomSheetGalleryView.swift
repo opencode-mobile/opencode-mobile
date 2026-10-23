@@ -3,6 +3,7 @@ import SwiftUI
 private enum GalleryBottomSheetDecoratorKind: String, CaseIterable, Identifiable {
     case none
     case icon
+    case illustration
 
     var id: String { rawValue }
 
@@ -10,6 +11,7 @@ private enum GalleryBottomSheetDecoratorKind: String, CaseIterable, Identifiable
         switch self {
         case .none: "None"
         case .icon: "Icon"
+        case .illustration: "Illustration"
         }
     }
 }
@@ -18,6 +20,7 @@ struct BottomSheetGalleryView: View {
     @State private var isPresented = false
     @State private var entryEnabled = true
     @State private var entrySelected = false
+    @State private var entryTagged = false
     @State private var showsHeaderBack = false
     @State private var showsHeaderTextAction = false
     @State private var headerTextActionEditing = false
@@ -38,6 +41,8 @@ struct BottomSheetGalleryView: View {
             .none
         case .icon:
             .icon(.folder)
+        case .illustration:
+            .illustration(.timelineActivityCard)
         }
     }
 
@@ -47,6 +52,8 @@ struct BottomSheetGalleryView: View {
             .none
         case .icon:
             .icon(.chevronRight)
+        case .illustration:
+            .illustration(.timelineStepRail)
         }
     }
 
@@ -69,6 +76,11 @@ struct BottomSheetGalleryView: View {
                         action: { entrySelected.toggle() }
                     )
                     OpenCodeChoiceBadge(
+                        label: "Entry tag",
+                        selected: entryTagged,
+                        action: { entryTagged.toggle() }
+                    )
+                    OpenCodeChoiceBadge(
                         label: "Header back",
                         selected: showsHeaderBack,
                         action: { showsHeaderBack.toggle() }
@@ -86,6 +98,7 @@ struct BottomSheetGalleryView: View {
                 options: [
                     ("Fit content", OpenCodeBottomSheetHeight.fitContent),
                     ("Half", .half),
+                    ("Fit all", .fitAllContent),
                 ],
                 selected: height,
                 onSelect: { height = $0 }
@@ -244,6 +257,7 @@ struct BottomSheetGalleryView: View {
                 startDecorator: entryStartDecorator,
                 endDecorator: entryEndDecorator,
                 selected: entrySelected,
+                tag: entryTagged ? "Recommended" : nil,
                 action: { isPresented = false }
             )
             OpenCodeBottomSheetEntry(

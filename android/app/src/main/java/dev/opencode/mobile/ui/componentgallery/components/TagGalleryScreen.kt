@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeTag
 import dev.opencode.mobile.ui.components.OpenCodeTagSize
+import dev.opencode.mobile.ui.components.OpenCodeTagTone
 
 @Composable
 fun TagGalleryScreen(modifier: Modifier = Modifier) {
@@ -25,5 +26,11 @@ fun TagGalleryScreen(modifier: Modifier = Modifier) {
             OpenCodeTag(title = "git", size = OpenCodeTagSize.Small)
         }
         OpenCodeTag(title = "new", size = OpenCodeTagSize.Small)
+        Text(text = "Accent", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        OpenCodeTag(title = "Recommended", tone = OpenCodeTagTone.Accent)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(text = "Activity Card", style = MaterialTheme.typography.bodyLarge)
+            OpenCodeTag(title = "Recommended", size = OpenCodeTagSize.Small, tone = OpenCodeTagTone.Accent)
+        }
     }
 }
