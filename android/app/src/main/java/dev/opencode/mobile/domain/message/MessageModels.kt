@@ -201,6 +201,8 @@ data class PromptSendOptions(
     /** v2 only: inline skill spans, sent as `skills: [{id, mention}]`. */
     val skillMentions: List<SkillMention> = emptyList(),
     val delivery: FollowUpDelivery = FollowUpDelivery.Steer,
+    /** [ClientMessageId] the server gives the user message it creates. */
+    val messageId: String? = null,
 )
 
 data class PromptModelSelection(

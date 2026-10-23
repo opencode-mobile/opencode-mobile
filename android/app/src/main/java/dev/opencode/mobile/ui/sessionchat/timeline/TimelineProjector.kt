@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.message.ClientMessageId
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
@@ -89,7 +90,8 @@ data class TimelineFrame(
  */
 data class OptimisticInputs(
     val pendingRows: List<TimelineRow> = emptyList(),
-    val baselineSignatures: Map<String, String> = emptyMap(),
+    /** Server row ids loaded when the send began. None of them is the send's echo. */
+    val baselineIds: Set<String> = emptySet(),
 )
 
 object TimelineProjector {
@@ -127,9 +129,6 @@ object TimelineProjector {
     fun projectServerRows(bodies: List<DisplayMessageBody>): List<TimelineRow> =
         bodies.mapNotNull { body -> projectRow(body, previous = null) }
 
-    fun reconciliationSignaturesById(rows: List<TimelineRow>): Map<String, String> =
-        rows.associate { row -> row.id to reconciliationSignature(row) }
-
     fun isHiddenPendingPrompt(item: SessionChatMessageItem): Boolean = item.role == MessageRole.User && item.pendingDelivery != null
 
     fun displayedOptimisticSendItems(items: List<SessionChatMessageItem>): List<SessionChatMessageItem> =
@@ -152,11 +151,11 @@ object TimelineProjector {
     fun unmatchedPending(
         pendingRows: List<TimelineRow>,
         serverRows: List<TimelineRow>,
-        baselineSignatures: Map<String, String>,
+        baselineIds: Set<String>,
     ): List<TimelineRow> =
         pendingRows.filter { pending ->
             serverRows.none { server ->
-                retiresPending(server, pending) && isNewServerEchoOf(server, pending, baselineSignatures)
+                retiresPending(server, pending) && isNewServerEchoOf(server, pending, baselineIds)
             }
         }
 
@@ -165,13 +164,22 @@ object TimelineProjector {
         pending: TimelineRow,
     ): Boolean = isHiddenPendingPrompt(pending) || server.pendingDelivery != FollowUpDelivery.Steer
 
+    /**
+     * A pending row whose send carried a [ClientMessageId] is echoed only by the user row
+     * the server created under that id, whatever its text or filenames.
+     *
+     * A v2 command takes no id, and its echo is the expanded template, so the first user
+     * row that was not loaded when the send began stands for it.
+     */
     fun isNewServerEchoOf(
         server: TimelineRow,
         pending: TimelineRow,
-        baselineSignatures: Map<String, String>,
-    ): Boolean =
-        baselineSignatures[server.id] != reconciliationSignature(server) &&
-            matchesOptimistic(server, pending)
+        baselineIds: Set<String>,
+    ): Boolean {
+        if (server.role != MessageRole.User) return false
+        if (ClientMessageId.isClientId(pending.id)) return server.id == pending.id
+        return server.id !in baselineIds
+    }
 
     fun rowFromMessageItem(
         item: SessionChatMessageItem,
@@ -255,19 +263,6 @@ object TimelineProjector {
     }
 
     fun isStreaming(message: Message): Boolean = message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
-
-    fun reconciliationSignature(row: TimelineRow): String =
-        buildString {
-            append(row.role.name)
-            append('\u0000')
-            append(row.text)
-            row.attachments.forEach { attachment ->
-                append('\u0000')
-                append(attachment.id)
-                append('\u0000')
-                append(attachment.signature)
-            }
-        }
 
     private fun projectRow(
         body: DisplayMessageBody,
@@ -430,15 +425,15 @@ object TimelineProjector {
     ): PendingMerge {
         val pendingRows = optimisticInputs.pendingRows
         if (pendingRows.isEmpty()) return PendingMerge(serverRows)
-        val baselineSignatures = optimisticInputs.baselineSignatures
+        val baselineIds = optimisticInputs.baselineIds
         val pendingToKeep =
             unmatchedPending(
                 pendingRows = pendingRows,
                 serverRows = serverRows,
-                baselineSignatures = baselineSignatures,
+                baselineIds = baselineIds,
             )
         val dropped = pendingRows.filter { pending -> pendingToKeep.none { it.id == pending.id } }
-        val withMetadata = applyPendingMetadata(serverRows, dropped, baselineSignatures)
+        val withMetadata = applyPendingMetadata(serverRows, dropped, baselineIds)
         return PendingMerge(
             rows = splicePending(withMetadata.rows, pendingToKeep),
             echoes = withMetadata.echoes,
@@ -463,16 +458,15 @@ object TimelineProjector {
     private fun applyPendingMetadata(
         serverRows: List<TimelineRow>,
         dropped: List<TimelineRow>,
-        baselineSignatures: Map<String, String>,
+        baselineIds: Set<String>,
     ): PendingMerge {
         if (dropped.isEmpty()) return PendingMerge(serverRows)
         val echoes = mutableMapOf<String, String>()
         val rows =
             serverRows.map { row ->
-                if (row.role != MessageRole.User) return@map row
-                if (baselineSignatures[row.id] == reconciliationSignature(row)) return@map row
                 val pending =
-                    dropped.firstOrNull { candidate -> matchesOptimistic(row, candidate) } ?: return@map row
+                    dropped.firstOrNull { candidate -> isNewServerEchoOf(row, candidate, baselineIds) }
+                        ?: return@map row
                 if (!isHiddenPendingPrompt(row) && pending.id !in echoes.values) {
                     echoes[row.id] = pending.id
                 }
@@ -501,50 +495,6 @@ object TimelineProjector {
                 )
             }
         return PendingMerge(rows, echoes)
-    }
-
-    /**
-     * Text-equal user rows match. Blank text is an attachment-only send: both
-     * sides must carry the same files. A blank server row with no attachments is
-     * not an echo of an attachment-only pending row — [MessageDomainAdapter]
-     * leaves [Message.text] empty for file-only parts and still projects those
-     * files onto the row.
-     */
-    fun matchesOptimistic(
-        server: TimelineRow,
-        pending: TimelineRow,
-    ): Boolean {
-        if (server.role != MessageRole.User || server.text != pending.text) {
-            return false
-        }
-        if (pending.text.isBlank()) {
-            return attachmentsCorrespond(server, pending)
-        }
-        if (server.attachments.isEmpty()) return true
-        return attachmentsCorrespond(server, pending)
-    }
-
-    private fun attachmentsCorrespond(
-        server: TimelineRow,
-        pending: TimelineRow,
-    ): Boolean {
-        if (server.attachments.size != pending.attachments.size) return false
-        if (server.attachments.isEmpty()) return false
-        return server.attachments.zip(pending.attachments).all { (left, right) ->
-            attachmentsMatch(left, right)
-        }
-    }
-
-    private fun attachmentsMatch(
-        left: SessionChatAttachmentItem,
-        right: SessionChatAttachmentItem,
-    ): Boolean {
-        if (left.variant != right.variant) return false
-        if (left.id == right.id) return true
-        val leftName = left.filename.trim()
-        val rightName = right.filename.trim()
-        if (leftName.isNotEmpty() && leftName == rightName) return true
-        return leftName.isEmpty() || rightName.isEmpty()
     }
 
     private fun diffFrame(

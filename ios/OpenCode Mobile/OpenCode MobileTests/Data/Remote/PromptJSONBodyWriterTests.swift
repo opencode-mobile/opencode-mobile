@@ -131,4 +131,23 @@ struct PromptJSONBodyWriterTests {
             try AttachmentLoader().load(data: data, filename: "huge.pdf", declaredMime: "application/pdf")
         }
     }
+
+    @Test func writers_sendClientMessageID() throws {
+        let v1Prompt = try PromptJSONBodyWriter.writeV1Prompt(
+            SendMessageRequestDTO(parts: [SendMessagePartDTO(type: "text", text: "Hi")], messageID: "msg_v1"),
+            attachments: []
+        )
+        let v2Prompt = try PromptJSONBodyWriter.writeV2Prompt(
+            V2PromptRequestDTO(id: "msg_v2", text: "Hi"),
+            attachments: []
+        )
+        let v1Command = try PromptJSONBodyWriter.writeV1Command(
+            RunCommandRequestDTO(command: "review", arguments: "", messageID: "msg_cmd"),
+            attachments: []
+        )
+
+        #expect(try String(contentsOf: v1Prompt, encoding: .utf8).contains("\"messageID\":\"msg_v1\""))
+        #expect(try String(contentsOf: v2Prompt, encoding: .utf8).contains("\"id\":\"msg_v2\""))
+        #expect(try String(contentsOf: v1Command, encoding: .utf8).contains("\"messageID\":\"msg_cmd\""))
+    }
 }

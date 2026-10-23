@@ -42,6 +42,8 @@ struct CommandRunOptions: Equatable, Sendable {
     let delivery: FollowUpDelivery
     /// v2 skills placed in the draft; ride along on the command route without offsets.
     let skillIDs: [String]
+    /// `ClientMessageID` for the user message. v1 keeps it; v2 commands take no id.
+    let messageID: String?
 
     init(
         command: String,
@@ -51,7 +53,8 @@ struct CommandRunOptions: Equatable, Sendable {
         variant: String? = nil,
         mode: String? = nil,
         delivery: FollowUpDelivery = .steer,
-        skillIDs: [String] = []
+        skillIDs: [String] = [],
+        messageID: String? = nil
     ) {
         self.command = command
         self.arguments = arguments
@@ -61,6 +64,7 @@ struct CommandRunOptions: Equatable, Sendable {
         self.mode = mode
         self.delivery = delivery
         self.skillIDs = skillIDs
+        self.messageID = messageID
     }
 }
 

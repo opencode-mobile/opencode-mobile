@@ -37,6 +37,14 @@ struct MessageDomainAdapterTests {
         #expect(message.failure?.providerBody == nil)
     }
 
+    @Test func sendRequests_carryClientMessageID() {
+        let options = PromptSendOptions(text: "Hello", messageID: "msg_client")
+
+        #expect(adapter.sendRequest(options: options).messageID == "msg_client")
+        #expect(adapter.v2PromptRequest(options: options).id == "msg_client")
+        #expect(adapter.v2PromptRequest(options: PromptSendOptions(text: "Hello")).id == nil)
+    }
+
     @Test func sendRequest_includesModelAndNonDefaultVariant() throws {
         let body = adapter.sendRequest(
             options: PromptSendOptions(

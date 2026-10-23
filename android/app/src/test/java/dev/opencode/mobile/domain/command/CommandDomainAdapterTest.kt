@@ -89,7 +89,7 @@ class CommandDomainAdapterTest {
     }
 
     @Test
-    fun toRunRequest_mapsComposerSnapshotWithoutMessageId() {
+    fun toRunRequest_mapsComposerSnapshotAndClientMessageId() {
         val request =
             adapter.toRunRequest(
                 CommandRunOptions(
@@ -109,9 +109,11 @@ class CommandDomainAdapterTest {
                     model = PromptModelSelection(providerId = "openai", modelId = "gpt-4"),
                     variant = "high",
                     mode = "build",
+                    messageId = "msg_client",
                 ),
             )
         assertEquals("init", request.command)
+        assertEquals("msg_client", request.messageId)
         assertEquals("please", request.arguments)
         assertEquals("build", request.agent)
         assertEquals("openai/gpt-4", request.model)

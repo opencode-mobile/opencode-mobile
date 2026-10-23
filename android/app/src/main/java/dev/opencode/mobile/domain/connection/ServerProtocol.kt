@@ -35,6 +35,8 @@ data class ServerCapabilities(
     val supportsSessionViewed: Boolean = false,
     /** Server moves a session to another worktree (`POST /api/session/{id}/move`, v2). */
     val supportsSessionMove: Boolean = false,
+    /** The command route keeps a client message id (v1 `messageID`); v2 `…/command` takes none. */
+    val commandKeepsClientMessageId: Boolean = false,
 ) {
     companion object {
         fun forProtocol(
@@ -48,6 +50,7 @@ data class ServerCapabilities(
                         supportsSessionArchive = true,
                         supportsFollowUpDelivery = false,
                         supportsSessionViewed = false,
+                        commandKeepsClientMessageId = true,
                     )
                 ServerProtocol.V2 ->
                     ServerCapabilities(

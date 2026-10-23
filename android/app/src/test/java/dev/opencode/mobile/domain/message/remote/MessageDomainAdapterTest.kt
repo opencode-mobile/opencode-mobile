@@ -119,6 +119,15 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun sendRequests_carryClientMessageId() {
+        val options = PromptSendOptions(text = "Hello", messageId = "msg_client")
+
+        assertEquals("msg_client", adapter.toSendRequest(options).messageId)
+        assertEquals("msg_client", adapter.toV2PromptRequest(options).id)
+        assertEquals(null, adapter.toV2PromptRequest(PromptSendOptions(text = "Hello")).id)
+    }
+
+    @Test
     fun toSendRequest_includesModelAndNonDefaultVariant() {
         val body =
             adapter.toSendRequest(

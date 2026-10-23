@@ -555,12 +555,13 @@ enum SessionChatStatusChrome {
 /// Explicit optimistic merge inputs supplied by `SessionChatTimeline`.
 nonisolated struct OptimisticInputs: Sendable {
     let pendingRows: [TimelineRow]
-    let baselineSignatureCounts: [String: Int]
+    /// Server row ids loaded when the send began. None of them is the send's echo.
+    let baselineIDs: Set<String>
     let mergePending: Bool
 
     static let none = OptimisticInputs(
         pendingRows: [],
-        baselineSignatureCounts: [:],
+        baselineIDs: [],
         mergePending: false
     )
 }

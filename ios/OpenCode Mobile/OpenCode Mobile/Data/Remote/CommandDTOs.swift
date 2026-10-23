@@ -54,6 +54,7 @@ nonisolated struct RunCommandRequestDTO: Codable, Sendable {
     let model: String?
     let variant: String?
     let parts: [CommandFilePartDTO]
+    let messageID: String?
 
     init(
         command: String,
@@ -61,7 +62,8 @@ nonisolated struct RunCommandRequestDTO: Codable, Sendable {
         agent: String? = nil,
         model: String? = nil,
         variant: String? = nil,
-        parts: [CommandFilePartDTO] = []
+        parts: [CommandFilePartDTO] = [],
+        messageID: String? = nil
     ) {
         self.command = command
         self.arguments = arguments
@@ -69,6 +71,7 @@ nonisolated struct RunCommandRequestDTO: Codable, Sendable {
         self.model = model
         self.variant = variant
         self.parts = parts
+        self.messageID = messageID
     }
 }
 

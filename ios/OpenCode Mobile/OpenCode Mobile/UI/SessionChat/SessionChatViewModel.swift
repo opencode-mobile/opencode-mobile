@@ -1082,6 +1082,7 @@ final class SessionChatViewModel {
             },
             isSessionBusy: sessionInfo.state.sessionStatusLabel != nil,
             supportsFollowUp: activeConnectionManager.capabilities.supportsFollowUpDelivery,
+            commandKeepsClientMessageID: activeConnectionManager.capabilities.commandKeepsClientMessageID,
             waitToSend: waitToSend,
             serverAlreadyAccepted: { [weak self] in
                 self?.serverAlreadyAccepted() ?? false

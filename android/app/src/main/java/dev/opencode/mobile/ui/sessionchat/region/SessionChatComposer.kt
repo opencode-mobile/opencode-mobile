@@ -24,6 +24,7 @@ import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
+import dev.opencode.mobile.domain.message.ClientMessageId
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
@@ -988,6 +989,7 @@ class SessionChatComposer(
         onSendFailed: (optimisticId: String, error: String) -> Unit,
         isSessionBusy: Boolean,
         supportsFollowUp: Boolean,
+        commandKeepsClientMessageId: Boolean = false,
         holdUntil: suspend () -> Boolean = { true },
         serverAlreadyAccepted: () -> Boolean = { false },
         beforePrompt: suspend () -> Unit = {},
@@ -1035,11 +1037,22 @@ class SessionChatComposer(
                     commands = _state.value.serverCommands,
                 )
         val displayText = collapsedDisplay?.text ?: prompt
+        val intent =
+            ComposerSubmitRouting.resolve(
+                text = prompt,
+                commands = _state.value.serverCommands,
+            )
+        // The echo of a send that carries its id comes back under it. v2 commands take
+        // no id, so their row keeps a local id and retires on text instead.
+        val messageId =
+            ClientMessageId.next().takeIf {
+                intent !is ComposerSubmitIntent.ServerCommand || commandKeepsClientMessageId
+            }
         scope.launch {
             val display =
                 withContext(ioDispatcher) {
                     messageRepository.prepareOptimisticUserMessage(
-                        id = "pending-${UUID.randomUUID()}",
+                        id = messageId ?: "pending-${UUID.randomUUID()}",
                         text = displayText,
                         attachments = attachments,
                     )
@@ -1111,11 +1124,6 @@ class SessionChatComposer(
                     onSendFailed(display.id, PENDING_SEND_TIMEOUT_ERROR)
                     return@launch
                 }
-                val intent =
-                    ComposerSubmitRouting.resolve(
-                        text = prompt,
-                        commands = _state.value.serverCommands,
-                    )
                 val hasAttachments = attachments.isNotEmpty()
                 val progress =
                     PromptSendProgressReporter { sent, total ->
@@ -1148,6 +1156,7 @@ class SessionChatComposer(
                                         worktree = worktree,
                                         skillMentions = skillMentions,
                                         delivery = delivery,
+                                        messageId = messageId,
                                     ),
                                 directory = worktree,
                             )
@@ -1196,6 +1205,7 @@ class SessionChatComposer(
                                                 .skillParts(prompt, skillsForSend)
                                                 .map { it.skillId }
                                                 .distinct(),
+                                        messageId = messageId,
                                     ),
                                 directory = worktree,
                             )

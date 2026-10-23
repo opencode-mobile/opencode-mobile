@@ -78,7 +78,8 @@ struct CommandDomainAdapter: Sendable {
                     url: attachment.dataURL,
                     filename: attachment.filename
                 )
-            }
+            },
+            messageID: options.messageID
         )
     }
 

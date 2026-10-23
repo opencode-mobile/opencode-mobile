@@ -82,6 +82,10 @@ nonisolated enum PromptJSONBodyWriter {
                 try writer.key("agent")
                 try writer.writeString(agent)
             }
+            if let messageID = body.messageID {
+                try writer.key("messageID")
+                try writer.writeString(messageID)
+            }
             try writer.endObject()
         }
     }
@@ -89,6 +93,10 @@ nonisolated enum PromptJSONBodyWriter {
     static func writeV2Prompt(_ body: V2PromptRequestDTO, attachments: [Attachment]) throws -> URL {
         try writeBody(to: newFile()) { writer in
             try writer.beginObject()
+            if let id = body.id {
+                try writer.key("id")
+                try writer.writeString(id)
+            }
             try writer.key("text")
             try writer.writeString(body.text)
             let mentionFiles = body.fileMentions ?? []
@@ -229,6 +237,10 @@ nonisolated enum PromptJSONBodyWriter {
                 try writer.endObject()
             }
             try writer.endArray()
+            if let messageID = body.messageID {
+                try writer.key("messageID")
+                try writer.writeString(messageID)
+            }
             try writer.endObject()
         }
     }

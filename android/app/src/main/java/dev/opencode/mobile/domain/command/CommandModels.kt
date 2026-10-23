@@ -37,6 +37,8 @@ data class CommandRunOptions(
     val delivery: FollowUpDelivery = FollowUpDelivery.Steer,
     /** v2 skills mentioned in the draft; the command route carries them as `skills: [{id}]`. */
     val skillIds: List<String> = emptyList(),
+    /** [ClientMessageId] for the user message. v1 keeps it; v2 commands take no id. */
+    val messageId: String? = null,
 )
 
 sealed class ComposerSubmitIntent {

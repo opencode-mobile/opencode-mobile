@@ -2,6 +2,7 @@ package dev.opencode.mobile.data.remote.dto
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -64,6 +65,7 @@ data class RunCommandRequestDto(
     val model: String? = null,
     val variant: String? = null,
     val parts: List<CommandFilePartDto> = emptyList(),
+    @SerialName("messageID") val messageId: String? = null,
 )
 
 @Serializable

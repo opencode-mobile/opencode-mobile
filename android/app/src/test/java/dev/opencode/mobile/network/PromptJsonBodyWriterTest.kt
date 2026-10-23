@@ -227,4 +227,31 @@ class PromptJsonBodyWriterTest {
         assertTrue(json.contains("\"filename\":\"shot.png\""))
         assertTrue(json.contains("data:image/png;base64,AQIDBA=="))
     }
+
+    @Test
+    fun writers_sendClientMessageId() {
+        val directory = File(System.getProperty("java.io.tmpdir"), "prompt-writer-ids")
+        val v1Prompt =
+            PromptJsonBodyWriter.writeV1Prompt(
+                SendMessageRequestDto(parts = listOf(SendMessagePartDto(type = "text", text = "Hi")), messageId = "msg_v1"),
+                emptyList(),
+                directory,
+            )
+        val v2Prompt =
+            PromptJsonBodyWriter.writeV2Prompt(
+                V2PromptRequestDto(id = "msg_v2", text = "Hi", delivery = "steer"),
+                emptyList(),
+                directory,
+            )
+        val v1Command =
+            PromptJsonBodyWriter.writeV1Command(
+                RunCommandRequestDto(command = "review", arguments = "", messageId = "msg_cmd"),
+                emptyList(),
+                directory,
+            )
+
+        assertTrue(v1Prompt.readText().contains("\"messageID\":\"msg_v1\""))
+        assertTrue(v2Prompt.readText().contains("\"id\":\"msg_v2\""))
+        assertTrue(v1Command.readText().contains("\"messageID\":\"msg_cmd\""))
+    }
 }

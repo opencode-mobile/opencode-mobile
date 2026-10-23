@@ -2723,7 +2723,7 @@ class SessionChatViewModelTest {
 
             assertTrue(
                 viewModel.uiState.value.messages
-                    .any { it.id.startsWith("pending-") },
+                    .any { it.isPending },
             )
             sendGate.complete(Unit)
             advanceUntilIdle()
@@ -3965,7 +3965,7 @@ class SessionChatViewModelTest {
             repository.failListMessagesAfterSend = false
             repository.messages =
                 listOf(
-                    Message(id = "msg-1", role = MessageRole.User, text = "New prompt"),
+                    Message(id = requireNotNull(repository.sentOptions?.messageId), role = MessageRole.User, text = "New prompt"),
                     Message(id = "msg-2", role = MessageRole.Assistant, text = "Reply"),
                 )
             repository.eventStream.emit(OpencodeEvent(type = "message.updated", sessionId = "ses-1"))
@@ -7507,9 +7507,10 @@ private class FakeMessageRepository(
         if (failSendWithTransport) throw MessageError.Transport(RuntimeException("offline"))
         if (shouldFailSend) error("send failed")
         if (echoSentPrompt && options.text.isNotEmpty()) {
+            // Like the server, the echo keeps the client message id.
             messages = messages +
                 Message(
-                    id = "msg-sent",
+                    id = options.messageId ?: "msg-sent",
                     role = MessageRole.User,
                     text = options.text,
                 )
