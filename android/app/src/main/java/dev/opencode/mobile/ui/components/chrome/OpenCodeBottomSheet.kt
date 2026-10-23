@@ -203,6 +203,14 @@ enum class OpenCodeBottomSheetHeight {
 
     /** Fixed at the scrollable half height from the first frame. */
     Half,
+
+    /**
+     * Like [FitContent], but wraps all content up to the tallest sheet the window allows (the
+     * window less the top inset and the top gap, the same top limit an expanded sheet uses).
+     * Only content taller than that scrolls, and the sheet then rests at that maximum, not at
+     * half height. For short choice lists that must show every option at once.
+     */
+    FitAllContent,
 }
 
 /** How an [OpenCodeBottomSheet] treats the software keyboard. */
@@ -464,6 +472,7 @@ fun OpenCodeBottomSheet(
                         scrollTargetKey = shown.scrollTargetKey,
                         threeButtonNavigation = threeButtonNav,
                         windowHeight = maxHeight,
+                        sheetBottomInset = sheetBottomInset,
                         onDismissRequest = requestDismiss,
                         headerDragModifier =
                             Modifier.draggable(
@@ -626,6 +635,7 @@ private fun BottomSheetContent(
     scrollTargetKey: Any?,
     threeButtonNavigation: Boolean,
     windowHeight: Dp,
+    sheetBottomInset: Dp,
     onDismissRequest: () -> Unit,
     headerDragModifier: Modifier,
     pinnedTop: @Composable ColumnScope.() -> Unit,
@@ -633,7 +643,17 @@ private fun BottomSheetContent(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     val density = LocalDensity.current
-    val maxSheetHeight = openCodeBottomSheetHalfHeight(windowHeight)
+    val fitsAllContent = height == OpenCodeBottomSheetHeight.FitAllContent
+    val windowTopInset =
+        WindowInsets.systemBars
+            .union(WindowInsets.displayCutout)
+            .asPaddingValues()
+            .calculateTopPadding()
+    val fitAllMaxHeight = openCodeBottomSheetFitAllMaxHeight(windowHeight, windowTopInset, sheetBottomInset)
+    // Column height (inside its bottom padding) once scrollable, and the compact limit it must pass.
+    val maxSheetHeight =
+        if (fitsAllContent) fitAllMaxHeight - BottomSheetContentBottomPadding else openCodeBottomSheetHalfHeight(windowHeight)
+    val compactMaxHeight = if (fitsAllContent) fitAllMaxHeight else BottomSheetCompactMaxHeight
     var contentHeight by remember { mutableStateOf(0.dp) }
     var headerHeight by remember { mutableStateOf(0.dp) }
     var pinnedTopHeight by remember { mutableStateOf(0.dp) }
@@ -653,7 +673,7 @@ private fun BottomSheetContent(
     }
 
     val layoutMode =
-        remember(height, committedToScrollable, contentHeight, headerHeight, pinnedTopHeight, pinnedBottomHeight) {
+        remember(height, committedToScrollable, contentHeight, headerHeight, pinnedTopHeight, pinnedBottomHeight, compactMaxHeight) {
             openCodeBottomSheetLayoutMode(
                 height = height,
                 committedToScrollable = committedToScrollable,
@@ -661,6 +681,7 @@ private fun BottomSheetContent(
                 pinnedTopHeight = pinnedTopHeight,
                 contentHeight = contentHeight,
                 pinnedBottomHeight = pinnedBottomHeight,
+                compactMaxHeight = compactMaxHeight,
             )
         }
 
@@ -724,7 +745,7 @@ private fun BottomSheetContent(
                                 Modifier.bottomSheetFixedHeight(keyboardSheetHeight)
                             } else {
                                 Modifier
-                                    .heightIn(max = BottomSheetCompactMaxHeight)
+                                    .heightIn(max = if (fitsAllContent) maxSheetHeight else BottomSheetCompactMaxHeight)
                                     .wrapContentHeight()
                             }
                         BottomSheetLayoutMode.Measuring -> Modifier.heightIn(max = maxSheetHeight)
@@ -900,6 +921,19 @@ private fun BottomSheetHeader(
 /** Scrollable half height: half the window, less the gap above the sheet. */
 internal fun openCodeBottomSheetHalfHeight(windowHeight: Dp): Dp = windowHeight * BottomSheetScrollableHeightFraction - BottomSheetInset
 
+/**
+ * Tallest [OpenCodeBottomSheetHeight.FitAllContent] sheet, its column plus bottom padding: the
+ * window less the top system inset, the top gap, and the sheet's bottom inset. Never shorter
+ * than a half-height sheet, so a cramped window still scrolls at half height.
+ */
+internal fun openCodeBottomSheetFitAllMaxHeight(
+    windowHeight: Dp,
+    topInset: Dp,
+    bottomInset: Dp,
+): Dp =
+    (windowHeight - topInset - BottomSheetInset - bottomInset)
+        .coerceAtLeast(openCodeBottomSheetHalfHeight(windowHeight) + BottomSheetContentBottomPadding)
+
 /** The measured header height, or an estimate before the header has laid out. */
 internal fun openCodeBottomSheetResolvedHeaderHeight(headerHeight: Dp): Dp =
     if (headerHeight > 0.dp) headerHeight else BottomSheetEstimatedHeaderHeight
@@ -913,9 +947,10 @@ internal fun openCodeBottomSheetMeasuredHeight(
 ): Dp = openCodeBottomSheetResolvedHeaderHeight(headerHeight) + pinnedTopHeight + contentHeight + pinnedBottomHeight
 
 /**
- * Layout for a sheet of [height]. [OpenCodeBottomSheetHeight.Half] and a FitContent sheet that
- * already reached half height are scrollable; otherwise FitContent stays compact while the
- * measured column and bottom padding fit [BottomSheetCompactMaxHeight].
+ * Layout for a sheet of [height]. [OpenCodeBottomSheetHeight.Half] and a fitting sheet that
+ * already turned scrollable are scrollable; otherwise a fitting sheet stays compact while the
+ * measured column and bottom padding fit [compactMaxHeight]: [BottomSheetCompactMaxHeight] for
+ * FitContent, [openCodeBottomSheetFitAllMaxHeight] for FitAllContent.
  */
 internal fun openCodeBottomSheetLayoutMode(
     height: OpenCodeBottomSheetHeight,
@@ -924,13 +959,14 @@ internal fun openCodeBottomSheetLayoutMode(
     pinnedTopHeight: Dp,
     contentHeight: Dp,
     pinnedBottomHeight: Dp,
+    compactMaxHeight: Dp = BottomSheetCompactMaxHeight,
 ): BottomSheetLayoutMode {
     if (height == OpenCodeBottomSheetHeight.Half || committedToScrollable) return BottomSheetLayoutMode.Scrollable
     if (contentHeight == 0.dp) return BottomSheetLayoutMode.Measuring
     val total =
         openCodeBottomSheetMeasuredHeight(headerHeight, pinnedTopHeight, contentHeight, pinnedBottomHeight) +
             BottomSheetContentBottomPadding
-    return if (total > BottomSheetCompactMaxHeight) BottomSheetLayoutMode.Scrollable else BottomSheetLayoutMode.Compact
+    return if (total > compactMaxHeight) BottomSheetLayoutMode.Scrollable else BottomSheetLayoutMode.Compact
 }
 
 /**

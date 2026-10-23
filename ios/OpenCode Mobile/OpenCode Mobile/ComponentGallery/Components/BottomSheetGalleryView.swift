@@ -98,6 +98,7 @@ struct BottomSheetGalleryView: View {
                 options: [
                     ("Fit content", OpenCodeBottomSheetHeight.fitContent),
                     ("Half", .half),
+                    ("Fit all", .fitAllContent),
                 ],
                 selected: height,
                 onSelect: { height = $0 }

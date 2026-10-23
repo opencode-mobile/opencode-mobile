@@ -50,6 +50,10 @@ enum OpenCodeBottomSheetHeight: Equatable {
     case fitContent
     /// Fixed at the scrollable 50% detent from the first frame.
     case half
+    /// Wraps all content up to the tallest card the screen allows (the top
+    /// limit an expanded sheet uses); only taller content scrolls, resting at
+    /// that limit. For pickers whose every option should be in view.
+    case fitAllContent
 }
 
 /// How a bottom sheet treats the software keyboard.
@@ -186,6 +190,34 @@ enum OpenCodeBottomSheetLayoutMath {
     /// Whether a `.fitContent` card of `fitContentHeight` still wraps its content.
     static func fitsCompact(fitContentHeight: CGFloat) -> Bool {
         fitContentHeight <= compactMaxHeight
+    }
+
+    /// Tallest card a `.fitAllContent` sheet wraps: the space an expanded card gets.
+    static func fitAllMaxHeight(availableHeight: CGFloat, topSafeArea: CGFloat) -> CGFloat {
+        max(0, availableHeight - topSafeArea - expandedTopGap)
+    }
+
+    /// Tallest card that still wraps its content under `height`.
+    static func compactLimit(
+        height: OpenCodeBottomSheetHeight,
+        availableHeight: CGFloat,
+        topSafeArea: CGFloat
+    ) -> CGFloat {
+        height == .fitAllContent
+            ? fitAllMaxHeight(availableHeight: availableHeight, topSafeArea: topSafeArea)
+            : compactMaxHeight
+    }
+
+    /// Resting height once the card scrolls: the 50% detent, or for
+    /// `.fitAllContent` the same limit it wraps up to.
+    static func restingScrollableHeight(
+        height: OpenCodeBottomSheetHeight,
+        availableHeight: CGFloat,
+        topSafeArea: CGFloat
+    ) -> CGFloat {
+        height == .fitAllContent
+            ? fitAllMaxHeight(availableHeight: availableHeight, topSafeArea: topSafeArea)
+            : scrollableHeight(availableHeight: availableHeight)
     }
 
     /// Height left for the scrolling body in a fixed-height card: the card
@@ -424,7 +456,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         case .half:
             _mode = State(initialValue: .scrollable)
             _hasLockedScrollable = State(initialValue: true)
-        case .fitContent:
+        case .fitContent, .fitAllContent:
             _mode = State(initialValue: .compact)
             _hasLockedScrollable = State(initialValue: false)
         }
@@ -458,7 +490,11 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             keyboardOverlap: keyboardOverlap
         )
         let presentationMode: BottomSheetPresentationMode = keyboardExpanded ? .scrollable : resolvedMode
-        let restingScrollableHeight = OpenCodeBottomSheetLayoutMath.scrollableHeight(availableHeight: availableHeight)
+        let restingScrollableHeight = OpenCodeBottomSheetLayoutMath.restingScrollableHeight(
+            height: height,
+            availableHeight: availableHeight,
+            topSafeArea: topSafeArea
+        )
         let cardHeight = OpenCodeBottomSheetLayoutMath.cardHeight(
             restingHeight: resolvedMode == .scrollable ? restingScrollableHeight : nil,
             availableHeight: availableHeight,
@@ -533,7 +569,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
                 // the 50% detent. Wrapping to content left iOS shorter than Android.
                 hasLockedScrollable = true
                 mode = .scrollable
-            case .fitContent:
+            case .fitContent, .fitAllContent:
                 hasLockedScrollable = false
                 mode = .compact
             }
@@ -563,7 +599,12 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             pinnedBottomHeight: pinnedBottomHeight,
             bottomClearance: bottomClearance
         )
-        if OpenCodeBottomSheetLayoutMath.fitsCompact(fitContentHeight: fitContentHeight) {
+        let compactLimit = OpenCodeBottomSheetLayoutMath.compactLimit(
+            height: height,
+            availableHeight: availableHeight,
+            topSafeArea: topSafeArea
+        )
+        if fitContentHeight <= compactLimit {
             mode = .compact
         } else {
             hasLockedScrollable = true

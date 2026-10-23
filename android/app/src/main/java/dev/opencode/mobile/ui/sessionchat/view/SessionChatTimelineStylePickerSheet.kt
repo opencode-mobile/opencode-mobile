@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
@@ -19,12 +21,14 @@ import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
-import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeOptionCard
+import dev.opencode.mobile.ui.components.OpenCodeOptionCardPreview
 import dev.opencode.mobile.ui.components.OpenCodeSkeletonIllustrationTopic
+import dev.opencode.mobile.ui.components.OpenCodeTagTone
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineStyleOption
 
@@ -41,6 +45,10 @@ internal val SessionChatTimelineStyle.illustrationTopic: OpenCodeSkeletonIllustr
             SessionChatTimelineStyle.StepRail -> OpenCodeSkeletonIllustrationTopic.TimelineStepRail
             SessionChatTimelineStyle.ActivityCard -> OpenCodeSkeletonIllustrationTopic.TimelineActivityCard
         }
+
+/** "Recommended" draws the eye with the accent tone; "Current" stays neutral. */
+internal val SessionChatTimelineStyleOption.tagTone: OpenCodeTagTone
+    get() = if (tag == SessionChatTimelineStyleOption.RECOMMENDED_TAG) OpenCodeTagTone.Accent else OpenCodeTagTone.Neutral
 
 /**
  * One-time Timeline Style picker (#805). Tapping an entry only selects it; the pinned button
@@ -68,6 +76,8 @@ internal fun SessionChatTimelineStylePickerSheet(
         visible = visible,
         title = TIMELINE_STYLE_PICKER_TITLE,
         onDismissRequest = onDismiss,
+        // Every style stays on screen; only a window too short for all of them scrolls.
+        height = OpenCodeBottomSheetHeight.FitAllContent,
         pinnedBottom = {
             OpenCodeButton(
                 variant = OpenCodeButtonVariant.FullWidthText("Use ${selected.title}"),
@@ -89,15 +99,21 @@ internal fun SessionChatTimelineStylePickerSheet(
             color = openCodeColor("text-base"),
             modifier = Modifier.openCodeBottomSheetContentInset().padding(bottom = 8.dp),
         )
-        options.forEach { option ->
-            OpenCodeBottomSheetEntry(
-                title = option.style.title,
-                subtitle = option.style.subtitle,
-                tag = option.tag,
-                selected = option.style == selected,
-                startDecorator = BottomSheetEntryDecorator.Illustration(option.style.illustrationTopic),
-                onClick = { selectedWire = option.style.wireValue },
-            )
+        Column(
+            modifier = Modifier.openCodeBottomSheetContentInset(),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            options.forEach { option ->
+                OpenCodeOptionCard(
+                    title = option.style.title,
+                    subtitle = option.style.subtitle,
+                    tag = option.tag,
+                    tagTone = option.tagTone,
+                    preview = OpenCodeOptionCardPreview.Illustration(option.style.illustrationTopic),
+                    selected = option.style == selected,
+                    onClick = { selectedWire = option.style.wireValue },
+                )
+            }
         }
     }
 }

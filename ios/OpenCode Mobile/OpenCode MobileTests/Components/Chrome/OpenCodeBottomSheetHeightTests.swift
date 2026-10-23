@@ -234,6 +234,27 @@ final class OpenCodeBottomSheetHeightTests: XCTestCase {
         XCTAssertFalse(OpenCodeBottomSheetLayoutMath.fitsCompact(fitContentHeight: 420.5))
     }
 
+    func testFitAllContentWrapsUpToTheExpandedLimit() {
+        // iPhone 17: 866pt available, 62pt top safe area, 8pt top gap.
+        let limit = OpenCodeBottomSheetLayoutMath.compactLimit(height: .fitAllContent, availableHeight: 866, topSafeArea: 62)
+        XCTAssertEqual(limit, 796)
+        XCTAssertEqual(limit, OpenCodeBottomSheetLayoutMath.fitAllMaxHeight(availableHeight: 866, topSafeArea: 62))
+        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.compactLimit(height: .fitContent, availableHeight: 866, topSafeArea: 62), 420)
+        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.compactLimit(height: .half, availableHeight: 866, topSafeArea: 62), 420)
+    }
+
+    func testFitAllContentScrollsAtItsLimitInsteadOfTheHalfDetent() {
+        XCTAssertEqual(
+            OpenCodeBottomSheetLayoutMath.restingScrollableHeight(height: .fitAllContent, availableHeight: 866, topSafeArea: 62),
+            796
+        )
+        XCTAssertEqual(
+            OpenCodeBottomSheetLayoutMath.restingScrollableHeight(height: .fitContent, availableHeight: 866, topSafeArea: 62),
+            433
+        )
+        XCTAssertEqual(OpenCodeBottomSheetLayoutMath.fitAllMaxHeight(availableHeight: 40, topSafeArea: 62), 0)
+    }
+
     func testPinnedBottomCanPushFitContentToTheScrollableDetent() {
         let withoutFooter = OpenCodeBottomSheetLayoutMath.fitContentHeight(
             headerHeight: 60,

@@ -318,6 +318,12 @@ private fun ActionSheetEntries(
             onClick = onDismiss,
         )
     }
+    // Past the 420 compact limit: FitContent rests at half height, FitAllContent shows them all.
+    if (itemCount >= 12) {
+        repeat(6) { index ->
+            OpenCodeBottomSheetEntry(title = "Extra action ${index + 1}", onClick = onDismiss)
+        }
+    }
 }
 
 @Composable
@@ -369,7 +375,7 @@ private fun ItemCountControls(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(text = "Items", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(2, 4, 6).forEach { count ->
+            listOf(2, 4, 6, 12).forEach { count ->
                 OpenCodeChoiceBadge(
                     label = count.toString(),
                     selected = selected == count,

@@ -142,6 +142,8 @@ struct ComponentGalleryDetailView: View {
             ListItemGalleryView()
         case .selectableCard:
             SelectableCardGalleryView()
+        case .optionCard:
+            OptionCardGalleryView()
         case .listGroup:
             ListGroupGalleryView()
         case .sectionHeader:

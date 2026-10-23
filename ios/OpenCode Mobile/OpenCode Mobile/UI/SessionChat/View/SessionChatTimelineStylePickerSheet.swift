@@ -31,6 +31,8 @@ struct SessionChatTimelineStylePickerModifier: ViewModifier {
             .openCodeBottomSheet(
                 isPresented: presentedBinding,
                 title: "New: choose your timeline",
+                // Every option stays in view; the 50% detent hid the last one.
+                height: .fitAllContent,
                 pinnedTop: { EmptyView() },
                 content: { sheetContent(selected: selected) },
                 pinnedBottom: {
@@ -66,16 +68,20 @@ struct SessionChatTimelineStylePickerModifier: ViewModifier {
                 .openCodeBottomSheetContentInset()
                 .padding(.bottom, 8)
 
-            ForEach(orderedStyles, id: \.self) { style in
-                OpenCodeBottomSheetEntry(
-                    title: style.title,
-                    subtitle: style.subtitle,
-                    startDecorator: .illustration(style.pickerIllustration),
-                    selected: style == selected,
-                    tag: tag(for: style),
-                    action: { selection = style }
-                )
+            VStack(spacing: 8) {
+                ForEach(orderedStyles, id: \.self) { style in
+                    OpenCodeOptionCard(
+                        title: style.title,
+                        subtitle: style.subtitle,
+                        tag: tag(for: style),
+                        tagTone: style == .activityCard ? .accent : .neutral,
+                        preview: .illustration(style.pickerIllustration),
+                        selected: style == selected,
+                        action: { selection = style }
+                    )
+                }
             }
+            .openCodeBottomSheetContentInset()
         }
     }
 
