@@ -315,6 +315,53 @@ struct ListItemGalleryView: View {
                 )
             }
 
+            Text("Compact")
+                .font(OpenCodeTypography.button)
+                .foregroundStyle(OpenCodeColors.textStrong)
+
+            VStack(spacing: 0) {
+                OpenCodeListItem(
+                    variant: .compact,
+                    title: "Keep split pane in step with the sidebar",
+                    path: OpenCodeListItemPath(primary: "opencode-mobile", secondary: "803-compact-home-rows"),
+                    status: OpenCodeListItemStatus(text: "Running", tone: .interactive),
+                    caption: "now",
+                    startDecorator: .compactLetter(Character("O"), .red, statusDot: .interactive, pulsing: true),
+                    action: {}
+                )
+                OpenCodeListItem(
+                    variant: .compact,
+                    title: "Bump Android to 1.2.0 and iOS to 1.1.0",
+                    emphasized: true,
+                    path: OpenCodeListItemPath(primary: "opencode-mobile"),
+                    status: OpenCodeListItemStatus(text: "Done", tone: .success),
+                    caption: "3m ago",
+                    selected: selected,
+                    startDecorator: .compactLetter(Character("O"), .red, statusDot: .success),
+                    action: {}
+                )
+                OpenCodeListItem(
+                    variant: .compact,
+                    title: "Retry the flaky upload",
+                    path: OpenCodeListItemPath(
+                        primary: "api-client-for-the-enterprise-billing-platform",
+                        secondary: "ope-1042-show-worktree-and-project-on-home-rows"
+                    ),
+                    status: OpenCodeListItemStatus(text: "Retrying \u{00B7} 2", tone: .warning),
+                    caption: "12m ago",
+                    startDecorator: .compactLetter(Character("A"), .amber, statusDot: .warning),
+                    action: {}
+                )
+                OpenCodeListItem(
+                    variant: .compact,
+                    title: "Brewfile cleanup and remove casks that are no longer used",
+                    path: OpenCodeListItemPath(primary: "dotfiles"),
+                    caption: "4d ago",
+                    startDecorator: .compactLetter(Character("D"), .teal),
+                    action: {}
+                )
+            }
+
             Text("Title tag")
                 .font(OpenCodeTypography.button)
                 .foregroundStyle(OpenCodeColors.textStrong)

@@ -77,6 +77,9 @@ struct SessionListSession: Identifiable, Hashable {
     let location: HomeRowLocation?
     /// Project name shown on the line above `location`.
     let projectName: String?
+    /// Worktree part of a compact row: the shortened branch, or the folder on a detached HEAD.
+    /// Nil on the main checkout, for non-git projects, and while worktrees are off.
+    let worktreeLabel: String?
 
     init(
         id: String,
@@ -92,7 +95,8 @@ struct SessionListSession: Identifiable, Hashable {
         directory: String? = nil,
         worktreeScopeID: String? = nil,
         location: HomeRowLocation? = nil,
-        projectName: String? = nil
+        projectName: String? = nil,
+        worktreeLabel: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -108,6 +112,7 @@ struct SessionListSession: Identifiable, Hashable {
         self.worktreeScopeID = worktreeScopeID
         self.location = location
         self.projectName = projectName
+        self.worktreeLabel = worktreeLabel
     }
 }
 
@@ -340,6 +345,8 @@ struct SessionList<EmptyContent: View>: View {
     /// rendered order changes. Empty while nothing is rendered.
     let onDisplayedSessionsChange: (([SessionListSession]) -> Void)?
     let showsEmptyContent: Bool
+    /// Row style override, such as in the gallery. Nil follows the Session rows setting.
+    let rowStyle: HomeSessionRowStyle?
     let emptyContent: EmptyContent
 
     @State private var bottomSafeAreaInset: CGFloat = 0
@@ -374,6 +381,7 @@ struct SessionList<EmptyContent: View>: View {
         revealSelectedSessionToken: Int = 0,
         onDisplayedSessionsChange: (([SessionListSession]) -> Void)? = nil,
         showsEmptyContent: Bool = false,
+        rowStyle: HomeSessionRowStyle? = nil,
         @ViewBuilder emptyContent: () -> EmptyContent = { EmptyView() }
     ) {
         self.sessions = sessions
@@ -395,6 +403,7 @@ struct SessionList<EmptyContent: View>: View {
         self.revealSelectedSessionToken = revealSelectedSessionToken
         self.onDisplayedSessionsChange = onDisplayedSessionsChange
         self.showsEmptyContent = showsEmptyContent
+        self.rowStyle = rowStyle
         self.emptyContent = emptyContent()
         _incomingFilterId = State(initialValue: selectedFilterId)
         _incomingScopeTab = State(initialValue: selectedScopeTab?.id == selectedFilterId ? selectedScopeTab : nil)
@@ -582,7 +591,7 @@ struct SessionList<EmptyContent: View>: View {
             if sessionListShowsDivider(after: index, in: section.items, selectedSessionId: selectedSessionId) {
                 Divider()
                     .overlay(OpenCodeColors.borderWeakerBase)
-                    .padding(.leading, 60)
+                    .padding(.leading, dividerLeadingInset)
             }
         }
     }
@@ -596,12 +605,64 @@ struct SessionList<EmptyContent: View>: View {
             if sessionListShowsDivider(after: index, in: section.items, selectedSessionId: selectedSessionId) {
                 Divider()
                     .overlay(OpenCodeColors.borderWeakerBase)
-                    .padding(.leading, 60)
+                    .padding(.leading, dividerLeadingInset)
             }
         }
     }
 
+    private var effectiveRowStyle: HomeSessionRowStyle {
+        rowStyle ?? homeDisplayPreferences.sessionRowStyle
+    }
+
+    private var dividerLeadingInset: CGFloat {
+        switch effectiveRowStyle {
+        case .compact: 58
+        case .classic: 60
+        }
+    }
+
+    @ViewBuilder
     private func sessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
+        Group {
+            switch effectiveRowStyle {
+            case .compact: compactSessionRow(session)
+            case .classic: classicSessionRow(session, showStatusDot: showStatusDot)
+            }
+        }
+        .background {
+            if selectedSessionId == session.id {
+                GeometryReader { geometry in
+                    Color.clear.preference(
+                        key: SessionListSelectedRowFrameKey.self,
+                        value: geometry.frame(in: .named(sessionListViewportSpace))
+                    )
+                }
+            }
+        }
+    }
+
+    private func compactSessionRow(_ session: SessionListSession) -> some View {
+        let row = session.compactRow
+        return OpenCodeListItem(
+            variant: .compact,
+            title: session.title,
+            emphasized: row.emphasized,
+            path: row.path,
+            status: row.status,
+            caption: session.caption.isEmpty ? nil : session.caption,
+            selected: selectedSessionId == session.id,
+            startDecorator: .compactLetter(
+                session.letter,
+                session.letterAccent,
+                statusDot: row.status?.tone,
+                pulsing: row.pulsing
+            ),
+            action: { onSessionSelected(session) },
+            onLongPress: onSessionLongPress.map { handler in { handler(session) } }
+        )
+    }
+
+    private func classicSessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
         let lines = session.locationLines
         return OpenCodeListItem(
             title: session.title,
@@ -624,16 +685,6 @@ struct SessionList<EmptyContent: View>: View {
             action: { onSessionSelected(session) },
             onLongPress: onSessionLongPress.map { handler in { handler(session) } }
         )
-        .background {
-            if selectedSessionId == session.id {
-                GeometryReader { geometry in
-                    Color.clear.preference(
-                        key: SessionListSelectedRowFrameKey.self,
-                        value: geometry.frame(in: .named(sessionListViewportSpace))
-                    )
-                }
-            }
-        }
     }
 
     private func listItemStatus(_ status: SessionListStatus, isStale: Bool) -> OpenCodeListItemStatus {
@@ -1054,6 +1105,30 @@ extension SessionListSession {
         return SessionListLocationLines(
             subtitle: [OpenCodeListItemSubtitleSegment(text: projectName, tone: .secondary, icon: .folder)],
             detail: worktree.isEmpty ? nil : worktree
+        )
+    }
+}
+
+/// What a compact Home row shows beyond the title and time (#803).
+struct SessionListCompactRow: Equatable {
+    let path: OpenCodeListItemPath
+    /// Nil while Idle: no pill and no dot.
+    let status: OpenCodeListItemStatus?
+    /// Bold title for an unread finish.
+    let emphasized: Bool
+    /// The dot fades slowly while Running.
+    let pulsing: Bool
+}
+
+extension SessionListSession {
+    /// `project / worktree`, the project always shown; the status unless Idle.
+    var compactRow: SessionListCompactRow {
+        let project = projectName.flatMap { $0.isEmpty ? nil : $0 } ?? ServerPathPolicy.name(subtitle)
+        return SessionListCompactRow(
+            path: OpenCodeListItemPath(primary: project, secondary: worktreeLabel),
+            status: status == .idle ? nil : status.listItemStatus(isStale: statusIsStale),
+            emphasized: status.isReady,
+            pulsing: status == .running && !statusIsStale
         )
     }
 }

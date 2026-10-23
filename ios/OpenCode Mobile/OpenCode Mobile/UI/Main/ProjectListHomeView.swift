@@ -1329,7 +1329,14 @@ extension Array where Element == ProjectSectionItem {
                         worktreesEnabled: worktreesEnabled
                     )
                 },
-                projectName: project?.displayName
+                projectName: project?.displayName,
+                worktreeLabel: project.flatMap {
+                    HomeCompactRowPath.worktreeLabel(
+                        project: $0,
+                        sessionDirectory: directory,
+                        worktreesEnabled: worktreesEnabled
+                    )
+                }
             )
         }
     }

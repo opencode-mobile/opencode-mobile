@@ -291,6 +291,8 @@ enum ProductAnalytics {
         static let settingsOpenSyntaxPicker = "settings_open_syntax_picker"
         static let settingsToggleHideUserDirectory = "settings_toggle_hide_user_directory"
         static let settingsToggleWorktrees = "settings_toggle_worktrees"
+        static let settingsOpenSessionRowsPicker = "settings_open_session_rows_picker"
+        static let settingsSessionRows = "settings_session_rows"
         static let settingsOpenRecentWindowPicker = "settings_open_recent_window_picker"
         static let settingsToggleCollapseConsecutiveToolCalls = "settings_toggle_collapse_consecutive_tool_calls"
         static let settingsToggleChipTimeline = "settings_toggle_chip_timeline"
