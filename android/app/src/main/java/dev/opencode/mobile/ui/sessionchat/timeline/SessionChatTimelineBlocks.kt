@@ -65,6 +65,8 @@ sealed class SessionChatTimelineBlock {
          * read so far from the partial input, or a placeholder until one appears.
          */
         val isReceivingArguments: Boolean = false,
+        /** Inspector body for the tool-result sheet. Null when the card does not open one. */
+        val presentation: ToolResultPresentation? = null,
     ) : SessionChatTimelineBlock()
 
     /** Persistent note that the reply ended early (cut off or interrupted). */
@@ -1792,6 +1794,7 @@ object SessionChatTimelineBlocks {
             isInterrupted = interrupted,
             isMalformed = tool.isMalformed,
             isReceivingArguments = receivingArguments,
+            presentation = ToolResultInspector.fromTool(tool, chrome.title),
         )
     }
 

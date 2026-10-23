@@ -115,7 +115,7 @@ struct SessionChatToolGroupView: View {
                 changesTarget = makeChangesTarget(target.messageID, card.changesInitialFilePath)
             }
         }
-        if let detail = card.detailText {
+        if let target = SessionChatStepTapActions.detailTarget(for: card) {
             return {
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.sessionChat,
@@ -126,10 +126,7 @@ struct SessionChatToolGroupView: View {
                     presentation: ProductAnalytics.Presentation.sheet,
                     trigger: ProductAnalytics.Trigger.present
                 )
-                toolDetailTarget = SessionChatToolDetailTarget(
-                    title: card.title,
-                    body: detail
-                )
+                toolDetailTarget = target
             }
         }
         return nil

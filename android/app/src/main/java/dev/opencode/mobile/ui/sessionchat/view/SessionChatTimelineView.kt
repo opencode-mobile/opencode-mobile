@@ -141,6 +141,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatStepRail
 import dev.opencode.mobile.ui.sessionchat.SessionChatStepStatus
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
+import dev.opencode.mobile.ui.sessionchat.ToolResultInspector
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTopPill
 import dev.opencode.mobile.ui.sessionchat.StepParagraphChips
@@ -875,9 +876,9 @@ private fun AssistantMessageContent(
                                 block.text.takeIf { it.isNotBlank() }?.let { body ->
                                     {
                                         onToolDetailTap(
-                                            SessionChatToolDetailTarget(
-                                                title = "Thought",
-                                                body = body,
+                                            thoughtDetailTarget(
+                                                body,
+                                                SessionChatTimelineBlocks.thoughtDurationLabel(block.durationMs),
                                             ),
                                         )
                                     }
@@ -1057,10 +1058,36 @@ private class ToolTapTargets(
     }
 }
 
-private fun sessionChatToolCardDetail(block: SessionChatTimelineBlock.ToolCard): SessionChatToolDetailTarget? =
-    block.detailText?.let { text ->
-        SessionChatToolDetailTarget(title = block.title, body = text, bodyIsMarkdown = block.detailIsMarkdown)
-    }
+private fun thoughtDetailTarget(
+    text: String,
+    durationLabel: String?,
+): SessionChatToolDetailTarget {
+    val presentation = ToolResultInspector.thought(text, durationLabel)
+    return SessionChatToolDetailTarget(
+        title = presentation?.title ?: "Thought",
+        body = text,
+        presentation = presentation,
+    )
+}
+
+private fun stepThoughtDuration(step: SessionChatStep): String? {
+    val start = step.startedAtMs
+    val end = step.endedAtMs
+    if (start == null || end == null || end < start) return null
+    return SessionChatTimelineBlocks.thoughtDurationLabel(end - start)
+}
+
+private fun sessionChatToolCardDetail(block: SessionChatTimelineBlock.ToolCard): SessionChatToolDetailTarget? {
+    val presentation = block.presentation?.takeUnless { block.detailIsMarkdown }
+    val text = block.detailText
+    if (presentation == null && text == null) return null
+    return SessionChatToolDetailTarget(
+        title = presentation?.title ?: block.title,
+        body = text ?: presentation?.raw.orEmpty(),
+        bodyIsMarkdown = block.detailIsMarkdown,
+        presentation = presentation,
+    )
+}
 
 /**
  * The detail a step's tap shows (a thought, or tool output, failure or answer
@@ -1080,7 +1107,7 @@ internal fun sessionChatStepDetail(
             } else {
                 sessionChatToolCardDetail(card)
             }
-        thoughtText != null -> SessionChatToolDetailTarget(title = "Thought", body = thoughtText)
+        thoughtText != null -> thoughtDetailTarget(thoughtText, stepThoughtDuration(step))
         else -> null
     }
 }
