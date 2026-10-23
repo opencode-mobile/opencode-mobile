@@ -28,11 +28,13 @@ enum OpenCodeListItemStyle {
 
 enum OpenCodeListItemSubtitleTone {
     case secondary
+    /// Quieter than `secondary`, for the detail line under the subtitle.
+    case tertiary
     case addition
     case deletion
 }
 
-struct OpenCodeListItemSubtitleSegment {
+struct OpenCodeListItemSubtitleSegment: Equatable {
     let text: String
     let tone: OpenCodeListItemSubtitleTone
     /// Small glyph drawn inline before `text`, such as the branch icon.
@@ -71,6 +73,8 @@ struct OpenCodeListItem<Trailing: View>: View {
     let title: String
     let subtitle: String?
     let subtitleSegments: [OpenCodeListItemSubtitleSegment]?
+    /// Optional third line under the subtitle, such as a branch. Truncates on its own.
+    let detailSegments: [OpenCodeListItemSubtitleSegment]?
     let status: OpenCodeListItemStatus?
     let caption: String?
     /// Small tag after the title, such as "git". The title truncates first; the tag stays.
@@ -91,6 +95,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         title: String,
         subtitle: String? = nil,
         subtitleSegments: [OpenCodeListItemSubtitleSegment]? = nil,
+        detailSegments: [OpenCodeListItemSubtitleSegment]? = nil,
         status: OpenCodeListItemStatus? = nil,
         caption: String? = nil,
         titleTag: String? = nil,
@@ -107,6 +112,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         self.title = title
         self.subtitle = subtitle
         self.subtitleSegments = subtitleSegments
+        self.detailSegments = detailSegments?.isEmpty == true ? nil : detailSegments
         self.status = status
         self.caption = caption
         self.titleTag = titleTag?.isEmpty == true ? nil : titleTag
@@ -226,6 +232,12 @@ struct OpenCodeListItem<Trailing: View>: View {
                         .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
                         .lineLimit(1)
                 }
+
+                if let detailSegments {
+                    semanticSubtitle(detailSegments)
+                        .font(OpenCodeTypography.caption)
+                        .lineLimit(1)
+                }
             }
 
             Spacer(minLength: 8)
@@ -295,6 +307,8 @@ struct OpenCodeListItem<Trailing: View>: View {
         switch tone {
         case .secondary:
             return OpenCodeColors.textBase
+        case .tertiary:
+            return OpenCodeColors.textWeak
         case .addition:
             return OpenCodeColors.diffAdd
         case .deletion:
@@ -536,6 +550,17 @@ private struct OpenCodeListItemPressStyle: ButtonStyle {
             status: OpenCodeListItemStatus(text: "Running", tone: .stale),
             caption: "14m ago",
             startDecorator: .letter(Character("C"), .violet)
+        )
+        OpenCodeListItem(
+            title: "Keep split pane in step with the sidebar",
+            subtitleSegments: [.init(text: "opencode-mobile-enterprise-edition", tone: .secondary, icon: .folder)],
+            detailSegments: [
+                .init(text: "feature/ope-1042-show-worktree-and-project-on-home-rows", tone: .tertiary, icon: .callSplit),
+                .init(text: " \u{00B7} opencode-mobile-1042", tone: .tertiary)
+            ],
+            status: OpenCodeListItemStatus(text: "Running", tone: .interactive),
+            caption: "13m ago",
+            startDecorator: .letter(Character("O"), .red)
         )
         OpenCodeListItem(
             title: "All projects",

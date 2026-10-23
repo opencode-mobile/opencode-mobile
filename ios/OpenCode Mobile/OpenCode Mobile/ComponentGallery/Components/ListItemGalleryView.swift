@@ -23,6 +23,7 @@ private enum GalleryDecoratorKind: String, CaseIterable, Identifiable {
 private enum GallerySubtitleKind: String, CaseIterable, Identifiable {
     case plain
     case diff
+    case branch
     case off
 
     var id: String { rawValue }
@@ -87,12 +88,23 @@ struct ListItemGalleryView: View {
     }
 
     private var subtitleSegments: [OpenCodeListItemSubtitleSegment]? {
+        if subtitleKind == .branch {
+            return [.init(text: "opencode-mobile", tone: .secondary, icon: .folder)]
+        }
         guard subtitleKind == .diff else { return nil }
         return [
             .init(text: "Modified · ", tone: .secondary),
             .init(text: "+51", tone: .addition),
             .init(text: " ", tone: .secondary),
             .init(text: "−7", tone: .deletion)
+        ]
+    }
+
+    private var detailSegments: [OpenCodeListItemSubtitleSegment]? {
+        guard subtitleKind == .branch else { return nil }
+        return [
+            .init(text: "feature/723-iphone-duo", tone: .tertiary, icon: .callSplit),
+            .init(text: " \u{00B7} opencode-mobile-723", tone: .tertiary)
         ]
     }
 
@@ -240,6 +252,7 @@ struct ListItemGalleryView: View {
                 title: "Material Design Icons integration plan",
                 subtitle: subtitle,
                 subtitleSegments: subtitleSegments,
+                detailSegments: detailSegments,
                 status: status,
                 caption: caption,
                 selected: selected,
@@ -270,6 +283,34 @@ struct ListItemGalleryView: View {
                     title: "Unselected session",
                     subtitle: "Plain row",
                     style: .plain,
+                    action: {}
+                )
+            }
+
+            Text("Detail line")
+                .font(OpenCodeTypography.button)
+                .foregroundStyle(OpenCodeColors.textStrong)
+
+            VStack(spacing: 0) {
+                OpenCodeListItem(
+                    title: "Code samples request",
+                    subtitleSegments: [.init(text: "opencode-mobile", tone: .secondary, icon: .folder)],
+                    detailSegments: [.init(text: "main", tone: .tertiary, icon: .callSplit)],
+                    status: OpenCodeListItemStatus(text: "Done", tone: .success),
+                    caption: "1h ago",
+                    startDecorator: .letter(Character("O"), .red),
+                    action: {}
+                )
+                OpenCodeListItem(
+                    title: "Keep split pane in step with the sidebar",
+                    subtitleSegments: [.init(text: "opencode-mobile-enterprise-edition", tone: .secondary, icon: .folder)],
+                    detailSegments: [
+                        .init(text: "feature/ope-1042-show-worktree-and-project-on-home-rows", tone: .tertiary, icon: .callSplit),
+                        .init(text: " \u{00B7} opencode-mobile-1042", tone: .tertiary)
+                    ],
+                    status: OpenCodeListItemStatus(text: "Running", tone: .interactive),
+                    caption: "13m ago",
+                    startDecorator: .letter(Character("O"), .red, worktree: true),
                     action: {}
                 )
             }
