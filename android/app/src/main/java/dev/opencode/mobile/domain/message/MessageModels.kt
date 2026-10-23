@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
+import dev.opencode.mobile.domain.agent.SkillMention
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -29,6 +30,8 @@ data class Message(
     val stopReason: MessageStopReason? = null,
     /** A run failure to show under the reply. Null when the run did not fail, or the user stopped it. */
     val failure: SessionFailure? = null,
+    /** Inline `/name` skill spans a v2 user message was sent with. */
+    val skillMentions: List<SkillMention> = emptyList(),
 )
 
 /** An assistant reply that ended before the model finished its answer. */
@@ -181,7 +184,8 @@ data class PromptSendOptions(
     val fileMentions: List<FileMention> = emptyList(),
     /** Server worktree used to build `file://` URLs for [fileMentions]. */
     val worktree: String? = null,
-    val skillIds: List<String> = emptyList(),
+    /** v2 only: inline skill spans, sent as `skills: [{id, mention}]`. */
+    val skillMentions: List<SkillMention> = emptyList(),
     val delivery: FollowUpDelivery = FollowUpDelivery.Steer,
 )
 

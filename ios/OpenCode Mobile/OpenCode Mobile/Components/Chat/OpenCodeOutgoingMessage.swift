@@ -171,19 +171,16 @@ struct OpenCodeOutgoingMessage: View {
     }
 }
 
+/// Every `[/name]` token (a collapsed command or skill span, anywhere in the text) takes the
+/// syntax-type colour; the rest keeps the body colour.
 private func attributedCommandDisplayText(_ text: String) -> AttributedString {
     var attributed = AttributedString(text)
-    let bodyColor = OpenCodeColors.textStrong
-    guard text.hasPrefix("[/"), let end = text.firstIndex(of: "]") else {
-        attributed.foregroundColor = bodyColor
-        return attributed
-    }
-    let tokenEnd = text.distance(from: text.startIndex, to: end) + 1
-    let tokenRange = attributed.startIndex ..< attributed.index(attributed.startIndex, offsetByCharacters: tokenEnd)
-    attributed[tokenRange].foregroundColor = OpenCodeColors.syntaxType
-    let remainderStart = attributed.index(attributed.startIndex, offsetByCharacters: tokenEnd)
-    if remainderStart < attributed.endIndex {
-        attributed[remainderStart ..< attributed.endIndex].foregroundColor = bodyColor
+    attributed.foregroundColor = OpenCodeColors.textStrong
+    for range in CommandInvocationCollapser.tokenRanges(in: text) {
+        guard let lower = AttributedString.Index(String.Index(utf16Offset: range.lowerBound, in: text), within: attributed),
+              let upper = AttributedString.Index(String.Index(utf16Offset: range.upperBound, in: text), within: attributed)
+        else { continue }
+        attributed[lower ..< upper].foregroundColor = OpenCodeColors.syntaxType
     }
     return attributed
 }

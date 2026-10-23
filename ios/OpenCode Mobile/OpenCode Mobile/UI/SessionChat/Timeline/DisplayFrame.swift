@@ -73,7 +73,8 @@ nonisolated enum DisplayFrameBuilder {
             blocks = SessionChatTimelineBlocks.collapseCommandInvocations(
                 role: message.role,
                 blocks: blocks,
-                commands: serverCommands
+                commands: serverCommands,
+                skillMentions: message.skillMentions
             )
             blocks = SessionChatTimelineBlocks.ensureLiveRow(
                 message: message,

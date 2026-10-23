@@ -7,7 +7,9 @@ import dev.opencode.mobile.data.remote.dto.SendMessagePartDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileMentionDto
 import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
+import dev.opencode.mobile.data.remote.dto.V2PromptSkillDto
 import dev.opencode.mobile.data.remote.dto.V2PromptSourceDto
+import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import org.junit.Assert.assertEquals
@@ -153,6 +155,37 @@ class PromptJsonBodyWriterTest {
         assertTrue(json.contains("\"uri\":\"file:///repo/src/App.kt\""))
         assertTrue(json.contains("\"text\":\"@src/App.kt\""))
         assertTrue(json.indexOf("data:text/plain;base64,AQIDBA==") < json.indexOf("file:///repo/src/App.kt"))
+    }
+
+    @Test
+    fun writeV2Prompt_writesSkillWithMention() {
+        val body =
+            V2PromptRequestDto(
+                text = "fix /tdd now",
+                skills = listOf(V2PromptSkillDto(id = "tdd", mention = V2PromptSourceDto(start = 4, end = 8, text = "/tdd"))),
+                delivery = "steer",
+            )
+        val json =
+            PromptJsonBodyWriter
+                .writeV2Prompt(body, emptyList(), File(System.getProperty("java.io.tmpdir"), "prompt-writer-out"))
+                .readText()
+        assertTrue(json, json.contains("\"skills\":[{\"id\":\"tdd\",\"mention\":{\"start\":4,\"end\":8,\"text\":\"/tdd\"}}]"))
+    }
+
+    @Test
+    fun writeV2Command_writesSkillIdsWithoutMention() {
+        val body =
+            V2RunCommandRequestDto(
+                name = "init",
+                text = "fix /tdd",
+                delivery = "steer",
+                skills = listOf(V2PromptSkillDto(id = "tdd")),
+            )
+        val json =
+            PromptJsonBodyWriter
+                .writeV2Command(body, emptyList(), File(System.getProperty("java.io.tmpdir"), "prompt-writer-out"))
+                .readText()
+        assertTrue(json, json.contains("\"skills\":[{\"id\":\"tdd\"}]"))
     }
 
     @Test

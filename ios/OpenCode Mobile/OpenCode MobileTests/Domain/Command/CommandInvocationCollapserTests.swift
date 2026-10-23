@@ -12,7 +12,36 @@ struct CommandInvocationCollapserTests {
         #expect(display?.commandName == "prototype")
         #expect(display?.arguments == "ship the home page")
         #expect(display?.text == "[/prototype] ship the home page")
-        #expect(display?.highlightRange == 0 ..< "[/prototype]".utf16.count)
+        #expect(display?.highlightRanges == [0 ..< "[/prototype]".utf16.count])
+    }
+
+    @Test func collapseSkillMentions_wrapsEverySpanAndKeepsText() {
+        let display = CommandInvocationCollapser.collapseSkillMentions(
+            text: "fix @reviewer /tdd the login flow /security-check",
+            skillMentions: [
+                SkillMention(id: "s1", skillID: "tdd", name: "tdd", start: 14, end: 18),
+                SkillMention(id: "s2", skillID: "security-check", name: "security-check", start: 34, end: 49),
+            ]
+        )
+        #expect(display?.text == "fix @reviewer [/tdd] the login flow [/security-check]")
+        #expect(display?.highlightRanges == [14 ..< 20, 36 ..< 53])
+        #expect(CommandInvocationCollapser.tokenRanges(in: display?.text ?? "") == [14 ..< 20, 36 ..< 53])
+    }
+
+    @Test func collapseSkillMentions_fallsBackToTokenSearchWhenOffsetsMoved() {
+        let display = CommandInvocationCollapser.collapseSkillMentions(
+            text: "please /tdd this",
+            skillMentions: [SkillMention(id: "s1", skillID: "tdd", name: "tdd", start: -1, end: -1)]
+        )
+        #expect(display?.text == "please [/tdd] this")
+    }
+
+    @Test func collapseSkillMentions_skipsUnplaceableSpan() {
+        let display = CommandInvocationCollapser.collapseSkillMentions(
+            text: "nothing here",
+            skillMentions: [SkillMention(id: "s1", skillID: "tdd", name: "tdd", start: 0, end: 4)]
+        )
+        #expect(display == nil)
     }
 
     @Test func collapse_expandedTemplate_withTrailingArgs() {

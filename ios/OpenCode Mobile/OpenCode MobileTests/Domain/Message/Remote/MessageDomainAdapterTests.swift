@@ -208,15 +208,20 @@ struct MessageDomainAdapterTests {
         #expect(body.fileMentions?.first?.mention.end == 15)
     }
 
-    @Test func v2PromptRequest_mapsSkillIds() {
+    @Test func v2PromptRequest_mapsSkillMentionsWithOffsetsDeduped() {
         let body = adapter.v2PromptRequest(
             options: PromptSendOptions(
-                text: "check the error",
-                skillIDs: [" opencode ", "opencode", ""]
+                text: "/OpenCode check /OpenCode the error /stale",
+                skillMentions: [
+                    SkillMention(id: "s1", skillID: "opencode", name: "OpenCode", start: 0, end: 9),
+                    SkillMention(id: "s2", skillID: "opencode", name: "OpenCode", start: 16, end: 25),
+                    SkillMention(id: "s3", skillID: "stale", name: "moved", start: 36, end: 42),
+                ]
             )
         )
-        #expect(body.text == "check the error")
+        #expect(body.text == "/OpenCode check /OpenCode the error /stale")
         #expect(body.skills?.map(\.id) == ["opencode"])
+        #expect(body.skills?.first?.mention == V2PromptSourceDTO(start: 0, end: 9, text: "/OpenCode"))
     }
 
     @Test func v2SwitchModelRequest_mapsProviderModelAndVariant() {
@@ -955,6 +960,34 @@ struct MessageDomainAdapterTests {
 
         let message = try #require(adapter.messages(fromV2: dtos).first)
         #expect(message.contextEstimate.userCharacters == "agent prompt text".count)
+    }
+
+    @Test func projectV2ReadsSkillMentionsOnUserMessage() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"fix /tdd now /sec",
+                    "skills":[
+                      {"id":"tdd","name":"tdd","mention":{"start":4,"end":8,"text":"/tdd"}},
+                      {"id":"security","mention":{"start":13,"end":17,"text":"/sec"}}
+                    ],
+                    "time":{"created":1}
+                  }
+                ]
+                """.utf8
+            )
+        )
+
+        let message = try #require(adapter.messages(fromV2: dtos).first)
+        #expect(message.skillMentions.map(\.skillID) == ["tdd", "security"])
+        #expect(message.skillMentions.map(\.name) == ["tdd", "security"])
+        #expect(message.skillMentions.map(\.start) == [4, 13])
+        #expect(message.contextEstimate.userCharacters == "fix /tdd now /sec".count + "/tdd".count + "/sec".count)
     }
 
     @Test func projectV2ExpandsShellAndCompaction() throws {

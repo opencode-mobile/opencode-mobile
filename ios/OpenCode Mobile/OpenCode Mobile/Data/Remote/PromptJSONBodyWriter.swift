@@ -166,6 +166,23 @@ nonisolated enum PromptJSONBodyWriter {
                     try writer.beginObject()
                     try writer.key("id")
                     try writer.writeString(skill.id)
+                    if let mention = skill.mention {
+                        try writer.key("mention")
+                        try writer.beginObject()
+                        if let start = mention.start {
+                            try writer.key("start")
+                            try writer.writeInt(start)
+                        }
+                        if let end = mention.end {
+                            try writer.key("end")
+                            try writer.writeInt(end)
+                        }
+                        if let text = mention.text {
+                            try writer.key("text")
+                            try writer.writeString(text)
+                        }
+                        try writer.endObject()
+                    }
                     try writer.endObject()
                 }
                 try writer.endArray()
@@ -234,6 +251,17 @@ nonisolated enum PromptJSONBodyWriter {
                         try writer.key("name")
                         try writer.writeString(name)
                     }
+                    try writer.endObject()
+                }
+                try writer.endArray()
+            }
+            if let skills = body.skills, !skills.isEmpty {
+                try writer.key("skills")
+                try writer.beginArray()
+                for skill in skills {
+                    try writer.beginObject()
+                    try writer.key("id")
+                    try writer.writeString(skill.id)
                     try writer.endObject()
                 }
                 try writer.endArray()

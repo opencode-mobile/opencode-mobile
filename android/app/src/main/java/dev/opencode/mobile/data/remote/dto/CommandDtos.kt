@@ -81,4 +81,6 @@ data class V2RunCommandRequestDto(
     val text: String,
     val files: List<V2PromptFileDto>? = null,
     val delivery: String,
+    /** v2 skills mentioned in the draft, `[{id}]`; mention offsets are meaningless after the token is cut. */
+    val skills: List<V2PromptSkillDto>? = null,
 )

@@ -286,11 +286,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 mention: V2PromptSourceDTO(start: part.start, end: part.end, text: part.sourceValue)
             )
         }
-        var seen = Set<String>()
-        let skills = options.skillIDs.compactMap { raw -> V2PromptSkillDTO? in
-            let id = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !id.isEmpty, seen.insert(id).inserted else { return nil }
-            return V2PromptSkillDTO(id: id)
+        let skills = ComposerMentionRouting.skillParts(text: options.text, mentions: options.skillMentions).map { part in
+            V2PromptSkillDTO(
+                id: part.skillID,
+                mention: V2PromptSourceDTO(start: part.start, end: part.end, text: part.sourceValue)
+            )
         }
         return V2PromptRequestDTO(
             text: options.text,
@@ -477,7 +477,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 parts.append(part)
             }
         }
-        return messageFromV2(
+        var message = messageFromV2(
             id: dto.id,
             role: .user,
             parts: parts,
@@ -489,8 +489,19 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 userCharacters: text.count
                     + dto.files.reduce(0) { $0 + ($1.mention?.text?.count ?? $1.source?.text?.count ?? 0) }
                     + dto.agents.reduce(0) { $0 + ($1.mention?.text?.count ?? $1.source?.text?.count ?? 0) }
+                    + dto.skills.reduce(0) { $0 + ($1.mention?.text?.count ?? 0) }
             )
         )
+        message.skillMentions = dto.skills.enumerated().map { index, skill in
+            SkillMention(
+                id: "\(dto.id):skill:\(index)",
+                skillID: skill.id,
+                name: skill.name ?? skill.id,
+                start: skill.mention?.start ?? -1,
+                end: skill.mention?.end ?? -1
+            )
+        }
+        return message
     }
 
     private func projectV2Synthetic(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message? {

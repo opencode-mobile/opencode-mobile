@@ -40,6 +40,8 @@ struct CommandRunOptions: Equatable, Sendable {
     let variant: String?
     let mode: String?
     let delivery: FollowUpDelivery
+    /// v2 skills placed in the draft; ride along on the command route without offsets.
+    let skillIDs: [String]
 
     init(
         command: String,
@@ -48,7 +50,8 @@ struct CommandRunOptions: Equatable, Sendable {
         model: PromptModelSelection? = nil,
         variant: String? = nil,
         mode: String? = nil,
-        delivery: FollowUpDelivery = .steer
+        delivery: FollowUpDelivery = .steer,
+        skillIDs: [String] = []
     ) {
         self.command = command
         self.arguments = arguments
@@ -57,14 +60,14 @@ struct CommandRunOptions: Equatable, Sendable {
         self.variant = variant
         self.mode = mode
         self.delivery = delivery
+        self.skillIDs = skillIDs
     }
 }
 
 enum ComposerSubmitIntent: Equatable, Sendable {
+    /// Plain prompt. Skills travel as `/name` spans on the prompt, never on the command route.
     case prompt(text: String)
     case serverCommand(command: String, arguments: String)
-    /// A slash skill. Admitted on the prompt, not the command route.
-    case skillPrompt(skillID: String, text: String)
 }
 
 nonisolated enum CommandError: Error, Equatable {

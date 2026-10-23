@@ -22,6 +22,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
     var stopReason: MessageStopReason?
     /// A run failure to show under the reply. Nil when the run did not fail, or the user stopped it.
     var failure: SessionFailure?
+    /// v2 skills the user placed in this prompt as `/name` spans, with their offsets into `text`.
+    var skillMentions: [SkillMention]
 
     init(
         id: String,
@@ -42,7 +44,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         followUpDelivery: FollowUpDelivery? = nil,
         isWaitingForPickup: Bool = false,
         stopReason: MessageStopReason? = nil,
-        failure: SessionFailure? = nil
+        failure: SessionFailure? = nil,
+        skillMentions: [SkillMention] = []
     ) {
         self.id = id
         self.role = role
@@ -63,6 +66,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         self.isWaitingForPickup = isWaitingForPickup
         self.stopReason = stopReason
         self.failure = failure
+        self.skillMentions = skillMentions
     }
 
     /// Fills agent, model, variant, and an omitted failure this copy lacks from `base`.
@@ -93,7 +97,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             followUpDelivery: followUpDelivery,
             isWaitingForPickup: isWaitingForPickup,
             stopReason: copy.stopReason,
-            failure: copy.failure
+            failure: copy.failure,
+            skillMentions: skillMentions
         )
     }
 
@@ -120,7 +125,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             followUpDelivery: followUpDelivery,
             isWaitingForPickup: isWaitingForPickup,
             stopReason: stopReason,
-            failure: failure
+            failure: failure,
+            skillMentions: skillMentions
         )
     }
 
@@ -144,7 +150,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             followUpDelivery: followUpDelivery,
             isWaitingForPickup: isWaitingForPickup,
             stopReason: stopReason,
-            failure: failure
+            failure: failure,
+            skillMentions: skillMentions
         )
     }
 }
@@ -653,7 +660,8 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
     let fileMentions: [FileMention]
     /// Server worktree used to build `file://` URLs for file mentions.
     let worktree: String?
-    let skillIDs: [String]
+    /// v2 skills placed as `/name` spans; sent with their offsets into `text`.
+    let skillMentions: [SkillMention]
     let delivery: FollowUpDelivery
 
     init(
@@ -665,7 +673,7 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
         agentMentions: [AgentMention] = [],
         fileMentions: [FileMention] = [],
         worktree: String? = nil,
-        skillIDs: [String] = [],
+        skillMentions: [SkillMention] = [],
         delivery: FollowUpDelivery = .steer
     ) {
         self.text = text
@@ -676,7 +684,7 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
         self.agentMentions = agentMentions
         self.fileMentions = fileMentions
         self.worktree = worktree
-        self.skillIDs = skillIDs
+        self.skillMentions = skillMentions
         self.delivery = delivery
     }
 }

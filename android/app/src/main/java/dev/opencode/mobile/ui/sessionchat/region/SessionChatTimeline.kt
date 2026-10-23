@@ -1134,6 +1134,7 @@ class SessionChatTimeline(
                                 activityCard = activityCardTimeline,
                             ),
                         commands = serverCommands,
+                        skillMentions = message.skillMentions,
                     ),
             )
         if (resolvedBlocks.isEmpty() && message.failure == null) return null
