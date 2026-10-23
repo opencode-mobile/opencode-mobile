@@ -1120,20 +1120,13 @@ class SessionChatTimeline(
                 message = message,
                 isStreaming = display.isStreaming,
                 blocks =
-                    SessionChatTimelineBlocks.collapseCommandInvocations(
-                        role = message.role,
-                        blocks =
-                            SessionChatTimelineBlocks.buildOrFallback(
-                                role = message.role,
-                                parts = message.parts,
-                                messageId = message.id,
-                                fallbackText = message.text,
-                                collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
-                                chipTimeline = chipTimeline,
-                                stepRail = stepRailTimeline,
-                                activityCard = activityCardTimeline,
-                            ),
+                    SessionChatTimelineBlocks.present(
+                        message = message,
                         commands = serverCommands,
+                        collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
+                        chipTimeline = chipTimeline,
+                        stepRail = stepRailTimeline,
+                        activityCard = activityCardTimeline,
                     ),
             )
         if (resolvedBlocks.isEmpty() && message.failure == null) return null

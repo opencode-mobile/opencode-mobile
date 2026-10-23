@@ -471,6 +471,7 @@ class MessageDomainAdapter {
             id = dto.id,
             role = MessageRole.User,
             parts = parts,
+            promptSkills = promptSkills(dto),
             mode = dto.agent ?: agent.ifBlank { null },
             model = dto.model ?: model,
             sentAtEpochMs = dto.time?.created,
@@ -686,6 +687,7 @@ class MessageDomainAdapter {
         role: MessageRole,
         parts: List<MessagePart>,
         fallbackText: String = "",
+        promptSkills: List<PromptSkill> = emptyList(),
         cost: Double? = null,
         tokens: MessageTokenUsage? = null,
         mode: String? = null,
@@ -705,6 +707,7 @@ class MessageDomainAdapter {
             failure = failure,
             text = flatText.ifBlank { fallbackText },
             parts = parts,
+            promptSkills = promptSkills,
             cost = cost,
             tokens = tokens,
             model = model?.id,
@@ -718,6 +721,22 @@ class MessageDomainAdapter {
             contextEstimate = contextEstimate,
         )
     }
+
+    /**
+     * Skills ride on the user message. Keep id and name only — `text` is the
+     * model-facing skill body and must not become a second chat bubble.
+     */
+    private fun promptSkills(dto: V2SessionMessageDto): List<PromptSkill> =
+        dto.skills.mapNotNull { skill ->
+            val id = skill.id?.trim().orEmpty().ifEmpty { skill.name?.trim().orEmpty() }
+            val name = skill.name?.trim().orEmpty().ifEmpty { id }
+            if (name.isEmpty()) return@mapNotNull null
+            PromptSkill(
+                id = id.ifEmpty { name },
+                name = name,
+                mentionText = skill.mention?.text?.trim()?.takeIf { it.isNotEmpty() },
+            )
+        }
 
     private fun toV2AssistantPart(
         content: V2AssistantContentDto,
