@@ -1325,18 +1325,11 @@ extension Array where Element == ProjectSectionItem {
                     HomeRowLocation.make(
                         project: $0,
                         sessionDirectory: directory,
-                        includesProjectName: true,
-                        worktreesEnabled: worktreesEnabled
-                    )
-                },
-                scopedLocation: project.flatMap {
-                    HomeRowLocation.make(
-                        project: $0,
-                        sessionDirectory: directory,
                         includesProjectName: false,
                         worktreesEnabled: worktreesEnabled
                     )
-                }
+                },
+                projectName: project?.displayName
             )
         }
     }

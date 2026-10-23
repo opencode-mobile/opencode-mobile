@@ -149,13 +149,45 @@ struct CrossProjectSessionListSessionsTests {
             HomeScope.worktreeID(projectKey: "prj", directory: "/repo"),
             HomeScope.worktreeID(projectKey: "prj", directory: "/repo-wt"),
         ])
-        #expect(sessions[0].location?.parts == [.text("repo"), .branch("main")])
-        #expect(sessions[0].scopedLocation?.parts == [.branch("main")])
-        #expect(sessions[1].scopedLocation?.parts == [.branch("feature/b"), .text("repo-wt")])
+        #expect(sessions.map(\.projectName) == ["repo", "repo"])
+        #expect(sessions[0].location?.parts == [.branch("main")])
+        #expect(sessions[1].location?.parts == [.branch("feature/b"), .text("repo-wt")])
 
         let scoped = sessions.visibleForFilter(HomeScope.worktreeID(projectKey: "prj", directory: "/repo-wt"))
         #expect(scoped.map(\.id) == ["b"])
         #expect(sessions.visibleForFilter("prj").map(\.id) == ["a", "b"])
+    }
+
+    @Test func rowLinesPutProjectAndWorktreeOnSeparateLines() {
+        func row(_ location: HomeRowLocation?, project: String?) -> SessionListSession {
+            SessionListSession(
+                id: "s", title: "T", worktree: "prj", letter: "R", letterAccent: .red,
+                subtitle: "/repo", status: .idle, caption: "",
+                location: location, projectName: project
+            )
+        }
+        let main = row(HomeRowLocation(parts: [.branch("main")]), project: "repo").locationLines
+        #expect(main?.subtitle == [.init(text: "repo", tone: .secondary, icon: .folder)])
+        #expect(main?.detail == [.init(text: "main", tone: .tertiary, icon: .callSplit)])
+
+        let worktree = row(HomeRowLocation(parts: [.branch("feature/b"), .text("repo-wt")]), project: "repo").locationLines
+        #expect(worktree?.subtitle.map(\.text) == ["repo"])
+        #expect(worktree?.detail == [
+            .init(text: "feature/b", tone: .tertiary, icon: .callSplit),
+            .init(text: " \u{00B7} repo-wt", tone: .tertiary),
+        ])
+
+        // Detached HEAD: folder name only, still on its own line.
+        let detached = row(HomeRowLocation(parts: [.text("brave-otter")]), project: "repo").locationLines
+        #expect(detached?.detail == [.init(text: "brave-otter", tone: .tertiary)])
+
+        // Non-git project keeps the path subtitle.
+        #expect(row(nil, project: "notes").locationLines == nil)
+
+        // No project name: the worktree line moves up to the subtitle.
+        let unnamed = row(HomeRowLocation(parts: [.branch("main")]), project: nil).locationLines
+        #expect(unnamed?.subtitle == [.init(text: "main", tone: .secondary, icon: .callSplit)])
+        #expect(unnamed?.detail == nil)
     }
 
     @Test func worktreesOffDropsBranchesAndWorktreeScopes() {
@@ -180,7 +212,6 @@ struct CrossProjectSessionListSessionsTests {
         #expect(off.map(\.worktree) == ["prj", "prj"])
         #expect(off.map(\.worktreeScopeID) == [nil, nil])
         #expect(off.map(\.location) == [nil, nil])
-        #expect(off.map(\.scopedLocation) == [nil, nil])
         #expect(off.map(\.subtitle) == ["/repo", "/repo"])
         #expect(off.visibleForFilter("prj").map(\.id) == ["a", "b"])
         let tabs = SessionListHomeChrome.filterTabs(projects: projects, sessions: off, worktreesEnabled: false)
@@ -189,7 +220,7 @@ struct CrossProjectSessionListSessionsTests {
         // Back on: branches and worktree scopes return from the same inputs.
         let on = sections.crossProjectSessionListSessions(projects: projects)
         #expect(on[1].worktreeScopeID == HomeScope.worktreeID(projectKey: "prj", directory: "/repo-wt"))
-        #expect(on[1].scopedLocation?.parts == [.branch("feature/b"), .text("repo-wt")])
+        #expect(on[1].location?.parts == [.branch("feature/b"), .text("repo-wt")])
     }
 
     @Test func movedSessionRegroupsUnderItsNewWorktree() {
@@ -214,7 +245,7 @@ struct CrossProjectSessionListSessionsTests {
         #expect(after.visibleForFilter(mainScope).isEmpty)
         #expect(after.visibleForFilter(featureScope).map(\.id) == ["a"])
         #expect(after[0].directory == "/repo-wt")
-        #expect(after[0].scopedLocation?.parts == [.branch("feature/b"), .text("repo-wt")])
+        #expect(after[0].location?.parts == [.branch("feature/b"), .text("repo-wt")])
     }
 
     private func section(worktree: String, _ sessions: SessionListItem...) -> ProjectSectionItem {

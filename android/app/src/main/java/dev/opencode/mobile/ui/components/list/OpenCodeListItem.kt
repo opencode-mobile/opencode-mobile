@@ -104,6 +104,9 @@ enum class OpenCodeListItemStyle {
 
 enum class OpenCodeListItemSubtitleTone {
     Secondary,
+
+    /** Quieter than [Secondary], for the detail line under the subtitle. */
+    Tertiary,
     Addition,
     Deletion,
 }
@@ -147,6 +150,8 @@ fun OpenCodeListItem(
     title: String,
     subtitle: String? = null,
     subtitleSegments: List<OpenCodeListItemSubtitleSegment>? = null,
+    /** Optional third line under the subtitle, such as a branch. Truncates on its own. */
+    detailSegments: List<OpenCodeListItemSubtitleSegment>? = null,
     status: OpenCodeListItemStatus? = null,
     caption: String? = null,
     /** Small tag after the title, such as "git". The title truncates; the tag never does. */
@@ -321,54 +326,7 @@ fun OpenCodeListItem(
                         }
                     }
                     if (subtitleSegments != null) {
-                        val disabledColor = textWeaker
-                        val segmentColors =
-                            subtitleSegments.map { segment ->
-                                if (!enabled) {
-                                    disabledColor
-                                } else {
-                                    when (segment.tone) {
-                                        OpenCodeListItemSubtitleTone.Secondary -> textBase
-                                        OpenCodeListItemSubtitleTone.Addition -> openCodeColor("diff-add")
-                                        OpenCodeListItemSubtitleTone.Deletion -> openCodeColor("diff-delete")
-                                    }
-                                }
-                            }
-                        val inlineIcons =
-                            subtitleSegments
-                                .mapIndexedNotNull { index, segment ->
-                                    val icon = segment.icon ?: return@mapIndexedNotNull null
-                                    subtitleIconId(index) to
-                                        InlineTextContent(
-                                            Placeholder(
-                                                width = SubtitleIconWidth,
-                                                height = SubtitleIconHeight,
-                                                placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
-                                            ),
-                                        ) {
-                                            Icon(
-                                                imageVector = icon,
-                                                contentDescription = null,
-                                                tint = segmentColors[index],
-                                                modifier = Modifier.fillMaxSize().padding(end = 2.dp),
-                                            )
-                                        }
-                                }.toMap()
-                        Text(
-                            text =
-                                buildAnnotatedString {
-                                    subtitleSegments.forEachIndexed { index, segment ->
-                                        // Decorative icon: alternate text must be non-empty, so use a zero-width space
-                                        // rather than the default replacement character screen readers announce.
-                                        if (segment.icon != null) appendInlineContent(subtitleIconId(index), "\u200B")
-                                        withStyle(SpanStyle(color = segmentColors[index])) { append(segment.text) }
-                                    }
-                                },
-                            inlineContent = inlineIcons,
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        ListItemSegmentsText(subtitleSegments, enabled)
                     } else if (subtitle != null) {
                         Text(
                             text = subtitle,
@@ -377,6 +335,9 @@ fun OpenCodeListItem(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
+                    }
+                    if (!detailSegments.isNullOrEmpty()) {
+                        ListItemSegmentsText(detailSegments, enabled)
                     }
                 }
 
@@ -620,6 +581,67 @@ private fun ListItemStartDecoration(
     }
 }
 
+/** One line of semantic segments with inline icons, cut with an ellipsis at its end. */
+@Composable
+private fun ListItemSegmentsText(
+    segments: List<OpenCodeListItemSubtitleSegment>,
+    enabled: Boolean,
+) {
+    val textBase = openCodeColor("text-base")
+    val textWeak = openCodeColor("text-weak")
+    val textWeaker = openCodeColor("text-weaker")
+    val diffAdd = openCodeColor("diff-add")
+    val diffDelete = openCodeColor("diff-delete")
+    val segmentColors =
+        segments.map { segment ->
+            if (!enabled) {
+                textWeaker
+            } else {
+                when (segment.tone) {
+                    OpenCodeListItemSubtitleTone.Secondary -> textBase
+                    OpenCodeListItemSubtitleTone.Tertiary -> textWeak
+                    OpenCodeListItemSubtitleTone.Addition -> diffAdd
+                    OpenCodeListItemSubtitleTone.Deletion -> diffDelete
+                }
+            }
+        }
+    val inlineIcons =
+        segments
+            .mapIndexedNotNull { index, segment ->
+                val icon = segment.icon ?: return@mapIndexedNotNull null
+                subtitleIconId(index) to
+                    InlineTextContent(
+                        Placeholder(
+                            width = SubtitleIconWidth,
+                            height = SubtitleIconHeight,
+                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = segmentColors[index],
+                            modifier = Modifier.fillMaxSize().padding(end = 2.dp),
+                        )
+                    }
+            }.toMap()
+    Text(
+        text =
+            buildAnnotatedString {
+                segments.forEachIndexed { index, segment ->
+                    // Decorative icon: alternate text must be non-empty, so use a zero-width space
+                    // rather than the default replacement character screen readers announce.
+                    if (segment.icon != null) appendInlineContent(subtitleIconId(index), "\u200B")
+                    withStyle(SpanStyle(color = segmentColors[index])) { append(segment.text) }
+                }
+            },
+        inlineContent = inlineIcons,
+        style = MaterialTheme.typography.labelMedium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
 @Preview(showBackground = true)
 @Composable
 private fun OpenCodeListItemPreview() {
@@ -669,6 +691,29 @@ private fun OpenCodeListItemPreview() {
                 status = OpenCodeListItemStatus(text = "Running", tone = OpenCodeListItemStatusTone.Stale),
                 caption = "now",
                 startDecorator = StartDecorator.Letter('O', LetterAccent.Violet),
+            )
+            OpenCodeListItem(
+                title = "Keep split pane in step with the sidebar",
+                subtitleSegments =
+                    listOf(
+                        OpenCodeListItemSubtitleSegment(
+                            "opencode-mobile-enterprise-edition",
+                            OpenCodeListItemSubtitleTone.Secondary,
+                            OpenCodeIcons.Folder,
+                        ),
+                    ),
+                detailSegments =
+                    listOf(
+                        OpenCodeListItemSubtitleSegment(
+                            "feature/ope-1042-show-worktree-and-project-on-home-rows",
+                            OpenCodeListItemSubtitleTone.Tertiary,
+                            OpenCodeIcons.CallSplit,
+                        ),
+                        OpenCodeListItemSubtitleSegment(" · opencode-mobile-1042", OpenCodeListItemSubtitleTone.Tertiary),
+                    ),
+                status = OpenCodeListItemStatus(text = "Running", tone = OpenCodeListItemStatusTone.Interactive),
+                caption = "13m ago",
+                startDecorator = StartDecorator.Letter('O', LetterAccent.Red),
             )
             OpenCodeListItem(
                 title = "All projects",

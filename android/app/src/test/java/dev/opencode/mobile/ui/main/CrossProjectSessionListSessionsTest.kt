@@ -5,10 +5,15 @@ import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleSegment
+import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleTone
 import dev.opencode.mobile.ui.components.SessionListLocationPart
+import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.components.visibleForFilter
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class CrossProjectSessionListSessionsTest {
@@ -151,15 +156,63 @@ class CrossProjectSessionListSessionsTest {
             listOf(SessionListLocationPart("feature/723-iphone-duo", isBranch = true), SessionListLocationPart("repo-wt")),
             checkout.location,
         )
+        assertEquals("repo", checkout.projectName)
+        assertEquals(listOf("repo"), checkout.locationLines()?.subtitle?.map { it.text })
+        assertEquals("feature/723-iphone-duo · repo-wt", checkout.locationLines()?.detail?.joinToString("") { it.text })
+        assertEquals(listOf(SessionListLocationPart("dev", isBranch = true)), sessions.first { it.id == "main" }.location)
+    }
+
+    @Test
+    fun rowLines_putProjectAndWorktreeOnSeparateLines() {
+        fun row(
+            location: List<SessionListLocationPart>?,
+            project: String?,
+        ) = SessionListSession(
+            id = "s",
+            title = "T",
+            worktree = "prj",
+            letter = 'R',
+            letterAccent = LetterAccent.Red,
+            subtitle = "/repo",
+            status = SessionListStatus.Idle,
+            caption = "",
+            location = location,
+            projectName = project,
+        )
+        val secondary = OpenCodeListItemSubtitleTone.Secondary
+        val tertiary = OpenCodeListItemSubtitleTone.Tertiary
+
+        val main = row(listOf(SessionListLocationPart("main", isBranch = true)), "repo").locationLines()
+        assertEquals(listOf(OpenCodeListItemSubtitleSegment("repo", secondary, OpenCodeIcons.Folder)), main?.subtitle)
+        assertEquals(listOf(OpenCodeListItemSubtitleSegment("main", tertiary, OpenCodeIcons.CallSplit)), main?.detail)
+
+        val worktree =
+            row(
+                listOf(SessionListLocationPart("feature/b", isBranch = true), SessionListLocationPart("repo-wt")),
+                "repo",
+            ).locationLines()
         assertEquals(
             listOf(
-                SessionListLocationPart("repo"),
-                SessionListLocationPart("feature/723-iphone-duo", isBranch = true),
-                SessionListLocationPart("repo-wt"),
+                OpenCodeListItemSubtitleSegment("feature/b", tertiary, OpenCodeIcons.CallSplit),
+                OpenCodeListItemSubtitleSegment(" · ", tertiary),
+                OpenCodeListItemSubtitleSegment("repo-wt", tertiary),
             ),
-            checkout.locationParts(showsProjectName = true),
+            worktree?.detail,
         )
-        assertEquals(listOf(SessionListLocationPart("dev", isBranch = true)), sessions.first { it.id == "main" }.location)
+
+        // Detached HEAD: folder name only, still on its own line.
+        assertEquals(
+            listOf(OpenCodeListItemSubtitleSegment("brave-otter", tertiary)),
+            row(listOf(SessionListLocationPart("brave-otter")), "repo").locationLines()?.detail,
+        )
+
+        // Non-git project keeps the path subtitle.
+        assertNull(row(null, "notes").locationLines())
+
+        // No project name: the worktree line moves up to the subtitle.
+        val unnamed = row(listOf(SessionListLocationPart("main", isBranch = true)), null).locationLines()
+        assertEquals(listOf(OpenCodeListItemSubtitleSegment("main", secondary, OpenCodeIcons.CallSplit)), unnamed?.subtitle)
+        assertNull(unnamed?.detail)
     }
 
     @Test

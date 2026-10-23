@@ -388,8 +388,8 @@ struct ProjectListHomeViewModelTests {
             return
         }
         let rows = sections.crossProjectSessionListSessions(projects: viewModel.homeProjects)
-        #expect(rows.first { $0.id == "s-tax" }?.scopedLocation?.parts == [.branch("feature/tax-rounding"), .text("tax")])
-        #expect(rows.first { $0.id == "s-main" }?.scopedLocation?.parts == [.branch("main")])
+        #expect(rows.first { $0.id == "s-tax" }?.location?.parts == [.branch("feature/tax-rounding"), .text("tax")])
+        #expect(rows.first { $0.id == "s-main" }?.location?.parts == [.branch("main")])
     }
 
     @Test func loadedWorktreeInventoriesAreSharedForSessionChat() async {
@@ -448,7 +448,7 @@ struct ProjectListHomeViewModelTests {
             return
         }
         let rows = sections.crossProjectSessionListSessions(projects: viewModel.homeProjects)
-        #expect(rows.first { $0.id == "s-tax" }?.scopedLocation?.parts == [.branch("feature/tax-rounding"), .text("tax")])
+        #expect(rows.first { $0.id == "s-tax" }?.location?.parts == [.branch("feature/tax-rounding"), .text("tax")])
         // A folder the server never detects stops after the bounded retries.
         #expect(await waitUntil { calls.count("/notes") == 3 })
         try? await Task.sleep(for: .milliseconds(50))
