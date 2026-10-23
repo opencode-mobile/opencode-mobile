@@ -7,6 +7,7 @@ import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2InboxUserPayloadDto
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
+import dev.opencode.mobile.domain.agent.SkillMention
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
@@ -365,16 +366,54 @@ class MessageDomainAdapterTest {
     }
 
     @Test
-    fun toV2PromptRequest_mapsSkillIds() {
+    fun toV2PromptRequest_mapsSkillMentionsDedupedWithOffsets() {
         val body =
             adapter.toV2PromptRequest(
                 PromptSendOptions(
-                    text = "check the error",
-                    skillIds = listOf(" opencode ", "opencode", ""),
+                    text = "/OpenCode check /OpenCode the /tdd error",
+                    skillMentions =
+                        listOf(
+                            SkillMention(id = "s1", skillId = "opencode", name = "OpenCode", start = 0, end = 9),
+                            SkillMention(id = "s2", skillId = "opencode", name = "OpenCode", start = 16, end = 25),
+                            SkillMention(id = "s3", skillId = "tdd", name = "tdd", start = 30, end = 34),
+                            SkillMention(id = "s4", skillId = "stale", name = "stale", start = 35, end = 40),
+                        ),
                 ),
             )
-        assertEquals("check the error", body.text)
-        assertEquals(listOf("opencode"), body.skills?.map { it.id })
+        assertEquals("/OpenCode check /OpenCode the /tdd error", body.text)
+        val skills = body.skills.orEmpty()
+        assertEquals(listOf("opencode", "tdd"), skills.map { it.id })
+        val first = skills.first().mention
+        assertEquals(0, first?.start)
+        assertEquals(9, first?.end)
+        assertEquals("/OpenCode", first?.text)
+        assertEquals("/tdd", skills.last().mention?.text)
+    }
+
+    @Test
+    fun projectV2_userSkillsRoundTripIntoSkillMentions() {
+        val message =
+            projectV2(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"/tdd the login flow",
+                    "skills":[{"id":"tdd","name":"tdd","mention":{"start":0,"end":4,"text":"/tdd"}},{"id":"bare"}],
+                    "time":{"created":1}
+                  }
+                ]
+                """,
+            ).single()
+
+        assertEquals(listOf("tdd", "bare"), message.promptSkills.map { it.id })
+        assertEquals("tdd", message.promptSkills[0].name)
+        assertEquals(0, message.promptSkills[0].mentionStart)
+        assertEquals(4, message.promptSkills[0].mentionEnd)
+        assertEquals("bare", message.promptSkills[1].name)
+        assertEquals(null, message.promptSkills[1].mentionStart)
+        assertEquals("/tdd the login flow".length + "/tdd".length, message.contextEstimate.userCharacters)
     }
 
     @Test

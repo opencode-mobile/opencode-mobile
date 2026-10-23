@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
+import dev.opencode.mobile.domain.agent.SkillMention
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -16,6 +17,9 @@ data class PromptSkill(
     val name: String,
     /** Mention text already present in the prompt, when another client recorded one. */
     val mentionText: String? = null,
+    /** Offsets of that mention into the prompt text, when the sender recorded them. */
+    val mentionStart: Int? = null,
+    val mentionEnd: Int? = null,
 )
 
 data class Message(
@@ -194,7 +198,8 @@ data class PromptSendOptions(
     val fileMentions: List<FileMention> = emptyList(),
     /** Server worktree used to build `file://` URLs for [fileMentions]. */
     val worktree: String? = null,
-    val skillIds: List<String> = emptyList(),
+    /** v2 only: inline skill spans, sent as `skills: [{id, mention}]`. */
+    val skillMentions: List<SkillMention> = emptyList(),
     val delivery: FollowUpDelivery = FollowUpDelivery.Steer,
 )
 

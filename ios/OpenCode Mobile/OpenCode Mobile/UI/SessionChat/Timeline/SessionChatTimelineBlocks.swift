@@ -2285,8 +2285,24 @@ nonisolated enum SessionChatTimelineBlocks {
                 skills: message.promptSkills,
                 commands: commands
             ),
-            commands: commands
+            commands: commands,
+            skillMentions: skillMentions(message.promptSkills, commands: commands)
         )
+    }
+
+    /// The `/name` spans a user prompt carries, for `[/name]` collapse. A skill sent without
+    /// offsets (an older client, or one `admitPromptSkills` just prefixed) is placed by token search.
+    static func skillMentions(_ skills: [PromptSkill], commands: [ServerCommand]) -> [SkillMention] {
+        skills.enumerated().compactMap { index, skill in
+            guard let name = slashName(skill, commands: commands) else { return nil }
+            return SkillMention(
+                id: "prompt-skill:\(index)",
+                skillID: skill.id,
+                name: name,
+                start: skill.mentionStart ?? -1,
+                end: skill.mentionEnd ?? -1
+            )
+        }
     }
 
     /// A v2 skill prompt stores the user's arguments as the message text and the
@@ -2372,16 +2388,28 @@ nonisolated enum SessionChatTimelineBlocks {
 
     /// Rewrites user text blocks that are expanded slash-command / skill
     /// templates into `[/name] args` for Session Chat display.
+    /// `/name` skill spans (from the message) and server-command templates both collapse into
+    /// `[/name]` plain text so the bubble can highlight them. Skill spans apply to the first text
+    /// block, where the prompt text lives.
     static func collapseCommandInvocations(
         role: MessageRole,
         blocks: [SessionChatTimelineBlock],
-        commands: [ServerCommand]
+        commands: [ServerCommand],
+        skillMentions: [SkillMention] = []
     ) -> [SessionChatTimelineBlock] {
-        guard role == .user, !commands.isEmpty, !blocks.isEmpty else { return blocks }
+        guard role == .user, !blocks.isEmpty, !commands.isEmpty || !skillMentions.isEmpty else { return blocks }
+        var skillsPending = !skillMentions.isEmpty
         return blocks.map { block in
-            guard case .text(let blockID, let text, _) = block,
-                  let collapsed = CommandInvocationCollapser.collapse(text: text, commands: commands)
-            else { return block }
+            guard case .text(let blockID, let text, _) = block else { return block }
+            let collapsed: CommandInvocationCollapser.Display?
+            if skillsPending {
+                skillsPending = false
+                collapsed = CommandInvocationCollapser.collapseSkillMentions(text: text, skillMentions: skillMentions)
+                    ?? CommandInvocationCollapser.collapse(text: text, commands: commands)
+            } else {
+                collapsed = CommandInvocationCollapser.collapse(text: text, commands: commands)
+            }
+            guard let collapsed else { return block }
             return .text(
                 blockID: blockID,
                 text: collapsed.text,

@@ -29,6 +29,7 @@ import dev.opencode.mobile.data.remote.HttpBodyResponseException
 import dev.opencode.mobile.data.remote.dto.V2ToolStateDto
 import dev.opencode.mobile.data.remote.dto.V2UnknownErrorDto
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
+import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.filesystem.ProjectFileReference
 import dev.opencode.mobile.domain.session.ServerErrorMessage
 import io.ktor.client.plugins.ResponseException
@@ -276,12 +277,20 @@ class MessageDomainAdapter {
                     )
                 }.takeIf { it.isNotEmpty() }
         val skills =
-            options.skillIds
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .distinct()
-                .map { V2PromptSkillDto(id = it) }
-                .takeIf { it.isNotEmpty() }
+            ComposerMentionRouting
+                .skillParts(options.text, options.skillMentions)
+                .distinctBy { it.skillId }
+                .map { part ->
+                    V2PromptSkillDto(
+                        id = part.skillId,
+                        mention =
+                            V2PromptSourceDto(
+                                start = part.start,
+                                end = part.end,
+                                text = part.sourceValue,
+                            ),
+                    )
+                }.takeIf { it.isNotEmpty() }
         val fileMentions = v2FileMentions(options)
         return V2PromptRequestDto(
             text = options.text,
@@ -481,7 +490,8 @@ class MessageDomainAdapter {
                     userCharacters =
                         text.length +
                             dto.files.sumOf { it.mention?.text?.length ?: it.source?.text?.length ?: 0 } +
-                            dto.agents.sumOf { it.mention?.text?.length ?: it.source?.text?.length ?: 0 },
+                            dto.agents.sumOf { it.mention?.text?.length ?: it.source?.text?.length ?: 0 } +
+                            dto.skills.sumOf { it.mention?.text?.length ?: 0 },
                 ),
         )
     }
@@ -735,6 +745,8 @@ class MessageDomainAdapter {
                 id = id.ifEmpty { name },
                 name = name,
                 mentionText = skill.mention?.text?.trim()?.takeIf { it.isNotEmpty() },
+                mentionStart = skill.mention?.start,
+                mentionEnd = skill.mention?.end,
             )
         }
 

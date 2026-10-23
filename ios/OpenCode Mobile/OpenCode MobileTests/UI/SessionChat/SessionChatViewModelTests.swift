@@ -959,9 +959,103 @@ struct SessionChatViewModelTests {
 
         #expect(commandRepository.runCommandCalled == false)
         #expect(repository.sendPromptAsyncCalled)
-        #expect(repository.sentOptions?.text == "check the error")
-        #expect(repository.sentOptions?.skillIDs == ["opencode"])
+        #expect(repository.sentOptions?.text == "/OpenCode check the error")
+        #expect(repository.sentOptions?.skillMentions.map(\.skillID) == ["opencode"])
+        #expect(repository.sentOptions?.skillMentions.first?.start == 0)
+        #expect(repository.sentOptions?.skillMentions.first?.end == 9)
         #expect(viewModel.uiState.composer.text == "")
+    }
+
+    @Test func slashSuggestion_skillsInlineAnywhereAndSentWithMentions() async {
+        let repository = FakeMessageRepository()
+        let commandRepository = FakeCommandRepository(
+            commands: [
+                ServerCommand(name: "init", description: "Create AGENTS.md", source: .command),
+                ServerCommand(name: "tdd", description: "Test first", source: .skill, skillID: "tdd"),
+                ServerCommand(name: "security-check", description: "Audit", source: .skill, skillID: "security-check"),
+            ]
+        )
+        let viewModel = makeViewModel(messageRepository: repository, commandRepository: commandRepository)
+        await viewModel.loadMessages()
+
+        viewModel.updateComposerText("@", cursor: 1)
+        let agentsReady = await waitUntil {
+            viewModel.uiState.atSuggestions.contains { $0.agentName == "explore" }
+        }
+        guard agentsReady else {
+            Issue.record("Expected mentionable agent catalog to load")
+            return
+        }
+        viewModel.selectAtSuggestion(agentName: "explore")
+        #expect(viewModel.uiState.composer.text == "@explore ")
+
+        viewModel.updateComposerText("@explore /td", cursor: 12)
+        let slashReady = await waitUntil {
+            viewModel.uiState.slashSuggestionsVisible && !viewModel.uiState.slashSuggestions.isEmpty
+        }
+        guard slashReady else {
+            Issue.record("Expected slash suggestions mid-draft")
+            return
+        }
+        // Mid-draft `/` offers skills only, never the leading-only command.
+        #expect(viewModel.uiState.slashSuggestions.map(\.commandName) == ["tdd"])
+        viewModel.selectSlashSuggestion(commandName: "tdd")
+        #expect(viewModel.uiState.composer.text == "@explore /tdd ")
+        #expect(viewModel.uiState.composer.skillMentions.map(\.skillID) == ["tdd"])
+
+        viewModel.updateComposerText("@explore /tdd the login flow /sec", cursor: 33)
+        _ = await waitUntil { viewModel.uiState.slashSuggestionsVisible }
+        // A skill already in the draft is not offered again.
+        #expect(viewModel.uiState.slashSuggestions.map(\.commandName) == ["security-check"])
+        viewModel.selectSlashSuggestion(commandName: "security-check")
+        #expect(viewModel.uiState.composer.text == "@explore /tdd the login flow /security-check ")
+        #expect(viewModel.uiState.composer.skillMentions.count == 2)
+        #expect(viewModel.uiState.composer.agentMentions.count == 1)
+
+        await viewModel.sendPrompt()
+
+        #expect(commandRepository.runCommandCalled == false)
+        #expect(repository.sentOptions?.text == "@explore /tdd the login flow /security-check")
+        #expect(repository.sentOptions?.agentMentions.map(\.name) == ["explore"])
+        #expect(repository.sentOptions?.skillMentions.map(\.skillID) == ["tdd", "security-check"])
+        #expect(repository.sentOptions?.skillMentions.map(\.start) == [9, 29])
+        #expect(repository.sentOptions?.skillMentions.map(\.end) == [13, 44])
+        #expect(viewModel.uiState.composer.skillMentions.isEmpty)
+    }
+
+    @Test func slashSuggestion_leadingCommandKeepsRestOfDraftAndCarriesSkills() async {
+        let repository = FakeMessageRepository()
+        let commandRepository = FakeCommandRepository(
+            commands: [
+                ServerCommand(name: "init", description: "Create AGENTS.md", source: .command),
+                ServerCommand(name: "tdd", description: "Test first", source: .skill, skillID: "tdd"),
+            ]
+        )
+        let viewModel = makeViewModel(messageRepository: repository, commandRepository: commandRepository)
+        await viewModel.loadMessages()
+
+        viewModel.updateComposerText("/in", cursor: 3)
+        let ready = await waitUntil {
+            viewModel.uiState.slashSuggestionsVisible && viewModel.uiState.slashSuggestions.contains { $0.commandName == "init" }
+        }
+        guard ready else {
+            Issue.record("Expected leading slash suggestions")
+            return
+        }
+        viewModel.selectSlashSuggestion(commandName: "init")
+        #expect(viewModel.uiState.composer.text == "/init ")
+        viewModel.updateComposerText("/init now /t", cursor: 12)
+        _ = await waitUntil { viewModel.uiState.slashSuggestionsVisible }
+        viewModel.selectSlashSuggestion(commandName: "tdd")
+        #expect(viewModel.uiState.composer.text == "/init now /tdd ")
+
+        await viewModel.sendPrompt()
+
+        #expect(commandRepository.runCommandCalled)
+        #expect(commandRepository.lastRunOptions?.command == "init")
+        #expect(commandRepository.lastRunOptions?.arguments == "now /tdd")
+        #expect(commandRepository.lastRunOptions?.skillIDs == ["tdd"])
+        #expect(repository.sendPromptAsyncCalled == false)
     }
 
     @Test func sendPrompt_unknownSlash_fallsThroughToPrompt() async {

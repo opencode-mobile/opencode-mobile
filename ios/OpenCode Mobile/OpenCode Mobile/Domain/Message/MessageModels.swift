@@ -7,11 +7,16 @@ nonisolated struct PromptSkill: Equatable, Sendable {
     let name: String
     /// Mention text already present in the prompt, when another client recorded one.
     let mentionText: String?
+    /// Offsets of that mention into the prompt text, when the sender recorded them.
+    let mentionStart: Int?
+    let mentionEnd: Int?
 
-    init(id: String, name: String, mentionText: String? = nil) {
+    init(id: String, name: String, mentionText: String? = nil, mentionStart: Int? = nil, mentionEnd: Int? = nil) {
         self.id = id
         self.name = name
         self.mentionText = mentionText
+        self.mentionStart = mentionStart
+        self.mentionEnd = mentionEnd
     }
 }
 
@@ -675,7 +680,8 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
     let fileMentions: [FileMention]
     /// Server worktree used to build `file://` URLs for file mentions.
     let worktree: String?
-    let skillIDs: [String]
+    /// v2 skills placed as `/name` spans; sent with their offsets into `text`.
+    let skillMentions: [SkillMention]
     let delivery: FollowUpDelivery
 
     init(
@@ -687,7 +693,7 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
         agentMentions: [AgentMention] = [],
         fileMentions: [FileMention] = [],
         worktree: String? = nil,
-        skillIDs: [String] = [],
+        skillMentions: [SkillMention] = [],
         delivery: FollowUpDelivery = .steer
     ) {
         self.text = text
@@ -698,7 +704,7 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
         self.agentMentions = agentMentions
         self.fileMentions = fileMentions
         self.worktree = worktree
-        self.skillIDs = skillIDs
+        self.skillMentions = skillMentions
         self.delivery = delivery
     }
 }

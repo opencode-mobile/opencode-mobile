@@ -105,6 +105,7 @@ struct SessionChatComposerState: Equatable {
     var modelCatalogError: String?
     var agentMentions: [AgentMention] = []
     var fileMentions: [FileMention] = []
+    var skillMentions: [SkillMention] = []
     var cursor: Int = 0
     var selectionRevision: Int = 0
     var followUpDelivery: FollowUpDelivery = .steer
@@ -132,7 +133,9 @@ struct SessionChatComposerState: Equatable {
     }
 
     var mentionRanges: [Range<Int>] {
-        (agentMentions.map { $0.start ..< $0.end } + fileMentions.map { $0.start ..< $0.end })
+        (agentMentions.map { $0.start ..< $0.end }
+            + fileMentions.map { $0.start ..< $0.end }
+            + skillMentions.map { $0.start ..< $0.end })
             .sorted { $0.lowerBound < $1.lowerBound }
     }
 

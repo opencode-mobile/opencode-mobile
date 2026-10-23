@@ -109,6 +109,8 @@ data class V2AgentAttachmentDto(
     val mention: V2PromptSourceDto? = null,
 )
 
+/** A skill admitted on a user message: `{id, name?, mention?}`. */
+
 @Serializable
 data class V2PromptSourceDto(
     val start: Int? = null,

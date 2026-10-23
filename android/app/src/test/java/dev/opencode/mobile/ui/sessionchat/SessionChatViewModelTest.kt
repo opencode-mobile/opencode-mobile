@@ -2070,9 +2070,111 @@ class SessionChatViewModelTest {
 
             assertFalse(commandRepository.runCommandCalled)
             assertTrue(repository.sendPromptAsyncCalled)
-            assertEquals("check the error", repository.sentOptions?.text)
-            assertEquals(listOf("opencode"), repository.sentOptions?.skillIds)
+            assertEquals("/OpenCode check the error", repository.sentOptions?.text)
+            val skill = repository.sentOptions?.skillMentions?.single()
+            assertEquals("opencode", skill?.skillId)
+            assertEquals(0, skill?.start)
+            assertEquals(9, skill?.end)
             assertEquals("", viewModel.uiState.value.composer.text)
+        }
+
+    @Test
+    fun sendPrompt_multipleInlineSkills_sendsTextVerbatimWithOffsets() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val commandRepository = FakeCommandRepository(commands = skillCatalog)
+            val viewModel = createViewModel(repository = repository, commandRepository = commandRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("fix @", cursor = 5)
+            advanceUntilIdle()
+            viewModel.selectAtSuggestion("explore")
+            runCurrent()
+            assertEquals("fix @explore ", viewModel.uiState.value.composer.text)
+
+            viewModel.updateComposerText("fix @explore /td", cursor = 16)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.slashSuggestionsVisible)
+            val offered = viewModel.uiState.value.slashSuggestions
+            assertEquals(listOf("tdd"), offered.map { it.commandName })
+            viewModel.selectSlashSuggestion("tdd")
+            runCurrent()
+            assertEquals("fix @explore /tdd ", viewModel.uiState.value.composer.text)
+
+            val next = "fix @explore /tdd the login flow /sec"
+            viewModel.updateComposerText(next, cursor = next.length)
+            advanceUntilIdle()
+            viewModel.selectSlashSuggestion("security-check")
+            runCurrent()
+            val draft = "fix @explore /tdd the login flow /security-check "
+            assertEquals(draft, viewModel.uiState.value.composer.text)
+            assertEquals(
+                listOf(4 until 12, 13 until 17, 33 until 48),
+                viewModel.uiState.value.composer.mentionRanges,
+            )
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertFalse(commandRepository.runCommandCalled)
+            assertEquals(draft.trim(), repository.sentOptions?.text)
+            val sent = repository.sentOptions
+            assertEquals("explore", sent?.agentMentions?.single()?.name)
+            assertEquals(
+                listOf("tdd" to (13 to 17), "security-check" to (33 to 48)),
+                sent?.skillMentions?.map { it.skillId to (it.start to it.end) },
+            )
+        }
+
+    @Test
+    fun selectSlashSuggestion_midDraft_keepsRestOfDraft() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    commandRepository = FakeCommandRepository(commands = skillCatalog),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("please /td the login flow", cursor = 10)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.slashSuggestionsVisible)
+            // Commands are only offered for a leading slash; skills go anywhere.
+            val offered = viewModel.uiState.value.slashSuggestions
+            assertFalse(offered.any { it.commandName == "init" })
+            viewModel.selectSlashSuggestion("tdd")
+            runCurrent()
+
+            val composer = viewModel.uiState.value.composer
+            assertEquals("please /tdd  the login flow", composer.text)
+            assertEquals(12, composer.cursor)
+            assertEquals(7, composer.skillMentions.single().start)
+            assertFalse(viewModel.uiState.value.slashSuggestionsVisible)
+        }
+
+    @Test
+    fun slashSuggestions_omitSkillsAlreadyInDraft() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    commandRepository = FakeCommandRepository(commands = skillCatalog),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("/tdd", cursor = 4)
+            advanceUntilIdle()
+            viewModel.selectSlashSuggestion("tdd")
+            runCurrent()
+            viewModel.updateComposerText("/tdd /", cursor = 6)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertTrue(state.slashSuggestionsVisible)
+            assertEquals(listOf("security-check"), state.slashSuggestions.map { it.commandName })
         }
 
     @Test
@@ -7208,6 +7310,18 @@ private class FakeSecureCredentialStore : dev.opencode.mobile.domain.connection.
 
     override fun clearAll() = Unit
 }
+
+private val skillCatalog =
+    listOf(
+        ServerCommand(name = "init", source = ServerCommandSource.Command),
+        ServerCommand(name = "tdd", description = "Test first", source = ServerCommandSource.Skill, skillId = "tdd"),
+        ServerCommand(
+            name = "security-check",
+            description = "Security review",
+            source = ServerCommandSource.Skill,
+            skillId = "security-check",
+        ),
+    )
 
 private class FakeCommandRepository(
     var commands: List<ServerCommand> =

@@ -98,17 +98,20 @@ nonisolated struct V2RunCommandRequestDTO: Encodable, Sendable {
     let name: String
     let text: String
     let files: [V2PromptFileDTO]?
+    let skills: [V2PromptSkillDTO]?
     let delivery: String
 
     init(
         name: String,
         text: String,
         files: [V2PromptFileDTO]? = nil,
+        skills: [V2PromptSkillDTO]? = nil,
         delivery: String = "steer"
     ) {
         self.name = name
         self.text = text
         self.files = files
+        self.skills = skills
         self.delivery = delivery
     }
 
@@ -116,6 +119,7 @@ nonisolated struct V2RunCommandRequestDTO: Encodable, Sendable {
         case name
         case text
         case files
+        case skills
         case delivery
     }
 
@@ -124,6 +128,7 @@ nonisolated struct V2RunCommandRequestDTO: Encodable, Sendable {
         try container.encode(name, forKey: .name)
         try container.encode(text, forKey: .text)
         try container.encodeIfPresent(files, forKey: .files)
+        try container.encodeIfPresent(skills, forKey: .skills)
         try container.encode(delivery, forKey: .delivery)
     }
 }
