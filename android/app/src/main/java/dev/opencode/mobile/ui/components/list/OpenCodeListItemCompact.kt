@@ -43,7 +43,7 @@ import kotlin.math.ceil
 
 private val CompactRowMinHeight = 66.dp
 private val CompactRowLineSpacing = 5.dp
-private val CompactTileSize = 30.dp
+private val CompactTileSize = 32.dp
 private val CompactTileGlyphSize = 13.sp
 private val CompactStatusDotSize = 8.dp
 private val CompactStatusDotRing = 2.5.dp
