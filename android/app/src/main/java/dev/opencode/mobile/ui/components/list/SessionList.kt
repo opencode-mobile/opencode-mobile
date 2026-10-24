@@ -731,7 +731,7 @@ private fun SessionListRow(
     }
 }
 
-/** Two-line row (#803): the same in every scope; Idle shows no dot and no pill. */
+/** Two-line row (#803): the same in every scope; Idle shows no dot and no status. */
 @Composable
 private fun SessionListCompactRow(
     session: SessionListSession,

@@ -27,7 +27,8 @@ private let listItemCompactTitleFont = Font.system(size: 16, weight: .medium)
 private let listItemCompactEmphasizedTitleFont = Font.system(size: 16, weight: .semibold)
 private let listItemCompactPathFont = Font.system(size: 13.5, weight: .regular)
 private let listItemCompactPathSpacing: CGFloat = 5
-private let listItemCompactStatusFont = Font.system(size: 12, weight: .semibold)
+/// Same size as the path beside it, one weight up.
+private let listItemCompactStatusFont = Font.system(size: 13.5, weight: .semibold)
 private let listItemPulseDuration: Double = 1.2
 private let listItemPulseMinOpacity: Double = 0.3
 private let listItemPressedScale: CGFloat = 0.965
@@ -44,7 +45,7 @@ enum OpenCodeListItemStyle {
 enum OpenCodeListItemVariant {
     /// Title, then up to two lines of subtitle and detail, with time and status stacked on the right.
     case standard
-    /// Fixed two-line row: title and caption, then a path and a small status pill.
+    /// Fixed two-line row: title and caption, then a path and a coloured status label.
     case compact
 }
 
@@ -319,7 +320,7 @@ struct OpenCodeListItem<Trailing: View>: View {
                     compactSecondLine
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if let status {
-                        statusPill(status, compact: true)
+                        compactStatusLabel(status)
                             .fixedSize()
                     }
                 }
@@ -405,21 +406,29 @@ struct OpenCodeListItem<Trailing: View>: View {
                     .padding(.trailing, 2)
             }
             if let status {
-                statusPill(status, compact: false)
+                statusPill(status)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
         .fixedSize(horizontal: true, vertical: false)
     }
 
-    private func statusPill(_ status: OpenCodeListItemStatus, compact: Bool) -> some View {
+    private func statusPill(_ status: OpenCodeListItemStatus) -> some View {
         Text(status.text)
-            .font(compact ? listItemCompactStatusFont : OpenCodeTypography.caption.weight(.semibold))
+            .font(OpenCodeTypography.caption.weight(.semibold))
             .foregroundStyle(statusForeground(status.tone))
             .lineLimit(1)
             .padding(.horizontal, 8)
-            .padding(.vertical, compact ? 2 : 4)
+            .padding(.vertical, 4)
             .background(statusBackground(status.tone), in: Capsule())
+    }
+
+    /// Compact rows show the status as coloured text, without the pill's capsule.
+    private func compactStatusLabel(_ status: OpenCodeListItemStatus) -> some View {
+        Text(status.text)
+            .font(listItemCompactStatusFont)
+            .foregroundStyle(statusForeground(status.tone))
+            .lineLimit(1)
     }
 
     private func semanticSubtitle(_ segments: [OpenCodeListItemSubtitleSegment]) -> Text {
