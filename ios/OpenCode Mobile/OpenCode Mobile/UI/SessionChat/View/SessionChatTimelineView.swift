@@ -954,7 +954,7 @@ private struct AssistantMessageContent: View {
             rail,
             unfolded: stepRailState.unfolded.contains(rail.id)
         )
-        let stepsByID = Dictionary(uniqueKeysWithValues: rail.steps.map { ($0.id, $0) })
+        let stepsByID = Dictionary(rail.steps.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         return OpenCodeStepRail(
             steps: rows.map { row in row.railItem(actionable: { stepAction(for: $0) != nil }) },
             isLive: rail.isLive,

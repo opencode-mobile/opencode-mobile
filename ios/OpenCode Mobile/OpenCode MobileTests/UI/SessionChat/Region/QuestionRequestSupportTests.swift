@@ -45,6 +45,24 @@ struct QuestionRequestSupportTests {
         #expect(dropOrphanQuestionRequests([pending, kept], messages: messages).map(\.id) == ["que_2"])
     }
 
+    @Test func dropOrphanQuestionRequests_toleratesDuplicateMessageIDs() {
+        let request = questionRequest(id: "que_1", sessionID: "ses_1", toolMessageID: "msg_1", toolCallID: "call_1")
+        func message(status: ToolStatus) -> Message {
+            Message(
+                id: "msg_1",
+                role: .assistant,
+                text: "",
+                parts: [.tool(ToolPart(toolName: "question", status: status, callID: "call_1"))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            )
+        }
+        // The later duplicate wins, matching the message store's last-write-wins rule.
+        #expect(dropOrphanQuestionRequests([request], messages: [message(status: .running), message(status: .completed)]).isEmpty)
+        #expect(dropOrphanQuestionRequests([request], messages: [message(status: .completed), message(status: .running)]).map(\.id) == ["que_1"])
+    }
+
     @Test func buildQuestionAnswers_requiresEveryQuestion() {
         let questions = [
             QuestionInfo(question: "One", header: "One", options: [QuestionOption(label: "A", description: "")], multiple: false, custom: true),

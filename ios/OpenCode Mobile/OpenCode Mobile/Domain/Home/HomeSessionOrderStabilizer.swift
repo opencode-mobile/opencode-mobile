@@ -24,7 +24,8 @@ enum HomeSessionOrderStabilizer {
         }
 
         let previousById = Dictionary(
-            uniqueKeysWithValues: previousSections.flatMap(\.items).map { (itemId($0), $0) }
+            previousSections.flatMap(\.items).map { (itemId($0), $0) },
+            uniquingKeysWith: { _, latest in latest }
         )
         let desiredItems = desired.flatMap(\.items)
         let forceApply = desiredItems.contains { item in
@@ -39,7 +40,7 @@ enum HomeSessionOrderStabilizer {
         }
 
         let lastAppliedAt = previousLastAppliedAtEpochMs ?? nowEpochMs
-        let latestById = Dictionary(uniqueKeysWithValues: desiredItems.map { (itemId($0), $0) })
+        let latestById = Dictionary(desiredItems.map { (itemId($0), $0) }, uniquingKeysWith: { _, latest in latest })
         let held = previousSections.compactMap { section -> HomeSessionLadderSection<Item>? in
             let items = section.items.compactMap { latestById[itemId($0)] }
             guard !items.isEmpty else { return nil }

@@ -28,7 +28,7 @@ func orderedQuestionRequests(
 }
 
 func dropOrphanQuestionRequests(_ requests: [QuestionRequest], messages: [Message]) -> [QuestionRequest] {
-    let messagesByID = Dictionary(uniqueKeysWithValues: messages.map { ($0.id, $0) })
+    let messagesByID = Dictionary(messages.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
     return requests.filter { request in
         guard let messageID = request.toolMessageID,
               let callID = request.toolCallID,

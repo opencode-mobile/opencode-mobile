@@ -414,7 +414,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             .sorted { $0.timeCreated < $1.timeCreated }
         if userItems.isEmpty { return messages }
         let existingIDs = Set(messages.map(\.id))
-        let itemsByID = Dictionary(uniqueKeysWithValues: userItems.map { ($0.id, $0) })
+        let itemsByID = Dictionary(userItems.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         let merged = messages.map { message -> Message in
             guard let item = itemsByID[message.id] else { return message }
             return message.withPickupState(
