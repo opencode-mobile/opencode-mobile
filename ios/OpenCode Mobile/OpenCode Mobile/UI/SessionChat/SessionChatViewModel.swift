@@ -35,6 +35,8 @@ final class SessionChatViewModel {
     private var workingChrome = WorkingTurnIndicator.Chrome.unmounted
     private var workingHold: WorkingTurnIndicator.Hold?
     private var workingHoldTask: Task<Void, Never>?
+    private var pendingPromptsGate = PendingPromptsStripGate()
+    private var pendingPromptsWakeTask: Task<Void, Never>?
     private var isSessionBound = true
     private var suppressedSnackbarKey: String?
     private var snackbarSequence: UInt64 = 0
@@ -1744,6 +1746,14 @@ final class SessionChatViewModel {
                 "workingLamp label=\(workingIndicatorLabel ?? "none") collapsed=\(workingIndicatorCollapsed ? 1 : 0) fading=\(workingIndicatorFading ? 1 : 0) hold=\(workingHold != nil ? 1 : 0) status=\(sessionStatusLabel ?? "none") awaitingUser=\(awaitingUser ? 1 : 0) lastIsThinking=\(lastIsThinking ? 1 : 0)"
             )
         }
+        let pendingResolution = pendingPromptsGate.resolve(
+            Self.pendingPrompts(
+                loaded: timeline.loadedMessages(),
+                optimistic: timeline.pendingOptimisticItems()
+            ),
+            nowMs: clock.nowMs()
+        )
+        schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
@@ -1754,10 +1764,7 @@ final class SessionChatViewModel {
             sessionBranchPill: SessionChatBranchPillUiState.resolved(from: repoStripState),
             timeline: timelineState.timeline,
             messages: timelineState.messages,
-            pendingPrompts: Self.pendingPrompts(
-                loaded: timeline.loadedMessages(),
-                optimistic: timeline.pendingOptimisticItems()
-            ),
+            pendingPrompts: pendingResolution.prompts,
             timelineFrame: timelineFrame,
             composer: {
                 var next = composer.state.composer
@@ -1928,6 +1935,20 @@ final class SessionChatViewModel {
         workingHoldTask = nil
         workingHold = nil
         workingChrome = .unmounted
+        pendingPromptsWakeTask?.cancel()
+        pendingPromptsWakeTask = nil
+        pendingPromptsGate = PendingPromptsStripGate()
+    }
+
+    private func schedulePendingPromptsWake(_ wakeAfterMs: Int64?) {
+        pendingPromptsWakeTask?.cancel()
+        pendingPromptsWakeTask = nil
+        guard let wakeAfterMs else { return }
+        pendingPromptsWakeTask = Task { [clock] in
+            await clock.sleep(milliseconds: Int(wakeAfterMs))
+            guard !Task.isCancelled else { return }
+            publishUiState()
+        }
     }
 
     private func scheduleWorkingFooterWake(_ wakeAfterMs: Int64?) {
