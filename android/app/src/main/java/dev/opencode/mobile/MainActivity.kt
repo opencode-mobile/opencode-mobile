@@ -43,8 +43,9 @@ class MainActivity : FragmentActivity() {
 
     private val keyboardShortcuts = KeyboardShortcutHost()
 
-    // Privacy cover and optional app lock (#755). The cover goes up in onPause (recents
-    // thumbnails are handled in onCreate); the lock engages on the first resume and after onStop.
+    // Privacy cover and optional app lock (#755). The cover goes up in onPause when App Lock
+    // is on (recents thumbnails are handled in onCreate); the lock engages on the first
+    // resume and after onStop. When App Lock is off the task manager keeps the normal screen.
     private val privacyCover = mutableStateOf(PrivacyCoverState())
     private var wasInBackground = true
     private var unlockPrompt: BiometricPrompt? = null
@@ -57,15 +58,17 @@ class MainActivity : FragmentActivity() {
         worldSignals.register()
 
         enableEdgeToEdge()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Recents shows the launcher icon instead of a live snapshot of the chat.
-            setRecentsScreenshotEnabled(false)
-        } else {
-            // Below API 33 the recents thumbnail is taken before onPause, so the cover can never
-            // be in it. With App Lock on, a secure window gives a blank thumbnail instead (and,
-            // as a side effect, blocks screenshots of the app).
-            lifecycleScope.launch {
-                snapshotFlow { AppLockPreferences.enabled }.collect { enabled ->
+        // The task-manager thumbnail follows the App Lock setting: when on, recents shows
+        // a blank/icon instead of live chat; when off, the normal screen stays visible.
+        lifecycleScope.launch {
+            snapshotFlow { AppLockPreferences.enabled }.collect { enabled ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    // Recents shows the launcher icon instead of a live snapshot of the chat.
+                    setRecentsScreenshotEnabled(!enabled)
+                } else {
+                    // Below API 33 the recents thumbnail is taken before onPause, so the cover can never
+                    // be in it. With App Lock on, a secure window gives a blank thumbnail instead (and,
+                    // as a side effect, blocks screenshots of the app).
                     if (enabled) {
                         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
                     } else {
@@ -116,9 +119,13 @@ class MainActivity : FragmentActivity() {
     }
 
     override fun onPause() {
-        // Only cover here. On API 29 and below the device-credential screen is a separate
-        // activity that pauses this one, so cancelling the prompt here would end the unlock.
-        privacyCover.value = privacyCover.value.copy(covered = true)
+        // Only cover here when App Lock is on (or already locked). When off, the task
+        // manager keeps showing the normal screen. On API 29 and below the device-credential
+        // screen is a separate activity that pauses this one, so cancelling the prompt here
+        // would end the unlock.
+        if (AppLockPreferences.enabled || privacyCover.value.locked) {
+            privacyCover.value = privacyCover.value.copy(covered = true)
+        }
         super.onPause()
     }
 

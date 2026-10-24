@@ -137,14 +137,19 @@ struct AppRootView: View {
             }
         }
         .onChange(of: scenePhase) { _, phase in
-            // Privacy cover (#755): hide content before the app-switcher snapshot, and engage
-            // the lock when coming back from the background.
+            // Privacy cover (#755): when App Lock is on, hide content before the app-switcher
+            // snapshot, and engage the lock when coming back from the background.
+            // When App Lock is off the switcher keeps the normal screen.
             switch phase {
             case .inactive:
-                privacyCoverVisible = true
+                if appLockPreferences.enabled || locked {
+                    privacyCoverVisible = true
+                }
             case .background:
                 wasInBackground = true
-                privacyCoverVisible = true
+                if appLockPreferences.enabled || locked {
+                    privacyCoverVisible = true
+                }
             case .active:
                 if AppLockPolicy.shouldLock(enabled: appLockPreferences.enabled, wasInBackground: wasInBackground) {
                     locked = true
@@ -211,12 +216,12 @@ extension AppRootView {
             // prompt. Turn App Lock off instead of locking the user out with no way to Settings.
             appLockPreferences.setEnabled(false)
             locked = false
-            privacyCoverVisible = AppLockPolicy.coverVisible(isForeground: scenePhase == .active, locked: false)
+            privacyCoverVisible = AppLockPolicy.coverVisible(isForeground: scenePhase == .active, locked: false, enabled: false)
             return
         }
         if await appLockAuthenticator.authenticate(reason: "Unlock OpenCode Mobile") {
             locked = false
-            privacyCoverVisible = AppLockPolicy.coverVisible(isForeground: scenePhase == .active, locked: false)
+            privacyCoverVisible = AppLockPolicy.coverVisible(isForeground: scenePhase == .active, locked: false, enabled: appLockPreferences.enabled)
         }
     }
 }
