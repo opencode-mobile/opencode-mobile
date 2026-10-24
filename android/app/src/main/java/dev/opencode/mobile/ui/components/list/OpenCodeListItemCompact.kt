@@ -224,11 +224,25 @@ internal fun CompactListItemContent(
                     else -> Box(lineModifier)
                 }
                 if (status != null) {
-                    ListItemStatusPill(status = status, enabled = enabled, small = true)
+                    ListItemCompactStatusLabel(status = status, enabled = enabled)
                 }
             }
         }
     }
+}
+
+/** Status as coloured text, the path's size one weight up, without the pill's chip. */
+@Composable
+private fun ListItemCompactStatusLabel(
+    status: OpenCodeListItemStatus,
+    enabled: Boolean,
+) {
+    Text(
+        text = status.text,
+        color = if (enabled) status.tone.foreground() else openCodeColor("text-weaker"),
+        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+        maxLines = 1,
+    )
 }
 
 /** `project / worktree` on one line, shared by [OpenCodeListItemPathSplit]. */

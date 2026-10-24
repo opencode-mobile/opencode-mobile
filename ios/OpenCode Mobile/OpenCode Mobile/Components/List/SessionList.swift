@@ -1112,7 +1112,7 @@ extension SessionListSession {
 /// What a compact Home row shows beyond the title and time (#803).
 struct SessionListCompactRow: Equatable {
     let path: OpenCodeListItemPath
-    /// Nil while Idle: no pill and no dot.
+    /// Nil while Idle: no status and no dot.
     let status: OpenCodeListItemStatus?
     /// Bold title for an unread finish.
     let emphasized: Bool

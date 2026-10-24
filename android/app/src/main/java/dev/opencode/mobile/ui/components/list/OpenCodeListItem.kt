@@ -93,8 +93,6 @@ private val SubtitleIconWidth = 1.15.em
 private val SubtitleIconHeight = 1.em
 private val ListItemTitleTagSpacing = 6.dp
 private val StatusChipShape = OpenCodePillShape
-private val ListItemSmallStatusFontSize = 11.sp
-private val ListItemSmallStatusLineHeight = 14.sp
 private const val ListItemPressedScale = 0.965f
 private const val ListItemPopPeakScale = 1.035f
 
@@ -110,7 +108,7 @@ enum class OpenCodeListItemVariant {
     Standard,
 
     /**
-     * Two lines of fixed height: the title and caption, then a path and a small status pill.
+     * Two lines of fixed height: the title and caption, then a path and a coloured status label.
      * Pairs with [StartDecorator.Tile].
      */
     Compact,
@@ -440,12 +438,11 @@ private fun ListItemMetaColumn(
     }
 }
 
-/** Status chip; [small] is the Compact variant's size. */
+/** Status chip. */
 @Composable
 internal fun ListItemStatusPill(
     status: OpenCodeListItemStatus,
     enabled: Boolean,
-    small: Boolean = false,
 ) {
     val foreground = if (enabled) status.tone.foreground() else openCodeColor("text-weaker")
     val background = if (enabled) status.tone.background() else openCodeColor("surface-raised-base")
@@ -453,30 +450,13 @@ internal fun ListItemStatusPill(
         text = status.text,
         color = foreground,
         textAlign = TextAlign.Center,
-        style =
-            if (small) {
-                MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    fontSize = ListItemSmallStatusFontSize,
-                    lineHeight = ListItemSmallStatusLineHeight,
-                )
-            } else {
-                MaterialTheme.typography.labelSmall.copy(
-                    fontWeight = FontWeight.SemiBold,
-                )
-            },
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
         maxLines = 1,
         modifier =
             Modifier
                 .clip(StatusChipShape)
                 .background(background)
-                .then(
-                    if (small) {
-                        Modifier.padding(horizontal = 7.dp, vertical = 1.dp)
-                    } else {
-                        Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                    },
-                ),
+                .padding(horizontal = 8.dp, vertical = 3.dp),
     )
 }
 

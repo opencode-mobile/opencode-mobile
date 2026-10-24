@@ -470,7 +470,7 @@ private val galleryCompactRows =
             emphasized = true,
         ),
         GalleryCompactRow(
-            title = "Idle on the main checkout: no dot, no pill",
+            title = "Idle on the main checkout: no dot, no status",
             path = OpenCodeListItemPath("opencode-mobile"),
             accent = LetterAccent.Red,
             caption = "2d ago",
