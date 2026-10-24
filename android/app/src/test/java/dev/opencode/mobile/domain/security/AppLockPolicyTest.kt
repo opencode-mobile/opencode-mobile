@@ -7,10 +7,13 @@ import org.junit.Test
 
 class AppLockPolicyTest {
     @Test
-    fun coverShowsWheneverTheAppIsNotInTheForegroundOrIsLocked() {
-        assertTrue(AppLockPolicy.coverVisible(isForeground = false, locked = false))
-        assertTrue(AppLockPolicy.coverVisible(isForeground = true, locked = true))
-        assertFalse(AppLockPolicy.coverVisible(isForeground = true, locked = false))
+    fun coverShowsOnlyWhenAppLockIsOnAndTheAppIsNotInTheForegroundOrIsLocked() {
+        assertTrue(AppLockPolicy.coverVisible(isForeground = false, locked = false, enabled = true))
+        assertFalse(AppLockPolicy.coverVisible(isForeground = false, locked = false, enabled = false))
+        assertTrue(AppLockPolicy.coverVisible(isForeground = true, locked = true, enabled = true))
+        assertTrue(AppLockPolicy.coverVisible(isForeground = true, locked = true, enabled = false))
+        assertFalse(AppLockPolicy.coverVisible(isForeground = true, locked = false, enabled = true))
+        assertFalse(AppLockPolicy.coverVisible(isForeground = true, locked = false, enabled = false))
     }
 
     @Test

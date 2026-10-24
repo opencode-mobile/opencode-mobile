@@ -1,7 +1,9 @@
 import SwiftUI
 
-/// Opaque surface over the whole window while the app is not in the foreground or the app
-/// lock is engaged (#755). Replaces the app-switcher snapshot and blocks touches underneath.
+/// Opaque surface over the whole window while the app is not in the foreground when App Lock
+/// is on, or while the app lock is engaged (#755). When App Lock is off no cover is shown
+/// and the app switcher keeps the normal screen. Replaces the app-switcher snapshot and
+/// blocks touches underneath.
 struct PrivacyCoverView: View {
     let locked: Bool
     let onUnlock: () -> Void

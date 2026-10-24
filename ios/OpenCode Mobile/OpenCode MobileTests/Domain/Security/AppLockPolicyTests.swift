@@ -3,10 +3,13 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct AppLockPolicyTests {
-    @Test func coverShowsWheneverTheAppIsNotInTheForegroundOrIsLocked() {
-        #expect(AppLockPolicy.coverVisible(isForeground: false, locked: false))
-        #expect(AppLockPolicy.coverVisible(isForeground: true, locked: true))
-        #expect(AppLockPolicy.coverVisible(isForeground: true, locked: false) == false)
+    @Test func coverShowsOnlyWhenAppLockIsOnAndTheAppIsNotInTheForegroundOrIsLocked() {
+        #expect(AppLockPolicy.coverVisible(isForeground: false, locked: false, enabled: true))
+        #expect(AppLockPolicy.coverVisible(isForeground: false, locked: false, enabled: false) == false)
+        #expect(AppLockPolicy.coverVisible(isForeground: true, locked: true, enabled: true))
+        #expect(AppLockPolicy.coverVisible(isForeground: true, locked: true, enabled: false))
+        #expect(AppLockPolicy.coverVisible(isForeground: true, locked: false, enabled: true) == false)
+        #expect(AppLockPolicy.coverVisible(isForeground: true, locked: false, enabled: false) == false)
     }
 
     @Test func lockEngagesOnlyWhenEnabledAndTheAppWasInTheBackground() {

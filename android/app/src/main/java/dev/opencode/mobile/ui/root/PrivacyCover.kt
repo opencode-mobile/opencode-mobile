@@ -36,9 +36,11 @@ data class PrivacyCoverState(
 )
 
 /**
- * Opaque surface over the whole window while the app is not in the foreground or the app
- * lock is engaged (#755). Swallows touches so nothing underneath reacts, and while locked
- * takes focus so a text field underneath cannot keep receiving keyboard input.
+ * Opaque surface over the whole window while the app is not in the foreground when App Lock
+ * is on, or while the app lock is engaged (#755). When App Lock is off no cover is shown
+ * and the task manager keeps the normal screen. Swallows touches so nothing underneath
+ * reacts, and while locked takes focus so a text field underneath cannot keep receiving
+ * keyboard input.
  */
 @Composable
 fun PrivacyCover(
