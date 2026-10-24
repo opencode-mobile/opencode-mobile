@@ -191,7 +191,7 @@ struct OpenCodeTextInput: View {
 
     private var borderColor: Color {
         if errorMessage != nil { return OpenCodeColors.error }
-        if focused { return OpenCodeColors.interactive }
+        if isEditing { return OpenCodeColors.interactive }
         return OpenCodeColors.borderWeakerBase
     }
 }
