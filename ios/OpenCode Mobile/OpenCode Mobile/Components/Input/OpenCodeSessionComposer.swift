@@ -923,6 +923,10 @@ private struct QuestionCustomTextField: View {
     let enabled: Bool
     let onChange: (String) -> Void
 
+    /// Custom answer grows from 3 lines up to 5, then scrolls.
+    private static let minLines = 3
+    private static let maxLines = 5
+
     @State private var draft: String = ""
 
     var body: some View {
@@ -935,7 +939,9 @@ private struct QuestionCustomTextField: View {
                 }
             ),
             hint: "Enter a custom answer",
-            enabled: enabled
+            enabled: enabled,
+            minLines: Self.minLines,
+            maxLines: Self.maxLines
         )
         .onAppear { draft = text }
         .onChange(of: text) { _, newValue in

@@ -324,6 +324,10 @@ fun rememberOpenCodeSessionComposerFocus(): OpenCodeSessionComposerFocus = remem
 /** ~5 body lines — enough for a long prompt without swallowing the chat (OPE-127). */
 private const val PromptMaxVisibleLines = 5
 
+/** Custom question answer grows from 3 lines up to 5, then scrolls. */
+private const val QuestionCustomMinLines = 3
+private const val QuestionCustomMaxLines = 5
+
 @Composable
 fun OpenCodeSessionComposer(
     state: OpenCodeSessionComposerState,
@@ -1117,6 +1121,8 @@ private fun QuestionRequestContent(
                         },
                         hint = "Enter a custom answer",
                         enabled = !state.submitting,
+                        minLines = QuestionCustomMinLines,
+                        maxLines = QuestionCustomMaxLines,
                     )
                 }
             }
