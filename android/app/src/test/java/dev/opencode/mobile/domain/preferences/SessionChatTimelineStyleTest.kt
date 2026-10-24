@@ -140,6 +140,23 @@ class SessionChatTimelineStyleTest {
     }
 
     @Test
+    fun clearAllData_settlesAsFreshInstall() {
+        launch(existingInstall = true)
+
+        // Clear All Data, as SettingsViewModel.clearAllData runs it.
+        SessionChatDisplayPreferences.clear()
+        SessionChatDisplayPreferences.resolveTimelineForInstall(existingInstall = false)
+
+        assertEquals(SessionChatTimelineStyle.ActivityCard, SessionChatDisplayPreferences.timelineStylePreference)
+        assertFalse(SessionChatDisplayPreferences.timelineStylePickerPending)
+        // The next launch, already past onboarding with a profile, must not offer the picker.
+        launch(existingInstall = true)
+        assertEquals(SessionChatTimelineStyle.ActivityCard, SessionChatDisplayPreferences.timelineStylePreference)
+        assertFalse(SessionChatDisplayPreferences.timelineStylePickerPending)
+        assertFalse(SessionChatDisplayPreferences.shouldOfferChipTimelineIntro(20, 1_000L))
+    }
+
+    @Test
     fun clear_resetsPickerKey() {
         launch(existingInstall = true)
 
