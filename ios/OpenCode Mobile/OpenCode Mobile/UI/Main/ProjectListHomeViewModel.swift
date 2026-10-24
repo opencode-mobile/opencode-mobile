@@ -1068,7 +1068,7 @@ final class ProjectListHomeViewModel {
               current.count == worktrees.count,
               Set(current) == Set(worktrees)
         else { return }
-        let byWorktree = Dictionary(uniqueKeysWithValues: sections.map { ($0.worktree, $0) })
+        let byWorktree = Dictionary(sections.map { ($0.worktree, $0) }, uniquingKeysWith: { _, latest in latest })
         state = .loaded(
             sections: worktrees.compactMap { byWorktree[$0] },
             showAddProjectSheet: showAdd,
@@ -1493,7 +1493,7 @@ final class ProjectListHomeViewModel {
     private func sectionFromCache(worktree: String) async -> ProjectSectionItem {
         let seeded = await sessionCache.seedSessions(worktree: worktree)
         let cachedActivity = await sessionCache.seedActivity(directory: worktree) ?? []
-        let activityByID = Dictionary(uniqueKeysWithValues: cachedActivity.map { ($0.sessionId, $0) })
+        let activityByID = Dictionary(cachedActivity.map { ($0.sessionId, $0) }, uniquingKeysWith: { _, latest in latest })
         let sessions =
             (seeded ?? [])
                 .activeSessions()

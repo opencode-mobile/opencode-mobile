@@ -1388,6 +1388,18 @@ struct SessionChatTimelineProjectorTests {
 
     private static let clientID = "msg_19a1b2c3d4e5AbCdEfGhIjKlMn"
 
+    @Test func duplicateMessageIDs_doNotTrapAcrossReprojection() {
+        let first = makeMessage(id: "dup", role: .user, parts: [text("p1", "Hello")], text: "Hello", sentAtEpochMs: 1)
+        let second = makeMessage(id: "dup", role: .user, parts: [text("p1", "Hello again")], text: "Hello again", sentAtEpochMs: 1)
+        let other = makeMessage(id: "other", parts: [text("p2", "Reply")], text: "Reply", sentAtEpochMs: 2)
+        let messages = [first, second, other].map { DisplayMessage(message: $0) }
+
+        let projected = project(displayFrame(revision: 1, messages: messages))
+        let reprojected = project(displayFrame(revision: 2, messages: messages), previous: projected)
+
+        #expect(reprojected.rows.contains { $0.id == "other" })
+    }
+
     private func project(
         _ frame: DisplayFrame,
         optimistic: OptimisticInputs = .none,

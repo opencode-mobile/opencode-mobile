@@ -152,6 +152,34 @@ struct HomeSessionOrderStabilizerTests {
         #expect(held.nextApplyAtEpochMs == t0 + HomeSessionOrderStabilizer.reorderIntervalMs)
     }
 
+    @Test func duplicateIdsInPreviousSectionsDoNotTrap() {
+        let previous = recent(Item(id: "a", title: "Old"), Item(id: "a", title: "Older"), Item(id: "b"))
+
+        let held = stabilize(
+            previous: previous,
+            lastAppliedAt: t0,
+            desired: recent("a", "b"),
+            now: t0 + 1_000
+        )
+
+        #expect(Set(ids(held)) == ["a", "b"])
+    }
+
+    @Test func duplicateIdsInDesiredSectionsDoNotTrapAndLatestWins() {
+        let applied = stabilize(previous: [], lastAppliedAt: nil, desired: recent("a", "b"), now: t0)
+        let desired = recent(Item(id: "a", title: "First"), Item(id: "a", title: "Last"), Item(id: "b"))
+
+        let held = stabilize(
+            previous: applied.sections,
+            lastAppliedAt: t0,
+            desired: desired,
+            now: t0 + 1_000
+        )
+
+        #expect(Set(ids(held)) == ["a", "b"])
+        #expect(titles(held).contains("Last"))
+    }
+
     private func ids(_ result: HomeSessionOrderResult<Item>) -> [String] {
         result.sections.flatMap { $0.items.map(\.id) }
     }

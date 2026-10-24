@@ -200,7 +200,8 @@ nonisolated enum DisplayFrameBuilder {
 
     static func orderedDisplayMessages(_ displayMessages: [DisplayMessage]) -> [DisplayMessage] {
         let inputIndex = Dictionary(
-            uniqueKeysWithValues: displayMessages.enumerated().map { ($0.element.id, $0.offset) }
+            displayMessages.enumerated().map { ($0.element.id, $0.offset) },
+            uniquingKeysWith: { _, latest in latest }
         )
         var ordered =
             displayMessages

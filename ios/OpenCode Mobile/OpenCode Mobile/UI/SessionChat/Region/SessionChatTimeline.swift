@@ -439,7 +439,7 @@ final class SessionChatTimeline {
         ).withRequired(false)
         timelineFrame = stamped
 
-        let previousByID = Dictionary(uniqueKeysWithValues: state.messages.map { ($0.id, $0) })
+        let previousByID = Dictionary(state.messages.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         let rows = stamped.rows.map { timelineRow -> SessionChatRow in
             if let previous = previousByID[timelineRow.id],
                !stamped.changedRowIDs.contains(timelineRow.id),
@@ -814,7 +814,7 @@ final class SessionChatTimeline {
 
         let stateSnapshot = state
         let previousErrorMessage = fromQuietRefresh ? stateSnapshot.errorMessage : nil
-        let previousByID = Dictionary(uniqueKeysWithValues: stateSnapshot.messages.map { ($0.id, $0) })
+        let previousByID = Dictionary(stateSnapshot.messages.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         let applyStartedAt = ContinuousClock.now
 
         displayFrameRevision &+= 1
@@ -1026,7 +1026,7 @@ final class SessionChatTimeline {
         decorateRowIDs: Set<String> = [],
         isRequired: Bool = false
     ) {
-        let previousByID = Dictionary(uniqueKeysWithValues: timelineFrame.rows.map { ($0.id, $0) })
+        let previousByID = Dictionary(timelineFrame.rows.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         let rows = messages.map { row -> TimelineRow in
             if let previous = previousByID[row.id],
                !insertedRowIDs.contains(row.id),
@@ -1121,7 +1121,7 @@ final class SessionChatTimeline {
 
     private func expirePendingPromptPatches(against authoritative: [DisplayMessage]) {
         guard !pendingPromptPatches.isEmpty else { return }
-        let byID = Dictionary(uniqueKeysWithValues: authoritative.map { ($0.message.id, $0.message) })
+        let byID = Dictionary(authoritative.map { ($0.message.id, $0.message) }, uniquingKeysWith: { _, latest in latest })
         for (id, patch) in pendingPromptPatches {
             let incoming = byID[id]
             if patch.removed {

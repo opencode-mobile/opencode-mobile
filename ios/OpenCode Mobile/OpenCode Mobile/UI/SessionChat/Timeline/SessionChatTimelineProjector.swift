@@ -53,7 +53,8 @@ nonisolated enum SessionChatTimelineProjector {
     ) -> TimelineFrame {
         let resolveLabel = metadataLabel ?? { message in Self.metadataLabel(for: message) }
         let previousByID = Dictionary(
-            uniqueKeysWithValues: (previous?.rows ?? []).map { ($0.id, $0) }
+            (previous?.rows ?? []).map { ($0.id, $0) },
+            uniquingKeysWith: { _, latest in latest }
         )
 
         let serverRows = serverRows(from: frame, previousByID: previousByID, metadataLabel: resolveLabel)
@@ -131,7 +132,8 @@ nonisolated enum SessionChatTimelineProjector {
     ) -> [TimelineRow] {
         let resolveLabel = metadataLabel ?? { message in Self.metadataLabel(for: message) }
         let previousByID = Dictionary(
-            uniqueKeysWithValues: (previous?.rows ?? []).map { ($0.id, $0) }
+            (previous?.rows ?? []).map { ($0.id, $0) },
+            uniquingKeysWith: { _, latest in latest }
         )
         return serverRows(from: frame, previousByID: previousByID, metadataLabel: resolveLabel)
     }
