@@ -830,6 +830,8 @@ extension Container {
             DeveloperToolsPreferences.shared.clear()
             PerformanceOverlayPreferences.shared.clear()
             SessionChatDisplayPreferences.shared.clear()
+            // A wipe is a fresh install: settle the timeline now so the update-only picker never shows.
+            SessionChatDisplayPreferences.shared.resolveTimelineForInstall(existingInstall: false)
             SplitPanePreferences.shared.clear()
             FeatureFlags.shared.clearOverrides()
             MessageContentPreparer.shared.clearDocumentCache()

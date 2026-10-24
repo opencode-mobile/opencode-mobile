@@ -170,6 +170,27 @@ import Testing
         #expect(preferences.timelineStylePickerPending)
     }
 
+    @Test func install_clearAllDataSettlesAsFreshInstall() {
+        let suite = "SessionChatDisplayPreferencesTests.clearAllData"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+        preferences.resolveTimelineForInstall(existingInstall: true)
+
+        // Clear All Data, as AppContainer.clearAllData runs it.
+        preferences.clear()
+        preferences.resolveTimelineForInstall(existingInstall: false)
+
+        #expect(preferences.timelineStyle == .activityCard)
+        #expect(!preferences.timelineStylePickerPending)
+        // The next launch, already past onboarding with a profile, must not offer the picker.
+        let relaunched = SessionChatDisplayPreferences(defaults: defaults)
+        relaunched.resolveTimelineForInstall(existingInstall: true)
+        #expect(relaunched.timelineStyle == .activityCard)
+        #expect(!relaunched.timelineStylePickerPending)
+        #expect(!relaunched.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: 1_000))
+    }
+
     @Test func install_resolveKeepsStoredValues() {
         let suite = "SessionChatDisplayPreferencesTests.resolveStored"
         let defaults = UserDefaults(suiteName: suite)!

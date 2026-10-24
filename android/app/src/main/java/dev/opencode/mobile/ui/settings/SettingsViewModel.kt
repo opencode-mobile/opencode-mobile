@@ -98,6 +98,8 @@ class SettingsViewModel
                 DeveloperToolsPreferences.clear()
                 PerformanceOverlayPreferences.clear()
                 SessionChatDisplayPreferences.clear()
+                // A wipe is a fresh install: settle the timeline now so the update-only picker never shows.
+                SessionChatDisplayPreferences.resolveTimelineForInstall(existingInstall = false)
                 SplitPanePreferences.clear()
                 FeatureFlags.clearOverrides()
                 messageContentPreparer.clearDocumentCache()
