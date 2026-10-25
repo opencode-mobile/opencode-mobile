@@ -43,7 +43,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
     /// A run failure to show under the reply. Nil when the run did not fail, or the user stopped it.
     var failure: SessionFailure?
     /// Skills admitted with this prompt. Empty for v1 and for messages that did not load a skill.
-    let promptSkills: [PromptSkill]
+    var promptSkills: [PromptSkill]
 
     init(
         id: String,
@@ -89,13 +89,14 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         self.promptSkills = promptSkills
     }
 
-    /// Fills agent, model, variant, and an omitted failure this copy lacks from `base`.
+    /// Fills agent, model, variant, prompt skills, and an omitted failure this copy lacks from `base`.
     /// v2 live infos are partial. An explicit null error is a clear and must not be restored.
     func withMetadata(from base: Message?, failureOmitted: Bool) -> Message {
         guard let base else { return self }
         var copy = self
         if copy.stopReason == nil { copy.stopReason = base.stopReason }
         if copy.failure == nil, failureOmitted { copy.failure = base.failure }
+        if copy.promptSkills.isEmpty { copy.promptSkills = base.promptSkills }
         guard mode == nil || model == nil else { return copy }
         let takeModel = model == nil
         return Message(
@@ -118,7 +119,7 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             isWaitingForPickup: isWaitingForPickup,
             stopReason: copy.stopReason,
             failure: copy.failure,
-            promptSkills: promptSkills
+            promptSkills: copy.promptSkills
         )
     }
 
