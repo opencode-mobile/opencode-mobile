@@ -167,7 +167,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             followUpDelivery: baseMessage.followUpDelivery,
             isWaitingForPickup: baseMessage.isWaitingForPickup,
             stopReason: baseMessage.stopReason,
-            failure: baseMessage.failure
+            failure: baseMessage.failure,
+            promptSkills: baseMessage.promptSkills
         )
     }
 
