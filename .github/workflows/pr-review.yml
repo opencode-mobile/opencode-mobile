@@ -49,14 +49,24 @@ jobs:
     timeout-minutes: 45
     steps:
       # The comment payload does not say where the PR head lives, so ask the
-      # API before anything from the PR reaches the runner.
+      # API before anything from the PR reaches the runner. Plain python, since
+      # the runner user (prrunner) has no gh.
       - name: Skip forks
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number || github.event.issue.number }}
         run: |
-          head=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR" --jq '.head.repo.full_name // ""')
+          head=$(python3 - <<'PY'
+          import json, os, urllib.request
+          req = urllib.request.Request(
+              f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{os.environ['PR']}",
+              headers={"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Accept": "application/vnd.github+json"},
+          )
+          with urllib.request.urlopen(req, timeout=30) as resp:
+              print((json.load(resp)["head"].get("repo") or {}).get("full_name") or "")
+          PY
+          )
           if [ "$head" = "$GITHUB_REPOSITORY" ]; then
             echo "same_repo=true" >> "$GITHUB_OUTPUT"
           else
@@ -82,4 +92,6 @@ jobs:
           if [ -n "$COMMENT_ID" ]; then
             args+=(--comment-id "$COMMENT_ID")
           fi
-          python3 "$HOME/Projects/homelab/services/pr-review/review.py" "${args[@]}"
+          # The runner user's own homelab clone; ivan cannot write it.
+          git -C /opt/pr-review/homelab pull -q --ff-only
+          python3 /opt/pr-review/homelab/services/pr-review/review.py "${args[@]}"
