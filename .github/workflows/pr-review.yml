@@ -1,0 +1,56 @@
+# Copy to opencode-mobile/opencode-mobile as .github/workflows/pr-review.yml.
+# Source of truth: ivanfenenko/homelab services/pr-review/workflow.yml.
+#
+# Automated review by three opencode passes on fedora-box (runner
+# fedora-box-pr-review). Runs when a PR is opened, reopened or marked ready
+# for review, and when an owner/member/collaborator comments `/review`.
+# Not on every push. Drafts and forks are skipped. The review script comes
+# from the homelab checkout on the runner, never from the PR.
+name: PR review
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: pr-review-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: >-
+      (github.event_name == 'pull_request'
+        && !github.event.pull_request.draft
+        && github.event.pull_request.head.repo.full_name == github.repository)
+      || (github.event_name == 'issue_comment'
+        && github.event.issue.pull_request
+        && github.event.issue.state == 'open'
+        && startsWith(github.event.comment.body, '/review')
+        && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: [self-hosted, pr-review]
+    timeout-minutes: 45
+    steps:
+      - name: Check out PR head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number || github.event.issue.number }}/head
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          args=(--repo "$GITHUB_REPOSITORY" --pr "$PR" --repo-dir "$GITHUB_WORKSPACE")
+          if [ -n "$COMMENT_ID" ]; then
+            args+=(--comment-id "$COMMENT_ID")
+          fi
+          python3 "$HOME/Projects/homelab/services/pr-review/review.py" "${args[@]}"
