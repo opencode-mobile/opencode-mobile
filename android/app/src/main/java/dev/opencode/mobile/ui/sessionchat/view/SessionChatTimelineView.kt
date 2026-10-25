@@ -155,6 +155,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.yield
 
 private val LocalHideLiveRetryFailures = staticCompositionLocalOf { false }
+private val LocalRetryCountdownBlockId = staticCompositionLocalOf<String?> { null }
 private val LocalNoticeModelNames = staticCompositionLocalOf { SessionChatNoticeModelNames() }
 
 internal data class SessionChatTimelineViewProps(
@@ -177,6 +178,8 @@ internal data class SessionChatTimelineViewProps(
     val hideFloatStack: Boolean = false,
     /** Hide rate-limit and quota marks while the composer retry status is showing. */
     val hideLiveRetryFailures: Boolean = false,
+    /** The session is retrying: the composer owns the countdown, so failure marks show none. */
+    val hideRetryCountdown: Boolean = false,
     /** Model display names a "Switched to" notice shows; the model id when absent. */
     val noticeModelNames: SessionChatNoticeModelNames = SessionChatNoticeModelNames(),
     /** Extra bottom inset so the timeline can scroll under a floating composer. */
@@ -266,8 +269,13 @@ internal fun SessionChatTimelineView(
             }
 
         SessionChatTimelineState.Ready -> {
+            val retryCountdownBlockId =
+                remember(props.messages, props.hideRetryCountdown) {
+                    if (props.hideRetryCountdown) null else SessionChatTimelineBlocks.retryCountdownBlockId(props.messages)
+                }
             CompositionLocalProvider(
                 LocalHideLiveRetryFailures provides props.hideLiveRetryFailures,
+                LocalRetryCountdownBlockId provides retryCountdownBlockId,
                 LocalNoticeModelNames provides props.noticeModelNames,
             ) {
             SessionChatTimelineReadyView(
@@ -1338,6 +1346,7 @@ private fun FailureLineBlock(
         text = block.text,
         isNeutral = block.isNeutral,
         onOpen = target?.let { detail -> { onToolDetailTap(detail) } },
+        retryAtEpochMs = block.retryAtEpochMs.takeIf { block.blockID == LocalRetryCountdownBlockId.current },
     )
 }
 

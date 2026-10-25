@@ -22,6 +22,78 @@ class SessionFailureTest {
     }
 
     @Test
+    fun usageLimitTypesMapToTheirActions() {
+        assertEquals(FailureAction.PickModel, failure("provider.free-limit").action())
+        assertEquals("Pick a model", failure("provider.free-limit").actionLabel())
+        assertEquals(FailureAction.PickModel, failure("provider.model-budget-limit").action())
+        assertNull(failure("provider.budget-limit").action())
+        assertFalse(failure("provider.free-limit").coversLiveRetry())
+        assertFalse(failure("provider.budget-limit").coversLiveRetry())
+    }
+
+    @Test
+    fun retryAtCountsFromTheRecordedTime() {
+        val limited =
+            SessionFailure.fromV2(
+                type = "provider.free-limit",
+                message = "Free usage limit reached.",
+                status = 429,
+                providerBody = null,
+                retryAfterMs = 30_000L,
+                recordedAtEpochMs = 1_000L,
+            )
+        assertEquals(30_000L, limited?.retryAfterMs)
+        assertEquals(31_000L, limited?.retryAtEpochMs())
+        assertEquals("HTTP 429 · Free usage limit reached.", limited?.line())
+    }
+
+    @Test
+    fun noRetryAfterMeansNoRetryTime() {
+        val plain =
+            SessionFailure.fromV2(
+                type = "provider.rate-limit",
+                message = "Slow down",
+                status = 429,
+                providerBody = null,
+                recordedAtEpochMs = 1_000L,
+            )
+        assertNull(plain?.retryAfterMs)
+        assertNull(plain?.recordedAtEpochMs)
+        assertNull(plain?.retryAtEpochMs())
+        assertEquals(SessionFailure(type = "provider.rate-limit", message = "Slow down", status = 429), plain)
+
+        val v1 = SessionFailure.fromV1(name = "APIError", message = "Slow down", statusCode = 429, responseBody = null)
+        assertNull(v1?.retryAtEpochMs())
+        assertNull(failure("provider.quota").retryAtEpochMs())
+    }
+
+    @Test
+    fun negativeRetryAfterIsIgnored() {
+        val failure =
+            SessionFailure.fromV2(
+                type = "provider.quota",
+                message = "Quota",
+                status = null,
+                providerBody = null,
+                retryAfterMs = -5L,
+                recordedAtEpochMs = 1_000L,
+            )
+        assertNull(failure?.retryAtEpochMs())
+    }
+
+    @Test
+    fun retryAfterLabelUsesSecondsThenMinutes() {
+        assertEquals("Try again in 1 s", SessionFailure.retryAfterLabel(1L))
+        assertEquals("Try again in 12 s", SessionFailure.retryAfterLabel(11_200L))
+        assertEquals("Try again in 90 s", SessionFailure.retryAfterLabel(90_000L))
+        assertEquals("Try again in 2 min", SessionFailure.retryAfterLabel(90_001L))
+        assertEquals("Try again in 4 min", SessionFailure.retryAfterLabel(240_000L))
+        assertEquals("Try again in 60 min", SessionFailure.retryAfterLabel(3_600_000L))
+        assertNull(SessionFailure.retryAfterLabel(0L))
+        assertNull(SessionFailure.retryAfterLabel(-1_000L))
+    }
+
+    @Test
     fun rateLimitAndQuotaAreCoveredByTheLiveRetry() {
         assertTrue(failure("provider.rate-limit").coversLiveRetry())
         assertTrue(failure(" Provider.Quota ").coversLiveRetry())

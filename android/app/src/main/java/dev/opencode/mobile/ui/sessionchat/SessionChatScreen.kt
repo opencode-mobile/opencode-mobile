@@ -791,6 +791,7 @@ fun SessionChatScreen(
                             sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
                             hideFloatStack = showSessionTodosSheet,
                             hideLiveRetryFailures = uiState.retryCard != null,
+                            hideRetryCountdown = uiState.isRetrying,
                             noticeModelNames = noticeModelNames,
                             // Composer + 16 end-pin gap; Scroll to end uses this as-is
                             // (no extra scrollToEndPillBottomPadding).

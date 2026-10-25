@@ -20,6 +20,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case stopNote(blockID: String, reason: MessageStopReason)
     /// A failed run under the reply. A provider body or an action opens the detail sheet.
     /// `coveredByLiveRetry` is a rate-limit or quota the composer status already shows.
+    /// `retryAtEpochMs` is when the provider said to try again.
     case failureLine(
         blockID: String,
         text: String,
@@ -27,7 +28,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         isNeutral: Bool,
         action: FailureAction?,
         actionLabel: String?,
-        coveredByLiveRetry: Bool
+        coveredByLiveRetry: Bool,
+        retryAtEpochMs: Int64? = nil
     )
     /// A session-level change (moved, agent, model, instructions, restart) on its own row.
     case notice(blockID: String, notice: TimelineNotice)
@@ -54,7 +56,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             blockID
         case .stopNote(let blockID, _):
             blockID
-        case .failureLine(let blockID, _, _, _, _, _, _):
+        case .failureLine(let blockID, _, _, _, _, _, _, _):
             blockID
         case .notice(let blockID, _):
             blockID
@@ -129,11 +131,11 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case let (.stopNote(lID, lReason), .stopNote(rID, rReason)):
             lID == rID && lReason == rReason
         case let (
-            .failureLine(lID, lText, lBody, lNeutral, lAction, lLabel, lCovered),
-            .failureLine(rID, rText, rBody, rNeutral, rAction, rLabel, rCovered)
+            .failureLine(lID, lText, lBody, lNeutral, lAction, lLabel, lCovered, lRetryAt),
+            .failureLine(rID, rText, rBody, rNeutral, rAction, rLabel, rCovered, rRetryAt)
         ):
             lID == rID && lText == rText && lBody == rBody && lNeutral == rNeutral
-                && lAction == rAction && lLabel == rLabel && lCovered == rCovered
+                && lAction == rAction && lLabel == rLabel && lCovered == rCovered && lRetryAt == rRetryAt
         case let (.notice(lID, lNotice), .notice(rID, rNotice)):
             lID == rID && lNotice == rNotice
         default:
@@ -1018,11 +1020,23 @@ nonisolated enum SessionChatTimelineBlocks {
         ]
     }
 
+    /// The failure mark that may count down to its retry time: only on the last
+    /// turn, so a user message after it means the countdown no longer applies.
+    static func retryCountdownBlockID(in rows: [SessionChatRow]) -> String? {
+        for row in rows.reversed() {
+            if row.role == .user { return nil }
+            for block in row.blocks.reversed() {
+                if case .failureLine(let id, _, _, _, _, _, _, let retryAt) = block, retryAt != nil { return id }
+            }
+        }
+        return nil
+    }
+
     /// Newest rate-limit or quota body, for the composer status to open.
     static func newestLiveRetryProviderBody(in rows: [SessionChatRow]) -> String? {
         for row in rows.reversed() {
             for block in row.blocks {
-                if case .failureLine(_, _, let body, _, _, _, let covered) = block,
+                if case .failureLine(_, _, let body, _, _, _, let covered, _) = block,
                    covered,
                    let body = body?.trimmingCharacters(in: .whitespacesAndNewlines),
                    !body.isEmpty
@@ -1112,7 +1126,8 @@ nonisolated enum SessionChatTimelineBlocks {
                     isNeutral: failure.isNeutral,
                     action: failure.action(),
                     actionLabel: failure.actionLabel(),
-                    coveredByLiveRetry: failure.coversLiveRetry()
+                    coveredByLiveRetry: failure.coversLiveRetry(),
+                    retryAtEpochMs: failure.retryAtEpochMs()
                 )
             )
         }

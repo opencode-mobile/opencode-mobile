@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.event
 
+import dev.opencode.mobile.data.remote.dto.MessageInfoDto
+import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
@@ -1435,6 +1437,26 @@ class EventDomainAdapterTest {
         assertNull(
             SessionActivity.Retrying(errorType = "provider.content-filter", nextAtMs = 1L).retryCard(),
         )
+    }
+
+    @Test
+    fun stepFailed_keepsRetryAfterOnTheTranslatedError() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.step.failed","data":{"sessionID":"ses-1","assistantMessageID":"a1","error":{"type":"provider.free-limit","message":"Free usage limit reached.","status":429,"retryAfterMs":3600000}}}""",
+            )
+        val info = events.single().rawProperties?.get("info") as kotlinx.serialization.json.JsonObject
+        val payload = (info["error"] as kotlinx.serialization.json.JsonObject)["data"] as kotlinx.serialization.json.JsonObject
+        assertEquals("3600000", (payload["retryAfterMs"] as kotlinx.serialization.json.JsonPrimitive).content)
+
+        val failure =
+            MessageDomainAdapter(nowEpochMs = { 5_000L })
+                .toMessage(
+                    Json { ignoreUnknownKeys = true }.decodeFromJsonElement(MessageInfoDto.serializer(), info),
+                    emptyList(),
+                ).failure
+        assertEquals(3_600_000L, failure?.retryAfterMs)
+        assertEquals(3_605_000L, failure?.retryAtEpochMs())
     }
 
     @Test

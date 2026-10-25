@@ -1560,6 +1560,85 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun projectV2_freeLimitCarriesRetryAfterFromTheCompletedTime() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [{
+                  "id":"a1","type":"assistant","finish":"error","content":[],
+                  "time":{"created":1000,"completed":2000},
+                  "error":{"type":"provider.free-limit",
+                    "message":"Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.",
+                    "status":429,"retryAfterMs":3600000}
+                }]
+                """.trimIndent(),
+            )
+        val failure = MessageDomainAdapter(nowEpochMs = { 9_999L }).projectV2(dtos).single().failure
+        assertEquals("provider.free-limit", failure?.type)
+        assertEquals(
+            "HTTP 429 · Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.",
+            failure?.line(),
+        )
+        assertEquals(FailureAction.PickModel, failure?.action())
+        assertEquals(3_600_000L, failure?.retryAfterMs)
+        assertEquals(2_000L, failure?.recordedAtEpochMs)
+        assertEquals(3_602_000L, failure?.retryAtEpochMs())
+    }
+
+    @Test
+    fun projectV2_budgetLimitsFromTheConsoleEnvelope() {
+        // Payloads as anomalyco/opencode#58694 builds them (dev only, no release sends them yet).
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {"id":"a1","type":"assistant","finish":"error","content":[],
+                    "error":{"type":"provider.budget-limit",
+                      "message":"Workspace usage limit reached. Model use is paused until the limit resets.",
+                      "status":429,"retryAfterMs":120000,
+                      "response":{"body":"{\"type\":\"error\",\"error\":{\"type\":\"BudgetLimitError\"}}"}}},
+                  {"id":"u2","type":"user","text":"again","time":{"created":3000}},
+                  {"id":"a2","type":"assistant","finish":"error","content":[],"time":{"created":3001,"completed":3002},
+                    "error":{"type":"provider.model-budget-limit",
+                      "message":"You've reached the spend limit for this model. Switch models to keep going.",
+                      "status":429,
+                      "response":{"body":"{\"type\":\"error\",\"error\":{\"type\":\"BudgetLimitError\",\"metadata\":{\"coverage\":\"models\"}}}"}}}
+                ]
+                """.trimIndent(),
+            )
+        val messages = MessageDomainAdapter(nowEpochMs = { 9_999L }).projectV2(dtos)
+        val budget = messages.first().failure
+        assertEquals("HTTP 429 · Workspace usage limit reached. Model use is paused until the limit resets.", budget?.line())
+        assertNull(budget?.action())
+        // No completed time on the failed message: the countdown runs from when the app received it.
+        assertEquals(9_999L, budget?.recordedAtEpochMs)
+        assertEquals(129_999L, budget?.retryAtEpochMs())
+
+        val modelBudget = messages.last().failure
+        assertEquals("provider.model-budget-limit", modelBudget?.type)
+        assertEquals(FailureAction.PickModel, modelBudget?.action())
+        assertNull(modelBudget?.retryAtEpochMs())
+        assertNull(modelBudget?.recordedAtEpochMs)
+    }
+
+    @Test
+    fun v1Failure_hasNoRetryTime() {
+        val dto =
+            json.decodeFromString<MessageDto>(
+                """
+                {"info":{"id":"m1","role":"assistant","time":{"created":1,"completed":2},
+                  "error":{"name":"APIError","data":{"message":"Rate limited","statusCode":429,"isRetryable":true}}},
+                 "parts":[]}
+                """.trimIndent(),
+            )
+        val failure = adapter.toMessage(dto).failure
+        assertEquals("HTTP 429 · Rate limited", failure?.line())
+        assertNull(failure?.retryAfterMs)
+        assertNull(failure?.recordedAtEpochMs)
+        assertNull(failure?.retryAtEpochMs())
+    }
+
+    @Test
     fun projectV2_hidesAbortAndProjectsFailedIdleAndCompaction() {
         val dtos =
             json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(

@@ -15,6 +15,70 @@ struct SessionFailureTests {
         #expect(failure("compaction.failed").action() == nil)
     }
 
+    @Test func usageLimitTypesMapToTheirActions() {
+        #expect(failure("provider.free-limit").action() == .pickModel)
+        #expect(failure("provider.free-limit").actionLabel() == "Pick a model")
+        #expect(failure("provider.model-budget-limit").action() == .pickModel)
+        #expect(failure("provider.budget-limit").action() == nil)
+        #expect(!failure("provider.free-limit").coversLiveRetry())
+        #expect(!failure("provider.budget-limit").coversLiveRetry())
+    }
+
+    @Test func retryAtCountsFromTheRecordedTime() {
+        let limited = SessionFailure.fromV2(
+            type: "provider.free-limit",
+            message: "Free usage limit reached.",
+            status: 429,
+            providerBody: nil,
+            retryAfterMs: 30_000,
+            recordedAtEpochMs: 1_000
+        )
+        #expect(limited?.retryAfterMs == 30_000)
+        #expect(limited?.retryAtEpochMs() == 31_000)
+        #expect(limited?.line() == "HTTP 429 · Free usage limit reached.")
+    }
+
+    @Test func noRetryAfterMeansNoRetryTime() {
+        let plain = SessionFailure.fromV2(
+            type: "provider.rate-limit",
+            message: "Slow down",
+            status: 429,
+            providerBody: nil,
+            recordedAtEpochMs: 1_000
+        )
+        #expect(plain?.retryAfterMs == nil)
+        #expect(plain?.recordedAtEpochMs == nil)
+        #expect(plain?.retryAtEpochMs() == nil)
+        #expect(plain == SessionFailure(type: "provider.rate-limit", message: "Slow down", status: 429, providerBody: nil))
+
+        let v1 = SessionFailure.fromV1(name: "APIError", message: "Slow down", statusCode: 429, responseBody: nil)
+        #expect(v1?.retryAtEpochMs() == nil)
+        #expect(failure("provider.quota").retryAtEpochMs() == nil)
+    }
+
+    @Test func negativeRetryAfterIsIgnored() {
+        let failure = SessionFailure.fromV2(
+            type: "provider.quota",
+            message: "Quota",
+            status: nil,
+            providerBody: nil,
+            retryAfterMs: -5,
+            recordedAtEpochMs: 1_000
+        )
+        #expect(failure?.retryAtEpochMs() == nil)
+    }
+
+    @Test func retryAfterLabelUsesSecondsThenMinutes() {
+        #expect(SessionFailure.retryAfterLabel(remainingMs: 1) == "Try again in 1 s")
+        #expect(SessionFailure.retryAfterLabel(remainingMs: 11_200) == "Try again in 12 s")
+        #expect(SessionFailure.retryAfterLabel(remainingMs: 90_000) == "Try again in 90 s")
+        #expect(SessionFailure.retryAfterLabel(remainingMs: 90_001) == "Try again in 2 min")
+        #expect(SessionFailure.retryAfterLabel(remainingMs: 240_000) == "Try again in 4 min")
+        #expect(SessionFailure.retryAfterLabel(remainingMs: 3_600_000) == "Try again in 60 min")
+        #expect(SessionFailure.retryAfterLabel(remainingMs: 0) == nil)
+        #expect(SessionFailure.retryAfterLabel(remainingMs: -1_000) == nil)
+    }
+
     @Test func rateLimitAndQuotaAreCoveredByTheLiveRetry() {
         #expect(failure("provider.rate-limit").coversLiveRetry())
         #expect(failure(" Provider.Quota ").coversLiveRetry())

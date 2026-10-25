@@ -102,6 +102,29 @@ export const P1 = [
     ],
   },
   {
+    id: "provider-free-limit-retry-after",
+    priority: "P1",
+    title: "Free usage limit with retry-after",
+    category: "error",
+    // v1 treats the 429 as a throttle and retries it live instead of failing the turn.
+    protocols: ["v2"],
+    prompt: "Summarise the README.",
+    expect:
+      "The provider refuses with a free usage limit (429, retry-after 75 s). The failure mark shows the server's free-limit message with a Try again in N s line counting down under it (gone at zero), and the sheet offers Pick a model.",
+    modelCalls: [
+      {
+        steps: [
+          {
+            op: "httpError",
+            status: 429,
+            headers: { "retry-after": "75" },
+            body: { type: "error", error: { type: "FreeUsageLimitError", message: "Rate limit exceeded. Please try again later." } },
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: "retry-rate-limit-then-success",
     priority: "P1",
     title: "Rate limit and overload, then recovery",

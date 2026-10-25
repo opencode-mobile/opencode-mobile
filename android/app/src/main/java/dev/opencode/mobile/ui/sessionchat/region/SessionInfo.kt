@@ -335,6 +335,7 @@ class SessionInfo(
                                     authoritative = label,
                                     hasResolved = snapshot.seeded,
                                     retryCard = retryCard,
+                                    isRetrying = activity is SessionActivity.Retrying,
                                 )
                             }
                         }

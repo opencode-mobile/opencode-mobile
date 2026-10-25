@@ -574,6 +574,7 @@ class EventDomainAdapter(
                     if (message.isNotEmpty()) put("message", message)
                     error.int("status")?.let { put("statusCode", it) }
                     body?.takeIf { it.isNotBlank() }?.let { put("responseBody", it) }
+                    error.long("retryAfterMs")?.let { put("retryAfterMs", it) }
                 },
             )
         }

@@ -196,12 +196,21 @@ nonisolated struct V2UnknownErrorDTO: Decodable, Sendable {
     let message: String?
     let status: Int?
     let response: V2ErrorResponseDTO?
+    /// How long the provider asked to wait, counted from when the failure was recorded.
+    let retryAfterMs: Int64?
 
-    init(type: String? = nil, message: String? = nil, status: Int? = nil, response: V2ErrorResponseDTO? = nil) {
+    init(
+        type: String? = nil,
+        message: String? = nil,
+        status: Int? = nil,
+        response: V2ErrorResponseDTO? = nil,
+        retryAfterMs: Int64? = nil
+    ) {
         self.type = type
         self.message = message
         self.status = status
         self.response = response
+        self.retryAfterMs = retryAfterMs
     }
 }
 

@@ -81,6 +81,7 @@ sealed class SessionChatTimelineBlock {
      * A failed run under the reply. A provider body or an action opens the
      * detail sheet. [isNeutral] is a permission rejection. [coveredByLiveRetry]
      * is a rate-limit or quota the composer status already shows.
+     * [retryAtEpochMs] is when the provider said to try again.
      */
     data class FailureLine(
         override val blockID: String,
@@ -90,6 +91,7 @@ sealed class SessionChatTimelineBlock {
         val action: FailureAction? = null,
         val actionLabel: String? = null,
         val coveredByLiveRetry: Boolean = false,
+        val retryAtEpochMs: Long? = null,
     ) : SessionChatTimelineBlock()
 
     /**
@@ -1253,6 +1255,20 @@ object SessionChatTimelineBlocks {
         }
 
     /**
+     * The failure mark that may count down to its retry time: only on the last
+     * turn, so a user message after it means the countdown no longer applies.
+     */
+    fun retryCountdownBlockId(messages: List<SessionChatMessageItem>): String? {
+        for (message in messages.asReversed()) {
+            if (message.role == MessageRole.User) return null
+            val line =
+                message.blocks.lastOrNull { it is SessionChatTimelineBlock.FailureLine && it.retryAtEpochMs != null }
+            if (line != null) return line.blockID
+        }
+        return null
+    }
+
+    /**
      * Rows never render empty: drop blocks the timeline paints as nothing
      * (live thought is footer chrome) and fall back to the live placeholder.
      */
@@ -1330,6 +1346,7 @@ object SessionChatTimelineBlocks {
                     action = failure.action(),
                     actionLabel = failure.actionLabel(),
                     coveredByLiveRetry = failure.coversLiveRetry(),
+                    retryAtEpochMs = failure.retryAtEpochMs(),
                 )
         }
         return if (blocks === body.blocks) body else body.copy(blocks = blocks)

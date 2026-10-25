@@ -1365,6 +1365,94 @@ struct MessageDomainAdapterTests {
         #expect(message.failure?.isNeutral == false)
     }
 
+    @Test func projectV2FreeLimitCarriesRetryAfterFromTheCompletedTime() throws {
+        let dtos = try decodeV2(
+            """
+            [{
+              "id":"a1","type":"assistant","finish":"error","content":[],
+              "time":{"created":1000,"completed":2000},
+              "error":{"type":"provider.free-limit",
+                "message":"Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.",
+                "status":429,"retryAfterMs":3600000}
+            }]
+            """
+        )
+        let adapter = MessageDomainAdapter(nowEpochMs: { 9_999 })
+        let failure = try #require(adapter.messages(fromV2: dtos).first?.failure)
+        #expect(failure.type == "provider.free-limit")
+        #expect(
+            failure.line()
+                == "HTTP 429 · Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models."
+        )
+        #expect(failure.action() == .pickModel)
+        #expect(failure.retryAfterMs == 3_600_000)
+        #expect(failure.recordedAtEpochMs == 2_000)
+        #expect(failure.retryAtEpochMs() == 3_602_000)
+    }
+
+    @Test func projectV2BudgetLimitsFromTheConsoleEnvelope() throws {
+        // Payloads as anomalyco/opencode#58694 builds them (dev only, no release sends them yet).
+        let dtos = try decodeV2(
+            """
+            [
+              {"id":"a1","type":"assistant","finish":"error","content":[],
+                "error":{"type":"provider.budget-limit",
+                  "message":"Workspace usage limit reached. Model use is paused until the limit resets.",
+                  "status":429,"retryAfterMs":120000,
+                  "response":{"body":"{\\"type\\":\\"error\\",\\"error\\":{\\"type\\":\\"BudgetLimitError\\"}}"}}},
+              {"id":"u2","type":"user","text":"again","time":{"created":3000}},
+              {"id":"a2","type":"assistant","finish":"error","content":[],"time":{"created":3001,"completed":3002},
+                "error":{"type":"provider.model-budget-limit",
+                  "message":"You've reached the spend limit for this model. Switch models to keep going.",
+                  "status":429,
+                  "response":{"body":"{\\"type\\":\\"error\\",\\"error\\":{\\"type\\":\\"BudgetLimitError\\",\\"metadata\\":{\\"coverage\\":\\"models\\"}}}"}}}
+            ]
+            """
+        )
+        let messages = MessageDomainAdapter(nowEpochMs: { 9_999 }).messages(fromV2: dtos)
+        let budget = try #require(messages.first?.failure)
+        #expect(budget.line() == "HTTP 429 · Workspace usage limit reached. Model use is paused until the limit resets.")
+        #expect(budget.action() == nil)
+        // No completed time on the failed message: the countdown runs from when the app received it.
+        #expect(budget.recordedAtEpochMs == 9_999)
+        #expect(budget.retryAtEpochMs() == 129_999)
+
+        let modelBudget = try #require(messages.last?.failure)
+        #expect(modelBudget.type == "provider.model-budget-limit")
+        #expect(modelBudget.action() == .pickModel)
+        #expect(modelBudget.retryAtEpochMs() == nil)
+        #expect(modelBudget.recordedAtEpochMs == nil)
+    }
+
+    @Test func v1FailureHasNoRetryTime() throws {
+        let data = Data(
+            """
+            {"info":{"id":"m1","role":"assistant","time":{"created":1,"completed":2},
+              "error":{"name":"APIError","data":{"message":"Rate limited","statusCode":429,"isRetryable":true}}},
+             "parts":[]}
+            """.utf8
+        )
+        let failure = try #require(adapter.message(from: try decoder.decode(MessageDTO.self, from: data)).failure)
+        #expect(failure.line() == "HTTP 429 · Rate limited")
+        #expect(failure.retryAfterMs == nil)
+        #expect(failure.recordedAtEpochMs == nil)
+        #expect(failure.retryAtEpochMs() == nil)
+    }
+
+    @Test func liveTranslatedInfoKeepsRetryAfter() throws {
+        // The shape EventDomainAdapter builds from a v2 `session.step.failed`.
+        let data = Data(
+            """
+            {"id":"a1","role":"assistant",
+             "error":{"name":"provider.free-limit","data":{"message":"Free usage limit reached.","statusCode":429,"retryAfterMs":3600000}}}
+            """.utf8
+        )
+        let info = try decoder.decode(MessageInfoDTO.self, from: data)
+        let failure = try #require(MessageDomainAdapter(nowEpochMs: { 5_000 }).message(info: info, domainParts: []).failure)
+        #expect(failure.retryAfterMs == 3_600_000)
+        #expect(failure.retryAtEpochMs() == 3_605_000)
+    }
+
     @Test func projectV2HidesAbortAndProjectsFailedIdleAndCompaction() throws {
         let dtos = try decodeV2(
             """

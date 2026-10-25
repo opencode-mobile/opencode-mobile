@@ -258,6 +258,10 @@ data class SessionFailure(
     val providerId: String? = null,
     val retries: Int? = null,
     val source: FailureSource = FailureSource.Step,
+    /** v2 `retryAfterMs`: how long the provider asked to wait. */
+    val retryAfterMs: Long? = null,
+    /** When the failure was recorded; set only with [retryAfterMs]. */
+    val recordedAtEpochMs: Long? = null,
 ) {
     val isNeutral: Boolean
         get() = type.equals("permission.rejected", ignoreCase = true)
@@ -266,6 +270,13 @@ data class SessionFailure(
     fun coversLiveRetry(): Boolean {
         val kind = type?.trim()?.lowercase().orEmpty()
         return kind == "provider.rate-limit" || kind == "provider.quota"
+    }
+
+    /** When the provider said to try again; null when the server sent no `retryAfterMs`. */
+    fun retryAtEpochMs(): Long? {
+        val wait = retryAfterMs ?: return null
+        val recorded = recordedAtEpochMs ?: return null
+        return recorded + wait
     }
 
     /** Caption under the reply. The provider body stays behind the existing detail sheet. */
@@ -279,6 +290,7 @@ data class SessionFailure(
         val kind = type?.trim()?.lowercase().orEmpty()
         return when {
             kind == "provider.no-route" -> FailureAction.PickModel
+            kind == "provider.free-limit" || kind == "provider.model-budget-limit" -> FailureAction.PickModel
             kind == "provider.content-filter" -> null
             isContextOverflow() -> FailureAction.Compact
             kind == "unknown" || kind == "provider.unknown" -> FailureAction.Copy
@@ -305,7 +317,20 @@ data class SessionFailure(
 
     companion object {
         private const val MAX_BODY = 4_000
+        private const val SECONDS_LIMIT_MS = 90_000L
         private val json = Json { ignoreUnknownKeys = true }
+
+        /** "Try again in N s", minutes above 90 s; null once the wait is over. */
+        fun retryAfterLabel(remainingMs: Long): String? {
+            if (remainingMs <= 0) return null
+            if (remainingMs <= SECONDS_LIMIT_MS) return "Try again in ${ceilDiv(remainingMs, 1_000L)} s"
+            return "Try again in ${ceilDiv(remainingMs, 60_000L)} min"
+        }
+
+        private fun ceilDiv(
+            value: Long,
+            unit: Long,
+        ): Long = (value + unit - 1) / unit
 
         fun isSilent(type: String?): Boolean {
             val value = type?.trim().orEmpty()
@@ -339,6 +364,8 @@ data class SessionFailure(
             providerId: String? = null,
             retries: Int? = null,
             source: FailureSource = FailureSource.Step,
+            retryAfterMs: Long? = null,
+            recordedAtEpochMs: Long? = null,
         ): SessionFailure? {
             if (isSilent(name)) return null
             return build(
@@ -351,6 +378,8 @@ data class SessionFailure(
                 providerId = providerId,
                 retries = retries,
                 source = source,
+                retryAfterMs = retryAfterMs,
+                recordedAtEpochMs = recordedAtEpochMs,
             )
         }
 
@@ -361,6 +390,8 @@ data class SessionFailure(
             providerBody: String?,
             outcome: String? = null,
             source: FailureSource = FailureSource.Step,
+            retryAfterMs: Long? = null,
+            recordedAtEpochMs: Long? = null,
         ): SessionFailure? {
             if (outcome.equals("succeeded", ignoreCase = true) || outcome.equals("interrupted", ignoreCase = true)) {
                 return null
@@ -373,6 +404,8 @@ data class SessionFailure(
                 providerBody = providerBody,
                 emptyFallback = "",
                 source = source,
+                retryAfterMs = retryAfterMs,
+                recordedAtEpochMs = recordedAtEpochMs,
             )
         }
 
@@ -386,6 +419,8 @@ data class SessionFailure(
             providerId: String? = null,
             retries: Int? = null,
             source: FailureSource = FailureSource.Step,
+            retryAfterMs: Long? = null,
+            recordedAtEpochMs: Long? = null,
         ): SessionFailure? {
             val body = providerBody?.trim()?.takeIf { it.isNotEmpty() }?.take(MAX_BODY)
             val text =
@@ -395,6 +430,7 @@ data class SessionFailure(
             val shown = text.ifBlank { type?.trim().orEmpty() }
             val http = status?.takeIf { it in 100..599 }
             if (shown.isBlank() && body == null && http == null) return null
+            val wait = retryAfterMs?.takeIf { it >= 0 }
             return SessionFailure(
                 type = type?.trim()?.takeIf { it.isNotEmpty() },
                 message = shown,
@@ -404,6 +440,8 @@ data class SessionFailure(
                 providerId = providerId?.trim()?.takeIf { it.isNotEmpty() },
                 retries = retries,
                 source = source,
+                retryAfterMs = wait,
+                recordedAtEpochMs = recordedAtEpochMs.takeIf { wait != null },
             )
         }
     }

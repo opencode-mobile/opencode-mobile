@@ -376,7 +376,8 @@ object TimelineProjector {
                 "ac:${block.blockID}:${activityCardFingerprint(block)}:${block.isLive}:${block.thinking}"
             is SessionChatTimelineBlock.StopNote -> "x:${block.blockID}:${block.reason}"
             is SessionChatTimelineBlock.FailureLine ->
-                "f:${block.blockID}:${block.providerBody != null}:${block.isNeutral}:${block.action != null}"
+                "f:${block.blockID}:${block.providerBody != null}:${block.isNeutral}:${block.action != null}:" +
+                    "${block.retryAtEpochMs != null}"
             is SessionChatTimelineBlock.Notice -> "o:${block.blockID}:${block.notice.hashCode()}"
         }
 

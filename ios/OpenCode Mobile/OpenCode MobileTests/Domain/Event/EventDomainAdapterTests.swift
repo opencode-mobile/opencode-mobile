@@ -929,6 +929,15 @@ struct EventDomainAdapterTests {
         #expect(actionLink == "https://example.com")
     }
 
+    @Test func stepFailed_keepsRetryAfterOnTheTranslatedError() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.step.failed","data":{"sessionID":"ses-1","assistantMessageID":"a1","error":{"type":"provider.free-limit","message":"Free usage limit reached.","status":429,"retryAfterMs":3600000}}}"#
+        )
+        let data = events.first?.rawProperties?["info"]?.dictionaryValue?["error"]?.dictionaryValue?["data"]?.dictionaryValue
+        #expect(data?["retryAfterMs"]?.int64Value == 3_600_000)
+    }
+
     @Test func stepFailed_withAssistantId_putsTheErrorOnTheMessageAndSkipsTheSnackbarEvent() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(

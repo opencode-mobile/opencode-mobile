@@ -50,6 +50,8 @@ nonisolated struct MessageErrorDataDTO: Codable, Sendable {
     var isRetryable: Bool? = nil
     var providerID: String? = nil
     var retries: Int? = nil
+    /// v2 `retryAfterMs`, carried here by the live event translation; v1 servers never send it.
+    var retryAfterMs: Int64? = nil
 }
 
 nonisolated struct MessageModelRefDTO: Codable, Sendable {
