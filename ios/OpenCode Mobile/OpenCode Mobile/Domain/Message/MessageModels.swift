@@ -207,10 +207,12 @@ nonisolated struct SessionFailure: Equatable, Sendable {
     /// When the failure was recorded; set only with `retryAfterMs`.
     var recordedAtEpochMs: Int64? = nil
 
-    /// When the provider said to try again; nil when the server sent no `retryAfterMs`.
+    /// When the provider said to try again; nil when the server sent no `retryAfterMs`
+    /// or one too large to add (Int64 addition traps on overflow).
     func retryAtEpochMs() -> Int64? {
         guard let retryAfterMs, let recordedAtEpochMs else { return nil }
-        return recordedAtEpochMs + retryAfterMs
+        let (retryAt, overflow) = recordedAtEpochMs.addingReportingOverflow(retryAfterMs)
+        return overflow ? nil : retryAt
     }
 
     /// "Try again in N s", minutes above 90 s; nil once the wait is over.

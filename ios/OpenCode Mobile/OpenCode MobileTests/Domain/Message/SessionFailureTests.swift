@@ -68,6 +68,19 @@ struct SessionFailureTests {
         #expect(failure?.retryAtEpochMs() == nil)
     }
 
+    @Test func overflowingRetryAfterIsNoHint() {
+        let failure = SessionFailure.fromV2(
+            type: "provider.free-limit",
+            message: "Free usage limit reached.",
+            status: 429,
+            providerBody: nil,
+            retryAfterMs: Int64.max,
+            recordedAtEpochMs: 1_792_961_337_683
+        )
+        #expect(failure?.retryAfterMs == Int64.max)
+        #expect(failure?.retryAtEpochMs() == nil)
+    }
+
     @Test func retryAfterLabelUsesSecondsThenMinutes() {
         #expect(SessionFailure.retryAfterLabel(remainingMs: 1) == "Try again in 1 s")
         #expect(SessionFailure.retryAfterLabel(remainingMs: 11_200) == "Try again in 12 s")
