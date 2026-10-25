@@ -22,6 +22,8 @@ nonisolated struct MessageInfoDTO: Codable, Sendable {
     let waiting: Bool?
     let delivery: String?
     let finish: String?
+    /// v2 live prompt skills, projected from the inbox event.
+    let skills: [V2UserSkillDTO]?
 }
 
 nonisolated struct MessageTokensDTO: Codable, Sendable {

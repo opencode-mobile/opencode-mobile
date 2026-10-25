@@ -350,6 +350,12 @@ nonisolated struct EventDomainAdapter: Sendable {
         if !isSyntheticInboxItem(properties), let delivery = deliveryValue(in: properties) {
             info["delivery"] = delivery
         }
+        // Skill spans for `[/name]` display. Drop `text`: it is the model-facing skill body.
+        let skills = (promptObject(in: properties)?["skills"] as? [[String: Any]] ?? [])
+            .map { $0.filter { $0.key != "text" } }
+        if !skills.isEmpty {
+            info["skills"] = skills
+        }
         return event(type: "message.updated", properties: ["info": info])
     }
 

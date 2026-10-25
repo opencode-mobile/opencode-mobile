@@ -112,4 +112,59 @@ import Testing
         let blocks = SessionChatTimelineBlocks.present(message: rebuilt, commands: [])
         #expect(blocks.compactMap { $0.textContent?.text } == ["fix [/tdd-check] the login flow [/security-check]"])
     }
+
+    /// A live v2 prompt carries its skills only on `session.inbox.enqueued`; the later
+    /// `session.inbox.delivered` info has none and must not drop them.
+    @Test func liveV2Prompt_keepsSkillsThroughDelivery() {
+        let engine = SessionMessageEngine(store: InMemoryMessageStore())
+        applyProjected(
+            #"{"type":"session.inbox.enqueued","data":{"inboxID":"msg-1","sessionID":"ses-1","item":{"type":"user","payload":{"text":"fix /tdd-check the login flow /security-check","skills":[{"id":"tdd-check","name":"tdd-check","text":"<skill_content>body</skill_content>","mention":{"start":4,"end":14,"text":"/tdd-check"}},{"id":"security-check","name":"security-check","text":"<skill_content>body</skill_content>","mention":{"start":30,"end":45,"text":"/security-check"}}]}}}}"#,
+            engine: engine
+        )
+        applyProjected(
+            #"{"type":"session.inbox.delivered","data":{"inboxID":"msg-1","sessionID":"ses-1"}}"#,
+            engine: engine
+        )
+        guard let message = engine.message(sessionID: "ses-1", messageID: "msg-1") else {
+            Issue.record("message missing")
+            return
+        }
+
+        #expect(message.promptSkills == skills)
+        let blocks = SessionChatTimelineBlocks.present(message: message, commands: [])
+        #expect(blocks.compactMap { $0.textContent?.text } == ["fix [/tdd-check] the login flow [/security-check]"])
+    }
+
+    @Test func enqueuedProjection_keepsSkillMentionsWithoutBodies() {
+        let events = EventDomainAdapter().parseEvents(
+            dataLine: #"{"type":"session.inbox.enqueued","data":{"inboxID":"msg-1","sessionID":"ses-1","item":{"type":"user","payload":{"text":"/tdd-check go","skills":[{"id":"tdd-check","name":"tdd-check","text":"<skill_content>body</skill_content>","mention":{"start":0,"end":10,"text":"/tdd-check"}}]}}}}"#
+        )
+        let info = events.first?.rawProperties?["info"]?.dictionaryValue
+        guard case .array(let projected) = info?["skills"] else {
+            Issue.record("info has no skills")
+            return
+        }
+        let skill = projected.first?.dictionaryValue
+
+        #expect(skill?["id"]?.stringValue == "tdd-check")
+        #expect(skill?["name"]?.stringValue == "tdd-check")
+        #expect(skill?["mention"]?.dictionaryValue?["end"] != nil)
+        #expect(skill?["text"] == nil)
+    }
+
+    private func applyProjected(_ line: String, engine: SessionMessageEngine) {
+        for event in EventDomainAdapter().parseEvents(dataLine: line) {
+            guard let properties = event.rawProperties else { continue }
+            switch event.type {
+            case "message.updated":
+                guard let info = properties["info"]?.dictionaryValue else { continue }
+                _ = engine.apply(sessionID: "ses-1", patch: .infoUpdated(info))
+            case "message.part.updated":
+                guard let part = properties["part"]?.dictionaryValue else { continue }
+                _ = engine.apply(sessionID: "ses-1", patch: .partUpdated(part: part, delta: nil))
+            default:
+                break
+            }
+        }
+    }
 }

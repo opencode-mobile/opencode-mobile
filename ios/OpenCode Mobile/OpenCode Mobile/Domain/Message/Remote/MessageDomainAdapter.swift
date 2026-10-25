@@ -54,7 +54,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup: info.waiting == true,
             stopReason: stop,
-            failure: sessionFailure(info.error, stopReason: stop)
+            failure: sessionFailure(info.error, stopReason: stop),
+            promptSkills: promptSkills(info.skills ?? [])
         )
     }
 
@@ -483,7 +484,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             id: dto.id,
             role: .user,
             parts: parts,
-            promptSkills: promptSkills(dto),
+            promptSkills: promptSkills(dto.skills),
             mode: dto.agent ?? (agent.isEmpty ? nil : agent),
             model: dto.model ?? model,
             sentAtEpochMs: dto.time?.created,
@@ -683,8 +684,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     /// Skills ride on the user message. Keep id and name only — `text` is the
     /// model-facing skill body and must not become a second chat bubble.
-    private func promptSkills(_ dto: V2SessionMessageDTO) -> [PromptSkill] {
-        dto.skills.compactMap { skill in
+    private func promptSkills(_ skills: [V2UserSkillDTO]) -> [PromptSkill] {
+        skills.compactMap { skill in
             let id = skill.id?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
                 ?? skill.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
             let name = skill.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? id
