@@ -45,12 +45,29 @@ nonisolated enum ProtocolRecheckPolicy {
         return now - lastRecheck >= minInterval
     }
 
-    static func action(result: ProtocolRedetection, applied: ServerProtocol) -> ProtocolRecheckAction {
+    /// How long a request that arrives inside the window waits. It is deferred, not dropped: a
+    /// v1 server also answers `/api/event`, so the recovery request may be the only hint of a swap.
+    static func delayUntilDue(
+        now: ContinuousClock.Instant,
+        lastRecheck: ContinuousClock.Instant?,
+        minInterval: Duration = minInterval
+    ) -> Duration {
+        guard let lastRecheck else { return .zero }
+        return max(.zero, lastRecheck + minInterval - now)
+    }
+
+    /// `leaseWentLive` is true when an event stream connected while the check was in flight; a
+    /// no-answer result is then stale and must not mark a working server offline.
+    static func action(
+        result: ProtocolRedetection,
+        applied: ServerProtocol,
+        leaseWentLive: Bool = false
+    ) -> ProtocolRecheckAction {
         switch result {
         case let .detected(detected):
             detected == applied ? .keepProtocol : .retarget(detected)
         case .unreachable:
-            .markUnreachable
+            leaseWentLive ? .none : .markUnreachable
         case .skipped:
             .none
         }

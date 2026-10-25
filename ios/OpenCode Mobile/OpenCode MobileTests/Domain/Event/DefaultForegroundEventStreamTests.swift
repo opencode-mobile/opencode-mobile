@@ -400,6 +400,36 @@ struct DefaultForegroundEventStreamTests {
         #expect(movedToV1)
     }
 
+    @Test func launchedWhileServerDownThenV1StartsDefersTheRecheckInsteadOfDroppingIt() async {
+        let saved = LockedBox<ServerProtocol>(.v2)
+        let checks = LockedBox(0)
+        // The server is down for the first attempts, then v1 starts and also answers `/api/event`.
+        // The stream stays open, so connecting is the only hint that the protocol changed.
+        let harness = makeStream(
+            responses: Array(repeating: Self.connectedFrame, count: 10),
+            holdOpen: true,
+            cachedProtocol: { saved.value },
+            failFirstRequests: 2,
+            protocolRedetect: {
+                checks.value += 1
+                if checks.value == 1 { return .unreachable }
+                saved.value = .v1
+                return .detected(.v1)
+            },
+            protocolRecheckInterval: .seconds(5)
+        )
+        harness.stream.start()
+        let offline = await waitUntil { harness.stream.connectionState == .disconnected }
+        let movedToV1 = await waitUntil(timeoutMs: 15_000) {
+            harness.stream.snapshot.config?.serverProtocol == .v1
+                && harness.stream.connectionState == .connected
+        }
+        await harness.stream.stop()
+        #expect(offline)
+        #expect(movedToV1)
+        #expect(checks.value == 2)
+    }
+
     private struct StreamHarness {
         let stream: DefaultForegroundEventStream
         let streamID: String
@@ -420,6 +450,7 @@ struct DefaultForegroundEventStreamTests {
         connectionIdentity: (@Sendable () async -> String)? = nil,
         credentialFingerprint: (@Sendable () async -> String)? = nil,
         failBeforeHeaders: Bool = false,
+        failFirstRequests: Int = 0,
         statusByPathSuffix: [String: Int] = [:],
         protocolRedetect: (@Sendable () async -> ProtocolRedetection)? = nil,
         protocolRecheckInterval: Duration = ProtocolRecheckPolicy.minInterval
@@ -433,6 +464,7 @@ struct DefaultForegroundEventStreamTests {
             statusCode: statusCode,
             holdOpen: holdOpen,
             failBeforeHeaders: failBeforeHeaders,
+            failFirstRequests: failFirstRequests,
             statusByPathSuffix: statusByPathSuffix
         )
         let session = URLSession(configuration: configuration)
@@ -595,6 +627,8 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
         var statusCode: Int
         var holdOpen: Bool
         var failBeforeHeaders: Bool = false
+        /// Requests that fail before headers before the server "starts".
+        var failFirstRequests = 0
         /// Status for request paths ending in a key; those requests leave `responses` alone.
         var statusByPathSuffix: [String: Int] = [:]
         var paths: [String] = []
@@ -617,6 +651,7 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
         statusCode: Int,
         holdOpen: Bool,
         failBeforeHeaders: Bool = false,
+        failFirstRequests: Int = 0,
         statusByPathSuffix: [String: Int] = [:]
     ) {
         lock.lock()
@@ -625,6 +660,7 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
             statusCode: statusCode,
             holdOpen: holdOpen,
             failBeforeHeaders: failBeforeHeaders,
+            failFirstRequests: failFirstRequests,
             statusByPathSuffix: statusByPathSuffix
         )
         lock.unlock()
@@ -677,7 +713,11 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
         }
         let statusCode = pathStatus ?? state.statusCode
         let holdOpen = state.holdOpen
-        let failBeforeHeaders = state.failBeforeHeaders
+        var failBeforeHeaders = state.failBeforeHeaders
+        if state.failFirstRequests > 0 {
+            state.failFirstRequests -= 1
+            failBeforeHeaders = true
+        }
         state.paths.append(request.url?.path ?? "")
         state.requestDates.append(Date())
         if holdOpen {

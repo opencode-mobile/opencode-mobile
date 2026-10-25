@@ -33,7 +33,8 @@ class LiveUpdatesTest {
             )
         assertEquals(LiveUpdatesLabel.Offline, chrome.label)
         assertFalse(chrome.canMutate)
-        assertTrue(chrome.composerEnabled)
+        // Like iOS: no send while no server protocol answers.
+        assertFalse(chrome.composerEnabled)
     }
 
     @Test

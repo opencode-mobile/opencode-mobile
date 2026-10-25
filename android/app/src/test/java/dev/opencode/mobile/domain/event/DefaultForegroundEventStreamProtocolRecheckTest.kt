@@ -18,6 +18,8 @@ import io.ktor.client.request.HttpResponseData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import io.ktor.utils.io.ByteChannel
+import io.ktor.utils.io.writeStringUtf8
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -189,6 +191,63 @@ class DefaultForegroundEventStreamProtocolRecheckTest {
             }
         }
 
+    @Test
+    fun launchedWhileServerDown_thenV1Starts_recheckInsideWindowIsDeferredNotDropped() =
+        runBlocking {
+            val requests = Collections.synchronizedList(mutableListOf<String>())
+            val apiEventAttempts = AtomicInteger(0)
+            // The server is down for the first attempts, then v1 starts; v1 also answers `/api/event`.
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        requests += request.url.encodedPath
+                        when (request.url.encodedPath) {
+                            "/api/event" ->
+                                if (apiEventAttempts.incrementAndGet() <= 2) {
+                                    throw java.net.ConnectException("Connection refused")
+                                } else {
+                                    // Stays open: the recovery is the only hint that v1 is back.
+                                    openEventStream(CONNECTED_V2)
+                                }
+                            "/global/event" -> eventStream(CONNECTED_V1)
+                            else -> respond(content = "", status = HttpStatusCode.NotFound)
+                        }
+                    },
+                )
+            val store = SavingProfileStore()
+            val probes = AtomicInteger(0)
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing {
+                        if (probes.incrementAndGet() == 1) {
+                            throw ServerProbeError.Transport(java.net.ConnectException("Connection refused"))
+                        }
+                        ServerProtocol.V1
+                    },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            // The stream connects ~3 s in, inside this window, so its recheck must wait for the window.
+            val stream = stream(client, manager, store, recheckIntervalMs = 5_000)
+            try {
+                stream.start()
+                withTimeout(5_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Disconnected }
+                }
+                withTimeout(15_000) {
+                    stream.snapshot.first { snapshot ->
+                        snapshot.config?.protocol == ServerProtocol.V1 &&
+                            snapshot.connectionState == EventStreamConnectionState.Connected
+                    }
+                }
+                assertTrue(requests.contains("/global/event"))
+                assertEquals(ServerProtocol.V1, store.lastSaved?.serverProtocol)
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
     /** opencode v2: the v1 event paths answer 500, `/api/event` streams. */
     private fun v2ServerClient(requests: MutableList<String>): HttpClient =
         HttpClient(
@@ -200,6 +259,16 @@ class DefaultForegroundEventStreamProtocolRecheckTest {
                 }
             },
         )
+
+    private suspend fun MockRequestHandleScope.openEventStream(firstFrame: String): HttpResponseData {
+        val channel = ByteChannel(autoFlush = true)
+        channel.writeStringUtf8(firstFrame)
+        return respond(
+            content = channel,
+            status = HttpStatusCode.OK,
+            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+        )
+    }
 
     private fun MockRequestHandleScope.eventStream(body: String): HttpResponseData =
         respond(

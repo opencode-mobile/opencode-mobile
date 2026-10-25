@@ -61,7 +61,8 @@ fun composeLiveUpdates(
         hasConnection &&
             path == DeviceNetworkPathStatus.Ready &&
             occupancy != StreamOccupancy.Stopped &&
-            connectionState != EventStreamConnectionState.AuthFailed
+            connectionState != EventStreamConnectionState.AuthFailed &&
+            connectionState != EventStreamConnectionState.Disconnected
     val canMutate = label == LiveUpdatesLabel.Live
     return LiveUpdatesChrome(label = label, canMutate = canMutate, composerEnabled = composerEnabled)
 }

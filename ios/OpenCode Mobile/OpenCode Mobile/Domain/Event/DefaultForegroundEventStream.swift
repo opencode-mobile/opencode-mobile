@@ -61,6 +61,12 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private var lastProtocolRecheck: ContinuousClock.Instant?
     private var protocolRecheckTask: Task<Void, Never>?
     private var protocolRecheckID: UUID?
+    /// A request that arrived inside the window, run when it closes; guarded by `lock`.
+    private var deferredProtocolRecheckTask: Task<Void, Never>?
+    /// The last recheck got no answer, so the next stream to connect must confirm the protocol.
+    private var protocolUnverified = false
+    /// Counts leases going live, so a recheck can tell its no-answer result went stale.
+    private var leaseLiveEpoch: UInt64 = 0
     private let reconnectWake = ReconnectWakeGate()
 
     private let idleTimeout: Duration
@@ -209,6 +215,9 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         protocolRecheckTask = nil
         protocolRecheckID = nil
         recheck?.cancel()
+        deferredProtocolRecheckTask?.cancel()
+        deferredProtocolRecheckTask = nil
+        protocolUnverified = false
         let leaseWork = cancelAllLeasesLocked()
         eventIngress.reset()
         appliedConfig = nil
@@ -792,6 +801,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         lock.lock()
         authRejectedTargets.remove(lease.target.key)
         serverUnreachable = false
+        leaseLiveEpoch &+= 1
         lock.unlock()
         refreshOverallState(generation: generation)
     }
@@ -827,6 +837,10 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                 pathLost: deviceNetworkPath.status == .unavailable
             )
         )
+        // The first connection is no reconnect, but it must still confirm a protocol that the last
+        // check could not.
+        let connectedUnverified = decided.connectionState == .connected && !overall.lastAllLive
+            && protocolUnverified
         overall = decided.flags
         let nextState = decided.connectionState != .connected && serverUnreachable
             ? .disconnected
@@ -845,6 +859,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                 // A server restarted at this address may have come back speaking the other protocol.
                 requestProtocolRecheck(generation: decisionGeneration, reason: "reconnected")
             }
+        } else if connectedUnverified {
+            requestProtocolRecheck(generation: decisionGeneration, reason: "connected unverified")
         }
         publishSnapshot()
     }
@@ -853,18 +869,48 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         guard protocolRedetect != nil else { return }
         lock.lock()
         defer { lock.unlock() }
-        guard occupancyTask != nil, streamGeneration == generation, protocolRecheckTask == nil else { return }
+        guard occupancyTask != nil, streamGeneration == generation else { return }
         let now = ContinuousClock.now
-        guard ProtocolRecheckPolicy.isDue(
+        let wait = ProtocolRecheckPolicy.delayUntilDue(
             now: now,
             lastRecheck: lastProtocolRecheck,
             minInterval: protocolRecheckInterval
-        ) else { return }
+        )
+        if protocolRecheckTask != nil || wait > .zero {
+            deferProtocolRecheckLocked(reason: reason)
+            return
+        }
         lastProtocolRecheck = now
         let id = UUID()
         protocolRecheckID = id
         protocolRecheckTask = Task { [weak self] in
             await self?.recheckProtocol(id: id, generation: generation, reason: reason)
+        }
+    }
+
+    private func deferProtocolRecheckLocked(reason: String) {
+        guard deferredProtocolRecheckTask == nil else { return }
+        let inFlight = protocolRecheckTask
+        deferredProtocolRecheckTask = Task { [weak self] in
+            // An answer still in flight may predate the change that asked for this check.
+            await inFlight?.value
+            guard let self else { return }
+            self.lock.lock()
+            let wait = ProtocolRecheckPolicy.delayUntilDue(
+                now: .now,
+                lastRecheck: self.lastProtocolRecheck,
+                minInterval: self.protocolRecheckInterval
+            )
+            self.lock.unlock()
+            if wait > .zero {
+                try? await Task.sleep(for: wait)
+            }
+            guard !Task.isCancelled else { return }
+            self.lock.lock()
+            self.deferredProtocolRecheckTask = nil
+            let generation = self.streamGeneration
+            self.lock.unlock()
+            self.requestProtocolRecheck(generation: generation, reason: "\(reason) (deferred)")
         }
     }
 
@@ -879,13 +925,21 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         }
         guard let protocolRedetect else { return }
         DiagnosticLog.info(.sse, "SSE protocol recheck reason=\(reason)")
+        lock.lock()
+        let liveEpochAtStart = leaseLiveEpoch
+        lock.unlock()
         let result = await protocolRedetect()
         guard !Task.isCancelled, stillCurrent(generation) else { return }
         lock.lock()
         let applied = appliedConfig
+        let leaseWentLive = leaseLiveEpoch != liveEpochAtStart
         lock.unlock()
         guard let applied else { return }
-        switch ProtocolRecheckPolicy.action(result: result, applied: applied.serverProtocol) {
+        switch ProtocolRecheckPolicy.action(
+            result: result,
+            applied: applied.serverProtocol,
+            leaseWentLive: leaseWentLive
+        ) {
         case let .retarget(detected):
             DiagnosticLog.info(
                 .sse,
@@ -893,6 +947,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             )
             lock.lock()
             serverUnreachable = false
+            protocolUnverified = false
             protocolConfirmed = true
             lock.unlock()
             retargetIdentity(applied.with(serverProtocol: detected))
@@ -900,6 +955,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             lock.lock()
             let wasUnreachable = serverUnreachable
             serverUnreachable = false
+            protocolUnverified = false
             lock.unlock()
             if wasUnreachable {
                 refreshOverallState(generation: generation)
@@ -908,6 +964,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             DiagnosticLog.warning(.sse, "SSE protocol recheck: no protocol answered")
             lock.lock()
             serverUnreachable = true
+            protocolUnverified = true
             lock.unlock()
             refreshOverallState(generation: generation)
         case .none:

@@ -54,9 +54,24 @@ internal object ProtocolRecheckPolicy {
         minIntervalMs: Long = MIN_INTERVAL_MS,
     ): Boolean = lastRecheckMs == null || nowMs - lastRecheckMs >= minIntervalMs
 
+    /**
+     * How long a request that arrives inside the window waits. It is deferred, not dropped: a
+     * v1 server also answers `/api/event`, so the recovery request may be the only hint of a swap.
+     */
+    fun delayUntilDueMs(
+        nowMs: Long,
+        lastRecheckMs: Long?,
+        minIntervalMs: Long = MIN_INTERVAL_MS,
+    ): Long = if (lastRecheckMs == null) 0L else (lastRecheckMs + minIntervalMs - nowMs).coerceAtLeast(0L)
+
+    /**
+     * [leaseWentLive] is true when an event stream connected while the check was in flight; a
+     * no-answer result is then stale and must not mark a working server offline.
+     */
     fun action(
         result: ProtocolRedetection,
         applied: ServerProtocol,
+        leaseWentLive: Boolean = false,
     ): ProtocolRecheckAction =
         when (result) {
             is ProtocolRedetection.Detected ->
@@ -65,7 +80,8 @@ internal object ProtocolRecheckPolicy {
                 } else {
                     ProtocolRecheckAction.Retarget(result.protocol)
                 }
-            ProtocolRedetection.Unreachable -> ProtocolRecheckAction.MarkUnreachable
+            ProtocolRedetection.Unreachable ->
+                if (leaseWentLive) ProtocolRecheckAction.None else ProtocolRecheckAction.MarkUnreachable
             ProtocolRedetection.Skipped -> ProtocolRecheckAction.None
         }
 }

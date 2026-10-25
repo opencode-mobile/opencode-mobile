@@ -125,6 +125,15 @@ class DefaultForegroundEventStream
         /** When the last protocol re-check started; guarded by [stateLock]. */
         private var lastProtocolRecheckMs: Long? = null
         private var protocolRecheckJob: Job? = null
+
+        /** A request that arrived inside the window, run when it closes; guarded by [stateLock]. */
+        private var deferredProtocolRecheckJob: Job? = null
+
+        /** The last recheck got no answer, so the next stream to connect must confirm the protocol. */
+        private val protocolUnverified = AtomicBoolean(false)
+
+        /** Counts leases going live, so a recheck can tell its no-answer result went stale. */
+        private val leaseLiveEpoch = AtomicLong(0)
         private val reconnectWakeEpoch = AtomicLong(0)
         private val reconnectWake =
             MutableSharedFlow<Unit>(
@@ -250,10 +259,13 @@ class DefaultForegroundEventStream
             val leaseJobs: List<Job>
             protocolConfirmed.set(false)
             serverUnreachable.set(false)
+            protocolUnverified.set(false)
             synchronized(stateLock) {
                 lastProtocolRecheckMs = null
                 protocolRecheckJob?.cancel()
                 protocolRecheckJob = null
+                deferredProtocolRecheckJob?.cancel()
+                deferredProtocolRecheckJob = null
                 val wasFullyConnected = overall.wasFullyConnected
                 occupancySerial += 1
                 inFlightStartApplies = 0
@@ -831,6 +843,7 @@ class DefaultForegroundEventStream
         ) {
             if (generation != streamGeneration.get()) return
             lease.live.set(true)
+            leaseLiveEpoch.incrementAndGet()
             serverUnreachable.set(false)
             synchronized(leaseLock) { authRejectedTargets -= lease.target.key }
             refreshOverallState(generation)
@@ -867,7 +880,8 @@ class DefaultForegroundEventStream
                 }
             }
             if (decision.recovered) {
-                // A server restarted at this address may have come back speaking the other protocol.
+                // A server restarted at this address, or one that did not answer the last check,
+                // may have come back speaking the other protocol.
                 requestProtocolRecheck(decision.generation, "reconnected")
             }
         }
@@ -878,12 +892,40 @@ class DefaultForegroundEventStream
         ) {
             synchronized(stateLock) {
                 if (occupancyJob?.isActive != true || generation != streamGeneration.get()) return
-                if (protocolRecheckJob?.isActive == true) return
                 val now = System.currentTimeMillis()
-                if (!ProtocolRecheckPolicy.isDue(now, lastProtocolRecheckMs, protocolRecheckIntervalMs)) return
+                val waitMs = ProtocolRecheckPolicy.delayUntilDueMs(now, lastProtocolRecheckMs, protocolRecheckIntervalMs)
+                if (protocolRecheckJob?.isActive == true || waitMs > 0L) {
+                    deferProtocolRecheckLocked(reason)
+                    return
+                }
                 lastProtocolRecheckMs = now
                 protocolRecheckJob = scope.launch { recheckProtocol(generation, reason) }
             }
+        }
+
+        private fun deferProtocolRecheckLocked(reason: String) {
+            if (deferredProtocolRecheckJob?.isActive == true) return
+            val inFlight = protocolRecheckJob
+            deferredProtocolRecheckJob =
+                scope.launch {
+                    // An answer still in flight may predate the change that asked for this check.
+                    inFlight?.join()
+                    val waitMs =
+                        synchronized(stateLock) {
+                            ProtocolRecheckPolicy.delayUntilDueMs(
+                                System.currentTimeMillis(),
+                                lastProtocolRecheckMs,
+                                protocolRecheckIntervalMs,
+                            )
+                        }
+                    delay(waitMs)
+                    val generation =
+                        synchronized(stateLock) {
+                            deferredProtocolRecheckJob = null
+                            streamGeneration.get()
+                        }
+                    requestProtocolRecheck(generation, "$reason (deferred)")
+                }
         }
 
         private suspend fun recheckProtocol(
@@ -891,25 +933,35 @@ class DefaultForegroundEventStream
             reason: String,
         ) {
             diagnosticLogger.info(DiagnosticLogArea.Sse, "SSE protocol recheck reason=$reason")
+            val liveEpochAtStart = leaseLiveEpoch.get()
             val result = activeConnectionManager.redetectProtocol()
             if (!stillCurrent(generation)) return
-            val applied = appliedConfig ?: return
-            when (val action = ProtocolRecheckPolicy.action(result, applied.protocol)) {
+            val applied = synchronized(stateLock) { appliedConfig } ?: return
+            val action =
+                ProtocolRecheckPolicy.action(
+                    result = result,
+                    applied = applied.protocol,
+                    leaseWentLive = leaseLiveEpoch.get() != liveEpochAtStart,
+                )
+            when (action) {
                 is ProtocolRecheckAction.Retarget -> {
                     diagnosticLogger.info(
                         DiagnosticLogArea.Sse,
                         "SSE protocol changed ${applied.protocol.wireValue} -> ${action.protocol.wireValue}; reconnecting",
                     )
                     serverUnreachable.set(false)
+                    protocolUnverified.set(false)
                     protocolConfirmed.set(true)
                     retargetIdentity(applied.copy(protocol = action.protocol))
                 }
                 ProtocolRecheckAction.KeepProtocol -> {
+                    protocolUnverified.set(false)
                     if (serverUnreachable.getAndSet(false)) refreshOverallState(generation)
                 }
                 ProtocolRecheckAction.MarkUnreachable -> {
                     diagnosticLogger.warning(DiagnosticLogArea.Sse, "SSE protocol recheck: no protocol answered")
                     serverUnreachable.set(true)
+                    protocolUnverified.set(true)
                     refreshOverallState(generation)
                 }
                 ProtocolRecheckAction.None -> Unit
@@ -961,7 +1013,7 @@ class DefaultForegroundEventStream
                 connectionState = connectionState,
                 publishReconnect = decided.publishReconnect,
                 snapshot = buildSnapshotLocked(connectionState),
-                recovered = decided.publishReconnect && wasFullyConnected,
+                recovered = decided.publishReconnect && (wasFullyConnected || protocolUnverified.get()),
             )
         }
 

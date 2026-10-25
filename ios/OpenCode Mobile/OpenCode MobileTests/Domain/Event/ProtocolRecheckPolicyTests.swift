@@ -36,6 +36,20 @@ struct ProtocolRecheckPolicyTests {
         #expect(ProtocolRecheckPolicy.isDue(now: start + .seconds(15), lastRecheck: start))
     }
 
+    @Test func delayUntilDueDefersARequestInsideTheWindowInsteadOfDroppingIt() {
+        let start = ContinuousClock.now
+        #expect(ProtocolRecheckPolicy.delayUntilDue(now: start, lastRecheck: nil) == .zero)
+        #expect(ProtocolRecheckPolicy.delayUntilDue(now: start + .seconds(3), lastRecheck: start) == .seconds(12))
+        #expect(ProtocolRecheckPolicy.delayUntilDue(now: start + .seconds(20), lastRecheck: start) == .zero)
+    }
+
+    @Test func actionIgnoresANoAnswerResultOnceAStreamConnectedDuringTheCheck() {
+        #expect(
+            ProtocolRecheckPolicy.action(result: .unreachable, applied: .v1, leaseWentLive: true)
+                == ProtocolRecheckAction.none
+        )
+    }
+
     @Test func actionRetargetsOnlyWhenTheDetectedProtocolDiffers() {
         #expect(ProtocolRecheckPolicy.action(result: .detected(.v2), applied: .v1) == .retarget(.v2))
         #expect(ProtocolRecheckPolicy.action(result: .detected(.v1), applied: .v2) == .retarget(.v1))

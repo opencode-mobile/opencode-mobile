@@ -49,6 +49,21 @@ class ProtocolRecheckPolicyTest {
     }
 
     @Test
+    fun delayUntilDue_defersARequestInsideTheWindowInsteadOfDroppingIt() {
+        assertEquals(0L, ProtocolRecheckPolicy.delayUntilDueMs(nowMs = 1_000, lastRecheckMs = null))
+        assertEquals(12_000L, ProtocolRecheckPolicy.delayUntilDueMs(nowMs = 4_000, lastRecheckMs = 1_000))
+        assertEquals(0L, ProtocolRecheckPolicy.delayUntilDueMs(nowMs = 20_000, lastRecheckMs = 1_000))
+    }
+
+    @Test
+    fun action_ignoresANoAnswerResultOnceAStreamConnectedDuringTheCheck() {
+        assertEquals(
+            ProtocolRecheckAction.None,
+            ProtocolRecheckPolicy.action(ProtocolRedetection.Unreachable, ServerProtocol.V1, leaseWentLive = true),
+        )
+    }
+
+    @Test
     fun action_retargetsOnlyWhenTheDetectedProtocolDiffers() {
         assertEquals(
             ProtocolRecheckAction.Retarget(ServerProtocol.V2),
