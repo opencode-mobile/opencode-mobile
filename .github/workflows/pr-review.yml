@@ -2,10 +2,11 @@
 # Source of truth: ivanfenenko/homelab services/pr-review/workflow.yml.
 #
 # Automated review by three opencode passes on fedora-box (runner
-# fedora-box-pr-review). Runs when a PR is opened, reopened or marked ready
-# for review, and when an owner/member/collaborator comments `/review`.
-# Not on every push. Drafts and forks are skipped. The review script comes
-# from the homelab checkout on the runner, never from the PR.
+# fedora-box-pr-review). Only Ivan (ivanfenenko) can trigger it: it runs when
+# he opens, reopens or marks ready one of his own PRs, and when he comments
+# `/review` on a PR. Nobody else's PR or comment uses the runner. Not on every
+# push. Drafts and forks are skipped. The review script comes from the homelab
+# checkout on the runner, never from the PR.
 name: PR review
 
 on:
@@ -28,7 +29,7 @@ concurrency:
       github.event_name == 'issue_comment'
       && !(github.event.issue.pull_request
         && startsWith(github.event.comment.body, '/review')
-        && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+        && github.event.comment.user.login == 'ivanfenenko')
       && format('-ignored-{0}', github.run_id) || '' }}
   cancel-in-progress: true
 
@@ -37,12 +38,13 @@ jobs:
     if: >-
       (github.event_name == 'pull_request'
         && !github.event.pull_request.draft
+        && github.event.pull_request.user.login == 'ivanfenenko'
         && github.event.pull_request.head.repo.full_name == github.repository)
       || (github.event_name == 'issue_comment'
         && github.event.issue.pull_request
         && github.event.issue.state == 'open'
         && startsWith(github.event.comment.body, '/review')
-        && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+        && github.event.comment.user.login == 'ivanfenenko')
     runs-on: [self-hosted, pr-review]
     timeout-minutes: 45
     steps:
