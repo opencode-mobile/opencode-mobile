@@ -92,6 +92,8 @@ jobs:
           if [ -n "$COMMENT_ID" ]; then
             args+=(--comment-id "$COMMENT_ID")
           fi
-          # The runner user's own homelab clone; ivan cannot write it.
-          git -C /opt/pr-review/homelab pull -q --ff-only
+          # The runner user's own homelab clone; ivan cannot write it. A failed
+          # pull reviews with the copy already there rather than not at all.
+          git -C /opt/pr-review/homelab pull -q --ff-only \
+            || echo "::warning::could not update /opt/pr-review/homelab; reviewing with $(git -C /opt/pr-review/homelab rev-parse --short HEAD)"
           python3 /opt/pr-review/homelab/services/pr-review/review.py "${args[@]}"
