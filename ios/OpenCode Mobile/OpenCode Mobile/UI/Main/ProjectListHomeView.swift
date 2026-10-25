@@ -14,7 +14,6 @@ struct ProjectListHomeView: View {
     /// model to the split detail pane and back.
     @State private var stackedChatViewModels: [String: SessionChatViewModel] = [:]
     @State private var connectionSetupPresentation: ConnectionSetupPresentation?
-    @State private var connectionSetupViewModel: ConnectionSetupViewModel?
     @State private var serversRefreshToken = 0
     @State private var showNewSessionProjectPicker = false
     /// What the New session sheet lists: the projects, or one project's Run in list.
@@ -83,10 +82,6 @@ struct ProjectListHomeView: View {
                 SettingsView(
                     onAddServer: { presentConnectionSetup(mode: .add) },
                     onEditProfile: { profile in
-                        connectionSetupViewModel = Container.makeConnectionSetupViewModel(
-                            initialProfile: profile,
-                            mode: .edit
-                        )
                         connectionSetupPresentation = ConnectionSetupPresentation(
                             initialProfile: profile,
                             mode: .edit
@@ -346,13 +341,9 @@ struct ProjectListHomeView: View {
             }
             .fullScreenCover(item: $connectionSetupPresentation) { presentation in
                 ConnectionSetupView(
-                    viewModel: connectionSetupViewModel ?? Container.makeConnectionSetupViewModel(
-                        initialProfile: presentation.initialProfile,
-                        mode: presentation.mode
-                    ),
+                    viewModel: presentation.viewModel,
                     onDismiss: {
                         connectionSetupPresentation = nil
-                        connectionSetupViewModel = nil
                         serversRefreshToken += 1
                         Task { await viewModel.refreshServersChrome() }
                     }
@@ -979,17 +970,14 @@ struct ProjectListHomeView: View {
     private func presentConnectionSetup(mode: ConnectionSetupMode = .first) {
         switch mode {
         case .first, .add:
-            connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: nil, mode: mode)
             connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: nil, mode: mode)
         case .edit:
             if let profile = Container.shared.activeConnectionManager().currentProfile() {
-                connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: profile, mode: .edit)
                 connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: profile, mode: .edit)
                 return
             }
             Task {
                 let profile = await Container.shared.connectionProfileStore().activeProfile()
-                connectionSetupViewModel = Container.makeConnectionSetupViewModel(initialProfile: profile, mode: .edit)
                 connectionSetupPresentation = ConnectionSetupPresentation(initialProfile: profile, mode: .edit)
             }
         }
