@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.DetectedServer
+import dev.opencode.mobile.domain.connection.ProtocolRedetection
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.project.ServerProbeError
 import kotlinx.coroutines.CompletableDeferred
@@ -87,6 +88,63 @@ class ActiveConnectionManagerProtocolTest {
 
             assertNull(manager.current())
             assertNull(manager.currentProtocol())
+        }
+
+    @Test
+    fun redetectProtocol_movesSavedV1ProfileToV2AndSavesIt() =
+        runTest {
+            val store = FakeProfileStore()
+            val manager = ActiveConnectionManager(store, ConnectionProbing { ServerProtocol.V2 })
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+
+            val result = manager.redetectProtocol()
+
+            assertEquals(ProtocolRedetection.Detected(ServerProtocol.V2), result)
+            assertEquals(ServerProtocol.V2, manager.currentProtocol())
+            assertEquals(ServerProtocol.V2, store.lastSaved?.serverProtocol)
+            assertEquals(sampleProfile.baseUrl, store.lastSaved?.baseUrl)
+        }
+
+    @Test
+    fun redetectProtocol_movesSavedV2ProfileBackToV1() =
+        runTest {
+            val store = FakeProfileStore()
+            val manager = ActiveConnectionManager(store, ConnectionProbing { ServerProtocol.V1 })
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+
+            assertEquals(ProtocolRedetection.Detected(ServerProtocol.V1), manager.redetectProtocol())
+            assertEquals(ServerProtocol.V1, store.lastSaved?.serverProtocol)
+        }
+
+    @Test
+    fun redetectProtocol_noAnswerKeepsSavedProtocol() =
+        runTest {
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { throw ServerProbeError.Transport(java.io.IOException("refused")) },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+
+            assertEquals(ProtocolRedetection.Unreachable, manager.redetectProtocol())
+            assertEquals(ServerProtocol.V1, manager.currentProtocol())
+            assertEquals(ServerProtocol.V1, store.lastSaved?.serverProtocol)
+        }
+
+    @Test
+    fun redetectProtocol_rejectedCredentialIsNotAnAnswer() =
+        runTest {
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { throw ServerProbeError.Http(statusCode = 401, message = "Unauthorized") },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+
+            assertEquals(ProtocolRedetection.Skipped, manager.redetectProtocol())
+            assertEquals(ServerProtocol.V1, manager.currentProtocol())
         }
 
     @Test

@@ -205,6 +205,20 @@ final class ActiveConnectionManager: @unchecked Sendable {
         try await sharedProbe(force: true).get()
     }
 
+    /// Re-runs detection on the active connection, so a server replaced at the same address by
+    /// the other protocol moves the profile to it. A rejected credential is not an answer.
+    func redetectProtocol() async -> ProtocolRedetection {
+        guard connection != nil, connectionProbing != nil else { return .skipped }
+        switch await sharedProbe(force: true) {
+        case let .success(detected):
+            return .detected(detected)
+        case let .failure(error):
+            if error is CancellationError { return .skipped }
+            if (error as? ServerProbeError)?.probeStatus == .authFailed { return .skipped }
+            return .unreachable
+        }
+    }
+
     private func sharedProbe(force: Bool) async -> Result<ServerProtocol, Error> {
         if !force, let cached = serverProtocol {
             return .success(cached)
