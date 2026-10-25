@@ -198,6 +198,8 @@ data class SessionChatUiState(
     val workingIndicatorLabel: String? = null,
     /** Live rate-limit countdown. Hidden for content-filter retries. */
     val retryCard: SessionRetryCard? = null,
+    /** The session is in `retry` status: the composer owns the countdown, failure marks show none. */
+    val isRetrying: Boolean = false,
     /** True after the Idle hold when the reserved footer has collapsed. */
     val workingIndicatorCollapsed: Boolean = false,
     /** True while the reserved Working lamp/label is fading through the idle hold. */
@@ -668,6 +670,7 @@ data class SessionInfoRegionState(
     val parentId: String? = null,
     val sessionStatusLabel: String? = null,
     val retryCard: SessionRetryCard? = null,
+    val isRetrying: Boolean = false,
     val hasResolvedSessionStatus: Boolean = false,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val canMutate: Boolean = false,
@@ -683,11 +686,13 @@ fun SessionInfoRegionState.withStatus(
     authoritative: String?,
     hasResolved: Boolean = true,
     retryCard: SessionRetryCard? = null,
+    isRetrying: Boolean = false,
 ): SessionInfoRegionState =
     copy(
         sessionStatusLabel = authoritative,
         hasResolvedSessionStatus = hasResolved,
         retryCard = retryCard,
+        isRetrying = isRetrying,
     )
 
 data class SessionChatReviewChangesRegionState(

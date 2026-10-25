@@ -202,6 +202,27 @@ nonisolated struct SessionFailure: Equatable, Sendable {
     var providerID: String? = nil
     var retries: Int? = nil
     var source: FailureSource = .step
+    /// v2 `retryAfterMs`: how long the provider asked to wait.
+    var retryAfterMs: Int64? = nil
+    /// When the failure was recorded; set only with `retryAfterMs`.
+    var recordedAtEpochMs: Int64? = nil
+
+    /// When the provider said to try again; nil when the server sent no `retryAfterMs`.
+    func retryAtEpochMs() -> Int64? {
+        guard let retryAfterMs, let recordedAtEpochMs else { return nil }
+        return recordedAtEpochMs + retryAfterMs
+    }
+
+    /// "Try again in N s", minutes above 90 s; nil once the wait is over.
+    static func retryAfterLabel(remainingMs: Int64) -> String? {
+        guard remainingMs > 0 else { return nil }
+        if remainingMs <= 90_000 { return "Try again in \(ceilDiv(remainingMs, 1_000)) s" }
+        return "Try again in \(ceilDiv(remainingMs, 60_000)) min"
+    }
+
+    private static func ceilDiv(_ value: Int64, _ unit: Int64) -> Int64 {
+        (value + unit - 1) / unit
+    }
 
     /// The composer retry status already shows this failure, so the transcript mark waits.
     func coversLiveRetry() -> Bool {
@@ -213,6 +234,7 @@ nonisolated struct SessionFailure: Equatable, Sendable {
     func action() -> FailureAction? {
         let kind = type?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         if kind == "provider.no-route" { return .pickModel }
+        if kind == "provider.free-limit" || kind == "provider.model-budget-limit" { return .pickModel }
         if kind == "provider.content-filter" { return nil }
         if isContextOverflow() { return .compact }
         if kind == "unknown" || kind == "provider.unknown" { return .copy }
@@ -283,7 +305,9 @@ nonisolated struct SessionFailure: Equatable, Sendable {
         isRetryable: Bool? = nil,
         providerID: String? = nil,
         retries: Int? = nil,
-        source: FailureSource = .step
+        source: FailureSource = .step,
+        retryAfterMs: Int64? = nil,
+        recordedAtEpochMs: Int64? = nil
     ) -> SessionFailure? {
         if isSilent(type: name) { return nil }
         return build(
@@ -295,7 +319,9 @@ nonisolated struct SessionFailure: Equatable, Sendable {
             isRetryable: isRetryable,
             providerID: providerID,
             retries: retries,
-            source: source
+            source: source,
+            retryAfterMs: retryAfterMs,
+            recordedAtEpochMs: recordedAtEpochMs
         )
     }
 
@@ -305,7 +331,9 @@ nonisolated struct SessionFailure: Equatable, Sendable {
         status: Int?,
         providerBody: String?,
         outcome: String? = nil,
-        source: FailureSource = .step
+        source: FailureSource = .step,
+        retryAfterMs: Int64? = nil,
+        recordedAtEpochMs: Int64? = nil
     ) -> SessionFailure? {
         if outcome?.caseInsensitiveCompare("succeeded") == .orderedSame
             || outcome?.caseInsensitiveCompare("interrupted") == .orderedSame
@@ -319,7 +347,9 @@ nonisolated struct SessionFailure: Equatable, Sendable {
             status: status,
             providerBody: providerBody,
             emptyFallback: "",
-            source: source
+            source: source,
+            retryAfterMs: retryAfterMs,
+            recordedAtEpochMs: recordedAtEpochMs
         )
     }
 
@@ -334,7 +364,9 @@ nonisolated struct SessionFailure: Equatable, Sendable {
         isRetryable: Bool? = nil,
         providerID: String? = nil,
         retries: Int? = nil,
-        source: FailureSource = .step
+        source: FailureSource = .step,
+        retryAfterMs: Int64? = nil,
+        recordedAtEpochMs: Int64? = nil
     ) -> SessionFailure? {
         let trimmedBody = providerBody?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let body = trimmedBody.isEmpty ? nil : String(trimmedBody.prefix(maxBody))
@@ -350,6 +382,7 @@ nonisolated struct SessionFailure: Equatable, Sendable {
         if shown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && body == nil && http == nil {
             return nil
         }
+        let wait = retryAfterMs.flatMap { $0 >= 0 ? $0 : nil }
         return SessionFailure(
             type: trimmedType.isEmpty ? nil : trimmedType,
             message: shown,
@@ -358,7 +391,9 @@ nonisolated struct SessionFailure: Equatable, Sendable {
             isRetryable: isRetryable,
             providerID: providerID,
             retries: retries,
-            source: source
+            source: source,
+            retryAfterMs: wait,
+            recordedAtEpochMs: wait == nil ? nil : recordedAtEpochMs
         )
     }
 }

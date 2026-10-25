@@ -85,7 +85,60 @@ struct SessionFailureDetailTargetTests {
         #expect(SessionChatTimelineBlocks.newestLiveRetryProviderBody(in: [older, newer, auth]) == "new")
     }
 
-    private func failureRow(_ id: String, body: String, covered: Bool) -> SessionChatRow {
+    @Test func failureLineCarriesTheRetryTime() throws {
+        let failure = SessionFailure(
+            type: "provider.free-limit",
+            message: "Free usage limit reached.",
+            status: 429,
+            providerBody: nil,
+            retryAfterMs: 60_000,
+            recordedAtEpochMs: 1_000
+        )
+        let body = DisplayMessageBody(
+            message: Message(
+                id: "a1", role: .assistant, text: "", model: nil, mode: nil, sentAtEpochMs: nil, failure: failure
+            ),
+            isStreaming: false,
+            blocks: [],
+            renderedMarkdown: nil
+        )
+        let blocks = try #require(
+            SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                [body],
+                collapseConsecutiveToolCalls: false
+            ).first?.blocks
+        )
+        guard case .failureLine(_, let text, _, _, let action, _, _, let retryAt) = blocks.last else {
+            Issue.record("expected a failure line")
+            return
+        }
+        #expect(text == "HTTP 429 · Free usage limit reached.")
+        #expect(action == .pickModel)
+        #expect(retryAt == 61_000)
+    }
+
+    @Test func retryCountdownOnlyOnTheLastTurn() {
+        let failed = failureRow("a1", body: "limit", covered: false, retryAt: 9_000)
+        #expect(SessionChatTimelineBlocks.retryCountdownBlockID(in: [failed]) == "a1:failure")
+        #expect(
+            SessionChatTimelineBlocks.retryCountdownBlockID(in: [failed, failureRow("a2", body: "x", covered: false)])
+                == "a1:failure"
+        )
+
+        let user = SessionChatRow(id: "u2", role: .user, text: "again", metadataLabel: "", blocks: [])
+        #expect(SessionChatTimelineBlocks.retryCountdownBlockID(in: [failed, user]) == nil)
+        #expect(
+            SessionChatTimelineBlocks.retryCountdownBlockID(in: [failureRow("a0", body: "x", covered: false), user]) == nil
+        )
+    }
+
+    @Test func noRetryTimeMeansNoCountdown() {
+        #expect(
+            SessionChatTimelineBlocks.retryCountdownBlockID(in: [failureRow("a1", body: "limit", covered: true)]) == nil
+        )
+    }
+
+    private func failureRow(_ id: String, body: String, covered: Bool, retryAt: Int64? = nil) -> SessionChatRow {
         SessionChatRow(
             id: id,
             role: .assistant,
@@ -99,7 +152,8 @@ struct SessionFailureDetailTargetTests {
                     isNeutral: false,
                     action: nil,
                     actionLabel: nil,
-                    coveredByLiveRetry: covered
+                    coveredByLiveRetry: covered,
+                    retryAtEpochMs: retryAt
                 ),
             ]
         )

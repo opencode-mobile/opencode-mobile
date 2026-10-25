@@ -59,6 +59,8 @@ data class MessageErrorDataDto(
     val isRetryable: Boolean? = null,
     val providerID: String? = null,
     val retries: Int? = null,
+    /** v2 `retryAfterMs`, carried here by the live event translation; v1 servers never send it. */
+    val retryAfterMs: Long? = null,
 )
 
 @Serializable

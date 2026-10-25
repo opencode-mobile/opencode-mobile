@@ -287,6 +287,7 @@ struct SessionChatView: View {
                     sessionTodoActivePreview: viewModel.uiState.sessionTodoActivePreview?.content,
                     hideFloatStack: showSessionTodosSheet,
                     hideLiveRetryFailures: viewModel.uiState.retryCard != nil,
+                    hideRetryCountdown: viewModel.uiState.isRetrying,
                     // Composer + 16 end-pin gap; Scroll to end uses this as-is
                     // (no extra scrollToEndPillBottomPadding).
                     bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight)

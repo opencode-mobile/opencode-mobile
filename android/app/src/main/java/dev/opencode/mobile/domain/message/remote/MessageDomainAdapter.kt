@@ -45,7 +45,10 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-class MessageDomainAdapter {
+class MessageDomainAdapter(
+    /** Receive time for a failure whose message has no completed time yet. */
+    private val nowEpochMs: () -> Long = System::currentTimeMillis,
+) {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun toMessage(dto: MessageDto): Message {
@@ -72,7 +75,7 @@ class MessageDomainAdapter {
             followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup = info.waiting == true,
             stopReason = stopReason,
-            failure = sessionFailure(info.error, stopReason),
+            failure = sessionFailure(info.error, stopReason, completedAtEpochMs = info.time?.completed),
         )
     }
 
@@ -101,7 +104,7 @@ class MessageDomainAdapter {
             followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup = info.waiting == true,
             stopReason = stopReason,
-            failure = sessionFailure(info.error, stopReason),
+            failure = sessionFailure(info.error, stopReason, completedAtEpochMs = info.time?.completed),
         )
     }
 
@@ -630,10 +633,11 @@ class MessageDomainAdapter {
             }
         val stopReason = MessageStopReason.from(finish = dto.finish, errorKind = dto.error?.type)
         val failure =
-            structuredFailure(dto.error, outcome = null)
-                ?: dto.retry?.error?.let { structuredFailure(it, outcome = null) }?.takeIf {
-                    dto.finish.equals("error", ignoreCase = true)
-                }
+            structuredFailure(dto.error, outcome = null, completedAtEpochMs = dto.time?.completed)
+                ?: dto.retry
+                    ?.error
+                    ?.let { structuredFailure(it, outcome = null, completedAtEpochMs = dto.time?.completed) }
+                    ?.takeIf { dto.finish.equals("error", ignoreCase = true) }
         return messageFromV2(
             id = dto.id,
             role = MessageRole.Assistant,
@@ -672,7 +676,13 @@ class MessageDomainAdapter {
             sentAtEpochMs = dto.time?.created,
             completedAtEpochMs = dto.time?.completed,
             contextEstimate = MessageContextEstimate(assistantCharacters = summary.length),
-            failure = structuredFailure(dto.error, outcome = null, source = FailureSource.Compaction),
+            failure =
+                structuredFailure(
+                    dto.error,
+                    outcome = null,
+                    source = FailureSource.Compaction,
+                    completedAtEpochMs = dto.time?.completed,
+                ),
         )
     }
 
@@ -681,7 +691,13 @@ class MessageDomainAdapter {
         dto: V2SessionMessageDto,
         messages: MutableList<Message>,
     ) {
-        val failure = structuredFailure(dto.error, outcome = dto.outcome, source = FailureSource.Execution) ?: return
+        val failure =
+            structuredFailure(
+                dto.error,
+                outcome = dto.outcome,
+                source = FailureSource.Execution,
+                completedAtEpochMs = dto.time?.completed,
+            ) ?: return
         if (messages.lastOrNull()?.failure?.line() == failure.line()) return
         messages +=
             messageFromV2(
@@ -915,6 +931,7 @@ class MessageDomainAdapter {
     private fun sessionFailure(
         error: MessageErrorInfoDto?,
         stopReason: MessageStopReason?,
+        completedAtEpochMs: Long?,
     ): SessionFailure? {
         if (stopReason == MessageStopReason.Interrupted) return null
         return SessionFailure.fromV1(
@@ -925,6 +942,8 @@ class MessageDomainAdapter {
             isRetryable = error?.data?.isRetryable,
             providerId = error?.data?.providerID,
             retries = error?.data?.retries,
+            retryAfterMs = error?.data?.retryAfterMs,
+            recordedAtEpochMs = recordedAt(error?.data?.retryAfterMs, completedAtEpochMs),
         )
     }
 
@@ -932,6 +951,7 @@ class MessageDomainAdapter {
         error: V2UnknownErrorDto?,
         outcome: String?,
         source: FailureSource = FailureSource.Step,
+        completedAtEpochMs: Long?,
     ): SessionFailure? =
         SessionFailure.fromV2(
             type = error?.type,
@@ -940,7 +960,15 @@ class MessageDomainAdapter {
             providerBody = error?.response?.body,
             outcome = outcome,
             source = source,
+            retryAfterMs = error?.retryAfterMs,
+            recordedAtEpochMs = recordedAt(error?.retryAfterMs, completedAtEpochMs),
         )
+
+    /** The failed message's completion time, else when the app received it. Only a retry hint needs it. */
+    private fun recordedAt(
+        retryAfterMs: Long?,
+        completedAtEpochMs: Long?,
+    ): Long? = if (retryAfterMs == null) null else completedAtEpochMs ?: nowEpochMs()
 
     private fun httpMessage(body: String?): String {
         val friendly = ServerErrorMessage.userFacing(body)

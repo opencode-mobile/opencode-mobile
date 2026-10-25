@@ -1977,6 +1977,7 @@ class SessionChatViewModel
                 sessionStatusLabel = sessionStatusLabel,
                 workingIndicatorLabel = workingIndicatorLabel,
                 retryCard = infoState.retryCard,
+                isRetrying = infoState.isRetrying,
                 workingIndicatorCollapsed = workingIndicatorCollapsed,
                 workingIndicatorFading = workingIndicatorFading,
                 syncingIndicatorLabel = syncingIndicatorLabel,

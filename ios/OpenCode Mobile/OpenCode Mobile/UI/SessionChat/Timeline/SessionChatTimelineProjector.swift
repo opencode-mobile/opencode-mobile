@@ -461,8 +461,8 @@ nonisolated enum SessionChatTimelineProjector {
                     }.joined(separator: ",")
             case .stopNote(let id, let reason):
                 "x:\(id):\(reason.rawValue)"
-            case .failureLine(let id, _, let body, let neutral, let action, _, _):
-                "f:\(id):\(body != nil):\(neutral):\(action != nil)"
+            case .failureLine(let id, _, let body, let neutral, let action, _, _, let retryAt):
+                "f:\(id):\(body != nil):\(neutral):\(action != nil):\(retryAt != nil)"
             case .notice(let id, let notice):
                 "o:\(id):\(String(describing: notice.kind).hashValue)"
             }
@@ -505,7 +505,7 @@ nonisolated enum SessionChatTimelineProjector {
                 "ac:\(id):\(card.steps.count)"
             case .stopNote(let id, let reason):
                 "x:\(id):\(reason.rawValue)"
-            case .failureLine(let id, _, let body, _, _, _, _):
+            case .failureLine(let id, _, let body, _, _, _, _, _):
                 "f:\(id):\(body != nil)"
             case .notice(let id, _):
                 "o:\(id)"

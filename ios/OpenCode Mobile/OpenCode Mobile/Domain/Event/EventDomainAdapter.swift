@@ -541,6 +541,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let body, !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             data["responseBody"] = body
         }
+        if let retryAfterMs = int64(in: error, key: "retryAfterMs") { data["retryAfterMs"] = retryAfterMs }
         var info: [String: Any] = ["data": data]
         if let type { info["name"] = type }
         return info

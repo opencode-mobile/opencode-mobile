@@ -25,6 +25,8 @@ struct SessionChatTimelineViewProps {
     let hideFloatStack: Bool
     /// Hide rate-limit and quota marks while the composer retry status is showing.
     let hideLiveRetryFailures: Bool
+    /// The session is retrying: the composer owns the countdown, so failure marks show none.
+    let hideRetryCountdown: Bool
     /// Extra bottom inset so the timeline can scroll under a floating composer.
     let bottomOverlayInset: CGFloat
     let onRefresh: () async -> Void
@@ -85,6 +87,7 @@ struct SessionChatTimelineViewProps {
         sessionTodoActivePreview: String? = nil,
         hideFloatStack: Bool = false,
         hideLiveRetryFailures: Bool = false,
+        hideRetryCountdown: Bool = false,
         bottomOverlayInset: CGFloat = 0,
         onRefresh: @escaping () async -> Void,
         onRetry: @escaping () async -> Void = {},
@@ -134,6 +137,7 @@ struct SessionChatTimelineViewProps {
         self.sessionTodoActivePreview = sessionTodoActivePreview
         self.hideFloatStack = hideFloatStack
         self.hideLiveRetryFailures = hideLiveRetryFailures
+        self.hideRetryCountdown = hideRetryCountdown
         self.bottomOverlayInset = bottomOverlayInset
         self.onRefresh = onRefresh
         self.onRetry = onRetry
@@ -208,6 +212,10 @@ struct SessionChatTimelineView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.bottom, props.timeline == .ready ? 0 : props.bottomOverlayInset)
         .environment(\.hideLiveRetryFailures, props.hideLiveRetryFailures)
+        .environment(
+            \.retryCountdownBlockID,
+            props.hideRetryCountdown ? nil : SessionChatTimelineBlocks.retryCountdownBlockID(in: props.messages)
+        )
     }
 }
 
@@ -215,10 +223,19 @@ private struct HideLiveRetryFailuresKey: EnvironmentKey {
     static let defaultValue = false
 }
 
+private struct RetryCountdownBlockIDKey: EnvironmentKey {
+    static let defaultValue: String? = nil
+}
+
 private extension EnvironmentValues {
     var hideLiveRetryFailures: Bool {
         get { self[HideLiveRetryFailuresKey.self] }
         set { self[HideLiveRetryFailuresKey.self] = newValue }
+    }
+
+    var retryCountdownBlockID: String? {
+        get { self[RetryCountdownBlockIDKey.self] }
+        set { self[RetryCountdownBlockIDKey.self] = newValue }
     }
 }
 
@@ -773,6 +790,7 @@ private struct AssistantMessageContent: View {
     let onOpenMessageActions: () -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     @Environment(\.hideLiveRetryFailures) private var hideLiveRetryFailures
+    @Environment(\.retryCountdownBlockID) private var retryCountdownBlockID
     let onToolGroupTap: (SessionChatToolGroupTarget) -> Void
     let onSkillsTap: (SessionChatSkillsTarget) -> Void
     let onChildSessionTap: (String, String) -> Void
@@ -895,7 +913,9 @@ private struct AssistantMessageContent: View {
                     OpenCodeMessageNote(variant: reason == .length ? .truncated : .interrupted)
                 case .notice(_, let notice):
                     SessionChatNoticeLine(notice: notice, modelNames: .empty)
-                case .failureLine(_, let text, let providerBody, let isNeutral, let action, let actionLabel, let covered):
+                case .failureLine(
+                    let id, let text, let providerBody, let isNeutral, let action, let actionLabel, let covered, let retryAt
+                ):
                     if !(hideLiveRetryFailures && covered) {
                         FailureLineBlock(
                             text: text,
@@ -903,6 +923,7 @@ private struct AssistantMessageContent: View {
                             isNeutral: isNeutral,
                             action: action,
                             actionLabel: actionLabel,
+                            retryAtEpochMs: id == retryCountdownBlockID ? retryAt : nil,
                             onToolDetailTap: onToolDetailTap
                         )
                     }
@@ -1377,7 +1398,12 @@ private struct FailureLineBlock: View {
     let isNeutral: Bool
     let action: FailureAction?
     let actionLabel: String?
+    /// Adds a "Try again in …" line below the caption until this time passes.
+    let retryAtEpochMs: Int64?
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
+
+    private static let dotSize: CGFloat = 6
+    private static let dotGap: CGFloat = 8
 
     var body: some View {
         let target = SessionChatToolDetailTarget.failure(
@@ -1386,21 +1412,44 @@ private struct FailureLineBlock: View {
             action: action,
             actionLabel: actionLabel
         )
-        HStack(alignment: .center, spacing: 8) {
-            Circle()
-                .fill(isNeutral ? OpenCodeColors.textWeak : OpenCodeColors.error)
-                .frame(width: 6, height: 6)
-            Text(text)
-                .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textWeak)
-                .lineLimit(3)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(alignment: .center, spacing: Self.dotGap) {
+                Circle()
+                    .fill(isNeutral ? OpenCodeColors.textWeak : OpenCodeColors.error)
+                    .frame(width: Self.dotSize, height: Self.dotSize)
+                Text(text)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            if let retryAtEpochMs {
+                FailureRetryAfterLine(retryAtEpochMs: retryAtEpochMs)
+                    .padding(.leading, Self.dotSize + Self.dotGap)
+            }
         }
         .padding(.horizontal, 4)
         .contentShape(Rectangle())
         .modifier(FailureMarkTap(target: target, onToolDetailTap: onToolDetailTap))
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(target == nil ? [] : .isButton)
+    }
+}
+
+/// Counts down to `retryAtEpochMs` and disappears at zero.
+private struct FailureRetryAfterLine: View {
+    let retryAtEpochMs: Int64
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let nowMs = Int64(context.date.timeIntervalSince1970 * 1_000)
+            if let label = SessionFailure.retryAfterLabel(remainingMs: retryAtEpochMs - nowMs) {
+                Text(label)
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .lineLimit(1)
+            }
+        }
     }
 }
 

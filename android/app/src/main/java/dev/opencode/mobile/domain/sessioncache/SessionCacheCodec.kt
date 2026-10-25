@@ -193,6 +193,8 @@ internal data class CachedMessagePayload(
     val failureMessage: String? = null,
     val failureStatus: Int? = null,
     val failureBody: String? = null,
+    val failureRetryAfterMs: Long? = null,
+    val failureRecordedAtEpochMs: Long? = null,
 )
 
 @Serializable
@@ -345,6 +347,8 @@ private fun Message.toCachePayload(): CachedMessagePayload =
         failureMessage = failure?.message,
         failureStatus = failure?.status,
         failureBody = failure?.providerBody,
+        failureRetryAfterMs = failure?.retryAfterMs,
+        failureRecordedAtEpochMs = failure?.recordedAtEpochMs,
     )
 
 private fun CachedMessagePayload.toDomain(): Message =
@@ -372,6 +376,8 @@ private fun CachedMessagePayload.toDomain(): Message =
                     message = failureMessage.orEmpty(),
                     status = failureStatus,
                     providerBody = failureBody,
+                    retryAfterMs = failureRetryAfterMs,
+                    recordedAtEpochMs = failureRecordedAtEpochMs,
                 )
             } else {
                 null

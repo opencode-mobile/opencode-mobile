@@ -1,6 +1,9 @@
 import Foundation
 
 nonisolated struct MessageDomainAdapter: Sendable {
+    /// Receive time for a failure whose message has no completed time yet.
+    var nowEpochMs: @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1_000) }
+
     func message(from dto: MessageDTO) -> Message {
         let info = dto.info
         let domainParts = parseParts(from: dto.parts)
@@ -25,7 +28,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup: info.waiting == true,
             stopReason: stop,
-            failure: sessionFailure(info.error, stopReason: stop)
+            failure: sessionFailure(info.error, stopReason: stop, completedAtEpochMs: info.time?.completed)
         )
     }
 
@@ -54,7 +57,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup: info.waiting == true,
             stopReason: stop,
-            failure: sessionFailure(info.error, stopReason: stop),
+            failure: sessionFailure(info.error, stopReason: stop, completedAtEpochMs: info.time?.completed),
             promptSkills: promptSkills(info.skills ?? [])
         )
     }
@@ -580,8 +583,10 @@ nonisolated struct MessageDomainAdapter: Sendable {
             return v2AssistantPart(content, fallbackID: fallbackID)
         }
         let stopReason = MessageStopReason.from(finish: dto.finish, errorKind: dto.error?.type)
-        let failure = structuredFailure(dto.error, outcome: nil)
-            ?? dto.retry?.error.flatMap { structuredFailure($0, outcome: nil) }.flatMap { candidate in
+        let failure = structuredFailure(dto.error, outcome: nil, completedAtEpochMs: dto.time?.completed)
+            ?? dto.retry?.error.flatMap {
+                structuredFailure($0, outcome: nil, completedAtEpochMs: dto.time?.completed)
+            }.flatMap { candidate in
                 dto.finish?.caseInsensitiveCompare("error") == .orderedSame ? candidate : nil
             }
         var message = messageFromV2(
@@ -624,13 +629,23 @@ nonisolated struct MessageDomainAdapter: Sendable {
             sentAtEpochMs: dto.time?.created,
             completedAtEpochMs: dto.time?.completed,
             contextEstimate: MessageContextEstimate(assistantCharacters: summary.count),
-            failure: structuredFailure(dto.error, outcome: nil, source: .compaction)
+            failure: structuredFailure(
+                dto.error,
+                outcome: nil,
+                source: .compaction,
+                completedAtEpochMs: dto.time?.completed
+            )
         )
     }
 
     /// A failed idle item is its own row when the assistant message did not already carry the same failure.
     private func projectV2Idle(_ dto: V2SessionMessageDTO, messages: inout [Message]) {
-        guard let failure = structuredFailure(dto.error, outcome: dto.outcome, source: .execution) else { return }
+        guard let failure = structuredFailure(
+            dto.error,
+            outcome: dto.outcome,
+            source: .execution,
+            completedAtEpochMs: dto.time?.completed
+        ) else { return }
         if messages.last?.failure?.line() == failure.line() { return }
         messages.append(
             messageFromV2(
@@ -886,7 +901,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
         return MessageStopReason.from(finish: info.finish, errorKind: info.error?.name)
     }
 
-    private func sessionFailure(_ error: MessageErrorInfoDTO?, stopReason: MessageStopReason?) -> SessionFailure? {
+    private func sessionFailure(
+        _ error: MessageErrorInfoDTO?,
+        stopReason: MessageStopReason?,
+        completedAtEpochMs: Int64?
+    ) -> SessionFailure? {
         if stopReason == .interrupted { return nil }
         return SessionFailure.fromV1(
             name: error?.name,
@@ -895,14 +914,17 @@ nonisolated struct MessageDomainAdapter: Sendable {
             responseBody: error?.data?.responseBody,
             isRetryable: error?.data?.isRetryable,
             providerID: error?.data?.providerID,
-            retries: error?.data?.retries
+            retries: error?.data?.retries,
+            retryAfterMs: error?.data?.retryAfterMs,
+            recordedAtEpochMs: recordedAt(retryAfterMs: error?.data?.retryAfterMs, completedAtEpochMs: completedAtEpochMs)
         )
     }
 
     private func structuredFailure(
         _ error: V2UnknownErrorDTO?,
         outcome: String?,
-        source: FailureSource = .step
+        source: FailureSource = .step,
+        completedAtEpochMs: Int64?
     ) -> SessionFailure? {
         SessionFailure.fromV2(
             type: error?.type,
@@ -910,8 +932,16 @@ nonisolated struct MessageDomainAdapter: Sendable {
             status: error?.status,
             providerBody: error?.response?.body,
             outcome: outcome,
-            source: source
+            source: source,
+            retryAfterMs: error?.retryAfterMs,
+            recordedAtEpochMs: recordedAt(retryAfterMs: error?.retryAfterMs, completedAtEpochMs: completedAtEpochMs)
         )
+    }
+
+    /// The failed message's completion time, else when the app received it. Only a retry hint needs it.
+    private func recordedAt(retryAfterMs: Int64?, completedAtEpochMs: Int64?) -> Int64? {
+        guard retryAfterMs != nil else { return nil }
+        return completedAtEpochMs ?? nowEpochMs()
     }
 
     private func httpMessage(_ body: String?) -> String {

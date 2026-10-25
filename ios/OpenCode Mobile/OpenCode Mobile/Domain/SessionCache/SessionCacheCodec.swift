@@ -192,6 +192,8 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
     let failureMessage: String?
     let failureStatus: Int?
     let failureBody: String?
+    let failureRetryAfterMs: Int64?
+    let failureRecordedAtEpochMs: Int64?
 
     init(
         id: String,
@@ -213,7 +215,9 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         failureType: String? = nil,
         failureMessage: String? = nil,
         failureStatus: Int? = nil,
-        failureBody: String? = nil
+        failureBody: String? = nil,
+        failureRetryAfterMs: Int64? = nil,
+        failureRecordedAtEpochMs: Int64? = nil
     ) {
         self.id = id
         self.role = role
@@ -235,6 +239,8 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         self.failureMessage = failureMessage
         self.failureStatus = failureStatus
         self.failureBody = failureBody
+        self.failureRetryAfterMs = failureRetryAfterMs
+        self.failureRecordedAtEpochMs = failureRecordedAtEpochMs
     }
 
     init(from decoder: Decoder) throws {
@@ -262,6 +268,8 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         failureMessage = try container.decodeIfPresent(String.self, forKey: .failureMessage)
         failureStatus = try container.decodeIfPresent(Int.self, forKey: .failureStatus)
         failureBody = try container.decodeIfPresent(String.self, forKey: .failureBody)
+        failureRetryAfterMs = try container.decodeIfPresent(Int64.self, forKey: .failureRetryAfterMs)
+        failureRecordedAtEpochMs = try container.decodeIfPresent(Int64.self, forKey: .failureRecordedAtEpochMs)
     }
 }
 
@@ -543,7 +551,9 @@ private extension Message {
             failureType: failure?.type,
             failureMessage: failure?.message,
             failureStatus: failure?.status,
-            failureBody: failure?.providerBody
+            failureBody: failure?.providerBody,
+            failureRetryAfterMs: failure?.retryAfterMs,
+            failureRecordedAtEpochMs: failure?.recordedAtEpochMs
         )
     }
 }
@@ -572,7 +582,9 @@ private extension CachedMessagePayload {
                     type: failureType,
                     message: failureMessage ?? "",
                     status: failureStatus,
-                    providerBody: failureBody
+                    providerBody: failureBody,
+                    retryAfterMs: failureRetryAfterMs,
+                    recordedAtEpochMs: failureRecordedAtEpochMs
                 )
                 : nil
         )
