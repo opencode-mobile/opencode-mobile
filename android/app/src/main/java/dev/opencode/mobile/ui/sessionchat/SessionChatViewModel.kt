@@ -273,6 +273,8 @@ class SessionChatViewModel
         private var workingChrome: WorkingTurnIndicator.Chrome = WorkingTurnIndicator.Chrome.Unmounted
         private var workingHold: WorkingTurnIndicator.Hold? = null
         private var workingHoldJob: Job? = null
+        private val pendingPromptsGate = PendingPromptsStripGate()
+        private var pendingPromptsWakeJob: Job? = null
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
         private var turnDiffNotice: String? = null
@@ -1946,16 +1948,21 @@ class SessionChatViewModel
                 } else {
                     null
                 }
+            val pendingResolution =
+                pendingPromptsGate.resolve(
+                    pendingPromptsFrom(
+                        loaded = timeline.loadedMessages(),
+                        optimistic = timeline.pendingOptimisticItems(),
+                    ),
+                    nowMs = nowMs(),
+                )
+            schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
                 sessionTitle = infoState.sessionTitle,
                 timeline = timelineState.timeline,
                 messages = messages,
-                pendingPrompts =
-                    pendingPromptsFrom(
-                        loaded = timeline.loadedMessages(),
-                        optimistic = timeline.pendingOptimisticItems(),
-                    ),
+                pendingPrompts = pendingResolution.prompts,
                 timelineFrame = timelineFrame,
                 composer =
                     composerState.composer.copy(
@@ -2312,6 +2319,20 @@ class SessionChatViewModel
             workingHoldJob = null
             workingHold = null
             workingChrome = WorkingTurnIndicator.Chrome.Unmounted
+            pendingPromptsWakeJob?.cancel()
+            pendingPromptsWakeJob = null
+            pendingPromptsGate.reset()
+        }
+
+        private fun schedulePendingPromptsWake(wakeAfterMs: Long?) {
+            pendingPromptsWakeJob?.cancel()
+            pendingPromptsWakeJob = null
+            if (wakeAfterMs == null) return
+            pendingPromptsWakeJob =
+                viewModelScope.launch {
+                    delay(wakeAfterMs)
+                    publishUiState()
+                }
         }
 
         private fun scheduleWorkingFooterWake(wakeAfterMs: Long?) {
