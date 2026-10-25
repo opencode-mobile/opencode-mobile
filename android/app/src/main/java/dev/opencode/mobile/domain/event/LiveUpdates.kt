@@ -52,6 +52,8 @@ fun composeLiveUpdates(
             !hasConnection -> LiveUpdatesLabel.Offline
             path == DeviceNetworkPathStatus.Unavailable -> LiveUpdatesLabel.Offline
             occupancy == StreamOccupancy.Stopped -> LiveUpdatesLabel.Offline
+            // No protocol answered the last check: the server is down or replaced.
+            connectionState == EventStreamConnectionState.Disconnected -> LiveUpdatesLabel.Offline
             connectionState == EventStreamConnectionState.Connected -> LiveUpdatesLabel.Live
             else -> LiveUpdatesLabel.Connecting
         }

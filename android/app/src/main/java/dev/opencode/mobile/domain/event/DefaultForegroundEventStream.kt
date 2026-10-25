@@ -69,6 +69,7 @@ class DefaultForegroundEventStream
             deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
             idleTimeoutMs: Long,
             connectionEpoch: ConnectionEpoch = ConnectionEpoch.shared,
+            protocolRecheckIntervalMs: Long = ProtocolRecheckPolicy.MIN_INTERVAL_MS,
         ) : this(
             eventsApi,
             eventDomainAdapter,
@@ -79,6 +80,7 @@ class DefaultForegroundEventStream
         ) {
             this.idleTimeoutMs = idleTimeoutMs
             this.connectionEpoch = connectionEpoch
+            this.protocolRecheckIntervalMs = protocolRecheckIntervalMs
         }
 
         private val scope =
@@ -94,6 +96,7 @@ class DefaultForegroundEventStream
             )
         private var occupancyJob: Job? = null
         private var idleTimeoutMs: Long = DEFAULT_IDLE_TIMEOUT_MS
+        private var protocolRecheckIntervalMs: Long = ProtocolRecheckPolicy.MIN_INTERVAL_MS
         private var connectionEpoch: ConnectionEpoch = ConnectionEpoch.shared
         private val leaseLock = Any()
         private val stateLock = Any()
@@ -115,6 +118,13 @@ class DefaultForegroundEventStream
         /** Leases whose last attempt was rejected with 401/403; guarded by [leaseLock]. */
         private val authRejectedTargets = mutableSetOf<String>()
         private val protocolConfirmed = AtomicBoolean(false)
+
+        /** The last protocol re-check found no protocol answering; cleared once one does. */
+        private val serverUnreachable = AtomicBoolean(false)
+
+        /** When the last protocol re-check started; guarded by [stateLock]. */
+        private var lastProtocolRecheckMs: Long? = null
+        private var protocolRecheckJob: Job? = null
         private val reconnectWakeEpoch = AtomicLong(0)
         private val reconnectWake =
             MutableSharedFlow<Unit>(
@@ -227,6 +237,7 @@ class DefaultForegroundEventStream
         }
 
         override fun onReconnectWake() {
+            synchronized(stateLock) { lastProtocolRecheckMs = null }
             reconnectWakeEpoch.incrementAndGet()
             reconnectWake.tryEmit(Unit)
         }
@@ -238,7 +249,11 @@ class DefaultForegroundEventStream
             val occupancyToJoin: Job?
             val leaseJobs: List<Job>
             protocolConfirmed.set(false)
+            serverUnreachable.set(false)
             synchronized(stateLock) {
+                lastProtocolRecheckMs = null
+                protocolRecheckJob?.cancel()
+                protocolRecheckJob = null
                 val wasFullyConnected = overall.wasFullyConnected
                 occupancySerial += 1
                 inFlightStartApplies = 0
@@ -369,6 +384,12 @@ class DefaultForegroundEventStream
 
         private suspend fun probeProtocolWhileOccupying(generation: Long) {
             val hadCached = activeConnectionManager.currentProtocol() != null
+            if (hadCached) {
+                // The saved protocol opened the leases; confirm the server still speaks it.
+                protocolConfirmed.set(true)
+                requestProtocolRecheck(generation, "start")
+                return
+            }
             val resolved = activeConnectionManager.currentProtocolOrProbe()
             if (!stillCurrent(generation)) return
             if (hadCached || activeConnectionManager.currentProtocol() != null) {
@@ -645,6 +666,14 @@ class DefaultForegroundEventStream
                         if (lease.currentAttempt() == attemptId) {
                             logAttemptOutcome(target.key, outcome)
                         }
+                        if (ProtocolRecheckPolicy.suggestsProtocolChange(
+                                outcome = outcome,
+                                httpOpened = attempt.httpOpened,
+                                serverConnected = attempt.serverConnected,
+                            )
+                        ) {
+                            requestProtocolRecheck(generation, "sse target=${target.key}")
+                        }
                         when (
                             val decision =
                                 SseAttemptPolicy.decide(
@@ -802,6 +831,7 @@ class DefaultForegroundEventStream
         ) {
             if (generation != streamGeneration.get()) return
             lease.live.set(true)
+            serverUnreachable.set(false)
             synchronized(leaseLock) { authRejectedTargets -= lease.target.key }
             refreshOverallState(generation)
         }
@@ -820,6 +850,7 @@ class DefaultForegroundEventStream
             val connectionState: EventStreamConnectionState,
             val publishReconnect: Boolean,
             val snapshot: LiveConnectionSnapshot,
+            val recovered: Boolean = false,
         )
 
         private fun refreshOverallState(generation: Long) {
@@ -834,6 +865,54 @@ class DefaultForegroundEventStream
                 scope.launch {
                     emitIfCurrent(OpencodeEvent(type = "stream.reconnected"), decision.generation)
                 }
+            }
+            if (decision.recovered) {
+                // A server restarted at this address may have come back speaking the other protocol.
+                requestProtocolRecheck(decision.generation, "reconnected")
+            }
+        }
+
+        private fun requestProtocolRecheck(
+            generation: Long,
+            reason: String,
+        ) {
+            synchronized(stateLock) {
+                if (occupancyJob?.isActive != true || generation != streamGeneration.get()) return
+                if (protocolRecheckJob?.isActive == true) return
+                val now = System.currentTimeMillis()
+                if (!ProtocolRecheckPolicy.isDue(now, lastProtocolRecheckMs, protocolRecheckIntervalMs)) return
+                lastProtocolRecheckMs = now
+                protocolRecheckJob = scope.launch { recheckProtocol(generation, reason) }
+            }
+        }
+
+        private suspend fun recheckProtocol(
+            generation: Long,
+            reason: String,
+        ) {
+            diagnosticLogger.info(DiagnosticLogArea.Sse, "SSE protocol recheck reason=$reason")
+            val result = activeConnectionManager.redetectProtocol()
+            if (!stillCurrent(generation)) return
+            val applied = appliedConfig ?: return
+            when (val action = ProtocolRecheckPolicy.action(result, applied.protocol)) {
+                is ProtocolRecheckAction.Retarget -> {
+                    diagnosticLogger.info(
+                        DiagnosticLogArea.Sse,
+                        "SSE protocol changed ${applied.protocol.wireValue} -> ${action.protocol.wireValue}; reconnecting",
+                    )
+                    serverUnreachable.set(false)
+                    protocolConfirmed.set(true)
+                    retargetIdentity(applied.copy(protocol = action.protocol))
+                }
+                ProtocolRecheckAction.KeepProtocol -> {
+                    if (serverUnreachable.getAndSet(false)) refreshOverallState(generation)
+                }
+                ProtocolRecheckAction.MarkUnreachable -> {
+                    diagnosticLogger.warning(DiagnosticLogArea.Sse, "SSE protocol recheck: no protocol answered")
+                    serverUnreachable.set(true)
+                    refreshOverallState(generation)
+                }
+                ProtocolRecheckAction.None -> Unit
             }
         }
 
@@ -869,12 +948,20 @@ class DefaultForegroundEventStream
                     ),
                     currentlyConnected = currentlyConnected,
                 )
+            val wasFullyConnected = overall.wasFullyConnected
             overall = decided.flags
+            val connectionState =
+                if (decided.connectionState != EventStreamConnectionState.Connected && serverUnreachable.get()) {
+                    EventStreamConnectionState.Disconnected
+                } else {
+                    decided.connectionState
+                }
             return OverallDecision(
                 generation = generation,
-                connectionState = decided.connectionState,
+                connectionState = connectionState,
                 publishReconnect = decided.publishReconnect,
-                snapshot = buildSnapshotLocked(decided.connectionState),
+                snapshot = buildSnapshotLocked(connectionState),
+                recovered = decided.publishReconnect && wasFullyConnected,
             )
         }
 

@@ -22,7 +22,8 @@ class LiveUpdatesTest {
     }
 
     @Test
-    fun occupyingDisconnectedIsConnecting() {
+    fun occupyingDisconnectedIsOffline() {
+        // Disconnected means no server protocol answered a re-check, not a transient reconnect.
         val chrome =
             composeLiveUpdates(
                 connectionState = EventStreamConnectionState.Disconnected,
@@ -30,7 +31,7 @@ class LiveUpdatesTest {
                 occupancy = StreamOccupancy.Active,
                 hasConnection = true,
             )
-        assertEquals(LiveUpdatesLabel.Connecting, chrome.label)
+        assertEquals(LiveUpdatesLabel.Offline, chrome.label)
         assertFalse(chrome.canMutate)
         assertTrue(chrome.composerEnabled)
     }

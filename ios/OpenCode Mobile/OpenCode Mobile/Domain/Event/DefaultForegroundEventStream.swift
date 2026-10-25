@@ -32,6 +32,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private let protocolHint: @Sendable () -> ServerProtocol
     private let cachedProtocol: @Sendable () -> ServerProtocol?
     private let protocolProbe: (@Sendable () async -> ServerProtocol)?
+    private let protocolRedetect: (@Sendable () async -> ProtocolRedetection)?
+    private let protocolRecheckInterval: Duration
     private let connectionEpoch: ConnectionEpoch
     private var occupancyTask: Task<Void, Never>?
     private var revisionTask: Task<Void, Never>?
@@ -53,6 +55,12 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     /// Leases whose last attempt was rejected with 401/403; guarded by `lock`.
     private var authRejectedTargets: Set<String> = []
     private var protocolConfirmed = false
+    /// The last protocol re-check found no protocol answering; cleared once one does. Guarded by `lock`.
+    private var serverUnreachable = false
+    /// When the last protocol re-check started; guarded by `lock`.
+    private var lastProtocolRecheck: ContinuousClock.Instant?
+    private var protocolRecheckTask: Task<Void, Never>?
+    private var protocolRecheckID: UUID?
     private let reconnectWake = ReconnectWakeGate()
 
     private let idleTimeout: Duration
@@ -72,7 +80,9 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         credentialFingerprint: (@Sendable () async -> String)? = nil,
         protocolHint: (@Sendable () -> ServerProtocol)? = nil,
         cachedProtocol: (@Sendable () -> ServerProtocol?)? = nil,
-        protocolProbe: (@Sendable () async -> ServerProtocol)? = nil
+        protocolProbe: (@Sendable () async -> ServerProtocol)? = nil,
+        protocolRedetect: (@Sendable () async -> ProtocolRedetection)? = nil,
+        protocolRecheckInterval: Duration = ProtocolRecheckPolicy.minInterval
     ) {
         self.api = api
         self.eventIngress = SseEventIngress(adapter: adapter)
@@ -88,6 +98,8 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         self.protocolHint = protocolHint ?? { api.eventProtocol }
         self.cachedProtocol = cachedProtocol ?? { nil }
         self.protocolProbe = protocolProbe
+        self.protocolRedetect = protocolRedetect
+        self.protocolRecheckInterval = protocolRecheckInterval
     }
 
     func events() -> AsyncStream<OpencodeEvent> {
@@ -191,6 +203,12 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         probe?.cancel()
         pendingStartConfig = nil
         protocolConfirmed = false
+        serverUnreachable = false
+        lastProtocolRecheck = nil
+        let recheck = protocolRecheckTask
+        protocolRecheckTask = nil
+        protocolRecheckID = nil
+        recheck?.cancel()
         let leaseWork = cancelAllLeasesLocked()
         eventIngress.reset()
         appliedConfig = nil
@@ -258,6 +276,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
 
     func onReconnectWake() {
         lock.lock()
+        lastProtocolRecheck = nil
         for lease in leases.values {
             lease.retry?.reset()
         }
@@ -387,6 +406,14 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     }
 
     private func probeProtocolWhileOccupying(generation: UInt64) async {
+        if cachedProtocol() != nil, protocolRedetect != nil {
+            // The saved protocol opened the leases; confirm the server still speaks it.
+            lock.lock()
+            protocolConfirmed = true
+            lock.unlock()
+            requestProtocolRecheck(generation: generation, reason: "start")
+            return
+        }
         guard let protocolProbe else { return }
         let hadCached = cachedProtocol() != nil
         let resolved = await protocolProbe()
@@ -527,6 +554,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                                     "GET /\(target.path) opened status=\(statusCode) protocol=\(self.api.eventProtocolWireValue)"
                                 )
                                 if (200 ..< 300).contains(statusCode) {
+                                    handshake.markOpened()
                                     handshake.startTimeout(self.firstFrameTimeout) {
                                         DiagnosticLog.warning(
                                             .sse,
@@ -619,6 +647,13 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
                 }
                 guard generation == self.currentGeneration(), self.isRequired(target.key) else { return }
                 self.logAttemptOutcome(target.key, outcome)
+                if ProtocolRecheckPolicy.suggestsProtocolChange(
+                    outcome: outcome,
+                    httpOpened: handshake.wasOpened,
+                    serverConnected: handshake.isConnected
+                ) {
+                    self.requestProtocolRecheck(generation: generation, reason: "sse target=\(target.key)")
+                }
                 let decision = SseAttemptPolicy.decide(
                     outcome: outcome,
                     protocolConfirmed: self.isProtocolConfirmed(),
@@ -756,6 +791,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         lease.setLive(true)
         lock.lock()
         authRejectedTargets.remove(lease.target.key)
+        serverUnreachable = false
         lock.unlock()
         refreshOverallState(generation: generation)
     }
@@ -792,7 +828,9 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             )
         )
         overall = decided.flags
-        let nextState = decided.connectionState
+        let nextState = decided.connectionState != .connected && serverUnreachable
+            ? .disconnected
+            : decided.connectionState
         let publishReconnect = decided.publishReconnect
         let decisionGeneration = streamGeneration
         lock.unlock()
@@ -804,9 +842,77 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             if stillSameGeneration {
                 DiagnosticLog.info(.sse, "foreground SSE stream reconnected")
                 publish(OpencodeEvent(type: "stream.reconnected", sessionID: nil))
+                // A server restarted at this address may have come back speaking the other protocol.
+                requestProtocolRecheck(generation: decisionGeneration, reason: "reconnected")
             }
         }
         publishSnapshot()
+    }
+
+    private func requestProtocolRecheck(generation: UInt64, reason: String) {
+        guard protocolRedetect != nil else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        guard occupancyTask != nil, streamGeneration == generation, protocolRecheckTask == nil else { return }
+        let now = ContinuousClock.now
+        guard ProtocolRecheckPolicy.isDue(
+            now: now,
+            lastRecheck: lastProtocolRecheck,
+            minInterval: protocolRecheckInterval
+        ) else { return }
+        lastProtocolRecheck = now
+        let id = UUID()
+        protocolRecheckID = id
+        protocolRecheckTask = Task { [weak self] in
+            await self?.recheckProtocol(id: id, generation: generation, reason: reason)
+        }
+    }
+
+    private func recheckProtocol(id: UUID, generation: UInt64, reason: String) async {
+        defer {
+            lock.lock()
+            if protocolRecheckID == id {
+                protocolRecheckID = nil
+                protocolRecheckTask = nil
+            }
+            lock.unlock()
+        }
+        guard let protocolRedetect else { return }
+        DiagnosticLog.info(.sse, "SSE protocol recheck reason=\(reason)")
+        let result = await protocolRedetect()
+        guard !Task.isCancelled, stillCurrent(generation) else { return }
+        lock.lock()
+        let applied = appliedConfig
+        lock.unlock()
+        guard let applied else { return }
+        switch ProtocolRecheckPolicy.action(result: result, applied: applied.serverProtocol) {
+        case let .retarget(detected):
+            DiagnosticLog.info(
+                .sse,
+                "SSE protocol changed \(applied.serverProtocol.wireValue) -> \(detected.wireValue); reconnecting"
+            )
+            lock.lock()
+            serverUnreachable = false
+            protocolConfirmed = true
+            lock.unlock()
+            retargetIdentity(applied.with(serverProtocol: detected))
+        case .keepProtocol:
+            lock.lock()
+            let wasUnreachable = serverUnreachable
+            serverUnreachable = false
+            lock.unlock()
+            if wasUnreachable {
+                refreshOverallState(generation: generation)
+            }
+        case .markUnreachable:
+            DiagnosticLog.warning(.sse, "SSE protocol recheck: no protocol answered")
+            lock.lock()
+            serverUnreachable = true
+            lock.unlock()
+            refreshOverallState(generation: generation)
+        case .none:
+            break
+        }
     }
 
     private func publish(_ event: OpencodeEvent) {
@@ -1075,6 +1181,7 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private final class HandshakeBox: @unchecked Sendable {
         private let lock = NSLock()
         private var state: State = .pending
+        private var opened = false
         private var _error: SseHandshakeError?
         private var timeoutTask: Task<Void, Never>?
         private var cancelStream: (@Sendable () -> Void)?
@@ -1101,6 +1208,19 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
             lock.lock()
             defer { lock.unlock() }
             return state == .failed
+        }
+
+        /// The server answered 2xx, whether or not `server.connected` followed.
+        var wasOpened: Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return opened
+        }
+
+        func markOpened() {
+            lock.lock()
+            opened = true
+            lock.unlock()
         }
 
         var error: SseHandshakeError? {

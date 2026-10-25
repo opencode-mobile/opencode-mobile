@@ -145,13 +145,13 @@ class DefaultForegroundEventStreamTest {
                     },
                 )
             val store = FakeProfileStore()
-            val probeEntered = CompletableDeferred<Unit>()
+            val probeFinished = CompletableDeferred<Unit>()
             val manager =
                 ActiveConnectionManager(
                     store,
                     ConnectionProbing {
-                        probeEntered.complete(Unit)
                         delay(5_000)
+                        probeFinished.complete(Unit)
                         ServerProtocol.V1
                     },
                 )
@@ -174,7 +174,8 @@ class DefaultForegroundEventStreamTest {
                         .url.encodedPath
                         .contains("/api/event"),
                 )
-                assertTrue(!probeEntered.isCompleted)
+                // The start check that the server still speaks v2 runs beside the open lease.
+                assertTrue(!probeFinished.isCompleted)
             } finally {
                 stream.stop()
                 client.close()

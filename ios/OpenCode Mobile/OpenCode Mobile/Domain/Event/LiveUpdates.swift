@@ -80,6 +80,9 @@ nonisolated func composeLiveUpdates(
         label = .offline
     } else if occupancy == .stopped {
         label = .offline
+    } else if connectionState == .disconnected {
+        // No protocol answered the last check: the server is down or replaced.
+        label = .offline
     } else if connectionState == .connected {
         label = .live
     } else {

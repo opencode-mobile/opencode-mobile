@@ -4,10 +4,14 @@ import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.connection.ProbeStatus
+import dev.opencode.mobile.domain.connection.ProtocolRedetection
 import dev.opencode.mobile.domain.connection.ServerAddressProbe
 import dev.opencode.mobile.domain.connection.ServerCapabilities
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.V2ServerFeatures
+import dev.opencode.mobile.domain.connection.toProbeStatus
+import dev.opencode.mobile.domain.project.ServerProbeError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Mutex
@@ -117,6 +121,24 @@ class ActiveConnectionManager(
 
     /** Home / Test Connection: join the in-flight detect and throw on failure. */
     suspend fun probeActive(): ServerProtocol = sharedProbe(force = true).getOrThrow()
+
+    /**
+     * Re-runs detection on the active connection, so a server replaced at the same address by
+     * the other protocol moves the profile to it. A rejected credential is not an answer.
+     */
+    suspend fun redetectProtocol(): ProtocolRedetection {
+        if (connection == null || connectionProbing == null) return ProtocolRedetection.Skipped
+        return sharedProbe(force = true).fold(
+            onSuccess = { ProtocolRedetection.Detected(it) },
+            onFailure = { error ->
+                when {
+                    error is CancellationException -> ProtocolRedetection.Skipped
+                    (error as? ServerProbeError)?.toProbeStatus() == ProbeStatus.AuthFailed -> ProtocolRedetection.Skipped
+                    else -> ProtocolRedetection.Unreachable
+                }
+            },
+        )
+    }
 
     private suspend fun sharedProbe(force: Boolean): Result<ServerProtocol> {
         var existing: CompletableDeferred<Result<ServerProtocol>>? = null

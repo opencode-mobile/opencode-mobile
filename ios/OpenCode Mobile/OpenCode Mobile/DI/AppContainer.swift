@@ -485,7 +485,8 @@ extension Container {
                 },
                 protocolHint: { manager.protocolHint() },
                 cachedProtocol: { manager.serverProtocol },
-                protocolProbe: { await manager.currentProtocolOrProbe() }
+                protocolProbe: { await manager.currentProtocolOrProbe() },
+                protocolRedetect: { await manager.redetectProtocol() }
             )
         }.singleton
     }
