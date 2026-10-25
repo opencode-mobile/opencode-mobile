@@ -271,7 +271,7 @@ nonisolated struct V2AgentAttachmentDTO: Decodable, Sendable {
     }
 }
 
-nonisolated struct V2UserSkillDTO: Decodable, Sendable {
+nonisolated struct V2UserSkillDTO: Codable, Sendable {
     let id: String?
     let name: String?
     let mention: V2PromptSourceDTO?

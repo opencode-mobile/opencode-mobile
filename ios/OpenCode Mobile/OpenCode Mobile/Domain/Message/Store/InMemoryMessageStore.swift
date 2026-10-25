@@ -332,6 +332,10 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             if infoDict["error"] == nil, let error = prior["error"] {
                 merged["error"] = error
             }
+            // Only the v2 enqueue info carries a prompt's skills; delivery omits them.
+            if infoDict["skills"] == nil, let skills = prior["skills"] {
+                merged["skills"] = skills
+            }
             // v2 infos are partial projections: keep the times an update omits.
             if infoDict["time"] == nil, let time = prior["time"] {
                 merged["time"] = time
