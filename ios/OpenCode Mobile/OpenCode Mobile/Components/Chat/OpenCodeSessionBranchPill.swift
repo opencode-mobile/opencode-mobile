@@ -76,7 +76,8 @@ struct OpenCodeSessionBranchPill: View {
             .padding(.horizontal, Self.paddingHorizontal)
             .padding(.vertical, Self.paddingVertical)
             .frame(minHeight: Self.minHeight)
-            .frame(maxWidth: Self.maxWidth)
+            .frame(maxWidth: Self.maxWidth, alignment: .center)
+            .fixedSize(horizontal: true, vertical: false)
             .contentShape(Capsule())
         }
         .buttonStyle(OpenCodeFloatingPillPressStyle())

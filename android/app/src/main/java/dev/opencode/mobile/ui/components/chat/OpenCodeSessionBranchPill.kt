@@ -139,7 +139,15 @@ fun OpenCodeSessionBranchPill(
                 color = contentColor,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
+                modifier =
+                    Modifier.widthIn(
+                        max =
+                            when {
+                                additionLabel != null && deletionLabel != null -> 160.dp
+                                additionLabel != null || deletionLabel != null -> 200.dp
+                                else -> 240.dp
+                            },
+                    ),
             )
             if (additionLabel != null) {
                 OpenCodeDiffStat(
