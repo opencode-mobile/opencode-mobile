@@ -99,8 +99,10 @@ Repair issue state only when asked; otherwise report the mismatch.
    visible, skip this step and keep "No UI change" under Checks.
 
 Name the issue as `#<number>`. Write `Fixes #<number>` whenever the pull
-request completes the issue's work, so merging closes it; unticked Remaining
-boxes do not block this. Use a bare `#<number>` only when other work on the
-issue is still open, and say so under Risks / Follow-ups. Add an issue comment only when asked, via
+request completes the issue's work, so merging closes it. Decide from the work
+actually done, not from the Remaining checkboxes: tick them as you go, but a
+box can be missed, so neither a stale unticked box nor a ticked one settles it.
+Use a bare `#<number>` when real work on the issue is still open, and say so
+under Risks / Follow-ups. Add an issue comment only when asked, via
 `github-issue-tracking`. Report the commit, remote branch, pull-request URL,
 and evidence comment URL.
