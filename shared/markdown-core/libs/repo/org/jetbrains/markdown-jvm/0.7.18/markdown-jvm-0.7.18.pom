@@ -5,12 +5,12 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>org.jetbrains</groupId>
   <artifactId>markdown-jvm</artifactId>
-  <version>0.7.16</version>
+  <version>0.7.18</version>
   <name>markdown-jvm (vendored for the Android 15 List API check)</name>
   <description>
-    Local copy of org.jetbrains:markdown-jvm:0.7.16. Gradle resolves this
+    Local copy of org.jetbrains:markdown-jvm:0.7.18. Gradle resolves this
     module only from this repository. 0.7.8 called java.util.ArrayList.removeLast(),
-    which Play rejects. 0.7.16 does not. The remaining removeLast calls are
+    which Play rejects. 0.7.18 does not. The remaining removeLast calls are
     kotlin.collections.ArrayDeque.removeLast, which is Kotlin stdlib.
   </description>
   <dependencies>

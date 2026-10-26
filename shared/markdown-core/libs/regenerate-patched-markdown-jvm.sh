@@ -2,7 +2,7 @@
 set -euo pipefail
 # Regenerates repo/org/jetbrains/markdown-jvm/<ver>/ from Maven Central + ASM patch.
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-VERSION="${1:-0.7.16}"
+VERSION="${1:-0.7.18}"
 ASM="${ASM_JAR:-$(find "${HOME}/.gradle/caches/modules-2/files-2.1/org.ow2.asm/asm" -name 'asm-9*.jar' 2>/dev/null | sort | tail -1)}"
 if [[ -z "${ASM}" || ! -f "${ASM}" ]]; then
   echo "Set ASM_JAR to an org.ow2.asm:asm jar" >&2
