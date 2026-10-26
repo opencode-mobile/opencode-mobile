@@ -76,36 +76,70 @@ else
   echo "Pushed ${#files[@]} file(s) to $branch." >&2
 fi
 
-url() { echo "https://github.com/$repo/blob/$branch/$issue/$1?raw=true"; }
+# Percent-encode everything outside RFC 3986 unreserved characters.
+encode() {
+  local LC_ALL=C s="$1" out="" c i
+  for (( i = 0; i < ${#s}; i++ )); do
+    c="${s:i:1}"
+    case "$c" in
+      [A-Za-z0-9._~-]) out+="$c" ;;
+      *) out+="$(printf '%%%02X' $(( $(printf '%d' "'$c") & 255 )))" ;;
+    esac
+  done
+  echo "$out"
+}
+url() { echo "https://github.com/$repo/blob/$branch/$issue/$(encode "$1")?raw=true"; }
 img() { if [ -n "$1" ]; then echo "<img src=\"$(url "$1")\" width=\"240\">"; fi; }
+html() { local s="${1//&/&amp;}"; s="${s//\"/&quot;}"; echo "${s//</&lt;}"; }
+caption() { echo "$1" | tr '-' ' ' | sed 's/|/\\|/g' | awk '{ print toupper(substr($0, 1, 1)) substr($0, 2) }'; }
 
 steps=()
 others=()
 for f in "${files[@]}"; do
   if [[ "$f" =~ ^(ios|android)-([0-9]+)-(.+)\.[A-Za-z]+$ ]]; then
-    step="${BASH_REMATCH[2]}"
-    steps+=("$step")
+    steps+=("${BASH_REMATCH[2]}")
   else
     others+=("$f")
   fi
 done
 
+# One row per step when each platform has at most one file for it, so
+# differently named iOS and Android shots still pair. Otherwise (light and
+# dark, several frames) one row per step and slug.
 if [ "${#steps[@]}" -gt 0 ]; then
   echo "| Step | iOS | Android |"
   echo "| --- | --- | --- |"
-  for step in $(printf '%s\n' "${steps[@]}" | sort -n -u); do
-    ios="" android="" caption=""
+  for step in $(printf '%s\n' "${steps[@]}" | sort -u | sort -n -s); do
+    ios=() android=() slugs=() first=""
     for f in "${files[@]}"; do
       [[ "$f" =~ ^(ios|android)-${step}-(.+)\.[A-Za-z]+$ ]] || continue
-      [ -n "$caption" ] || caption="$(echo "${BASH_REMATCH[2]}" | tr '-' ' ' | awk '{ print toupper(substr($0, 1, 1)) substr($0, 2) }')"
-      if [ "${BASH_REMATCH[1]}" = ios ]; then ios="$f"; else android="$f"; fi
+      slugs+=("${BASH_REMATCH[2]}")
+      if [ "${BASH_REMATCH[1]}" = ios ]; then
+        ios+=("$f")
+        [ -n "$first" ] || first="${BASH_REMATCH[2]}"
+      else
+        android+=("$f")
+      fi
     done
-    echo "| $step $caption | $(img "$ios") | $(img "$android") |"
+    if [ "${#ios[@]}" -le 1 ] && [ "${#android[@]}" -le 1 ]; then
+      echo "| $step $(caption "${first:-${slugs[0]}}") | $(img "${ios[0]-}") | $(img "${android[0]-}") |"
+      continue
+    fi
+    while IFS= read -r slug; do
+      ios_file="" android_file=""
+      for f in ${ios[@]+"${ios[@]}"}; do
+        if [[ "$f" == "ios-$step-$slug".* ]]; then ios_file="$f"; fi
+      done
+      for f in ${android[@]+"${android[@]}"}; do
+        if [[ "$f" == "android-$step-$slug".* ]]; then android_file="$f"; fi
+      done
+      echo "| $step $(caption "$slug") | $(img "$ios_file") | $(img "$android_file") |"
+    done < <(printf '%s\n' "${slugs[@]}" | LC_ALL=C sort -u)
   done
 fi
 if [ "${#others[@]}" -gt 0 ]; then
   echo
   for f in "${others[@]}"; do
-    echo "<img src=\"$(url "$f")\" width=\"240\" alt=\"$f\">"
+    echo "<img src=\"$(url "$f")\" width=\"240\" alt=\"$(html "$f")\">"
   done
 fi
