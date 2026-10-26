@@ -18,7 +18,8 @@ nonisolated enum AttachmentUploadPolicy {
         model: ModelSelectionOption?,
         uploadAvailable: Bool
     ) -> AttachmentDestination {
-        let native = model?.readsNatively(mime: mime) ?? false
+        // With no known model, images and PDFs count as native (they go inline); everything else uploads.
+        let native = model?.readsNatively(mime: mime) ?? AttachmentMime.isNativeMedia(mime)
         if native, byteCount <= AttachmentLimits.maxDecodedBytes { return .inline }
         return uploadAvailable ? .upload : .inline
     }
@@ -40,18 +41,17 @@ nonisolated enum AttachmentUploadFailure: Equatable, Sendable {
     /// Timeout, lost connection, server or auth failure: remove the chip, show "Upload failed".
     case transport
 
-    static let message = "Upload failed"
-
     /// `nil` when the response is a success carrying a `data.path`.
     static func classify(statusCode: Int, hasPath: Bool) -> AttachmentUploadFailure? {
         switch statusCode {
         case 200 ..< 300:
             return hasPath ? nil : .contractMiss
-        case 401, 403, 408, 429, 500...:
-            return .transport
-        default:
-            // 404, 405, 400, 415 and any other client error: the route changed.
+        case 400, 404, 405, 415:
             return .contractMiss
+        default:
+            // Every other status (409, 413, 422, 401, 403, 408, 429, 5xx) is a failure of this
+            // upload, not a changed route: the flag stays on.
+            return .transport
         }
     }
 }

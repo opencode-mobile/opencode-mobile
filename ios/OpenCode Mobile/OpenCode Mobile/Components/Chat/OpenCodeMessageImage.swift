@@ -54,8 +54,8 @@ struct OpenCodeMessageImage: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1))
+                    .clipShape(RoundedRectangle(cornerRadius: OpenCodeRadius.small))
+                    .overlay(RoundedRectangle(cornerRadius: OpenCodeRadius.small).stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1))
             }
             .contentShape(Rectangle())
             .onTapGesture { showsViewer = true }
@@ -120,9 +120,9 @@ struct OpenCodeImageViewer: View {
         .overlay(alignment: .topTrailing) {
             Button(action: onDismiss) {
                 OpenCodeIconImage(icon: .close, size: 24)
-                    .foregroundStyle(Color.white)
+                    .foregroundStyle(OpenCodeColors.iconStrongBase)
                     .frame(width: 44, height: 44)
-                    .background(Color.black.opacity(0.5), in: Circle())
+                    .background(OpenCodeColors.surfaceRaisedBase, in: Circle())
             }
             .buttonStyle(.plain)
             .padding(12)

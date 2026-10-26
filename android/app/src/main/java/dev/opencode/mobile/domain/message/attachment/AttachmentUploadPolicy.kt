@@ -13,6 +13,11 @@ sealed interface AttachmentDestination {
     ) : AttachmentDestination
 }
 
+enum class InlineRejection {
+    TooLarge,
+    Unsupported,
+}
+
 /**
  * Desktop policy: a file the selected model reads natively (image, PDF) and that fits the
  * server's inline cap goes in the prompt as a data URL; everything else is uploaded when the
@@ -45,6 +50,21 @@ object AttachmentUploadPolicy {
             AttachmentKind.Image -> model?.supportsImageInput != false
             AttachmentKind.Pdf -> model?.supportsPdfInput != false
             else -> false
+        }
+
+    /**
+     * Why [attachment] cannot ride in the prompt as a data URL, or null when it can: over the inline
+     * cap, or a type the model does not read (a generic file never travels inline).
+     */
+    fun inlineRejection(
+        attachment: Attachment,
+        model: ModelSelectionOption?,
+    ): InlineRejection? =
+        when {
+            attachment.byteCount > AttachmentLimits.MAX_DECODED_BYTES -> InlineRejection.TooLarge
+            attachment.kind == AttachmentKind.File || model?.acceptsAttachmentKind(attachment.kind) == false ->
+                InlineRejection.Unsupported
+            else -> null
         }
 
     /** Same name and byte size as a file already in the draft, pending or uploaded. */

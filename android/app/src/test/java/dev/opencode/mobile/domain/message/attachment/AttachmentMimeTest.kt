@@ -20,11 +20,12 @@ class AttachmentMimeTest {
         assertTrue(cases.isNotEmpty())
         cases.forEach { case ->
             val declared = case["mime"]?.let { (it as? JsonPrimitive)?.contentOrNull }
+            val filename = (case["filename"] as? JsonPrimitive)?.contentOrNull.orEmpty()
             val bytes = Base64.getDecoder().decode(case["bytesBase64"]!!.jsonPrimitive.content)
             assertEquals(
                 case["name"]!!.jsonPrimitive.content,
                 case["expected"]!!.jsonPrimitive.content,
-                AttachmentMime.normalize(declared, bytes),
+                AttachmentMime.normalize(AttachmentMime.resolveDeclared(declared, filename), bytes),
             )
         }
     }

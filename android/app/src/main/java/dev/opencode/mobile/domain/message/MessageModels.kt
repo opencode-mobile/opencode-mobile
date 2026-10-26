@@ -147,7 +147,14 @@ data class Attachment(
     /** The attachment travels in the prompt body (not already on the server, not still uploading). */
     val isInline: Boolean
         get() = upload is AttachmentUpload.Inline
+
+    /** Where the file lives on the server once it is uploaded; null while inline or uploading. */
+    val uploadedServerPath: String?
+        get() = (upload as? AttachmentUpload.Uploaded)?.serverPath
 }
+
+/** The attachments that travel in the prompt body; uploaded ones are named in the text instead. */
+fun List<Attachment>.inlineAttachments(): List<Attachment> = filter { it.isInline }
 
 sealed class MessagePart {
     data class Text(
@@ -457,12 +464,7 @@ data class SessionFailure(
             val body = providerBody?.trim()?.takeIf { it.isNotEmpty() }?.take(MAX_BODY)
             val text =
                 unwrap(message).ifBlank { emptyFallback }.ifBlank {
-                    body
-                        ?.lineSequence()
-                        ?.firstOrNull()
-                        ?.trim()
-                        ?.take(200)
-                        .orEmpty()
+                    body?.lineSequence()?.firstOrNull()?.trim()?.take(200).orEmpty()
                 }
             val shown = text.ifBlank { type?.trim().orEmpty() }
             val http = status?.takeIf { it in 100..599 }

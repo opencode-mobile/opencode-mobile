@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -85,8 +86,9 @@ fun OpenCodeMessageImage(
 }
 
 /**
- * Full-screen viewer: the whole image letterboxed on black. A tap outside the image, or the
- * close control, dismisses; a tap on the image itself does not.
+ * Full-screen viewer: the whole image letterboxed on the theme's scrim (black). A tap outside the
+ * image, or the close control, dismisses; a tap on the image itself does not. The close icon stays
+ * white because no token reads on a black letterbox in both themes.
  */
 @Composable
 fun OpenCodeImageViewer(
@@ -102,7 +104,7 @@ fun OpenCodeImageViewer(
             modifier =
                 Modifier
                     .fillMaxSize()
-                    .background(Color.Black)
+                    .background(MaterialTheme.colorScheme.scrim)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,

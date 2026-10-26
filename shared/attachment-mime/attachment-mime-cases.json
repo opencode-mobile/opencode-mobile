@@ -1,5 +1,5 @@
 {
-  "rule": "image/png|jpeg|gif|webp and application/pdf keep type; text/* and application/json|xml|yaml|javascript|x-sh -> text/plain; anything else: NUL byte in bytes -> binary, keeps declared mime (application/octet-stream when null); no NUL -> text/plain.",
+  "rule": "image/png|jpeg|gif|webp and application/pdf keep type; text/* and application/json|xml|yaml|javascript|x-sh -> text/plain; anything else: NUL byte in bytes -> binary, keeps declared mime (application/octet-stream when null); no NUL -> text/plain. Optional filename: when mime is null/blank/application/octet-stream and the extension is png/jpg/jpeg/gif/webp/pdf, the extension names the mime first.",
   "description": "Mime normalization for streamed attachment uploads (#644). Detected mime -> normalized mime; sniffed bytes only matter when mime is not recognized. bytesBase64 is the first <=4096 bytes of the file.",
   "cases": [
     {
@@ -115,6 +115,27 @@
       "mime": "application/octet-stream",
       "bytesBase64": "",
       "expected": "text/plain"
+    },
+    {
+      "name": "png declared octet-stream uses extension",
+      "mime": "application/octet-stream",
+      "filename": "shot.png",
+      "bytesBase64": "iVBORw0KGgo=",
+      "expected": "image/png"
+    },
+    {
+      "name": "pdf with no mime uses extension",
+      "mime": null,
+      "filename": "brief.PDF",
+      "bytesBase64": "JVBERi0xLjQ=",
+      "expected": "application/pdf"
+    },
+    {
+      "name": "octet-stream bin with NUL stays binary",
+      "mime": "application/octet-stream",
+      "filename": "data.bin",
+      "bytesBase64": "AAECAw==",
+      "expected": "application/octet-stream"
     }
   ]
 }

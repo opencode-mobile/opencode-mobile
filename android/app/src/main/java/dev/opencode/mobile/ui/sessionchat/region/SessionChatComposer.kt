@@ -32,6 +32,7 @@ import dev.opencode.mobile.domain.message.AttachmentUploadResult
 import dev.opencode.mobile.domain.message.AttachmentUploadService
 import dev.opencode.mobile.domain.message.ClientMessageId
 import dev.opencode.mobile.domain.message.FollowUpDelivery
+import dev.opencode.mobile.domain.message.InlineRejection
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.PromptModelSelection
@@ -871,13 +872,12 @@ class SessionChatComposer(
             val seen = draft + fresh
             if (AttachmentUploadPolicy.isDuplicate(attachment, seen)) duplicates += attachment else fresh += attachment
         }
-        val destinations = fresh.associateWith { destinationFor(it, option, uploadAvailable) }
-        val toUpload = fresh.filter { destinations[it] == AttachmentDestination.Upload && it.localPath != null }
-        val tooLarge = fresh.filter { destinations[it] is AttachmentDestination.Reject }
-        val inline =
-            fresh.filter { it !in toUpload && it !in tooLarge }
-        val accepted = inline.filter { option?.acceptsAttachmentKind(it.kind) != false }
-        val rejected = inline.filter { option?.acceptsAttachmentKind(it.kind) == false }
+        val toUpload =
+            fresh.filter { destinationFor(it, option, uploadAvailable) == AttachmentDestination.Upload && it.localPath != null }
+        val inlineVerdicts = fresh.filter { it !in toUpload }.associateWith { AttachmentUploadPolicy.inlineRejection(it, option) }
+        val accepted = inlineVerdicts.filterValues { it == null }.keys.toList()
+        val tooLarge = inlineVerdicts.filterValues { it == InlineRejection.TooLarge }.keys.toList()
+        val rejected = inlineVerdicts.filterValues { it == InlineRejection.Unsupported }.keys.toList()
         val staged = accepted + toUpload.map { it.copy(upload = AttachmentUpload.Uploading()) }
         if (staged.isNotEmpty()) {
             updateComposer { composer ->
@@ -907,8 +907,7 @@ class SessionChatComposer(
         }
         discardStoredAttachments(duplicates + tooLarge)
         when {
-            tooLarge.isNotEmpty() ->
-                reportAttachmentError((destinations[tooLarge.first()] as AttachmentDestination.Reject).message)
+            tooLarge.isNotEmpty() -> reportAttachmentError(AttachmentLimits.TOO_LARGE_ERROR)
             duplicates.isNotEmpty() -> reportAttachmentError(AttachmentUploadPolicy.DUPLICATE_ERROR)
             rejected.isNotEmpty() -> reportAttachmentError(unsupportedAttachmentMessage(rejected))
             staged.isNotEmpty() -> _state.update { it.copy(errorMessage = null) }
@@ -923,7 +922,7 @@ class SessionChatComposer(
         option: ModelSelectionOption?,
         uploadAvailable: Boolean,
     ): AttachmentDestination =
-        if (attachment.upload !is AttachmentUpload.Inline) {
+        if (!attachment.isInline) {
             AttachmentDestination.Inline
         } else {
             AttachmentUploadPolicy.destination(attachment.mime, attachment.byteCount, option, uploadAvailable)
@@ -976,25 +975,16 @@ class SessionChatComposer(
                 val option =
                     _state.value.composer.selectedModel
                         ?.option
-                val inline = attachment.copy(upload = AttachmentUpload.Inline)
-                when (val fallback = AttachmentUploadPolicy.destination(attachment.mime, attachment.byteCount, option, false)) {
-                    is AttachmentDestination.Reject -> {
+                when (AttachmentUploadPolicy.inlineRejection(attachment, option)) {
+                    null -> updateAttachment(attachment.id) { it.copy(upload = AttachmentUpload.Inline) }
+                    InlineRejection.TooLarge -> {
                         dropAttachment(attachment.id)
-                        reportAttachmentError(fallback.message)
+                        reportAttachmentError(AttachmentLimits.TOO_LARGE_ERROR)
                     }
-                    else ->
-                        if (option?.acceptsAttachmentKind(attachment.kind) == false || attachment.kind == AttachmentKind.File) {
-                            dropAttachment(attachment.id)
-                            reportAttachmentError(
-                                if (attachment.kind == AttachmentKind.File) {
-                                    AttachmentIngestionService.UNSUPPORTED_ERROR
-                                } else {
-                                    unsupportedAttachmentMessage(listOf(attachment))
-                                },
-                            )
-                        } else {
-                            updateAttachment(attachment.id) { inline }
-                        }
+                    InlineRejection.Unsupported -> {
+                        dropAttachment(attachment.id)
+                        reportAttachmentError(unsupportedAttachmentMessage(listOf(attachment)))
+                    }
                 }
             }
             AttachmentUploadResult.TransportFailure -> {
@@ -1049,13 +1039,13 @@ class SessionChatComposer(
     fun selectModel(option: ModelSelectionOption) {
         val dropped =
             _state.value.composer.attachments
-                .filterNot { it.upload !is AttachmentUpload.Inline || option.acceptsAttachmentKind(it.kind) }
+                .filterNot { !it.isInline || option.acceptsAttachmentKind(it.kind) }
         dropped.forEach { attachmentRevisions.remove(it.id) }
         updateComposer { composer ->
             val previousVariant = composer.selectedVariant
             val variant = previousVariant?.takeIf { it in option.variants }
             val keptAttachments =
-                composer.attachments.filter { it.upload !is AttachmentUpload.Inline || option.acceptsAttachmentKind(it.kind) }
+                composer.attachments.filter { !it.isInline || option.acceptsAttachmentKind(it.kind) }
             composer.copy(
                 selectedModel = ModelSelection(option, variant),
                 selectedVariant = variant,
@@ -2093,6 +2083,7 @@ class SessionChatComposer(
         return when (kinds) {
             setOf(AttachmentKind.Image) -> "This model does not support image attachments."
             setOf(AttachmentKind.Pdf) -> "This model does not support PDF attachments."
+            setOf(AttachmentKind.File) -> AttachmentIngestionService.UNSUPPORTED_ERROR
             else -> "This model does not support some of the selected attachments."
         }
     }

@@ -8,10 +8,10 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageContextEstimate
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
-import dev.opencode.mobile.domain.message.MessageStopReason
-import dev.opencode.mobile.domain.message.MessageTokenUsage
 import dev.opencode.mobile.domain.message.SessionFailure
 import dev.opencode.mobile.domain.message.TimelineNoticeCodec
+import dev.opencode.mobile.domain.message.MessageStopReason
+import dev.opencode.mobile.domain.message.MessageTokenUsage
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity

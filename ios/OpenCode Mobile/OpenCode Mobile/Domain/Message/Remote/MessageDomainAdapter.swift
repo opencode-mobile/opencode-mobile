@@ -244,7 +244,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     func sendRequest(options: PromptSendOptions) -> SendMessageRequestDTO {
         var parts: [SendMessagePartDTO] = []
-        let text = Self.promptText(options.text, uploaded: options.uploadedAttachments)
+        let text = UploadedAttachmentMetadata.promptText(options.text, uploaded: options.uploadedAttachments)
         if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             parts.append(SendMessagePartDTO(type: "text", text: text))
         }
@@ -288,8 +288,10 @@ nonisolated struct MessageDomainAdapter: Sendable {
         }
         let uploaded = options.uploadedAttachments
         let metadata = uploaded.isEmpty ? nil : V2PromptMetadataDTO(
-            attachments: uploaded.map {
-                V2PromptUploadedAttachmentDTO(name: $0.filename, mime: $0.mime, path: $0.upload.serverPath ?? "")
+            attachments: uploaded.compactMap { attachment in
+                attachment.uploadedServerPath.map {
+                    V2PromptUploadedAttachmentDTO(name: attachment.filename, mime: attachment.mime, path: $0)
+                }
             }
         )
         let agents = ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
@@ -306,7 +308,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
         }
         return V2PromptRequestDTO(
             id: options.messageID,
-            text: Self.promptText(options.text, uploaded: uploaded),
+            text: UploadedAttachmentMetadata.promptText(options.text, uploaded: uploaded),
             files: files.isEmpty ? nil : files,
             agents: agents.isEmpty ? nil : agents,
             skills: skills.isEmpty ? nil : skills,
@@ -314,15 +316,6 @@ nonisolated struct MessageDomainAdapter: Sendable {
             fileMentions: v2FileMentions(options),
             metadata: metadata
         )
-    }
-
-    /// The user's text, then one ``Attached file: `<server path>` `` line per uploaded file, so the
-    /// agent can open it. Appending leaves mention offsets in the text untouched.
-    static func promptText(_ text: String, uploaded: [Attachment]) -> String {
-        let lines = uploaded.compactMap { $0.upload.serverPath }.map { "Attached file: `\($0)`" }
-        guard !lines.isEmpty else { return text }
-        let block = lines.joined(separator: "\n")
-        return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? block : text + "\n" + block
     }
 
     private func fileReferenceParts(_ options: PromptSendOptions) -> [SendMessagePartDTO] {

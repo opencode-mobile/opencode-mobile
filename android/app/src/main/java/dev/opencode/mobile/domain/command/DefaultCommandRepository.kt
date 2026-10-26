@@ -3,6 +3,7 @@ package dev.opencode.mobile.domain.command
 import dev.opencode.mobile.data.remote.CommandsApi
 import dev.opencode.mobile.data.remote.MessagesApi
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.message.inlineAttachments
 import dev.opencode.mobile.network.ActiveConnectionManager
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,7 +43,7 @@ class DefaultCommandRepository
                     adapter.toV2SwitchModelRequest(options)?.let { model ->
                         messagesApi.switchSessionModel(sessionId, model, directory)
                     }
-                    api.runCommandV2(sessionId, adapter.toV2RunRequest(options), options.attachments.filter { it.isInline })
+                    api.runCommandV2(sessionId, adapter.toV2RunRequest(options), options.attachments.inlineAttachments())
                 } else {
                     api.runCommand(sessionId, adapter.toRunRequest(options), directory, options.attachments)
                 }

@@ -26,7 +26,7 @@ class DefaultAttachmentUploadService
             onProgress: (sent: Long, total: Long) -> Unit,
         ): AttachmentUploadResult {
             val tmp = activeConnectionManager.attachmentUploadTmpDirectory() ?: return AttachmentUploadResult.ContractMiss
-            val serverPath = AttachmentUploadFailure.serverPath(tmp, UUID.randomUUID().toString(), filename)
+            val serverPath = UploadedAttachments.serverPath(tmp, UUID.randomUUID().toString(), filename)
             val response =
                 try {
                     api.write(serverPath, file, directory, onProgress)

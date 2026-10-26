@@ -104,6 +104,24 @@ class V2ServerContractTest {
     }
 
     @Test
+    fun attachmentUploadFollowsAllOfAndRequiresAJsonAnswer() {
+        val wrapped =
+            UPLOAD_DOCUMENT.replace(
+                "\"${'$'}ref\":\"#/components/schemas/FileSystem.Write\"",
+                "\"allOf\":[{\"${'$'}ref\":\"#/components/schemas/FileSystem.Write\"}]",
+            )
+        assertTrue(V2ServerContract.declaresAttachmentUpload(parse(wrapped)))
+        val nested =
+            UPLOAD_DOCUMENT.replace(
+                "\"data\":{\"${'$'}ref\":\"#/components/schemas/FileSystem.Write\"}",
+                "\"data\":{\"oneOf\":[{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}}}]}",
+            )
+        assertTrue(V2ServerContract.declaresAttachmentUpload(parse(nested)))
+        // A 200 that is not JSON cannot carry data.path.
+        assertFalse(V2ServerContract.declaresAttachmentUpload(parse(UPLOAD_DOCUMENT.replace("\"application/json\":{\"schema\"", "\"text/plain\":{\"schema\""))))
+    }
+
+    @Test
     fun tmpDirectoryComesFromApiInfoPaths() {
         assertEquals("/var/tmp", V2ServerContract.tmpDirectory(parse("""{"version":"local","paths":{"tmp":"/var/tmp"}}""")))
         assertEquals(null, V2ServerContract.tmpDirectory(parse("""{"version":"local","paths":{}}""")))

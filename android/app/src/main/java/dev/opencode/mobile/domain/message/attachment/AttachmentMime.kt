@@ -43,6 +43,19 @@ object AttachmentMime {
         }
     }
 
+    /**
+     * The type to classify with: the provider's, unless it names nothing useful (null, blank or the
+     * generic `application/octet-stream`) and the extension is one the app reads natively.
+     */
+    fun resolveDeclared(
+        declared: String?,
+        filename: String,
+    ): String? {
+        val mime = declared?.substringBefore(';')?.trim()?.lowercase(Locale.US)?.takeIf { it.isNotEmpty() }
+        if (mime != null && mime != BINARY) return declared
+        return declaredFromExtension(filename) ?: declared
+    }
+
     /** The type a provider could not name, recovered from the extensions the app already knows. */
     fun declaredFromExtension(filename: String): String? =
         when (filename.substringAfterLast('.', "").lowercase(Locale.US)) {

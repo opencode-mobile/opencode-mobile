@@ -51,7 +51,7 @@ class AttachmentIngestionService private constructor(
     private fun ingestStreamed(uri: Uri): Attachment {
         val contentResolver = requireNotNull(contentResolver)
         val metadata = metadata(uri)
-        val declared = contentResolver.getType(uri) ?: AttachmentMime.declaredFromExtension(metadata.filename)
+        val declared = AttachmentMime.resolveDeclared(contentResolver.getType(uri), metadata.filename)
         val stored = newStoreFile(metadata.filename)
         val head = ByteArrayOutputStream()
         val total =

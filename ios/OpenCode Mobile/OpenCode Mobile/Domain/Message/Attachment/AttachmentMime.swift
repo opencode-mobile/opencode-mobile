@@ -43,6 +43,12 @@ nonisolated enum AttachmentMime {
         }
     }
 
+    /// Image types the server accepts inline, and PDF.
+    static func isNativeMedia(_ mime: String) -> Bool {
+        let kind = kind(for: mime)
+        return kind == .image || kind == .pdf
+    }
+
     static func kind(for mime: String) -> AttachmentKind {
         switch mime.lowercased() {
         case "image/png", "image/jpeg", "image/gif", "image/webp": .image

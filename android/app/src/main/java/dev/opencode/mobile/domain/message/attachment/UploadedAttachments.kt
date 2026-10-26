@@ -15,7 +15,32 @@ data class UploadedAttachment(
     val kind: AttachmentKind get() = AttachmentDataUrl.kindOrFile(mime)
 }
 
+/** Naming uploaded files on the wire: server paths, the prompt text lines, and `metadata.attachments`. */
 object UploadedAttachments {
+    /** `<tmp>/uploads/<uuid>/<filename>`, one directory per file so names never collide. */
+    fun serverPath(
+        tmp: String,
+        uuid: String,
+        filename: String,
+    ): String {
+        val separator = if (tmp.contains('\\') && !tmp.contains('/')) '\\' else '/'
+        val safeName = filename.replace('/', '_').replace('\\', '_').ifBlank { "attachment" }
+        return "${tmp.trimEnd('/', '\\')}${separator}uploads$separator$uuid$separator$safeName"
+    }
+
+    /** Prompt text line naming an uploaded file, shared by both apps. */
+    fun promptLine(serverPath: String): String = "Attached file: `$serverPath`"
+
+    /** [text] followed by one [promptLine] per path, separated by a newline. */
+    fun promptText(
+        text: String,
+        serverPaths: List<String>,
+    ): String {
+        if (serverPaths.isEmpty()) return text
+        val lines = serverPaths.joinToString("\n", transform = ::promptLine)
+        return if (text.isBlank()) lines else "$text\n$lines"
+    }
+
     fun parse(metadata: JsonObject?): List<UploadedAttachment> {
         val entries = metadata?.get("attachments") as? JsonArray ?: return emptyList()
         return entries.mapNotNull { element ->
@@ -33,7 +58,7 @@ object UploadedAttachments {
         uploads: List<UploadedAttachment>,
     ): String {
         if (uploads.isEmpty() || text.isEmpty()) return text
-        val lines = uploads.map { AttachmentUploadFailure.promptLine(it.path) }.toSet()
+        val lines = uploads.map { promptLine(it.path) }.toSet()
         return text
             .lines()
             .filterNot { it.trim() in lines }

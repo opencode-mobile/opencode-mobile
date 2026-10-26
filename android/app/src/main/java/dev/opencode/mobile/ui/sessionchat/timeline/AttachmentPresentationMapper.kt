@@ -32,9 +32,9 @@ internal object AttachmentPresentationMapper {
             signature = signature(attachment.mime, attachment.id),
             imageBytes = attachment.previewBytes,
             imageSource =
-                (attachment.upload as? AttachmentUpload.Uploaded)
+                attachment.uploadedServerPath
                     ?.takeIf { attachment.kind == AttachmentKind.Image }
-                    ?.let { OpenCodeAttachmentImageSource.ServerPath(it.serverPath) },
+                    ?.let(OpenCodeAttachmentImageSource::ServerPath),
         )
 
     fun from(file: MessagePart.File): SessionChatAttachmentItem {

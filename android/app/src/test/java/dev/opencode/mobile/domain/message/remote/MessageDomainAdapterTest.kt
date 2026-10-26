@@ -1163,12 +1163,7 @@ class MessageDomainAdapterTest {
                 """.trimIndent(),
             )
 
-        val tools =
-            adapter
-                .projectV2(dtos)
-                .single()
-                .parts
-                .filterIsInstance<MessagePart.Tool>()
+        val tools = adapter.projectV2(dtos).single().parts.filterIsInstance<MessagePart.Tool>()
         assertEquals(listOf("Backfill users · step 3/3", null), tools.map { it.title })
     }
 
@@ -1314,13 +1309,7 @@ class MessageDomainAdapterTest {
                 """.trimIndent(),
             )
 
-        val tool =
-            adapter
-                .projectV2(dtos)
-                .single()
-                .parts
-                .filterIsInstance<MessagePart.Tool>()
-                .single()
+        val tool = adapter.projectV2(dtos).single().parts.filterIsInstance<MessagePart.Tool>().single()
 
         assertEquals("subagent", tool.toolName)
         assertEquals(ToolStatus.Completed, tool.status)
@@ -1681,13 +1670,7 @@ class MessageDomainAdapterTest {
                 }]
                 """.trimIndent(),
             )
-        val tool =
-            adapter
-                .projectV2(dtos)
-                .single()
-                .parts
-                .filterIsInstance<MessagePart.Tool>()
-                .single()
+        val tool = adapter.projectV2(dtos).single().parts.filterIsInstance<MessagePart.Tool>().single()
         assertTrue(tool.isMalformed)
         assertEquals("bad json", tool.error)
     }
@@ -1811,6 +1794,23 @@ class MessageDomainAdapterTest {
         assertEquals(listOf(AttachmentKind.File, AttachmentKind.Image), files.map { it.kind })
         assertEquals(listOf("/srv/tmp/uploads/abc/data.zip", "/srv/tmp/uploads/def/shot.png"), files.map { it.serverPath })
         assertEquals(listOf("data.zip", "shot.png"), files.map { it.filename })
+    }
+
+    @Test
+    fun projectV2_keepsATypedAttachedFileLineWithoutMatchingMetadata() {
+        val typed = "see Attached file: `/srv/tmp/uploads/u1/data.zip`"
+        val plain = projectV2("""[{"id":"m1","type":"user","text":"$typed","time":{"created":1}}]""").single()
+        assertEquals(typed, plain.text)
+
+        val other =
+            projectV2(
+                """
+                [{"id":"m2","type":"user","text":"Attached file: `/typed/by/user.txt`\nAttached file: `/srv/real.zip`",
+                  "metadata":{"attachments":[{"name":"real.zip","mime":"application/zip","path":"/srv/real.zip"}]},
+                  "time":{"created":1}}]
+                """,
+            ).single()
+        assertEquals("Attached file: `/typed/by/user.txt`", other.text)
     }
 
     @Test

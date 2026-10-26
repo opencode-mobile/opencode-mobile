@@ -63,10 +63,33 @@ nonisolated enum UploadedAttachmentMetadata {
         }
     }
 
+    /// `<tmp>/uploads/<lowercase uuid>/<filename>`; one directory per file keeps names from colliding.
+    /// A Windows tmp (backslash, no slash) keeps its separator.
+    static func serverPath(tmp: String, filename: String, uuid: UUID = UUID()) -> String {
+        let separator = tmp.contains("\\") && !tmp.contains("/") ? "\\" : "/"
+        let base = tmp.hasSuffix(separator) ? String(tmp.dropLast()) : tmp
+        let safeName = filename.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "\\", with: "_")
+        return [base, "uploads", uuid.uuidString.lowercased(), safeName].joined(separator: separator)
+    }
+
+    /// The line that names an uploaded file in the prompt text, so the agent can open it.
+    static func promptLine(path: String) -> String {
+        "Attached file: `\(path)`"
+    }
+
+    /// The user's text, then one `promptLine` per uploaded file. Appending leaves mention offsets
+    /// in the text untouched; blank text leaves just the lines.
+    static func promptText(_ text: String, uploaded: [Attachment]) -> String {
+        let lines = uploaded.compactMap(\.uploadedServerPath).map { promptLine(path: $0) }
+        guard !lines.isEmpty else { return text }
+        let block = lines.joined(separator: "\n")
+        return text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? block : text + "\n" + block
+    }
+
     /// The prompt text without the ``Attached file: `<path>` `` lines the chips already show.
     static func displayText(_ text: String, hiding refs: [UploadedAttachmentRef]) -> String {
         guard !refs.isEmpty else { return text }
-        let hidden = Set(refs.map { "Attached file: `\($0.path)`" })
+        let hidden = Set(refs.map { promptLine(path: $0.path) })
         let kept = text.components(separatedBy: "\n").filter { !hidden.contains($0.trimmingCharacters(in: .whitespaces)) }
         return kept.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
     }

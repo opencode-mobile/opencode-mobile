@@ -259,10 +259,10 @@ class MessageDomainAdapter(
     fun toV2ShellRequest(options: ShellCommandOptions): V2ShellRequestDto = V2ShellRequestDto(command = options.command)
 
     fun toV2PromptRequest(options: PromptSendOptions): V2PromptRequestDto {
-        val uploaded = options.attachments.filter { it.upload is AttachmentUpload.Uploaded }
+        val uploaded = options.attachments.mapNotNull { attachment -> attachment.uploadedServerPath?.let { attachment to it } }
         val files =
             options.attachments
-                .filter { it.isInline }
+                .inlineAttachments()
                 .map { attachment ->
                     V2PromptFileDto(
                         uri = attachment.dataUrl,
@@ -302,7 +302,7 @@ class MessageDomainAdapter(
         val fileMentions = v2FileMentions(options)
         return V2PromptRequestDto(
             id = options.messageId,
-            text = AttachmentUploadFailure.promptText(options.text, uploaded.map { it.serverPath() }),
+            text = UploadedAttachments.promptText(options.text, uploaded.map { it.second }),
             files = files,
             metadata = uploadedAttachmentsMetadata(uploaded),
             agents = agents,
@@ -312,21 +312,19 @@ class MessageDomainAdapter(
         )
     }
 
-    private fun Attachment.serverPath(): String = (upload as AttachmentUpload.Uploaded).serverPath
-
     /** `metadata.attachments` lets the timeline draw a chip for each uploaded file. */
-    private fun uploadedAttachmentsMetadata(uploaded: List<Attachment>): JsonObject? {
+    private fun uploadedAttachmentsMetadata(uploaded: List<Pair<Attachment, String>>): JsonObject? {
         if (uploaded.isEmpty()) return null
         return buildJsonObject {
             put(
                 "attachments",
                 buildJsonArray {
-                    uploaded.forEach { attachment ->
+                    uploaded.forEach { (attachment, path) ->
                         add(
                             buildJsonObject {
                                 put("name", attachment.filename)
                                 put("mime", attachment.mime)
-                                put("path", attachment.serverPath())
+                                put("path", path)
                             },
                         )
                     }

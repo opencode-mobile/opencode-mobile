@@ -13,6 +13,9 @@ nonisolated enum AttachmentUploadError: Error, Equatable, Sendable {
     case failed
     /// The user cancelled.
     case cancelled
+
+    /// What the composer shows when an upload fails for transport or auth reasons.
+    static let failedMessage = "Upload failed"
 }
 
 nonisolated protocol AttachmentUploadRepository: Sendable {
@@ -26,16 +29,8 @@ nonisolated protocol AttachmentUploadRepository: Sendable {
     ) async throws -> UploadedAttachment
 }
 
-/// Builds the server path of an upload and turns the route's answer into product outcomes.
+/// Turns the route's answer into product outcomes.
 nonisolated struct AttachmentUploadDomainAdapter: Sendable {
-    /// `<tmp>/uploads/<lowercase uuid>/<filename>`; one directory per file keeps names from colliding.
-    func serverPath(tmp: String, filename: String, uuid: UUID = UUID()) -> String {
-        let separator = tmp.contains("\\") && !tmp.contains("/") ? "\\" : "/"
-        let base = tmp.hasSuffix(separator) ? String(tmp.dropLast()) : tmp
-        let safeName = filename.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "\\", with: "_")
-        return [base, "uploads", uuid.uuidString.lowercased(), safeName].joined(separator: separator)
-    }
-
     func result(from http: AttachmentUploadHTTPResult) throws -> UploadedAttachment {
         let path = Self.resolvedPath(in: http.body)
         if let failure = AttachmentUploadFailure.classify(statusCode: http.statusCode, hasPath: path != nil) {
@@ -93,7 +88,7 @@ nonisolated final class DefaultAttachmentUploadRepository: AttachmentUploadRepos
         guard let tmp = activeConnectionManager.streamedUploadDirectory else {
             throw AttachmentUploadError.contractMiss
         }
-        let path = adapter.serverPath(tmp: tmp, filename: filename)
+        let path = UploadedAttachmentMetadata.serverPath(tmp: tmp, filename: filename)
         let http: AttachmentUploadHTTPResult
         do {
             http = try await api.write(fileURL: fileURL, path: path, directory: directory) { sent, total in

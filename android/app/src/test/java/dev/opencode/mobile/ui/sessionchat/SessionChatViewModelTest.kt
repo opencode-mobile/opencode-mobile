@@ -7566,6 +7566,27 @@ class SessionChatViewModelTest {
             )
         }
 
+    @Test
+    fun genericFile_neverGoesInlineWhenUploadsAreUnavailable() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.addAttachments(listOf(uploadCandidate("data.zip", stagedFile("data.zip"), "application/zip", AttachmentKind.File)))
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value.composer.attachments
+                    .isEmpty(),
+            )
+            assertEquals(
+                "Only images, PDFs, or text files can be attached here.",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+        }
+
     private fun stagedFile(name: String): java.io.File {
         val directory =
             java.io

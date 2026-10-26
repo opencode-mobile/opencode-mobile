@@ -763,7 +763,7 @@ final class SessionChatComposer {
 
     private func startUpload(_ attachment: Attachment) {
         guard let repository = attachmentUploadRepository, let fileURL = attachment.fileURL else {
-            removeFailedUpload(id: attachment.id, message: AttachmentUploadFailure.message)
+            removeFailedUpload(id: attachment.id, message: AttachmentUploadError.failedMessage)
             return
         }
         let id = attachment.id
@@ -815,7 +815,7 @@ final class SessionChatComposer {
         case .cancelled:
             removeFailedUpload(id: id, message: nil)
         case .failed:
-            removeFailedUpload(id: id, message: AttachmentUploadFailure.message)
+            removeFailedUpload(id: id, message: AttachmentUploadError.failedMessage)
         case .contractMiss:
             // The route no longer matches: send this file the old way, with its old errors.
             state.composer.streamedUploadAvailable = false
@@ -829,8 +829,11 @@ final class SessionChatComposer {
             return
         }
         let name = attachment.filename
+        // The same destination decision as the add path; the contract miss already cleared the
+        // availability flag, so it answers inline for every file.
+        let destination = uploadDestination()
         let loaded = await Task.detached(priority: .userInitiated) {
-            Result { try AttachmentLoader().load(fileURL: fileURL, declaredMime: nil) }
+            Result { try AttachmentLoader().prepare(fileURL: fileURL, destination: destination) }
         }.value
         guard state.composer.attachments.contains(where: { $0.id == attachment.id }) else {
             if case let .success(file) = loaded { AttachmentLimits.discard(file.fileURL) }
@@ -1032,7 +1035,7 @@ final class SessionChatComposer {
                     kind: attachment.kind,
                     dataURL: "",
                     previewData: attachment.previewData,
-                    serverPath: attachment.upload.serverPath
+                    serverPath: attachment.uploadedServerPath
                 )
             )
         }

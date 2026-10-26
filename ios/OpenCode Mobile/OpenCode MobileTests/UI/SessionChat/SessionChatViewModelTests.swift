@@ -1473,7 +1473,7 @@ struct SessionChatViewModelTests {
         #expect(uploads.directories == ["/repo"])
         viewModel.updateComposerText("read this")
         await viewModel.sendPrompt()
-        #expect(repository.sentOptions?.uploadedAttachments.map(\.upload.serverPath) == ["/tmp/uploads/u1/notes.txt"])
+        #expect(repository.sentOptions?.uploadedAttachments.map(\.uploadedServerPath) == ["/tmp/uploads/u1/notes.txt"])
         #expect(repository.sentOptions?.inlineAttachments.isEmpty == true)
     }
 

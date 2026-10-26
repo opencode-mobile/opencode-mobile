@@ -37,6 +37,7 @@ object V2ServerContract {
     private const val SESSION_PATH = "/api/session/{sessionID}"
     private const val SESSION_DIFF_PATH = "/api/session/{sessionID}/diff"
     private const val SESSION_GENERATE_PATH = "/api/session/{sessionID}/generate"
+    private const val MAX_SCHEMA_DEPTH = 8
     private const val FS_WRITE_PATH = "/api/experimental/fs/write"
     const val INFO_PATH = "api/info"
 
@@ -100,12 +101,11 @@ object V2ServerContract {
                 ?.obj("200")
                 ?.let { document.resolve(it) }
                 ?.obj("content")
-                ?.values
-                ?.firstNotNullOfOrNull { (it as? JsonObject)?.obj("schema") }
-                ?.let { document.resolve(it) }
+                ?.obj("application/json")
+                ?.obj("schema")
                 ?: return false
-        val data = answer.obj("properties")?.obj("data")?.let { document.resolve(it) } ?: return false
-        return data.obj("properties")?.obj("path") != null
+        val data = document.property(answer, "data") ?: return false
+        return document.property(data, "path") != null
     }
 
     /** `paths.tmp` of the `/api/info` answer, or null when the server does not declare it. */
@@ -114,6 +114,24 @@ object V2ServerContract {
             .obj("paths")
             ?.string("tmp")
             ?.takeIf { it.isNotBlank() }
+
+    /** [name] among a schema's properties, looking through `$ref` and `allOf`/`anyOf`/`oneOf` members. */
+    private fun JsonObject.property(
+        schema: JsonObject,
+        name: String,
+        depth: Int = 0,
+    ): JsonObject? {
+        if (depth > MAX_SCHEMA_DEPTH) return null
+        val resolved = resolve(schema) ?: return null
+        resolved.obj("properties")?.obj(name)?.let { return it }
+        for (combinator in listOf("allOf", "anyOf", "oneOf")) {
+            val members = resolved[combinator] as? JsonArray ?: continue
+            for (member in members) {
+                (member as? JsonObject)?.let { property(it, name, depth + 1) }?.let { return it }
+            }
+        }
+        return null
+    }
 
     /** Follows a local `#/components/...` reference; other schemas are returned as is. */
     private fun JsonObject.resolve(schema: JsonObject): JsonObject? {

@@ -530,7 +530,8 @@ nonisolated struct Attachment: Equatable, Sendable, Identifiable {
 
     var usesFileBackedBody: Bool { fileURL != nil }
     /// Bytes already on the server: the prompt names the path instead of carrying them.
-    var isServerFile: Bool { upload.serverPath != nil }
+    var uploadedServerPath: String? { upload.serverPath }
+    var isServerFile: Bool { uploadedServerPath != nil }
     var isUploadPending: Bool { upload.isPending }
 
     init(
@@ -560,6 +561,13 @@ nonisolated struct Attachment: Equatable, Sendable, Identifiable {
         copy.upload = upload
         return copy
     }
+}
+
+extension Sequence where Element == Attachment {
+    /// Attachments whose bytes ride in the prompt body.
+    var inlineAttachments: [Attachment] { filter { !$0.isServerFile } }
+    /// Attachments already on the server; the prompt names their paths.
+    var uploadedAttachments: [Attachment] { filter(\.isServerFile) }
 }
 
 nonisolated struct FilePart: Equatable, Sendable {
@@ -761,9 +769,9 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
     let messageID: String?
 
     /// Attachments whose bytes ride in the prompt body.
-    var inlineAttachments: [Attachment] { attachments.filter { !$0.isServerFile } }
+    var inlineAttachments: [Attachment] { attachments.inlineAttachments }
     /// Attachments already uploaded; the prompt names their server paths.
-    var uploadedAttachments: [Attachment] { attachments.filter(\.isServerFile) }
+    var uploadedAttachments: [Attachment] { attachments.uploadedAttachments }
 
     init(
         text: String,

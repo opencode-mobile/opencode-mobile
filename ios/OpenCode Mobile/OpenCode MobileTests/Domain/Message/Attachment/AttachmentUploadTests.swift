@@ -7,6 +7,7 @@ struct AttachmentMimeSharedVectorTests {
         struct Case: Decodable {
             let name: String
             let mime: String?
+            let filename: String?
             let bytesBase64: String
             let expected: String
         }
@@ -34,7 +35,10 @@ struct AttachmentMimeSharedVectorTests {
         for item in cases {
             let bytes = Data(base64Encoded: item.bytesBase64) ?? Data()
             #expect(
-                AttachmentMime.normalized(declared: item.mime, leadingBytes: bytes) == item.expected,
+                AttachmentMime.normalized(
+                    declared: item.filename.map { AttachmentMime.declared(item.mime, filename: $0) } ?? item.mime,
+                    leadingBytes: bytes
+                ) == item.expected,
                 "\(item.name)"
             )
         }
@@ -107,6 +111,23 @@ struct AttachmentUploadPolicyTests {
         #expect(AttachmentUploadPolicy.destination(mime: "application/zip", byteCount: 10, model: model(), uploadAvailable: true) == .upload)
     }
 
+    @Test func unknownModelSendsMediaInlineAndEverythingElseUploads() {
+        for mime in ["image/png", "image/jpeg", "application/pdf"] {
+            #expect(AttachmentUploadPolicy.destination(mime: mime, byteCount: 10, model: nil, uploadAvailable: true) == .inline, Comment(rawValue: mime))
+        }
+        for mime in ["text/plain", "application/zip"] {
+            #expect(AttachmentUploadPolicy.destination(mime: mime, byteCount: 10, model: nil, uploadAvailable: true) == .upload, Comment(rawValue: mime))
+        }
+        #expect(
+            AttachmentUploadPolicy.destination(
+                mime: "image/png",
+                byteCount: AttachmentLimits.maxDecodedBytes + 1,
+                model: nil,
+                uploadAvailable: true
+            ) == .upload
+        )
+    }
+
     @Test func withoutTheRouteEverythingTakesTheOldPath() {
         for mime in ["image/png", "text/plain", "application/zip"] {
             #expect(
@@ -129,11 +150,11 @@ struct AttachmentUploadPolicyTests {
     }
 
     @Test func failureTableClassifiesEveryRow() {
-        for status in [404, 405, 400, 415, 422] {
+        for status in [404, 405, 400, 415] {
             #expect(AttachmentUploadFailure.classify(statusCode: status, hasPath: false) == .contractMiss, "\(status)")
         }
         #expect(AttachmentUploadFailure.classify(statusCode: 200, hasPath: false) == .contractMiss)
-        for status in [401, 403, 408, 429, 500, 502, 503] {
+        for status in [401, 403, 408, 409, 413, 422, 429, 500, 502, 503] {
             #expect(AttachmentUploadFailure.classify(statusCode: status, hasPath: false) == .transport, "\(status)")
         }
         #expect(AttachmentUploadFailure.classify(statusCode: 200, hasPath: true) == nil)
@@ -146,11 +167,11 @@ struct AttachmentUploadAdapterTests {
     @Test func pathIsTmpUploadsLowercaseUuidAndSafeFilename() {
         let uuid = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
         #expect(
-            adapter.serverPath(tmp: "/var/tmp", filename: "a/b\\c.txt", uuid: uuid)
+            UploadedAttachmentMetadata.serverPath(tmp: "/var/tmp", filename: "a/b\\c.txt", uuid: uuid)
                 == "/var/tmp/uploads/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/a_b_c.txt"
         )
         #expect(
-            adapter.serverPath(tmp: "C:\\Temp\\", filename: "n.pdf", uuid: uuid)
+            UploadedAttachmentMetadata.serverPath(tmp: "C:\\Temp\\", filename: "n.pdf", uuid: uuid)
                 == "C:\\Temp\\uploads\\aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee\\n.pdf"
         )
     }
@@ -210,11 +231,11 @@ struct UploadedAttachmentPromptTests {
     @Test func promptTextAppendsOneLinePerUploadedFile() {
         let files = [uploaded("a.zip", "application/zip", "/tmp/uploads/1/a.zip"), uploaded("b.txt", "text/plain", "/tmp/uploads/2/b.txt")]
         #expect(
-            MessageDomainAdapter.promptText("look", uploaded: files)
+            UploadedAttachmentMetadata.promptText("look", uploaded: files)
                 == "look\nAttached file: `/tmp/uploads/1/a.zip`\nAttached file: `/tmp/uploads/2/b.txt`"
         )
-        #expect(MessageDomainAdapter.promptText("  ", uploaded: [files[0]]) == "Attached file: `/tmp/uploads/1/a.zip`")
-        #expect(MessageDomainAdapter.promptText("hi", uploaded: []) == "hi")
+        #expect(UploadedAttachmentMetadata.promptText("  ", uploaded: [files[0]]) == "Attached file: `/tmp/uploads/1/a.zip`")
+        #expect(UploadedAttachmentMetadata.promptText("hi", uploaded: []) == "hi")
     }
 
     @Test func v2PromptKeepsUploadsOutOfFilesAndWritesMetadata() throws {
@@ -237,6 +258,19 @@ struct UploadedAttachmentPromptTests {
         let json = try #require(String(data: encoder.encode(request), encoding: .utf8))
         #expect(json.contains(#""metadata":{"attachments":[{"#))
         #expect(json.contains(#""path":"/tmp/uploads/1/a.zip""#))
+    }
+
+    @Test func userTypedAttachedFileLineStaysWithoutMatchingMetadata() throws {
+        let typed = #"[{"id":"m1","type":"user","text":"see\nAttached file: `/etc/hosts`"}]"#
+        let message = try #require(adapter.messages(fromV2: try JSONDecoder().decode([V2SessionMessageDTO].self, from: Data(typed.utf8))).first)
+        #expect(message.text == "see\nAttached file: `/etc/hosts`")
+
+        let other = """
+        [{"id":"m2","type":"user","text":"see\\nAttached file: `/etc/hosts`",
+          "metadata":{"attachments":[{"name":"a.txt","mime":"text/plain","path":"/tmp/uploads/1/a.txt"}]}}]
+        """
+        let kept = try #require(adapter.messages(fromV2: try JSONDecoder().decode([V2SessionMessageDTO].self, from: Data(other.utf8))).first)
+        #expect(kept.text == "see\nAttached file: `/etc/hosts`")
     }
 
     @Test func v2PromptWithoutUploadsHasNoMetadata() {
@@ -283,6 +317,21 @@ struct StreamedUploadContractTests {
         #expect(features.streamedUpload)
         #expect(ServerCapabilities.forProtocol(.v2, v2Features: features).supportsStreamedUpload)
         #expect(!ServerCapabilities.forProtocol(.v1, v2Features: features).supportsStreamedUpload)
+    }
+
+    @Test func followsAllOfWrapperAroundTheResponseObject() throws {
+        let wrapped = Self.route.replacingOccurrences(
+            of: ##""data":{"type":"object","properties":{"path":{"type":"string"}}}"##,
+            with: ##""data":{"allOf":[{"type":"object","properties":{"path":{"type":"string"}}}]}"##
+        )
+        #expect(wrapped != Self.route)
+        #expect(try V2ServerContract.features(data: Data(wrapped.utf8)).streamedUploadRoute)
+    }
+
+    @Test func nonJsonSuccessResponseTurnsItOff() throws {
+        let textResponse = Self.route.replacingOccurrences(of: #""content":{"application/json""#, with: #""content":{"text/plain""#)
+        #expect(textResponse != Self.route)
+        #expect(try !V2ServerContract.features(data: Data(textResponse.utf8)).streamedUploadRoute)
     }
 
     @Test func offByDefault() throws {
