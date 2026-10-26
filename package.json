@@ -18,6 +18,7 @@
     "sse:capture": "node scripts/capture-sse.mjs",
     "store:screenshots": "node scripts/store-screenshots.mjs",
     "store:push": "node scripts/store-screenshots/push-store-shots.mjs",
+    "store:upload-app-store": "node scripts/store-screenshots/upload-app-store.mjs",
     "store:fixture-server:test": "node --test scripts/store-screenshots/*.test.mjs",
     "store:screenshots:gallery": "node scripts/store-screenshots/write-gallery.mjs",
     "graphics:editor": "node scripts/launch-graphics/editor.mjs",
