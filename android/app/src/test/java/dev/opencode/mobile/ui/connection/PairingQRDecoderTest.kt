@@ -12,7 +12,7 @@ class PairingQRDecoderTest {
     @Test
     fun decode_readsPairingPayload() {
         val payload =
-            """{"urls":["http://192.168.0.160:4096"],"username":"opencode","password":"secret"}"""
+            """{"urls":["http://192.168.1.60:4096"],"username":"opencode","password":"secret"}"""
         val frame = qrLuminance(payload)
 
         assertEquals(
@@ -27,7 +27,7 @@ class PairingQRDecoderTest {
 
     @Test
     fun decode_ignoresRowPadding() {
-        val payload = "http://192.168.0.160:4096/auth/connect/abc_DEF-123"
+        val payload = "http://192.168.1.60:4096/auth/connect/abc_DEF-123"
         val frame = qrLuminance(payload)
         val padding = 12
         val rowStride = frame.width + padding

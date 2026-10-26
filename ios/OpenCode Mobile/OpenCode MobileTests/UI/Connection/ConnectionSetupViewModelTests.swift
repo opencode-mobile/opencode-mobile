@@ -171,10 +171,10 @@ struct ConnectionSetupViewModelTests {
                 connectionProfileStore: store
             )
         )
-        let serverURLs = ["http://192.168.0.160:4096/", "http://100.84.57.15:4096/"]
+        let serverURLs = ["http://192.168.1.60:4096/", "http://100.64.0.15:4096/"]
         viewModel.configure(
             initialProfile: ConnectionProfile(
-                baseURL: "http://100.84.57.15:4096/",
+                baseURL: "http://100.64.0.15:4096/",
                 serverURLs: serverURLs,
                 username: "opencode",
                 password: "secret",
@@ -215,10 +215,10 @@ struct ConnectionSetupViewModelTests {
         )
         await viewModel.applyPairingQR(
             """
-            {"urls":["http://192.168.0.160:4096"],"username":"opencode","password":"secret"}
+            {"urls":["http://192.168.1.60:4096"],"username":"opencode","password":"secret"}
             """
         )
-        #expect(viewModel.baseURL == "http://192.168.0.160:4096/")
+        #expect(viewModel.baseURL == "http://192.168.1.60:4096/")
         #expect(viewModel.username == "opencode")
         #expect(viewModel.password == "secret")
         #expect(viewModel.usesQRLayout)
@@ -239,10 +239,10 @@ struct ConnectionSetupViewModelTests {
         )
         await viewModel.applyPairingQR(
             """
-            {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
+            {"urls":["http://192.168.1.60:4096","http://100.64.0.15:4096"],"username":"opencode","password":"secret"}
             """
         )
-        #expect(viewModel.baseURL == "http://100.84.57.15:4096/")
+        #expect(viewModel.baseURL == "http://100.64.0.15:4096/")
     }
 
     @Test func submit_pairingQR_bothReachable_savesTailscale() async {
@@ -258,20 +258,20 @@ struct ConnectionSetupViewModelTests {
         )
         await viewModel.applyPairingQR(
             """
-            {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
+            {"urls":["http://192.168.1.60:4096","http://100.64.0.15:4096"],"username":"opencode","password":"secret"}
             """
         )
         let saved = await viewModel.submit()
         #expect(saved == true)
         #expect(Set(probe.probed) == Set([
-            "http://192.168.0.160:4096/",
-            "http://100.84.57.15:4096/",
+            "http://192.168.1.60:4096/",
+            "http://100.64.0.15:4096/",
         ]))
-        #expect(store.saved.last?.baseURL == "http://100.84.57.15:4096/")
-        #expect(viewModel.baseURL == "http://100.84.57.15:4096/")
+        #expect(store.saved.last?.baseURL == "http://100.64.0.15:4096/")
+        #expect(viewModel.baseURL == "http://100.64.0.15:4096/")
         #expect(Set(store.saved.last?.serverURLs ?? []) == Set([
-            "http://192.168.0.160:4096/",
-            "http://100.84.57.15:4096/",
+            "http://192.168.1.60:4096/",
+            "http://100.64.0.15:4096/",
         ]))
         #expect(viewModel.usesQRLayout)
     }
@@ -335,9 +335,9 @@ struct ConnectionSetupViewModelTests {
     }
 
     @Test(arguments: [
-        "http://192.168.0.160:4096/",
-        "http://100.84.57.15:4096/",
-        "http://mybox.tail069dbf.ts.net:4096/",
+        "http://192.168.1.60:4096/",
+        "http://100.64.0.15:4096/",
+        "http://mybox.tail1234.ts.net:4096/",
         "https://devbox.example.com/",
     ])
     func submit_trustedOrEncryptedHost_connectsWithoutWarning(url: String) async {
@@ -468,25 +468,25 @@ struct ConnectionSetupViewModelTests {
         )
         await viewModel.applyPairingQR(
             """
-            {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
+            {"urls":["http://192.168.1.60:4096","http://100.64.0.15:4096"],"username":"opencode","password":"secret"}
             """
         )
         let saved = await viewModel.submit()
         #expect(saved == true)
         let withPassword = probe.connections.filter { !($0.password ?? "").isEmpty }
-        #expect(withPassword.map { $0.baseURL.absoluteString } == ["http://100.84.57.15:4096/"])
+        #expect(withPassword.map { $0.baseURL.absoluteString } == ["http://100.64.0.15:4096/"])
         let withoutPassword = probe.connections.filter { ($0.password ?? "").isEmpty }
         #expect(Set(withoutPassword.map { $0.baseURL.absoluteString }) == Set([
-            "http://192.168.0.160:4096/",
-            "http://100.84.57.15:4096/",
+            "http://192.168.1.60:4096/",
+            "http://100.64.0.15:4096/",
         ]))
-        #expect(store.saved.last?.baseURL == "http://100.84.57.15:4096/")
+        #expect(store.saved.last?.baseURL == "http://100.64.0.15:4096/")
     }
 
     @Test func submit_pairingQR_tailscaleDown_savesLan() async {
         let store = RecordingConnectionProfileStore()
         let probe = RecordingURLProbeService(
-            failingHosts: ["100.84.57.15"],
+            failingHosts: ["100.64.0.15"],
             successProtocol: .v2
         )
         let viewModel = ConnectionSetupViewModel(
@@ -499,17 +499,17 @@ struct ConnectionSetupViewModelTests {
         )
         await viewModel.applyPairingQR(
             """
-            {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
+            {"urls":["http://192.168.1.60:4096","http://100.64.0.15:4096"],"username":"opencode","password":"secret"}
             """
         )
         let saved = await viewModel.submit()
         #expect(saved == true)
-        #expect(store.saved.last?.baseURL == "http://192.168.0.160:4096/")
-        #expect(viewModel.baseURL == "http://192.168.0.160:4096/")
+        #expect(store.saved.last?.baseURL == "http://192.168.1.60:4096/")
+        #expect(viewModel.baseURL == "http://192.168.1.60:4096/")
         #expect(viewModel.addressRecovery == nil)
         #expect(Set(store.saved.last?.serverURLs ?? []) == Set([
-            "http://192.168.0.160:4096/",
-            "http://100.84.57.15:4096/",
+            "http://192.168.1.60:4096/",
+            "http://100.64.0.15:4096/",
         ]))
     }
 
@@ -526,7 +526,7 @@ struct ConnectionSetupViewModelTests {
         )
         await viewModel.applyPairingQR(
             """
-            {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
+            {"urls":["http://192.168.1.60:4096","http://100.64.0.15:4096"],"username":"opencode","password":"secret"}
             """
         )
         viewModel.name = "Studio"
@@ -549,7 +549,7 @@ struct ConnectionSetupViewModelTests {
 
     @Test func submit_pairingQR_authFailure_doesNotSave() async {
         let store = RecordingConnectionProfileStore()
-        let probe = RecordingURLProbeService(authFailingHosts: ["192.168.0.160", "100.84.57.15"])
+        let probe = RecordingURLProbeService(authFailingHosts: ["192.168.1.60", "100.64.0.15"])
         let viewModel = ConnectionSetupViewModel(
             connectionProbeService: probe,
             connectionSessionCoordinator: ConnectionSessionCoordinator(
@@ -560,12 +560,12 @@ struct ConnectionSetupViewModelTests {
         )
         await viewModel.applyPairingQR(
             """
-            {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"wrong"}
+            {"urls":["http://192.168.1.60:4096","http://100.64.0.15:4096"],"username":"opencode","password":"wrong"}
             """
         )
         #expect(viewModel.usesQRLayout == false)
         #expect(viewModel.serverURLs.isEmpty)
-        #expect(viewModel.baseURL == "http://100.84.57.15:4096/")
+        #expect(viewModel.baseURL == "http://100.64.0.15:4096/")
         #expect(viewModel.password == "wrong")
         #expect(viewModel.credentialSegment == .password)
         #expect(viewModel.showsPrimaryAction)
@@ -588,7 +588,7 @@ struct ConnectionSetupViewModelTests {
         )
         await viewModel.applyPairingQR(
             """
-            {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
+            {"urls":["http://192.168.1.60:4096","http://100.64.0.15:4096"],"username":"opencode","password":"secret"}
             """
         )
         viewModel.baseURL = "http://10.0.0.1:4096/"
@@ -746,15 +746,15 @@ struct ConnectionSetupViewModelTests {
             redeemer: redeemer,
             store: store
         )
-        viewModel.baseURL = "http://192.168.0.183:4096/auth/connect/XJdLmg9llko9nmn3jN2XLw"
+        viewModel.baseURL = "http://192.168.1.83:4096/auth/connect/XJdLmg9llko9nmn3jN2XLw"
         let saved = await viewModel.submit()
         #expect(saved == true)
         #expect(redeemer.calls.count == 1)
-        #expect(redeemer.calls.first?.baseURL == "http://192.168.0.183:4096/")
+        #expect(redeemer.calls.first?.baseURL == "http://192.168.1.83:4096/")
         #expect(redeemer.calls.first?.code == "XJdLmg9llko9nmn3jN2XLw")
         #expect(store.saved.last?.password == "paired-token")
-        #expect(store.saved.last?.baseURL == "http://192.168.0.183:4096/")
-        #expect(store.saved.last?.serverURLs == ["http://192.168.0.183:4096/"])
+        #expect(store.saved.last?.baseURL == "http://192.168.1.83:4096/")
+        #expect(store.saved.last?.serverURLs == ["http://192.168.1.83:4096/"])
         #expect(viewModel.usesQRLayout)
         #expect(viewModel.savedAddressRows.count == 1)
         #expect(viewModel.username == "opencode")
@@ -770,7 +770,7 @@ struct ConnectionSetupViewModelTests {
             redeemer: redeemer,
             store: store
         )
-        viewModel.baseURL = "http://192.168.0.183:4096/auth/connect/XJdLmg9llko9nmn3jN2XLw"
+        viewModel.baseURL = "http://192.168.1.83:4096/auth/connect/XJdLmg9llko9nmn3jN2XLw"
         let saved = await viewModel.submit()
         #expect(saved == false)
         #expect(redeemer.calls.isEmpty)
@@ -780,7 +780,7 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.showsPrimaryAction)
         #expect(viewModel.primaryEnabled)
         #expect(viewModel.primaryActionLabel == "Connect")
-        #expect(viewModel.baseURL == "http://192.168.0.183:4096/")
+        #expect(viewModel.baseURL == "http://192.168.1.83:4096/")
         #expect(viewModel.username == "opencode")
         #expect(viewModel.snackbar?.text == "Unable to reach the server")
         #expect(viewModel.snackbar?.variant == .error)
@@ -981,7 +981,7 @@ struct ConnectionSetupViewModelTests {
     }
 
     @Test func savedAddressesHint_tailscaleAndLocalNetwork() {
-        let urls = ["http://192.168.0.160:4096/", "http://100.84.57.15:4096/"]
+        let urls = ["http://192.168.1.60:4096/", "http://100.64.0.15:4096/"]
         let viewModel = makeSavedAddressViewModel(
             urls: urls,
             probe: FakeConnectionProbeService(result: .success(.v2))
@@ -994,7 +994,7 @@ struct ConnectionSetupViewModelTests {
     }
 
     @Test func savedAddressesHint_otherMix() {
-        let urls = ["https://ab12.cd34.opentunnel.xyz/", "http://192.168.0.160:4096/"]
+        let urls = ["https://ab12.cd34.opentunnel.xyz/", "http://192.168.1.60:4096/"]
         #expect(
             ConnectionSetupViewModel.savedAddressesHint(for: urls)
                 == "Saved addresses are tried until one answers. Tailscale is preferred when it answers."

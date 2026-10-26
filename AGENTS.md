@@ -7,6 +7,63 @@ The implementations live under `android/` (Kotlin, Jetpack Compose, Material 3)
 and `ios/OpenCode Mobile/` (SwiftUI). Both apps, API generation, CI, and private
 release distribution are active. Product vocabulary lives in `CONTEXT.md`.
 
+## Public Repository And Sensitive Data
+
+This is an open-source project (GPL-3.0, see `LICENSE`). Treat everything you
+write anywhere in it as public and permanent, even while the repository is
+private: files, commit messages, branch and tag names, issues, pull requests,
+comments, review threads, CI logs, release notes, and attached screenshots,
+logs, or videos. Git history and edited issue text keep old versions, so
+deleting something later does not undo a leak.
+
+- Never put any of these in a commit, branch, issue, pull request, comment, CI
+  log, or attachment:
+  - Secrets: passwords, API keys, tokens, signing keys, keystores,
+    certificates, provisioning profiles, `.env` files, Firebase config
+    (`google-services.json`, `GoogleService-Info.plist`), or CI secret values.
+  - Real connection details: server URLs, hostnames, IP addresses, Tailscale
+    or tunnel names, pairing QR payloads, or opencode server passwords.
+  - Personal or private data: real names other than public GitHub handles,
+    email addresses, phone numbers, home paths such as `/Users/<name>`,
+    machine or device names, and content from real opencode sessions
+    (prompts, code, file trees, transcripts).
+  - Private infrastructure and context: hostnames and addresses of
+    self-hosted runners and private servers (workflow runner labels are
+    fine), artifact or prototype server URLs, LAN or Tailscale links, links
+    to private trackers, chats, or documents, and anything about an employer
+    or client.
+- Use obvious placeholders in code, tests, fixtures, docs, and examples:
+  `example.com` hosts, documentation IP ranges (`192.0.2.0/24`,
+  `198.51.100.0/24`, `203.0.113.0/24`), paths like `/Users/example/project`,
+  and passwords like `test-password`. When a test needs a LAN or Tailscale
+  address, use a round one such as `192.168.1.2`, `10.0.0.1`, or
+  `100.64.0.3` and a tailnet like `tail1234.ts.net`, never one copied from a
+  real network. Take demo content from the scenario harness or committed
+  fixtures, never from a real session.
+- Check every screenshot, recording, and log before you commit or attach it.
+  Status bars, notifications, session lists, file paths, and server URLs leak
+  easily. Capture against seeded fixture servers; recapture rather than crop
+  when a real value is visible.
+- Stage explicit paths instead of `git add -A` or `git add .`; this checkout
+  often holds local-only files (agent config, prototypes, notes, research).
+  Before every commit and push, read the staged diff for the items above and
+  run `gitleaks git --pre-commit --staged` when gitleaks is installed. The
+  Secret Scan workflow runs the same check on every pull request and push to
+  `main`; allowlist a false positive in `.gitleaks.toml` only for fake test
+  values, never to get a real secret through.
+- Do not commit machine-local agent or editor config (`.mcp.json`,
+  `.claude/launch.json`, `*.local.*` settings, personal skill paths) unless
+  the user asks for a shared version with no personal values in it.
+- In GitHub Actions, read secrets only from Actions secrets. Never echo them,
+  write them to files that get uploaded, or add them to workflow YAML.
+- Security vulnerabilities go through private reporting (`SECURITY.md`),
+  never a public issue, pull request title, or commit message that describes
+  the exploit. Draft the report for the user instead of filing it.
+- If you find or cause a leak, stop before pushing and tell the user what and
+  where. Once pushed, assume the value is compromised: it needs rotation, and
+  a follow-up commit does not remove it. Rewriting history or force-pushing
+  is the user's decision.
+
 ## Product Direction
 
 - Maintain native mobile clients for opencode.

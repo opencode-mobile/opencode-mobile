@@ -46,8 +46,8 @@ class ConnectionProfileIdentityTest {
 
     @Test
     fun hasSameIdentity_trueWhenBaseUrlMovesWithinServerUrls() {
-        val lan = "http://192.168.0.160:4096/"
-        val tailscale = "http://100.84.57.15:4096/"
+        val lan = "http://192.168.1.60:4096/"
+        val tailscale = "http://100.64.0.15:4096/"
         val original =
             ConnectionProfile(
                 id = "profile-1",
@@ -62,8 +62,8 @@ class ConnectionProfileIdentityTest {
 
     @Test
     fun hasSameIdentity_falseWhenMovedBaseUrlChangesPassword() {
-        val lan = "http://192.168.0.160:4096/"
-        val tailscale = "http://100.84.57.15:4096/"
+        val lan = "http://192.168.1.60:4096/"
+        val tailscale = "http://100.64.0.15:4096/"
         val original =
             ConnectionProfile(
                 id = "profile-1",
@@ -78,8 +78,8 @@ class ConnectionProfileIdentityTest {
 
     @Test
     fun hasSameIdentity_falseWhenBaseUrlIsOutsideServerUrls() {
-        val lan = "http://192.168.0.160:4096/"
-        val tailscale = "http://100.84.57.15:4096/"
+        val lan = "http://192.168.1.60:4096/"
+        val tailscale = "http://100.64.0.15:4096/"
         val original =
             ConnectionProfile(
                 id = "profile-1",

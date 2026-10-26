@@ -9,10 +9,10 @@ import org.junit.Test
 class ServerPathPolicyTest {
     @Test
     fun parentPath_posix_returnsParentUntilRoot() {
-        assertEquals("/Users/ivan", ServerPathPolicy.parentPath("/Users/ivan/Projects"))
-        assertEquals("/Users", ServerPathPolicy.parentPath("/Users/ivan"))
+        assertEquals("/Users/example", ServerPathPolicy.parentPath("/Users/example/Projects"))
+        assertEquals("/Users", ServerPathPolicy.parentPath("/Users/example"))
         assertEquals("/", ServerPathPolicy.parentPath("/Users"))
-        assertEquals("/Users", ServerPathPolicy.parentPath("/Users/ivan/"))
+        assertEquals("/Users", ServerPathPolicy.parentPath("/Users/example/"))
         assertNull(ServerPathPolicy.parentPath("/"))
         assertNull(ServerPathPolicy.parentPath(""))
     }

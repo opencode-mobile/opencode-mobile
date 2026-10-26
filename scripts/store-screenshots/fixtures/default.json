@@ -4,12 +4,12 @@
     "version": "1.1.8",
     "pid": 4242
   },
-  "bootDirectory": "/Users/ivan/Projects/opencode-mobile",
+  "bootDirectory": "/Users/example/Projects/opencode-mobile",
   "projects": [
     {
       "id": "prj_opencode-mobile",
-      "worktree": "/Users/ivan/Projects/opencode-mobile",
-      "directory": "/Users/ivan/Projects/opencode-mobile",
+      "worktree": "/Users/example/Projects/opencode-mobile",
+      "directory": "/Users/example/Projects/opencode-mobile",
       "vcs": "git",
       "workspaceID": "ws_opencode-mobile",
       "branch": {
@@ -27,8 +27,8 @@
     },
     {
       "id": "prj_artifact-publisher",
-      "worktree": "/Users/ivan/Projects/artifact-publisher",
-      "directory": "/Users/ivan/Projects/artifact-publisher",
+      "worktree": "/Users/example/Projects/artifact-publisher",
+      "directory": "/Users/example/Projects/artifact-publisher",
       "vcs": "git",
       "workspaceID": "ws_artifact-publisher",
       "branch": {
@@ -57,7 +57,7 @@
       "timeCreatedOffsetMs": -10800000,
       "timeUpdatedOffsetMs": -300000,
       "location": {
-        "directory": "/Users/ivan/Projects/opencode-mobile",
+        "directory": "/Users/example/Projects/opencode-mobile",
         "workspaceID": "ws_opencode-mobile"
       },
       "active": { "type": "busy" }
@@ -76,7 +76,7 @@
       "timeCreatedOffsetMs": -10800000,
       "timeUpdatedOffsetMs": -3600000,
       "location": {
-        "directory": "/Users/ivan/Projects/opencode-mobile",
+        "directory": "/Users/example/Projects/opencode-mobile",
         "workspaceID": "ws_opencode-mobile"
       }
     },
@@ -94,7 +94,7 @@
       "timeCreatedOffsetMs": -10800000,
       "timeUpdatedOffsetMs": -10740000,
       "location": {
-        "directory": "/Users/ivan/Projects/opencode-mobile",
+        "directory": "/Users/example/Projects/opencode-mobile",
         "workspaceID": "ws_opencode-mobile"
       }
     },
@@ -112,7 +112,7 @@
       "timeCreatedOffsetMs": -57600000,
       "timeUpdatedOffsetMs": -57600000,
       "location": {
-        "directory": "/Users/ivan/Projects/artifact-publisher",
+        "directory": "/Users/example/Projects/artifact-publisher",
         "workspaceID": "ws_artifact-publisher"
       }
     },
@@ -130,7 +130,7 @@
       "timeCreatedOffsetMs": -86400000,
       "timeUpdatedOffsetMs": -86400000,
       "location": {
-        "directory": "/Users/ivan/Projects/opencode-mobile",
+        "directory": "/Users/example/Projects/opencode-mobile",
         "workspaceID": "ws_opencode-mobile"
       }
     },
@@ -148,7 +148,7 @@
       "timeCreatedOffsetMs": -93600000,
       "timeUpdatedOffsetMs": -93600000,
       "location": {
-        "directory": "/Users/ivan/Projects/opencode-mobile",
+        "directory": "/Users/example/Projects/opencode-mobile",
         "workspaceID": "ws_opencode-mobile"
       }
     },
@@ -166,7 +166,7 @@
       "timeCreatedOffsetMs": -104400000,
       "timeUpdatedOffsetMs": -104400000,
       "location": {
-        "directory": "/Users/ivan/Projects/opencode-mobile",
+        "directory": "/Users/example/Projects/opencode-mobile",
         "workspaceID": "ws_opencode-mobile"
       }
     }

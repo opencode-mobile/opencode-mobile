@@ -209,7 +209,7 @@ class ConnectionProbeServiceTest {
                         "/global/health" -> spaHtml()
                         "/api/info" ->
                             jsonOk(
-                                """{"version":"2.0.7","pid":1481731,"urls":["http://192.168.0.160:4096"]}""",
+                                """{"version":"2.0.7","pid":1481731,"urls":["http://192.168.1.60:4096"]}""",
                             )
                         else -> jsonNotFound()
                     }

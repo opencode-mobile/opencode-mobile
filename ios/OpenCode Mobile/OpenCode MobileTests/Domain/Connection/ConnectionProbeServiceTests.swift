@@ -103,7 +103,7 @@ struct ConnectionProbeServiceTests {
     @Test func probe_detectsV2FromOpenCode207ApiInfoWhenHealthPathsMiss() async throws {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (200, "<!doctype html><html><head><title>OpenCode</title></head><body></body></html>"),
-            "/api/info": (200, #"{"version":"2.0.7","pid":1481731,"urls":["http://192.168.0.160:4096"]}"#),
+            "/api/info": (200, #"{"version":"2.0.7","pid":1481731,"urls":["http://192.168.1.60:4096"]}"#),
         ])
         let service = makeService()
 

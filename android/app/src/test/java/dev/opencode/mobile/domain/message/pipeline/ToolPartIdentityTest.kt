@@ -55,7 +55,7 @@ class ToolPartIdentityTest {
             "",
             ToolPartIdentity.resolvedName(
                 null,
-                JsonObject(mapOf("path" to JsonPrimitive("/home/ivan/Projects/session-test"))),
+                JsonObject(mapOf("path" to JsonPrimitive("/home/example/Projects/session-test"))),
             ),
         )
     }

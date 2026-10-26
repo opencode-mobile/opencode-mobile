@@ -1803,7 +1803,7 @@ class SessionChatViewModelTest {
                             username = "opencode",
                             password = "",
                         ),
-                    worktrees = mutableListOf("/Users/ivan/Projects/opencode"),
+                    worktrees = mutableListOf("/Users/example/Projects/opencode"),
                 )
             val viewModel =
                 createViewModel(
@@ -1811,12 +1811,12 @@ class SessionChatViewModelTest {
                     connectionProfileStore = connectionProfileStore,
                 )
 
-            viewModel.bind("ses-1", "Title", "/Users/ivan/Projects/opencode")
+            viewModel.bind("ses-1", "Title", "/Users/example/Projects/opencode")
             advanceUntilIdle()
             assertEquals("opencode", viewModel.uiState.value.projectLabel)
 
-            connectionProfileStore.worktrees += "/Users/ivan/Documents/opencode"
-            viewModel.bind("ses-1", "Title", "/Users/ivan/Projects/opencode")
+            connectionProfileStore.worktrees += "/Users/example/Documents/opencode"
+            viewModel.bind("ses-1", "Title", "/Users/example/Projects/opencode")
             advanceUntilIdle()
 
             assertEquals("..Projects/opencode", viewModel.uiState.value.projectLabel)
