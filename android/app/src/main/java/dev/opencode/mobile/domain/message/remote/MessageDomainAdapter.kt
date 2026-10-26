@@ -259,8 +259,10 @@ class MessageDomainAdapter(
     fun toV2ShellRequest(options: ShellCommandOptions): V2ShellRequestDto = V2ShellRequestDto(command = options.command)
 
     fun toV2PromptRequest(options: PromptSendOptions): V2PromptRequestDto {
+        val uploaded = options.attachments.filter { it.upload is AttachmentUpload.Uploaded }
         val files =
             options.attachments
+                .filter { it.isInline }
                 .map { attachment ->
                     V2PromptFileDto(
                         uri = attachment.dataUrl,
@@ -300,13 +302,37 @@ class MessageDomainAdapter(
         val fileMentions = v2FileMentions(options)
         return V2PromptRequestDto(
             id = options.messageId,
-            text = options.text,
+            text = AttachmentUploadFailure.promptText(options.text, uploaded.map { it.serverPath() }),
             files = files,
+            metadata = uploadedAttachmentsMetadata(uploaded),
             agents = agents,
             skills = skills,
             delivery = options.delivery.wireValue,
             fileMentions = fileMentions,
         )
+    }
+
+    private fun Attachment.serverPath(): String = (upload as AttachmentUpload.Uploaded).serverPath
+
+    /** `metadata.attachments` lets the timeline draw a chip for each uploaded file. */
+    private fun uploadedAttachmentsMetadata(uploaded: List<Attachment>): JsonObject? {
+        if (uploaded.isEmpty()) return null
+        return buildJsonObject {
+            put(
+                "attachments",
+                buildJsonArray {
+                    uploaded.forEach { attachment ->
+                        add(
+                            buildJsonObject {
+                                put("name", attachment.filename)
+                                put("mime", attachment.mime)
+                                put("path", attachment.serverPath())
+                            },
+                        )
+                    }
+                },
+            )
+        }
     }
 
     private fun fileReferenceParts(options: PromptSendOptions): List<SendMessagePartDto> {
@@ -1091,7 +1117,7 @@ class MessageDomainAdapter(
 
     private fun toFilePart(dto: MessagePartDto): MessagePart.File? {
         dto.serverPath?.takeIf { it.isNotBlank() }?.let { path ->
-            val mime = dto.mime?.lowercase() ?: "application/octet-stream"
+            val mime = dto.mime?.lowercase() ?: AttachmentMime.BINARY
             return MessagePart.File(
                 id = dto.id ?: path,
                 filename = dto.filename?.takeIf { it.isNotBlank() } ?: "Attachment",

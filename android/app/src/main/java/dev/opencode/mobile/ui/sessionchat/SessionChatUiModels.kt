@@ -17,7 +17,6 @@ import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
-
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
@@ -56,7 +55,13 @@ data class SessionChatComposerState(
     val selectionRevision: Int = 0,
     val followUpDelivery: FollowUpDelivery = FollowUpDelivery.Steer,
     val supportsFollowUpDelivery: Boolean = false,
+    /** The server takes streamed uploads, so any file type or size can be attached. */
+    val attachmentUploadAvailable: Boolean = false,
 ) {
+    /** An attachment is still streaming to the server; sending waits for it. */
+    val hasPendingUploads: Boolean
+        get() = attachments.any { it.isUploading }
+
     val selectedModeLabel: String
         get() =
             selectableAgents.firstOrNull { it.id.equals(selectedMode, ignoreCase = true) }?.displayName
@@ -83,11 +88,11 @@ data class SessionChatComposerState(
             if (isShellMode) {
                 ComposerShellCommand.command(text) != null
             } else {
-                text.isNotBlank() || attachments.isNotEmpty()
+                (text.isNotBlank() || attachments.isNotEmpty()) && !hasPendingUploads
             }
 
     val canAttach: Boolean
-        get() = selectedModel?.option?.canAttach == true
+        get() = selectedModel?.option?.canAttach == true || attachmentUploadAvailable
 
     val mentionRanges: List<IntRange>
         get() =
@@ -98,10 +103,10 @@ data class SessionChatComposerState(
             ).sortedBy { it.first }
 
     val canAttachPhotos: Boolean
-        get() = selectedModel?.option?.canAttachPhotos == true
+        get() = selectedModel?.option?.canAttachPhotos == true || (attachmentUploadAvailable && selectedModel != null)
 
     val canAttachFiles: Boolean
-        get() = selectedModel?.option?.canAttachFiles == true
+        get() = selectedModel?.option?.canAttachFiles == true || (attachmentUploadAvailable && selectedModel != null)
 
     fun attachmentSources(developerToolsUnlocked: Boolean): ComposerAttachmentSources =
         ComposerAttachmentSources(

@@ -79,6 +79,17 @@ class ActiveConnectionManager(
         )
     }
 
+    /** `paths.tmp` for streamed uploads, or null while the server has not declared the route. */
+    fun attachmentUploadTmpDirectory(): String? = if (connection != null) v2Features.attachmentUploadTmp else null
+
+    /**
+     * A live upload showed the route is not what the contract promised. Streamed uploads stay
+     * off until the connection changes, so every file goes the data-URL way.
+     */
+    fun disableAttachmentUpload() {
+        v2Features = v2Features.copy(attachmentUploadTmp = null)
+    }
+
     fun currentProfile(): ConnectionProfile? =
         profile?.copy(
             password = connection?.password.orEmpty(),

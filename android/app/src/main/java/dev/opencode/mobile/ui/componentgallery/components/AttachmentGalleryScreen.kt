@@ -16,6 +16,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentChip
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentPresentation
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentUploadState
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
 import java.io.ByteArrayOutputStream
@@ -34,6 +35,13 @@ fun AttachmentGalleryScreen() {
             }
         }
 
+        Text("Uploading", style = MaterialTheme.typography.titleMedium)
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            UploadingExamples.forEach { attachment ->
+                OpenCodeAttachmentChip(attachment = attachment, onRemove = {})
+            }
+        }
+
         Text("Sent", style = MaterialTheme.typography.titleMedium)
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             AttachmentExamples.forEach { attachment ->
@@ -49,6 +57,22 @@ fun AttachmentGalleryScreen() {
         }
     }
 }
+
+private val UploadingExamples =
+    listOf(
+        OpenCodeAttachmentPresentation(
+            id = "uploading",
+            filename = "build-output.zip",
+            variant = OpenCodeAttachmentVariant.File,
+            uploadState = OpenCodeAttachmentUploadState.InProgress(42),
+        ),
+        OpenCodeAttachmentPresentation(
+            id = "starting",
+            filename = "recording.mov",
+            variant = OpenCodeAttachmentVariant.File,
+            uploadState = OpenCodeAttachmentUploadState.InProgress(null),
+        ),
+    )
 
 private fun ratioImage(
     id: String,

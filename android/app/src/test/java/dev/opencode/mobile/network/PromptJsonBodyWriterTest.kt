@@ -12,6 +12,7 @@ import dev.opencode.mobile.data.remote.dto.V2PromptSourceDto
 import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -155,6 +156,42 @@ class PromptJsonBodyWriterTest {
         assertTrue(json.contains("\"uri\":\"file:///repo/src/App.kt\""))
         assertTrue(json.contains("\"text\":\"@src/App.kt\""))
         assertTrue(json.indexOf("data:text/plain;base64,AQIDBA==") < json.indexOf("file:///repo/src/App.kt"))
+    }
+
+    @Test
+    fun writeV2Prompt_writesMetadataBeforeDelivery() {
+        val body =
+            V2PromptRequestDto(
+                text = "look\nAttached file: `/tmp/a`",
+                metadata =
+                    kotlinx.serialization.json.buildJsonObject {
+                        put(
+                            "attachments",
+                            kotlinx.serialization.json.buildJsonArray {
+                                add(
+                                    kotlinx.serialization.json.buildJsonObject {
+                                        put("name", "a.bin")
+                                        put("mime", "application/octet-stream")
+                                        put("path", "/tmp/a")
+                                    },
+                                )
+                            },
+                        )
+                    },
+                delivery = "steer",
+            )
+        val json =
+            PromptJsonBodyWriter
+                .writeV2Prompt(body, emptyList(), File(System.getProperty("java.io.tmpdir"), "prompt-writer-out"))
+                .readText()
+        assertTrue(
+            json,
+            json.contains(
+                "\"metadata\":{\"attachments\":[{\"name\":\"a.bin\",\"mime\":\"application/octet-stream\",\"path\":\"/tmp/a\"}]},\"delivery\":\"steer\"",
+            ),
+        )
+        kotlinx.serialization.json.Json
+            .parseToJsonElement(json)
     }
 
     @Test

@@ -35,6 +35,9 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
     /// `/btw` side questions: `POST /api/session/{id}/generate` answers from the session's context
     /// without adding to it (v2 releases that declare it). v1 has no equivalent.
     var supportsSideQuestion: Bool = false
+    /// Files can stream to the server (`POST /api/experimental/fs/write`, #644). Off unless the
+    /// server's API contract still matches what the app sends.
+    var supportsStreamedUpload: Bool = false
 
     static func forProtocol(_ serverProtocol: ServerProtocol, v2Features: V2ServerFeatures = V2ServerFeatures()) -> ServerCapabilities {
         switch serverProtocol {
@@ -54,7 +57,8 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
                 supportsFollowUpDelivery: true,
                 supportsSessionViewed: true,
                 supportsSessionMove: true,
-                supportsSideQuestion: v2Features.sessionGenerate
+                supportsSideQuestion: v2Features.sessionGenerate,
+                supportsStreamedUpload: v2Features.streamedUpload
             )
         }
     }

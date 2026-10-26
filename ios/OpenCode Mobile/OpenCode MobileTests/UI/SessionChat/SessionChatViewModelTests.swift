@@ -1446,6 +1446,126 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.errorMessage == nil)
     }
 
+    // MARK: Streamed uploads (#644)
+
+    private func uploadFixture(named name: String, text: String = "hello upload") throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("upload-fixture-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent(name)
+        try Data(text.utf8).write(to: file)
+        return file
+    }
+
+    @Test func upload_textFileUploadsAndSendsServerPathWithoutBytes() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .succeed("/tmp/uploads/u1/notes.txt"))
+        let repository = FakeMessageRepository(failListMessagesAfterSend: true)
+        let viewModel = makeViewModel(messageRepository: repository, attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+        let file = try uploadFixture(named: "notes.txt")
+
+        await viewModel.addAttachmentFiles([file])
+        await waitUntil { viewModel.uiState.composer.attachments.first?.isServerFile == true }
+
+        let attachment = try #require(viewModel.uiState.composer.attachments.first)
+        #expect(attachment.upload == .uploaded(serverPath: "/tmp/uploads/u1/notes.txt"))
+        #expect(uploads.uploadedFilenames == ["notes.txt"])
+        #expect(uploads.directories == ["/repo"])
+        viewModel.updateComposerText("read this")
+        await viewModel.sendPrompt()
+        #expect(repository.sentOptions?.uploadedAttachments.map(\.upload.serverPath) == ["/tmp/uploads/u1/notes.txt"])
+        #expect(repository.sentOptions?.inlineAttachments.isEmpty == true)
+    }
+
+    @Test func upload_sendIsBlockedWhilePendingAndCancelRemovesChipSilently() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .hold)
+        let repository = FakeMessageRepository()
+        let viewModel = makeViewModel(messageRepository: repository, attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+
+        await viewModel.addAttachmentFiles([try uploadFixture(named: "big.log")])
+        let id = try #require(viewModel.uiState.composer.attachments.first?.id)
+        #expect(viewModel.uiState.composer.hasPendingUploads)
+        viewModel.updateComposerText("go")
+        await viewModel.sendPrompt()
+        #expect(repository.sentOptions == nil)
+
+        viewModel.removeAttachment(id: id)
+        await waitUntil { uploads.cancelledCount == 1 }
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+        #expect(viewModel.uiState.snackbar == nil)
+        #expect(viewModel.uiState.errorMessage == nil)
+    }
+
+    @Test func upload_transportFailureRemovesChipAndShowsUploadFailed() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .fail(.failed))
+        let viewModel = makeViewModel(attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+
+        await viewModel.addAttachmentFiles([try uploadFixture(named: "notes.txt")])
+        await waitUntil { viewModel.uiState.snackbar?.message == "Upload failed" }
+
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+        #expect(viewModel.uiState.composer.streamedUploadAvailable)
+    }
+
+    @Test func upload_contractMissFallsBackToInlineWithoutError() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .fail(.contractMiss))
+        let viewModel = makeViewModel(attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+
+        await viewModel.addAttachmentFiles([try uploadFixture(named: "notes.txt")])
+        await waitUntil { viewModel.uiState.composer.attachments.first?.upload == .inline }
+
+        let attachment = try #require(viewModel.uiState.composer.attachments.first)
+        #expect(attachment.filename == "notes.txt")
+        #expect(attachment.mime == "text/plain")
+        #expect(viewModel.uiState.snackbar == nil)
+        #expect(!viewModel.uiState.composer.streamedUploadAvailable)
+    }
+
+    @Test func upload_contractMissOnHugeFileKeepsTheOldTooLargeError() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .fail(.contractMiss))
+        let viewModel = makeViewModel(attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+        let file = try uploadFixture(named: "huge.txt", text: "")
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.truncate(atOffset: UInt64(AttachmentLimits.maxDecodedBytes) + 1)
+        try handle.close()
+
+        await viewModel.addAttachmentFiles([file])
+        await waitUntil { viewModel.uiState.snackbar?.message == AttachmentLimits.tooLargeMessage }
+
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+    }
+
+    @Test func upload_sameNameAndSizeIsRefusedAsDuplicate() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .hold)
+        let viewModel = makeViewModel(attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+        let file = try uploadFixture(named: "notes.txt")
+
+        await viewModel.addAttachmentFiles([file])
+        await viewModel.addAttachmentFiles([file])
+
+        #expect(viewModel.uiState.composer.attachments.count == 1)
+        #expect(uploads.uploadedFilenames == ["notes.txt"])
+        #expect(viewModel.uiState.snackbar?.message == "This file has already been uploaded")
+        viewModel.removeAttachment(id: viewModel.uiState.composer.attachments[0].id)
+    }
+
+    @Test func upload_modelThatReadsPngKeepsItInline() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .succeed("/tmp/x"))
+        let viewModel = makeViewModel(attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+        await viewModel.refreshAttachmentUploadAvailability()
+
+        viewModel.addAttachmentData(Data([0x89, 0x50, 0x4E, 0x47, 0, 0]), filename: "p.png", declaredMime: "image/png")
+
+        #expect(viewModel.uiState.composer.attachments.first?.upload == .inline)
+        #expect(uploads.uploadedFilenames.isEmpty)
+    }
+
     @Test func sendPrompt_attachmentInFlight_showsSendingPercent() async {
         let repository = FakeMessageRepository(holdSend: true)
         let viewModel = makeViewModel(messageRepository: repository)
@@ -5322,6 +5442,7 @@ struct SessionChatViewModelTests {
         catalogRetryDelaysMs: [Int] = [],
         sessionViewReporter: (any SessionViewReporter)? = nil,
         projectFilesRepository: (any ProjectFilesRepository)? = nil,
+        attachmentUploadRepository: (any AttachmentUploadRepository)? = nil,
         worktree: String = "/repo",
         connectionProfileStore: any ConnectionProfileStore = EmptyConnectionProfileStore(),
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
@@ -5383,6 +5504,7 @@ struct SessionChatViewModelTests {
             sideQuestionStore: sideQuestionStore ?? SideQuestionStore(sessionRepository: sessionRepository),
             clock: clock,
             projectFilesRepository: projectFilesRepository,
+            attachmentUploadRepository: attachmentUploadRepository,
             catalogRetryDelaysMs: catalogRetryDelaysMs,
             worktreeRepository: worktreeRepository,
             worktreeInventoryCache: worktreeInventoryCache
@@ -6823,5 +6945,56 @@ private struct SideQuestionProbe: ConnectionProbing {
 
     func probeV2Features(connection _: ServerConnection) async throws -> V2ServerFeatures {
         V2ServerFeatures(sessionGenerate: true)
+    }
+}
+
+final class FakeAttachmentUploadRepository: AttachmentUploadRepository, @unchecked Sendable {
+    enum Mode {
+        case succeed(String)
+        case fail(AttachmentUploadError)
+        case hold
+    }
+
+    private let lock = NSLock()
+    private let mode: Mode
+    private var filenames: [String] = []
+    private var dirs: [String?] = []
+    private var cancelled = 0
+
+    init(mode: Mode) {
+        self.mode = mode
+    }
+
+    var uploadedFilenames: [String] { lock.withLock { filenames } }
+    var directories: [String?] { lock.withLock { dirs } }
+    var cancelledCount: Int { lock.withLock { cancelled } }
+
+    func isAvailable() async -> Bool { true }
+
+    func upload(
+        fileURL: URL,
+        filename: String,
+        directory: String?,
+        onProgress: @escaping @Sendable (Double) -> Void
+    ) async throws -> UploadedAttachment {
+        lock.withLock {
+            filenames.append(filename)
+            dirs.append(directory)
+        }
+        switch mode {
+        case let .succeed(path):
+            onProgress(0.5)
+            return UploadedAttachment(serverPath: path)
+        case let .fail(error):
+            throw error
+        case .hold:
+            do {
+                try await Task.sleep(for: .seconds(60))
+            } catch {
+                lock.withLock { cancelled += 1 }
+                throw AttachmentUploadError.cancelled
+            }
+            throw AttachmentUploadError.failed
+        }
     }
 }

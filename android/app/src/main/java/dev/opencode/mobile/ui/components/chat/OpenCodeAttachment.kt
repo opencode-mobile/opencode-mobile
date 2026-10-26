@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
@@ -56,12 +57,22 @@ sealed interface OpenCodeAttachmentImageSource {
     ) : OpenCodeAttachmentImageSource
 }
 
+/** Composer chip state: an upload in flight shows progress on the detail line and a hairline. */
+sealed interface OpenCodeAttachmentUploadState {
+    data object Idle : OpenCodeAttachmentUploadState
+
+    data class InProgress(
+        val percent: Int?,
+    ) : OpenCodeAttachmentUploadState
+}
+
 data class OpenCodeAttachmentPresentation(
     val id: String,
     val filename: String,
     val variant: OpenCodeAttachmentVariant,
     val imageBytes: ByteArray? = null,
     val imageSource: OpenCodeAttachmentImageSource? = null,
+    val uploadState: OpenCodeAttachmentUploadState = OpenCodeAttachmentUploadState.Idle,
 )
 
 /** Loads a server-side image for timeline previews and the viewer; null degrades the preview to the chip. */
@@ -83,40 +94,64 @@ fun OpenCodeAttachmentChip(
     enabled: Boolean = true,
 ) {
     val kindLabel = attachment.variant.label.uppercase()
-    Row(
+    val uploading = attachment.uploadState as? OpenCodeAttachmentUploadState.InProgress
+    Box(
         modifier =
             modifier
                 .fillMaxWidth()
+                .clip(AttachmentShape)
                 .border(1.dp, openCodeColor("border-weaker-base"), AttachmentShape)
-                .background(openCodeColor("surface-raised-base"), AttachmentShape)
-                .then(
-                    if (onClick != null) {
-                        Modifier
-                            .clip(AttachmentShape)
-                            .clickable(enabled = enabled, onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
-                    } else {
-                        Modifier
-                    },
-                ).padding(start = 6.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .background(openCodeColor("surface-raised-base"), AttachmentShape),
     ) {
-        AttachmentPreview(attachment, Modifier.size(36.dp))
-        AttachmentLabels(
-            attachment,
-            Modifier
-                .weight(1f)
-                .semantics { contentDescription = "${attachment.filename}, $kindLabel" },
-        )
-        IconButton(onClick = { onRemove(attachment.id) }, enabled = enabled, modifier = Modifier.size(36.dp)) {
-            Icon(
-                OpenCodeIcons.Close,
-                contentDescription = "Remove ${attachment.filename}",
-                tint = openCodeColor("icon-strong-base"),
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (onClick != null) {
+                            Modifier
+                                .clip(AttachmentShape)
+                                .clickable(enabled = enabled, onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
+                        } else {
+                            Modifier
+                        },
+                    ).padding(start = 6.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            AttachmentPreview(attachment, Modifier.size(36.dp))
+            AttachmentLabels(
+                attachment,
+                Modifier
+                    .weight(1f)
+                    .semantics { contentDescription = "${attachment.filename}, $kindLabel" },
+                detail = uploading?.let { uploadDetail(it) },
+            )
+            IconButton(onClick = { onRemove(attachment.id) }, enabled = enabled, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    OpenCodeIcons.Close,
+                    contentDescription =
+                        if (uploading != null) "Cancel upload of ${attachment.filename}" else "Remove ${attachment.filename}",
+                    tint = openCodeColor("icon-strong-base"),
+                )
+            }
+        }
+        if (uploading != null) {
+            // Hairline along the bottom edge: the percent, or a full faint line until the first report.
+            Box(
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth(((uploading.percent ?: 0) / 100f).coerceIn(0f, 1f))
+                        .height(2.dp)
+                        .background(openCodeColor("text-interactive-base")),
             )
         }
     }
 }
+
+private fun uploadDetail(upload: OpenCodeAttachmentUploadState.InProgress): String =
+    upload.percent?.let { "Uploading $it%" } ?: "Uploading…"
 
 /**
  * A sent attachment in the timeline. Images show inline at their own aspect ratio, capped in
@@ -195,6 +230,7 @@ private fun AttachmentPreview(
 private fun AttachmentLabels(
     attachment: OpenCodeAttachmentPresentation,
     modifier: Modifier,
+    detail: String? = null,
 ) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(
@@ -205,7 +241,7 @@ private fun AttachmentLabels(
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = attachment.variant.label.uppercase(),
+            text = detail ?: attachment.variant.label.uppercase(),
             style = MaterialTheme.typography.bodySmall,
             color = openCodeColor("text-base"),
         )

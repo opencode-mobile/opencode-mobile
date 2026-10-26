@@ -54,10 +54,21 @@ class ConnectionProbeService(
                     message = response.status.description,
                 )
             }
-            return V2ServerContract.features(response.body<JsonObject>())
+            val document = response.body<JsonObject>()
+            val features = V2ServerContract.features(document)
+            if (!V2ServerContract.declaresAttachmentUpload(document)) return features
+            // The route alone is not enough: the upload path is built under the server's tmp directory.
+            val tmp = runCatching { fetchTmpDirectory(client) }.getOrNull() ?: return features
+            return features.copy(attachmentUploadTmp = tmp)
         } finally {
             client.close()
         }
+    }
+
+    private suspend fun fetchTmpDirectory(client: HttpClient): String? {
+        val response: HttpResponse = client.get(V2ServerContract.INFO_PATH)
+        if (!response.status.isSuccess()) return null
+        return V2ServerContract.tmpDirectory(response.body<JsonObject>())
     }
 
     private suspend fun HttpClient.fetchHealth(path: String): HealthDto {

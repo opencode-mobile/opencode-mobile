@@ -10,6 +10,8 @@ import dev.opencode.mobile.data.remote.dto.V2PromptSkillDto
 import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SkillDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
+import dev.opencode.mobile.domain.message.AttachmentUpload
+import dev.opencode.mobile.domain.message.AttachmentUploadFailure
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 
@@ -101,9 +103,14 @@ class CommandDomainAdapter {
     fun toV2RunRequest(options: CommandRunOptions): V2RunCommandRequestDto =
         V2RunCommandRequestDto(
             name = options.command,
-            text = options.arguments,
+            text =
+                AttachmentUploadFailure.promptText(
+                    options.arguments,
+                    options.attachments.mapNotNull { (it.upload as? AttachmentUpload.Uploaded)?.serverPath },
+                ),
             files =
                 options.attachments
+                    .filter { it.isInline }
                     .map { attachment ->
                         V2PromptFileDto(
                             uri = attachment.dataUrl,

@@ -42,6 +42,8 @@ data class ServerCapabilities(
      * without adding to it (v2 releases that declare it). v1 has no equivalent.
      */
     val supportsSideQuestion: Boolean = false,
+    /** Attachments stream to the server (`POST /api/experimental/fs/write` plus `paths.tmp`, v2). */
+    val supportsAttachmentUpload: Boolean = false,
 ) {
     companion object {
         fun forProtocol(
@@ -65,6 +67,7 @@ data class ServerCapabilities(
                         supportsSessionViewed = true,
                         supportsSessionMove = true,
                         supportsSideQuestion = v2Features.sessionGenerate,
+                        supportsAttachmentUpload = v2Features.attachmentUpload,
                     )
             }
     }

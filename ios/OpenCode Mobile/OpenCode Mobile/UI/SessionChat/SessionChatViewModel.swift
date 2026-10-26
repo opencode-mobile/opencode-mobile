@@ -126,6 +126,7 @@ final class SessionChatViewModel {
         clock: any SyncClock = SystemSyncClock(),
         mcpRepository: (any McpRepository)? = nil,
         projectFilesRepository: (any ProjectFilesRepository)? = nil,
+        attachmentUploadRepository: (any AttachmentUploadRepository)? = nil,
         attachmentImageLoader: (any AttachmentImageLoading)? = nil,
         catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs,
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
@@ -181,6 +182,7 @@ final class SessionChatViewModel {
             activeConnectionManager: activeConnectionManager,
             foregroundEventStream: foregroundEventStream,
             projectFilesRepository: projectFilesRepository,
+            attachmentUploadRepository: attachmentUploadRepository,
             catalogRetryDelaysMs: catalogRetryDelaysMs
         )
         self.sessionInfo = SessionInfo(
@@ -563,6 +565,12 @@ final class SessionChatViewModel {
 
     func reportAttachmentReadFailure() {
         composer.reportAttachmentReadFailure()
+    }
+
+    /// Reads whether the server streams uploads, so the composer's attach sources and file routing
+    /// match the connection.
+    func refreshAttachmentUploadAvailability() async {
+        await composer.refreshUploadAvailability()
     }
 
     func addAttachmentFiles(_ urls: [URL]) async {

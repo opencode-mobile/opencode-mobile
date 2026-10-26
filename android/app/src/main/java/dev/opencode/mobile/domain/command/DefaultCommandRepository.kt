@@ -42,7 +42,7 @@ class DefaultCommandRepository
                     adapter.toV2SwitchModelRequest(options)?.let { model ->
                         messagesApi.switchSessionModel(sessionId, model, directory)
                     }
-                    api.runCommandV2(sessionId, adapter.toV2RunRequest(options), options.attachments)
+                    api.runCommandV2(sessionId, adapter.toV2RunRequest(options), options.attachments.filter { it.isInline })
                 } else {
                     api.runCommand(sessionId, adapter.toRunRequest(options), directory, options.attachments)
                 }

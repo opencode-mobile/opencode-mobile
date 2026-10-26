@@ -118,6 +118,11 @@ struct SessionChatComposerState: Equatable {
     var selectionRevision: Int = 0
     var followUpDelivery: FollowUpDelivery = .steer
     var supportsFollowUpDelivery = false
+    /// The server streams uploads (`POST /api/experimental/fs/write`), so any file can attach.
+    var streamedUploadAvailable = false
+
+    /// Send waits for every upload in flight (#644).
+    var hasPendingUploads: Bool { attachments.contains(where: \.isUploadPending) }
 
     var selectedModeLabel: String {
         selectableAgents.first { $0.id.compare(selectedMode, options: .caseInsensitive) == .orderedSame }?.displayName
@@ -160,15 +165,15 @@ struct SessionChatComposerState: Equatable {
     }
 
     var canAttach: Bool {
-        selectedModel?.option.canAttach == true
+        selectedModel?.option.canAttach == true || (selectedModel != nil && streamedUploadAvailable)
     }
 
     var canAttachPhotos: Bool {
-        selectedModel?.option.canAttachPhotos == true
+        selectedModel?.option.canAttachPhotos == true || (selectedModel != nil && streamedUploadAvailable)
     }
 
     var canAttachFiles: Bool {
-        selectedModel?.option.canAttachFiles == true
+        selectedModel?.option.canAttachFiles == true || (selectedModel != nil && streamedUploadAvailable)
     }
 
     func attachmentSources(developerToolsUnlocked: Bool) -> ComposerAttachmentSources {

@@ -17,6 +17,23 @@ class ServerFilePreviewsTest {
     }
 
     @Test
+    fun anUploadUnderTheTmpDirectoryIsReadFromTmpWithARelativePath() {
+        assertEquals(
+            "/srv/tmp" to "uploads/u1/shot.png",
+            DefaultServerFilePreviews.previewLocation("/srv/tmp/uploads/u1/shot.png", "/repo", "/srv/tmp/"),
+        )
+        assertEquals(
+            "C:\\Temp" to "uploads/u1/shot.png",
+            DefaultServerFilePreviews.previewLocation("C:\\Temp\\uploads\\u1\\shot.png", "/repo", "C:\\Temp"),
+        )
+        // Outside tmp the file's own folder is the location.
+        assertEquals(
+            "/srv/other" to "x.png",
+            DefaultServerFilePreviews.previewLocation("/srv/other/x.png", "/repo", "/srv/tmp"),
+        )
+    }
+
+    @Test
     fun aBareNameFallsBackToTheSessionDirectory() {
         assertEquals("/repo" to "shot.png", DefaultServerFilePreviews.previewLocation("shot.png", "/repo"))
     }

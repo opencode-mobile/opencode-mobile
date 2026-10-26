@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.data.remote.FilesystemApi
+import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,6 +30,7 @@ class DefaultServerFilePreviews
     @Inject
     constructor(
         private val filesystemApi: FilesystemApi,
+        private val activeConnectionManager: ActiveConnectionManager,
     ) : ServerFilePreviews {
         override suspend fun read(
             serverPath: String,
@@ -36,7 +38,8 @@ class DefaultServerFilePreviews
             maxBytes: Int,
         ): ByteArray? =
             try {
-                val (location, relative) = previewLocation(serverPath, sessionDirectory)
+                val (location, relative) =
+                    previewLocation(serverPath, sessionDirectory, activeConnectionManager.attachmentUploadTmpDirectory())
                 filesystemApi.readServerFileV2(location, relative, maxBytes)
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -47,12 +50,18 @@ class DefaultServerFilePreviews
         internal companion object {
             /**
              * The v2 file read route only serves files inside its `location[directory]`, so a file
-             * outside the project is read with the folder that holds it as the location.
+             * outside the project is read from a directory that holds it: the server's tmp directory
+             * for an upload (one location for every file), otherwise the file's own folder.
              */
             fun previewLocation(
                 serverPath: String,
                 sessionDirectory: String,
+                tmpDirectory: String? = null,
             ): Pair<String, String> {
+                val tmp = tmpDirectory?.trimEnd('/', '\\')
+                if (tmp != null && serverPath.length > tmp.length + 1 && serverPath.startsWith(tmp) && serverPath[tmp.length] in "/\\") {
+                    return tmp to serverPath.substring(tmp.length + 1).replace('\\', '/')
+                }
                 val separator = maxOf(serverPath.lastIndexOf('/'), serverPath.lastIndexOf('\\'))
                 if (separator <= 0) return sessionDirectory to serverPath
                 return serverPath.substring(0, separator) to serverPath.substring(separator + 1)

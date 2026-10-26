@@ -1422,6 +1422,7 @@ struct SessionChatView: View {
             let blockedSideQuestion = !sideQuestions.supported && SideQuestion.question(inDraft: composer.text) != nil
             let promptSendEnabled =
                 composer.hasSendableContent &&
+                !composer.hasPendingUploads &&
                 composer.selectedModel != nil &&
                 composer.isModelSelectionReady &&
                 !isSending &&

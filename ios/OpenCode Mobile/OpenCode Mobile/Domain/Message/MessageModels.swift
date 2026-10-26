@@ -499,6 +499,24 @@ nonisolated enum AttachmentKind: String, Equatable, Sendable {
     case file
 }
 
+/// Where an attachment's bytes live: in the prompt body (`inline`), on their way to the server,
+/// or already on the server at `serverPath` (streamed upload, #644).
+nonisolated enum AttachmentUploadState: Equatable, Sendable {
+    case inline
+    case uploading(fraction: Double)
+    case uploaded(serverPath: String)
+
+    var isPending: Bool {
+        if case .uploading = self { return true }
+        return false
+    }
+
+    var serverPath: String? {
+        if case let .uploaded(path) = self { return path }
+        return nil
+    }
+}
+
 nonisolated struct Attachment: Equatable, Sendable, Identifiable {
     let id: String
     let filename: String
@@ -508,8 +526,12 @@ nonisolated struct Attachment: Equatable, Sendable, Identifiable {
     let fileURL: URL?
     let byteCount: Int64
     let previewData: Data?
+    var upload: AttachmentUploadState
 
     var usesFileBackedBody: Bool { fileURL != nil }
+    /// Bytes already on the server: the prompt names the path instead of carrying them.
+    var isServerFile: Bool { upload.serverPath != nil }
+    var isUploadPending: Bool { upload.isPending }
 
     init(
         id: String,
@@ -519,7 +541,8 @@ nonisolated struct Attachment: Equatable, Sendable, Identifiable {
         dataURL: String,
         fileURL: URL? = nil,
         byteCount: Int64 = 0,
-        previewData: Data? = nil
+        previewData: Data? = nil,
+        upload: AttachmentUploadState = .inline
     ) {
         self.id = id
         self.filename = filename
@@ -529,6 +552,13 @@ nonisolated struct Attachment: Equatable, Sendable, Identifiable {
         self.fileURL = fileURL
         self.byteCount = byteCount
         self.previewData = previewData
+        self.upload = upload
+    }
+
+    func withUpload(_ upload: AttachmentUploadState) -> Attachment {
+        var copy = self
+        copy.upload = upload
+        return copy
     }
 }
 
@@ -729,6 +759,11 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
     let delivery: FollowUpDelivery
     /// `ClientMessageID` the server gives the user message it creates.
     let messageID: String?
+
+    /// Attachments whose bytes ride in the prompt body.
+    var inlineAttachments: [Attachment] { attachments.filter { !$0.isServerFile } }
+    /// Attachments already uploaded; the prompt names their server paths.
+    var uploadedAttachments: [Attachment] { attachments.filter(\.isServerFile) }
 
     init(
         text: String,

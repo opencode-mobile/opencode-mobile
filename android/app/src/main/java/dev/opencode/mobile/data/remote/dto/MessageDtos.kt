@@ -200,6 +200,8 @@ data class V2PromptRequestDto(
     val agents: List<V2PromptAgentDto>? = null,
     val skills: List<V2PromptSkillDto>? = null,
     val delivery: String,
+    /** `{attachments: [{name, mime, path}]}` for files uploaded to the server instead of sent inline. */
+    val metadata: JsonObject? = null,
     /** Project-file mentions. Written into `files` as literal URIs, after device attachments. */
     @Transient val fileMentions: List<V2PromptFileMentionDto>? = null,
 )

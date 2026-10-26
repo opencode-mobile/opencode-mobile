@@ -51,6 +51,22 @@ final class ActiveConnectionManager: @unchecked Sendable {
         return .forProtocol(connection.serverProtocol ?? .v1, v2Features: _v2Features)
     }
 
+    /// `paths.tmp` where uploads go, only while streamed upload is on for this connection.
+    var streamedUploadDirectory: String? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard _connection?.serverProtocol == .v2, _v2Features.streamedUpload else { return nil }
+        return _v2Features.uploadDirectory
+    }
+
+    /// A live upload showed the route no longer matches the contract: stop using it on this
+    /// connection. Probing again for the same release keeps the cleared flag.
+    func disableStreamedUpload() {
+        lock.lock()
+        _v2Features.streamedUploadRoute = false
+        lock.unlock()
+    }
+
     func ensureLoaded(from store: ConnectionProfileStore) async {
         lock.lock()
         let needsLoad = _connection == nil
@@ -669,7 +685,11 @@ struct ConnectionProbeService: ConnectionProbing, Sendable {
 
     func probeV2Features(connection: ServerConnection) async throws -> V2ServerFeatures {
         let client = ProjectsAPIClient(fixedConnection: connection, urlSession: urlSession)
-        return try V2ServerContract.features(data: try await client.getV2OpenAPIDocument())
+        var features = try V2ServerContract.features(data: try await client.getV2OpenAPIDocument())
+        if features.streamedUploadRoute {
+            features.uploadDirectory = (try? await client.getV2TmpDirectory()) ?? nil
+        }
+        return features
     }
 }
 

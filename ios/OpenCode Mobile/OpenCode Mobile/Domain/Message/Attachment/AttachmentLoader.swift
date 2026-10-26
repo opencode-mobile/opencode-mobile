@@ -119,6 +119,92 @@ struct AttachmentLoader: Sendable {
         }
     }
 
+    /// Picks the destination from the file's detected mime and size before reading its bytes.
+    /// Inline files go through `load`, so they keep its limits and errors; uploads are copied into
+    /// the attachment store and carry a pending upload state.
+    nonisolated func prepare(
+        fileURL: URL,
+        declaredMime: String? = nil,
+        destination: (_ mime: String, _ byteCount: Int64) -> AttachmentDestination
+    ) throws -> Attachment {
+        let accessed = fileURL.startAccessingSecurityScopedResource()
+        defer { if accessed { fileURL.stopAccessingSecurityScopedResource() } }
+        let values: URLResourceValues
+        let leading: Data
+        do {
+            values = try fileURL.resourceValues(forKeys: [.fileSizeKey, .contentTypeKey])
+            let handle = try FileHandle(forReadingFrom: fileURL)
+            defer { try? handle.close() }
+            leading = try handle.read(upToCount: AttachmentMime.sniffByteCount) ?? Data()
+        } catch {
+            throw AttachmentLoadError.unreadableFile
+        }
+        let size = Int64(values.fileSize ?? 0)
+        let declared = declaredMime ?? values.contentType?.preferredMIMEType
+        let mime = AttachmentMime.normalized(
+            declared: AttachmentMime.declared(declared, filename: fileURL.lastPathComponent),
+            leadingBytes: leading
+        )
+        guard destination(mime, size) == .upload else {
+            return try load(fileURL: fileURL, declaredMime: declaredMime)
+        }
+        let stored: URL
+        do {
+            stored = try persistCopy(of: fileURL, filename: fileURL.lastPathComponent)
+        } catch {
+            throw AttachmentLoadError.unreadableFile
+        }
+        return uploadAttachment(stored: stored, filename: fileURL.lastPathComponent, mime: mime, byteCount: size)
+    }
+
+    nonisolated func prepare(
+        data: Data,
+        filename: String,
+        declaredMime: String?,
+        destination: (_ mime: String, _ byteCount: Int64) -> AttachmentDestination
+    ) throws -> Attachment {
+        let mime = AttachmentMime.normalized(
+            declared: AttachmentMime.declared(declaredMime, filename: filename),
+            leadingBytes: data.prefix(AttachmentMime.sniffByteCount)
+        )
+        guard destination(mime, Int64(data.count)) == .upload else {
+            return try load(data: data, filename: filename, declaredMime: declaredMime)
+        }
+        let name = filename.trimmingCharacters(in: .whitespacesAndNewlines)
+        let stored: URL
+        do {
+            stored = try persist(data: data, filename: name)
+        } catch {
+            throw AttachmentLoadError.unreadableFile
+        }
+        return uploadAttachment(stored: stored, filename: name, mime: mime, byteCount: Int64(data.count))
+    }
+
+    nonisolated private func uploadAttachment(stored: URL, filename: String, mime: String, byteCount: Int64) -> Attachment {
+        let kind = AttachmentMime.kind(for: mime)
+        return Attachment(
+            id: UUID().uuidString,
+            filename: filename.isEmpty ? "Attachment" : filename,
+            mime: mime,
+            kind: kind,
+            dataURL: "",
+            fileURL: stored,
+            byteCount: byteCount,
+            previewData: kind == .image ? AttachmentPreview.make(fileURL: stored) : nil,
+            upload: .uploading(fraction: 0)
+        )
+    }
+
+    nonisolated private func persistCopy(of source: URL, filename: String) throws -> URL {
+        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(AttachmentLimits.storeDirectoryName, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let safeName = filename.replacingOccurrences(of: "/", with: "_")
+        let stored = directory.appendingPathComponent("\(UUID().uuidString)-\(safeName.isEmpty ? "attachment" : safeName)")
+        try FileManager.default.copyItem(at: source, to: stored)
+        return stored
+    }
+
     nonisolated private func persist(data: Data, filename: String) throws -> URL {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent(AttachmentLimits.storeDirectoryName, isDirectory: true)

@@ -1746,6 +1746,47 @@ class MessageDomainAdapterTest {
     // MARK: v2 timeline notices
 
     @Test
+    fun toV2PromptRequest_namesUploadedFilesInTextAndMetadata_andKeepsThemOutOfFiles() {
+        val uploaded =
+            Attachment(
+                id = "u1",
+                filename = "data.zip",
+                mime = "application/zip",
+                kind = AttachmentKind.File,
+                dataUrl = "",
+                byteCount = 50_000_000,
+                localPath = "/tmp/staged/data.zip",
+                upload = AttachmentUpload.Uploaded("/srv/tmp/uploads/abc/data.zip"),
+            )
+        val inline =
+            Attachment(
+                id = "i1",
+                filename = "shot.png",
+                mime = "image/png",
+                kind = AttachmentKind.Image,
+                dataUrl = "data:image/png;base64,AA==",
+                byteCount = 1,
+            )
+
+        val body = adapter.toV2PromptRequest(PromptSendOptions(text = "look", attachments = listOf(inline, uploaded)))
+
+        assertEquals("look\nAttached file: `/srv/tmp/uploads/abc/data.zip`", body.text)
+        assertEquals(listOf("shot.png"), body.files?.map { it.name })
+        assertEquals(
+            """{"attachments":[{"name":"data.zip","mime":"application/zip","path":"/srv/tmp/uploads/abc/data.zip"}]}""",
+            body.metadata.toString(),
+        )
+    }
+
+    @Test
+    fun toV2PromptRequest_withoutUploadsHasNoMetadataAndKeepsTheText() {
+        val body = adapter.toV2PromptRequest(PromptSendOptions(text = "plain"))
+
+        assertEquals("plain", body.text)
+        assertEquals(null, body.metadata)
+    }
+
+    @Test
     fun projectV2_userMetadataAttachmentsBecomeFilePartsAndDropTheAttachedFileLines() {
         val message =
             projectV2(

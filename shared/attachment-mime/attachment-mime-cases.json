@@ -1,0 +1,120 @@
+{
+  "rule": "image/png|jpeg|gif|webp and application/pdf keep type; text/* and application/json|xml|yaml|javascript|x-sh -> text/plain; anything else: NUL byte in bytes -> binary, keeps declared mime (application/octet-stream when null); no NUL -> text/plain.",
+  "description": "Mime normalization for streamed attachment uploads (#644). Detected mime -> normalized mime; sniffed bytes only matter when mime is not recognized. bytesBase64 is the first <=4096 bytes of the file.",
+  "cases": [
+    {
+      "name": "png keeps type",
+      "mime": "image/png",
+      "bytesBase64": "iVBORw0KGgo=",
+      "expected": "image/png"
+    },
+    {
+      "name": "jpeg keeps type",
+      "mime": "image/jpeg",
+      "bytesBase64": "/9j/4AAQ",
+      "expected": "image/jpeg"
+    },
+    {
+      "name": "gif keeps type",
+      "mime": "image/gif",
+      "bytesBase64": "R0lGODlh",
+      "expected": "image/gif"
+    },
+    {
+      "name": "webp keeps type",
+      "mime": "image/webp",
+      "bytesBase64": "UklGRg==",
+      "expected": "image/webp"
+    },
+    {
+      "name": "pdf keeps type",
+      "mime": "application/pdf",
+      "bytesBase64": "JVBERi0xLjQ=",
+      "expected": "application/pdf"
+    },
+    {
+      "name": "text plain",
+      "mime": "text/plain",
+      "bytesBase64": "aGVsbG8=",
+      "expected": "text/plain"
+    },
+    {
+      "name": "text markdown",
+      "mime": "text/markdown",
+      "bytesBase64": "IyBUaXRsZQ==",
+      "expected": "text/plain"
+    },
+    {
+      "name": "text csv",
+      "mime": "text/csv",
+      "bytesBase64": "YSxiCjEsMg==",
+      "expected": "text/plain"
+    },
+    {
+      "name": "json",
+      "mime": "application/json",
+      "bytesBase64": "e30=",
+      "expected": "text/plain"
+    },
+    {
+      "name": "xml",
+      "mime": "application/xml",
+      "bytesBase64": "PGEvPg==",
+      "expected": "text/plain"
+    },
+    {
+      "name": "yaml",
+      "mime": "application/yaml",
+      "bytesBase64": "YTogMQ==",
+      "expected": "text/plain"
+    },
+    {
+      "name": "javascript",
+      "mime": "application/javascript",
+      "bytesBase64": "bGV0IGEgPSAxOw==",
+      "expected": "text/plain"
+    },
+    {
+      "name": "shell script",
+      "mime": "application/x-sh",
+      "bytesBase64": "IyEvYmluL3No",
+      "expected": "text/plain"
+    },
+    {
+      "name": "unknown mime text bytes",
+      "mime": "application/octet-stream",
+      "bytesBase64": "cGxhaW4gdGV4dA==",
+      "expected": "text/plain"
+    },
+    {
+      "name": "missing mime text bytes",
+      "mime": null,
+      "bytesBase64": "cGxhaW4gdGV4dA==",
+      "expected": "text/plain"
+    },
+    {
+      "name": "unknown mime NUL byte",
+      "mime": "application/octet-stream",
+      "bytesBase64": "UEsDBAAAAAA=",
+      "expected": "application/octet-stream"
+    },
+    {
+      "name": "zip with NUL",
+      "mime": "application/zip",
+      "bytesBase64": "UEsDBAAAAAA=",
+      "expected": "application/zip"
+    },
+    {
+      "name": "missing mime NUL byte",
+      "mime": null,
+      "bytesBase64": "AAECAw==",
+      "expected": "application/octet-stream"
+    },
+    {
+      "name": "empty bytes unknown mime",
+      "mime": "application/octet-stream",
+      "bytesBase64": "",
+      "expected": "text/plain"
+    }
+  ]
+}

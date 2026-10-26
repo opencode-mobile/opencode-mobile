@@ -32,6 +32,10 @@ import dev.opencode.mobile.domain.live.SessionViewReporter
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
+import dev.opencode.mobile.domain.message.AttachmentUpload
+import dev.opencode.mobile.domain.message.AttachmentUploadResult
+import dev.opencode.mobile.domain.message.AttachmentUploadService
+import dev.opencode.mobile.domain.message.UnavailableAttachmentUploadService
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.Message
@@ -100,6 +104,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -7384,6 +7389,207 @@ class SessionChatViewModelTest {
             sentAtEpochMs = Long.MAX_VALUE / 2,
         )
 
+    @Test
+    fun streamedUpload_showsProgress_blocksSend_thenSendsServerPath() =
+        runTest(testDispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val uploads =
+                FakeAttachmentUploads { onProgress ->
+                    onProgress(50, 100)
+                    gate.await()
+                    AttachmentUploadResult.Uploaded("/tmp/uploads/u1/notes.txt")
+                }
+            val repository = FakeMessageRepository()
+            val viewModel = createViewModel(repository, attachmentUploads = uploads)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val file = stagedFile("notes.txt")
+
+            viewModel.addAttachments(listOf(uploadCandidate("notes.txt", file)))
+            runCurrent()
+
+            val pending = viewModel.uiState.value.composer
+            assertEquals(AttachmentUpload.Uploading(50), pending.attachments.single().upload)
+            assertTrue(pending.hasPendingUploads)
+            assertFalse(pending.canSend)
+
+            gate.complete(Unit)
+            runCurrent()
+
+            val done = viewModel.uiState.value.composer
+            assertEquals(AttachmentUpload.Uploaded("/tmp/uploads/u1/notes.txt"), done.attachments.single().upload)
+            assertTrue(done.canSend)
+            assertEquals(null, viewModel.uiState.value.snackbar)
+            viewModel.sendPrompt()
+            runCurrent()
+            assertEquals(
+                AttachmentUpload.Uploaded("/tmp/uploads/u1/notes.txt"),
+                repository.sentOptions
+                    ?.attachments
+                    ?.single()
+                    ?.upload,
+            )
+        }
+
+    @Test
+    fun nativeImageUnderLimit_staysInline_evenWhenUploadsAreAvailable() =
+        runTest(testDispatcher) {
+            val uploads = FakeAttachmentUploads { AttachmentUploadResult.TransportFailure }
+            val viewModel = createViewModel(FakeMessageRepository(), attachmentUploads = uploads)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.addAttachments(listOf(testAttachment()))
+            runCurrent()
+
+            assertEquals(0, uploads.calls)
+            assertTrue(
+                viewModel.uiState.value.composer.attachments
+                    .single()
+                    .isInline,
+            )
+        }
+
+    @Test
+    fun duplicateNameAndSize_isRefusedWithMessage() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.addAttachments(listOf(testAttachment(id = "a")))
+            viewModel.addAttachments(listOf(testAttachment(id = "b")))
+            runCurrent()
+
+            assertEquals(
+                listOf("a"),
+                viewModel.uiState.value.composer.attachments
+                    .map { it.id },
+            )
+            assertEquals(
+                "This file has already been uploaded",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+        }
+
+    @Test
+    fun cancelledUpload_removesChipSilently() =
+        runTest(testDispatcher) {
+            val uploads = FakeAttachmentUploads { awaitCancellation() }
+            val viewModel = createViewModel(FakeMessageRepository(), attachmentUploads = uploads)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val file = stagedFile("big.zip")
+            viewModel.addAttachments(listOf(uploadCandidate("big.zip", file, mime = "application/zip", kind = AttachmentKind.File)))
+            runCurrent()
+
+            viewModel.removeAttachment("upload-big.zip")
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value.composer.attachments
+                    .isEmpty(),
+            )
+            assertEquals(null, viewModel.uiState.value.snackbar)
+            assertTrue(uploads.cancelled)
+            assertFalse(file.exists())
+        }
+
+    @Test
+    fun transportFailure_removesChipAndShowsUploadFailed_keepingUploadsOn() =
+        runTest(testDispatcher) {
+            val uploads = FakeAttachmentUploads { AttachmentUploadResult.TransportFailure }
+            val viewModel = createViewModel(FakeMessageRepository(), attachmentUploads = uploads)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.addAttachments(listOf(uploadCandidate("notes.txt", stagedFile("notes.txt"))))
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value.composer.attachments
+                    .isEmpty(),
+            )
+            assertEquals(
+                "Upload failed",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+            assertFalse(uploads.contractMissed)
+        }
+
+    @Test
+    fun contractMiss_fallsBackToDataUrlSilentlyAndClearsTheFlag() =
+        runTest(testDispatcher) {
+            val uploads = FakeAttachmentUploads { AttachmentUploadResult.ContractMiss }
+            val viewModel = createViewModel(FakeMessageRepository(), attachmentUploads = uploads)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.addAttachments(listOf(uploadCandidate("notes.txt", stagedFile("notes.txt"))))
+            advanceUntilIdle()
+
+            assertTrue(uploads.contractMissed)
+            assertEquals(null, viewModel.uiState.value.snackbar)
+            assertTrue(
+                viewModel.uiState.value.composer.attachments
+                    .single()
+                    .isInline,
+            )
+        }
+
+    @Test
+    fun contractMiss_onFileOverTheInlineLimit_showsTheExistingSizeError() =
+        runTest(testDispatcher) {
+            val uploads = FakeAttachmentUploads { AttachmentUploadResult.ContractMiss }
+            val viewModel = createViewModel(FakeMessageRepository(), attachmentUploads = uploads)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.addAttachments(
+                listOf(
+                    uploadCandidate("huge.txt", stagedFile("huge.txt"))
+                        .copy(byteCount = AttachmentLimits.MAX_DECODED_BYTES + 1),
+                ),
+            )
+            advanceUntilIdle()
+
+            assertTrue(
+                viewModel.uiState.value.composer.attachments
+                    .isEmpty(),
+            )
+            assertEquals(
+                AttachmentLimits.TOO_LARGE_ERROR,
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+        }
+
+    private fun stagedFile(name: String): java.io.File {
+        val directory =
+            java.io
+                .File(System.getProperty("java.io.tmpdir"), AttachmentLimits.STORE_DIRECTORY_NAME)
+                .apply { mkdirs() }
+        return java.io.File(directory, "${java.util.UUID.randomUUID()}-$name").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+    }
+
+    private fun uploadCandidate(
+        name: String,
+        file: java.io.File,
+        mime: String = "text/plain",
+        kind: AttachmentKind = AttachmentKind.Text,
+    ): Attachment =
+        Attachment(
+            id = "upload-$name",
+            filename = name,
+            mime = mime,
+            kind = kind,
+            dataUrl = "",
+            byteCount = 3,
+            localPath = file.absolutePath,
+        )
+
     private fun createViewModel(
         repository: FakeMessageRepository,
         modelRepository: FakeModelRepository = FakeModelRepository(),
@@ -7412,6 +7618,7 @@ class SessionChatViewModelTest {
         worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
         sideQuestionsSupported: Boolean = false,
         sideQuestionStore: SideQuestionStore? = null,
+        attachmentUploads: AttachmentUploadService = UnavailableAttachmentUploadService,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -7495,6 +7702,7 @@ class SessionChatViewModelTest {
                     request = { sessionId, question -> sessionRepository.askSideQuestion(sessionId, question) },
                     scope = liveStoreScope.coroutineScope,
                 ),
+            attachmentUploads = attachmentUploads,
         ).apply {
             ioDispatcher = testDispatcher
             nowMs = { testDispatcher.scheduler.currentTime }
@@ -8507,4 +8715,36 @@ private object SideQuestionProbing : ConnectionProbing {
     override suspend fun probe(connection: ServerConnection): ServerProtocol = ServerProtocol.V2
 
     override suspend fun probeV2Features(connection: ServerConnection): V2ServerFeatures = V2ServerFeatures(sessionGenerate = true)
+}
+
+private class FakeAttachmentUploads(
+    private val handler: suspend (onProgress: (Long, Long) -> Unit) -> AttachmentUploadResult,
+) : AttachmentUploadService {
+    var calls = 0
+        private set
+    var contractMissed = false
+        private set
+    var cancelled = false
+        private set
+
+    override fun isAvailable(): Boolean = !contractMissed
+
+    override suspend fun upload(
+        file: java.io.File,
+        filename: String,
+        directory: String,
+        onProgress: (sent: Long, total: Long) -> Unit,
+    ): AttachmentUploadResult {
+        calls += 1
+        return try {
+            handler(onProgress)
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            cancelled = true
+            throw error
+        }
+    }
+
+    override fun onContractMiss() {
+        contractMissed = true
+    }
 }

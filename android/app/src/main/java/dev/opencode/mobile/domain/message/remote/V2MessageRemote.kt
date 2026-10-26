@@ -51,7 +51,7 @@ internal class V2MessageRemote(
         adapter.toV2SwitchModelRequest(options)?.let { model ->
             api.switchSessionModel(sessionId, model, directory)
         }
-        api.sendPromptV2(sessionId, adapter.toV2PromptRequest(options), directory, options.attachments)
+        api.sendPromptV2(sessionId, adapter.toV2PromptRequest(options), directory, options.attachments.filter { it.isInline })
     }
 
     /**

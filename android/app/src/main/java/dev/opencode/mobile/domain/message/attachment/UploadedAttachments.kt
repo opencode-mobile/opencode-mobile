@@ -16,16 +16,13 @@ data class UploadedAttachment(
 }
 
 object UploadedAttachments {
-    /** Prompt text line naming an uploaded file, shared by both apps. */
-    fun promptLine(serverPath: String): String = "Attached file: `$serverPath`"
-
     fun parse(metadata: JsonObject?): List<UploadedAttachment> {
         val entries = metadata?.get("attachments") as? JsonArray ?: return emptyList()
         return entries.mapNotNull { element ->
             val entry = element as? JsonObject ?: return@mapNotNull null
             val path = string(entry["path"]) ?: return@mapNotNull null
             val name = string(entry["name"]) ?: path.substringAfterLast('/').substringAfterLast('\\')
-            val mime = string(entry["mime"])?.lowercase() ?: AttachmentDataUrl.mimeFromFilename(name) ?: "application/octet-stream"
+            val mime = string(entry["mime"])?.lowercase() ?: AttachmentDataUrl.mimeFromFilename(name) ?: AttachmentMime.BINARY
             UploadedAttachment(name.ifBlank { "Attachment" }, mime, path)
         }
     }
@@ -36,7 +33,7 @@ object UploadedAttachments {
         uploads: List<UploadedAttachment>,
     ): String {
         if (uploads.isEmpty() || text.isEmpty()) return text
-        val lines = uploads.map { promptLine(it.path) }.toSet()
+        val lines = uploads.map { AttachmentUploadFailure.promptLine(it.path) }.toSet()
         return text
             .lines()
             .filterNot { it.trim() in lines }

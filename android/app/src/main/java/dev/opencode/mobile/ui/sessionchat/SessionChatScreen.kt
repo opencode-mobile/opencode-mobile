@@ -326,8 +326,9 @@ private fun SessionChatScreenBody(
 
     fun ingestAttachments(uris: List<android.net.Uri>) {
         if (uris.isEmpty()) return
+        val uploadAvailable = viewModel.attachmentUploadAvailable()
         coroutineScope.launch {
-            val result = withContext(Dispatchers.IO) { attachmentIngestion.ingest(uris) }
+            val result = withContext(Dispatchers.IO) { attachmentIngestion.ingest(uris, uploadAvailable) }
             viewModel.addAttachments(result.attachments)
             result.errors.firstOrNull()?.let(viewModel::reportAttachmentError)
         }
