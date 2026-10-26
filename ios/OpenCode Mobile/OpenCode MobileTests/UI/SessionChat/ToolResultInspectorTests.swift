@@ -37,8 +37,8 @@ struct ToolResultInspectorTests {
 
     @Test func findIsAPathListUnderShell() throws {
         let output = [
-            "/Users/ivan/.gradle/caches/8.11/transforms/a91/AndroidView.kt",
-            "/Users/ivan/.gradle/caches/8.11/transforms/a91/AndroidViewBinding.kt",
+            "/Users/example/.gradle/caches/8.11/transforms/a91/AndroidView.kt",
+            "/Users/example/.gradle/caches/8.11/transforms/a91/AndroidViewBinding.kt",
         ].joined(separator: "\n")
         let sheet = try pathList(
             toolName: "shell",
@@ -48,7 +48,7 @@ struct ToolResultInspectorTests {
         #expect(sheet.eyebrow == "Shell")
         #expect(sheet.title == "2 paths")
         #expect(sheet.paths[0].name == "AndroidView.kt")
-        #expect(sheet.paths[0].directory == "/Users/ivan/.gradle/caches/8.11/transforms/a91")
+        #expect(sheet.paths[0].directory == "/Users/example/.gradle/caches/8.11/transforms/a91")
     }
 
     @Test func globUsesGlobEyebrow() throws {

@@ -131,7 +131,7 @@ class SessionProtocolRepositoryTest {
                               "cost":0,
                               "tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},
                               "time":{"created":1,"updated":1},
-                              "location":{"directory":"/home/ivan"}
+                              "location":{"directory":"/home/example"}
                             },
                             {
                               "id":"ses_titled",
@@ -140,7 +140,7 @@ class SessionProtocolRepositoryTest {
                               "cost":0,
                               "tokens":{"input":1,"output":2,"reasoning":0,"cache":{"read":0,"write":0}},
                               "time":{"created":2,"updated":3},
-                              "location":{"directory":"/home/ivan"}
+                              "location":{"directory":"/home/example"}
                             }
                           ],
                           "cursor":{"previous":null,"next":null}
@@ -155,11 +155,11 @@ class SessionProtocolRepositoryTest {
                     activeConnectionManager = manager(ServerProtocol.V2),
                 )
 
-            val sessions = repository.listSessions("/home/ivan")
+            val sessions = repository.listSessions("/home/example")
 
             assertEquals(listOf("ses_untitled", "ses_titled"), sessions.map { it.id })
             assertEquals(listOf("New Session", "What is OpenCode 2?"), sessions.map { it.title })
-            assertEquals("/home/ivan", sessions.first().directory)
+            assertEquals("/home/example", sessions.first().directory)
         }
 
     @Test

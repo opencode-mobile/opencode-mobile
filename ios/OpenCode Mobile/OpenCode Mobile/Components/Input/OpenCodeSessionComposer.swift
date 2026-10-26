@@ -999,7 +999,7 @@ private struct QuestionCustomTextField: View {
                 requestID: "permission-preview",
                 sessionID: "session-preview",
                 permission: "external_directory",
-                patterns: ["/Users/ivan/Projects/opencode-web/**"]
+                patterns: ["/Users/example/Projects/opencode-web/**"]
             )
         ),
         onAction: { _ in }

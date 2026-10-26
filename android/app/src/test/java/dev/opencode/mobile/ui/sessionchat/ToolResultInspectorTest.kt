@@ -45,8 +45,8 @@ class ToolResultInspectorTest {
     fun find_isAPathListUnderShell() {
         val output =
             """
-            /Users/ivan/.gradle/caches/8.11/transforms/a91/AndroidView.kt
-            /Users/ivan/.gradle/caches/8.11/transforms/a91/AndroidViewBinding.kt
+            /Users/example/.gradle/caches/8.11/transforms/a91/AndroidView.kt
+            /Users/example/.gradle/caches/8.11/transforms/a91/AndroidViewBinding.kt
             """.trimIndent()
         val sheet =
             classify(
@@ -57,7 +57,7 @@ class ToolResultInspectorTest {
         assertEquals("Shell", sheet.eyebrow)
         assertEquals("2 paths", sheet.title)
         assertEquals("AndroidView.kt", sheet.paths[0].name)
-        assertEquals("/Users/ivan/.gradle/caches/8.11/transforms/a91", sheet.paths[0].directory)
+        assertEquals("/Users/example/.gradle/caches/8.11/transforms/a91", sheet.paths[0].directory)
     }
 
     @Test

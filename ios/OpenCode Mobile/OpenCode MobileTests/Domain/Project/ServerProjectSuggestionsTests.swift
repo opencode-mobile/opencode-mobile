@@ -93,27 +93,27 @@ struct ServerProjectSuggestionsTests {
     /// A real server's list: agents and tools left plain-folder projects that outrank the repos.
     @Test func suggestsReposNotOnHomeFromAgentCreatedServerList() {
         let projects = [
-            project("opencode", "/Users/ivan/Projects/opencode", activity: 20),
-            project("mobile", "/Users/ivan/Projects/opencode-mobile", activity: 19),
-            project("home", "/Users/ivan", activity: 18, repository: false),
-            project("t3code", "/Users/ivan/Projects/t3code", activity: 17),
+            project("opencode", "/Users/example/Projects/opencode", activity: 20),
+            project("mobile", "/Users/example/Projects/opencode-mobile", activity: 19),
+            project("home", "/Users/example", activity: 18, repository: false),
+            project("t3code", "/Users/example/Projects/t3code", activity: 17),
             project("root", "/", activity: 16, repository: false),
-            project("scratch", "/Users/ivan/.t3/scratch", activity: 15, repository: false),
-            project("projects", "/Users/ivan/Projects", activity: 14, repository: false),
-            project("evidence", "/Users/ivan/Projects/oc-655-evidence", activity: 13, repository: false),
+            project("scratch", "/Users/example/.t3/scratch", activity: 15, repository: false),
+            project("projects", "/Users/example/Projects", activity: 14, repository: false),
+            project("evidence", "/Users/example/Projects/oc-655-evidence", activity: 13, repository: false),
             project("upload", "/private/var/folders/_p/drt8/T/opencode/uploads/8d82a3f4", activity: 12, repository: false),
             project("global", "/", activity: 11, repository: false),
-            project("instax", "/Users/ivan/Projects/INSTAX", activity: 10),
-            project("homelab", "/Users/ivan/Projects/homelab", activity: 9),
-            project("difftest", "/Users/ivan/Projects/DiffTest", activity: 8),
-            project("docs", "/Users/ivan/Projects/opencode-mobile-docs", activity: 7),
-            project("jenv", "/Users/ivan/.jenv", activity: 6),
+            project("instax", "/Users/example/Projects/INSTAX", activity: 10),
+            project("homelab", "/Users/example/Projects/homelab", activity: 9),
+            project("difftest", "/Users/example/Projects/DiffTest", activity: 8),
+            project("docs", "/Users/example/Projects/opencode-mobile-docs", activity: 7),
+            project("jenv", "/Users/example/.jenv", activity: 6),
         ]
         let home = [
-            "/Users/ivan/Projects/opencode",
-            "/Users/ivan/Projects/opencode-mobile",
-            "/Users/ivan",
-            "/Users/ivan/Projects/t3code",
+            "/Users/example/Projects/opencode",
+            "/Users/example/Projects/opencode-mobile",
+            "/Users/example",
+            "/Users/example/Projects/t3code",
         ]
         let suggestions = ServerProjectSuggestions.suggestions(from: projects, excluding: home)
         #expect(suggestions.map(\.displayName) == ["INSTAX", "homelab", "DiffTest", "opencode-mobile-docs"])

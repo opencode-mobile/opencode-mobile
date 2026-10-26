@@ -8,12 +8,12 @@ class SmartProjectLabelTest {
     fun uniqueBasename_returnsNameOnly() {
         val label =
             smartProjectLabel(
-                focusWorktree = "/Users/ivan/Projects/opencode",
+                focusWorktree = "/Users/example/Projects/opencode",
                 peerWorktrees =
                     listOf(
-                        "/Users/ivan/Projects/opencode",
-                        "/Users/ivan/Projects/dotfiles",
-                        "/Users/ivan/Documents/notes",
+                        "/Users/example/Projects/opencode",
+                        "/Users/example/Projects/dotfiles",
+                        "/Users/example/Documents/notes",
                     ),
             )
         assertEquals("opencode", label)
@@ -23,7 +23,7 @@ class SmartProjectLabelTest {
     fun emptyPeers_returnsBasename() {
         assertEquals(
             "opencode",
-            smartProjectLabel("/Users/ivan/Projects/opencode", emptyList()),
+            smartProjectLabel("/Users/example/Projects/opencode", emptyList()),
         )
     }
 
@@ -31,16 +31,16 @@ class SmartProjectLabelTest {
     fun sameNameDifferentParent_usesOneParent() {
         val peers =
             listOf(
-                "/Users/ivan/Projects/opencode",
-                "/Users/ivan/Documents/opencode",
+                "/Users/example/Projects/opencode",
+                "/Users/example/Documents/opencode",
             )
         assertEquals(
             "..Projects/opencode",
-            smartProjectLabel("/Users/ivan/Projects/opencode", peers),
+            smartProjectLabel("/Users/example/Projects/opencode", peers),
         )
         assertEquals(
             "..Documents/opencode",
-            smartProjectLabel("/Users/ivan/Documents/opencode", peers),
+            smartProjectLabel("/Users/example/Documents/opencode", peers),
         )
     }
 
@@ -48,21 +48,21 @@ class SmartProjectLabelTest {
     fun sharedImmediateParent_walksUp() {
         val peers =
             listOf(
-                "/Users/ivan/Work/acme/lib/opencode",
-                "/Users/ivan/Work/beta/lib/opencode",
-                "/Users/ivan/Projects/opencode",
+                "/Users/example/Work/acme/lib/opencode",
+                "/Users/example/Work/beta/lib/opencode",
+                "/Users/example/Projects/opencode",
             )
         assertEquals(
             "..acme/lib/opencode",
-            smartProjectLabel("/Users/ivan/Work/acme/lib/opencode", peers),
+            smartProjectLabel("/Users/example/Work/acme/lib/opencode", peers),
         )
         assertEquals(
             "..beta/lib/opencode",
-            smartProjectLabel("/Users/ivan/Work/beta/lib/opencode", peers),
+            smartProjectLabel("/Users/example/Work/beta/lib/opencode", peers),
         )
         assertEquals(
             "..Projects/opencode",
-            smartProjectLabel("/Users/ivan/Projects/opencode", peers),
+            smartProjectLabel("/Users/example/Projects/opencode", peers),
         )
     }
 
@@ -71,8 +71,8 @@ class SmartProjectLabelTest {
         assertEquals(
             "..Projects/opencode",
             smartProjectLabel(
-                "/Users/ivan/Projects/opencode/",
-                listOf("/Users/ivan/Documents/opencode/"),
+                "/Users/example/Projects/opencode/",
+                listOf("/Users/example/Documents/opencode/"),
             ),
         )
     }

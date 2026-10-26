@@ -18,18 +18,18 @@ struct TerminalsCatalogViewModelTests {
         let repository = FakeCatalogTerminalRepository(
             running: [
                 RunningTerminal(
-                    directory: "/Users/ivan/Projects/opencode-mobile",
+                    directory: "/Users/example/Projects/opencode-mobile",
                     session: session(id: "pty_1", title: "zsh")
                 ),
                 RunningTerminal(
-                    directory: "/Users/ivan/Projects/playground",
+                    directory: "/Users/example/Projects/playground",
                     session: session(id: "pty_2", title: "term")
                 ),
             ]
         )
         let viewModel = makeViewModel(
             repository: repository,
-            worktrees: ["/Users/ivan/Projects/opencode-mobile", "/Users/ivan/Projects/playground"]
+            worktrees: ["/Users/example/Projects/opencode-mobile", "/Users/example/Projects/playground"]
         )
 
         await viewModel.appear()
@@ -40,17 +40,17 @@ struct TerminalsCatalogViewModelTests {
                     id: "pty_1",
                     title: "zsh",
                     projectTitle: "opencode-mobile",
-                    worktree: "/Users/ivan/Projects/opencode-mobile"
+                    worktree: "/Users/example/Projects/opencode-mobile"
                 ),
                 TerminalCatalogRow(
                     id: "pty_2",
                     title: "term",
                     projectTitle: "playground",
-                    worktree: "/Users/ivan/Projects/playground"
+                    worktree: "/Users/example/Projects/playground"
                 ),
             ]
         )
-        #expect(repository.listedDirectories == [["/Users/ivan/Projects/opencode-mobile", "/Users/ivan/Projects/playground"]])
+        #expect(repository.listedDirectories == [["/Users/example/Projects/opencode-mobile", "/Users/example/Projects/playground"]])
         #expect(!viewModel.isLoading)
     }
 
@@ -152,15 +152,15 @@ struct TerminalsCatalogViewModelTests {
     @Test func appear_exposesProjectsFromAddedWorktrees() async {
         let viewModel = makeViewModel(
             repository: FakeCatalogTerminalRepository(running: []),
-            worktrees: ["/Users/ivan/Projects/opencode-mobile", "/Users/ivan/Projects/playground"]
+            worktrees: ["/Users/example/Projects/opencode-mobile", "/Users/example/Projects/playground"]
         )
 
         await viewModel.appear()
 
         #expect(
             viewModel.projects == [
-                TerminalCatalogProject(worktree: "/Users/ivan/Projects/opencode-mobile", title: "opencode-mobile"),
-                TerminalCatalogProject(worktree: "/Users/ivan/Projects/playground", title: "playground"),
+                TerminalCatalogProject(worktree: "/Users/example/Projects/opencode-mobile", title: "opencode-mobile"),
+                TerminalCatalogProject(worktree: "/Users/example/Projects/playground", title: "playground"),
             ]
         )
     }

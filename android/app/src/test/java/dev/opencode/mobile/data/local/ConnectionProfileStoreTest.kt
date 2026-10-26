@@ -146,15 +146,15 @@ class ConnectionProfileStoreTest {
     fun save_roundTripsServerUrls_andBaseUrlUpdateKeepsId() =
         runTest {
             val store = InMemoryConnectionProfileStore()
-            val lan = "http://192.168.0.160:4096/"
-            val tailscale = "http://100.84.57.15:4096/"
+            val lan = "http://192.168.1.60:4096/"
+            val tailscale = "http://100.64.0.15:4096/"
             store.saveProfile(
                 ConnectionProfile(
                     id = "home",
                     baseUrl = lan,
                     username = "opencode",
                     password = "token",
-                    serverUrls = listOf("http://192.168.0.160:4096", tailscale),
+                    serverUrls = listOf("http://192.168.1.60:4096", tailscale),
                 ),
             )
             val saved = store.activeProfile()
@@ -188,9 +188,9 @@ class ConnectionProfileStoreTest {
                     listOf(
                         StoredConnectionProfile(
                             id = "home",
-                            baseUrl = "http://192.168.0.160:4096/",
+                            baseUrl = "http://192.168.1.60:4096/",
                             username = "opencode",
-                            serverUrls = listOf("http://192.168.0.160:4096/", "http://100.84.57.15:4096/"),
+                            serverUrls = listOf("http://192.168.1.60:4096/", "http://100.64.0.15:4096/"),
                         ),
                     ),
             )

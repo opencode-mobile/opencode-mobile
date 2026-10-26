@@ -203,7 +203,7 @@ class DefaultForegroundEventStreamTest {
                         )
                     },
                 )
-            val store = FakeProfileStore(worktrees = listOf("/Users/ivan/Projects/permission-test"))
+            val store = FakeProfileStore(worktrees = listOf("/Users/example/Projects/permission-test"))
             val manager =
                 ActiveConnectionManager(
                     store,
@@ -226,7 +226,7 @@ class DefaultForegroundEventStreamTest {
                 assertTrue(paths.any { it.endsWith("/event") && !it.contains("global") })
                 assertTrue(
                     requests.any {
-                        it.url.parameters["directory"] == "/Users/ivan/Projects/permission-test"
+                        it.url.parameters["directory"] == "/Users/example/Projects/permission-test"
                     },
                 )
                 assertTrue(requests.none { it.url.encodedPath.contains("/api/event") })
@@ -253,7 +253,7 @@ class DefaultForegroundEventStreamTest {
                         )
                     },
                 )
-            val store = FakeProfileStore(worktrees = listOf("/Users/ivan/Projects/permission-test"))
+            val store = FakeProfileStore(worktrees = listOf("/Users/example/Projects/permission-test"))
             val manager =
                 ActiveConnectionManager(
                     store,

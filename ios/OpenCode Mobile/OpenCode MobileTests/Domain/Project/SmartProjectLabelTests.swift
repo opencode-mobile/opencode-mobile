@@ -5,11 +5,11 @@ struct SmartProjectLabelTests {
     @Test
     func uniqueBasenameReturnsNameOnly() {
         let label = smartProjectLabel(
-            focusWorktree: "/Users/ivan/Projects/opencode",
+            focusWorktree: "/Users/example/Projects/opencode",
             peerWorktrees: [
-                "/Users/ivan/Projects/opencode",
-                "/Users/ivan/Projects/dotfiles",
-                "/Users/ivan/Documents/notes",
+                "/Users/example/Projects/opencode",
+                "/Users/example/Projects/dotfiles",
+                "/Users/example/Documents/notes",
             ]
         )
         #expect(label == "opencode")
@@ -19,7 +19,7 @@ struct SmartProjectLabelTests {
     func emptyPeersReturnsBasename() {
         #expect(
             smartProjectLabel(
-                focusWorktree: "/Users/ivan/Projects/opencode",
+                focusWorktree: "/Users/example/Projects/opencode",
                 peerWorktrees: []
             ) == "opencode"
         )
@@ -28,18 +28,18 @@ struct SmartProjectLabelTests {
     @Test
     func sameNameDifferentParentUsesOneParent() {
         let peers = [
-            "/Users/ivan/Projects/opencode",
-            "/Users/ivan/Documents/opencode",
+            "/Users/example/Projects/opencode",
+            "/Users/example/Documents/opencode",
         ]
         #expect(
             smartProjectLabel(
-                focusWorktree: "/Users/ivan/Projects/opencode",
+                focusWorktree: "/Users/example/Projects/opencode",
                 peerWorktrees: peers
             ) == "..Projects/opencode"
         )
         #expect(
             smartProjectLabel(
-                focusWorktree: "/Users/ivan/Documents/opencode",
+                focusWorktree: "/Users/example/Documents/opencode",
                 peerWorktrees: peers
             ) == "..Documents/opencode"
         )
@@ -48,25 +48,25 @@ struct SmartProjectLabelTests {
     @Test
     func sharedImmediateParentWalksUp() {
         let peers = [
-            "/Users/ivan/Work/acme/lib/opencode",
-            "/Users/ivan/Work/beta/lib/opencode",
-            "/Users/ivan/Projects/opencode",
+            "/Users/example/Work/acme/lib/opencode",
+            "/Users/example/Work/beta/lib/opencode",
+            "/Users/example/Projects/opencode",
         ]
         #expect(
             smartProjectLabel(
-                focusWorktree: "/Users/ivan/Work/acme/lib/opencode",
+                focusWorktree: "/Users/example/Work/acme/lib/opencode",
                 peerWorktrees: peers
             ) == "..acme/lib/opencode"
         )
         #expect(
             smartProjectLabel(
-                focusWorktree: "/Users/ivan/Work/beta/lib/opencode",
+                focusWorktree: "/Users/example/Work/beta/lib/opencode",
                 peerWorktrees: peers
             ) == "..beta/lib/opencode"
         )
         #expect(
             smartProjectLabel(
-                focusWorktree: "/Users/ivan/Projects/opencode",
+                focusWorktree: "/Users/example/Projects/opencode",
                 peerWorktrees: peers
             ) == "..Projects/opencode"
         )
@@ -76,8 +76,8 @@ struct SmartProjectLabelTests {
     func trailingSlashNormalized() {
         #expect(
             smartProjectLabel(
-                focusWorktree: "/Users/ivan/Projects/opencode/",
-                peerWorktrees: ["/Users/ivan/Documents/opencode/"]
+                focusWorktree: "/Users/example/Projects/opencode/",
+                peerWorktrees: ["/Users/example/Documents/opencode/"]
             ) == "..Projects/opencode"
         )
     }

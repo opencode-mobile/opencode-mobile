@@ -326,8 +326,8 @@ class ActiveConnectionManagerProtocolTest {
     @Test
     fun applyProfile_reselectsTailscaleAndKeepsServerUrls() =
         runTest {
-            val lan = "http://192.168.0.160:4096/"
-            val tailscale = "http://100.84.57.15:4096/"
+            val lan = "http://192.168.1.60:4096/"
+            val tailscale = "http://100.64.0.15:4096/"
             val store = FakeProfileStore()
             val manager =
                 ActiveConnectionManager(
@@ -356,8 +356,8 @@ class ActiveConnectionManagerProtocolTest {
     @Test
     fun ensureLoaded_reselectsTailscaleWhenStoredBaseUrlIsLan() =
         runTest {
-            val lan = "http://192.168.0.160:4096/"
-            val tailscale = "http://100.84.57.15:4096/"
+            val lan = "http://192.168.1.60:4096/"
+            val tailscale = "http://100.64.0.15:4096/"
             val store = FakeProfileStore()
             store.saveProfile(
                 ConnectionProfile(
@@ -385,8 +385,8 @@ class ActiveConnectionManagerProtocolTest {
     @Test
     fun ensureLoaded_sendsThePasswordOnlyToTheChosenAddress() =
         runTest {
-            val lan = "http://192.168.0.160:4096/"
-            val tailscale = "http://100.84.57.15:4096/"
+            val lan = "http://192.168.1.60:4096/"
+            val tailscale = "http://100.64.0.15:4096/"
             val store = FakeProfileStore()
             store.saveProfile(
                 ConnectionProfile(
@@ -411,8 +411,8 @@ class ActiveConnectionManagerProtocolTest {
     @Test
     fun ensureLoaded_keepsTheStoredAddressWhenTheChosenHostRejectsThePassword() =
         runTest {
-            val lan = "http://192.168.0.160:4096/"
-            val tailscale = "http://100.84.57.15:4096/"
+            val lan = "http://192.168.1.60:4096/"
+            val tailscale = "http://100.64.0.15:4096/"
             val store = FakeProfileStore()
             store.saveProfile(
                 ConnectionProfile(
@@ -437,7 +437,7 @@ class ActiveConnectionManagerProtocolTest {
     fun applyProfile_neverReplacesHttpsWithHttp() =
         runTest {
             val tunnel = "https://box.opentunnel.xyz/"
-            val lan = "http://192.168.0.160:4096/"
+            val lan = "http://192.168.1.60:4096/"
             val probe = CredentialRecordingProbe(silentHosts = setOf("box.opentunnel.xyz"))
             val manager = ActiveConnectionManager(FakeProfileStore(), probe)
 
@@ -458,8 +458,8 @@ class ActiveConnectionManagerProtocolTest {
     @Test
     fun applyProfile_whenNoAddressAnswers_keepsStoredBaseUrl() =
         runTest {
-            val lan = "http://192.168.0.160:4096/"
-            val tailscale = "http://100.84.57.15:4096/"
+            val lan = "http://192.168.1.60:4096/"
+            val tailscale = "http://100.64.0.15:4096/"
             val manager =
                 ActiveConnectionManager(
                     FakeProfileStore(),

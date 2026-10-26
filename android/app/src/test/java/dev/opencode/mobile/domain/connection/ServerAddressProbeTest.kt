@@ -9,8 +9,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ServerAddressProbeTest {
-    private val lan = "http://192.168.0.160:4096/"
-    private val tailscale = "http://100.84.57.15:4096/"
+    private val lan = "http://192.168.1.60:4096/"
+    private val tailscale = "http://100.64.0.15:4096/"
 
     @Test
     fun resolve_sendsCredentialsOnlyToTheChosenHost() =
@@ -42,7 +42,7 @@ class ServerAddressProbeTest {
     @Test
     fun resolve_silentHostsAreUnreachableAndNeverReceiveCredentials() =
         runTest {
-            val probe = RecordingCredentialProbe(silentHosts = setOf("100.84.57.15"))
+            val probe = RecordingCredentialProbe(silentHosts = setOf("100.64.0.15"))
             val resolution =
                 ServerAddressProbe.resolve(listOf(lan, tailscale), "opencode", "secret", lan, probe)
 
@@ -54,7 +54,7 @@ class ServerAddressProbeTest {
     @Test
     fun resolve_nothingAnswered_choosesNobodyAndSendsNoCredentials() =
         runTest {
-            val probe = RecordingCredentialProbe(silentHosts = setOf("192.168.0.160", "100.84.57.15"))
+            val probe = RecordingCredentialProbe(silentHosts = setOf("192.168.1.60", "100.64.0.15"))
             val resolution =
                 ServerAddressProbe.resolve(listOf(lan, tailscale), "opencode", "secret", lan, probe)
 

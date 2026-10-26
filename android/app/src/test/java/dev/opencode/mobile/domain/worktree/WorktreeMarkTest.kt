@@ -7,8 +7,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WorktreeMarkTest {
-    private val added = "/Users/ivan/Projects/opencode-mobile"
-    private val checkout = "/Users/ivan/.local/share/opencode/worktree/2fb98b/add-project-browse"
+    private val added = "/Users/example/Projects/opencode-mobile"
+    private val checkout = "/Users/example/.local/share/opencode/worktree/2fb98b/add-project-browse"
 
     @Test
     fun badgesAListedWorktreeOtherThanTheAddedPath() {

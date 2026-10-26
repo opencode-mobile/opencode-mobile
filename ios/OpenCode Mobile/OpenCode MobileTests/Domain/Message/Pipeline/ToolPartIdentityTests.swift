@@ -27,7 +27,7 @@ struct ToolPartIdentityTests {
         #expect(ToolPartIdentity.resolvedName(explicit: nil, input: nil) == "")
         #expect(ToolPartIdentity.resolvedName(explicit: nil, input: ["filePath": "src/Main.kt"]) == "read")
         #expect(ToolPartIdentity.resolvedName(explicit: nil, input: ["query": "opencode mobile"]) == "websearch")
-        #expect(ToolPartIdentity.resolvedName(explicit: nil, input: ["path": "/home/ivan/Projects/session-test"]) == "")
+        #expect(ToolPartIdentity.resolvedName(explicit: nil, input: ["path": "/home/example/Projects/session-test"]) == "")
     }
 
     @Test func resolvedNameInfersQuestionFromStoredAnyCodableInput() {

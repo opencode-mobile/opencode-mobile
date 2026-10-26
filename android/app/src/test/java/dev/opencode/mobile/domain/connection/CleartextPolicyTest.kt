@@ -11,7 +11,7 @@ class CleartextPolicyTest {
             "http://127.0.0.1:4096/",
             "http://localhost:4096",
             "http://[::1]:4096/",
-            "http://192.168.0.160:4096/",
+            "http://192.168.1.60:4096/",
             "http://10.0.2.2:4096/",
             "http://172.16.4.9:4096/",
             "http://172.31.255.1:4096/",
@@ -20,7 +20,7 @@ class CleartextPolicyTest {
             "http://100.127.255.254:4096/",
             "http://[fd7a:115c:a1e0::a033:5957]:4096/",
             "http://[fe80::1%25en0]:4096/",
-            "http://mybox.tail069dbf.ts.net:4096/",
+            "http://mybox.tail1234.ts.net:4096/",
             "http://mybox.local:4096/",
             "http://mybox:4096/",
             "http://mybox.lan:4096/",
@@ -56,7 +56,7 @@ class CleartextPolicyTest {
         val hosts =
             CleartextPolicy.untrustedCleartextHosts(
                 listOf(
-                    "http://192.168.0.160:4096/",
+                    "http://192.168.1.60:4096/",
                     "http://203.0.113.5:4096/",
                     "https://box.opentunnel.xyz/",
                     "http://devbox.example.com/",

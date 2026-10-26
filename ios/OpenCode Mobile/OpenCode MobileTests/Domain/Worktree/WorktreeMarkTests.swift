@@ -4,8 +4,8 @@ import Testing
 
 @Suite
 struct WorktreeMarkTests {
-    private let added = "/Users/ivan/Projects/opencode-mobile"
-    private let checkout = "/Users/ivan/.local/share/opencode/worktree/2fb98b/add-project-browse"
+    private let added = "/Users/example/Projects/opencode-mobile"
+    private let checkout = "/Users/example/.local/share/opencode/worktree/2fb98b/add-project-browse"
 
     @Test func badgesAListedWorktreeOtherThanTheAddedPath() {
         let inventory = WorktreeInventory.loaded([added, checkout])
