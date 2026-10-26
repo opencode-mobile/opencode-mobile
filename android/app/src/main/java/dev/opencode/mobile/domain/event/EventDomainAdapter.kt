@@ -4,6 +4,8 @@ import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.SessionFailure
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.TimelineNoticeCodec
+import dev.opencode.mobile.domain.message.UploadedAttachment
+import dev.opencode.mobile.domain.message.UploadedAttachments
 import dev.opencode.mobile.domain.message.ToolArgumentsPreview
 import dev.opencode.mobile.domain.message.ToolInterruption
 import dev.opencode.mobile.domain.message.ToolPartIdentity
@@ -402,18 +404,23 @@ class EventDomainAdapter(
         val sessionId = sessionIdFromProperties(properties)
         val messageId = userMessageId(properties)
         val parts = mutableListOf<OpencodeEvent>()
-        val text = prompt?.string("text") ?: properties.string("text")
+        val rawText = prompt?.string("text") ?: properties.string("text")
+        val uploads = UploadedAttachments.parse(prompt?.get("metadata") as? JsonObject ?: properties["metadata"] as? JsonObject)
+        val text = rawText?.let { UploadedAttachments.stripLines(it, uploads) }
         // v2 inbox `synthetic` items (e.g. Plan mode's system-reminder) are server-injected
         // context, not something the user typed: keep the part but mark it hidden.
         val synthetic = (properties["item"] as? JsonObject)?.string("type") == "synthetic"
         text?.takeIf { it.isNotBlank() }?.let {
             parts += userTextPartUpdated(sessionId, messageId, it, synthetic = synthetic)
         }
-        if (prompt == null) return parts
-        val files = prompt["files"] as? JsonArray ?: return parts
-        files.forEachIndexed { index, element ->
+        if (prompt == null && uploads.isEmpty()) return parts
+        val files = prompt?.get("files") as? JsonArray
+        files?.forEachIndexed { index, element ->
             val file = element as? JsonObject ?: return@forEachIndexed
             parts += userFilePartUpdated(sessionId, messageId, index, file)
+        }
+        uploads.forEachIndexed { index, upload ->
+            parts += uploadedFilePartUpdated(sessionId, messageId, index, upload)
         }
         return parts
     }
@@ -432,6 +439,25 @@ class EventDomainAdapter(
                 put("type", "text")
                 put("text", text)
                 if (synthetic) put("synthetic", true)
+            }
+        return event("message.part.updated", buildJsonObject { put("part", part) })
+    }
+
+    private fun uploadedFilePartUpdated(
+        sessionId: String?,
+        messageId: String?,
+        index: Int,
+        upload: UploadedAttachment,
+    ): OpencodeEvent {
+        val part =
+            buildJsonObject {
+                messageId?.let { put("id", "$it:upload:$index") }
+                sessionId?.let { put("sessionID", it) }
+                messageId?.let { put("messageID", it) }
+                put("type", "file")
+                put("mime", upload.mime)
+                put("filename", upload.name)
+                put("serverPath", upload.path)
             }
         return event("message.part.updated", buildJsonObject { put("part", part) })
     }

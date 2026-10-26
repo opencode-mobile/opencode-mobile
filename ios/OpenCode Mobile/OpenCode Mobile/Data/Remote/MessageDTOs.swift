@@ -95,6 +95,8 @@ nonisolated struct MessagePartDTO: Codable, Sendable {
     let mime: String?
     let filename: String?
     let url: String?
+    /// Client-only: absolute server path of an uploaded file (live `metadata.attachments`).
+    let serverPath: String?
     /// Client-only `notice` part from the v2 live projection.
     let notice: V2NoticeDTO?
 }

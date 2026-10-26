@@ -30,6 +30,7 @@ import dev.opencode.mobile.domain.session.VcsFileStatus
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionLeadingIcon
 import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
@@ -912,6 +913,7 @@ data class SessionChatAttachmentItem(
     val variant: OpenCodeAttachmentVariant,
     val signature: String,
     val imageBytes: ByteArray? = null,
+    val imageSource: OpenCodeAttachmentImageSource? = null,
 ) {
     override fun equals(other: Any?): Boolean =
         other is SessionChatAttachmentItem &&
@@ -919,11 +921,14 @@ data class SessionChatAttachmentItem(
             filename == other.filename &&
             variant == other.variant &&
             signature == other.signature &&
-            imageBytes.contentEquals(other.imageBytes)
+            imageBytes.contentEquals(other.imageBytes) &&
+            imageSource == other.imageSource
 
     override fun hashCode(): Int =
-        31 * (31 * (31 * (31 * id.hashCode() + filename.hashCode()) + variant.hashCode()) + signature.hashCode()) +
-            imageBytes.contentHashCode()
+        31 * (
+            31 * (31 * (31 * (31 * id.hashCode() + filename.hashCode()) + variant.hashCode()) + signature.hashCode()) +
+                imageBytes.contentHashCode()
+        ) + imageSource.hashCode()
 }
 
 fun MessageRole.displayLabel(): String =

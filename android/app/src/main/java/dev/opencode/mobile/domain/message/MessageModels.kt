@@ -103,6 +103,9 @@ enum class AttachmentKind {
     Image,
     Pdf,
     Text,
+
+    /** Any other file: a server-side attachment named in a prompt's `metadata.attachments`. */
+    File,
 }
 
 data class Attachment(
@@ -156,6 +159,8 @@ sealed class MessagePart {
         val mime: String,
         val kind: AttachmentKind,
         val dataUrl: String,
+        /** Absolute server path of an uploaded file (`metadata.attachments`); [dataUrl] is empty then. */
+        val serverPath: String? = null,
     ) : MessagePart()
 
     /**
@@ -425,7 +430,12 @@ data class SessionFailure(
             val body = providerBody?.trim()?.takeIf { it.isNotEmpty() }?.take(MAX_BODY)
             val text =
                 unwrap(message).ifBlank { emptyFallback }.ifBlank {
-                    body?.lineSequence()?.firstOrNull()?.trim()?.take(200).orEmpty()
+                    body
+                        ?.lineSequence()
+                        ?.firstOrNull()
+                        ?.trim()
+                        ?.take(200)
+                        .orEmpty()
                 }
             val shown = text.ifBlank { type?.trim().orEmpty() }
             val http = status?.takeIf { it in 100..599 }

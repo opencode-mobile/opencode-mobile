@@ -30,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,6 +73,8 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.ComposerDictationCardModel
+import dev.opencode.mobile.ui.components.LocalOpenCodeAttachmentImageLoader
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeActionTile
@@ -165,7 +168,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Session Chat; gives the timeline the loader for images that live on the server. */
 @Composable
 fun SessionChatScreen(
     sessionId: String,
@@ -187,6 +190,54 @@ fun SessionChatScreen(
         hiltViewModel(
             key = sessionChatViewModelKey(sessionId, worktree, optimisticNavigationInstanceId),
         ),
+) {
+    val attachmentImageLoader =
+        remember(viewModel) {
+            val loader: suspend (OpenCodeAttachmentImageSource.ServerPath) -> ByteArray? =
+                { source -> viewModel.loadAttachmentPreview(source.path) }
+            loader
+        }
+    CompositionLocalProvider(LocalOpenCodeAttachmentImageLoader provides attachmentImageLoader) {
+        SessionChatScreenBody(
+            sessionId = sessionId,
+            sessionTitle = sessionTitle,
+            worktree = worktree,
+            modifier = modifier,
+            optimisticNavigationInstanceId = optimisticNavigationInstanceId,
+            parentId = parentId,
+            onNavigateBack = onNavigateBack,
+            onSessionContextClick = onSessionContextClick,
+            onReviewChangesClick = onReviewChangesClick,
+            onChildSessionClick = onChildSessionClick,
+            onToolGroupClick = onToolGroupClick,
+            onSessionReplaceRequested = onSessionReplaceRequested,
+            onTerminalRequested = onTerminalRequested,
+            onFilesRequested = onFilesRequested,
+            detailControl = detailControl,
+            viewModel = viewModel,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SessionChatScreenBody(
+    sessionId: String,
+    sessionTitle: String,
+    worktree: String,
+    modifier: Modifier,
+    optimisticNavigationInstanceId: String?,
+    parentId: String?,
+    onNavigateBack: () -> Unit,
+    onSessionContextClick: () -> Unit,
+    onReviewChangesClick: (ChangesNavigationTarget) -> Unit,
+    onChildSessionClick: (ChildSessionNavigationTarget) -> Unit,
+    onToolGroupClick: (SessionToolGroup) -> Unit,
+    onSessionReplaceRequested: (ChildSessionNavigationTarget) -> Unit,
+    onTerminalRequested: (worktree: String, projectTitle: String) -> Unit,
+    onFilesRequested: (worktree: String) -> Unit,
+    detailControl: OpenCodeSplitPaneDetailControl?,
+    viewModel: SessionChatViewModel,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()

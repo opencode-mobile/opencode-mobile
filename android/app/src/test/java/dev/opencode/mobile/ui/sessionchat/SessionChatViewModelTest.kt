@@ -8002,6 +8002,7 @@ private fun testAttachment(
                 AttachmentKind.Text -> "text/plain"
                 AttachmentKind.Pdf -> "application/pdf"
                 AttachmentKind.Image -> "image/png"
+                AttachmentKind.File -> "application/octet-stream"
             }
     return Attachment(
         id = id,

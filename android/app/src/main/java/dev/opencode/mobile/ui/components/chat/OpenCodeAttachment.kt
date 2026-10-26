@@ -18,6 +18,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +39,21 @@ enum class OpenCodeAttachmentVariant(
     Image("Image"),
     Pdf("PDF"),
     Text("Text"),
+    File("File"),
+}
+
+/** Where the full image of an attachment lives, so the timeline can show more than the thumbnail. */
+sealed interface OpenCodeAttachmentImageSource {
+    /** The bytes ride in a `data:` URL on the message. */
+    data class DataUrl(
+        val dataUrl: String,
+        val mime: String,
+    ) : OpenCodeAttachmentImageSource
+
+    /** The bytes are on the server at an absolute [path]; loaded through [LocalOpenCodeAttachmentImageLoader]. */
+    data class ServerPath(
+        val path: String,
+    ) : OpenCodeAttachmentImageSource
 }
 
 data class OpenCodeAttachmentPresentation(
@@ -45,7 +61,12 @@ data class OpenCodeAttachmentPresentation(
     val filename: String,
     val variant: OpenCodeAttachmentVariant,
     val imageBytes: ByteArray? = null,
+    val imageSource: OpenCodeAttachmentImageSource? = null,
 )
+
+/** Loads a server-side image for timeline previews and the viewer; null degrades the preview to the chip. */
+val LocalOpenCodeAttachmentImageLoader =
+    staticCompositionLocalOf<suspend (OpenCodeAttachmentImageSource.ServerPath) -> ByteArray?> { { null } }
 
 /**
  * Removable attachment row. [onClick], when set, makes the row open the attachment
@@ -97,10 +118,28 @@ fun OpenCodeAttachmentChip(
     }
 }
 
+/**
+ * A sent attachment in the timeline. Images show inline at their own aspect ratio, capped in
+ * height ([OpenCodeMessageImage]); everything else, and any image that cannot load, is a chip.
+ */
 @Composable
 fun OpenCodeMessageAttachment(
     attachment: OpenCodeAttachmentPresentation,
     modifier: Modifier = Modifier,
+) {
+    if (attachment.variant == OpenCodeAttachmentVariant.Image &&
+        (attachment.imageBytes != null || attachment.imageSource != null)
+    ) {
+        OpenCodeMessageImage(attachment, modifier) { OpenCodeMessageAttachmentChip(attachment, modifier) }
+    } else {
+        OpenCodeMessageAttachmentChip(attachment, modifier)
+    }
+}
+
+@Composable
+private fun OpenCodeMessageAttachmentChip(
+    attachment: OpenCodeAttachmentPresentation,
+    modifier: Modifier,
 ) {
     val kindLabel = attachment.variant.label.uppercase()
     Row(

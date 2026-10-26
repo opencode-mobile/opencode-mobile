@@ -57,6 +57,8 @@ final class SessionChatViewModel {
     private var armedSendAcceptance: ArmedSendAcceptance?
     private var sendInFlight = false
     private var projectIdentity: SessionChatProjectIdentity
+    /// Loads timeline image attachments (inline data or server files); nil in tests.
+    let attachmentImageLoader: (any AttachmentImageLoading)?
     private var checkoutProjectIDs: Set<String> = []
     private var worktreeEventTask: Task<Void, Never>?
     private let worktreeRepository: any WorktreeRepository
@@ -124,6 +126,7 @@ final class SessionChatViewModel {
         clock: any SyncClock = SystemSyncClock(),
         mcpRepository: (any McpRepository)? = nil,
         projectFilesRepository: (any ProjectFilesRepository)? = nil,
+        attachmentImageLoader: (any AttachmentImageLoading)? = nil,
         catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs,
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
         projectRepository: any ProjectRepository = UnavailableProjectRepository(),
@@ -132,6 +135,7 @@ final class SessionChatViewModel {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
         self.worktree = worktree
+        self.attachmentImageLoader = attachmentImageLoader
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore

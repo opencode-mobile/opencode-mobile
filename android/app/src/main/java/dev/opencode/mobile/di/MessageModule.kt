@@ -8,6 +8,7 @@ import dagger.hilt.components.SingletonComponent
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.LiveStoreScope
 import dev.opencode.mobile.domain.message.DefaultMessageRepository
+import dev.opencode.mobile.domain.message.DefaultServerFilePreviews
 import dev.opencode.mobile.domain.message.DisplayMessagePipeline
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
@@ -17,6 +18,7 @@ import dev.opencode.mobile.domain.message.MessageRemote
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.ProtocolSelectedMessageRemote
+import dev.opencode.mobile.domain.message.ServerFilePreviews
 import dev.opencode.mobile.domain.message.SessionMessageEngine
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.SyncCoordinator
@@ -32,6 +34,10 @@ abstract class MessageModule {
     @Binds
     @Singleton
     abstract fun bindMessageRemote(impl: ProtocolSelectedMessageRemote): MessageRemote
+
+    @Binds
+    @Singleton
+    abstract fun bindServerFilePreviews(impl: DefaultServerFilePreviews): ServerFilePreviews
 
     companion object {
         @Provides

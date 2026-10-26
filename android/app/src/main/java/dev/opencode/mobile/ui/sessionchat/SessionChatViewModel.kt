@@ -38,6 +38,8 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ServerFilePreviews
+import dev.opencode.mobile.domain.message.UnavailableServerFilePreviews
 import dev.opencode.mobile.ui.changes.TurnDiffUnavailable
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelectionOption
@@ -105,6 +107,7 @@ import kotlin.coroutines.coroutineContext
 
 /** Minimum time a child session's current action stays on screen before the next one replaces it. */
 private const val ACTIVITY_CHILD_UPDATE_HOLD_MS = 800L
+private const val ATTACHMENT_PREVIEW_MAX_BYTES = 32 * 1024 * 1024
 
 @HiltViewModel
 class SessionChatViewModel
@@ -139,6 +142,7 @@ class SessionChatViewModel
         private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
         private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
         sideQuestionStore: SideQuestionStore? = null,
+        private val serverFilePreviews: ServerFilePreviews = UnavailableServerFilePreviews,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -983,6 +987,12 @@ class SessionChatViewModel
 
         fun refreshMentionableAgents() {
             composer.loadMentionableAgents(force = true)
+        }
+
+        /** Bytes of an image that lives on the server, for a timeline preview; null on any failure. */
+        suspend fun loadAttachmentPreview(serverPath: String): ByteArray? {
+            val directory = boundWorktree ?: return null
+            return serverFilePreviews.read(serverPath, directory, ATTACHMENT_PREVIEW_MAX_BYTES)
         }
 
         fun addAttachments(attachments: List<Attachment>) {

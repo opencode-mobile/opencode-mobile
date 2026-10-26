@@ -495,6 +495,8 @@ nonisolated enum AttachmentKind: String, Equatable, Sendable {
     case image
     case pdf
     case text
+    /// Anything else, which only travels as a file uploaded to the server.
+    case file
 }
 
 nonisolated struct Attachment: Equatable, Sendable, Identifiable {
@@ -537,6 +539,8 @@ nonisolated struct FilePart: Equatable, Sendable {
     let kind: AttachmentKind
     let dataURL: String
     let previewData: Data?
+    /// Absolute path on the server when the bytes were uploaded (`metadata.attachments`).
+    let serverPath: String?
 
     init(
         id: String,
@@ -544,7 +548,8 @@ nonisolated struct FilePart: Equatable, Sendable {
         mime: String,
         kind: AttachmentKind,
         dataURL: String,
-        previewData: Data? = nil
+        previewData: Data? = nil,
+        serverPath: String? = nil
     ) {
         self.id = id
         self.filename = filename
@@ -552,6 +557,7 @@ nonisolated struct FilePart: Equatable, Sendable {
         self.kind = kind
         self.dataURL = dataURL
         self.previewData = previewData
+        self.serverPath = serverPath
     }
 }
 

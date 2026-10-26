@@ -291,6 +291,22 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_projectsUploadedAttachmentsIntoServerPathFilePartsAndDropsTheTextLines() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"unpack\nAttached file: `/srv/tmp/uploads/u1/data.zip`","metadata":{"attachments":[{"name":"data.zip","mime":"application/zip","path":"/srv/tmp/uploads/u1/data.zip"}]}},"delivery":"steer"}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated", "message.part.updated"), events.map { it.type })
+        assertEquals("unpack", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+        val file = events[2].rawProperties?.get("part")?.jsonObject
+        assertEquals("file", file?.get("type")?.jsonPrimitive?.content)
+        assertEquals("/srv/tmp/uploads/u1/data.zip", file?.get("serverPath")?.jsonPrimitive?.content)
+        assertEquals("application/zip", file?.get("mime")?.jsonPrimitive?.content)
+        assertEquals("data.zip", file?.get("filename")?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun parseEvents_projectsPromptedFilesWithoutMimeFromDataUrl() {
         val events =
             adapter.parseEvents(

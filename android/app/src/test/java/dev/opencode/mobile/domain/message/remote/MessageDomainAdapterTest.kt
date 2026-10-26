@@ -1163,7 +1163,12 @@ class MessageDomainAdapterTest {
                 """.trimIndent(),
             )
 
-        val tools = adapter.projectV2(dtos).single().parts.filterIsInstance<MessagePart.Tool>()
+        val tools =
+            adapter
+                .projectV2(dtos)
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Tool>()
         assertEquals(listOf("Backfill users · step 3/3", null), tools.map { it.title })
     }
 
@@ -1676,7 +1681,13 @@ class MessageDomainAdapterTest {
                 }]
                 """.trimIndent(),
             )
-        val tool = adapter.projectV2(dtos).single().parts.filterIsInstance<MessagePart.Tool>().single()
+        val tool =
+            adapter
+                .projectV2(dtos)
+                .single()
+                .parts
+                .filterIsInstance<MessagePart.Tool>()
+                .single()
         assertTrue(tool.isMalformed)
         assertEquals("bad json", tool.error)
     }
@@ -1733,6 +1744,48 @@ class MessageDomainAdapterTest {
     }
 
     // MARK: v2 timeline notices
+
+    @Test
+    fun projectV2_userMetadataAttachmentsBecomeFilePartsAndDropTheAttachedFileLines() {
+        val message =
+            projectV2(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"look\nAttached file: `/srv/tmp/uploads/abc/data.zip`\nAttached file: `/srv/tmp/uploads/def/shot.png`",
+                    "metadata":{"attachments":[
+                      {"name":"data.zip","mime":"application/zip","path":"/srv/tmp/uploads/abc/data.zip"},
+                      {"name":"shot.png","mime":"image/png","path":"/srv/tmp/uploads/def/shot.png"}
+                    ]},
+                    "time":{"created":1}
+                  }
+                ]
+                """,
+            ).single()
+
+        assertEquals("look", message.text)
+        val files = message.parts.filterIsInstance<MessagePart.File>()
+        assertEquals(listOf(AttachmentKind.File, AttachmentKind.Image), files.map { it.kind })
+        assertEquals(listOf("/srv/tmp/uploads/abc/data.zip", "/srv/tmp/uploads/def/shot.png"), files.map { it.serverPath })
+        assertEquals(listOf("data.zip", "shot.png"), files.map { it.filename })
+    }
+
+    @Test
+    fun projectV2_attachmentOnlyUploadLeavesNoTextPart() {
+        val message =
+            projectV2(
+                """
+                [{"id":"m","type":"user","text":"Attached file: `/t/a.bin`",
+                  "metadata":{"attachments":[{"name":"a.bin","mime":"application/octet-stream","path":"/t/a.bin"}]},
+                  "time":{"created":1}}]
+                """,
+            ).single()
+
+        assertEquals(emptyList<MessagePart.Text>(), message.parts.filterIsInstance<MessagePart.Text>())
+        assertEquals(1, message.parts.filterIsInstance<MessagePart.File>().size)
+    }
 
     private fun projectV2(body: String): List<Message> =
         adapter.projectV2(json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(body.trimIndent()))

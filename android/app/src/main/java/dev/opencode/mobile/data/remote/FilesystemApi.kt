@@ -186,6 +186,27 @@ class FilesystemApi private constructor(
                 )
             }
 
+    /**
+     * v2 `GET /api/fs/read/<path>`, [relativePath] under [location]. The route is confined to its
+     * location, so a file outside the project (an upload under the server's tmp directory) is
+     * read by locating at a directory that contains it. Null on any failure or past [maxBytes].
+     */
+    suspend fun readServerFileV2(
+        location: String,
+        relativePath: String,
+        maxBytes: Int,
+    ): ByteArray? =
+        httpClient
+            .get()
+            .prepareGet {
+                url { appendEncodedPathSegments(v2ReadPathSegments(relativePath)) }
+                applyLocationDirectory(location)
+            }.execute { response ->
+                response.requireSuccess()
+                val read = response.bodyAsChannel().readCapped(maxBytes)
+                read.bytes.takeUnless { read.exceeded }
+            }
+
     private fun v2ReadPathSegments(relativePath: String): List<String> =
         listOf("api", "fs", "read") + encodeRelativePathSegments(relativePath)
 

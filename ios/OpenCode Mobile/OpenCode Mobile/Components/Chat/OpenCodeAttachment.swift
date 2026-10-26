@@ -5,6 +5,8 @@ enum OpenCodeAttachmentVariant: String {
     case image
     case pdf
     case text
+    /// Any other file; it only exists as a server upload.
+    case file
 
     var label: String { rawValue.uppercased() }
 }
@@ -16,19 +18,23 @@ struct OpenCodeAttachmentPresentation: Identifiable {
     let image: UIImage?
     /// Second line under the name; the variant label when nil.
     let detail: String?
+    /// The attachment behind a timeline image, so the inline image can load its full picture.
+    let imageFile: FilePart?
 
     init(
         id: String,
         filename: String,
         variant: OpenCodeAttachmentVariant,
         image: UIImage? = nil,
-        detail: String? = nil
+        detail: String? = nil,
+        imageFile: FilePart? = nil
     ) {
         self.id = id
         self.filename = filename
         self.variant = variant
         self.image = image
         self.detail = detail
+        self.imageFile = imageFile
     }
 
     var detailLabel: String { detail ?? variant.label }
@@ -117,7 +123,16 @@ struct OpenCodeAttachmentChip: View {
 struct OpenCodeMessageAttachment: View {
     let attachment: OpenCodeAttachmentPresentation
 
+    @ViewBuilder
     var body: some View {
+        if attachment.variant == .image, attachment.imageFile != nil {
+            OpenCodeMessageImage(attachment: attachment)
+        } else {
+            chip
+        }
+    }
+
+    var chip: some View {
         HStack(spacing: 10) {
             if let image = attachment.image, attachment.variant == .image {
                 Image(uiImage: image)

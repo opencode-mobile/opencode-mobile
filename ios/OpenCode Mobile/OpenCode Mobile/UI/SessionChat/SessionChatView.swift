@@ -181,6 +181,8 @@ struct SessionChatView: View {
         let observed = sessionChatObservers(sessionChatDestinations(sheets))
         return sessionChatMoveToWorktree(sessionChatRoutes(sessionChatDialogs(sessionChatLifecycle(observed))))
             .feedbackSheet(model: $feedbackModel)
+            .environment(\.attachmentImageLoading, viewModel.attachmentImageLoader)
+            .environment(\.attachmentImageDirectory, boundSession.directory ?? boundSession.worktree)
     }
 
     private var sessionChatLayout: some View {

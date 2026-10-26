@@ -18,7 +18,8 @@ enum AttachmentPresentationMapper {
             id: file.id,
             filename: file.filename,
             variant: variant(for: file.kind),
-            image: previewImage(previewData: file.previewData, dataURL: file.dataURL, mime: file.mime, kind: file.kind)
+            image: previewImage(previewData: file.previewData, dataURL: file.dataURL, mime: file.mime, kind: file.kind),
+            imageFile: file.kind == .image ? file : nil
         )
     }
 
@@ -27,6 +28,7 @@ enum AttachmentPresentationMapper {
         case .image: .image
         case .pdf: .pdf
         case .text: .text
+        case .file: .file
         }
     }
 

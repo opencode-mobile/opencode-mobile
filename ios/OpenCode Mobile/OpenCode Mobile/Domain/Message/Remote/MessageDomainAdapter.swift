@@ -474,7 +474,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     private func projectV2User(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message {
         var parts: [MessagePart] = []
-        let text = dto.text ?? ""
+        let uploaded = UploadedAttachmentMetadata.refs(from: dto.metadata)
+        let text = UploadedAttachmentMetadata.displayText(dto.text ?? "", hiding: uploaded)
         if !text.isEmpty {
             parts.append(.text(TextPart(id: "\(dto.id):text:0", text: text, isStreaming: false)))
         }
@@ -483,6 +484,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 parts.append(part)
             }
         }
+        parts.append(contentsOf: UploadedAttachmentMetadata.fileParts(uploaded, messageID: dto.id))
         return messageFromV2(
             id: dto.id,
             role: .user,
@@ -581,7 +583,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 fallbackID = "\(dto.id):\(content.type):\(index)"
             }
             return v2AssistantPart(content, fallbackID: fallbackID)
-        }
+        } + UploadedAttachmentMetadata.fileParts(UploadedAttachmentMetadata.refs(from: dto.metadata), messageID: dto.id)
         let stopReason = MessageStopReason.from(finish: dto.finish, errorKind: dto.error?.type)
         let failure = structuredFailure(dto.error, outcome: nil, completedAtEpochMs: dto.time?.completed)
             ?? dto.retry?.error.flatMap {
@@ -766,7 +768,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             id: dto.id ?? (url.isEmpty ? nil : url) ?? dto.filename ?? "file",
             filename: dto.filename,
             mime: dto.mime,
-            dataURL: url
+            dataURL: url,
+            serverPath: dto.serverPath
         )
     }
 
@@ -783,13 +786,28 @@ nonisolated struct MessageDomainAdapter: Sendable {
         id: String,
         filename: String?,
         mime: String?,
-        dataURL: String
+        dataURL: String,
+        serverPath: String? = nil
     ) -> MessagePart? {
         let resolvedMime = (
             mime
                 ?? AttachmentDataURL.mime(fromDataURL: dataURL)
                 ?? filename.flatMap(AttachmentDataURL.mime(fromFilename:))
         )?.lowercased()
+        if let serverPath, !serverPath.isEmpty {
+            // Uploaded file: any type shows, at least as a chip.
+            let mime = resolvedMime ?? AttachmentMime.binaryFallback
+            return .file(
+                FilePart(
+                    id: id,
+                    filename: filename?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "Attachment",
+                    mime: mime,
+                    kind: AttachmentMime.kind(for: mime),
+                    dataURL: "",
+                    serverPath: serverPath
+                )
+            )
+        }
         guard let resolvedMime, let kind = AttachmentDataURL.kind(for: resolvedMime) else { return nil }
         if !dataURL.isEmpty {
             guard dataURL.lowercased().hasPrefix("data:"),

@@ -367,7 +367,9 @@ nonisolated struct EventDomainAdapter: Sendable {
         // v2 inbox `synthetic` items (e.g. Plan mode's system-reminder) are server-injected
         // context, not something the user typed: keep the part but mark it hidden.
         let isSynthetic = (properties["item"] as? [String: Any]).flatMap { string(in: $0, key: "type") } == "synthetic"
-        if let text = prompt.flatMap({ string(in: $0, key: "text") }) ?? string(in: properties, key: "text"),
+        let uploaded = UploadedAttachmentMetadata.refs(fromJSON: prompt?["metadata"] ?? properties["metadata"])
+        if let rawText = prompt.flatMap({ string(in: $0, key: "text") }) ?? string(in: properties, key: "text"),
+           case let text = UploadedAttachmentMetadata.displayText(rawText, hiding: uploaded),
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
             parts.append(
@@ -379,6 +381,17 @@ nonisolated struct EventDomainAdapter: Sendable {
         for (index, element) in files.enumerated() {
             guard let file = element as? [String: Any] else { continue }
             parts.append(userFilePartUpdated(sessionID: sessionID, messageID: messageID, index: index, file: file))
+        }
+        for (index, ref) in uploaded.enumerated() {
+            var part: [String: Any] = [
+                "type": "file", "mime": ref.mime, "filename": ref.name, "serverPath": ref.path,
+            ]
+            if let messageID {
+                part["id"] = "\(messageID):upload:\(index)"
+                part["messageID"] = messageID
+            }
+            if let sessionID { part["sessionID"] = sessionID }
+            parts.append(event(type: "message.part.updated", properties: ["part": part]))
         }
         return parts
     }

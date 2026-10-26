@@ -85,6 +85,8 @@ data class MessagePartDto(
     val mime: String? = null,
     val url: String? = null,
     val filename: String? = null,
+    /** Absolute server path of a file the client uploaded (from a v2 prompt's `metadata.attachments`). */
+    val serverPath: String? = null,
     val system: String? = null,
     val tool: String? = null,
     val source: JsonObject? = null,

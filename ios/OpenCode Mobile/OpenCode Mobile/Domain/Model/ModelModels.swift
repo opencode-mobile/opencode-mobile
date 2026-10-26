@@ -106,7 +106,7 @@ struct ModelSelectionOption: Equatable, Sendable, Identifiable {
         switch kind {
         case .image: supportsImageInput
         case .pdf: supportsPdfInput
-        case .text: true
+        case .text, .file: true
         }
     }
 
