@@ -5057,6 +5057,190 @@ struct SessionChatViewModelTests {
         #expect(reporter.calls == ["focus:ses-1", "release:ses-1"])
     }
 
+    @Test func sideQuestion_typedBtwAsksOnceWithoutTouchingTheConversation() async {
+        let messageRepository = FakeMessageRepository()
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            messageRepository: messageRepository,
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.visibleClientSlashActions.first == .btw)
+        let messagesBefore = viewModel.uiState.messages
+
+        viewModel.updateComposerText("/btw ")
+        #expect(viewModel.uiState.sideQuestions.composerMode)
+        #expect(viewModel.uiState.composer.text == "")
+
+        viewModel.updateComposerText("What changed?")
+        await viewModel.sendPrompt()
+        let asked = await waitUntil { sessionRepository.sideQuestionRequests.count == 1 }
+
+        #expect(asked)
+        #expect(sessionRepository.sideQuestionRequests == [.init(sessionID: "ses-1", question: "What changed?")])
+        #expect(!messageRepository.sendPromptAsyncCalled)
+        #expect(viewModel.uiState.composer.text == "")
+        #expect(!viewModel.uiState.sideQuestions.composerMode)
+        #expect(viewModel.uiState.sideQuestions.pendingCount == 1)
+
+        sessionRepository.replySideQuestion(.success("Two files."))
+        let answered = await waitUntil { viewModel.uiState.sideQuestions.presentedAnswer != nil }
+
+        #expect(answered)
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer?.question == "What changed?")
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer?.answer == "Two files.")
+        #expect(viewModel.uiState.sideQuestions.pendingCount == 0)
+        #expect(viewModel.uiState.messages == messagesBefore)
+        #expect(!messageRepository.sendPromptAsyncCalled)
+    }
+
+    @Test func sideQuestion_btwTileEntersModeAndEmptyQuestionIsNotSent() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.runClientSlashAction(.btw)
+        #expect(viewModel.uiState.sideQuestions.composerMode)
+        #expect(!viewModel.uiState.commandsSheetVisible)
+
+        await viewModel.sendPrompt()
+        #expect(sessionRepository.sideQuestionRequests.isEmpty)
+
+        viewModel.exitSideQuestionMode()
+        #expect(!viewModel.uiState.sideQuestions.composerMode)
+    }
+
+    @Test(arguments: [ServerProtocol.v1, ServerProtocol.v2])
+    func sideQuestion_unsupportedServerShowsNoticeAndNeverSendsAPrompt(serverProtocol: ServerProtocol) async {
+        let messageRepository = FakeMessageRepository()
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            messageRepository: messageRepository,
+            sessionRepository: sessionRepository,
+            serverProtocol: serverProtocol
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        #expect(!viewModel.uiState.visibleClientSlashActions.contains(.btw))
+
+        viewModel.updateComposerText("/btw why?")
+        #expect(viewModel.uiState.sideQuestions.unsupportedNotice == SessionChatSideQuestions.unsupportedNotice)
+        #expect(!viewModel.uiState.sideQuestions.composerMode)
+
+        await viewModel.sendPrompt()
+        #expect(sessionRepository.sideQuestionRequests.isEmpty)
+        #expect(!messageRepository.sendPromptAsyncCalled)
+        #expect(viewModel.uiState.composer.text == "/btw why?")
+    }
+
+    @Test func sideQuestion_answerArrivingUnderAnOpenSheetWaitsThenOpens() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/btw One?")
+        await viewModel.sendPrompt()
+        viewModel.updateComposerText("/btw Two?")
+        await viewModel.sendPrompt()
+        _ = await waitUntil { sessionRepository.pendingSideQuestionReplies == 2 }
+        #expect(viewModel.uiState.sideQuestions.pendingCount == 2)
+
+        sessionRepository.replySideQuestion(.success("First"))
+        _ = await waitUntil { viewModel.uiState.sideQuestions.presentedAnswer != nil }
+        sessionRepository.replySideQuestion(.success("Second"))
+        _ = await waitUntil { viewModel.uiState.sideQuestions.readyCount == 1 }
+
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer?.answer == "First")
+        #expect(viewModel.uiState.sideQuestions.readyCount == 1)
+
+        viewModel.closeSideQuestionAnswer()
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer?.answer == "Second")
+        #expect(viewModel.uiState.sideQuestions.readyCount == 0)
+
+        viewModel.closeSideQuestionAnswer()
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer == nil)
+        #expect(viewModel.uiState.sideQuestions.readyCount == 0)
+    }
+
+    @Test func sideQuestion_failureOffersRetryOnTheSnackbarAndChip() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/btw Why?")
+        await viewModel.sendPrompt()
+        _ = await waitUntil { sessionRepository.pendingSideQuestionReplies == 1 }
+
+        sessionRepository.replySideQuestion(.failure(SessionError.http(statusCode: 503, message: "busy")))
+        let failed = await waitUntil { viewModel.uiState.sideQuestions.failedCount == 1 }
+
+        #expect(failed)
+        #expect(viewModel.uiState.snackbar?.message == "/btw failed: “Why?”")
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        guard case let .retrySideQuestion(id) = viewModel.uiState.snackbar?.action else {
+            Issue.record("expected a Retry action")
+            return
+        }
+
+        viewModel.retrySideQuestions(id: id)
+        _ = await waitUntil { sessionRepository.sideQuestionRequests.count == 2 }
+        #expect(viewModel.uiState.sideQuestions.failedCount == 0)
+        #expect(viewModel.uiState.sideQuestions.pendingCount == 1)
+
+        sessionRepository.replySideQuestion(.failure(SessionError.http(statusCode: 503, message: "busy")))
+        _ = await waitUntil { viewModel.uiState.sideQuestions.failedCount == 1 }
+        viewModel.dismissFailedSideQuestions()
+        #expect(viewModel.uiState.sideQuestions.failedCount == 0)
+    }
+
+    @Test func sideQuestion_requestsAndUnreadAnswersOutliveLeavingSessionChat() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let store = SideQuestionStore(sessionRepository: sessionRepository)
+        let viewModel = makeViewModel(
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository,
+            sideQuestionStore: store
+        )
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/btw Why?")
+        await viewModel.sendPrompt()
+        _ = await waitUntil { sessionRepository.pendingSideQuestionReplies == 1 }
+
+        viewModel.stopObserving()
+        viewModel.startObserving()
+        #expect(viewModel.uiState.sideQuestions.pendingCount == 1)
+
+        viewModel.stopObserving()
+        sessionRepository.replySideQuestion(.success("Because."))
+        _ = await waitUntil { store.entries(sessionID: "ses-1").first?.answer != nil }
+        viewModel.startObserving()
+
+        #expect(viewModel.uiState.sideQuestions.readyCount == 1)
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer == nil)
+
+        viewModel.openSideQuestionAnswer()
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer?.answer == "Because.")
+
+        viewModel.stopObserving()
+        viewModel.startObserving()
+        defer { viewModel.stopObserving() }
+        #expect(viewModel.uiState.sideQuestions.readyCount == 0)
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer == nil)
+        #expect(store.entries(sessionID: "ses-1").isEmpty)
+    }
+
     private func makeViewModel(
         messageRepository: (any MessageRepository)? = nil,
         eventStream: FakeForegroundEventStream? = nil,
@@ -5081,7 +5265,8 @@ struct SessionChatViewModelTests {
         worktree: String = "/repo",
         connectionProfileStore: any ConnectionProfileStore = EmptyConnectionProfileStore(),
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
-        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache()
+        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
+        sideQuestionStore: SideQuestionStore? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
@@ -5135,6 +5320,7 @@ struct SessionChatViewModelTests {
                 modelCatalogStore: catalogStore
             ),
             liveUpdates: liveUpdates,
+            sideQuestionStore: sideQuestionStore ?? SideQuestionStore(sessionRepository: sessionRepository),
             clock: clock,
             projectFilesRepository: projectFilesRepository,
             catalogRetryDelaysMs: catalogRetryDelaysMs,
@@ -5143,6 +5329,17 @@ struct SessionChatViewModelTests {
         )
         viewModel.startObserving()
         return viewModel
+    }
+
+    /// A v2 server whose contract declares `POST /api/session/{id}/generate`.
+    private static func makeSideQuestionConnectionManager() async -> ActiveConnectionManager {
+        let manager = ActiveConnectionManager(connectionProbing: SideQuestionProbe())
+        manager.apply(
+            ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
+            serverProtocol: .v2
+        )
+        _ = try? await manager.probeActive()
+        return manager
     }
 
     private func sharedCatalogFixture() -> (ModelSelectionOption, ModelSelectionOption, ModelSelectionCatalog) {
@@ -6163,6 +6360,39 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private(set) var moveRequests: [MoveRequest] = []
     var moveSessionError: SessionError?
 
+    struct SideQuestionRequest: Equatable {
+        let sessionID: String
+        let question: String
+    }
+
+    private let sideQuestionLock = NSLock()
+    private var _sideQuestionRequests: [SideQuestionRequest] = []
+    private var sideQuestionReplies: [CheckedContinuation<String, Error>] = []
+
+    var sideQuestionRequests: [SideQuestionRequest] {
+        sideQuestionLock.withLock { _sideQuestionRequests }
+    }
+
+    /// Requests still waiting for `replySideQuestion`.
+    var pendingSideQuestionReplies: Int {
+        sideQuestionLock.withLock { sideQuestionReplies.count }
+    }
+
+    func askSideQuestion(sessionID: String, question: String) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            sideQuestionLock.withLock {
+                _sideQuestionRequests.append(SideQuestionRequest(sessionID: sessionID, question: question))
+                sideQuestionReplies.append(continuation)
+            }
+        }
+    }
+
+    /// Answers the oldest waiting `/btw` request.
+    func replySideQuestion(_ result: Result<String, Error>) {
+        let continuation = sideQuestionLock.withLock { sideQuestionReplies.removeFirst() }
+        continuation.resume(with: result)
+    }
+
     func moveSession(id: String, directory: String) async throws {
         moveRequests.append(MoveRequest(id: id, directory: directory))
         if let moveSessionError { throw moveSessionError }
@@ -6526,4 +6756,12 @@ private final class RecordingSessionViewReporter: SessionViewReporter {
     func focus(sessionId: String) { calls.append("focus:\(sessionId)") }
     func release(sessionId: String) { calls.append("release:\(sessionId)") }
     func clearCache() { calls.append("clearCache") }
+}
+
+private struct SideQuestionProbe: ConnectionProbing {
+    func probe(connection _: ServerConnection) async throws -> ServerProtocol { .v2 }
+
+    func probeV2Features(connection _: ServerConnection) async throws -> V2ServerFeatures {
+        V2ServerFeatures(sessionGenerate: true)
+    }
 }

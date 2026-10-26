@@ -23,6 +23,10 @@ enum OpenCodeSessionComposerState {
         /// and a selected Shell badge replaces the model and agent chips; tapping it sends
         /// `.exitShellMode`.
         let shellMode: Bool
+        /// Send asks a `/btw` side question instead of prompting. A selected `/btw` badge replaces
+        /// the model and agent chips and the field shows its own placeholder; tapping the badge or
+        /// deleting on an empty field sends `.exitSideQuestionMode`.
+        let sideQuestionMode: Bool
 
         init(
             text: String,
@@ -42,7 +46,8 @@ enum OpenCodeSessionComposerState {
             stopEnabled: Bool,
             followUpDelivery: FollowUpDelivery? = nil,
             showDictationButton: Bool = false,
-            shellMode: Bool = false
+            shellMode: Bool = false,
+            sideQuestionMode: Bool = false
         ) {
             self.text = text
             self.mentionRanges = mentionRanges
@@ -62,6 +67,7 @@ enum OpenCodeSessionComposerState {
             self.followUpDelivery = followUpDelivery
             self.showDictationButton = showDictationButton
             self.shellMode = shellMode
+            self.sideQuestionMode = sideQuestionMode
         }
     }
 
@@ -217,6 +223,8 @@ enum OpenCodeSessionComposerAction {
     case cancelRevert
     /// Drop the leading `!` so the draft is a prompt again.
     case exitShellMode
+    /// Leave `/btw` side-question mode; the draft stays.
+    case exitSideQuestionMode
     case send
     case toggleFollowUp
     case stop
@@ -362,10 +370,11 @@ struct OpenCodeSessionComposer: View {
                 selectionStart: prompt.selectionStart,
                 selectionEnd: prompt.selectionEnd,
                 selectionRevision: prompt.selectionRevision,
-                placeholder: "Ask anything...",
+                placeholder: prompt.sideQuestionMode ? Self.sideQuestionPlaceholder : "Ask anything...",
                 focusRequestToken: focusRequestToken,
                 onFocusChange: onInputFocusChange,
                 literalInput: prompt.shellMode,
+                onDeleteBackwardWhenEmpty: prompt.sideQuestionMode ? { onAction(.exitSideQuestionMode) } : nil,
                 onChange: { text, selectionStart, selectionEnd in
                     onAction(.textChanged(text: text, selectionStart: selectionStart, selectionEnd: selectionEnd))
                 }
@@ -413,15 +422,17 @@ struct OpenCodeSessionComposer: View {
 
                     OpenCodeButton(
                         variant: .iconCircle(
-                            prompt.followUpDelivery == .steer ? .arrowWarmUp : .arrowUpward,
+                            prompt.followUpDelivery == .steer && !prompt.sideQuestionMode ? .arrowWarmUp : .arrowUpward,
                             accessibilityLabel: Self.sendLabel(
                                 followUpDelivery: prompt.followUpDelivery,
                                 hasActiveWork: prompt.showStop,
-                                shellMode: prompt.shellMode
+                                shellMode: prompt.shellMode,
+                                sideQuestionMode: prompt.sideQuestionMode
                             )
                         ),
                         enabled: prompt.sendEnabled,
-                        contrast: .accent,
+                        // A side question is not a prompt, so its Send does not look like one.
+                        contrast: prompt.sideQuestionMode ? .high : .accent,
                         longPress: prompt.followUpDelivery == nil ? nil : { onAction(.toggleFollowUp) },
                         action: {
                             // OPE-138: send leaves editing intent. Mention UITextView is
@@ -538,7 +549,16 @@ struct OpenCodeSessionComposer: View {
     private func pickerChipsRow(_ prompt: OpenCodeSessionComposerState.Prompt) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             let chips = HStack(spacing: 8) {
-                if prompt.shellMode {
+                if prompt.sideQuestionMode {
+                    OpenCodeChoiceBadge(
+                        label: "/btw",
+                        selected: true,
+                        variant: .glass,
+                        action: { onAction(.exitSideQuestionMode) }
+                    )
+                    .accessibilityLabel("Side question mode")
+                    .accessibilityHint("Leave side question mode")
+                } else if prompt.shellMode {
                     // Like the TUI, shell mode shows "Shell" in place of the agent and model.
                     OpenCodeChoiceBadge(
                         label: "Shell",
@@ -880,11 +900,15 @@ struct OpenCodeSessionComposer: View {
 
     /// Send button label. Steer/Queue only describe what Send does while work is running;
     /// an idle session just sends. A shell command always runs now.
+    static let sideQuestionPlaceholder = "Side question, not added to chat"
+
     nonisolated static func sendLabel(
         followUpDelivery: FollowUpDelivery?,
         hasActiveWork: Bool,
-        shellMode: Bool = false
+        shellMode: Bool = false,
+        sideQuestionMode: Bool = false
     ) -> String {
+        if sideQuestionMode { return "Ask side question" }
         if shellMode { return "Run shell command" }
         guard hasActiveWork, let followUpDelivery else { return "Send" }
         switch followUpDelivery {

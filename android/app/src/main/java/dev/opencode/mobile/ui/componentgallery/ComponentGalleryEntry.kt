@@ -57,6 +57,7 @@ enum class ComponentGalleryEntryId {
     ActionPill,
     ActionTile,
     SyncingPill,
+    SideQuestionPill,
     ComposerSuggestionOverlay,
     ReviewChangesPill,
     SessionTodosPill,
@@ -164,6 +165,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.SyncingPill,
             title = "Syncing Pill",
             description = "Non-interactive floating status pill for quiet cache→network sync.",
+            category = ComponentGalleryCategory.Controls,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SideQuestionPill,
+            title = "Side Question Pill",
+            description = "Floating /btw status above the composer: running, answer ready, or failed with Retry.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(

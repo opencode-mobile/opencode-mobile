@@ -47,6 +47,9 @@ protocol SessionRepository: Sendable {
     /// Moves a session to another worktree of its project (v2). The server applies it at the
     /// next turn boundary and announces it with `session.moved`. v1 has no move endpoint and throws.
     func moveSession(id: String, directory: String) async throws
+    /// Answers a `/btw` side question from the session's context and model without adding to the
+    /// conversation (v2). Returns the trimmed markdown answer. v1 has no equivalent and throws.
+    func askSideQuestion(sessionID: String, question: String) async throws -> String
 }
 
 /// How the server handled a compact request.
@@ -81,6 +84,9 @@ extension SessionRepository {
     func queuePendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
     func markSessionViewed(sessionId _: String, idleAtEpochMs _: Int64) async throws {}
     func moveSession(id _: String, directory _: String) async throws {
+        throw SessionError.http(statusCode: 404, message: "Needs an opencode v2 server")
+    }
+    func askSideQuestion(sessionID _: String, question _: String) async throws -> String {
         throw SessionError.http(statusCode: 404, message: "Needs an opencode v2 server")
     }
     func commitRevert(id _: String) async throws -> Bool { true }
@@ -344,6 +350,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func moveSession(id: String, directory: String) async throws {
         try await run { try await remote.moveSession(id: id, directory: directory) }
+    }
+
+    func askSideQuestion(sessionID: String, question: String) async throws -> String {
+        try await run { try await remote.askSideQuestion(sessionID: sessionID, question: question) }
     }
 
     private func run<T>(_ work: () async throws -> T) async throws -> T {

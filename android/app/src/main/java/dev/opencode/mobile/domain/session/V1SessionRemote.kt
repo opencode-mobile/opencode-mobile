@@ -100,6 +100,12 @@ internal class V1SessionRemote(
         directory: String,
     ): Unit = throw SessionError.Http(404, SESSION_MOVE_UNAVAILABLE)
 
+    /** v1 has no transient generate endpoint; Session Chat hides `/btw` there. */
+    override suspend fun askSideQuestion(
+        sessionId: String,
+        question: String,
+    ): String = throw SessionError.Http(404, SIDE_QUESTION_UNAVAILABLE)
+
     override suspend fun abortSession(
         id: String,
         directory: String?,

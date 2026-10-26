@@ -70,6 +70,8 @@ struct OpenCodeMentionTextView: View {
     /// Turns off autocorrect, auto-capitalization and smart quotes and dashes, for text that
     /// must reach the server exactly as typed, such as a shell command (`--flag` stays `--flag`).
     var literalInput = false
+    /// Delete on an empty field, which changes no text: the composer leaves a mode with it.
+    var onDeleteBackwardWhenEmpty: (() -> Void)?
     let onChange: (_ text: String, _ selectionStart: Int, _ selectionEnd: Int) -> Void
 
     var body: some View {
@@ -83,6 +85,7 @@ struct OpenCodeMentionTextView: View {
             focusRequestToken: focusRequestToken,
             onFocusChange: onFocusChange,
             literalInput: literalInput,
+            onDeleteBackwardWhenEmpty: onDeleteBackwardWhenEmpty,
             onChange: onChange
         )
     }
@@ -98,6 +101,7 @@ private struct Representable: UIViewRepresentable {
     let focusRequestToken: Int
     let onFocusChange: ((Bool) -> Void)?
     let literalInput: Bool
+    let onDeleteBackwardWhenEmpty: (() -> Void)?
     let onChange: (String, Int, Int) -> Void
 
     func makeUIView(context: Context) -> PlaceholderTextView {
@@ -124,6 +128,7 @@ private struct Representable: UIViewRepresentable {
         uiView.placeholderLabel.text = placeholder
         uiView.placeholderLabel.textColor = UIColor(OpenCodeColors.textWeak)
         context.coordinator.onFocusChange = onFocusChange
+        uiView.onDeleteBackwardWhenEmpty = onDeleteBackwardWhenEmpty
         applyInputTraits(to: uiView)
         if context.coordinator.lastFocusRequestToken != focusRequestToken {
             context.coordinator.lastFocusRequestToken = focusRequestToken
@@ -286,6 +291,7 @@ private struct Representable: UIViewRepresentable {
 
 final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput {
     let placeholderLabel = UILabel()
+    var onDeleteBackwardWhenEmpty: (() -> Void)?
     private var pendingCaretScroll = false
     private var pendingFocus = false
 
@@ -309,6 +315,14 @@ final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput {
     override func layoutSubviews() {
         super.layoutSubviews()
         retryPendingCaretScrollIfNeeded()
+    }
+
+    override func deleteBackward() {
+        if text.isEmpty, let onDeleteBackwardWhenEmpty {
+            onDeleteBackwardWhenEmpty()
+            return
+        }
+        super.deleteBackward()
     }
 
     override func didMoveToWindow() {

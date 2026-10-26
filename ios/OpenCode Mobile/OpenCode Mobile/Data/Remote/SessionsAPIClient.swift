@@ -353,6 +353,20 @@ nonisolated struct SessionsAPIClient: Sendable {
         return envelope.data
     }
 
+    /// `POST /api/session/{id}/generate` → `{ data: { text } }`. Answers `prompt` from the session's
+    /// context and model without adding a message; nothing streams. One model call can outlast the
+    /// default REST timeout, so this waits up to `sideQuestionTimeout`.
+    func generateSessionTextV2(id: String, prompt: String) async throws -> String {
+        var request = try requireConnection().authorizedRequest(path: "api/session/\(id)/generate", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(V2SessionGenerateRequestDTO(prompt: prompt))
+        request.timeoutInterval = Self.sideQuestionTimeout
+        let data = try await data(for: request)
+        return try decoder.decode(APIDataEnvelope<V2SessionGenerateResponseDTO>.self, from: data).data.text
+    }
+
+    static let sideQuestionTimeout: TimeInterval = 300
+
     func compactSessionV2(id: String) async throws -> Bool {
         var request = try requireConnection().authorizedRequest(path: "api/session/\(id)/compact", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

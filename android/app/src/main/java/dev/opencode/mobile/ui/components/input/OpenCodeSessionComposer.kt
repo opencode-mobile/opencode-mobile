@@ -48,12 +48,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -107,6 +112,12 @@ sealed interface OpenCodeSessionComposerState {
          * [OpenCodeSessionComposerAction.ExitShellMode].
          */
         val shellMode: Boolean = false,
+        /**
+         * Send asks a `/btw` side question instead of prompting. A selected `/btw` badge replaces
+         * the model and agent chips and the field shows its own placeholder; tapping the badge or
+         * deleting on an empty field sends [OpenCodeSessionComposerAction.ExitSideQuestionMode].
+         */
+        val sideQuestionMode: Boolean = false,
     ) : OpenCodeSessionComposerState
 
     /** A file an edit/write permission would change, with its diff size. */
@@ -192,6 +203,9 @@ sealed interface OpenCodeSessionComposerAction {
 
     /** Drop the leading `!` so the draft is a prompt again. */
     data object ExitShellMode : OpenCodeSessionComposerAction
+
+    /** Leave `/btw` side-question mode; the draft stays. */
+    data object ExitSideQuestionMode : OpenCodeSessionComposerAction
 
     data object Send : OpenCodeSessionComposerAction
 
@@ -534,6 +548,8 @@ private fun PromptEntryContent(
         mutableStateOf(TextFieldValue(text = state.text, selection = TextRange(state.text.length)))
     }
     var suppressImeEcho by remember { mutableStateOf(false) }
+    // The text the keyboard last typed, to rebase keystrokes that land on it after a programmatic change.
+    var lastImeText by remember { mutableStateOf(state.text) }
     LaunchedEffect(state.text, state.selectionRevision) {
         val selectionStart = (state.selectionStart ?: state.text.length).coerceIn(0, state.text.length)
         val selectionEnd = (state.selectionEnd ?: selectionStart).coerceIn(0, state.text.length)
@@ -554,14 +570,25 @@ private fun PromptEntryContent(
     BasicTextField(
         value = textFieldValue,
         onValueChange = { newValue ->
+            val rebased = rebaseAppendedComposerInput(shown = lastImeText, typed = newValue.text, current = state.text)
+            if (rebased != null) {
+                suppressImeEcho = false
+                lastImeText = rebased
+                textFieldValue = TextFieldValue(text = rebased, selection = TextRange(rebased.length))
+                onAction(OpenCodeSessionComposerAction.TextChanged(text = rebased, selectionStart = rebased.length))
+                return@BasicTextField
+            }
             if (newValue.text != state.text && textFieldValue.text != state.text) {
                 return@BasicTextField
             }
             if (suppressImeEcho) {
                 suppressImeEcho = false
-                if (newValue.text != state.text) return@BasicTextField
+                val typedOntoDroppedPrefix =
+                    typedOntoDroppedComposerPrefix(shown = lastImeText, typed = newValue.text, current = state.text)
+                if (newValue.text != state.text && !typedOntoDroppedPrefix) return@BasicTextField
             }
             textFieldValue = newValue
+            lastImeText = newValue.text
             onAction(
                 OpenCodeSessionComposerAction.TextChanged(
                     text = newValue.text,
@@ -589,12 +616,21 @@ private fun PromptEntryContent(
                 .onFocusChanged {
                     focus.updateFocused(it.isFocused)
                     reportFocus(it.isFocused)
+                }.onPreviewKeyEvent { event ->
+                    // Delete on an empty field changes no text; in side-question mode it leaves the mode.
+                    val leavesMode =
+                        state.sideQuestionMode &&
+                            state.text.isEmpty() &&
+                            event.key == Key.Backspace &&
+                            event.type == KeyEventType.KeyDown
+                    if (leavesMode) onAction(OpenCodeSessionComposerAction.ExitSideQuestionMode)
+                    leavesMode
                 },
         decorationBox = { innerTextField ->
             Box {
                 if (state.text.isBlank()) {
                     Text(
-                        text = "Ask anything...",
+                        text = if (state.sideQuestionMode) SESSION_COMPOSER_SIDE_QUESTION_PLACEHOLDER else "Ask anything...",
                         style = MaterialTheme.typography.bodyLarge,
                         color = openCodeColor("text-weak"),
                     )
@@ -650,7 +686,7 @@ private fun PromptEntryContent(
                 variant =
                     OpenCodeButtonVariant.IconCircle(
                         imageVector =
-                            if (state.followUpDelivery == FollowUpDelivery.Steer) {
+                            if (state.followUpDelivery == FollowUpDelivery.Steer && !state.sideQuestionMode) {
                                 OpenCodeIcons.ArrowWarmUp
                             } else {
                                 OpenCodeIcons.ArrowUpward
@@ -660,10 +696,12 @@ private fun PromptEntryContent(
                                 followUpDelivery = state.followUpDelivery,
                                 hasActiveWork = state.showStop,
                                 shellMode = state.shellMode,
+                                sideQuestionMode = state.sideQuestionMode,
                             ),
                     ),
                 enabled = state.sendEnabled,
-                contrast = OpenCodeButtonContrast.Accent,
+                // A side question is not a prompt, so its Send does not look like one.
+                contrast = if (state.sideQuestionMode) OpenCodeButtonContrast.High else OpenCodeButtonContrast.Accent,
                 onLongClick =
                     state.followUpDelivery?.let {
                         { onAction(OpenCodeSessionComposerAction.ToggleFollowUp) }
@@ -677,6 +715,37 @@ private fun PromptEntryContent(
         }
     }
 }
+
+/**
+ * Keystrokes typed onto [shown] after the state replaced it with [current] (the field had not caught
+ * up yet). When they only append and the state only dropped a leading part, such as the `/btw `
+ * that switches to side-question mode, the appended text lands on [current] instead of being lost.
+ * Null when that does not apply.
+ */
+internal fun rebaseAppendedComposerInput(
+    shown: String,
+    typed: String,
+    current: String,
+): String? {
+    if (shown == current || typed.length <= shown.length || !typed.startsWith(shown)) return null
+    if (!shown.endsWith(current)) return null
+    return current + typed.substring(shown.length)
+}
+
+/**
+ * The first keystroke after the state dropped a leading part of [shown] (the field shows [current]
+ * now) is real typing when it appends to [current], not a stale echo of [shown].
+ */
+internal fun typedOntoDroppedComposerPrefix(
+    shown: String,
+    typed: String,
+    current: String,
+): Boolean =
+    shown != current &&
+        shown.endsWith(current) &&
+        typed != shown &&
+        typed.length > current.length &&
+        typed.startsWith(current)
 
 /** Selection hint under a question; reflects a multiselect's `minItems` / `maxItems`. */
 internal fun questionSelectionHint(
@@ -699,10 +768,24 @@ internal fun questionSelectionHint(
  * Send button label. Steer/Queue only describe what Send does while work is running;
  * an idle session just sends. A shell command always runs now.
  */
+internal const val SESSION_COMPOSER_SIDE_QUESTION_PLACEHOLDER = "Side question, not added to chat"
+
 internal fun sessionComposerSendLabel(
     followUpDelivery: FollowUpDelivery?,
     hasActiveWork: Boolean,
     shellMode: Boolean = false,
+    sideQuestionMode: Boolean = false,
+): String =
+    if (sideQuestionMode) {
+        "Ask side question"
+    } else {
+        sessionComposerPromptSendLabel(followUpDelivery, hasActiveWork, shellMode)
+    }
+
+private fun sessionComposerPromptSendLabel(
+    followUpDelivery: FollowUpDelivery?,
+    hasActiveWork: Boolean,
+    shellMode: Boolean,
 ): String =
     when (followUpDelivery.takeIf { hasActiveWork && !shellMode }) {
         FollowUpDelivery.Steer -> "Send as Steer"
@@ -820,7 +903,15 @@ private fun PickerChipsRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (state.shellMode) {
+                if (state.sideQuestionMode) {
+                    OpenCodeChoiceBadge(
+                        label = "/btw",
+                        selected = true,
+                        onClick = { onAction(OpenCodeSessionComposerAction.ExitSideQuestionMode) },
+                        variant = OpenCodeChoiceBadgeVariant.Glass,
+                        modifier = Modifier.semantics { contentDescription = "Side question mode. Leave side question mode" },
+                    )
+                } else if (state.shellMode) {
                     // Like the TUI, shell mode shows "Shell" in place of the agent and model.
                     OpenCodeChoiceBadge(
                         label = "Shell",

@@ -45,6 +45,20 @@ struct V2ServerContractTests {
         #expect(try !V2ServerContract.features(data: Data("{}".utf8)).sessionTurnDiff)
     }
 
+    @Test func sessionGenerateDeclaredWhenGenerateRouteExists() throws {
+        let features = try V2ServerContract.features(data: Data(#"{"paths":{"/api/session/{sessionID}/generate":{"post":{}}}}"#.utf8))
+
+        #expect(features == V2ServerFeatures(sessionGenerate: true))
+        #expect(ServerCapabilities.forProtocol(.v2, v2Features: features).supportsSideQuestion)
+    }
+
+    @Test func sessionGenerateNotDeclaredWithoutRoute() throws {
+        #expect(try !V2ServerContract.features(data: Data(#"{"paths":{"/api/experimental/generate":{"post":{}}}}"#.utf8)).sessionGenerate)
+        #expect(try !V2ServerContract.features(data: Data("{}".utf8)).sessionGenerate)
+        #expect(!ServerCapabilities.forProtocol(.v2).supportsSideQuestion)
+        #expect(!ServerCapabilities.forProtocol(.v1, v2Features: V2ServerFeatures(sessionGenerate: true)).supportsSideQuestion)
+    }
+
     @Test func rejectsNonJSONDocument() {
         #expect(throws: (any Error).self) {
             _ = try V2ServerContract.features(data: Data("<!doctype html>".utf8))

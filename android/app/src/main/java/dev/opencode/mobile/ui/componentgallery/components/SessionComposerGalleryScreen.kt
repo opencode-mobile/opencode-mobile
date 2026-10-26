@@ -43,6 +43,7 @@ private enum class SessionComposerGalleryScenario(
     Attachments("Attachments"),
     Revert("Revert"),
     Shell("Shell"),
+    SideQuestion("/btw"),
     ChildLockout("Child"),
     Permission("Permission"),
     PermissionEdit("Edit"),
@@ -84,6 +85,8 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
     var mentionText by rememberSaveable { mutableStateOf(MentionGalleryText) }
     var mentionsCleared by rememberSaveable { mutableStateOf(false) }
     var shellText by rememberSaveable { mutableStateOf("!git status") }
+    var sideQuestionText by rememberSaveable { mutableStateOf("What did we change so far?") }
+    var sideQuestionMode by rememberSaveable { mutableStateOf(true) }
     var lastAction by rememberSaveable { mutableStateOf("None") }
     val composerFocus = rememberOpenCodeSessionComposerFocus()
     var selectedLabels by rememberSaveable { mutableStateOf(listOf("Minimal patch")) }
@@ -137,6 +140,8 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                 )
             SessionComposerGalleryScenario.Shell ->
                 promptState(text = shellText, shellMode = ComposerShellCommand.isShellMode(shellText))
+            SessionComposerGalleryScenario.SideQuestion ->
+                promptState(text = sideQuestionText, showStop = true, sideQuestionMode = sideQuestionMode)
             SessionComposerGalleryScenario.ChildLockout ->
                 OpenCodeSessionComposerState.ChildLockout(
                     selectedModelLabel = "Claude Sonnet 4",
@@ -302,9 +307,11 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                                 mentionsCleared = true
                             }
                             SessionComposerGalleryScenario.Shell -> shellText = action.text
+                            SessionComposerGalleryScenario.SideQuestion -> sideQuestionText = action.text
                             else -> draftText = action.text
                         }
                     OpenCodeSessionComposerAction.ExitShellMode -> shellText = ComposerShellCommand.exitShellMode(shellText)
+                    OpenCodeSessionComposerAction.ExitSideQuestionMode -> sideQuestionMode = false
                     is OpenCodeSessionComposerAction.ToggleQuestionOption -> {
                         selectedLabels =
                             if (scenario == SessionComposerGalleryScenario.MultiSelect) {
@@ -345,6 +352,7 @@ private fun promptState(
     showPendingRevert: Boolean = false,
     showStop: Boolean = false,
     shellMode: Boolean = false,
+    sideQuestionMode: Boolean = false,
 ) = OpenCodeSessionComposerState.Prompt(
     text = text,
     mentionRanges = mentionRanges,
@@ -356,10 +364,11 @@ private fun promptState(
     showVariant = true,
     sendEnabled =
         if (shellMode) ComposerShellCommand.command(text) != null else text.isNotBlank() || attachments.isNotEmpty(),
-    attachEnabled = !shellMode,
+    attachEnabled = !shellMode && !sideQuestionMode,
     showStop = showStop,
     stopEnabled = showStop,
     shellMode = shellMode,
+    sideQuestionMode = sideQuestionMode,
 )
 
 private fun permissionState(
@@ -436,6 +445,7 @@ private val OpenCodeSessionComposerAction.label: String
             is OpenCodeSessionComposerAction.RemoveAttachment -> "Remove attachment"
             OpenCodeSessionComposerAction.CancelRevert -> "Cancel revert"
             OpenCodeSessionComposerAction.ExitShellMode -> "Exit shell mode"
+            OpenCodeSessionComposerAction.ExitSideQuestionMode -> "Exit side question mode"
             OpenCodeSessionComposerAction.Send -> "Send"
             OpenCodeSessionComposerAction.ToggleFollowUp -> "Toggle follow-up"
             OpenCodeSessionComposerAction.Stop -> "Stop"

@@ -111,6 +111,26 @@ class ClientSlashActionCatalogTest {
     }
 
     @Test
+    fun visibleActions_sideQuestionServer_putsBtwFirst() {
+        val input =
+            ClientSlashActionVisibilityInput(
+                visibleUserMessageCount = 0,
+                hasUndoableUserMessage = false,
+                hasActiveSessionRevert = false,
+                hasSelectedComposerModel = false,
+                supportsSideQuestion = true,
+            )
+
+        assertEquals(ClientSlashAction.Btw, ClientSlashActionCatalog.visibleActions(input).first())
+        assertEquals("[btw] Ask a side question", ClientSlashAction.Btw.rowTitle)
+        assertEquals("Btw", ClientSlashAction.Btw.tileLabel)
+        assertTrue(
+            ClientSlashAction.Btw !in
+                ClientSlashActionCatalog.visibleActions(input.copy(supportsSideQuestion = false)),
+        )
+    }
+
+    @Test
     fun rowTitle_matchesAllowlistCopy() {
         assertEquals("[new] Start a new session", ClientSlashAction.New.rowTitle)
         assertEquals("[fork] Fork this session", ClientSlashAction.Fork.rowTitle)

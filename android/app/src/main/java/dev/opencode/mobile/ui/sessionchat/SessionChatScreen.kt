@@ -9,8 +9,11 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -21,6 +24,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -62,6 +66,7 @@ import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
+import dev.opencode.mobile.domain.session.SideQuestion
 import dev.opencode.mobile.domain.worktree.WorktreeCreateCopy
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -86,6 +91,7 @@ import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
 import dev.opencode.mobile.ui.components.OpenCodeDictationCardVariant
 import dev.opencode.mobile.ui.components.OpenCodeDictationUnavailableReason
 import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
+import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeVariant
 import dev.opencode.mobile.ui.components.OpenCodeLayout
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
@@ -96,6 +102,8 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
+import dev.opencode.mobile.ui.components.OpenCodeSideQuestionPill
+import dev.opencode.mobile.ui.components.OpenCodeSideQuestionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
@@ -122,19 +130,21 @@ import dev.opencode.mobile.ui.sessionchat.dictation.cardPhase
 import dev.opencode.mobile.ui.sessionchat.dictation.dictationLanguageLabel
 import dev.opencode.mobile.ui.sessionchat.dictation.formatDictationElapsed
 import dev.opencode.mobile.ui.sessionchat.dictation.probeDictationSupport
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveCopy
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveTags
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroModal
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineStylePickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingPromptsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatSideQuestionSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineStylePickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
@@ -192,6 +202,7 @@ fun SessionChatScreen(
         onDispose {
             viewModel.cancelDictationForDismiss()
             viewModel.clearSessionReadyFocus()
+            viewModel.leaveSideQuestions()
         }
     }
 
@@ -894,6 +905,13 @@ fun SessionChatScreen(
                 OpenCodeSnackbarHost(
                     message = uiState.snackbar?.toOpenCodeSnackbarMessage(),
                     onDismissed = viewModel::consumeSnackbar,
+                    onAction = { message ->
+                        val snackbar = uiState.snackbar?.takeIf { it.id == message.id }
+                        when (val action = snackbar?.action) {
+                            is SessionChatSnackbarAction.RetrySideQuestion -> viewModel.retrySideQuestions(action.id)
+                            null -> Unit
+                        }
+                    },
                     modifier =
                         Modifier
                             .align(Alignment.BottomCenter)
@@ -984,6 +1002,18 @@ fun SessionChatScreen(
                                         .padding(bottom = 6.dp),
                             )
                         }
+                        if (overlayComposerKind == SessionChatComposerKind.Prompt) {
+                            SessionChatSideQuestionRow(
+                                state = uiState.sideQuestions,
+                                onOpenAnswer = viewModel::openSideQuestionAnswer,
+                                onRetry = { viewModel.retrySideQuestions() },
+                                onDismissFailed = viewModel::dismissFailedSideQuestions,
+                                modifier =
+                                    Modifier
+                                        .padding(horizontal = 12.dp)
+                                        .padding(bottom = 6.dp),
+                            )
+                        }
                         if (overlayComposerKind == SessionChatComposerKind.Prompt &&
                             uiState.pendingPrompts.isNotEmpty()
                         ) {
@@ -997,6 +1027,10 @@ fun SessionChatScreen(
                             )
                         }
 
+                        val sideQuestionMode = uiState.sideQuestions.composerMode
+                        val blockedSideQuestion =
+                            !uiState.sideQuestions.supported &&
+                                SideQuestion.questionInDraft(uiState.composer.text) != null
                         val composerKind =
                             SessionChatComposerKind.resolve(
                                 isChildSession = isChildSession,
@@ -1092,10 +1126,18 @@ fun SessionChatScreen(
                                         selectedVariantLabel = uiState.composer.selectedVariantLabel,
                                         showVariant = uiState.composer.canSelectVariant,
                                         sendEnabled =
-                                            uiState.composer.canSend &&
-                                                uiState.composer.selectedModel != null &&
-                                                uiState.composer.isModelSelectionReady &&
-                                                !uiState.isSending &&
+                                            (
+                                                if (sideQuestionMode) {
+                                                    // A side question answers with the session's own model.
+                                                    uiState.composer.text.isNotBlank()
+                                                } else {
+                                                    uiState.composer.canSend &&
+                                                        uiState.composer.selectedModel != null &&
+                                                        uiState.composer.isModelSelectionReady &&
+                                                        !uiState.isSending &&
+                                                        !blockedSideQuestion
+                                                }
+                                            ) &&
                                                 sessionCreated &&
                                                 uiState.timeline != SessionChatTimelineState.Creating &&
                                                 uiState.composerEnabled,
@@ -1103,17 +1145,19 @@ fun SessionChatScreen(
                                             attachmentSources.isAttachEnabled &&
                                                 sessionCreated &&
                                                 uiState.composer.isModelSelectionReady &&
-                                                !uiState.composer.isShellMode,
+                                                !uiState.composer.isShellMode &&
+                                                !sideQuestionMode,
                                         showStop = uiState.sessionStatusLabel != null,
                                         stopEnabled =
                                             !uiState.isAborting &&
                                                 uiState.canMutate,
                                         followUpDelivery =
                                             uiState.composer.followUpDelivery.takeIf {
-                                                uiState.composer.supportsFollowUpDelivery
+                                                uiState.composer.supportsFollowUpDelivery && !sideQuestionMode
                                             },
                                         showDictationButton = dictationSupport.showsMic,
-                                        shellMode = uiState.composer.isShellMode,
+                                        shellMode = uiState.composer.isShellMode && !sideQuestionMode,
+                                        sideQuestionMode = sideQuestionMode,
                                     )
                             }
                         val composerFocus = rememberOpenCodeSessionComposerFocus()
@@ -1174,6 +1218,7 @@ fun SessionChatScreen(
                                     is OpenCodeSessionComposerAction.RemoveAttachment -> viewModel.removeAttachment(action.id)
                                     OpenCodeSessionComposerAction.CancelRevert -> viewModel.cancelRevert()
                                     OpenCodeSessionComposerAction.ExitShellMode -> viewModel.exitShellMode()
+                                    OpenCodeSessionComposerAction.ExitSideQuestionMode -> viewModel.exitSideQuestionMode()
                                     OpenCodeSessionComposerAction.Send -> viewModel.sendPrompt()
                                     OpenCodeSessionComposerAction.ToggleFollowUp -> viewModel.toggleFollowUp()
                                     OpenCodeSessionComposerAction.Stop -> viewModel.abort()
@@ -1280,6 +1325,12 @@ fun SessionChatScreen(
             onQueue = viewModel::queuePendingPrompt,
             onDelete = viewModel::cancelPendingPrompt,
             onClearAll = viewModel::clearPendingPrompts,
+        )
+
+        SessionChatSideQuestionSheet(
+            answer = uiState.sideQuestions.presentedAnswer,
+            onCopy = viewModel::sideQuestionAnswerCopied,
+            onClose = viewModel::closeSideQuestionAnswer,
         )
 
         val sheetContext = LocalContext.current
@@ -1614,6 +1665,7 @@ private fun SessionChatSnackbar.toOpenCodeSnackbarMessage(): OpenCodeSnackbarMes
                 SessionChatSnackbarTone.Default -> OpenCodeSnackbarVariant.Default
                 SessionChatSnackbarTone.Error -> OpenCodeSnackbarVariant.Error
             },
+        actionLabel = action?.label,
         id = id,
     )
 
@@ -1656,6 +1708,7 @@ private fun ClientSlashAction.tileIcon(): ImageVector =
         ClientSlashAction.Redo -> OpenCodeIcons.Redo
         ClientSlashAction.Compact -> OpenCodeIcons.VerticalAlignCenter
         ClientSlashAction.Mcp -> OpenCodeIcons.Plug
+        ClientSlashAction.Btw -> OpenCodeIcons.SubdirectoryArrowRight
     }
 
 internal fun sessionChatViewModelKey(
@@ -1741,5 +1794,42 @@ private fun SessionChatMoveToWorktreeRows(
         testTag = WorktreeCreateTags.MOVE_ROW,
         onClick = onNewWorktree,
     )
+}
+
+/** `/btw` chips and the notice for a `/btw` this server cannot answer, above the composer. */
+@Composable
+private fun SessionChatSideQuestionRow(
+    state: SessionChatSideQuestionsUiState,
+    onOpenAnswer: () -> Unit,
+    onRetry: () -> Unit,
+    onDismissFailed: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (state.unsupportedNotice == null && !state.hasChips) return
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        state.unsupportedNotice?.let { notice ->
+            OpenCodeInlineNotice(message = notice, variant = OpenCodeInlineNoticeVariant.Banner)
+        }
+        if (state.hasChips) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (state.pendingCount > 0) {
+                    OpenCodeSideQuestionPill(OpenCodeSideQuestionPillVariant.Pending(state.pendingCount))
+                }
+                if (state.readyCount > 0) {
+                    OpenCodeSideQuestionPill(OpenCodeSideQuestionPillVariant.AnswerReady(state.readyCount), onClick = onOpenAnswer)
+                }
+                if (state.failedCount > 0) {
+                    OpenCodeSideQuestionPill(
+                        OpenCodeSideQuestionPillVariant.Failed(state.failedCount),
+                        onClick = onRetry,
+                        onDismiss = onDismissFailed,
+                    )
+                }
+            }
+        }
+    }
 }
 

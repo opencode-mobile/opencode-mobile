@@ -12,6 +12,7 @@ enum class ClientSlashAction(
     Terminal("terminal", "Open project shell"),
     Files("files", "Browse project files"),
     Mcp("mcp", "Show MCP server status"),
+    Btw("btw", "Ask a side question"),
     ;
 
     val rowTitle: String
@@ -38,11 +39,16 @@ data class ClientSlashActionVisibilityInput(
     val hasUndoableUserMessage: Boolean,
     val hasActiveSessionRevert: Boolean,
     val hasSelectedComposerModel: Boolean,
+    /** The server answers `/btw` side questions (`ServerCapabilities.supportsSideQuestion`). */
+    val supportsSideQuestion: Boolean = false,
 )
 
 object ClientSlashActionCatalog {
     fun visibleActions(input: ClientSlashActionVisibilityInput): List<ClientSlashAction> =
         buildList {
+            if (input.supportsSideQuestion) {
+                add(ClientSlashAction.Btw)
+            }
             add(ClientSlashAction.New)
             add(ClientSlashAction.Terminal)
             add(ClientSlashAction.Files)
@@ -65,6 +71,7 @@ object ClientSlashActionCatalog {
         messages: List<ClientSlashMessageRef>,
         revertMessageId: String?,
         hasSelectedComposerModel: Boolean,
+        supportsSideQuestion: Boolean = false,
     ): ClientSlashActionVisibilityInput {
         val visible =
             messages.filter { message ->
@@ -79,6 +86,7 @@ object ClientSlashActionCatalog {
             hasUndoableUserMessage = visibleUsers.any { it.hasNonEmptyText },
             hasActiveSessionRevert = revertMessageId != null,
             hasSelectedComposerModel = hasSelectedComposerModel,
+            supportsSideQuestion = supportsSideQuestion,
         )
     }
 }

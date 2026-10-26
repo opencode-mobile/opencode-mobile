@@ -6,8 +6,10 @@ import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.command.CommandRunOptions
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
+import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.connection.V2ServerFeatures
 import dev.opencode.mobile.domain.connection.testConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.EventStreamConnectionState
@@ -69,6 +71,7 @@ import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionRevert
 import dev.opencode.mobile.domain.session.SessionStatus
+import dev.opencode.mobile.domain.session.SideQuestionStore
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
 import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
 import dev.opencode.mobile.domain.worktree.CreatedWorktree
@@ -86,9 +89,11 @@ import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import dev.opencode.mobile.network.ServerConnection
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsCopy
 import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -4634,6 +4639,238 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun sideQuestion_typedBtwAsksOnceWithoutTouchingTheConversation() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository = sessionRepository,
+                    serverProtocol = ServerProtocol.V2,
+                    sideQuestionsSupported = true,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            val actions = viewModel.uiState.value.visibleClientSlashActions
+            assertEquals(ClientSlashAction.Btw, actions.first())
+            val messagesBefore = viewModel.uiState.value.messages
+
+            viewModel.updateComposerText("/btw ")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.sideQuestions.composerMode)
+            assertEquals("", viewModel.uiState.value.composer.text)
+
+            viewModel.updateComposerText("What changed?")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals(listOf("ses-1" to "What changed?"), sessionRepository.sideQuestionRequests)
+            assertFalse(repository.sendPromptAsyncCalled)
+            assertEquals("", viewModel.uiState.value.composer.text)
+            assertFalse(viewModel.uiState.value.sideQuestions.composerMode)
+            assertEquals(1, viewModel.uiState.value.sideQuestions.pendingCount)
+
+            sessionRepository.sideQuestionReplies.single().complete("Two files.")
+            advanceUntilIdle()
+
+            val side = viewModel.uiState.value.sideQuestions
+            assertEquals("What changed?", side.presentedAnswer?.question)
+            assertEquals("Two files.", side.presentedAnswer?.answer)
+            assertEquals(0, side.pendingCount)
+            assertEquals(messagesBefore, viewModel.uiState.value.messages)
+            assertFalse(repository.sendPromptAsyncCalled)
+        }
+
+    @Test
+    fun sideQuestion_btwTileEntersModeAndEmptyQuestionIsNotSent() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    serverProtocol = ServerProtocol.V2,
+                    sideQuestionsSupported = true,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.runClientSlashAction(ClientSlashAction.Btw)
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.sideQuestions.composerMode)
+            assertFalse(viewModel.uiState.value.commandsSheetVisible)
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertTrue(sessionRepository.sideQuestionRequests.isEmpty())
+
+            viewModel.exitSideQuestionMode()
+            advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.sideQuestions.composerMode)
+        }
+
+    @Test
+    fun sideQuestion_unsupportedServerShowsNoticeAndNeverSendsAPrompt() =
+        runTest(testDispatcher) {
+            listOf(ServerProtocol.V1, ServerProtocol.V2).forEach { protocol ->
+                val repository = FakeMessageRepository()
+                val sessionRepository = FakeSessionRepository()
+                val viewModel =
+                    createViewModel(repository = repository, sessionRepository = sessionRepository, serverProtocol = protocol)
+                viewModel.bind("ses-1", "Title", "/repo")
+                advanceUntilIdle()
+                assertFalse(ClientSlashAction.Btw in viewModel.uiState.value.visibleClientSlashActions)
+
+                viewModel.updateComposerText("/btw why?")
+                advanceUntilIdle()
+                assertEquals(SessionChatSideQuestionsCopy.UNSUPPORTED, viewModel.uiState.value.sideQuestions.unsupportedNotice)
+                assertFalse(viewModel.uiState.value.sideQuestions.composerMode)
+
+                viewModel.sendPrompt()
+                advanceUntilIdle()
+                assertTrue(sessionRepository.sideQuestionRequests.isEmpty())
+                assertFalse(repository.sendPromptAsyncCalled)
+                assertEquals("/btw why?", viewModel.uiState.value.composer.text)
+            }
+        }
+
+    @Test
+    fun sideQuestion_answerArrivingUnderAnOpenSheetWaitsThenOpens() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    serverProtocol = ServerProtocol.V2,
+                    sideQuestionsSupported = true,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("/btw One?")
+            viewModel.sendPrompt()
+            viewModel.updateComposerText("/btw Two?")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertEquals(2, viewModel.uiState.value.sideQuestions.pendingCount)
+
+            sessionRepository.sideQuestionReplies[0].complete("First")
+            advanceUntilIdle()
+            sessionRepository.sideQuestionReplies[1].complete("Second")
+            advanceUntilIdle()
+
+            var side = viewModel.uiState.value.sideQuestions
+            assertEquals("First", side.presentedAnswer?.answer)
+            assertEquals(1, side.readyCount)
+
+            viewModel.closeSideQuestionAnswer()
+            advanceUntilIdle()
+            side = viewModel.uiState.value.sideQuestions
+            assertEquals("Second", side.presentedAnswer?.answer)
+            assertEquals(0, side.readyCount)
+
+            viewModel.closeSideQuestionAnswer()
+            advanceUntilIdle()
+            side = viewModel.uiState.value.sideQuestions
+            assertNull(side.presentedAnswer)
+            assertEquals(0, side.readyCount)
+        }
+
+    @Test
+    fun sideQuestion_failureOffersRetryOnTheSnackbarAndChip() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    serverProtocol = ServerProtocol.V2,
+                    sideQuestionsSupported = true,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("/btw Why?")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            sessionRepository.sideQuestionReplies.single().completeExceptionally(SessionError.Http(503, "busy"))
+            advanceUntilIdle()
+
+            val snackbar = viewModel.uiState.value.snackbar
+            assertEquals("/btw failed: “Why?”", snackbar?.message)
+            assertEquals(SessionChatSnackbarTone.Error, snackbar?.tone)
+            val retry = snackbar?.action as SessionChatSnackbarAction.RetrySideQuestion
+            assertEquals(1, viewModel.uiState.value.sideQuestions.failedCount)
+
+            viewModel.retrySideQuestions(retry.id)
+            advanceUntilIdle()
+            assertEquals(2, sessionRepository.sideQuestionRequests.size)
+            assertEquals(0, viewModel.uiState.value.sideQuestions.failedCount)
+            assertEquals(1, viewModel.uiState.value.sideQuestions.pendingCount)
+
+            sessionRepository.sideQuestionReplies.last().completeExceptionally(SessionError.Http(503, "busy"))
+            advanceUntilIdle()
+            viewModel.dismissFailedSideQuestions()
+            advanceUntilIdle()
+            assertEquals(0, viewModel.uiState.value.sideQuestions.failedCount)
+        }
+
+    @Test
+    fun sideQuestion_requestsAndUnreadAnswersOutliveLeavingSessionChat() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val store =
+                SideQuestionStore(
+                    request = { sessionId, question -> sessionRepository.askSideQuestion(sessionId, question) },
+                    scope = CoroutineScope(SupervisorJob() + testDispatcher),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    serverProtocol = ServerProtocol.V2,
+                    sideQuestionsSupported = true,
+                    sideQuestionStore = store,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("/btw Why?")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            viewModel.leaveSideQuestions()
+            advanceUntilIdle()
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(1, viewModel.uiState.value.sideQuestions.pendingCount)
+
+            viewModel.leaveSideQuestions()
+            sessionRepository.sideQuestionReplies.single().complete("Because.")
+            advanceUntilIdle()
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            var side = viewModel.uiState.value.sideQuestions
+            assertEquals(1, side.readyCount)
+            assertNull(side.presentedAnswer)
+
+            viewModel.openSideQuestionAnswer()
+            advanceUntilIdle()
+            side = viewModel.uiState.value.sideQuestions
+            assertEquals("Because.", side.presentedAnswer?.answer)
+
+            viewModel.leaveSideQuestions()
+            advanceUntilIdle()
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            side = viewModel.uiState.value.sideQuestions
+            assertEquals(0, side.readyCount)
+            assertNull(side.presentedAnswer)
+            assertTrue(store.entries("ses-1").isEmpty())
+        }
+
+    @Test
     fun moveToWorktree_v2PostsTheMoveAndSessionMovedRebindsInPlace() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
@@ -7095,6 +7332,8 @@ class SessionChatViewModelTest {
                 .HomeProjectsSnapshot(),
         worktreeRepository: WorktreeRepository = dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository,
         worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
+        sideQuestionsSupported: Boolean = false,
+        sideQuestionStore: SideQuestionStore? = null,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -7122,12 +7361,14 @@ class SessionChatViewModelTest {
                     if (ms < LiveStoreRefreshPolicy.STATUS_RUNNING_RECONCILE_MS) delay(ms)
                 },
             )
-        val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+        val activeConnectionManager =
+            ActiveConnectionManager(connectionProfileStore, SideQuestionProbing.takeIf { sideQuestionsSupported })
         runBlocking {
             val profile =
                 connectionProfileStore.activeProfile()
                     ?: ConnectionProfile(baseUrl = "http://127.0.0.1:4096/", username = "opencode", password = "")
             activeConnectionManager.applyProfile(profile, serverProtocol = serverProtocol)
+            if (sideQuestionsSupported) activeConnectionManager.probeActive()
         }
         val connectionSessionCoordinator =
             testConnectionSessionCoordinator(
@@ -7171,6 +7412,11 @@ class SessionChatViewModelTest {
             homeProjectsSnapshot = homeProjectsSnapshot,
             worktreeRepository = worktreeRepository,
             worktreeInventoryCache = worktreeInventoryCache,
+            sideQuestionStore =
+                sideQuestionStore ?: SideQuestionStore(
+                    request = { sessionId, question -> sessionRepository.askSideQuestion(sessionId, question) },
+                    scope = liveStoreScope.coroutineScope,
+                ),
         ).apply {
             ioDispatcher = testDispatcher
             nowMs = { testDispatcher.scheduler.currentTime }
@@ -7968,6 +8214,10 @@ private class FakeSessionRepository(
     }
 
     val moveSessionRequests = mutableListOf<Pair<String, String>>()
+    val sideQuestionRequests = mutableListOf<Pair<String, String>>()
+
+    /** One pending reply per `/btw` request, completed by the test. */
+    val sideQuestionReplies = mutableListOf<CompletableDeferred<String>>()
 
     /** Branch per directory for `getVcsInfo`; a directory missing here answers 404. */
     var vcsBranches: Map<String, String> = emptyMap()
@@ -7986,6 +8236,16 @@ private class FakeSessionRepository(
         directory: String,
     ) {
         moveSessionRequests += id to directory
+    }
+
+    override suspend fun askSideQuestion(
+        sessionId: String,
+        question: String,
+    ): String {
+        sideQuestionRequests += sessionId to question
+        val reply = CompletableDeferred<String>()
+        sideQuestionReplies += reply
+        return reply.await()
     }
 
     override suspend fun abortSession(
@@ -8162,3 +8422,10 @@ private fun questionRequest(
     toolMessageId = null,
     toolCallId = null,
 )
+
+/** A v2 server whose contract declares `POST /api/session/{id}/generate`. */
+private object SideQuestionProbing : ConnectionProbing {
+    override suspend fun probe(connection: ServerConnection): ServerProtocol = ServerProtocol.V2
+
+    override suspend fun probeV2Features(connection: ServerConnection): V2ServerFeatures = V2ServerFeatures(sessionGenerate = true)
+}

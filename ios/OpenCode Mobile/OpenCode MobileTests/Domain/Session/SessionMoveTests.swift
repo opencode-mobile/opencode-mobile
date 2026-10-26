@@ -44,6 +44,32 @@ struct SessionMoveAPIClientTests {
         }
     }
 
+    @Test func generateV2PostsThePromptAndReadsTheText() async throws {
+        MoveURLProtocol.reset(statusCode: 200, body: Data(#"{"data":{"text":" Two files.\n"}}"#.utf8))
+        let remote = V2SessionRemote(api: makeClient(), adapter: SessionDomainAdapter())
+
+        let answer = try await remote.askSideQuestion(sessionID: "ses_1", question: " What changed? ")
+
+        #expect(answer == "Two files.")
+        let request = try #require(MoveURLProtocol.lastRequest)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path.hasSuffix("/api/session/ses_1/generate") == true)
+        let body = try #require(MoveURLProtocol.lastBody)
+        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+        #expect(json["prompt"] as? String == SideQuestion.instructions + "\n\nWhat changed?")
+        #expect(json.count == 1)
+    }
+
+    @Test func v1HasNoGenerateEndpoint() async {
+        MoveURLProtocol.reset(statusCode: 200, body: Data())
+        let remote = V1SessionRemote(api: makeClient(), adapter: SessionDomainAdapter())
+
+        await #expect(throws: SessionError.http(statusCode: 404, message: "Needs an opencode v2 server")) {
+            _ = try await remote.askSideQuestion(sessionID: "ses_1", question: "Why?")
+        }
+        #expect(MoveURLProtocol.lastRequest == nil)
+    }
+
     @Test func v1HasNoMoveEndpoint() async {
         MoveURLProtocol.reset(statusCode: 204, body: Data())
         let remote = V1SessionRemote(api: makeClient(), adapter: SessionDomainAdapter())

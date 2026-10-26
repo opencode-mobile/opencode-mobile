@@ -107,6 +107,11 @@ internal class V2SessionRemote(
         api.moveSessionV2(id, directory)
     }
 
+    override suspend fun askSideQuestion(
+        sessionId: String,
+        question: String,
+    ): String = api.generateSessionTextV2(sessionId, SideQuestion.prompt(question)).trim()
+
     override suspend fun abortSession(
         id: String,
         directory: String?,

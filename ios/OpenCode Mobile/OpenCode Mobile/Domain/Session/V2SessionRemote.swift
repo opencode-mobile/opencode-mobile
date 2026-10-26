@@ -215,4 +215,9 @@ struct V2SessionRemote: SessionRemote, Sendable {
     func moveSession(id: String, directory: String) async throws {
         _ = try await api.moveSessionV2(id: id, directory: directory)
     }
+
+    func askSideQuestion(sessionID: String, question: String) async throws -> String {
+        let text = try await api.generateSessionTextV2(id: sessionID, prompt: SideQuestion.prompt(question))
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
