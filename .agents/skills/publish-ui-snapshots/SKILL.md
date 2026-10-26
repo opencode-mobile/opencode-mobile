@@ -29,9 +29,13 @@ Defaults: subject = assistant message; platforms = iOS and Android; frames =
      "$REPO/.snapshot-evidence/out" "UI snapshots"
    ```
 
-5. **Publish** `.snapshot-evidence/out/` with the user-level `publish-artifact`
-   skill (`~/.agents/skills/publish-artifact/SKILL.md`; stop and report if
-   missing) using `--type plan`, and paste the returned URLs.
+5. **Publish** the PNGs on GitHub, never the artifact server. Copy them to a
+   scratch directory as `ios-NN-<frame>-<appearance>.png` /
+   `android-NN-<frame>-<appearance>.png` (same `NN` for the same frame on
+   both platforms), then run
+   `scripts/publish-evidence.sh <issue> <dir> > <dir>.md` and post the table
+   with `gh pr comment <pr> --body-file <dir>.md` (or `gh issue comment` when
+   there is no pull request yet). Paste the comment URL.
 
 Throwaway tests, PNGs, HTML, and Paparazzi goldens stay out of commits; commit
 durable mock or host changes only when asked. Remove the generated iOS test
