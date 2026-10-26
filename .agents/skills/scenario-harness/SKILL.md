@@ -136,6 +136,12 @@ Faults affect only the apps; the harness observer talks to opencode directly.
   with the scenario's `expect`, and cross-check the timeline:
   `GET /harness/history` holds app requests (with auth kind), server events,
   model calls and harness actions.
+- **Evidence as you go:** when the change is user-visible, save each of those
+  screenshots under the session scratchpad as
+  `evidence/<platform>-<NN>-<step>.png` (`evidence/ios-03-answer-sheet.png`,
+  `evidence/android-03-answer-sheet.png`; same `NN` for the same step on both
+  apps). They become the pull request evidence (`feature` skill, Publish) with
+  no re-recording. Harness data only.
 - A feature change is verified only when it behaves on both apps and both
   protocols, or the gap is reported per platform and protocol.
 

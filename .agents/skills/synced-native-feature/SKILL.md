@@ -24,4 +24,8 @@ scope), not in `docs/`.
    resolved, intentional because of native platform behavior (and expressed in
    code and tests), or recorded as a temporary gap with a next action.
 5. **Check.** Run every applicable build, lint, test, or preview check for the
-   changed platforms and layers, and report each result or blocker.
+   changed platforms and layers, and report each result or blocker. When the
+   change is user-visible, save each verification screenshot under the session
+   scratchpad as `evidence/<platform>-<NN>-<step>.png`
+   (`evidence/ios-03-answer-sheet.png`, `evidence/android-03-answer-sheet.png`)
+   so those files become the pull request evidence without re-recording.

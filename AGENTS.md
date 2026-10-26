@@ -107,6 +107,12 @@ areas, status column, fold, system bars, simulator pose control) lives in
   `feature/ope-<number>-<short-slug>` when the issue title starts with
   `OPE-<number>:`. Use `fix/` instead of `feature/` for bug tickets. Slug is
   lowercase ASCII with single hyphens; whole name at most 80 characters.
+- A pull request that changes what users see carries screenshot evidence for
+  each affected platform, posted on GitHub: an `evidence/<issue>` branch
+  referenced from a pull request or issue comment, never a link to the
+  artifact server or another private host. Capture it while verifying, not
+  afterwards. A pull request with nothing visible says "No UI change" under
+  Checks.
 
 ## Pull Request Evidence
 
@@ -120,10 +126,11 @@ areas, status column, fold, system bars, simulator pose control) lives in
     the real app against a real server through `scenario-harness`, shown as
     screenshots, a short GIF, or a request/event trace.
 - Cover both platforms. Name what was not checked under Risks / Follow-ups.
-- Publish the evidence as one page with the user-level `publish-artifact`
-  skill and link it from the pull request. Do not commit evidence or push it
-  to a branch. If the skill or the artifact server is unavailable, say so in
-  the pull request instead.
+- Save each verification screenshot as `ios-NN-<step>.png` /
+  `android-NN-<step>.png` as you go, publish the set with
+  `scripts/publish-evidence.sh <issue> <dir>`, and post the table it prints as
+  a pull request comment. Never commit evidence to a feature branch. If the
+  push fails, say so in the pull request instead.
 - Capture only harness or mock data: no real passwords or personal
   transcripts.
 
