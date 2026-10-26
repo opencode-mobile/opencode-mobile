@@ -5241,6 +5241,66 @@ struct SessionChatViewModelTests {
         #expect(store.entries(sessionID: "ses-1").isEmpty)
     }
 
+    @Test func sideQuestion_btwTileOnABtwDraftAsksOnlyTheQuestion() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        viewModel.restoreComposerText("/btw Why?")
+        viewModel.runClientSlashAction(.btw)
+        await viewModel.sendPrompt()
+        _ = await waitUntil { sessionRepository.sideQuestionRequests.count == 1 }
+
+        #expect(sessionRepository.sideQuestionRequests == [.init(sessionID: "ses-1", question: "Why?")])
+    }
+
+    @Test func sideQuestion_leavingInModeKeepsTheDraftASideQuestion() async {
+        let messageRepository = FakeMessageRepository()
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            messageRepository: messageRepository,
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/btw ")
+        viewModel.updateComposerText("Why?")
+
+        viewModel.stopObserving()
+        viewModel.startObserving()
+        defer { viewModel.stopObserving() }
+        #expect(!viewModel.uiState.sideQuestions.composerMode)
+        #expect(viewModel.uiState.composer.text == "/btw Why?")
+
+        await viewModel.sendPrompt()
+        _ = await waitUntil { sessionRepository.sideQuestionRequests.count == 1 }
+        #expect(sessionRepository.sideQuestionRequests == [.init(sessionID: "ses-1", question: "Why?")])
+        #expect(!messageRepository.sendPromptAsyncCalled)
+    }
+
+    @Test func sideQuestion_answerWaitsBehindAScreenSheet() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/btw Why?")
+        await viewModel.sendPrompt()
+        _ = await waitUntil { sessionRepository.pendingSideQuestionReplies == 1 }
+
+        viewModel.setScreenSheetOpen(true)
+        sessionRepository.replySideQuestion(.success("Because."))
+        _ = await waitUntil { viewModel.uiState.sideQuestions.readyCount == 1 }
+
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer == nil)
+        #expect(viewModel.uiState.sideQuestions.readyCount == 1)
+    }
+
     private func makeViewModel(
         messageRepository: (any MessageRepository)? = nil,
         eventStream: FakeForegroundEventStream? = nil,

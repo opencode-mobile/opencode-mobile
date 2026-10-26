@@ -73,9 +73,12 @@ private struct SessionChatSideQuestionSheetBody: View {
         .task(id: answer?.id) {
             document = nil
             guard let source = answer?.answer, !source.isEmpty else { return }
-            document = await Task.detached(priority: .userInitiated) {
+            let parsed = await Task.detached(priority: .userInitiated) {
                 OpenCodeRenderedMarkdownParser.parse(source, variant: .standalone)
             }.value
+            // A newer answer restarted this task; its parse must not land on the new sheet.
+            guard !Task.isCancelled else { return }
+            document = parsed
         }
     }
 }

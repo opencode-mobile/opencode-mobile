@@ -243,7 +243,7 @@ class SessionChatViewModel
             ).also { region ->
                 region.canPresentAnswer = {
                     val state = _uiState.value
-                    !state.blocksChipTimelineIntro() && state.presentedActivityCard == null
+                    !screenSheetOpen && !state.blocksChipTimelineIntro() && state.presentedActivityCard == null
                 }
             }
 
@@ -276,6 +276,9 @@ class SessionChatViewModel
         val uiState: StateFlow<SessionChatUiState> = _uiState.asStateFlow()
 
         private var boundSessionId: String? = null
+
+        /** A sheet or dialog the screen owns is up; see [setScreenSheetOpen]. */
+        private var screenSheetOpen = false
         private var boundSessionTitle: String? = null
         private var boundWorktree: String? = null
 
@@ -811,7 +814,24 @@ class SessionChatViewModel
 
         /** Session Chat left the screen: the open answer was read; requests keep running. */
         fun leaveSideQuestions() {
+            keepSideQuestionDraft()
             sideQuestions.stop()
+        }
+
+        /** Sheets and dialogs Session Chat owns itself are up; a new answer waits behind them. */
+        fun setScreenSheetOpen(open: Boolean) {
+            screenSheetOpen = open
+        }
+
+        /**
+         * The mode is not kept, so a side-question draft gets its `/btw` back before leaving; it
+         * still asks a side question later instead of going out as a prompt.
+         */
+        private fun keepSideQuestionDraft() {
+            if (!sideQuestions.state.value.ui.composerMode) return
+            val draft = composer.state.value.composer.text
+            if (draft.isBlank() || SideQuestion.questionInDraft(draft) != null) return
+            composer.restoreComposerText("${SideQuestion.COMMAND} $draft")
         }
 
         /**
@@ -821,7 +841,9 @@ class SessionChatViewModel
         private fun askSideQuestion() {
             val side = sideQuestions.state.value.ui
             val draft = composer.state.value.composer.text
-            val question = if (side.composerMode) draft else SideQuestion.questionInDraft(draft).orEmpty()
+            // The Btw tile keeps the draft as it is, so it may still start with `/btw `.
+            val question =
+                if (side.composerMode) SideQuestion.draftAfterCommand(draft) ?: draft else SideQuestion.questionInDraft(draft).orEmpty()
             if (!supportsSideQuestion() || question.isBlank()) return
             logAction(ProductAnalytics.Action.SIDE_QUESTION_ASK)
             if (!sideQuestions.ask(question)) return

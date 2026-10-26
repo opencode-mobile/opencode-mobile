@@ -1364,6 +1364,7 @@ fun SessionChatScreen(
                 showAttachmentSource ||
                 activePicker != null ||
                 showDeleteConfirmation
+        LaunchedEffect(screenSheetOpen) { viewModel.setScreenSheetOpen(screenSheetOpen) }
         SessionChatChipTimelineIntroModal(
             visible = uiState.chipTimelineIntroVisible && !screenSheetOpen,
             onEnable = viewModel::enableChipTimelineFromIntro,

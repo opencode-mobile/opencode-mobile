@@ -91,6 +91,8 @@ final class SessionChatViewModel {
     private var dictation: ComposerDictationUiState?
     private var dictationInsertGeneration: UInt64 = 0
     private var dictationFinishTask: Task<Void, Never>?
+    /// A sheet or dialog the view owns is up; see `setScreenSheetOpen`.
+    @ObservationIgnored private var screenSheetOpen = false
     /// Tests set this to 0 to commit an insert synchronously.
     var dictationFinishDelayNs: UInt64 = 350_000_000
 
@@ -386,7 +388,10 @@ final class SessionChatViewModel {
     /// timeline, and the draft cleared. A `/btw` this server cannot answer stays in the draft.
     private func askSideQuestion() {
         let draft = composer.state.composer.text
-        let question = sideQuestions.state.composerMode ? draft : SideQuestion.question(inDraft: draft) ?? ""
+        // The Btw tile keeps the draft as it is, so it may still start with `/btw `.
+        let question = sideQuestions.state.composerMode
+            ? SideQuestion.draftAfterCommand(draft) ?? draft
+            : SideQuestion.question(inDraft: draft) ?? ""
         guard activeConnectionManager.capabilities.supportsSideQuestion,
               !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else { return }
@@ -396,9 +401,26 @@ final class SessionChatViewModel {
         sideQuestions.updateDraft("")
     }
 
+    /// Sheets and dialogs Session Chat's view owns itself are up; a new answer waits behind them.
+    func setScreenSheetOpen(_ open: Bool) {
+        screenSheetOpen = open
+    }
+
+    /// The mode is not kept, so a side-question draft gets its `/btw` back before leaving; it
+    /// still asks a side question later instead of going out as a prompt.
+    private func keepSideQuestionDraft() {
+        guard sideQuestions.state.composerMode else { return }
+        let draft = composer.state.composer.text
+        guard !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              SideQuestion.question(inDraft: draft) == nil
+        else { return }
+        composer.restoreComposerText(SideQuestion.command + " " + draft)
+    }
+
     /// A new answer opens its sheet only when no other sheet or dialog is up.
     private var canPresentSideQuestionAnswer: Bool {
         isSessionBound
+            && !screenSheetOpen
             && !uiState.commandsSheetVisible
             && !uiState.forkDialogVisible
             && !uiState.moveSheetVisible
@@ -1468,6 +1490,7 @@ final class SessionChatViewModel {
         resetWorkingFooter()
         resetChipTimelineIntro()
         resetTimelineStylePicker()
+        keepSideQuestionDraft()
         composer.flushDraft()
         pendingSend = nil
         optimisticCreateTask?.cancel()

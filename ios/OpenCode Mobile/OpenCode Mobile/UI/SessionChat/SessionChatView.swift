@@ -548,6 +548,9 @@ struct SessionChatView: View {
                 onCopy: { viewModel.sideQuestionAnswerCopied() },
                 onClose: { viewModel.closeSideQuestionAnswer() }
             )
+            .onChange(of: viewSheetOpen, initial: true) { _, open in
+                viewModel.setScreenSheetOpen(open)
+            }
             .sessionChatMessageActionsSheet(
                 target: $messageActionsTarget,
                 onRevertMessage: { viewModel.revertMessage($0) },

@@ -4871,6 +4871,84 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun sideQuestion_btwTileOnABtwDraftAsksOnlyTheQuestion() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    serverProtocol = ServerProtocol.V2,
+                    sideQuestionsSupported = true,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.restoreComposerText("/btw Why?")
+            viewModel.runClientSlashAction(ClientSlashAction.Btw)
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            assertEquals(listOf("ses-1" to "Why?"), sessionRepository.sideQuestionRequests)
+        }
+
+    @Test
+    fun sideQuestion_leavingInModeKeepsTheDraftASideQuestion() =
+        runTest(testDispatcher) {
+            val repository = FakeMessageRepository()
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = repository,
+                    sessionRepository = sessionRepository,
+                    serverProtocol = ServerProtocol.V2,
+                    sideQuestionsSupported = true,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("/btw ")
+            viewModel.updateComposerText("Why?")
+            advanceUntilIdle()
+
+            viewModel.leaveSideQuestions()
+            advanceUntilIdle()
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.sideQuestions.composerMode)
+            assertEquals("/btw Why?", viewModel.uiState.value.composer.text)
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertEquals(listOf("ses-1" to "Why?"), sessionRepository.sideQuestionRequests)
+            assertFalse(repository.sendPromptAsyncCalled)
+        }
+
+    @Test
+    fun sideQuestion_answerWaitsBehindAScreenSheet() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    serverProtocol = ServerProtocol.V2,
+                    sideQuestionsSupported = true,
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.updateComposerText("/btw Why?")
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+
+            viewModel.setScreenSheetOpen(true)
+            sessionRepository.sideQuestionReplies.single().complete("Because.")
+            advanceUntilIdle()
+
+            val side = viewModel.uiState.value.sideQuestions
+            assertNull(side.presentedAnswer)
+            assertEquals(1, side.readyCount)
+        }
+
+    @Test
     fun moveToWorktree_v2PostsTheMoveAndSessionMovedRebindsInPlace() =
         runTest(testDispatcher) {
             val repository = FakeMessageRepository()
