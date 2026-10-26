@@ -504,13 +504,17 @@ private val ToolChipContentHeightLine = HorizontalAlignmentLine(::maxOf)
  * box at least [minSize] on each axis so the enclosing clickable's pointer
  * bounds reach the minimum target, and publishes the content size as
  * alignment lines for [touchTargetShell].
+ *
+ * The box never exceeds [constraints]: Compose would re-centre an oversized box
+ * and shift the alignment lines with it, under-reporting the content size and
+ * going negative in a zero-width slot.
  */
 private fun Modifier.touchTargetCore(minSize: Dp): Modifier =
     layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
         val minPx = minSize.roundToPx()
-        val width = maxOf(placeable.width, minPx)
-        val height = maxOf(placeable.height, minPx)
+        val width = maxOf(placeable.width, minPx).coerceAtMost(constraints.maxWidth)
+        val height = maxOf(placeable.height, minPx).coerceAtMost(constraints.maxHeight)
         layout(
             width = width,
             height = height,
@@ -533,9 +537,11 @@ private fun Modifier.touchTargetShell(): Modifier =
     layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
         val width =
-            placeable[ToolChipContentWidthLine].takeIf { it != AlignmentLine.Unspecified } ?: placeable.width
+            (placeable[ToolChipContentWidthLine].takeIf { it != AlignmentLine.Unspecified } ?: placeable.width)
+                .coerceIn(constraints.minWidth, constraints.maxWidth)
         val height =
-            placeable[ToolChipContentHeightLine].takeIf { it != AlignmentLine.Unspecified } ?: placeable.height
+            (placeable[ToolChipContentHeightLine].takeIf { it != AlignmentLine.Unspecified } ?: placeable.height)
+                .coerceIn(constraints.minHeight, constraints.maxHeight)
         layout(width, height) {
             placeable.place((width - placeable.width) / 2, (height - placeable.height) / 2)
         }
