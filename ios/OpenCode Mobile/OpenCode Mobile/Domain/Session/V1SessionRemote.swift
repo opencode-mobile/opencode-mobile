@@ -159,4 +159,8 @@ struct V1SessionRemote: SessionRemote, Sendable {
     func moveSession(id _: String, directory _: String) async throws {
         throw SessionError.http(statusCode: 404, message: "Needs an opencode v2 server")
     }
+
+    func askSideQuestion(sessionID _: String, question _: String) async throws -> String {
+        throw SessionError.http(statusCode: 404, message: "Needs an opencode v2 server")
+    }
 }

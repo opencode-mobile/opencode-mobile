@@ -118,6 +118,7 @@ import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SplitPaneGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StepRailGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SideQuestionPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SyncingPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TagGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
@@ -769,6 +770,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ActionPill -> ActionPillGalleryScreen()
                                                         ComponentGalleryEntryId.ActionTile -> ActionTileGalleryScreen()
                                                         ComponentGalleryEntryId.SyncingPill -> SyncingPillGalleryScreen()
+                                                        ComponentGalleryEntryId.SideQuestionPill -> SideQuestionPillGalleryScreen()
                                                         ComponentGalleryEntryId.ComposerSuggestionOverlay ->
                                                             ComposerSuggestionOverlayGalleryScreen()
                                                         ComponentGalleryEntryId.ReviewChangesPill -> ReviewChangesPillGalleryScreen()

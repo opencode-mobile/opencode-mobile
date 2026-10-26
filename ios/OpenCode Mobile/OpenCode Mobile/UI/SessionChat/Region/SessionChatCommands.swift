@@ -93,7 +93,8 @@ final class SessionChatCommands {
         let input = ClientSlashActionCatalog.visibilityInput(
             messages: refs,
             revertMessageID: currentRevertMessageID,
-            hasSelectedComposerModel: hasSelectedComposerModel
+            hasSelectedComposerModel: hasSelectedComposerModel,
+            supportsSideQuestion: activeConnectionManager.capabilities.supportsSideQuestion
         )
         state.visibleActions = ClientSlashActionCatalog.visibleActions(input)
     }

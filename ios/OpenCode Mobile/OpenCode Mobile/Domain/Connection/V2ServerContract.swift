@@ -4,6 +4,7 @@ import Foundation
 nonisolated struct V2ServerFeatures: Equatable, Sendable {
     var sessionArchive = false
     var sessionTurnDiff = false
+    var sessionGenerate = false
 }
 
 /// Reads release-dependent v2 support from the server's OpenAPI document (`/openapi.json`).
@@ -12,12 +13,14 @@ nonisolated struct V2ServerFeatures: Equatable, Sendable {
 /// per-turn `GET /api/session/{sessionID}/diff` route. Older 2.x servers answer that PATCH
 /// with 204 and ignore the field, `time.archived` predates 2.1, and `/api/info` reports
 /// `local` or `0.0.0-<channel>-<n>` for source and preview builds, so the contract is the
-/// reliable signal.
+/// reliable signal. `POST /api/session/{sessionID}/generate` (`/btw`) shipped in 2.0.x, so
+/// earlier 2.x servers lack it too.
 nonisolated enum V2ServerContract {
     static let openAPIPath = "openapi.json"
 
     private static let sessionPath = "/api/session/{sessionID}"
     private static let sessionDiffPath = "/api/session/{sessionID}/diff"
+    private static let sessionGeneratePath = "/api/session/{sessionID}/generate"
 
     static func features(data: Data) throws -> V2ServerFeatures {
         guard let document = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -29,7 +32,8 @@ nonisolated enum V2ServerContract {
     static func features(_ document: [String: Any]) -> V2ServerFeatures {
         V2ServerFeatures(
             sessionArchive: declaresSessionArchive(document),
-            sessionTurnDiff: declaresSessionTurnDiff(document)
+            sessionTurnDiff: declaresSessionTurnDiff(document),
+            sessionGenerate: declaresSessionGenerate(document)
         )
     }
 
@@ -49,6 +53,12 @@ nonisolated enum V2ServerContract {
         object(document["paths"])
             .flatMap { object($0[sessionDiffPath]) }
             .flatMap { object($0["get"]) } != nil
+    }
+
+    static func declaresSessionGenerate(_ document: [String: Any]) -> Bool {
+        object(document["paths"])
+            .flatMap { object($0[sessionGeneratePath]) }
+            .flatMap { object($0["post"]) } != nil
     }
 
     /// Follows a local `#/components/...` reference; other schemas are returned as is.

@@ -398,7 +398,16 @@ struct SessionChatView: View {
 
             OpenCodeSnackbarHost(
                 message: viewModel.uiState.snackbar.mapToOpenCodeSnackbarMessage(),
-                onDismissed: { viewModel.consumeSnackbar() }
+                onDismissed: { viewModel.consumeSnackbar() },
+                onAction: { message in
+                    guard message.id == viewModel.uiState.snackbar?.id else { return }
+                    switch viewModel.uiState.snackbar?.action {
+                    case let .retrySideQuestion(id):
+                        viewModel.retrySideQuestions(id: id)
+                    case nil:
+                        break
+                    }
+                }
             )
             // Sit just above the measured composer, like Android; 168 only
             // covers the first frame before the composer reports its height.
@@ -455,6 +464,9 @@ struct SessionChatView: View {
                         }
                         .padding(.bottom, 6)
                     }
+                    sideQuestionRow
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 6)
                     if SessionChatComposerKind.resolve(
                         isChildSession: session.parentID != nil,
                         hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
@@ -495,8 +507,50 @@ struct SessionChatView: View {
         }
     }
 
+    /// `/btw` chips and the notice for a `/btw` this server cannot answer, above the composer.
+    @ViewBuilder
+    private var sideQuestionRow: some View {
+        let sideQuestions = viewModel.uiState.sideQuestions
+        if let notice = sideQuestions.unsupportedNotice {
+            OpenCodeInlineNotice(message: notice, variant: .banner)
+        }
+        if sideQuestions.pendingCount > 0 || sideQuestions.readyCount > 0 || sideQuestions.failedCount > 0 {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    if sideQuestions.pendingCount > 0 {
+                        OpenCodeSideQuestionPill(variant: .pending(count: sideQuestions.pendingCount))
+                    }
+                    if sideQuestions.readyCount > 0 {
+                        OpenCodeSideQuestionPill(variant: .answerReady(count: sideQuestions.readyCount)) {
+                            viewModel.openSideQuestionAnswer()
+                        }
+                    }
+                    if sideQuestions.failedCount > 0 {
+                        OpenCodeSideQuestionPill(
+                            variant: .failed(count: sideQuestions.failedCount),
+                            action: { viewModel.retrySideQuestions() },
+                            onDismiss: { viewModel.dismissFailedSideQuestions() }
+                        )
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            // The pills' floating shadow would otherwise be cut off at the row's bounds.
+            .scrollClipDisabled()
+            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        }
+    }
+
     private func sessionChatSheets(_ content: some View) -> some View {
         content
+            .sessionChatSideQuestionAnswerSheet(
+                answer: viewModel.uiState.sideQuestions.presentedAnswer,
+                onCopy: { viewModel.sideQuestionAnswerCopied() },
+                onClose: { viewModel.closeSideQuestionAnswer() }
+            )
+            .onChange(of: viewSheetOpen, initial: true) { _, open in
+                viewModel.setScreenSheetOpen(open)
+            }
             .sessionChatMessageActionsSheet(
                 target: $messageActionsTarget,
                 onRevertMessage: { viewModel.revertMessage($0) },
@@ -1361,6 +1415,18 @@ struct SessionChatView: View {
                 )
             )
         } else {
+            let sideQuestions = viewModel.uiState.sideQuestions
+            let sideQuestionMode = sideQuestions.composerMode
+            let blockedSideQuestion = !sideQuestions.supported && SideQuestion.question(inDraft: composer.text) != nil
+            let promptSendEnabled =
+                composer.hasSendableContent &&
+                composer.selectedModel != nil &&
+                composer.isModelSelectionReady &&
+                !isSending &&
+                !blockedSideQuestion
+            // A side question answers with the session's own model, so it needs no model pick.
+            let sideQuestionSendEnabled =
+                !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             state = .prompt(
                 .init(
                     text: composer.text,
@@ -1375,10 +1441,7 @@ struct SessionChatView: View {
                     selectedVariantLabel: composer.selectedVariantLabel,
                     showVariant: composer.canSelectVariant,
                     sendEnabled:
-                        composer.hasSendableContent &&
-                        composer.selectedModel != nil &&
-                        composer.isModelSelectionReady &&
-                        !isSending &&
+                        (sideQuestionMode ? sideQuestionSendEnabled : promptSendEnabled) &&
                         !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
                         viewModel.uiState.timeline != .creating &&
                         viewModel.uiState.composerEnabled &&
@@ -1386,13 +1449,15 @@ struct SessionChatView: View {
                     attachEnabled: composerAttachmentSources.isAttachEnabled &&
                         !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
                         composer.isModelSelectionReady &&
-                        !composer.isShellMode,
+                        !composer.isShellMode &&
+                        !sideQuestionMode,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting &&
                         viewModel.uiState.canMutate,
-                    followUpDelivery: composer.supportsFollowUpDelivery ? composer.followUpDelivery : nil,
+                    followUpDelivery: composer.supportsFollowUpDelivery && !sideQuestionMode ? composer.followUpDelivery : nil,
                     showDictationButton: dictationSupport.showsMic,
-                    shellMode: composer.isShellMode
+                    shellMode: composer.isShellMode && !sideQuestionMode,
+                    sideQuestionMode: sideQuestionMode
                 )
             )
         }
@@ -1466,6 +1531,8 @@ struct SessionChatView: View {
                     viewModel.cancelRevert()
                 case .exitShellMode:
                     viewModel.exitShellMode()
+                case .exitSideQuestionMode:
+                    viewModel.exitSideQuestionMode()
                 case .openCommands:
                     viewModel.openCommands()
                 case .send:
@@ -1754,6 +1821,7 @@ private extension SessionChatSnackbar {
         OpenCodeSnackbarMessage(
             text: message,
             variant: tone == .error ? .error : .default,
+            actionLabel: action?.label,
             id: id
         )
     }
@@ -1856,6 +1924,7 @@ private extension ClientSlashAction {
         case .redo: .redo
         case .compact: .verticalAlignCenter
         case .mcp: .plug
+        case .btw: .subdirectoryArrowRight
         }
     }
 }

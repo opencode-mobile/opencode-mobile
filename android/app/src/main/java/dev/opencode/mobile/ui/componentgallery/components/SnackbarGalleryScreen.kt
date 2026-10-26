@@ -61,6 +61,17 @@ fun SnackbarGalleryScreen(modifier: Modifier = Modifier) {
                         )
                 },
             )
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.CompactText("Action"),
+                onClick = {
+                    message =
+                        OpenCodeSnackbarMessage(
+                            text = "/btw failed: “What did we change so far?”",
+                            variant = OpenCodeSnackbarVariant.Error,
+                            actionLabel = "Retry",
+                        )
+                },
+            )
         }
         Box(
             modifier =

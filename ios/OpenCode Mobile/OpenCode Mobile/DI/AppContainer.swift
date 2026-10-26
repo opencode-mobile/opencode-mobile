@@ -612,9 +612,14 @@ extension Container {
                 sessionReadyStore: self.sessionReadyStore(),
                 messageRepository: self.messageRepository(),
                 modelCatalogStore: self.modelCatalogStore(),
-                sessionViewReporter: self.sessionViewReporter()
+                sessionViewReporter: self.sessionViewReporter(),
+                sideQuestionStore: self.sideQuestionStore()
             )
         }.singleton
+    }
+
+    var sideQuestionStore: Factory<SideQuestionStore> {
+        onMainActor { SideQuestionStore(sessionRepository: self.sessionRepository()) }.singleton
     }
 
     var sessionContextRepository: Factory<any SessionContextRepository> {
@@ -694,6 +699,7 @@ extension Container {
                 ),
                 liveUpdates: self.liveUpdates(),
                 lastTurnReviewChangesStore: self.lastTurnReviewChangesStore(),
+                sideQuestionStore: self.sideQuestionStore(),
                 syncCoordinator: self.syncCoordinator(),
                 mcpRepository: self.mcpRepository(),
                 projectFilesRepository: self.projectFilesRepository(),

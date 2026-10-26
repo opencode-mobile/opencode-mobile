@@ -209,10 +209,23 @@ enum SessionChatSnackbarTone: Equatable {
     case error
 }
 
+/// A button on a Session Chat snackbar.
+enum SessionChatSnackbarAction: Equatable {
+    /// Ask a failed `/btw` question again.
+    case retrySideQuestion(UUID)
+
+    var label: String {
+        switch self {
+        case .retrySideQuestion: "Retry"
+        }
+    }
+}
+
 struct SessionChatSnackbar: Equatable, Identifiable {
     let id: UInt64
     let message: String
     let tone: SessionChatSnackbarTone
+    var action: SessionChatSnackbarAction? = nil
 }
 
 enum ComposerDictationPhase: Equatable {
@@ -362,6 +375,8 @@ struct SessionChatUiState: Equatable {
     /// One-time Timeline Style picker for updated installs (#805).
     var timelineStylePickerVisible = false
     var dictation: ComposerDictationUiState? = nil
+    /// `/btw` side questions: composer mode, chips above the composer and the answer sheet.
+    var sideQuestions = SessionChatSideQuestionsUiState()
 
     /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.
     var blocksChipTimelineIntro: Bool {

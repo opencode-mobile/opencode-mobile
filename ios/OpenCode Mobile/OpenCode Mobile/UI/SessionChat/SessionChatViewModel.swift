@@ -22,6 +22,7 @@ final class SessionChatViewModel {
     private let repoStrip: SessionChatRepoStrip
     private let commands: SessionChatCommands
     private let inbox: SessionChatInbox
+    private let sideQuestions: SessionChatSideQuestions
     private let sessionRepository: any SessionRepository
     private let sessionReadyStore: any SessionReadyStore
     private let sessionViewReporter: any SessionViewReporter
@@ -90,6 +91,8 @@ final class SessionChatViewModel {
     private var dictation: ComposerDictationUiState?
     private var dictationInsertGeneration: UInt64 = 0
     private var dictationFinishTask: Task<Void, Never>?
+    /// A sheet or dialog the view owns is up; see `setScreenSheetOpen`.
+    @ObservationIgnored private var screenSheetOpen = false
     /// Tests set this to 0 to commit an insert synchronously.
     var dictationFinishDelayNs: UInt64 = 350_000_000
 
@@ -116,6 +119,7 @@ final class SessionChatViewModel {
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         liveUpdates: any LiveUpdates = FixedLiveUpdates(),
         lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil,
+        sideQuestionStore: SideQuestionStore? = nil,
         syncCoordinator: (any SyncCoordinator)? = nil,
         clock: any SyncClock = SystemSyncClock(),
         mcpRepository: (any McpRepository)? = nil,
@@ -203,6 +207,11 @@ final class SessionChatViewModel {
             composerDraftStore: composerDraftStore,
             mcpRepository: mcpRepository ?? EmptyMcpRepository()
         )
+        self.sideQuestions = SessionChatSideQuestions(
+            sessionID: sessionID,
+            store: sideQuestionStore ?? SideQuestionStore(sessionRepository: sessionRepository),
+            supported: { activeConnectionManager.capabilities.supportsSideQuestion }
+        )
         let boundSessionInfo = self.sessionInfo
         let boundTimeline = self.timeline
         self.inbox = SessionChatInbox(
@@ -232,6 +241,8 @@ final class SessionChatViewModel {
         repoStrip.onChange = { [weak self] in self?.publishUiState() }
         commands.onChange = { [weak self] in self?.publishUiState() }
         inbox.onChange = { [weak self] in self?.publishUiState() }
+        sideQuestions.onChange = { [weak self] in self?.publishUiState() }
+        sideQuestions.canPresentAnswer = { [weak self] in self?.canPresentSideQuestionAnswer ?? false }
         refreshProjectIdentity()
         publishUiState()
     }
@@ -259,6 +270,7 @@ final class SessionChatViewModel {
         startCollapsePreferenceObservation()
         repoStrip.start()
         reviewChanges.start()
+        sideQuestions.start()
         if OptimisticSessionCreate.isPlaceholder(sessionID) {
             beginOptimisticCreate()
             return
@@ -320,11 +332,100 @@ final class SessionChatViewModel {
     }
 
     func updateComposerText(_ text: String, cursor: Int? = nil) {
+        // Typing `/btw ` switches to side-question mode and keeps only the question. Also strips
+        // the command when it is already in that mode: a keystroke typed before the field took
+        // the stripped draft brings it back.
+        if activeConnectionManager.capabilities.supportsSideQuestion, let question = SideQuestion.draftAfterCommand(text) {
+            sideQuestions.enterMode()
+            composer.restoreComposerText(question)
+            return
+        }
         composer.updateComposerText(text, cursor: cursor)
+        sideQuestions.updateDraft(composer.state.composer.text)
     }
 
     func exitShellMode() {
         composer.exitShellMode()
+    }
+
+    func exitSideQuestionMode() {
+        sideQuestions.exitMode()
+    }
+
+    /// The "answer ready" chip.
+    func openSideQuestionAnswer() {
+        logChatAction(ProductAnalytics.Action.sideQuestionOpenAnswer)
+        sideQuestions.openReadyAnswer()
+    }
+
+    func closeSideQuestionAnswer() {
+        logChatAction(ProductAnalytics.Action.sideQuestionClose)
+        sideQuestions.closeAnswer()
+    }
+
+    /// The answer sheet copied its text to the pasteboard.
+    func sideQuestionAnswerCopied() {
+        logChatAction(ProductAnalytics.Action.sideQuestionCopy)
+        sideQuestions.answerCopied()
+    }
+
+    /// The failed chip, or Retry on its snackbar when `id` is set.
+    func retrySideQuestions(id: UUID? = nil) {
+        logChatAction(ProductAnalytics.Action.sideQuestionRetry)
+        if let id {
+            sideQuestions.retry(id)
+        } else {
+            sideQuestions.retryFailed()
+        }
+    }
+
+    func dismissFailedSideQuestions() {
+        logChatAction(ProductAnalytics.Action.sideQuestionDismissFailed)
+        sideQuestions.dismissFailed()
+    }
+
+    /// Sends the draft as a `/btw` side question: one `generate` request, nothing added to the
+    /// timeline, and the draft cleared. A `/btw` this server cannot answer stays in the draft.
+    private func askSideQuestion() {
+        let draft = composer.state.composer.text
+        // The Btw tile keeps the draft as it is, so it may still start with `/btw `.
+        let question = sideQuestions.state.composerMode
+            ? SideQuestion.draftAfterCommand(draft) ?? draft
+            : SideQuestion.question(inDraft: draft) ?? ""
+        guard activeConnectionManager.capabilities.supportsSideQuestion,
+              !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return }
+        logChatAction(ProductAnalytics.Action.sideQuestionAsk)
+        guard sideQuestions.ask(question) else { return }
+        composer.restoreComposerText("")
+        sideQuestions.updateDraft("")
+    }
+
+    /// Sheets and dialogs Session Chat's view owns itself are up; a new answer waits behind them.
+    func setScreenSheetOpen(_ open: Bool) {
+        screenSheetOpen = open
+    }
+
+    /// The mode is not kept, so a side-question draft gets its `/btw` back before leaving; it
+    /// still asks a side question later instead of going out as a prompt.
+    private func keepSideQuestionDraft() {
+        guard sideQuestions.state.composerMode else { return }
+        let draft = composer.state.composer.text
+        guard !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              SideQuestion.question(inDraft: draft) == nil
+        else { return }
+        composer.restoreComposerText(SideQuestion.command + " " + draft)
+    }
+
+    /// A new answer opens its sheet only when no other sheet or dialog is up.
+    private var canPresentSideQuestionAnswer: Bool {
+        isSessionBound
+            && !screenSheetOpen
+            && !uiState.commandsSheetVisible
+            && !uiState.forkDialogVisible
+            && !uiState.moveSheetVisible
+            && !uiState.rename.isDialogVisible
+            && uiState.presentedActivityCard == nil
     }
 
     func beginDictation(languageLabel: String, onDevice: Bool) {
@@ -569,6 +670,9 @@ final class SessionChatViewModel {
             commands.openMcpServers()
         case .compact:
             compactCurrentSession()
+        case .btw:
+            commands.dismissCommands()
+            sideQuestions.enterMode()
         }
     }
 
@@ -611,6 +715,7 @@ final class SessionChatViewModel {
             case .terminal: ProductAnalytics.Action.commandsTerminal
             case .files: ProductAnalytics.Action.commandsFiles
             case .mcp: ProductAnalytics.Action.commandsMcp
+            case .btw: ProductAnalytics.Action.commandsBtw
             }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.sessionCommands,
@@ -811,6 +916,7 @@ final class SessionChatViewModel {
         moveNotice = nil
         turnDiffNotice = nil
         commands.clearActionFeedback()
+        sideQuestions.clearNotice()
         composer.clearTransientErrors()
         sessionInfo.clearTransientErrors()
         timeline.clearReadyError()
@@ -1093,6 +1199,11 @@ final class SessionChatViewModel {
             return
         }
         if pendingSend != nil || sendInFlight || composer.state.isSending {
+            return
+        }
+        // A side question never becomes a prompt, including a typed `/btw` this server cannot answer.
+        if sideQuestions.state.composerMode || SideQuestion.question(inDraft: composer.state.composer.text) != nil {
+            askSideQuestion()
             return
         }
         sendInFlight = true
@@ -1379,6 +1490,7 @@ final class SessionChatViewModel {
         resetWorkingFooter()
         resetChipTimelineIntro()
         resetTimelineStylePicker()
+        keepSideQuestionDraft()
         composer.flushDraft()
         pendingSend = nil
         optimisticCreateTask?.cancel()
@@ -1392,6 +1504,7 @@ final class SessionChatViewModel {
         timeline.stopObserving()
         sessionInfo.stopObserving()
         inbox.stop()
+        sideQuestions.stop()
         collapsePreferenceGeneration += 1
         // Only release our own focus: the next Session Chat (child, parent, fork) may already
         // have focused itself before this screen disappears.
@@ -1620,6 +1733,7 @@ final class SessionChatViewModel {
         composer.rebind(sessionID: id)
         reviewChanges.rebind(sessionID: id)
         commands.rebind(sessionID: id)
+        sideQuestions.rebind(sessionID: id)
         sessionInfo.bind(sessionID: id, sessionTitle: title)
         inbox.bind(sessionID: id)
         commands.start()
@@ -1697,6 +1811,7 @@ final class SessionChatViewModel {
         }()
         let snackbar = resolveSnackbar(
             transientError: transientError,
+            sideQuestionNotice: sideQuestions.notice,
             successNotice: composerState.followUpNotice
                 ?? commandsState.actionSuccessMessage
                 ?? moveNotice
@@ -1858,7 +1973,13 @@ final class SessionChatViewModel {
             debouncedStepIDs: timelineState.debouncedStepIDs,
             chipTimelineIntroVisible: chipTimelineIntroVisible,
             timelineStylePickerVisible: timelineStylePickerVisible,
-            dictation: dictation
+            dictation: dictation,
+            sideQuestions: {
+                var next = sideQuestions.state
+                next.supported = activeConnectionManager.capabilities.supportsSideQuestion
+                next.composerMode = next.composerMode && next.supported
+                return next
+            }()
         )
     }
 
@@ -1888,7 +2009,27 @@ final class SessionChatViewModel {
         publishUiState()
     }
 
-    private func resolveSnackbar(transientError: String?, successNotice: String?) -> SessionChatSnackbar? {
+    private func resolveSnackbar(
+        transientError: String?,
+        sideQuestionNotice: SessionChatSideQuestionNotice? = nil,
+        successNotice: String?
+    ) -> SessionChatSnackbar? {
+        // A `/btw` notice outranks other success notices and yields to errors; its id keeps a
+        // repeated failure of the same question from deduping into the earlier snackbar.
+        if transientError == nil, let sideQuestionNotice {
+            let key = "sideQuestion:\(sideQuestionNotice.id)"
+            if key == suppressedSnackbarKey { return nil }
+            if key != lastSnackbarKey {
+                snackbarSequence += 1
+                lastSnackbarKey = key
+            }
+            return SessionChatSnackbar(
+                id: snackbarSequence,
+                message: sideQuestionNotice.message,
+                tone: sideQuestionNotice.isError ? .error : .default,
+                action: sideQuestionNotice.retryID.map { .retrySideQuestion($0) }
+            )
+        }
         let key: String?
         if let transientError {
             key = "error:\(transientError)"

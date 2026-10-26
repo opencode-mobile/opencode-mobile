@@ -28,6 +28,16 @@ struct SnackbarGalleryView: View {
                         )
                     }
                 )
+                OpenCodeButton(
+                    variant: .compactText(title: "Action"),
+                    action: {
+                        message = OpenCodeSnackbarMessage(
+                            text: "/btw failed: “What did we change so far?”",
+                            variant: .error,
+                            actionLabel: "Retry"
+                        )
+                    }
+                )
             }
 
             ZStack(alignment: .bottom) {

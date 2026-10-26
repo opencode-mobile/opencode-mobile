@@ -48,6 +48,25 @@ class V2ServerContractTest {
     }
 
     @Test
+    fun sessionGenerateDeclaredWhenGenerateRouteExists() {
+        val doc = parse("""{"paths":{"/api/session/{sessionID}/generate":{"post":{}}}}""")
+
+        assertTrue(V2ServerContract.declaresSessionGenerate(doc))
+        assertEquals(V2ServerFeatures(sessionGenerate = true), V2ServerContract.features(doc))
+        assertTrue(ServerCapabilities.forProtocol(ServerProtocol.V2, V2ServerContract.features(doc)).supportsSideQuestion)
+    }
+
+    @Test
+    fun sessionGenerateNotDeclaredWithoutRoute() {
+        assertFalse(V2ServerContract.declaresSessionGenerate(parse("""{"paths":{"/api/experimental/generate":{"post":{}}}}""")))
+        assertFalse(V2ServerContract.declaresSessionGenerate(parse("""{}""")))
+        assertFalse(ServerCapabilities.forProtocol(ServerProtocol.V2).supportsSideQuestion)
+        assertFalse(
+            ServerCapabilities.forProtocol(ServerProtocol.V1, V2ServerFeatures(sessionGenerate = true)).supportsSideQuestion,
+        )
+    }
+
+    @Test
     fun turnDiffNotDeclaredOnOlderServer() {
         assertFalse(V2ServerContract.declaresSessionTurnDiff(document(V2_0_PATCH_BODY)))
         assertFalse(V2ServerContract.declaresSessionTurnDiff(parse("""{}""")))

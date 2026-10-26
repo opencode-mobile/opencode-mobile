@@ -57,6 +57,8 @@ import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodoList
+import dev.opencode.mobile.domain.session.SideQuestion
+import dev.opencode.mobile.domain.session.SideQuestionStore
 import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.SyncCoordinator
@@ -68,6 +70,8 @@ import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionNotice
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestions
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatInbox
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatRepoStrip
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
@@ -134,6 +138,7 @@ class SessionChatViewModel
         private val projectRepository: ProjectRepository = UnavailableProjectRepository,
         private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
         private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
+        sideQuestionStore: SideQuestionStore? = null,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -213,6 +218,7 @@ class SessionChatViewModel
                 mcpRepository = mcpRepository,
                 composerDraftStore = composerDraftStore,
                 scope = viewModelScope,
+                supportsSideQuestion = { activeConnectionManager.currentCapabilities().supportsSideQuestion },
             )
         private val inbox =
             SessionChatInbox(
@@ -224,6 +230,22 @@ class SessionChatViewModel
                 canMutate = { sessionInfo.state.value.canMutate },
                 loadedMessages = { timeline.loadedMessages() },
             )
+
+        private val sideQuestions =
+            SessionChatSideQuestions(
+                store =
+                    sideQuestionStore ?: SideQuestionStore(
+                        request = { sessionId, question -> sessionRepository.askSideQuestion(sessionId, question) },
+                        scope = viewModelScope,
+                    ),
+                supported = { activeConnectionManager.currentCapabilities().supportsSideQuestion },
+                scope = viewModelScope,
+            ).also { region ->
+                region.canPresentAnswer = {
+                    val state = _uiState.value
+                    !screenSheetOpen && !state.blocksChipTimelineIntro() && state.presentedActivityCard == null
+                }
+            }
 
         private val worktreeMove =
             SessionChatWorktreeMove(
@@ -254,6 +276,9 @@ class SessionChatViewModel
         val uiState: StateFlow<SessionChatUiState> = _uiState.asStateFlow()
 
         private var boundSessionId: String? = null
+
+        /** A sheet or dialog the screen owns is up; see [setScreenSheetOpen]. */
+        private var screenSheetOpen = false
         private var boundSessionTitle: String? = null
         private var boundWorktree: String? = null
 
@@ -415,6 +440,9 @@ class SessionChatViewModel
                 repoStrip.state.collect { publishUiState() }
             }
             viewModelScope.launch {
+                sideQuestions.state.collect { publishUiState() }
+            }
+            viewModelScope.launch {
                 combine(
                     worktreeMove.state,
                     homeProjectsSnapshot.projects,
@@ -501,6 +529,7 @@ class SessionChatViewModel
             repoStrip.bind(worktree, startExpanded = false)
             commands.bind(sessionId, worktree)
             inbox.bind(sessionId, worktree)
+            sideQuestions.bind(sessionId)
             syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
             viewModelScope.launch {
                 composer.loadCatalog()
@@ -522,6 +551,7 @@ class SessionChatViewModel
             // Peers may have changed while the screen was away; re-resolve smart label.
             scheduleProjectIdentityRefine(worktree)
             timeline.restartLiveObservation()
+            sideQuestions.bind(sessionId)
             syncCoordinator.markFocused(ProjectionKey.Transcript(transcriptWorktree ?: worktree, sessionId))
         }
 
@@ -644,6 +674,7 @@ class SessionChatViewModel
             reviewChanges.bind(sessionId, worktree)
             commands.bind(sessionId, worktree)
             inbox.bind(sessionId, worktree)
+            sideQuestions.bind(sessionId)
             syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
             viewModelScope.launch {
                 composer.loadCatalog()
@@ -730,11 +761,94 @@ class SessionChatViewModel
             text: String,
             cursor: Int = text.length,
         ) {
+            // Typing `/btw ` switches to side-question mode and keeps only the question. Also strips
+            // the command when it is already in that mode: a keystroke typed before the field took
+            // the stripped draft brings it back.
+            val question = SideQuestion.draftAfterCommand(text)
+            if (question != null && supportsSideQuestion()) {
+                sideQuestions.enterMode()
+                composer.restoreComposerText(question)
+                return
+            }
             composer.updateComposerText(text, cursor)
+            sideQuestions.updateDraft(composer.state.value.composer.text)
         }
 
         fun exitShellMode() {
             composer.exitShellMode()
+        }
+
+        fun exitSideQuestionMode() {
+            sideQuestions.exitMode()
+        }
+
+        /** The "answer ready" chip. */
+        fun openSideQuestionAnswer() {
+            logAction(ProductAnalytics.Action.SIDE_QUESTION_OPEN_ANSWER)
+            sideQuestions.openReadyAnswer()
+        }
+
+        fun closeSideQuestionAnswer() {
+            logAction(ProductAnalytics.Action.SIDE_QUESTION_CLOSE)
+            sideQuestions.closeAnswer()
+        }
+
+        /** The answer sheet copied its text to the clipboard. */
+        fun sideQuestionAnswerCopied() {
+            logAction(ProductAnalytics.Action.SIDE_QUESTION_COPY)
+            sideQuestions.answerCopied()
+        }
+
+        /** The failed chip, or Retry on its snackbar when [id] is set. */
+        fun retrySideQuestions(id: String? = null) {
+            logAction(ProductAnalytics.Action.SIDE_QUESTION_RETRY)
+            if (id != null) sideQuestions.retry(id) else sideQuestions.retryFailed()
+        }
+
+        fun dismissFailedSideQuestions() {
+            logAction(ProductAnalytics.Action.SIDE_QUESTION_DISMISS_FAILED)
+            sideQuestions.dismissFailed()
+        }
+
+        private fun supportsSideQuestion(): Boolean = activeConnectionManager.currentCapabilities().supportsSideQuestion
+
+        /** Session Chat left the screen: the open answer was read; requests keep running. */
+        fun leaveSideQuestions() {
+            keepSideQuestionDraft()
+            sideQuestions.stop()
+        }
+
+        /** Sheets and dialogs Session Chat owns itself are up; a new answer waits behind them. */
+        fun setScreenSheetOpen(open: Boolean) {
+            screenSheetOpen = open
+        }
+
+        /**
+         * The mode is not kept, so a side-question draft gets its `/btw` back before leaving; it
+         * still asks a side question later instead of going out as a prompt.
+         */
+        private fun keepSideQuestionDraft() {
+            if (!sideQuestions.state.value.ui.composerMode) return
+            val draft = composer.state.value.composer.text
+            if (draft.isBlank() || SideQuestion.questionInDraft(draft) != null) return
+            composer.restoreComposerText("${SideQuestion.COMMAND} $draft")
+        }
+
+        /**
+         * Sends the draft as a `/btw` side question: one `generate` request, nothing added to the
+         * timeline, and the draft cleared. A `/btw` this server cannot answer stays in the draft.
+         */
+        private fun askSideQuestion() {
+            val side = sideQuestions.state.value.ui
+            val draft = composer.state.value.composer.text
+            // The Btw tile keeps the draft as it is, so it may still start with `/btw `.
+            val question =
+                if (side.composerMode) SideQuestion.draftAfterCommand(draft) ?: draft else SideQuestion.questionInDraft(draft).orEmpty()
+            if (!supportsSideQuestion() || question.isBlank()) return
+            logAction(ProductAnalytics.Action.SIDE_QUESTION_ASK)
+            if (!sideQuestions.ask(question)) return
+            composer.restoreComposerText("")
+            sideQuestions.updateDraft("")
         }
 
         fun beginDictation(
@@ -989,6 +1103,10 @@ class SessionChatViewModel
                 ClientSlashAction.Files -> commands.runFiles()
                 ClientSlashAction.Mcp -> commands.openMcpServers()
                 ClientSlashAction.Compact -> compactCurrentSession()
+                ClientSlashAction.Btw -> {
+                    commands.dismissCommands()
+                    sideQuestions.enterMode()
+                }
             }
         }
 
@@ -1306,6 +1424,7 @@ class SessionChatViewModel
             turnDiffNotice = null
             chipTimelineIntroNotice = null
             commands.clearActionFeedback()
+            sideQuestions.clearNotice()
             worktreeMove.clearMessages()
             composer.clearTransientErrors()
             sessionInfo.clearTransientErrors()
@@ -1431,6 +1550,13 @@ class SessionChatViewModel
 
         fun sendPrompt() {
             if (!hasCreatedSession()) return
+            // A side question never becomes a prompt, including a typed `/btw` this server cannot answer.
+            if (sideQuestions.state.value.ui.composerMode ||
+                SideQuestion.questionInDraft(composer.state.value.composer.text) != null
+            ) {
+                if (sessionInfo.state.value.composerEnabled) askSideQuestion()
+                return
+            }
             val composerState = composer.state.value.composer
             logAction(
                 actionId = ProductAnalytics.Action.COMPOSER_SEND,
@@ -1881,6 +2007,7 @@ class SessionChatViewModel
             val snackbar =
                 resolveSnackbar(
                     transientError,
+                    sideQuestions.state.value.notice,
                     composerState.followUpNotice
                         ?: worktreeMove.state.value.notice
                         ?: commandsState.actionSuccessMessage
@@ -2066,6 +2193,11 @@ class SessionChatViewModel
                 sessionBranchPill = repoStrip.state.value.toSessionBranchPill(),
                 worktree = boundWorktree.orEmpty(),
                 dictation = dictation,
+                sideQuestions =
+                    sideQuestions.state.value.ui.let { side ->
+                        val supported = activeConnectionManager.currentCapabilities().supportsSideQuestion
+                        side.copy(supported = supported, composerMode = side.composerMode && supported)
+                    },
             )
         }
 
@@ -2233,8 +2365,25 @@ class SessionChatViewModel
 
         private fun resolveSnackbar(
             transientError: String?,
+            sideQuestionNotice: SessionChatSideQuestionNotice?,
             successNotice: String?,
         ): SessionChatSnackbar? {
+            // A `/btw` notice outranks other success notices and yields to errors; its id keeps a
+            // repeated failure of the same question from deduping into the earlier snackbar.
+            if (transientError == null && sideQuestionNotice != null) {
+                val key = "sideQuestion:${sideQuestionNotice.id}"
+                if (key == suppressedSnackbarKey) return null
+                if (key != lastSnackbarKey) {
+                    snackbarSequence += 1
+                    lastSnackbarKey = key
+                }
+                return SessionChatSnackbar(
+                    message = sideQuestionNotice.message,
+                    tone = if (sideQuestionNotice.isError) SessionChatSnackbarTone.Error else SessionChatSnackbarTone.Default,
+                    id = snackbarSequence,
+                    action = sideQuestionNotice.retryId?.let { SessionChatSnackbarAction.RetrySideQuestion(it) },
+                )
+            }
             val key =
                 when {
                     transientError != null -> "error:$transientError"
@@ -2437,6 +2586,7 @@ private val ClientSlashAction.productActionId: String
             ClientSlashAction.Terminal -> ProductAnalytics.Action.COMMANDS_TERMINAL
             ClientSlashAction.Files -> ProductAnalytics.Action.COMMANDS_FILES
             ClientSlashAction.Mcp -> ProductAnalytics.Action.COMMANDS_MCP
+            ClientSlashAction.Btw -> ProductAnalytics.Action.COMMANDS_BTW
         }
 
 private object EmptyMcpRepository : McpRepository {

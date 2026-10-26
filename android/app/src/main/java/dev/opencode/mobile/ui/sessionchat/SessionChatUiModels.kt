@@ -34,6 +34,7 @@ import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionLeadingIcon
 import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 
 data class SessionChatComposerState(
@@ -133,10 +134,23 @@ enum class SessionChatSnackbarTone {
     Error,
 }
 
+/** A button on a Session Chat snackbar. */
+sealed interface SessionChatSnackbarAction {
+    val label: String
+
+    /** Ask a failed `/btw` question again. */
+    data class RetrySideQuestion(
+        val id: String,
+    ) : SessionChatSnackbarAction {
+        override val label: String get() = "Retry"
+    }
+}
+
 data class SessionChatSnackbar(
     val message: String,
     val tone: SessionChatSnackbarTone,
     val id: Long,
+    val action: SessionChatSnackbarAction? = null,
 )
 
 enum class ComposerDictationPhase {
@@ -301,6 +315,8 @@ data class SessionChatUiState(
     val dictation: ComposerDictationUiState? = null,
     /** Directory the session runs in now; differs from the route's after `session.moved`. Empty until bound. */
     val worktree: String = "",
+    /** `/btw` side questions: composer mode, chips above the composer and the answer sheet. */
+    val sideQuestions: SessionChatSideQuestionsUiState = SessionChatSideQuestionsUiState(),
 ) {
     /** A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet. */
     fun blocksChipTimelineIntro(): Boolean =

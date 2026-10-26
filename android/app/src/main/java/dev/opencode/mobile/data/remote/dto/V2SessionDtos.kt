@@ -70,6 +70,17 @@ data class V2MoveSessionRequestDto(
     val directory: String,
 )
 
+/** `POST /api/session/{id}/generate`: the prompt answered from the session's context. */
+@Serializable
+data class V2SessionGenerateRequestDto(
+    val prompt: String,
+)
+
+@Serializable
+data class V2SessionGenerateResponseDto(
+    val text: String,
+)
+
 @Serializable
 data class V2PermissionRequestDto(
     val id: String,

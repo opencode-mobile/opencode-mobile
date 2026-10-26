@@ -50,6 +50,8 @@ class SessionChatCommands(
     private val mcpRepository: McpRepository,
     private val composerDraftStore: ComposerDraftStore,
     private val scope: CoroutineScope,
+    /** The server answers `/btw`; shows the Btw tile. */
+    private val supportsSideQuestion: () -> Boolean = { false },
 ) {
     var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
@@ -129,7 +131,13 @@ class SessionChatCommands(
                     hasNonEmptyText = message.text.isNotBlank(),
                 )
             }
-        val input = ClientSlashActionCatalog.visibilityInput(refs, currentRevertMessageId, hasSelectedComposerModel)
+        val input =
+            ClientSlashActionCatalog.visibilityInput(
+                messages = refs,
+                revertMessageId = currentRevertMessageId,
+                hasSelectedComposerModel = hasSelectedComposerModel,
+                supportsSideQuestion = supportsSideQuestion(),
+            )
         _state.update { it.copy(visibleActions = ClientSlashActionCatalog.visibleActions(input)) }
     }
 

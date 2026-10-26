@@ -8,6 +8,7 @@ import kotlinx.serialization.json.contentOrNull
 data class V2ServerFeatures(
     val sessionArchive: Boolean = false,
     val sessionTurnDiff: Boolean = false,
+    val sessionGenerate: Boolean = false,
 )
 
 /**
@@ -17,18 +18,21 @@ data class V2ServerFeatures(
  * per-turn `GET /api/session/{sessionID}/diff` route. Older 2.x servers answer that PATCH
  * with 204 and ignore the field, `time.archived` predates 2.1, and `/api/info` reports
  * `local` or `0.0.0-<channel>-<n>` for source and preview builds, so the contract is the
- * reliable signal.
+ * reliable signal. `POST /api/session/{sessionID}/generate` (`/btw`) shipped in 2.0.x, so
+ * earlier 2.x servers lack it too.
  */
 object V2ServerContract {
     const val OPENAPI_PATH = "openapi.json"
 
     private const val SESSION_PATH = "/api/session/{sessionID}"
     private const val SESSION_DIFF_PATH = "/api/session/{sessionID}/diff"
+    private const val SESSION_GENERATE_PATH = "/api/session/{sessionID}/generate"
 
     fun features(document: JsonObject): V2ServerFeatures =
         V2ServerFeatures(
             sessionArchive = declaresSessionArchive(document),
             sessionTurnDiff = declaresSessionTurnDiff(document),
+            sessionGenerate = declaresSessionGenerate(document),
         )
 
     fun declaresSessionArchive(document: JsonObject): Boolean {
@@ -51,6 +55,12 @@ object V2ServerContract {
             .obj("paths")
             ?.obj(SESSION_DIFF_PATH)
             ?.obj("get") != null
+
+    fun declaresSessionGenerate(document: JsonObject): Boolean =
+        document
+            .obj("paths")
+            ?.obj(SESSION_GENERATE_PATH)
+            ?.obj("post") != null
 
     /** Follows a local `#/components/...` reference; other schemas are returned as is. */
     private fun JsonObject.resolve(schema: JsonObject): JsonObject? {
