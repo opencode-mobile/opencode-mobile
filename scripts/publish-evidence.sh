@@ -90,7 +90,8 @@ encode() {
 }
 url() { echo "https://github.com/$repo/blob/$branch/$issue/$(encode "$1")?raw=true"; }
 img() { if [ -n "$1" ]; then echo "<img src=\"$(url "$1")\" width=\"240\">"; fi; }
-html() { local s="${1//&/&amp;}"; s="${s//\"/&quot;}"; echo "${s//</&lt;}"; }
+# sed, not ${var//}: bash 5.2 expands & in pattern replacements.
+html() { echo "$1" | sed -e 's/&/\&amp;/g' -e 's/"/\&quot;/g' -e 's/</\&lt;/g'; }
 caption() { echo "$1" | tr '-' ' ' | sed 's/|/\\|/g' | awk '{ print toupper(substr($0, 1, 1)) substr($0, 2) }'; }
 
 steps=()
@@ -126,14 +127,17 @@ if [ "${#steps[@]}" -gt 0 ]; then
       continue
     fi
     while IFS= read -r slug; do
-      ios_file="" android_file=""
-      for f in ${ios[@]+"${ios[@]}"}; do
-        if [[ "$f" == "ios-$step-$slug".* ]]; then ios_file="$f"; fi
+      ios_cell="" android_cell=""
+      for f in ${ios[@]+"${ios[@]}"} ${android[@]+"${android[@]}"}; do
+        [[ "$f" =~ ^(ios|android)-${step}-(.+)\.[A-Za-z]+$ ]] || continue
+        [ "${BASH_REMATCH[2]}" = "$slug" ] || continue
+        if [ "${BASH_REMATCH[1]}" = ios ]; then
+          ios_cell="${ios_cell:+$ios_cell }$(img "$f")"
+        else
+          android_cell="${android_cell:+$android_cell }$(img "$f")"
+        fi
       done
-      for f in ${android[@]+"${android[@]}"}; do
-        if [[ "$f" == "android-$step-$slug".* ]]; then android_file="$f"; fi
-      done
-      echo "| $step $(caption "$slug") | $(img "$ios_file") | $(img "$android_file") |"
+      echo "| $step $(caption "$slug") | $ios_cell | $android_cell |"
     done < <(printf '%s\n' "${slugs[@]}" | LC_ALL=C sort -u)
   done
 fi
