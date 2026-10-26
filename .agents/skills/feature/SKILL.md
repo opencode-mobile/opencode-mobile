@@ -98,7 +98,9 @@ Repair issue state only when asked; otherwise report the mismatch.
    platform cell is a gap to name under Risks / Follow-ups. With nothing
    visible, skip this step and keep "No UI change" under Checks.
 
-Name the issue as `#<number>`; write `Fixes #<number>` only when the pull
-request finishes the issue. Add an issue comment only when asked, via
+Name the issue as `#<number>`. Write `Fixes #<number>` whenever the pull
+request completes the issue's work, so merging closes it; unticked Remaining
+boxes do not block this. Use a bare `#<number>` only when other work on the
+issue is still open, and say so under Risks / Follow-ups. Add an issue comment only when asked, via
 `github-issue-tracking`. Report the commit, remote branch, pull-request URL,
 and evidence comment URL.
