@@ -1,19 +1,25 @@
-package dev.opencode.mobile.markdown
+package dev.opencode.mobile.highlight.bench
 
+import kotlin.math.exp
 import kotlin.random.Random
 
-/** Typical code per language, repeated with varying identifiers, and pathological inputs. */
-internal object BaselineCorpus {
-    class WorstCase(
-        val name: String,
-        val language: String,
-        val source: String,
-    )
+/**
+ * Text generators behind [HighlightBenchCatalog], in code so every platform runs identical
+ * inputs: typical code per language repeated with varying identifiers, chat-sized fences, and
+ * pathological inputs.
+ */
+object HighlightBenchCorpus {
+    /** Languages with typical code; the worst cases add javascript and markdown. */
+    val languages: List<String> = listOf("typescript", "kotlin", "swift", "python", "json", "diff")
 
+    const val ONE_MB: Int = 1_000_000
+
+    /** Typical [language] code cut at a line end, at most [size] characters. */
     fun code(
         language: String,
         size: Int,
     ): String {
+        require(language in languages) { "No typical code for $language" }
         if (language == "json") return json(size)
         val template = TEMPLATES.getValue(language)
         val builder = StringBuilder(size + template.length)
@@ -26,6 +32,66 @@ internal object BaselineCorpus {
         return builder.substring(0, if (cut > 0) cut + 1 else size)
     }
 
+    /**
+     * [count] chat fences cut from typical code at line starts. Sizes come from a fixed
+     * log-uniform draw (median ~900 characters, clipped to 80..8,000), the same for every language.
+     */
+    fun chatFences(
+        language: String,
+        count: Int,
+    ): List<String> {
+        val corpus = code(language, 64_000)
+        val random = Random(872)
+        return List(count) {
+            val size = exp(6.8 + random.nextDouble(-1.0, 1.0) * 1.3).toInt().coerceIn(80, 8_000)
+            val start = corpus.lastIndexOf('\n', random.nextInt(0, corpus.length - size)) + 1
+            corpus.substring(start, minOf(corpus.length, start + size))
+        }
+    }
+
+    /** Pathological inputs; each is generated on demand because several are megabytes. */
+    internal fun worstCases(): List<HighlightBenchDataSet> =
+        listOf(
+            worst("minified-js-1mb", "Minified JS, one 1 MB line", "javascript", ONE_MB) {
+                buildString { while (length < ONE_MB) append("function a${length}(b,c){return b+c*\"x\"}var d=[1,2,3],e={f:1,g:'h',i:/[a-z]+/g};") }
+            },
+            worst("typescript-line-100k", "TypeScript, one 100K line", "typescript", 100_000) {
+                code("typescript", 120_000).replace('\n', ' ').take(100_000)
+            },
+            worst("unclosed-comment-1mb", "Unclosed block comment, 1 MB", "typescript", ONE_MB) { "/*\n" + code("typescript", ONE_MB) },
+            worst("unclosed-template-1mb", "Unclosed template literal, 1 MB", "typescript", ONE_MB) { "const t = `\n" + code("typescript", ONE_MB) },
+            worst("unclosed-string-100k", "Unclosed string, one 100K line", "python", 100_000) { "s = \"" + "abc \\\" ".repeat(14_300) },
+            worst("open-parens-20k", "20K open parentheses, one line", "typescript", 20_000) { "const x = " + "(".repeat(20_000) + "a" },
+            worst("nested-generics-10k", "10K nested generics, one line", "typescript", 40_000) {
+                "let x: " + "A<".repeat(10_000) + "B" + ">".repeat(10_000) + ";"
+            },
+            worst("arrow-heads-10k", "10K arrow-function heads, one line", "typescript", 100_000) { "const f = " + "(a, b) => ".repeat(10_000) + "a;" },
+            worst("json-deep-50k", "JSON nested 50K deep, one line", "json", 100_000) { "[".repeat(50_000) + "]".repeat(50_000) },
+            worst("json-deep-2k-pretty", "JSON nested 2K deep, pretty", "json", 8_000_000) { nestedJson(2_000) },
+            worst("binary-200k", "Binary bytes as text, 200K", "typescript", 200_000) {
+                val random = Random(872)
+                CharArray(200_000) { if (random.nextInt(80) == 0) '\n' else random.nextInt(0, 256).toChar() }.concatToString()
+            },
+            worst("unicode-soup-200k", "Surrogates, emoji, zero-width, 200K", "typescript", 200_000) { unicodeSoup(Random(873)) },
+            worst("crlf-typescript-250k", "CRLF TypeScript, 250K", "typescript", 250_000) { code("typescript", 250_000).replace("\n", "\r\n") },
+            worst("diff-long-line-1mb", "Diff with a 50K line, 1 MB", "diff", ONE_MB) { code("diff", 950_000) + "+" + "x".repeat(50_000) + "\n" },
+            worst("markdown-fence-1mb", "Markdown fence of 1 MB TypeScript", "markdown", ONE_MB) { "# Title\n\n```ts\n" + code("typescript", ONE_MB) + "```\n" },
+        )
+
+    private fun worst(
+        id: String,
+        displayName: String,
+        language: String,
+        approximateLength: Int,
+        generate: () -> String,
+    ) = HighlightBenchDataSet(
+        id = "worst/$id",
+        displayName = displayName,
+        language = language,
+        sizeClass = HighlightBenchSizeClass.of(approximateLength),
+        kind = HighlightBenchDataKind.WorstCase,
+    ) { listOf(generate()) }
+
     private fun json(size: Int): String {
         val builder = StringBuilder(size + JSON_ITEM.length).append("[\n")
         var index = 0
@@ -35,29 +101,6 @@ internal object BaselineCorpus {
             index += 1
         }
         return builder.append("\n]\n").toString()
-    }
-
-    fun worstCases(): List<WorstCase> {
-        val random = Random(872)
-        val minified = buildString { while (length < 1_000_000) append("function a${length}(b,c){return b+c*\"x\"}var d=[1,2,3],e={f:1,g:'h',i:/[a-z]+/g};") }
-        val typicalTs = code("typescript", 120_000)
-        return listOf(
-            WorstCase("Minified JS, one 1 MB line", "javascript", minified),
-            WorstCase("TypeScript, one 100K line", "typescript", typicalTs.replace('\n', ' ').take(100_000)),
-            WorstCase("Unclosed block comment, 1 MB", "typescript", "/*\n" + code("typescript", 1_000_000)),
-            WorstCase("Unclosed template literal, 1 MB", "typescript", "const t = `\n" + code("typescript", 1_000_000)),
-            WorstCase("Unclosed string, one 100K line", "python", "s = \"" + "abc \\\" ".repeat(14_300)),
-            WorstCase("20K open parentheses, one line", "typescript", "const x = " + "(".repeat(20_000) + "a"),
-            WorstCase("10K nested generics, one line", "typescript", "let x: " + "A<".repeat(10_000) + "B" + ">".repeat(10_000) + ";"),
-            WorstCase("10K arrow-function heads, one line", "typescript", "const f = " + "(a, b) => ".repeat(10_000) + "a;"),
-            WorstCase("JSON nested 50K deep, one line", "json", "[".repeat(50_000) + "]".repeat(50_000)),
-            WorstCase("JSON nested 2K deep, pretty", "json", nestedJson(2_000)),
-            WorstCase("Binary bytes as text, 200K", "typescript", String(CharArray(200_000) { if (random.nextInt(80) == 0) '\n' else random.nextInt(0, 256).toChar() })),
-            WorstCase("Surrogates, emoji, zero-width, 200K", "typescript", unicodeSoup(random)),
-            WorstCase("CRLF TypeScript, 250K", "typescript", code("typescript", 250_000).replace("\n", "\r\n")),
-            WorstCase("Diff with a 50K line, 1 MB", "diff", code("diff", 950_000) + "+" + "x".repeat(50_000) + "\n"),
-            WorstCase("Markdown fence of 1 MB TypeScript", "markdown", "# Title\n\n```ts\n" + code("typescript", 1_000_000) + "```\n"),
-        )
     }
 
     private fun nestedJson(depth: Int): String =

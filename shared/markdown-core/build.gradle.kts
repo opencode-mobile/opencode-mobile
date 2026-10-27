@@ -24,6 +24,7 @@ kotlin {
         }
         binaries.framework {
             baseName = xcfName
+            export(project(":highlight-bench"))
         }
         configureOnigurumaCinterop("iosX64")
     }
@@ -33,6 +34,7 @@ kotlin {
         }
         binaries.framework {
             baseName = xcfName
+            export(project(":highlight-bench"))
         }
         configureOnigurumaCinterop("iosArm64")
     }
@@ -42,12 +44,15 @@ kotlin {
         }
         binaries.framework {
             baseName = xcfName
+            export(project(":highlight-bench"))
         }
         configureOnigurumaCinterop("iosSimulatorArm64")
     }
 
     sourceSets {
         commonMain.dependencies {
+            // The Highlighting Lab benchmark ships inside this framework so iOS keeps one Kotlin framework.
+            api(project(":highlight-bench"))
             implementation(libs.jetbrains.markdown)
             implementation(libs.kotlinx.serialization.json)
         }

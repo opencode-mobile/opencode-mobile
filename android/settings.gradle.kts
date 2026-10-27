@@ -34,6 +34,8 @@ rootProject.name = "OpenCode Mobile"
 include(":app")
 include(":markdown-core")
 project(":markdown-core").projectDir = file("../shared/markdown-core")
+include(":highlight-bench")
+project(":highlight-bench").projectDir = file("../shared/highlight-bench")
 
 val includeScreenshot =
     JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21) ||

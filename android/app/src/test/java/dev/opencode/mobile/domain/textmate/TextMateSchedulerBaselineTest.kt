@@ -1,6 +1,7 @@
 package dev.opencode.mobile.domain.textmate
 
 import dev.opencode.mobile.domain.filesystem.TextMateProjectFileHighlighter
+import dev.opencode.mobile.highlight.bench.HighlightBenchCorpus
 import dev.opencode.mobile.markdown.CodeBlockKey
 import dev.opencode.mobile.markdown.HighlightIntent
 import dev.opencode.mobile.markdown.HighlightRequest
@@ -149,57 +150,6 @@ class TextMateSchedulerBaselineTest {
 
         fun ms(nanos: Long): String = "%.1f".format(nanos / 1_000_000.0)
 
-        /** The same TypeScript sample as markdown-core's `BaselineCorpus`, repeated to [size]. */
-        fun typescript(size: Int): String {
-            val builder = StringBuilder(size + TYPESCRIPT.length)
-            var index = 0
-            while (builder.length < size) {
-                builder.append(TYPESCRIPT.replace("{n}", index.toString()))
-                index += 1
-            }
-            return builder.substring(0, builder.lastIndexOf("\n", size) + 1)
-        }
-
-        val TYPESCRIPT =
-            """
-            |/**
-            | * Session store {n}: keeps the latest revision per key.
-            | */
-            |import { EventEmitter } from "node:events";
-            |import type { Session, Message } from "./types";
-            |
-            |export interface StoreOptions{n}<T extends Session = Session> {
-            |  readonly capacity: number;
-            |  onEvict?: (session: T) => void;
-            |  filter: RegExp | null;
-            |}
-            |
-            |enum Status{n} { Idle = "idle", Busy = "busy", Error = 3 }
-            |
-            |export class SessionStore{n}<T extends Session> extends EventEmitter {
-            |  private readonly items = new Map<string, T>();
-            |  #revision = 0;
-            |
-            |  constructor(private options: StoreOptions{n}<T> = { capacity: 64, filter: /^ses_[a-z0-9]+${'$'}/i }) {
-            |    super();
-            |  }
-            |
-            |  async load(id: string, signal?: AbortSignal): Promise<T | undefined> {
-            |    const response = await fetch(`/session/${'$'}{encodeURIComponent(id)}?rev=${'$'}{this.#revision}`, { signal });
-            |    if (!response.ok) throw new Error(`load failed: ${'$'}{response.status}`);
-            |    const body = (await response.json()) as { session: T; messages: Message[] };
-            |    this.items.set(id, body.session);
-            |    return this.items.get(id) ?? undefined;
-            |  }
-            |
-            |  get size(): number {
-            |    return [...this.items.values()].filter((s) => s.status !== Status{n}.Error).length * 2 + 0x1f;
-            |  }
-            |}
-            |
-            |export const createStore{n} = <T extends Session>(capacity = 32): SessionStore{n}<T> =>
-            |  new SessionStore{n}<T>({ capacity, filter: null, onEvict: (s) => console.log(s?.id, 1_000n) });
-            |
-            """.trimMargin()
+        fun typescript(size: Int): String = HighlightBenchCorpus.code("typescript", size)
     }
 }
