@@ -26,10 +26,10 @@ the parts of those libraries used as well as that of the covered work.
 Branding
 
 The GPL covers the source code only. The app icon and store graphics in
-app-icon/ and play-listing/, and the launcher and app icon assets generated
-from them in the Android and iOS projects, are not licensed under the GPL;
-all rights reserved. A fork that you distribute must use its own icon,
-store graphics, application id, and bundle id.
+app-icon/, play-listing/, and test-screenshots/, and the launcher and app
+icon assets generated from them in the Android and iOS projects, are not
+licensed under the GPL; all rights reserved. A fork that you distribute
+must use its own icon, store graphics, application id, and bundle id.
 
 OpenCode Mobile is an unofficial client. It is not affiliated with or
 endorsed by the opencode project or its authors.
