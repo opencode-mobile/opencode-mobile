@@ -116,6 +116,33 @@ nonisolated struct FilesystemAPIClient: Sendable {
         return try await boundedData(for: request, limit: limit)
     }
 
+    /// v2 `GET api/fs/read/<path>` for a file the server holds, such as an uploaded attachment.
+    /// The route is confined to its `location[directory]`, so an absolute path is read from its
+    /// parent folder by file name (an upload under `paths.tmp` is outside the session directory);
+    /// a relative path is read from `directory`.
+    func readServerFileV2(path: String, directory: String?, limit: Int) async throws -> BoundedHTTPBody {
+        guard let connection = connectionProvider() else {
+            throw ProjectsAPIError.noActiveConnection
+        }
+        let (location, relative) = Self.readLocation(forServerPath: path, sessionDirectory: directory)
+        var request = connection.authorizedRequest(path: "api/fs/read", locationDirectory: location)
+        if let url = request.url, var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            components.percentEncodedPath += "/" + Self.encodedPathSegments(relative)
+            request.url = components.url
+        }
+        request.setValue("*/*", forHTTPHeaderField: "Accept")
+        return try await boundedData(for: request, limit: limit)
+    }
+
+    static func readLocation(forServerPath path: String, sessionDirectory: String?) -> (location: String?, relative: String) {
+        let isAbsolute = path.hasPrefix("/") || path.hasPrefix("\\") || path.range(of: #"^[A-Za-z]:[\\/]"#, options: .regularExpression) != nil
+        guard isAbsolute else { return (sessionDirectory, path) }
+        guard let cut = path.lastIndex(where: { $0 == "/" || $0 == "\\" }) else { return (sessionDirectory, path) }
+        var parent = String(path[..<cut])
+        if parent.isEmpty { parent = String(path[cut]) }
+        return (parent, String(path[path.index(after: cut)...]))
+    }
+
     /// Each segment percent-encoded with only RFC 3986 unreserved characters left bare.
     static func encodedPathSegments(_ relativePath: String) -> String {
         let allowed = CharacterSet(

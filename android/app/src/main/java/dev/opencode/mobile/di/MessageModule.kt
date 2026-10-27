@@ -5,9 +5,13 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
+import dev.opencode.mobile.data.remote.AttachmentUploadApi
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.message.AttachmentUploadService
+import dev.opencode.mobile.domain.message.DefaultAttachmentUploadService
 import dev.opencode.mobile.domain.message.DefaultMessageRepository
+import dev.opencode.mobile.domain.message.DefaultServerFilePreviews
 import dev.opencode.mobile.domain.message.DisplayMessagePipeline
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.MessageDomainAdapter
@@ -17,9 +21,11 @@ import dev.opencode.mobile.domain.message.MessageRemote
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.message.ProtocolSelectedMessageRemote
+import dev.opencode.mobile.domain.message.ServerFilePreviews
 import dev.opencode.mobile.domain.message.SessionMessageEngine
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.SyncCoordinator
+import dev.opencode.mobile.network.OpencodeHttpClient
 import javax.inject.Singleton
 
 @Module
@@ -33,7 +39,19 @@ abstract class MessageModule {
     @Singleton
     abstract fun bindMessageRemote(impl: ProtocolSelectedMessageRemote): MessageRemote
 
+    @Binds
+    @Singleton
+    abstract fun bindServerFilePreviews(impl: DefaultServerFilePreviews): ServerFilePreviews
+
+    @Binds
+    @Singleton
+    abstract fun bindAttachmentUploadService(impl: DefaultAttachmentUploadService): AttachmentUploadService
+
     companion object {
+        @Provides
+        @Singleton
+        fun provideAttachmentUploadApi(httpClient: OpencodeHttpClient): AttachmentUploadApi = AttachmentUploadApi(httpClient)
+
         @Provides
         @Singleton
         fun provideMessageDomainAdapter(): MessageDomainAdapter = MessageDomainAdapter()

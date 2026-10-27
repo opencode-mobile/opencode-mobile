@@ -79,6 +79,17 @@ class ActiveConnectionManager(
         )
     }
 
+    /** `paths.tmp` for streamed uploads, or null while the server has not declared the route. */
+    fun attachmentUploadTmpDirectory(): String? = if (connection != null) v2Features.attachmentUploadTmp else null
+
+    /**
+     * A live upload showed the route is not what the contract promised. Streamed uploads stay
+     * off until the connection changes, so every file goes the data-URL way.
+     */
+    fun disableAttachmentUpload() {
+        v2Features = v2Features.copy(attachmentUploadTmp = null)
+    }
+
     fun currentProfile(): ConnectionProfile? =
         profile?.copy(
             password = connection?.password.orEmpty(),
@@ -179,7 +190,7 @@ class ActiveConnectionManager(
                     if (active != null && sameProfileDuringProbe(probedProfile, profile, active, current)) {
                         serverVersion = server.version
                         v2Features = features?.getOrNull() ?: V2ServerFeatures()
-                        v2FeaturesVersion = features?.getOrNull()?.let { server.version }
+                        v2FeaturesVersion = features?.getOrNull()?.takeUnless { it.tmpDirectoryUnread }?.let { server.version }
                         connection = active.withProtocol(detected)
                         persistLocked()
                         Result.success(detected)
@@ -201,6 +212,7 @@ class ActiveConnectionManager(
     /**
      * Reads v2 features once per server release. A failed read is not remembered,
      * so the next probe tries again; until then archive and Last turn stay hidden.
+     * Neither is a read whose `/api/info` failed, so streamed uploads can turn on later.
      */
     private suspend fun probeV2Features(
         probing: ConnectionProbing,

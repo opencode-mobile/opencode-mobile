@@ -104,6 +104,7 @@ class MessageContentPreparer
                                         mime = attachment.mime,
                                         kind = attachment.kind,
                                         dataUrl = "",
+                                        serverPath = attachment.uploadedServerPath,
                                     ),
                                 )
                             }

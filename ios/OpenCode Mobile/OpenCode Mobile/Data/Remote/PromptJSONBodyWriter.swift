@@ -195,6 +195,24 @@ nonisolated enum PromptJSONBodyWriter {
                 }
                 try writer.endArray()
             }
+            if let metadata = body.metadata, !metadata.attachments.isEmpty {
+                try writer.key("metadata")
+                try writer.beginObject()
+                try writer.key("attachments")
+                try writer.beginArray()
+                for attachment in metadata.attachments {
+                    try writer.beginObject()
+                    try writer.key("name")
+                    try writer.writeString(attachment.name)
+                    try writer.key("mime")
+                    try writer.writeString(attachment.mime)
+                    try writer.key("path")
+                    try writer.writeString(attachment.path)
+                    try writer.endObject()
+                }
+                try writer.endArray()
+                try writer.endObject()
+            }
             try writer.key("delivery")
             try writer.writeString(body.delivery)
             try writer.endObject()

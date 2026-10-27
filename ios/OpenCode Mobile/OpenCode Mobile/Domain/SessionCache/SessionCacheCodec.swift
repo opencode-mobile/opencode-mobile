@@ -292,6 +292,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
     let mime: String?
     let attachmentKind: String?
     let dataUrl: String?
+    let serverPath: String?
     let timeStartEpochMs: Int64?
     let timeEndEpochMs: Int64?
     let auto: Bool?
@@ -317,6 +318,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         mime: String? = nil,
         attachmentKind: String? = nil,
         dataUrl: String? = nil,
+        serverPath: String? = nil,
         timeStartEpochMs: Int64? = nil,
         timeEndEpochMs: Int64? = nil,
         auto: Bool? = nil,
@@ -341,6 +343,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         self.mime = mime
         self.attachmentKind = attachmentKind
         self.dataUrl = dataUrl
+        self.serverPath = serverPath
         self.timeStartEpochMs = timeStartEpochMs
         self.timeEndEpochMs = timeEndEpochMs
         self.auto = auto
@@ -368,6 +371,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         mime = try container.decodeIfPresent(String.self, forKey: .mime)
         attachmentKind = try container.decodeIfPresent(String.self, forKey: .attachmentKind)
         dataUrl = try container.decodeIfPresent(String.self, forKey: .dataUrl)
+        serverPath = try container.decodeIfPresent(String.self, forKey: .serverPath)
         timeStartEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeStartEpochMs)
         timeEndEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeEndEpochMs)
         auto = try container.decodeIfPresent(Bool.self, forKey: .auto)
@@ -672,7 +676,8 @@ private extension MessagePart {
                 filename: part.filename,
                 mime: part.mime,
                 attachmentKind: part.kind.rawValue,
-                dataUrl: AttachmentLimits.persistedDataURL(part.dataURL)
+                dataUrl: AttachmentLimits.persistedDataURL(part.dataURL),
+                serverPath: part.serverPath
             )
         case let .compaction(part):
             return CachedMessagePartPayload(
@@ -811,7 +816,8 @@ private extension CachedMessagePartPayload {
                     filename: filename ?? "",
                     mime: mime ?? "",
                     kind: AttachmentKind(rawValue: (attachmentKind ?? "").lowercased()) ?? .text,
-                    dataURL: dataUrl ?? ""
+                    dataURL: dataUrl ?? "",
+                    serverPath: serverPath
                 )
             )
         case "reasoning":

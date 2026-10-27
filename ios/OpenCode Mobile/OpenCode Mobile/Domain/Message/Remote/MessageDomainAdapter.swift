@@ -244,8 +244,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     func sendRequest(options: PromptSendOptions) -> SendMessageRequestDTO {
         var parts: [SendMessagePartDTO] = []
-        if !options.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            parts.append(SendMessagePartDTO(type: "text", text: options.text))
+        let text = UploadedAttachmentMetadata.promptText(options.text, uploaded: options.uploadedAttachments)
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(SendMessagePartDTO(type: "text", text: text))
         }
         parts.append(contentsOf: ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
             SendMessagePartDTO(
@@ -257,7 +258,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
         parts.append(contentsOf: fileReferenceParts(options))
         // Omit wire `id`: FilePartInput allows it only when it matches ^prt.
         // Local Attachment ids are UUIDs for composer chip identity.
-        parts.append(contentsOf: options.attachments.map {
+        parts.append(contentsOf: options.inlineAttachments.map {
             SendMessagePartDTO(type: "file", mime: $0.mime, filename: $0.filename, url: $0.dataURL)
         })
         return SendMessageRequestDTO(
@@ -282,9 +283,17 @@ nonisolated struct MessageDomainAdapter: Sendable {
     }
 
     func v2PromptRequest(options: PromptSendOptions) -> V2PromptRequestDTO {
-        let files = options.attachments.map {
+        let files = options.inlineAttachments.map {
             V2PromptFileDTO(uri: $0.dataURL, name: $0.filename, mime: $0.mime)
         }
+        let uploaded = options.uploadedAttachments
+        let metadata = uploaded.isEmpty ? nil : V2PromptMetadataDTO(
+            attachments: uploaded.compactMap { attachment in
+                attachment.uploadedServerPath.map {
+                    V2PromptUploadedAttachmentDTO(name: attachment.filename, mime: attachment.mime, path: $0)
+                }
+            }
+        )
         let agents = ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
             V2PromptAgentDTO(
                 name: part.name,
@@ -299,12 +308,13 @@ nonisolated struct MessageDomainAdapter: Sendable {
         }
         return V2PromptRequestDTO(
             id: options.messageID,
-            text: options.text,
+            text: UploadedAttachmentMetadata.promptText(options.text, uploaded: uploaded),
             files: files.isEmpty ? nil : files,
             agents: agents.isEmpty ? nil : agents,
             skills: skills.isEmpty ? nil : skills,
             delivery: options.delivery.wireValue,
-            fileMentions: v2FileMentions(options)
+            fileMentions: v2FileMentions(options),
+            metadata: metadata
         )
     }
 
@@ -474,7 +484,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     private func projectV2User(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message {
         var parts: [MessagePart] = []
-        let text = dto.text ?? ""
+        let uploaded = UploadedAttachmentMetadata.refs(from: dto.metadata)
+        let text = UploadedAttachmentMetadata.displayText(dto.text ?? "", hiding: uploaded)
         if !text.isEmpty {
             parts.append(.text(TextPart(id: "\(dto.id):text:0", text: text, isStreaming: false)))
         }
@@ -483,6 +494,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 parts.append(part)
             }
         }
+        parts.append(contentsOf: UploadedAttachmentMetadata.fileParts(uploaded, messageID: dto.id))
         return messageFromV2(
             id: dto.id,
             role: .user,
@@ -581,7 +593,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 fallbackID = "\(dto.id):\(content.type):\(index)"
             }
             return v2AssistantPart(content, fallbackID: fallbackID)
-        }
+        } + UploadedAttachmentMetadata.fileParts(UploadedAttachmentMetadata.refs(from: dto.metadata), messageID: dto.id)
         let stopReason = MessageStopReason.from(finish: dto.finish, errorKind: dto.error?.type)
         let failure = structuredFailure(dto.error, outcome: nil, completedAtEpochMs: dto.time?.completed)
             ?? dto.retry?.error.flatMap {
@@ -766,7 +778,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             id: dto.id ?? (url.isEmpty ? nil : url) ?? dto.filename ?? "file",
             filename: dto.filename,
             mime: dto.mime,
-            dataURL: url
+            dataURL: url,
+            serverPath: dto.serverPath
         )
     }
 
@@ -783,13 +796,28 @@ nonisolated struct MessageDomainAdapter: Sendable {
         id: String,
         filename: String?,
         mime: String?,
-        dataURL: String
+        dataURL: String,
+        serverPath: String? = nil
     ) -> MessagePart? {
         let resolvedMime = (
             mime
                 ?? AttachmentDataURL.mime(fromDataURL: dataURL)
                 ?? filename.flatMap(AttachmentDataURL.mime(fromFilename:))
         )?.lowercased()
+        if let serverPath, !serverPath.isEmpty {
+            // Uploaded file: any type shows, at least as a chip.
+            let mime = resolvedMime ?? AttachmentMime.binaryFallback
+            return .file(
+                FilePart(
+                    id: id,
+                    filename: filename?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "Attachment",
+                    mime: mime,
+                    kind: AttachmentMime.kind(for: mime),
+                    dataURL: "",
+                    serverPath: serverPath
+                )
+            )
+        }
         guard let resolvedMime, let kind = AttachmentDataURL.kind(for: resolvedMime) else { return nil }
         if !dataURL.isEmpty {
             guard dataURL.lowercased().hasPrefix("data:"),

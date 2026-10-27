@@ -58,6 +58,16 @@ nonisolated struct ProjectsAPIClient: Sendable {
         try await get(path: "api/info")
     }
 
+    /// `paths.tmp` from `GET api/info`: the server's scratch directory, or nil when it declares none.
+    func getV2TmpDirectory() async throws -> String? {
+        struct Info: Decodable {
+            struct Paths: Decodable { let tmp: String? }
+            let paths: Paths?
+        }
+        let info: Info = try await get(path: "api/info")
+        return info.paths?.tmp
+    }
+
     func getApiHealth() async throws -> HealthDTO {
         try await get(path: "api/health")
     }

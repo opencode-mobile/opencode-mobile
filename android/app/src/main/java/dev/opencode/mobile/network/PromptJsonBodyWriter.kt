@@ -192,6 +192,10 @@ object PromptJsonBodyWriter {
                 writer.endArray()
             }
             writeSkills(body.skills, writer)
+            body.metadata?.let {
+                writer.key("metadata")
+                writer.writeRawJson(it.toString())
+            }
             writer.key("delivery")
             writer.writeString(body.delivery)
             writer.endObject()

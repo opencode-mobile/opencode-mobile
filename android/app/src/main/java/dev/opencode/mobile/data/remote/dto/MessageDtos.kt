@@ -85,6 +85,8 @@ data class MessagePartDto(
     val mime: String? = null,
     val url: String? = null,
     val filename: String? = null,
+    /** Absolute server path of a file the client uploaded (from a v2 prompt's `metadata.attachments`). */
+    val serverPath: String? = null,
     val system: String? = null,
     val tool: String? = null,
     val source: JsonObject? = null,
@@ -198,6 +200,8 @@ data class V2PromptRequestDto(
     val agents: List<V2PromptAgentDto>? = null,
     val skills: List<V2PromptSkillDto>? = null,
     val delivery: String,
+    /** `{attachments: [{name, mime, path}]}` for files uploaded to the server instead of sent inline. */
+    val metadata: JsonObject? = null,
     /** Project-file mentions. Written into `files` as literal URIs, after device attachments. */
     @Transient val fileMentions: List<V2PromptFileMentionDto>? = null,
 )

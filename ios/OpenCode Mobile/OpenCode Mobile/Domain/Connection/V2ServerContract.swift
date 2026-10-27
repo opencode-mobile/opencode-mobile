@@ -5,6 +5,16 @@ nonisolated struct V2ServerFeatures: Equatable, Sendable {
     var sessionArchive = false
     var sessionTurnDiff = false
     var sessionGenerate = false
+    /// `POST /api/experimental/fs/write` matches the shape the upload sends (#644). The flag only
+    /// turns on together with `uploadDirectory`, the server's `paths.tmp` from `/api/info`.
+    var streamedUploadRoute = false
+    /// `paths.tmp` from `/api/info`; uploads go under `<tmp>/uploads/<uuid>/`.
+    var uploadDirectory: String?
+    /// The route is declared but `/api/info` could not be read, so `uploadDirectory` is unknown
+    /// rather than absent. Such a result is not cached.
+    var uploadDirectoryUnread = false
+
+    var streamedUpload: Bool { streamedUploadRoute && uploadDirectory?.isEmpty == false }
 }
 
 /// Reads release-dependent v2 support from the server's OpenAPI document (`/openapi.json`).
@@ -21,6 +31,7 @@ nonisolated enum V2ServerContract {
     private static let sessionPath = "/api/session/{sessionID}"
     private static let sessionDiffPath = "/api/session/{sessionID}/diff"
     private static let sessionGeneratePath = "/api/session/{sessionID}/generate"
+    private static let fsWritePath = "/api/experimental/fs/write"
 
     static func features(data: Data) throws -> V2ServerFeatures {
         guard let document = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -33,7 +44,8 @@ nonisolated enum V2ServerContract {
         V2ServerFeatures(
             sessionArchive: declaresSessionArchive(document),
             sessionTurnDiff: declaresSessionTurnDiff(document),
-            sessionGenerate: declaresSessionGenerate(document)
+            sessionGenerate: declaresSessionGenerate(document),
+            streamedUploadRoute: declaresStreamedUpload(document)
         )
     }
 
@@ -59,6 +71,53 @@ nonisolated enum V2ServerContract {
         object(document["paths"])
             .flatMap { object($0[sessionGeneratePath]) }
             .flatMap { object($0["post"]) } != nil
+    }
+
+    /// The upload route still has the shape we send: a required `path` query parameter, an
+    /// `application/octet-stream` body, and a 200 response whose `data.path` resolves.
+    static func declaresStreamedUpload(_ document: [String: Any]) -> Bool {
+        guard let post = object(document["paths"]).flatMap({ object($0[fsWritePath]) }).flatMap({ object($0["post"]) })
+        else { return false }
+        let parameters = (post["parameters"] as? [Any] ?? []).compactMap { entry -> [String: Any]? in
+            guard let parameter = object(entry) else { return nil }
+            if parameter["$ref"] != nil { return resolve(parameter, in: document) }
+            return parameter
+        }
+        let requiresPath = parameters.contains {
+            ($0["name"] as? String) == "path" && ($0["in"] as? String) == "query" && ($0["required"] as? Bool) == true
+        }
+        guard requiresPath else { return false }
+        let hasOctetBody = object(post["requestBody"])
+            .flatMap { resolve($0, in: document) }
+            .flatMap { object($0["content"]) }
+            .flatMap { object($0["application/octet-stream"]) } != nil
+        guard hasOctetBody else { return false }
+        let responseSchema = object(post["responses"])
+            .flatMap { object($0["200"]) }
+            .flatMap { resolve($0, in: document) }
+            .flatMap { object($0["content"]) }
+            .flatMap { object($0["application/json"]) }
+            .flatMap { object($0["schema"]) }
+            .flatMap { resolve($0, in: document) }
+        guard let responseSchema, let data = property("data", of: responseSchema, in: document) else { return false }
+        return property("path", of: data, in: document) != nil
+    }
+
+    private static func property(_ name: String, of schema: [String: Any], in document: [String: Any]) -> [String: Any]? {
+        if let properties = object(schema["properties"]), let value = object(properties[name]) {
+            return resolve(value, in: document)
+        }
+        // `allOf` / `anyOf` wrappers around the object schema.
+        for key in ["allOf", "anyOf", "oneOf"] {
+            for entry in schema[key] as? [Any] ?? [] {
+                if let entry = object(entry).flatMap({ resolve($0, in: document) }),
+                   let found = property(name, of: entry, in: document)
+                {
+                    return found
+                }
+            }
+        }
+        return nil
     }
 
     /// Follows a local `#/components/...` reference; other schemas are returned as is.

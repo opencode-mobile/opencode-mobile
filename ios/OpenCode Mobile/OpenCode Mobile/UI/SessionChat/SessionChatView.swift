@@ -181,6 +181,8 @@ struct SessionChatView: View {
         let observed = sessionChatObservers(sessionChatDestinations(sheets))
         return sessionChatMoveToWorktree(sessionChatRoutes(sessionChatDialogs(sessionChatLifecycle(observed))))
             .feedbackSheet(model: $feedbackModel)
+            .environment(\.attachmentImageLoading, viewModel.attachmentImageLoader)
+            .environment(\.attachmentImageDirectory, boundSession.directory ?? boundSession.worktree)
     }
 
     private var sessionChatLayout: some View {
@@ -1420,6 +1422,7 @@ struct SessionChatView: View {
             let blockedSideQuestion = !sideQuestions.supported && SideQuestion.question(inDraft: composer.text) != nil
             let promptSendEnabled =
                 composer.hasSendableContent &&
+                !composer.hasPendingUploads &&
                 composer.selectedModel != nil &&
                 composer.isModelSelectionReady &&
                 !isSending &&

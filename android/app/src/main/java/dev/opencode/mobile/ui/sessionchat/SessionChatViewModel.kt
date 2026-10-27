@@ -33,11 +33,15 @@ import dev.opencode.mobile.domain.live.SessionViewReporter
 import dev.opencode.mobile.domain.mcp.McpRepository
 import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentUploadService
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ServerFilePreviews
+import dev.opencode.mobile.domain.message.UnavailableAttachmentUploadService
+import dev.opencode.mobile.domain.message.UnavailableServerFilePreviews
 import dev.opencode.mobile.ui.changes.TurnDiffUnavailable
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelectionOption
@@ -105,6 +109,7 @@ import kotlin.coroutines.coroutineContext
 
 /** Minimum time a child session's current action stays on screen before the next one replaces it. */
 private const val ACTIVITY_CHILD_UPDATE_HOLD_MS = 800L
+private const val ATTACHMENT_PREVIEW_MAX_BYTES = 32 * 1024 * 1024
 
 @HiltViewModel
 class SessionChatViewModel
@@ -139,6 +144,8 @@ class SessionChatViewModel
         private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
         private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
         sideQuestionStore: SideQuestionStore? = null,
+        private val serverFilePreviews: ServerFilePreviews = UnavailableServerFilePreviews,
+        private val attachmentUploads: AttachmentUploadService = UnavailableAttachmentUploadService,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -186,6 +193,7 @@ class SessionChatViewModel
                 scope = viewModelScope,
                 foregroundEventStream = foregroundEventStream,
                 projectFilesRepository = projectFilesRepository,
+                attachmentUploads = attachmentUploads,
             )
         private val sessionInfo =
             SessionInfo(
@@ -983,6 +991,15 @@ class SessionChatViewModel
 
         fun refreshMentionableAgents() {
             composer.loadMentionableAgents(force = true)
+        }
+
+        /** Whether new picks should be staged for streaming (no size cap, any type). */
+        fun attachmentUploadAvailable(): Boolean = attachmentUploads.isAvailable()
+
+        /** Bytes of an image that lives on the server, for a timeline preview; null on any failure. */
+        suspend fun loadAttachmentPreview(serverPath: String): ByteArray? {
+            val directory = boundWorktree ?: return null
+            return serverFilePreviews.read(serverPath, directory, ATTACHMENT_PREVIEW_MAX_BYTES)
         }
 
         fun addAttachments(attachments: List<Attachment>) {
@@ -2095,6 +2112,7 @@ class SessionChatViewModel
                     composerState.composer.copy(
                         supportsFollowUpDelivery =
                             activeConnectionManager.currentCapabilities().supportsFollowUpDelivery,
+                        attachmentUploadAvailable = attachmentUploads.isAvailable(),
                     ),
                 isSending = composerState.isSending,
                 isRefreshing = timelineState.isRefreshing,

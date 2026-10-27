@@ -21,11 +21,19 @@ class AttachmentIngestionService private constructor(
 
     internal constructor(thumbnailer: (ByteArray) -> ByteArray?) : this(null, thumbnailer)
 
-    fun ingest(uris: List<Uri>): AttachmentIngestionResult {
+    /**
+     * [uploadAvailable]: the server takes streamed uploads, so a file is copied to the store with no
+     * size cap and any type is accepted (unknown types are classified by [AttachmentMime]). Without
+     * it, ingestion is the data-URL path unchanged: 20 MB cap, images, PDFs and text only.
+     */
+    fun ingest(
+        uris: List<Uri>,
+        uploadAvailable: Boolean = false,
+    ): AttachmentIngestionResult {
         val attachments = mutableListOf<Attachment>()
         val errors = mutableListOf<String>()
         uris.forEach { uri ->
-            runCatching { ingest(uri) }
+            runCatching { if (uploadAvailable) ingestStreamed(uri) else ingest(uri) }
                 .onSuccess { attachments += it }
                 .onFailure { throwable ->
                     val message = throwable.message ?: READ_ERROR
@@ -38,6 +46,42 @@ class AttachmentIngestionService private constructor(
             "attachments selected accepted=${attachments.size} rejected=${errors.size}",
         )
         return AttachmentIngestionResult(attachments, errors)
+    }
+
+    private fun ingestStreamed(uri: Uri): Attachment {
+        val contentResolver = requireNotNull(contentResolver)
+        val metadata = metadata(uri)
+        val declared = AttachmentMime.resolveDeclared(contentResolver.getType(uri), metadata.filename)
+        val stored = newStoreFile(metadata.filename)
+        val head = ByteArrayOutputStream()
+        val total =
+            try {
+                contentResolver.openInputStream(uri)?.use { input ->
+                    stored.outputStream().use { output -> copyCapturingHead(input, output, head) }
+                } ?: throw IllegalArgumentException(READ_ERROR)
+            } catch (error: Throwable) {
+                runCatching { stored.delete() }
+                throw error
+            }
+        val mime = AttachmentMime.normalize(declared, head.toByteArray())
+        val kind = AttachmentDataUrl.kindOrFile(mime)
+        val preview =
+            if (kind == AttachmentKind.Image && total <= AttachmentLimits.MAX_DECODED_BYTES) {
+                runCatching { thumbnailer(stored.readBytes())?.takeIf { it.size <= MAX_PREVIEW_BYTES } }.getOrNull()
+            } else {
+                null
+            }
+        DiagnosticLog.info(DiagnosticLogArea.Chat, "attachment staged mime=$mime bytes=$total")
+        return Attachment(
+            id = UUID.randomUUID().toString(),
+            filename = metadata.filename.ifBlank { "Attachment" },
+            mime = mime,
+            kind = kind,
+            dataUrl = "",
+            byteCount = total,
+            previewBytes = preview,
+            localPath = stored.absolutePath,
+        )
     }
 
     private fun ingest(uri: Uri): Attachment {
@@ -99,10 +143,12 @@ class AttachmentIngestionService private constructor(
     private fun persist(
         bytes: ByteArray,
         filename: String,
-    ): File {
+    ): File = newStoreFile(filename).apply { writeBytes(bytes) }
+
+    private fun newStoreFile(filename: String): File {
         val directory = File(System.getProperty("java.io.tmpdir"), AttachmentLimits.STORE_DIRECTORY_NAME).apply { mkdirs() }
         val safeName = filename.replace("/", "_").ifBlank { "attachment" }
-        return File(directory, "${UUID.randomUUID()}-$safeName").apply { writeBytes(bytes) }
+        return File(directory, "${UUID.randomUUID()}-$safeName")
     }
 
     private fun metadata(uri: Uri): AttachmentMetadata {
@@ -183,6 +229,25 @@ class AttachmentIngestionService private constructor(
                 output.write(buffer, 0, read)
             }
             return output.toByteArray()
+        }
+
+        /** Copies [input] to [output], keeping the first [AttachmentMime.SNIFF_BYTES] in [head]; returns the byte count. */
+        internal fun copyCapturingHead(
+            input: InputStream,
+            output: java.io.OutputStream,
+            head: ByteArrayOutputStream,
+        ): Long {
+            val buffer = ByteArray(64 * 1024)
+            var total = 0L
+            while (true) {
+                val read = input.read(buffer)
+                if (read < 0) break
+                val room = AttachmentMime.SNIFF_BYTES - head.size()
+                if (room > 0) head.write(buffer, 0, minOf(room, read))
+                output.write(buffer, 0, read)
+                total += read
+            }
+            return total
         }
 
         const val UNSUPPORTED_ERROR = "Only images, PDFs, or text files can be attached here."

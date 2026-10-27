@@ -145,4 +145,5 @@ data class V2InboxItemDto(
 @Serializable
 data class V2InboxUserPayloadDto(
     val text: String = "",
+    val metadata: JsonObject? = null,
 )

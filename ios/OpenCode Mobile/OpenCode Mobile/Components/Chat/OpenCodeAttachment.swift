@@ -5,6 +5,8 @@ enum OpenCodeAttachmentVariant: String {
     case image
     case pdf
     case text
+    /// Any other file; it only exists as a server upload.
+    case file
 
     var label: String { rawValue.uppercased() }
 }
@@ -16,22 +18,33 @@ struct OpenCodeAttachmentPresentation: Identifiable {
     let image: UIImage?
     /// Second line under the name; the variant label when nil.
     let detail: String?
+    /// Fraction (0...1) of an upload in flight. The chip shows it as its detail line and a hairline.
+    let uploadFraction: Double?
+    /// The attachment behind a timeline image, so the inline image can load its full picture.
+    let imageFile: FilePart?
 
     init(
         id: String,
         filename: String,
         variant: OpenCodeAttachmentVariant,
         image: UIImage? = nil,
-        detail: String? = nil
+        detail: String? = nil,
+        uploadFraction: Double? = nil,
+        imageFile: FilePart? = nil
     ) {
         self.id = id
         self.filename = filename
         self.variant = variant
         self.image = image
         self.detail = detail
+        self.uploadFraction = uploadFraction
+        self.imageFile = imageFile
     }
 
-    var detailLabel: String { detail ?? variant.label }
+    var detailLabel: String {
+        if let uploadFraction { return "Uploading \(Int((uploadFraction * 100).rounded(.down)))%" }
+        return detail ?? variant.label
+    }
 }
 
 struct OpenCodeAttachmentChip: View {
@@ -72,14 +85,32 @@ struct OpenCodeAttachmentChip: View {
                     .foregroundStyle(OpenCodeColors.iconStrongBase)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Remove \(attachment.filename)")
+            .accessibilityLabel(
+                attachment.uploadFraction == nil ? "Remove \(attachment.filename)" : "Cancel upload of \(attachment.filename)"
+            )
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
         .overlay(RoundedRectangle(cornerRadius: 8).stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1))
+        .overlay(alignment: .bottomLeading) { uploadHairline }
+        .clipShape(RoundedRectangle(cornerRadius: 8))
         .accessibilityElement(children: .contain)
+    }
+
+    /// Upload progress as a hairline along the chip's bottom edge.
+    @ViewBuilder
+    private var uploadHairline: some View {
+        if let fraction = attachment.uploadFraction {
+            GeometryReader { proxy in
+                Rectangle()
+                    .fill(OpenCodeColors.interactive)
+                    .frame(width: proxy.size.width * min(1, max(0, fraction)), height: 2)
+                    .frame(maxHeight: .infinity, alignment: .bottom)
+            }
+            .allowsHitTesting(false)
+        }
     }
 
     private var chipLabel: some View {
@@ -117,7 +148,16 @@ struct OpenCodeAttachmentChip: View {
 struct OpenCodeMessageAttachment: View {
     let attachment: OpenCodeAttachmentPresentation
 
+    @ViewBuilder
     var body: some View {
+        if attachment.variant == .image, attachment.imageFile != nil {
+            OpenCodeMessageImage(attachment: attachment)
+        } else {
+            chip
+        }
+    }
+
+    var chip: some View {
         HStack(spacing: 10) {
             if let image = attachment.image, attachment.variant == .image {
                 Image(uiImage: image)

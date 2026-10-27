@@ -26,6 +26,10 @@ final class SessionChatComposer {
     private let composerDraftStore: any ComposerDraftStore
     private let projectFilesRepository: (any ProjectFilesRepository)?
     private let activeConnectionManager: ActiveConnectionManager
+    private let attachmentUploadRepository: (any AttachmentUploadRepository)?
+    /// Uploads in flight by attachment id; cancelling the task aborts the request.
+    private var uploadTasks: [String: Task<Void, Never>] = [:]
+    private var uploadFractions: [String: Double] = [:]
     private let foregroundEventStream: (any ForegroundEventStream)?
     private let sentTimeFormatter: DateFormatter
     private var loadedCatalog: ModelSelectionCatalog?
@@ -69,6 +73,7 @@ final class SessionChatComposer {
         activeConnectionManager: ActiveConnectionManager,
         foregroundEventStream: (any ForegroundEventStream)? = nil,
         projectFilesRepository: (any ProjectFilesRepository)? = nil,
+        attachmentUploadRepository: (any AttachmentUploadRepository)? = nil,
         catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs
     ) {
         self.sessionID = sessionID
@@ -82,6 +87,7 @@ final class SessionChatComposer {
         self.composerDraftStore = composerDraftStore
         self.projectFilesRepository = projectFilesRepository
         self.activeConnectionManager = activeConnectionManager
+        self.attachmentUploadRepository = attachmentUploadRepository
         self.foregroundEventStream = foregroundEventStream
         self.catalogRetryDelaysMs = catalogRetryDelaysMs
         let formatter = DateFormatter()
@@ -110,6 +116,7 @@ final class SessionChatComposer {
             }
         persistDraftTask?.cancel()
         persistDraft(sessionID: previousSessionID, draft: currentDraft())
+        cancelAllUploads()
         discardStoredAttachments(state.composer.attachments)
         self.sessionID = sessionID
         loadedCatalog = nil
@@ -138,6 +145,7 @@ final class SessionChatComposer {
     }
 
     func startCatalogLoads() {
+        Task { await refreshUploadAvailability() }
         loadServerCommands()
         loadMentionableAgents()
         loadSelectableAgents()
@@ -192,6 +200,7 @@ final class SessionChatComposer {
         draftRevision = 0
         attachmentRevision = 0
         attachmentRevisions = [:]
+        cancelAllUploads()
         discardStoredAttachments(state.composer.attachments)
         state = SessionChatComposerRegionState()
         state.composer.followUpDelivery = SessionChatDisplayPreferences.shared.followUpDelivery
@@ -385,12 +394,12 @@ final class SessionChatComposer {
         initialSelectionState = initialSelectionState == .waitingForFallback ? .failedWithFallback : .resolved
         let wasProvisional = isSelectionProvisional
         isSelectionProvisional = false
-        let droppedForModel = state.composer.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
+        let droppedForModel = state.composer.attachments.filter { !option.accepts($0) }
         for attachment in droppedForModel {
             attachmentRevisions[attachment.id] = nil
         }
         updateComposer {
-            $0.attachments.removeAll { !option.acceptsAttachmentKind($0.kind) }
+            $0.attachments.removeAll { !option.accepts($0) }
             $0.modelOptions = catalog.options
             $0.selectedModel = ModelSelection(option: option, selectedVariant: variant)
             $0.selectedVariant = variant
@@ -637,8 +646,19 @@ final class SessionChatComposer {
     func addAttachments(_ attachments: [Attachment]) {
         guard !attachments.isEmpty else { return }
         let option = state.composer.selectedModel?.option
-        let accepted = attachments.filter { option?.acceptsAttachmentKind($0.kind) != false }
-        let rejected = attachments.filter { option?.acceptsAttachmentKind($0.kind) == false }
+        var candidates: [Attachment] = []
+        var duplicates: [Attachment] = []
+        for attachment in attachments {
+            // Same name and size as a file already in the draft, pending or uploaded.
+            let draft = state.composer.attachments.filter { $0.id != attachment.id } + candidates
+            if AttachmentDuplicate.isDuplicate(filename: attachment.filename, byteCount: attachment.byteCount, in: draft) {
+                duplicates.append(attachment)
+            } else {
+                candidates.append(attachment)
+            }
+        }
+        let accepted = candidates.filter { option?.accepts($0) != false }
+        let rejected = candidates.filter { option?.accepts($0) == false }
         if !accepted.isEmpty {
             updateComposer { composer in
                 var ordered = composer.attachments
@@ -653,8 +673,12 @@ final class SessionChatComposer {
                 }
                 composer.attachments = ordered
             }
+            accepted.filter(\.isUploadPending).forEach(startUpload)
         }
-        if !rejected.isEmpty {
+        if !duplicates.isEmpty {
+            discardStoredAttachments(duplicates)
+            setAttachmentError(AttachmentDuplicate.message)
+        } else if !rejected.isEmpty {
             discardStoredAttachments(rejected)
             setAttachmentError(Self.unsupportedAttachmentMessage(for: rejected))
         } else if !accepted.isEmpty {
@@ -664,6 +688,7 @@ final class SessionChatComposer {
     }
 
     func removeAttachment(id: String) {
+        cancelUpload(id: id)
         let removed = state.composer.attachments.filter { $0.id == id }
         attachmentRevisions[id] = nil
         updateComposer { $0.attachments.removeAll { $0.id == id } }
@@ -672,7 +697,13 @@ final class SessionChatComposer {
 
     func addAttachmentData(_ data: Data, filename: String, declaredMime: String?) {
         do {
-            let attachment = try AttachmentLoader().load(data: data, filename: filename, declaredMime: declaredMime)
+            let destination = uploadDestination()
+            let attachment = try AttachmentLoader().prepare(
+                data: data,
+                filename: filename,
+                declaredMime: declaredMime,
+                destination: destination
+            )
             addAttachments([attachment])
             if state.composer.attachments.contains(where: { $0.id == attachment.id }) {
                 OpenCodeLog.sessionChat.info("attachment accepted mime=\(attachment.mime) bytes=\(data.count) count=1")
@@ -688,9 +719,11 @@ final class SessionChatComposer {
 
     func addAttachmentFiles(_ urls: [URL]) async {
         guard !urls.isEmpty else { return }
+        await refreshUploadAvailability()
+        let destination = uploadDestination()
         let result = await Task.detached(priority: .userInitiated) {
             urls.map { url -> Result<Attachment, Error> in
-                Result { try AttachmentLoader().load(fileURL: url) }
+                Result { try AttachmentLoader().prepare(fileURL: url, destination: destination) }
             }
         }.value
         let attachments = result.compactMap { try? $0.get() }
@@ -703,6 +736,152 @@ final class SessionChatComposer {
             setAttachmentError(failure.localizedDescription)
         }
         OpenCodeLog.sessionChat.info("attachments selected accepted=\(attachments.count) rejected=\(result.count - attachments.count)")
+    }
+
+    // MARK: Streamed uploads (#644)
+
+    /// Reads whether the server streams uploads. The first read probes the API contract.
+    func refreshUploadAvailability() async {
+        let available = await attachmentUploadRepository?.isAvailable() ?? false
+        guard state.composer.streamedUploadAvailable != available else { return }
+        state.composer.streamedUploadAvailable = available
+        notifyChange()
+    }
+
+    private func uploadDestination() -> @Sendable (String, Int64) -> AttachmentDestination {
+        let option = state.composer.selectedModel?.option
+        let available = state.composer.streamedUploadAvailable
+        return { mime, byteCount in
+            AttachmentUploadPolicy.destination(
+                mime: mime,
+                byteCount: byteCount,
+                model: option,
+                uploadAvailable: available
+            )
+        }
+    }
+
+    private func startUpload(_ attachment: Attachment) {
+        guard let repository = attachmentUploadRepository, let fileURL = attachment.fileURL else {
+            removeFailedUpload(id: attachment.id, message: AttachmentUploadError.failedMessage)
+            return
+        }
+        let id = attachment.id
+        let filename = attachment.filename
+        let directory = worktree
+        uploadTasks[id] = Task { [weak self] in
+            do {
+                let uploaded = try await repository.upload(
+                    fileURL: fileURL,
+                    filename: filename,
+                    directory: directory
+                ) { fraction in
+                    Task { @MainActor in self?.setUploadFraction(fraction, id: id) }
+                }
+                self?.finishUpload(id: id, serverPath: uploaded.serverPath)
+            } catch let error as AttachmentUploadError {
+                await self?.endUpload(id: id, error: error)
+            } catch {
+                await self?.endUpload(id: id, error: .failed)
+            }
+        }
+    }
+
+    private func setUploadFraction(_ fraction: Double, id: String) {
+        guard let index = state.composer.attachments.firstIndex(where: { $0.id == id }),
+              state.composer.attachments[index].isUploadPending
+        else { return }
+        // Coalesce: a chip repaint per percent is plenty.
+        guard fraction - (uploadFractions[id] ?? -1) >= 0.01 else { return }
+        uploadFractions[id] = fraction
+        state.composer.attachments[index] = state.composer.attachments[index].withUpload(.uploading(fraction: fraction))
+        notifyChange()
+    }
+
+    private func finishUpload(id: String, serverPath: String) {
+        uploadTasks[id] = nil
+        uploadFractions[id] = nil
+        guard let index = state.composer.attachments.firstIndex(where: { $0.id == id }) else { return }
+        state.composer.attachments[index] = state.composer.attachments[index].withUpload(.uploaded(serverPath: serverPath))
+        OpenCodeLog.sessionChat.info("attachment uploaded bytes=\(state.composer.attachments[index].byteCount)")
+        notifyChange()
+    }
+
+    private func endUpload(id: String, error: AttachmentUploadError) async {
+        uploadTasks[id] = nil
+        uploadFractions[id] = nil
+        guard let attachment = state.composer.attachments.first(where: { $0.id == id }) else { return }
+        switch error {
+        case .cancelled:
+            removeFailedUpload(id: id, message: nil)
+        case .failed:
+            removeFailedUpload(id: id, message: AttachmentUploadError.failedMessage)
+        case .contractMiss:
+            // The route no longer matches: send this file the old way, with its old errors.
+            state.composer.streamedUploadAvailable = false
+            await sendInline(replacing: attachment)
+        }
+    }
+
+    private func sendInline(replacing attachment: Attachment) async {
+        guard let fileURL = attachment.fileURL else {
+            removeFailedUpload(id: attachment.id, message: AttachmentLoadError.unreadableFile.localizedDescription)
+            return
+        }
+        let name = attachment.filename
+        // The same destination decision as the add path; the contract miss already cleared the
+        // availability flag, so it answers inline for every file.
+        let destination = uploadDestination()
+        let loaded = await Task.detached(priority: .userInitiated) {
+            Result { try AttachmentLoader().prepare(fileURL: fileURL, destination: destination) }
+        }.value
+        guard state.composer.attachments.contains(where: { $0.id == attachment.id }) else {
+            if case let .success(file) = loaded { AttachmentLimits.discard(file.fileURL) }
+            return
+        }
+        switch loaded {
+        case let .success(file):
+            let inline = Attachment(
+                id: attachment.id,
+                filename: name,
+                mime: file.mime,
+                kind: file.kind,
+                dataURL: file.dataURL,
+                fileURL: file.fileURL,
+                byteCount: file.byteCount,
+                previewData: file.previewData
+            )
+            addAttachments([inline])
+            if state.composer.attachments.contains(where: { $0.id == attachment.id && $0.upload == .inline }) {
+                AttachmentLimits.discard(attachment.fileURL)
+            } else {
+                // Refused (for example a model without image input; the error is already shown).
+                AttachmentLimits.discard(file.fileURL)
+                removeFailedUpload(id: attachment.id, message: nil)
+            }
+        case let .failure(failure):
+            removeFailedUpload(id: attachment.id, message: failure.localizedDescription)
+        }
+    }
+
+    private func removeFailedUpload(id: String, message: String?) {
+        let removed = state.composer.attachments.filter { $0.id == id }
+        attachmentRevisions[id] = nil
+        updateComposer { $0.attachments.removeAll { $0.id == id } }
+        discardStoredAttachments(removed)
+        if let message { setAttachmentError(message) }
+    }
+
+    private func cancelUpload(id: String) {
+        uploadTasks[id]?.cancel()
+        uploadTasks[id] = nil
+        uploadFractions[id] = nil
+    }
+
+    private func cancelAllUploads() {
+        uploadTasks.values.forEach { $0.cancel() }
+        uploadTasks = [:]
+        uploadFractions = [:]
     }
 
     private func setAttachmentError(_ message: String) {
@@ -724,13 +903,13 @@ final class SessionChatComposer {
 
     func selectModel(_ option: ModelSelectionOption) {
         settleProvisionalSelection()
-        let dropped = state.composer.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
+        let dropped = state.composer.attachments.filter { !option.accepts($0) }
         for attachment in dropped {
             attachmentRevisions[attachment.id] = nil
         }
         updateComposer { composer in
             let previousVariant = composer.selectedVariant
-            composer.attachments.removeAll { !option.acceptsAttachmentKind($0.kind) }
+            composer.attachments.removeAll { !option.accepts($0) }
             composer.selectedModel = ModelSelection(
                 option: option,
                 selectedVariant: previousVariant.flatMap { option.variants.contains($0) ? $0 : nil }
@@ -811,6 +990,7 @@ final class SessionChatComposer {
             runShellCommand(sessionID: sessionID, isSessionBusy: isSessionBusy, supportsFollowUp: supportsFollowUp)
             return
         }
+        guard !state.composer.hasPendingUploads else { return }
         let submittedText = state.composer.text
         let submittedMentions = state.composer.agentMentions
         let submittedFileMentions = state.composer.fileMentions
@@ -854,7 +1034,8 @@ final class SessionChatComposer {
                     mime: attachment.mime,
                     kind: attachment.kind,
                     dataURL: "",
-                    previewData: attachment.previewData
+                    previewData: attachment.previewData,
+                    serverPath: attachment.uploadedServerPath
                 )
             )
         }
@@ -1454,12 +1635,12 @@ final class SessionChatComposer {
         }
         let fallback = catalog.serverDefault ?? catalog.options[0]
         OpenCodeLog.sessionChat.info("modelSelection refreshed catalog dropped selected model")
-        let dropped = state.composer.attachments.filter { !fallback.acceptsAttachmentKind($0.kind) }
+        let dropped = state.composer.attachments.filter { !fallback.accepts($0) }
         for attachment in dropped {
             attachmentRevisions[attachment.id] = nil
         }
         updateComposer {
-            $0.attachments.removeAll { !fallback.acceptsAttachmentKind($0.kind) }
+            $0.attachments.removeAll { !fallback.accepts($0) }
             $0.selectedModel = ModelSelection(option: fallback, selectedVariant: nil)
             $0.selectedVariant = nil
             $0.modelNotice = "Selected model is unavailable. Using \(fallback.modelLabel)."

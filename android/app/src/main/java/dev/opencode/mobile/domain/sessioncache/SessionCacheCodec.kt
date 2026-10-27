@@ -217,6 +217,7 @@ internal data class CachedMessagePartPayload(
     val mime: String? = null,
     val attachmentKind: String? = null,
     val dataUrl: String? = null,
+    val serverPath: String? = null,
     val timeStartEpochMs: Long? = null,
     val timeEndEpochMs: Long? = null,
     val auto: Boolean = false,
@@ -453,6 +454,7 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 mime = mime,
                 attachmentKind = kind.name.lowercase(),
                 dataUrl = AttachmentLimits.persistedDataUrl(dataUrl),
+                serverPath = serverPath,
             )
         is MessagePart.Compaction ->
             CachedMessagePartPayload(
@@ -516,6 +518,7 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                     AttachmentKind.entries.firstOrNull { it.name.equals(attachmentKind, ignoreCase = true) }
                         ?: AttachmentKind.Text,
                 dataUrl = dataUrl.orEmpty(),
+                serverPath = serverPath,
             )
         }
         "reasoning" ->

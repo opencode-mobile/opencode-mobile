@@ -1309,13 +1309,7 @@ class MessageDomainAdapterTest {
                 """.trimIndent(),
             )
 
-        val tool =
-            adapter
-                .projectV2(dtos)
-                .single()
-                .parts
-                .filterIsInstance<MessagePart.Tool>()
-                .single()
+        val tool = adapter.projectV2(dtos).single().parts.filterIsInstance<MessagePart.Tool>().single()
 
         assertEquals("subagent", tool.toolName)
         assertEquals(ToolStatus.Completed, tool.status)
@@ -1733,6 +1727,106 @@ class MessageDomainAdapterTest {
     }
 
     // MARK: v2 timeline notices
+
+    @Test
+    fun toV2PromptRequest_namesUploadedFilesInTextAndMetadata_andKeepsThemOutOfFiles() {
+        val uploaded =
+            Attachment(
+                id = "u1",
+                filename = "data.zip",
+                mime = "application/zip",
+                kind = AttachmentKind.File,
+                dataUrl = "",
+                byteCount = 50_000_000,
+                localPath = "/tmp/staged/data.zip",
+                upload = AttachmentUpload.Uploaded("/srv/tmp/uploads/abc/data.zip"),
+            )
+        val inline =
+            Attachment(
+                id = "i1",
+                filename = "shot.png",
+                mime = "image/png",
+                kind = AttachmentKind.Image,
+                dataUrl = "data:image/png;base64,AA==",
+                byteCount = 1,
+            )
+
+        val body = adapter.toV2PromptRequest(PromptSendOptions(text = "look", attachments = listOf(inline, uploaded)))
+
+        assertEquals("look\nAttached file: `/srv/tmp/uploads/abc/data.zip`", body.text)
+        assertEquals(listOf("shot.png"), body.files?.map { it.name })
+        assertEquals(
+            """{"attachments":[{"name":"data.zip","mime":"application/zip","path":"/srv/tmp/uploads/abc/data.zip"}]}""",
+            body.metadata.toString(),
+        )
+    }
+
+    @Test
+    fun toV2PromptRequest_withoutUploadsHasNoMetadataAndKeepsTheText() {
+        val body = adapter.toV2PromptRequest(PromptSendOptions(text = "plain"))
+
+        assertEquals("plain", body.text)
+        assertEquals(null, body.metadata)
+    }
+
+    @Test
+    fun projectV2_userMetadataAttachmentsBecomeFilePartsAndDropTheAttachedFileLines() {
+        val message =
+            projectV2(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"look\nAttached file: `/srv/tmp/uploads/abc/data.zip`\nAttached file: `/srv/tmp/uploads/def/shot.png`",
+                    "metadata":{"attachments":[
+                      {"name":"data.zip","mime":"application/zip","path":"/srv/tmp/uploads/abc/data.zip"},
+                      {"name":"shot.png","mime":"image/png","path":"/srv/tmp/uploads/def/shot.png"}
+                    ]},
+                    "time":{"created":1}
+                  }
+                ]
+                """,
+            ).single()
+
+        assertEquals("look", message.text)
+        val files = message.parts.filterIsInstance<MessagePart.File>()
+        assertEquals(listOf(AttachmentKind.File, AttachmentKind.Image), files.map { it.kind })
+        assertEquals(listOf("/srv/tmp/uploads/abc/data.zip", "/srv/tmp/uploads/def/shot.png"), files.map { it.serverPath })
+        assertEquals(listOf("data.zip", "shot.png"), files.map { it.filename })
+    }
+
+    @Test
+    fun projectV2_keepsATypedAttachedFileLineWithoutMatchingMetadata() {
+        val typed = "see Attached file: `/srv/tmp/uploads/u1/data.zip`"
+        val plain = projectV2("""[{"id":"m1","type":"user","text":"$typed","time":{"created":1}}]""").single()
+        assertEquals(typed, plain.text)
+
+        val other =
+            projectV2(
+                """
+                [{"id":"m2","type":"user","text":"Attached file: `/typed/by/user.txt`\nAttached file: `/srv/real.zip`",
+                  "metadata":{"attachments":[{"name":"real.zip","mime":"application/zip","path":"/srv/real.zip"}]},
+                  "time":{"created":1}}]
+                """,
+            ).single()
+        assertEquals("Attached file: `/typed/by/user.txt`", other.text)
+    }
+
+    @Test
+    fun projectV2_attachmentOnlyUploadLeavesNoTextPart() {
+        val message =
+            projectV2(
+                """
+                [{"id":"m","type":"user","text":"Attached file: `/t/a.bin`",
+                  "metadata":{"attachments":[{"name":"a.bin","mime":"application/octet-stream","path":"/t/a.bin"}]},
+                  "time":{"created":1}}]
+                """,
+            ).single()
+
+        assertEquals(emptyList<MessagePart.Text>(), message.parts.filterIsInstance<MessagePart.Text>())
+        assertEquals(1, message.parts.filterIsInstance<MessagePart.File>().size)
+    }
 
     private fun projectV2(body: String): List<Message> =
         adapter.projectV2(json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(body.trimIndent()))

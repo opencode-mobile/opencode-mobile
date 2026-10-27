@@ -180,6 +180,19 @@ extension Container {
         }.singleton
     }
 
+    var attachmentUploadRepository: Factory<any AttachmentUploadRepository> {
+        onMainActor {
+            DefaultAttachmentUploadRepository(
+                api: AttachmentUploadAPIClient(connectionProvider: self.connectionProvider()),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
+    }
+
+    var attachmentImageLoader: Factory<any AttachmentImageLoading> {
+        onMainActor { AttachmentImageLoader(filesystem: self.filesystemAPIClient()) }.singleton
+    }
+
     var messageDomainAdapter: Factory<MessageDomainAdapter> {
         onMainActor { MessageDomainAdapter() }.singleton
     }
@@ -703,6 +716,8 @@ extension Container {
                 syncCoordinator: self.syncCoordinator(),
                 mcpRepository: self.mcpRepository(),
                 projectFilesRepository: self.projectFilesRepository(),
+                attachmentUploadRepository: self.attachmentUploadRepository(),
+                attachmentImageLoader: self.attachmentImageLoader(),
                 worktreeRepository: self.worktreeRepository(),
                 projectRepository: self.projectRepository(),
                 worktreeInventoryCache: self.worktreeInventoryCache()
