@@ -6,12 +6,18 @@ import dev.opencode.mobile.markdown.HighlightRequest
 import dev.opencode.mobile.markdown.HighlightResult
 import dev.opencode.mobile.markdown.HighlightRevision
 import dev.opencode.mobile.markdown.MarkdownDiagnosticKind
+import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
+import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
+import dev.opencode.mobile.markdown.OpenCodeTextMateMetricsSink
+import dev.opencode.mobile.markdown.SyntaxHighlightResult
+import dev.opencode.mobile.markdown.SyntaxHighlightSource
 import dev.opencode.mobile.markdown.TextMateHighlightingEngine
 import dev.opencode.mobile.markdown.TextMateParseObservation
 import dev.opencode.mobile.markdown.TextMateParseOutcome
 import dev.opencode.mobile.markdown.TextMateRequestScheduler
 import dev.opencode.mobile.markdown.TextMateSchedulerLimits
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -22,7 +28,10 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 class AndroidTextMateHighlightingEngineTest {
@@ -138,6 +147,43 @@ class AndroidTextMateHighlightingEngineTest {
         }
 
     @Test
+    fun newerRevisionCancelsJobThatBlocksTheOwnerThread() =
+        runBlocking {
+            val highlighter = BlockingUntilCancelledHighlighter()
+            val executor =
+                Executors.newSingleThreadExecutor { runnable ->
+                    Thread(runnable, "textmate-owner-test")
+                }
+            val dispatcher = executor.asCoroutineDispatcher()
+            try {
+                val engine =
+                    AndroidTextMateHighlightingEngine(
+                        OpenCodeTextMateHighlightingEngine(highlighter),
+                        dispatcher,
+                    )
+                val first =
+                    async(Dispatchers.Default) {
+                        engine.highlight(request(key = "block", revision = 1))
+                    }
+                assertTrue(highlighter.entered.await(2, TimeUnit.SECONDS))
+                val second =
+                    async(Dispatchers.Default) {
+                        engine.highlight(request(key = "block", revision = 2))
+                    }
+
+                withTimeout(1_000) {
+                    assertEquals(TextMateParseOutcome.Cancelled, first.await().outcome)
+                    assertEquals(TextMateParseOutcome.Highlighted, second.await().outcome)
+                }
+                assertTrue(highlighter.sawCancel.get())
+            } finally {
+                highlighter.giveUp.countDown()
+                // Graceful: a dropped queued admit would leave runBlocking waiting forever.
+                executor.shutdown()
+            }
+        }
+
+    @Test
     fun initializerErrorDuringHighlightDoesNotEscapePump() =
         runBlocking {
             val delegate =
@@ -176,6 +222,47 @@ class AndroidTextMateHighlightingEngineTest {
             intent = HighlightIntent.InteractiveFinal,
             policyEpoch = 1,
         )
+
+    /** Spins on its thread, like a real tokenizer, until the job is cancelled. Later calls return at once. */
+    private class BlockingUntilCancelledHighlighter : OpenCodeCodeHighlighter {
+        val entered = CountDownLatch(1)
+        val giveUp = CountDownLatch(1)
+        val sawCancel = AtomicBoolean(false)
+        private val calls = AtomicInteger(0)
+
+        override fun supportsLanguage(languageOrAlias: String?): Boolean = true
+
+        override fun highlight(
+            languageOrAlias: String?,
+            code: String,
+        ): SyntaxHighlightResult = result()
+
+        override fun highlight(
+            languageOrAlias: String?,
+            code: String,
+            metricsSink: OpenCodeTextMateMetricsSink,
+            shouldCancel: () -> Boolean,
+        ): SyntaxHighlightResult {
+            if (calls.incrementAndGet() > 1) return result()
+            entered.countDown()
+            while (giveUp.count > 0) {
+                if (shouldCancel()) {
+                    sawCancel.set(true)
+                    return result(TextMateParseOutcome.Cancelled)
+                }
+                Thread.onSpinWait()
+            }
+            return result()
+        }
+
+        private fun result(outcome: TextMateParseOutcome? = null) =
+            SyntaxHighlightResult(
+                spans = emptyList(),
+                diagnostics = emptyList(),
+                source = SyntaxHighlightSource.TextMate,
+                textMateOutcome = outcome,
+            )
+    }
 
     private class RacingEngine : TextMateHighlightingEngine {
         val maximumActive = AtomicInteger(0)

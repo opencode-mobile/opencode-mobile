@@ -63,9 +63,10 @@ extension TextMateHighlighting {
     func trim(_ level: TextMateMemoryPressure) async {}
 }
 
-/// iOS's asynchronous platform-to-KMP adapter. Actor isolation is the sole
-/// mutable owner; the shared Kotlin scheduler bridge owns queue policy while
-/// this actor drives at most one active highlight job per pump turn.
+/// iOS's asynchronous platform-to-KMP adapter. Actor isolation owns continuations;
+/// the shared Kotlin scheduler bridge owns queue policy. Highlight jobs run one at a
+/// time on `executor`, off the actor, so an admit for a newer revision can still reach
+/// the scheduler and cancel the job that is running.
 actor KMPTextMateHighlightingEngine: TextMateHighlighting {
     static let shared = KMPTextMateHighlightingEngine()
 
@@ -75,6 +76,8 @@ actor KMPTextMateHighlightingEngine: TextMateHighlighting {
     private var waiters: [Int64: CheckedContinuation<TextMateHighlightResult, Error>] = [:]
     private var ticketIdentity: [Int64: (TextMateCodeBlockKey, TextMateHighlightRevision)] = [:]
     private var pumping = false
+    /// Serial owner of Kotlin engine state: highlight jobs and cache trims only.
+    private let executor = DispatchQueue(label: "dev.opencode.mobile.textmate", qos: .userInitiated)
 
     init(bridge: OpenCodeTextMateSchedulerBridge? = nil) {
         self.bridge = bridge
@@ -87,8 +90,9 @@ actor KMPTextMateHighlightingEngine: TextMateHighlighting {
     }
 
     func trim(_ level: TextMateMemoryPressure) async {
-        let completedJSON = activeBridge().trim(level: level.rawValue)
-        deliverAll(resultsJSON: completedJSON)
+        let bridge = activeBridge()
+        deliverAll(resultsJSON: bridge.trimQueue(level: level.rawValue))
+        await onExecutor(bridge) { $0.trimEngine(level: level.rawValue) }
     }
 
     func setLowPowerOrThermal(_ disabled: Bool) async {
@@ -109,7 +113,7 @@ actor KMPTextMateHighlightingEngine: TextMateHighlighting {
             if let ticketId = admit.ticketId {
                 waiters[ticketId] = continuation
                 ticketIdentity[ticketId] = (request.key, request.revision)
-                pump()
+                startPumpIfNeeded()
             } else if let rejected = admit.completed.last(where: {
                 $0.key == request.key && $0.revision == request.revision
             }) ?? admit.completed.last {
@@ -122,12 +126,33 @@ actor KMPTextMateHighlightingEngine: TextMateHighlighting {
         }
     }
 
-    private func pump() {
+    private func startPumpIfNeeded() {
         guard !pumping else { return }
         pumping = true
-        defer { pumping = false }
-        while let resultsJSON = activeBridge().pumpOnce() {
-            deliverAll(resultsJSON: resultsJSON)
+        Task { await self.pump() }
+    }
+
+    private func pump() async {
+        let bridge = activeBridge()
+        repeat {
+            while let resultsJSON = await onExecutor(bridge, { $0.pumpOnce() }) {
+                deliverAll(resultsJSON: resultsJSON)
+            }
+            // An admit can land between the executor finding the queue empty and
+            // this actor resuming; it saw `pumping` and left the work to us.
+        } while bridge.hasPendingWork()
+        pumping = false
+    }
+
+    private nonisolated func onExecutor<T: Sendable>(
+        _ bridge: OpenCodeTextMateSchedulerBridge,
+        _ body: @escaping @Sendable (OpenCodeTextMateSchedulerBridge) -> T
+    ) async -> T {
+        let box = UncheckedSendableBridge(bridge: bridge)
+        return await withCheckedContinuation { continuation in
+            executor.async {
+                continuation.resume(returning: body(box.bridge))
+            }
         }
     }
 
@@ -214,6 +239,11 @@ nonisolated private struct EncodableHighlightRequest: Encodable {
         try container.encode(fenceIndex, forKey: .fenceIndex)
         try container.encode(fenceCount, forKey: .fenceCount)
     }
+}
+
+/// The bridge locks its own queue state; engine state is confined to the executor.
+nonisolated private struct UncheckedSendableBridge: @unchecked Sendable {
+    let bridge: OpenCodeTextMateSchedulerBridge
 }
 
 nonisolated private enum TextMateHighlightingAdapterError: Error {

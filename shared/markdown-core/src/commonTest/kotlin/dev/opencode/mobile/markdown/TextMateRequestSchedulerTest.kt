@@ -5,6 +5,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
 class TextMateRequestSchedulerTest {
     @Test
@@ -115,6 +117,20 @@ class TextMateRequestSchedulerTest {
             ),
         )
         assertEquals("fast", scheduler.pickNext()?.request?.key?.value)
+    }
+
+    @Test
+    fun defaultClockAdvancesSoQueueWaitAndDeadlinesWork() {
+        val scheduler = TextMateRequestScheduler()
+        scheduler.admit(request(key = "a", revision = 1, intent = HighlightIntent.InteractiveFinal))
+        val waitStartedAt = TimeSource.Monotonic.markNow()
+        while (waitStartedAt.elapsedNow() < 25.milliseconds) {
+            // Busy-wait: common tests have no sleep, and the real clock is the subject.
+        }
+
+        val job = assertNotNull(scheduler.pickNext())
+        assertTrue(job.queueWaitNanoseconds >= 20.milliseconds.inWholeNanoseconds)
+        assertEquals(1, scheduler.snapshot().deadlinePriorityCount)
     }
 
     private fun request(
