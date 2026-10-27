@@ -9,8 +9,8 @@ OpenCode Mobile is an unofficial client. It is not affiliated with or endorsed
 by the opencode project or its authors.
 
 | Android | iOS |
-|---|---|
-| <img src="test-screenshots/android_1_1.jpg" width="240" alt="OpenCode Mobile on Android"> | <img src="test-screenshots/ios_1_1.jpg" width="240" alt="OpenCode Mobile on iOS"> |
+|:---:|:---:|
+| <img src="test-screenshots/android_1_1.jpg" height="480" alt="OpenCode Mobile on Android"> | <img src="test-screenshots/ios_1_1.jpg" height="480" alt="OpenCode Mobile on iOS"> |
 
 ## Get the app
 
