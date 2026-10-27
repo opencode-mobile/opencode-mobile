@@ -63,7 +63,7 @@ jobs:
             exit 0
           fi
 
-          gh api "repos/$GITHUB_REPOSITORY/issues/comments/$COMMENT_ID/reactions" -f content=rocket >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/issues/comments/$COMMENT_ID/reactions" -f content=rocket >/dev/null || true
           for platform in "${platforms[@]}"; do
             gh workflow run "$platform-app-distribution.yml" \
               --repo "$GITHUB_REPOSITORY" \
