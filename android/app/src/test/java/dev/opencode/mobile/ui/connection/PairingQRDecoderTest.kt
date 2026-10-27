@@ -70,6 +70,18 @@ class PairingQRDecoderTest {
     }
 
     @Test
+    fun decode_readsAnInvertedCodeFromALightTerminal() {
+        // `opencode pair` draws light modules as blocks, so a light terminal shows the code inverted.
+        val payload = """{"code":"Ab3dEf9hKz","urls":["https://example-route.opentunnel.xyz"]}"""
+        val frame = lightTerminalLuminance(payload)
+
+        assertEquals(
+            payload,
+            decoder.decode(frame.bytes, frame.width, frame.height, frame.width, pixelStride = 1),
+        )
+    }
+
+    @Test
     fun decode_returnsNullWhenTheFrameHasNoCode() {
         val bytes = ByteArray(96 * 96) { 0xFF.toByte() }
 
@@ -90,6 +102,22 @@ class PairingQRDecoderTest {
             val row = y * width
             for (x in 0 until width) {
                 bytes[row + x] = if (matrix.get(x, y)) 0 else 0xFF.toByte()
+            }
+        }
+        return Frame(bytes, width, height)
+    }
+
+    /** Inverted code on a light background, as a light-theme terminal renders it. */
+    private fun lightTerminalLuminance(text: String): Frame {
+        val code = qrLuminance(text)
+        val margin = 40
+        val width = code.width + 2 * margin
+        val height = code.height + 2 * margin
+        val bytes = ByteArray(width * height) { 0xFA.toByte() }
+        for (y in 0 until code.height) {
+            for (x in 0 until code.width) {
+                val dark = code.bytes[y * code.width + x] == 0.toByte()
+                bytes[(y + margin) * width + x + margin] = if (dark) 0xFA.toByte() else 0x1E
             }
         }
         return Frame(bytes, width, height)
