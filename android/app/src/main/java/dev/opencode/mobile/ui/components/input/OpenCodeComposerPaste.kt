@@ -157,7 +157,15 @@ internal fun ComposerKeyboardContentInsertion(
     InterceptPlatformTextInput(interceptor = interceptor, content = content)
 }
 
-internal fun ClipDescription.hasAttachableTypes(): Boolean = (0 until mimeTypeCount).any { !getMimeType(it).startsWith("text/") }
+internal fun ClipDescription.hasAttachableTypes(): Boolean = composerClipTypesAreAttachable((0 until mimeTypeCount).map(::getMimeType))
+
+/**
+ * An image, or only non-text types (a copied file). A clip that also names a text type, such as rich
+ * text with an app-specific type, stays a text paste: the built-in Paste is never hidden for a clip
+ * whose items carry no file.
+ */
+internal fun composerClipTypesAreAttachable(mimeTypes: List<String>): Boolean =
+    mimeTypes.any { it.startsWith("image/") } || (mimeTypes.isNotEmpty() && mimeTypes.none { it.startsWith("text/") })
 
 private val ComposerPasteAttachmentKey = Any()
 private val KeyboardContentMimeTypes = arrayOf("image/png", "image/jpeg", "image/gif", "image/webp")

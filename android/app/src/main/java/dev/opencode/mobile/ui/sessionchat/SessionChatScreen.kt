@@ -352,19 +352,21 @@ private fun SessionChatScreenBody(
                 .map { it.filename }
                 .toMutableList()
         coroutineScope.launch {
-            val result =
+            val (folders, result) =
                 try {
                     withContext(Dispatchers.IO) {
-                        attachmentIngestion.ingest(content.uris, uploadAvailable) { mime ->
-                            // An unnamed pasted image is `Pasted image N.png`; other content keeps its URI name.
-                            if (mime?.startsWith("image/") != true) return@ingest null
-                            AttachmentDropRouting.pastedImageName(names).also { names += it }
-                        }
+                        val (folders, uris) = content.uris.partition { context.contentResolver.isFolder(it) }
+                        folders to
+                            attachmentIngestion.ingest(uris, uploadAvailable) { mime ->
+                                // An unnamed pasted image is `Pasted image N.png`; other content keeps its URI name.
+                                if (mime?.startsWith("image/") != true) return@ingest null
+                                AttachmentDropRouting.pastedImageName(names).also { names += it }
+                            }
                     }
                 } finally {
                     content.release()
                 }
-            if (viewModel.addPastedOrDroppedAttachments(result, skippedFolders = 0)) {
+            if (viewModel.addPastedOrDroppedAttachments(result, skippedFolders = folders.size)) {
                 logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_PASTE)
             }
         }

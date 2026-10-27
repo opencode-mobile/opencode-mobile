@@ -144,6 +144,8 @@ struct AttachmentDropRoutingTests {
         // A text selection or a link is text, never an attachment.
         #expect(kind([.utf8PlainText, .html], nil) == nil)
         #expect(kind([.url], nil) == nil)
+        #expect(kind([.url, .plainText], "example.com") == nil)
+        #expect(kind([.fileURL, .plainText], "notes.txt") == .text)
     }
 
     @Test func sharedPastedImageNameVectors() throws {

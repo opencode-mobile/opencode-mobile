@@ -10,10 +10,12 @@ enum AttachmentItemProviders {
         if contentTypes.contains(where: { $0.conforms(to: .folder) || $0.conforms(to: .directory) }) { return .folder }
         if contentTypes.contains(where: { $0.conforms(to: .image) }) { return .image }
         if contentTypes.contains(where: { $0.conforms(to: .pdf) }) { return .pdf }
+        let hasFileURL = contentTypes.contains(.fileURL)
+        // A web link is never a file, even when its suggested name (`example.com`) has a dot.
+        if !hasFileURL, contentTypes.contains(where: { $0.conforms(to: .url) }) { return nil }
         let named = suggestedName.map { !URL(fileURLWithPath: $0).pathExtension.isEmpty } ?? false
-        let isFile = named || contentTypes.contains(.fileURL)
-        if contentTypes.contains(where: { $0.conforms(to: .text) || $0.conforms(to: .url) }) {
-            return isFile ? .text : nil
+        if contentTypes.contains(where: { $0.conforms(to: .text) }) {
+            return named || hasFileURL ? .text : nil
         }
         return contentTypes.contains(where: { $0.conforms(to: .data) }) ? .file : nil
     }
