@@ -26,3 +26,12 @@ import Testing
         }
     }
 }
+
+#if HIGHLIGHT_LAB
+@Suite struct SettingsDetailHighlightLabTests {
+    @Test func highlightLabIsADeveloperTool() {
+        #expect(SettingsDetail.highlightLab.resolved(developerToolsUnlocked: true) == .highlightLab)
+        #expect(SettingsDetail.highlightLab.resolved(developerToolsUnlocked: false) == .servers)
+    }
+}
+#endif

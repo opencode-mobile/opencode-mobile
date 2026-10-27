@@ -56,7 +56,7 @@ enum FileViewerMenu {
         dismissMenu: @escaping () -> Void
     ) -> [OpenCodeOverflowMenuEntry] {
         let wraps = viewModel.state.wrapLines
-        return [
+        let entries = [
             OpenCodeOverflowMenuEntry(
                 id: "files-copy-path",
                 title: "Copy path",
@@ -79,6 +79,22 @@ enum FileViewerMenu {
                 }
             ),
         ]
+        #if HIGHLIGHT_LAB
+        guard let document = viewModel.state.viewers[relativePath]?.textDocument else { return entries }
+        return entries + [
+            OpenCodeOverflowMenuEntry(
+                id: "files-open-in-highlighting-lab",
+                title: "Open in Highlighting Lab",
+                icon: .code,
+                action: {
+                    dismissMenu()
+                    HighlightLabLauncher.shared.open(relativePath: relativePath, document: document)
+                }
+            ),
+        ]
+        #else
+        return entries
+        #endif
     }
 
     /// The viewed file path is never reported.

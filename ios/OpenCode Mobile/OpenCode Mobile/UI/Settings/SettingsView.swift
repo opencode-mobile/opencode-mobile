@@ -11,6 +11,9 @@ enum SettingsDetail: Hashable {
     case textMateLogbook
     case featureFlags
     case diagnosticLogs
+    #if HIGHLIGHT_LAB
+    case highlightLab
+    #endif
 
     /// Whether the screen lives in the Developer Tools section that Clear All Data locks.
     var requiresDeveloperTools: Bool {
@@ -19,6 +22,10 @@ enum SettingsDetail: Hashable {
             false
         case .componentGallery, .textMateLanguages, .textMateLogbook, .featureFlags:
             true
+        #if HIGHLIGHT_LAB
+        case .highlightLab:
+            true
+        #endif
         }
     }
 
@@ -44,6 +51,9 @@ struct SettingsView: View {
     @State private var showDiagnosticLogs = false
     @State private var showTextMateLanguages = false
     @State private var showFeatureFlags = false
+    #if HIGHLIGHT_LAB
+    @State private var showHighlightLab = false
+    #endif
     @State private var showClearConfirmation = false
     @State private var showClearSessionCacheConfirmation = false
     @State private var sessionCacheSizeLabel = "Empty"
@@ -105,6 +115,11 @@ struct SettingsView: View {
         .navigationDestination(isPresented: $showFeatureFlags) {
             FeatureFlagsView()
         }
+        #if HIGHLIGHT_LAB
+        .navigationDestination(isPresented: $showHighlightLab) {
+            HighlightLabHomeView()
+        }
+        #endif
         .navigationDestination(isPresented: $showDiagnosticLogs) {
             DiagnosticLogsView()
         }
@@ -659,6 +674,19 @@ struct SettingsView: View {
                         )
                         .padding(.horizontal, 16)
 
+                        #if HIGHLIGHT_LAB
+                        OpenCodeListItem(
+                            title: "Highlighting Lab",
+                            subtitle: "Data sets, on-device benchmarks, and engine comparison",
+                            selected: isDetailSelected(.highlightLab),
+                            style: .card,
+                            startDecorator: .icon(.code, accessibilityLabel: "Highlighting Lab"),
+                            action: { open(.highlightLab) }
+                        )
+                        .padding(.horizontal, 16)
+                        .accessibilityIdentifier("settings.highlightLab")
+                        #endif
+
                         OpenCodeListItem(
                             title: "Feature Flags",
                             subtitle: "Remote flags with device overrides",
@@ -724,6 +752,9 @@ struct SettingsView: View {
         case .textMateLogbook: showTextMateLogbook = true
         case .featureFlags: showFeatureFlags = true
         case .diagnosticLogs: showDiagnosticLogs = true
+        #if HIGHLIGHT_LAB
+        case .highlightLab: showHighlightLab = true
+        #endif
         }
     }
 
@@ -760,6 +791,10 @@ struct SettingsView: View {
             FeatureFlagsView(detailControl: control)
         case .diagnosticLogs:
             DiagnosticLogsView(detailControl: control)
+        #if HIGHLIGHT_LAB
+        case .highlightLab:
+            HighlightLabHomeView(detailControl: control)
+        #endif
         }
     }
 
