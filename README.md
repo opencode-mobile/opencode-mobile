@@ -15,7 +15,7 @@ by the opencode project or its authors.
 ## Get the app
 
 - **Android:** [Google Play](https://play.google.com/store/apps/details?id=dev.opencode.mobile)
-- **iOS:** not on the App Store yet. [Build it from source](#build-from-source).
+- **iOS:** [App Store](https://apps.apple.com/app/id6799246544)
 
 ## Connect to your opencode server
 
