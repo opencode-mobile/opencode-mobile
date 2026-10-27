@@ -260,6 +260,7 @@ class FilesViewModel internal constructor(
         val plain =
             FilesViewerContent.Text(
                 lines = lines,
+                source = content.text,
                 languageName = language.displayName,
                 isTruncated = content.isTruncated,
                 markdown = markdown,

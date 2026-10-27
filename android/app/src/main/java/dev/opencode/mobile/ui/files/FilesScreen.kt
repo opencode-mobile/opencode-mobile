@@ -54,6 +54,8 @@ fun FilesScreen(
     worktree: String,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Lab builds only: opens a loaded text file in the Highlighting Lab. */
+    onOpenInHighlightingLab: ((path: String, source: String) -> Unit)? = null,
     viewModel: FilesViewModel = hiltViewModel(key = "files-$worktree"),
 ) {
     LaunchedEffect(worktree) { viewModel.bind(worktree) }
@@ -160,6 +162,7 @@ fun FilesScreen(
                             onToggleWrap = toggleWrap,
                             onRetry = { retryFile(viewer.path) },
                             onToggleMarkdownSource = { toggleMarkdownSource(viewer.path) },
+                            onOpenInHighlightingLab = onOpenInHighlightingLab,
                             tabs = {
                                 OpenCodeFileTabs(
                                     tabs = state.tabs.map { path -> OpenCodeFileTab(id = path, title = path.substringAfterLast('/')) },
@@ -230,6 +233,7 @@ fun FilesScreen(
                                     onToggleWrap = toggleWrap,
                                     onRetry = { retryFile(viewer.path) },
                                     onToggleMarkdownSource = { toggleMarkdownSource(viewer.path) },
+                                    onOpenInHighlightingLab = onOpenInHighlightingLab,
                                 )
                             }
                         }

@@ -1,0 +1,266 @@
+package dev.opencode.mobile.lab
+
+import dev.opencode.mobile.highlight.bench.HighlightBenchDataKind
+import dev.opencode.mobile.highlight.bench.HighlightBenchDataSet
+import dev.opencode.mobile.highlight.bench.HighlightBenchSizeClass
+import dev.opencode.mobile.markdown.CodeTokenRole
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
+
+@OptIn(ExperimentalCoroutinesApi::class)
+class LabScreenModelsTest {
+    private val dispatcher = StandardTestDispatcher()
+
+    @Before
+    fun setUp() {
+        Dispatchers.setMain(dispatcher)
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
+
+    @Test
+    fun dataSetsFilterByLanguageSizeAndKindAndMeasureCharacters() =
+        runTest(dispatcher) {
+            val pasted = HighlightBenchDataSet.custom("t", "Pasted kotlin", "kotlin", KOTLIN_SOURCE)
+            val model = LabDataSetsViewModel(smallStore(listOf(pasted)), labEngines(dispatcher))
+            assertEquals(7, model.state.value.rows.size)
+
+            model.selectLanguage("kotlin")
+            assertEquals(
+                listOf("typical/kotlin/2k", "custom/t"),
+                model.state.value.rows
+                    .map { it.id },
+            )
+
+            model.selectKind(HighlightBenchDataKind.Custom)
+            assertEquals(
+                listOf("custom/t"),
+                model.state.value.rows
+                    .map { it.id },
+            )
+
+            model.selectKind(null)
+            model.selectLanguage(null)
+            model.selectSizeClass(HighlightBenchSizeClass.Huge)
+            assertTrue(
+                model.state.value.rows
+                    .isEmpty(),
+            )
+
+            model.selectSizeClass(null)
+            advanceUntilIdle()
+            val rows = model.state.value.rows
+            assertTrue(rows.all { it.characters != null })
+            assertEquals(KOTLIN_SOURCE.length, rows.single { it.id == "custom/t" }.characters)
+            assertEquals("kotlin · 2K · ${LabFormat.count(KOTLIN_SOURCE.length)} chars", rows.single { it.id == "custom/t" }.subtitle)
+        }
+
+    @Test
+    fun pasteOpensACustomDataSetInThePickedLanguage() {
+        val store = smallStore()
+        val model = LabPasteViewModel(store)
+        assertNull(model.open())
+
+        model.setText(KOTLIN_SOURCE)
+        model.selectLanguage("kotlin")
+        val id = requireNotNull(model.open())
+
+        val dataSet = requireNotNull(store.find(id))
+        assertEquals("kotlin", dataSet.language)
+        assertEquals(HighlightBenchDataKind.Custom, dataSet.kind)
+        assertEquals(KOTLIN_SOURCE, dataSet.generate())
+    }
+
+    @Test
+    fun viewerHighlightsWithThePickedEngineAndReportsTiming() =
+        runTest(dispatcher) {
+            val store = smallStore()
+            val id = store.addPasted("kotlin", KOTLIN_SOURCE).id
+            val model = LabViewerViewModel(store, labEngines(dispatcher))
+
+            model.bind(id)
+            advanceUntilIdle()
+            var state = model.state.value
+            assertEquals(LabViewerPhase.Highlighted, state.phase)
+            assertEquals("alpha", state.engineId)
+            assertEquals(2, state.timing?.spanCount)
+            assertTrue(state.timing?.cold == true)
+            assertEquals(
+                CodeTokenRole.Keyword,
+                state.lines
+                    .first()
+                    .spans
+                    .single()
+                    .role,
+            )
+
+            model.selectEngine("beta")
+            advanceUntilIdle()
+            state = model.state.value
+            assertEquals("beta", state.engineId)
+            assertEquals(3, state.timing?.spanCount)
+            assertEquals("Highlighted", state.timing?.outcomeLabel)
+        }
+
+    @Test
+    fun viewerShowsAMissingDataSet() =
+        runTest(dispatcher) {
+            val model = LabViewerViewModel(smallStore(), labEngines(dispatcher))
+            model.bind("custom/gone")
+            advanceUntilIdle()
+            assertEquals(LabViewerPhase.Missing, model.state.value.phase)
+        }
+
+    @Test
+    fun compareMarksWhereTheEnginesDisagree() =
+        runTest(dispatcher) {
+            val store = smallStore()
+            val id = store.addPasted("kotlin", KOTLIN_SOURCE).id
+            val model = LabCompareViewModel(store, labEngines(dispatcher))
+
+            model.bind(null)
+            assertEquals(LabComparePhase.Picking, model.state.value.phase)
+            assertEquals(7, model.state.value.pickerRows.size)
+
+            model.selectDataSet(id)
+            advanceUntilIdle()
+            val state = model.state.value
+            assertEquals(LabComparePhase.Compared, state.phase)
+            val summary = requireNotNull(state.summary)
+            // Only "val" (3 characters) differs: colored by beta, plain for alpha.
+            assertEquals(1, summary.differingRanges)
+            assertEquals(3, summary.differingCharacters)
+            assertEquals(1.0 - 3.0 / KOTLIN_SOURCE.length, summary.agreement, 1e-9)
+            // The tab before "val" expands to four spaces, and the mark moves with it.
+            val marked = requireNotNull(state.right).lines[1]
+            assertEquals("    val x = 1", marked.text)
+            assertEquals(4, marked.marks.single().start)
+            assertEquals(7, marked.marks.single().end)
+            assertEquals(marked.marks, requireNotNull(state.left).lines[1].marks)
+
+            model.selectRightEngine("alpha")
+            advanceUntilIdle()
+            assertEquals(
+                1.0,
+                model.state.value.summary
+                    ?.agreement,
+            )
+            assertEquals(
+                0,
+                model.state.value.summary
+                    ?.differingRanges,
+            )
+
+            model.changeDataSet()
+            assertEquals(LabComparePhase.Picking, model.state.value.phase)
+            assertNull(model.state.value.summary)
+        }
+
+    @Test
+    fun benchmarkKeepsEngineOrderAndNeedsDataSetsWhenSelected() =
+        runTest(dispatcher) {
+            val model = benchmark(smallStore(), LabReportStore(createTempDirectory()))
+            assertEquals(listOf("alpha", "beta"), model.state.value.engineOrder)
+            assertEquals("1. Alpha (baseline)", model.state.value.engineLabel(LabEngineOption("alpha", "Alpha")))
+
+            model.toggleEngine("alpha")
+            model.toggleEngine("alpha")
+            assertEquals(listOf("beta", "alpha"), model.state.value.engineOrder)
+            assertEquals("2. Alpha", model.state.value.engineLabel(LabEngineOption("alpha", "Alpha")))
+
+            model.selectScope(LabBenchmarkScope.Selected)
+            assertFalse(model.state.value.canRun)
+            model.toggleDataSet("typical/kotlin/2k")
+            assertTrue(model.state.value.canRun)
+            model.toggleEngine("alpha")
+            model.toggleEngine("beta")
+            assertFalse(model.state.value.canRun)
+        }
+
+    @Test
+    fun benchmarkRunsPickedDataSetsComparesAndSavesTheReport() =
+        runTest(dispatcher) {
+            val directory = createTempDirectory()
+            val reports = LabReportStore(directory, now = { 0L })
+            val model = benchmark(smallStore(), reports)
+            model.selectScope(LabBenchmarkScope.Selected)
+            model.toggleDataSet("typical/kotlin/2k")
+
+            model.run()
+            assertTrue(model.state.value.running)
+            advanceUntilIdle()
+
+            val state = model.state.value
+            assertFalse(state.running)
+            assertNull(state.error)
+            // One throughput case, one row per engine.
+            assertEquals(
+                2,
+                state.tables
+                    .single()
+                    .rows.size,
+            )
+            assertEquals("Alpha", state.baselineName)
+            assertEquals("Beta", state.comparisons.single().candidate)
+            val report = requireNotNull(state.report)
+            assertFalse(state.reportFromStorage)
+            assertTrue(report.markdown.contains("Highlighting Lab run: selected data sets (Alpha, Beta)"))
+            assertTrue(report.markdown.contains("Device: test"))
+            assertEquals(report.json, reports.latest()?.json)
+
+            // A new screen shows the saved report.
+            val reopened = benchmark(smallStore(), reports)
+            advanceUntilIdle()
+            assertTrue(reopened.state.value.reportFromStorage)
+            assertEquals(
+                report.markdown,
+                reopened.state.value.report
+                    ?.markdown,
+            )
+        }
+
+    @Test
+    fun benchmarkStopKeepsThePartialReport() =
+        runTest(dispatcher) {
+            val model = benchmark(smallStore(), LabReportStore(createTempDirectory()))
+            model.selectScope(LabBenchmarkScope.Selected)
+            model.toggleDataSet("typical/kotlin/2k")
+            model.toggleDataSet("typical/json/2k")
+            model.run()
+            model.stop()
+            assertTrue(model.state.value.stopping)
+            advanceUntilIdle()
+
+            val state = model.state.value
+            assertFalse(state.running)
+            // Stopped before the first case: every row is there, skipped.
+            assertEquals(4, state.tables.sumOf { it.rows.size })
+            assertTrue(requireNotNull(state.report).json.contains("Skipped"))
+        }
+
+    private fun benchmark(
+        store: LabDataSetStore,
+        reports: LabReportStore,
+    ) = LabBenchmarkViewModel(store, labEngines(dispatcher), reports, LabDeviceInfo(listOf("Device: test")))
+
+    private fun createTempDirectory() =
+        kotlin.io.path
+            .createTempDirectory("lab-test")
+            .toFile()
+            .also { it.deleteOnExit() }
+}

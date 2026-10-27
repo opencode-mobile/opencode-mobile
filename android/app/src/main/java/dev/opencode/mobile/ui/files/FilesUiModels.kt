@@ -70,6 +70,8 @@ sealed interface FilesViewerContent {
 
     data class Text(
         val lines: List<OpenCodeCodeLine>,
+        /** The text as loaded, for actions that need it whole (the Highlighting Lab in Lab builds). */
+        val source: String,
         val languageName: String,
         val isTruncated: Boolean,
         /** Rendered preview for Markdown files; null for other files or when parsing failed. */

@@ -130,6 +130,18 @@ android {
                 debugSymbolLevel = "SYMBOL_TABLE"
             }
         }
+        // Release-like build for on-device Highlighting Lab numbers (#872): R8 on, not
+        // debuggable, but signed with the debug key and Firebase-free like debug.
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            manifestPlaceholders["crashlyticsVerificationEnabled"] = false
+            proguardFiles("proguard-benchmark.pro")
+            ndk {
+                debugSymbolLevel = "NONE"
+            }
+        }
     }
     compileOptions {
         // minSdk 24 has no java.time; desugaring backports it to API 24-25.
@@ -152,6 +164,18 @@ android {
     }
 
     sourceSets {
+        // The Highlighting Lab ships in debug and benchmark only; release has a no-op seam.
+        getByName("debug") {
+            java.srcDir("src/lab/java")
+        }
+        getByName("benchmark") {
+            java.srcDir("src/lab/java")
+            // Debug's Firebase-free feedback and observability seams.
+            java.srcDir("src/debug/java")
+        }
+        getByName("testDebug") {
+            java.srcDir("src/testLab/java")
+        }
         getByName("test") {
             resources.srcDir("../../shared/sse-recovery")
             resources.srcDir("../../shared/feedback")

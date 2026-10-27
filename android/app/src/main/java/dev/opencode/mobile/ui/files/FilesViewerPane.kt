@@ -64,6 +64,8 @@ internal fun FilesViewerPane(
     onRetry: () -> Unit,
     onToggleMarkdownSource: () -> Unit,
     tabs: (@Composable () -> Unit)? = null,
+    /** Lab builds only: opens the loaded text in the Highlighting Lab. Null hides the action. */
+    onOpenInHighlightingLab: ((path: String, source: String) -> Unit)? = null,
 ) {
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     ProductRouteScreenViewEffect(screenId = ProductAnalytics.Screen.FILES_VIEWER)
@@ -91,7 +93,7 @@ internal fun FilesViewerPane(
                             onToggleWrap()
                         },
                     ),
-                ),
+                ) + highlightingLabEntries(viewer, onOpenInHighlightingLab) { menuExpanded = false },
         ) {
             OpenCodeTopBar(
                 title = viewer.name,
@@ -112,6 +114,25 @@ internal fun FilesViewerPane(
             FilesViewerBody(viewer, wrapLines, onRetry, onToggleMarkdownSource)
         }
     }
+}
+
+private fun highlightingLabEntries(
+    viewer: FilesViewerState,
+    onOpen: ((path: String, source: String) -> Unit)?,
+    dismissMenu: () -> Unit,
+): List<OpenCodeOverflowMenuEntry> {
+    val text = viewer.content as? FilesViewerContent.Text ?: return emptyList()
+    if (onOpen == null) return emptyList()
+    return listOf(
+        OpenCodeOverflowMenuEntry(
+            title = "Open in Highlighting Lab",
+            icon = OpenCodeIcons.Code,
+            onClick = {
+                dismissMenu()
+                onOpen(viewer.path, text.source)
+            },
+        ),
+    )
 }
 
 @Composable

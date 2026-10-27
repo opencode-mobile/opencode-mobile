@@ -518,6 +518,9 @@ fun MainNavigation() {
                                                     onTextMateLogbookClick = {
                                                         openSettingsDetail(SettingsDetail.TextMateLogbook)
                                                     },
+                                                    // A full-screen route, also on wide windows; null in release builds.
+                                                    onHighlightingLabClick =
+                                                        HighlightingLabSeam.homeRoute?.let { route -> { backStack.add(route) } },
                                                     onDiagnosticLogsClick = {
                                                         openSettingsDetail(SettingsDetail.DiagnosticLogs)
                                                     },

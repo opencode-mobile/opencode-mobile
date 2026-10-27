@@ -175,6 +175,12 @@ internal fun EntryProviderScope<NavKey>.chatFlowEntries(
             FilesScreen(
                 worktree = key.worktree,
                 onNavigateBack = navigator.navigateBack,
+                onOpenInHighlightingLab =
+                    if (HighlightingLabSeam.isAvailable) {
+                        { path, source -> HighlightingLabSeam.fileRoute(path, source)?.let(navigator.push) }
+                    } else {
+                        null
+                    },
             )
         }
     }
@@ -250,4 +256,6 @@ internal fun EntryProviderScope<NavKey>.chatFlowEntries(
             }
         }
     }
+    // The File Viewer opens Lab screens in whichever stack shows it; empty in release builds.
+    highlightingLabEntries(navigator.push, navigator.navigateBack)
 }

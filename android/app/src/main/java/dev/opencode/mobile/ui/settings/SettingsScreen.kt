@@ -63,6 +63,8 @@ fun SettingsScreen(
     onTextMateLanguagesClick: () -> Unit,
     onFeatureFlagsClick: () -> Unit = {},
     onTextMateLogbookClick: () -> Unit,
+    /** Lab builds only; null hides the Highlighting Lab row. */
+    onHighlightingLabClick: (() -> Unit)? = null,
     onDiagnosticLogsClick: () -> Unit,
     onNavigateBack: () -> Unit,
     onServersClick: () -> Unit,
@@ -512,6 +514,18 @@ fun SettingsScreen(
                         onClick = onTextMateLogbookClick,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
+
+                    if (onHighlightingLabClick != null) {
+                        OpenCodeListItem(
+                            title = "Highlighting Lab",
+                            subtitle = "Data sets, on-device benchmarks, and engine comparison",
+                            style = OpenCodeListItemStyle.Card,
+                            startDecorator = StartDecorator.Icon(OpenCodeIcons.Code, "Highlighting Lab"),
+                            accessory = OpenCodeListItemAccessory.Disclosure,
+                            onClick = onHighlightingLabClick,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
 
                     OpenCodeListItem(
                         title = "Feature Flags",
