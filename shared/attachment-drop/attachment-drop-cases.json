@@ -1,0 +1,239 @@
+{
+  "description": "Paste and drop attachment routing (#870). Kinds: image (png/jpeg/gif/webp), pdf, text, file (anything else), folder. A route is decided before an item's bytes are read, so filename and byteCount are optional; a missing byteCount counts as fitting the 20 MB inline cap. Context defaults: imagesSupported true, pdfSupported true, uploadAvailable false, draft empty.",
+  "rule": "folder -> skipped \"Folders can't be attached.\"; same filename and byteCount as a draft attachment -> skipped duplicate; image (model reads images), pdf (model reads PDFs) or text that fits -> accepted; otherwise accepted when the server takes uploads; otherwise skipped with the image, PDF, size or unsupported-type error, in that order.",
+  "routes": [
+    {
+      "name": "image the model reads",
+      "item": { "kind": "image", "filename": "shot.png", "byteCount": 1200000 },
+      "expected": { "accepted": true }
+    },
+    {
+      "name": "image with unknown size",
+      "item": { "kind": "image" },
+      "expected": { "accepted": true }
+    },
+    {
+      "name": "text file",
+      "item": { "kind": "text", "filename": "device.log", "byteCount": 800000 },
+      "expected": { "accepted": true }
+    },
+    {
+      "name": "pdf the model reads",
+      "item": { "kind": "pdf", "filename": "spec.pdf", "byteCount": 3400000 },
+      "expected": { "accepted": true }
+    },
+    {
+      "name": "folder",
+      "item": { "kind": "folder", "filename": "designs" },
+      "expected": { "skipped": "Folders can't be attached." }
+    },
+    {
+      "name": "folder even with uploads",
+      "item": { "kind": "folder", "filename": "designs" },
+      "context": { "uploadAvailable": true },
+      "expected": { "skipped": "Folders can't be attached." }
+    },
+    {
+      "name": "duplicate of a draft attachment",
+      "item": { "kind": "image", "filename": "shot.png", "byteCount": 1200000 },
+      "context": { "draft": [{ "filename": "shot.png", "byteCount": 1200000 }] },
+      "expected": { "skipped": "This file has already been uploaded" }
+    },
+    {
+      "name": "same name, different size is not a duplicate",
+      "item": { "kind": "image", "filename": "shot.png", "byteCount": 1200001 },
+      "context": { "draft": [{ "filename": "shot.png", "byteCount": 1200000 }] },
+      "expected": { "accepted": true }
+    },
+    {
+      "name": "unknown size is never a duplicate",
+      "item": { "kind": "image", "filename": "shot.png" },
+      "context": { "draft": [{ "filename": "shot.png", "byteCount": 1200000 }] },
+      "expected": { "accepted": true }
+    },
+    {
+      "name": "image the model cannot read, no uploads",
+      "item": { "kind": "image", "filename": "shot.png", "byteCount": 1200000 },
+      "context": { "imagesSupported": false },
+      "expected": { "skipped": "This model does not support image attachments." }
+    },
+    {
+      "name": "image the model cannot read, uploads available",
+      "item": { "kind": "image", "filename": "shot.png", "byteCount": 1200000 },
+      "context": { "imagesSupported": false, "uploadAvailable": true },
+      "expected": { "accepted": true }
+    },
+    {
+      "name": "pdf the model cannot read, no uploads",
+      "item": { "kind": "pdf", "filename": "spec.pdf", "byteCount": 3400000 },
+      "context": { "pdfSupported": false },
+      "expected": { "skipped": "This model does not support PDF attachments." }
+    },
+    {
+      "name": "large image, no uploads",
+      "item": { "kind": "image", "filename": "hero.png", "byteCount": 27262976 },
+      "expected": { "skipped": "This file is larger than 20 MB." }
+    },
+    {
+      "name": "large image, uploads available",
+      "item": { "kind": "image", "filename": "hero.png", "byteCount": 27262976 },
+      "context": { "uploadAvailable": true },
+      "expected": { "accepted": true }
+    },
+    {
+      "name": "exactly 20 MB fits",
+      "item": { "kind": "text", "filename": "big.log", "byteCount": 20971520 },
+      "expected": { "accepted": true }
+    },
+    {
+      "name": "other file, no uploads",
+      "item": { "kind": "file", "filename": "crash-dump.zip", "byteCount": 6000000 },
+      "expected": { "skipped": "Only images, PDFs, or text files can be attached here." }
+    },
+    {
+      "name": "other file, uploads available",
+      "item": { "kind": "file", "filename": "repro.mov", "byteCount": 50331648 },
+      "context": { "uploadAvailable": true },
+      "expected": { "accepted": true }
+    }
+  ],
+  "summaries": [
+    {
+      "name": "nothing attachable shows no card",
+      "items": [],
+      "expected": null
+    },
+    {
+      "name": "one image",
+      "items": [{ "kind": "image" }],
+      "expected": {
+        "title": "Drop to attach 1 image",
+        "subtitle": "Adds them to the message you are writing",
+        "previews": ["image"],
+        "rejected": false
+      }
+    },
+    {
+      "name": "several images",
+      "items": [{ "kind": "image" }, { "kind": "image" }, { "kind": "image" }],
+      "expected": {
+        "title": "Drop to attach 3 images",
+        "subtitle": "Adds them to the message you are writing",
+        "previews": ["image", "image", "image"],
+        "rejected": false
+      }
+    },
+    {
+      "name": "mixed kinds are files",
+      "items": [{ "kind": "image" }, { "kind": "pdf" }],
+      "expected": {
+        "title": "Drop to attach 2 files",
+        "subtitle": "Adds them to the message you are writing",
+        "previews": ["image", "pdf"],
+        "rejected": false
+      }
+    },
+    {
+      "name": "one text file is a file",
+      "items": [{ "kind": "text" }],
+      "expected": {
+        "title": "Drop to attach 1 file",
+        "subtitle": "Adds them to the message you are writing",
+        "previews": ["text"],
+        "rejected": false
+      }
+    },
+    {
+      "name": "previews stop at four",
+      "items": [{ "kind": "image" }, { "kind": "image" }, { "kind": "image" }, { "kind": "image" }, { "kind": "image" }],
+      "expected": {
+        "title": "Drop to attach 5 images",
+        "subtitle": "Adds them to the message you are writing",
+        "previews": ["image", "image", "image", "image"],
+        "rejected": false
+      }
+    },
+    {
+      "name": "a skipped folder names the first reason",
+      "items": [{ "kind": "image" }, { "kind": "text" }, { "kind": "folder" }],
+      "expected": {
+        "title": "Drop to attach 2 files",
+        "subtitle": "1 will be skipped · Folders can't be attached.",
+        "previews": ["image", "text"],
+        "rejected": false
+      }
+    },
+    {
+      "name": "skipped items do not change the noun",
+      "items": [{ "kind": "image" }, { "kind": "file" }],
+      "expected": {
+        "title": "Drop to attach 1 image",
+        "subtitle": "1 will be skipped · Only images, PDFs, or text files can be attached here.",
+        "previews": ["image"],
+        "rejected": false
+      }
+    },
+    {
+      "name": "one folder only",
+      "items": [{ "kind": "folder" }],
+      "expected": {
+        "title": "Can't attach this",
+        "subtitle": "Folders can't be attached.",
+        "previews": [],
+        "rejected": true
+      }
+    },
+    {
+      "name": "nothing attachable among several",
+      "items": [{ "kind": "image" }, { "kind": "image" }],
+      "context": { "imagesSupported": false },
+      "expected": {
+        "title": "Can't attach these",
+        "subtitle": "This model does not support image attachments.",
+        "previews": [],
+        "rejected": true
+      }
+    },
+    {
+      "name": "count unknown",
+      "items": [{ "kind": "image" }],
+      "countKnown": false,
+      "expected": {
+        "title": "Drop to attach images",
+        "subtitle": "Adds them to the message you are writing",
+        "previews": ["image"],
+        "rejected": false
+      }
+    },
+    {
+      "name": "count unknown with a skipped kind",
+      "items": [{ "kind": "pdf" }, { "kind": "folder" }],
+      "countKnown": false,
+      "expected": {
+        "title": "Drop to attach files",
+        "subtitle": "Some will be skipped · Folders can't be attached.",
+        "previews": ["pdf"],
+        "rejected": false
+      }
+    },
+    {
+      "name": "count unknown, nothing attachable",
+      "items": [{ "kind": "folder" }],
+      "countKnown": false,
+      "expected": {
+        "title": "Can't attach these",
+        "subtitle": "Folders can't be attached.",
+        "previews": [],
+        "rejected": true
+      }
+    }
+  ],
+  "pastedImageNames": [
+    { "name": "first paste", "draft": [], "expected": "Pasted image 1.png" },
+    { "name": "counts up", "draft": ["Pasted image 1.png"], "expected": "Pasted image 2.png" },
+    { "name": "other files do not count", "draft": ["shot.png", "spec.pdf"], "expected": "Pasted image 1.png" },
+    { "name": "follows the highest number", "draft": ["Pasted image 3.png", "Pasted image 1.png"], "expected": "Pasted image 4.png" },
+    { "name": "a removed chip frees its number only at the top", "draft": ["Pasted image 1.png", "Pasted image 3.png"], "expected": "Pasted image 4.png" },
+    { "name": "similar names do not count", "draft": ["Pasted image 7.jpg", "My Pasted image 9.png"], "expected": "Pasted image 1.png" }
+  ]
+}

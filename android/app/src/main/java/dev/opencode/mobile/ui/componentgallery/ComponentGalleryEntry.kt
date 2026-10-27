@@ -82,6 +82,7 @@ enum class ComponentGalleryEntryId {
     SessionBranchPill,
     SessionComposer,
     DictationCard,
+    DropOverlay,
     RenderedMarkdown,
     MessageList,
 }
@@ -453,6 +454,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.DictationCard,
             title = "Dictation Card",
             description = "Listening takeover for composer dictation.",
+            category = ComponentGalleryCategory.Session,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.DropOverlay,
+            title = "Drop Overlay",
+            description = "Drag-over scrim card for images and files dropped on Session Chat.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(

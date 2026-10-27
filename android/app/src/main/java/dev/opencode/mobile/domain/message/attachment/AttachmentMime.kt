@@ -37,11 +37,14 @@ object AttachmentMime {
                 ?.takeIf { it.isNotEmpty() }
         return when {
             mime in keptTypes -> mime!!
-            mime != null && (mime.startsWith("text/") || mime in textTypes) -> TEXT
+            mime != null && isTextLike(mime) -> TEXT
             head.take(SNIFF_BYTES).any { it == 0.toByte() } -> mime ?: BINARY
             else -> TEXT
         }
     }
+
+    /** Any `text/` type or a text-like application type; [mime] is already trimmed and lowercased. */
+    fun isTextLike(mime: String): Boolean = mime.startsWith("text/") || mime in textTypes
 
     /**
      * The type to classify with: the provider's, unless it names nothing useful (null, blank or the
