@@ -25,15 +25,46 @@ data class HighlightBenchSettings(
 
 /**
  * One benchmark run of [cases] on each of [engines], executed once by [run] on the caller's
- * thread. Call it off the main thread: a full tier takes minutes per engine. [stop] may be called
- * from any thread.
+ * thread, and the entry point of the #872 Highlighting Lab's shared benchmark module.
  *
- * Each case runs on every engine before the next case starts, so paired results share
- * conditions. Every engine call gets a cancel signal that turns true at its deadline. Light cases
- * call the engine's shared warm instance inline. Isolated cases (1 MB files, worst cases, custom
- * inputs) make one call on a fresh instance through [callGuard], which can give up on a call that
- * ignores its signal; such a call becomes an [HighlightBenchCaseStatus.IgnoredCancel] row, and
- * [HighlightBenchSettings.whileCallStuck] decides what happens to the isolated cases after it.
+ * **Data sets.** [HighlightBenchCatalog] lists every bundled input ([HighlightBenchCatalog.dataSets],
+ * [HighlightBenchCatalog.filter] by language, [HighlightBenchSizeClass], [HighlightBenchDataKind];
+ * [HighlightBenchCatalog.dataSet] by id such as `typical/kotlin/16k`, `fences/json`, or
+ * `worst/minified-js-1mb`). A [HighlightBenchDataSet] generates its text on demand
+ * ([HighlightBenchDataSet.generate], [HighlightBenchDataSet.pieces]); [HighlightBenchDataSet.custom]
+ * wraps pasted text or a server file.
+ *
+ * **Engines.** [HighlightBenchEngine] (id, display name, fresh instances) and
+ * [HighlightBenchHighlighter] (one synchronous call with a cancel signal, spans optional). The apps
+ * get theirs from markdown-core's `HighlightBenchEngines.available()`: TextMate (`textmate`) and
+ * the semantic fallback (`semantic-fallback`); the new library's adapter joins that list later.
+ *
+ * **Viewing.** [HighlightBenchProbe.highlight] makes one timed call that returns
+ * [HighlightBenchCall.spans]; [HighlightBenchSpanDiff.compare] finds where two engines' spans differ.
+ *
+ * **Running.** Build cases with [HighlightBenchPlan.cases] (a [HighlightBenchTier] or picked data
+ * sets), then call [run] off the main thread: a full tier takes minutes per engine. Progress arrives
+ * on the running thread before and after each case and engine with an immutable report snapshot.
+ * [stop] may be called from any thread. Pass the platform's `HighlightBenchThreadGuard` as
+ * [callGuard] on devices. [HighlightBenchHeadless] runs a plan from a `labRun` launch argument.
+ *
+ * **Results.** [HighlightBenchReport] gives per-section [HighlightBenchReport.headers] and
+ * [HighlightBenchCaseResult.cells] for tables, typed [HighlightBenchMeasurement]s,
+ * [HighlightBenchReport.comparisons] (first engine as baseline, candidate/baseline time ratio),
+ * [HighlightBenchReport.markdown], and [HighlightBenchReport.json].
+ *
+ * **Cancellation.** Each case runs on every engine before the next case starts, so paired
+ * results share conditions. Every engine call gets a cancel signal that turns true at its
+ * deadline. Light cases call the engine's shared warm instance inline. Isolated cases (1 MB files,
+ * worst cases, custom inputs) make one call on a fresh instance through [callGuard], which can give
+ * up on a call that ignores its signal; such a call becomes an
+ * [HighlightBenchCaseStatus.IgnoredCancel] row, and [HighlightBenchSettings.whileCallStuck] decides
+ * what happens to the isolated cases after it.
+ *
+ * **Swift.** Everything is exported from `OpenCodeMarkdownCore`: objects through `.shared`
+ * (`HighlightBenchPlan.shared.cases(tier:)`), companions through `.companion`
+ * (`HighlightBenchSettings.companion.standard`), sealed subclasses flattened
+ * (`HighlightBenchMeasurementTimed`), and functions marked `@Throws` as `throws`.
  */
 class HighlightBenchRun(
     val engines: List<HighlightBenchEngine>,

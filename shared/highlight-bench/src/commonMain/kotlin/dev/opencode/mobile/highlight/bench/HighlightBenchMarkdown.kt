@@ -233,10 +233,13 @@ internal object HighlightBenchMarkdown {
         return "$sign${abs(tenths) / 10}.${abs(tenths) % 10}"
     }
 
-    /** Two decimals, for ratios. */
+    /** Ratios: three decimals below 1 (a much faster candidate stays readable), two above. */
     private fun ratio(value: Double): String {
-        val hundredths = (value * 100).roundToLong()
-        return "${hundredths / 100}.${(hundredths % 100).toString().padStart(2, '0')}"
+        val digits = if (value < 1) 3 else 2
+        var scale = 1L
+        repeat(digits) { scale *= 10 }
+        val scaled = (value * scale).roundToLong()
+        return "${scaled / scale}.${(scaled % scale).toString().padStart(digits, '0')}"
     }
 
     /** No decimals, like `"%.0f"`. */

@@ -228,4 +228,12 @@ class HighlightBenchReport internal constructor(
         title: String,
         environment: List<String>,
     ): String = HighlightBenchMarkdown.render(this, title, environment)
+
+    /**
+     * A machine-readable summary: `engines`, `settings`, `complete`, and `rows`, one per case and
+     * engine, with `case`, `section`, `dataSet`, `language`, `engine`, `status`, `headlineMs`,
+     * `headlineLabel`, `characters`, `charsPerMs`, `callStatus`, `ignoredCancel`, `slowed`, and `note`
+     * (missing values are null).
+     */
+    fun json(): String = HighlightBenchJson.render(this)
 }
