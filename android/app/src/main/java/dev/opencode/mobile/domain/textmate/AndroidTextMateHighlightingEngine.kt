@@ -15,6 +15,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -113,7 +115,16 @@ class AndroidTextMateHighlightingEngine(
                             else -> active.highlight(job.request)
                         }
                     } catch (cancelled: CancellationException) {
-                        throw cancelled
+                        // Only the pump's own cancellation ends the loop. One thrown by the
+                        // delegate (a timeout inside it) cancels this job; finishing it below
+                        // clears the active slot so later requests still run.
+                        currentCoroutineContext().ensureActive()
+                        emptyResult(
+                            request = job.request,
+                            outcome = TextMateParseOutcome.Cancelled,
+                            queueWaitNanoseconds = job.queueWaitNanoseconds,
+                            schedulingReason = null,
+                        )
                     } catch (error: Throwable) {
                         emptyResult(
                             request = job.request,
