@@ -1,12 +1,5 @@
-# Copy to opencode-mobile/opencode-mobile as .github/workflows/pr-review.yml.
-# Source of truth: ivanfenenko/homelab services/pr-review/workflow.yml.
-#
-# Automated review by three opencode passes on fedora-box (runner
-# fedora-box-pr-review). Only Ivan (ivanfenenko) can trigger it: it runs when
-# he opens, reopens or marks ready one of his own PRs, and when he comments
-# `/review` on a PR. Nobody else's PR or comment uses the runner. Not on every
-# push. Drafts and forks are skipped. The review script comes from the homelab
-# checkout on the runner, never from the PR.
+# Automated review that runs only for the maintainer's own PRs and their
+# `/review` comments, on a self-hosted runner. Never runs for forks.
 name: PR review
 
 on:
