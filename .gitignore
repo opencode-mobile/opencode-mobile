@@ -75,6 +75,7 @@ research/
 
 # Throwaway on-demand UI snapshot evidence (OPE-161)
 .snapshot-evidence/
+/snapshot-evidence/
 ios/OpenCode Mobile/OpenCode MobileTests/GeneratedSnapshotEvidence/
 android/app/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapshotEvidence/
 android/app/src/test/snapshots/
