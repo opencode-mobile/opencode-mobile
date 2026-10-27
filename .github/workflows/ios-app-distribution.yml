@@ -57,6 +57,9 @@ jobs:
       run:
         working-directory: ios/OpenCode Mobile
     env:
+      # The iOS 27.1 SDK stamp makes iPhone Duo fill its inner display and use
+      # the vertical bars; the system Xcode on the runner is 26.x.
+      DEVELOPER_DIR: /Users/ivan/Xcode-27.1.app/Contents/Developer
       # Marketing version comes from the repo VERSION file after checkout.
       # Isolate build numbers from the manual iOS Release / TestFlight sequence.
       EXPECTED_TEAM_ID: 677MTXPXZZ
