@@ -164,6 +164,10 @@ areas, status column, fold, system bars, simulator pose control) lives in
   `feature/ope-<number>-<short-slug>` when the issue title starts with
   `OPE-<number>:`. Use `fix/` instead of `feature/` for bug tickets. Slug is
   lowercase ASCII with single hyphens; whole name at most 80 characters.
+- A pull request that finishes an issue says `Fixes #<number>` in its body so
+  merging closes the issue; a bare `#<number>` only links it. Use the bare form
+  while work on the issue stays open, and switch to `Fixes` before marking the
+  pull request ready once it finishes the issue.
 - A pull request that changes what users see carries screenshot evidence for
   each affected platform, posted on GitHub: an `evidence/<issue>` branch
   referenced from a pull request or issue comment, never a link to the
