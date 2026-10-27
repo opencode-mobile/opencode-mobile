@@ -78,6 +78,8 @@ Repair issue state only when asked; otherwise report the mismatch.
 
 ## Issue
 Fixes #<number>
+<!-- "Fixes #<number>" when this pull request finishes the issue; a bare
+     #<number> while work on it stays open. See below. -->
 
 ## Risks / Follow-ups
 - ...
