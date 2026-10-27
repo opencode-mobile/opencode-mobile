@@ -16,6 +16,11 @@ data class V2ServerFeatures(
      * (`POST /api/experimental/fs/write`). Null means streamed uploads are off for this connection.
      */
     val attachmentUploadTmp: String? = null,
+    /**
+     * The document declares the upload route but `/api/info` could not be read, so
+     * [attachmentUploadTmp] is unknown rather than absent. Such a result is not cached.
+     */
+    val tmpDirectoryUnread: Boolean = false,
 ) {
     val attachmentUpload: Boolean
         get() = attachmentUploadTmp != null

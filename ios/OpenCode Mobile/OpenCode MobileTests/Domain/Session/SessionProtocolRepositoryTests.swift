@@ -309,6 +309,29 @@ struct SessionProtocolRepositoryTests {
         }
     }
 
+    @Test func probeV2FeaturesLeavesUploadUnresolvedWhenInfoFails() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(StreamedUploadContractTests.route),
+            StubResponse(statusCode: 503, body: "Unavailable"),
+        ])
+        let service = ConnectionProbeService(urlSession: makeURLSession())
+
+        let features = try await service.probeV2Features(connection: try #require(makeManager(serverProtocol: .v2).connection))
+
+        #expect(!features.streamedUpload)
+        #expect(features.uploadDirectoryUnread)
+    }
+
+    @Test func probeV2FeaturesInfoWithoutTmpIsAFinalAnswer() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.json(StreamedUploadContractTests.route), .json("{}")])
+        let service = ConnectionProbeService(urlSession: makeURLSession())
+
+        let features = try await service.probeV2Features(connection: try #require(makeManager(serverProtocol: .v2).connection))
+
+        #expect(!features.streamedUpload)
+        #expect(!features.uploadDirectoryUnread)
+    }
+
     @Test func v2ProjectCurrentUsesLocationDirectoryQuery() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [.json(#"{"directory":"/repo","project":{"id":"proj_1","directory":"/repo","canonical":"/repo"}}"#)])
         let manager = makeManager(serverProtocol: .v2)

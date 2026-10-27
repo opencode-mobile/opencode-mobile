@@ -10,6 +10,9 @@ nonisolated struct V2ServerFeatures: Equatable, Sendable {
     var streamedUploadRoute = false
     /// `paths.tmp` from `/api/info`; uploads go under `<tmp>/uploads/<uuid>/`.
     var uploadDirectory: String?
+    /// The route is declared but `/api/info` could not be read, so `uploadDirectory` is unknown
+    /// rather than absent. Such a result is not cached.
+    var uploadDirectoryUnread = false
 
     var streamedUpload: Bool { streamedUploadRoute && uploadDirectory?.isEmpty == false }
 }

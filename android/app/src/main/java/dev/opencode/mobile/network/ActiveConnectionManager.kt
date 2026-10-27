@@ -190,7 +190,7 @@ class ActiveConnectionManager(
                     if (active != null && sameProfileDuringProbe(probedProfile, profile, active, current)) {
                         serverVersion = server.version
                         v2Features = features?.getOrNull() ?: V2ServerFeatures()
-                        v2FeaturesVersion = features?.getOrNull()?.let { server.version }
+                        v2FeaturesVersion = features?.getOrNull()?.takeUnless { it.tmpDirectoryUnread }?.let { server.version }
                         connection = active.withProtocol(detected)
                         persistLocked()
                         Result.success(detected)
@@ -212,6 +212,7 @@ class ActiveConnectionManager(
     /**
      * Reads v2 features once per server release. A failed read is not remembered,
      * so the next probe tries again; until then archive and Last turn stay hidden.
+     * Neither is a read whose `/api/info` failed, so streamed uploads can turn on later.
      */
     private suspend fun probeV2Features(
         probing: ConnectionProbing,

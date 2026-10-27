@@ -336,13 +336,14 @@ final class ActiveConnectionManager: @unchecked Sendable {
         _connection = active.withProtocol(detected)
         _serverVersion = serverVersion
         _v2Features = v2Features ?? V2ServerFeatures()
-        _v2FeaturesVersion = v2Features == nil ? nil : serverVersion
+        _v2FeaturesVersion = v2Features == nil || v2Features?.uploadDirectoryUnread == true ? nil : serverVersion
         persistLocked()
         return detected
     }
 
     /// Reads v2 features once per server release. A failed read returns nil and is not
     /// remembered, so the next probe tries again; until then archive and Last turn stay hidden.
+    /// Neither is a read whose `/api/info` failed, so streamed upload can turn on later.
     private func probeV2Features(
         probing: any ConnectionProbing,
         connection: ServerConnection,
@@ -687,7 +688,13 @@ struct ConnectionProbeService: ConnectionProbing, Sendable {
         let client = ProjectsAPIClient(fixedConnection: connection, urlSession: urlSession)
         var features = try V2ServerContract.features(data: try await client.getV2OpenAPIDocument())
         if features.streamedUploadRoute {
-            features.uploadDirectory = (try? await client.getV2TmpDirectory()) ?? nil
+            do {
+                features.uploadDirectory = try await client.getV2TmpDirectory()
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                features.uploadDirectoryUnread = true
+            }
         }
         return features
     }

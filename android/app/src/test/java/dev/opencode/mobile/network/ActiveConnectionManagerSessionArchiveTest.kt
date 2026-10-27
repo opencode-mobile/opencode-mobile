@@ -122,6 +122,29 @@ class ActiveConnectionManagerSessionArchiveTest {
             assertFalse(manager.currentCapabilities().supportsSessionArchive)
         }
 
+    @Test
+    fun unreadTmpDirectory_isNotCachedSoUploadTurnsOnNextProbe() =
+        runTest {
+            val probing =
+                FeatureSequenceProbing(
+                    V2ServerFeatures(sessionArchive = true, tmpDirectoryUnread = true),
+                    V2ServerFeatures(sessionArchive = true, attachmentUploadTmp = "/tmp/opencode"),
+                )
+            val manager = connected(probing)
+
+            manager.probeActive()
+            assertTrue(manager.currentCapabilities().supportsSessionArchive)
+            assertFalse(manager.currentCapabilities().supportsAttachmentUpload)
+
+            manager.probeActive()
+            assertTrue(manager.currentCapabilities().supportsAttachmentUpload)
+            assertEquals("/tmp/opencode", manager.attachmentUploadTmpDirectory())
+            assertEquals(2, probing.probes)
+
+            manager.probeActive()
+            assertEquals(2, probing.probes)
+        }
+
     /** Starts from a profile stamped v2, as after an earlier session, so archive waits on the contract. */
     private suspend fun connected(probing: ConnectionProbing): ActiveConnectionManager =
         ActiveConnectionManager(MemoryProfileStore(), probing).also {
@@ -145,6 +168,18 @@ private class ArchiveProbing(
         val supported = archive(version)
         return V2ServerFeatures(sessionArchive = supported, sessionTurnDiff = supported)
     }
+}
+
+private class FeatureSequenceProbing(
+    private vararg val answers: V2ServerFeatures,
+) : ConnectionProbing {
+    var probes = 0
+
+    override suspend fun probe(connection: ServerConnection): ServerProtocol = ServerProtocol.V2
+
+    override suspend fun probeServer(connection: ServerConnection): DetectedServer = DetectedServer(ServerProtocol.V2, "2.1.0")
+
+    override suspend fun probeV2Features(connection: ServerConnection): V2ServerFeatures = answers[minOf(probes++, answers.lastIndex)]
 }
 
 private class MemoryProfileStore : ConnectionProfileStore {

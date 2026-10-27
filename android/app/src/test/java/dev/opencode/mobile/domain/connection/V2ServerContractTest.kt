@@ -154,7 +154,7 @@ internal const val V2_1_PATCH_BODY =
     """{"type":"object","properties":{"title":{"anyOf":[{"type":"string"},{"type":"null"}]},"metadata":{},"permissions":{},"archived":{"anyOf":[{"type":"boolean"},{"type":"null"}]}},"additionalProperties":false}"""
 
 /** Trimmed from opencode's `/openapi.json`: the write route with a `$ref` answer, as the server emits it. */
-private val UPLOAD_DOCUMENT =
+internal val UPLOAD_DOCUMENT =
     """
     {"paths":{"/api/experimental/fs/write":{"post":{
       "parameters":[
