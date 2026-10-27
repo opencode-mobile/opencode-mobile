@@ -76,6 +76,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case sessionBranchPill
     case sessionComposer
     case dictationCard
+    case dropOverlay
     case composerSuggestionOverlay
     case renderedMarkdown
     case messageList
@@ -429,6 +430,12 @@ let componentGalleryEntries = [
         id: .dictationCard,
         title: "Dictation Card",
         description: "Listening takeover for composer dictation.",
+        category: .session
+    ),
+    ComponentGalleryEntry(
+        id: .dropOverlay,
+        title: "Drop Overlay",
+        description: "Drag-over scrim card for images and files dropped on Session Chat.",
         category: .session
     ),
     ComponentGalleryEntry(

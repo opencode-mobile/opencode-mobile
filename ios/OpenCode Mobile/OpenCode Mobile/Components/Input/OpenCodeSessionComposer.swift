@@ -220,6 +220,8 @@ enum OpenCodeSessionComposerAction {
     case attach
     case openCommands
     case removeAttachment(String)
+    /// An image or file was pasted into the prompt; only sent while the prompt's `attachEnabled`.
+    case pasteAttachments([NSItemProvider])
     case cancelRevert
     /// Drop the leading `!` so the draft is a prompt again.
     case exitShellMode
@@ -273,6 +275,9 @@ struct OpenCodeSessionComposer: View {
     /// Called with true when the prompt input gains keyboard focus, false when it loses it.
     let onInputFocusChange: ((Bool) -> Void)?
     let dictation: OpenCodeSessionComposerDictation?
+    /// True while an image or file is dragged over the screen that hosts the composer: the prompt
+    /// leaves the drop to that screen instead of taking it as text.
+    let attachmentDragActive: Bool
     let onAction: (OpenCodeSessionComposerAction) -> Void
     private let status: AnyView?
 
@@ -281,6 +286,7 @@ struct OpenCodeSessionComposer: View {
         focusRequestToken: Int = 0,
         onInputFocusChange: ((Bool) -> Void)? = nil,
         dictation: OpenCodeSessionComposerDictation? = nil,
+        attachmentDragActive: Bool = false,
         onAction: @escaping (OpenCodeSessionComposerAction) -> Void,
         status: AnyView? = nil
     ) {
@@ -288,6 +294,7 @@ struct OpenCodeSessionComposer: View {
         self.focusRequestToken = focusRequestToken
         self.onInputFocusChange = onInputFocusChange
         self.dictation = dictation
+        self.attachmentDragActive = attachmentDragActive
         self.onAction = onAction
         self.status = status
     }
@@ -375,6 +382,8 @@ struct OpenCodeSessionComposer: View {
                 onFocusChange: onInputFocusChange,
                 literalInput: prompt.shellMode,
                 onDeleteBackwardWhenEmpty: prompt.sideQuestionMode ? { onAction(.exitSideQuestionMode) } : nil,
+                onPasteAttachments: prompt.attachEnabled ? { onAction(.pasteAttachments($0)) } : nil,
+                acceptsTextDrops: !attachmentDragActive,
                 onChange: { text, selectionStart, selectionEnd in
                     onAction(.textChanged(text: text, selectionStart: selectionStart, selectionEnd: selectionEnd))
                 }

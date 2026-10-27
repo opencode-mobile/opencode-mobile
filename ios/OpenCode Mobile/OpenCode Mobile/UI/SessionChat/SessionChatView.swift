@@ -39,6 +39,8 @@ struct SessionChatView: View {
     @State private var showAttachmentSources = false
     @State private var showFilesPicker = false
     @State private var showPhotosPicker = false
+    /// The drag-over card while images or files are dragged over the chat (#870).
+    @State private var attachmentDropSummary: AttachmentDropSummary?
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var showSessionTodosSheet = false
     @State private var holdingFinishedTodos = false
@@ -180,6 +182,31 @@ struct SessionChatView: View {
         let sheets = sessionChatPickerSheets(sessionChatSheets(sessionChatLayout))
         let observed = sessionChatObservers(sessionChatDestinations(sheets))
         return sessionChatMoveToWorktree(sessionChatRoutes(sessionChatDialogs(sessionChatLifecycle(observed))))
+            .onDrop(
+                of: [.item],
+                delegate: SessionChatAttachmentDropDelegate(
+                    isEnabled: attachmentDropEnabled,
+                    context: { attachmentDropContext },
+                    summary: $attachmentDropSummary,
+                    onDrop: { attachItemProviders($0, source: .drop) }
+                )
+            )
+            .overlay {
+                if let summary = attachmentDropSummary {
+                    OpenCodeDropOverlay(
+                        variant: summary.rejected ? .reject : .accept,
+                        title: summary.title,
+                        subtitle: summary.subtitle,
+                        previews: summary.previews.map(\.attachmentVariant)
+                    )
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.12), value: attachmentDropSummary)
+            .onChange(of: attachmentDropEnabled) { _, enabled in
+                if !enabled { attachmentDropSummary = nil }
+            }
             .feedbackSheet(model: $feedbackModel)
             .environment(\.attachmentImageLoading, viewModel.attachmentImageLoader)
             .environment(\.attachmentImageDirectory, boundSession.directory ?? boundSession.worktree)
@@ -1071,6 +1098,43 @@ struct SessionChatView: View {
         }
     }
 
+    /// Pasted or dropped items (#870): each is copied to a temporary file, then attached like a file
+    /// from the Files picker. Paste names an unnamed image `Pasted image N.png`.
+    private func attachItemProviders(_ providers: [NSItemProvider], source: SessionChatAttachmentSource) {
+        Task {
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("attachment-\(source.rawValue)-\(UUID().uuidString)", isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            var names = viewModel.uiState.composer.attachments.map(\.filename)
+            var files: [URL] = []
+            var folders = 0
+            var unreadable = 0
+            for provider in providers {
+                switch AttachmentItemProviders.kind(of: provider) {
+                case .folder:
+                    folders += 1
+                case nil:
+                    continue
+                case .some:
+                    let unnamedImageName: (() -> String)? = source == .paste ? {
+                        let name = AttachmentDropRouting.pastedImageName(draftFilenames: names)
+                        names.append(name)
+                        return name
+                    } : nil
+                    do {
+                        files.append(try await AttachmentItemProviders.copy(provider, into: directory, unnamedImageName: unnamedImageName))
+                    } catch {
+                        unreadable += 1
+                    }
+                }
+            }
+            let added = await viewModel.addPastedOrDroppedFiles(files, skippedFolders: folders, unreadable: unreadable)
+            if added {
+                logAttachmentSourceAction(source == .paste ? ProductAnalytics.Action.attachPaste : ProductAnalytics.Action.attachDrop)
+            }
+        }
+    }
+
     private func importPhotos(_ items: [PhotosPickerItem]) async {
         defer { selectedPhotoItems = [] }
         for (index, item) in items.enumerated() {
@@ -1339,6 +1403,33 @@ struct SessionChatView: View {
         )
     }
 
+    /// The prompt takes attachments: the Attach button, paste of images and files, and drops.
+    private var promptAttachEnabled: Bool {
+        let composer = viewModel.uiState.composer
+        return composerAttachmentSources.isAttachEnabled &&
+            !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
+            composer.isModelSelectionReady &&
+            !composer.isShellMode &&
+            !viewModel.uiState.sideQuestions.composerMode
+    }
+
+    /// Drops attach only where the Attach button would: a prompt composer that takes attachments,
+    /// not mid-dictation. Otherwise drops fall through to the system default.
+    private var attachmentDropEnabled: Bool {
+        composerKind == .prompt && promptAttachEnabled && viewModel.uiState.dictation == nil
+    }
+
+    private var attachmentDropContext: AttachmentDropContext {
+        let composer = viewModel.uiState.composer
+        let option = composer.selectedModel?.option
+        return AttachmentDropContext(
+            imagesSupported: option?.supportsImageInput ?? true,
+            pdfSupported: option?.supportsPdfInput ?? true,
+            uploadAvailable: composer.streamedUploadAvailable,
+            draft: composer.attachments
+        )
+    }
+
     /// Focus Composer applies while this chat is the visible screen and shows the
     /// prompt (not a permission, question, or child-session lockout) with no
     /// system picker on top.
@@ -1449,11 +1540,7 @@ struct SessionChatView: View {
                         viewModel.uiState.timeline != .creating &&
                         viewModel.uiState.composerEnabled &&
                         viewModel.uiState.pendingSend == nil,
-                    attachEnabled: composerAttachmentSources.isAttachEnabled &&
-                        !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
-                        composer.isModelSelectionReady &&
-                        !composer.isShellMode &&
-                        !sideQuestionMode,
+                    attachEnabled: promptAttachEnabled,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting &&
                         viewModel.uiState.canMutate,
@@ -1495,6 +1582,7 @@ struct SessionChatView: View {
             state: state,
             focusRequestToken: composerFocusRequest,
             dictation: kind == .prompt ? viewModel.uiState.dictation.map(composerDictation) : nil,
+            attachmentDragActive: attachmentDropSummary != nil,
             onAction: { action in
                 switch action {
                 case let .textChanged(text, selectionStart, _):
@@ -1530,6 +1618,8 @@ struct SessionChatView: View {
                     }
                 case let .removeAttachment(id):
                     viewModel.removeAttachment(id: id)
+                case let .pasteAttachments(providers):
+                    attachItemProviders(providers, source: .paste)
                 case .cancelRevert:
                     viewModel.cancelRevert()
                 case .exitShellMode:

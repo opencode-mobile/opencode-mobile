@@ -443,6 +443,7 @@ private val OpenCodeSessionComposerAction.label: String
             OpenCodeSessionComposerAction.Attach -> "Attach"
             OpenCodeSessionComposerAction.OpenCommands -> "Open commands"
             is OpenCodeSessionComposerAction.RemoveAttachment -> "Remove attachment"
+            is OpenCodeSessionComposerAction.PasteContent -> "Paste attachment"
             OpenCodeSessionComposerAction.CancelRevert -> "Cancel revert"
             OpenCodeSessionComposerAction.ExitShellMode -> "Exit shell mode"
             OpenCodeSessionComposerAction.ExitSideQuestionMode -> "Exit side question mode"

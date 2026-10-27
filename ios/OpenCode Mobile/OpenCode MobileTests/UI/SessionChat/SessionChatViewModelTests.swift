@@ -1457,6 +1457,51 @@ struct SessionChatViewModelTests {
         return file
     }
 
+    // MARK: Paste and drop (#870)
+
+    @Test func drop_filesWithAFolderAttachTheFilesAndNameTheFolder() async throws {
+        let viewModel = makeViewModel()
+        await viewModel.loadMessages()
+
+        let added = await viewModel.addPastedOrDroppedFiles([try uploadFixture(named: "notes.txt")], skippedFolders: 1, unreadable: 0)
+
+        #expect(added)
+        #expect(viewModel.uiState.composer.attachments.map(\.filename) == ["notes.txt"])
+        #expect(viewModel.uiState.snackbar?.message == "Folders can't be attached.")
+    }
+
+    @Test func drop_folderOnlyAddsNothingAndSaysWhy() async {
+        let viewModel = makeViewModel()
+        await viewModel.loadMessages()
+
+        let added = await viewModel.addPastedOrDroppedFiles([], skippedFolders: 1, unreadable: 0)
+
+        #expect(!added)
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+        #expect(viewModel.uiState.snackbar?.message == "Folders can't be attached.")
+    }
+
+    @Test func drop_duplicateKeepsTheDuplicateMessageOverTheFolder() async throws {
+        let viewModel = makeViewModel()
+        await viewModel.loadMessages()
+        await viewModel.addAttachmentFiles([try uploadFixture(named: "notes.txt")])
+
+        let added = await viewModel.addPastedOrDroppedFiles([try uploadFixture(named: "notes.txt")], skippedFolders: 1, unreadable: 0)
+
+        #expect(!added)
+        #expect(viewModel.uiState.snackbar?.message == "This file has already been uploaded")
+    }
+
+    @Test func paste_unreadableItemSaysItCouldNotBeRead() async {
+        let viewModel = makeViewModel()
+        await viewModel.loadMessages()
+
+        let added = await viewModel.addPastedOrDroppedFiles([], skippedFolders: 0, unreadable: 1)
+
+        #expect(!added)
+        #expect(viewModel.uiState.snackbar?.message == "The attachment could not be read.")
+    }
+
     @Test func upload_textFileUploadsAndSendsServerPathWithoutBytes() async throws {
         let uploads = FakeAttachmentUploadRepository(mode: .succeed("/tmp/uploads/u1/notes.txt"))
         let repository = FakeMessageRepository(failListMessagesAfterSend: true)

@@ -738,6 +738,22 @@ final class SessionChatComposer {
         OpenCodeLog.sessionChat.info("attachments selected accepted=\(attachments.count) rejected=\(result.count - attachments.count)")
     }
 
+    /// Pasted or dropped items (#870), already copied to readable files: attached like files from
+    /// the Files picker. Items that never became a file (a folder, an unreadable provider) show
+    /// their error only when ingestion left nothing else to say. Returns whether a chip was added.
+    func addPastedOrDroppedFiles(_ urls: [URL], skippedFolders: Int, unreadable: Int) async -> Bool {
+        let before = state.composer.attachments.count
+        let errorBefore = state.errorMessage
+        await addAttachmentFiles(urls)
+        let quiet = state.errorMessage == nil || state.errorMessage == errorBefore
+        if quiet, unreadable > 0 {
+            setAttachmentError(AttachmentLoadError.unreadableFile.localizedDescription)
+        } else if quiet, skippedFolders > 0 {
+            setAttachmentError(AttachmentDropRouting.folderMessage)
+        }
+        return state.composer.attachments.count > before
+    }
+
     // MARK: Streamed uploads (#644)
 
     /// Reads whether the server streams uploads. The first read probes the API contract.

@@ -199,6 +199,11 @@ sealed interface OpenCodeSessionComposerAction {
         val id: String,
     ) : OpenCodeSessionComposerAction
 
+    /** An image or file was pasted into the prompt; only sent while [OpenCodeSessionComposerState.Prompt.attachEnabled]. */
+    data class PasteContent(
+        val content: OpenCodeComposerPastedContent,
+    ) : OpenCodeSessionComposerAction
+
     data object CancelRevert : OpenCodeSessionComposerAction
 
     /** Drop the leading `!` so the draft is a prompt again. */
@@ -550,6 +555,10 @@ private fun PromptEntryContent(
     var suppressImeEcho by remember { mutableStateOf(false) }
     // The text the keyboard last typed, to rebase keystrokes that land on it after a programmatic change.
     var lastImeText by remember { mutableStateOf(state.text) }
+    val attachmentPaste = rememberComposerAttachmentPaste()
+    val onPasteContent: (OpenCodeComposerPastedContent) -> Unit = { content ->
+        onAction(OpenCodeSessionComposerAction.PasteContent(content))
+    }
     LaunchedEffect(state.text, state.selectionRevision) {
         val selectionStart = (state.selectionStart ?: state.text.length).coerceIn(0, state.text.length)
         val selectionEnd = (state.selectionEnd ?: selectionStart).coerceIn(0, state.text.length)
@@ -567,78 +576,82 @@ private fun PromptEntryContent(
 
     // Cap growth so chips/send stay above the keyboard; further text scrolls
     // inside the field (OPE-127). Matches iOS OpenCodeMentionTextView (~5 body lines).
-    BasicTextField(
-        value = textFieldValue,
-        onValueChange = { newValue ->
-            val rebased = rebaseAppendedComposerInput(shown = lastImeText, typed = newValue.text, current = state.text)
-            if (rebased != null) {
-                suppressImeEcho = false
-                lastImeText = rebased
-                textFieldValue = TextFieldValue(text = rebased, selection = TextRange(rebased.length))
-                onAction(OpenCodeSessionComposerAction.TextChanged(text = rebased, selectionStart = rebased.length))
-                return@BasicTextField
-            }
-            if (newValue.text != state.text && textFieldValue.text != state.text) {
-                return@BasicTextField
-            }
-            if (suppressImeEcho) {
-                suppressImeEcho = false
-                val typedOntoDroppedPrefix =
-                    typedOntoDroppedComposerPrefix(shown = lastImeText, typed = newValue.text, current = state.text)
-                if (newValue.text != state.text && !typedOntoDroppedPrefix) return@BasicTextField
-            }
-            textFieldValue = newValue
-            lastImeText = newValue.text
-            onAction(
-                OpenCodeSessionComposerAction.TextChanged(
-                    text = newValue.text,
-                    selectionStart = newValue.selection.start,
-                    selectionEnd = newValue.selection.end,
-                ),
-            )
-        },
-        textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
-        cursorBrush = SolidColor(bodyColor),
-        visualTransformation = mentionTransformation,
-        // A shell command must reach the server as typed: no autocorrect or auto-capitalization.
-        keyboardOptions =
-            if (state.shellMode) {
-                KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false)
-            } else {
-                KeyboardOptions.Default
-            },
-        maxLines = PromptMaxVisibleLines,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp)
-                .focusRequester(focus.requester)
-                .onFocusChanged {
-                    focus.updateFocused(it.isFocused)
-                    reportFocus(it.isFocused)
-                }.onPreviewKeyEvent { event ->
-                    // Delete on an empty field changes no text; in side-question mode it leaves the mode.
-                    val leavesMode =
-                        state.sideQuestionMode &&
-                            state.text.isEmpty() &&
-                            event.key == Key.Backspace &&
-                            event.type == KeyEventType.KeyDown
-                    if (leavesMode) onAction(OpenCodeSessionComposerAction.ExitSideQuestionMode)
-                    leavesMode
-                },
-        decorationBox = { innerTextField ->
-            Box {
-                if (state.text.isBlank()) {
-                    Text(
-                        text = if (state.sideQuestionMode) SESSION_COMPOSER_SIDE_QUESTION_PLACEHOLDER else "Ask anything...",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = openCodeColor("text-weak"),
-                    )
+    ComposerKeyboardContentInsertion(enabled = state.attachEnabled, onPaste = onPasteContent) {
+        BasicTextField(
+            value = textFieldValue,
+            onValueChange = { newValue ->
+                val rebased = rebaseAppendedComposerInput(shown = lastImeText, typed = newValue.text, current = state.text)
+                if (rebased != null) {
+                    suppressImeEcho = false
+                    lastImeText = rebased
+                    textFieldValue = TextFieldValue(text = rebased, selection = TextRange(rebased.length))
+                    onAction(OpenCodeSessionComposerAction.TextChanged(text = rebased, selectionStart = rebased.length))
+                    return@BasicTextField
                 }
-                innerTextField()
-            }
-        },
-    )
+                if (newValue.text != state.text && textFieldValue.text != state.text) {
+                    return@BasicTextField
+                }
+                if (suppressImeEcho) {
+                    suppressImeEcho = false
+                    val typedOntoDroppedPrefix =
+                        typedOntoDroppedComposerPrefix(shown = lastImeText, typed = newValue.text, current = state.text)
+                    if (newValue.text != state.text && !typedOntoDroppedPrefix) return@BasicTextField
+                }
+                textFieldValue = newValue
+                lastImeText = newValue.text
+                onAction(
+                    OpenCodeSessionComposerAction.TextChanged(
+                        text = newValue.text,
+                        selectionStart = newValue.selection.start,
+                        selectionEnd = newValue.selection.end,
+                    ),
+                )
+            },
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
+            cursorBrush = SolidColor(bodyColor),
+            visualTransformation = mentionTransformation,
+            // A shell command must reach the server as typed: no autocorrect or auto-capitalization.
+            keyboardOptions =
+                if (state.shellMode) {
+                    KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false)
+                } else {
+                    KeyboardOptions.Default
+                },
+            maxLines = PromptMaxVisibleLines,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .focusRequester(focus.requester)
+                    .onFocusChanged {
+                        focus.updateFocused(it.isFocused)
+                        reportFocus(it.isFocused)
+                    }.composerAttachmentPasteMenu(attachmentPaste, enabled = state.attachEnabled, onPaste = onPasteContent)
+                    .onPreviewKeyEvent { event ->
+                        if (state.attachEnabled && attachmentPaste.handleKey(event, onPasteContent)) return@onPreviewKeyEvent true
+                        // Delete on an empty field changes no text; in side-question mode it leaves the mode.
+                        val leavesMode =
+                            state.sideQuestionMode &&
+                                state.text.isEmpty() &&
+                                event.key == Key.Backspace &&
+                                event.type == KeyEventType.KeyDown
+                        if (leavesMode) onAction(OpenCodeSessionComposerAction.ExitSideQuestionMode)
+                        leavesMode
+                    },
+            decorationBox = { innerTextField ->
+                Box {
+                    if (state.text.isBlank()) {
+                        Text(
+                            text = if (state.sideQuestionMode) SESSION_COMPOSER_SIDE_QUESTION_PLACEHOLDER else "Ask anything...",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = openCodeColor("text-weak"),
+                        )
+                    }
+                    innerTextField()
+                }
+            },
+        )
+    }
 
     PickerChipsRow(state = state, onAction = onAction)
 
