@@ -52,5 +52,6 @@ gh api repos/opencode-mobile/opencode-mobile/issues/<parent>/sub_issues \
 ```
 
 - Related issue: a `#<number>` link in the body.
-- In a pull request, name the issue as `#<number>`; `Fixes #<number>` only when
-  the pull request finishes it.
+- In a pull request that finishes the issue, write `Fixes #<number>` so merging
+  closes it; a bare `#<number>` only links it. Use the bare form while work on
+  the issue stays open, and switch to `Fixes` once the pull request finishes it.

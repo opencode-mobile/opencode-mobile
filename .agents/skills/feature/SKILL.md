@@ -48,6 +48,9 @@ Check what applies and report pass, fail, or not applicable for each:
   is in scope)
 - relevant automated checks have a recorded pass, fail, or explicit skip
 - the pull-request summary states scope, checks, and remaining risks
+- a pull request that finishes the issue says `Fixes #<number>`, and
+  `gh pr view <pr> --json closingIssuesReferences` lists the issue; otherwise
+  the open work is named under Risks / Follow-ups
 - evidence posted or explicitly not needed: user-visible or live-server
   changes have an evidence comment on the pull request per `AGENTS.md`
   **Pull Request Evidence**, or Checks says "No UI change" or why none applies
@@ -74,7 +77,9 @@ Repair issue state only when asked; otherwise report the mismatch.
      comment", or one line saying why none applies. -->
 
 ## Issue
-- #<number>
+Fixes #<number>
+<!-- "Fixes #<number>" when this pull request finishes the issue; a bare
+     #<number> while work on it stays open. See below. -->
 
 ## Risks / Follow-ups
 - ...
@@ -103,6 +108,10 @@ request completes the issue's work, so merging closes it. Decide from the work
 actually done, not from the Remaining checkboxes: tick them as you go, but a
 box can be missed, so neither a stale unticked box nor a ticked one settles it.
 Use a bare `#<number>` when real work on the issue is still open, and say so
-under Risks / Follow-ups. Add an issue comment only when asked, via
+under Risks / Follow-ups. Re-decide whenever you push more work or mark the
+pull request ready: a pull request opened with a bare `#<number>` for an early
+stage switches to `Fixes #<number>` (`gh pr edit <pr> --body-file`) once it
+finishes the issue. A bare number in a list, under a heading, or in the title
+does not close anything. Add an issue comment only when asked, via
 `github-issue-tracking`. Report the commit, remote branch, pull-request URL,
 and evidence comment URL.

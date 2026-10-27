@@ -1,6 +1,8 @@
 ## Summary
 
 Fixes #
+<!-- "Fixes #<number>" closes the issue on merge. Use a bare #<number> only
+     when this pull request leaves work on the issue open. -->
 
 ## Checks
 
