@@ -76,6 +76,45 @@ struct TextMateHighlightingEngineTests {
         #expect(snapshot.maxActive == 1)
     }
 
+    @Test func newerRevisionCancelsTheRunningJob() async throws {
+        let engine = KMPTextMateHighlightingEngine()
+        let chunk = """
+        export function render(value: number): string {
+          const label = `item ${value}`; // trailing comment
+          return label.padStart(12, "-");
+        }
+
+        """
+        let slowSource = String(repeating: chunk, count: 1_500)
+        let first = Task {
+            try await engine.highlight(request(key: "cancel", revision: 1, source: slowSource))
+        }
+        // Long enough for the first job to start running on the executor.
+        try await Task.sleep(for: .milliseconds(200))
+
+        let second = try await engine.highlight(request(key: "cancel", revision: 2, source: "let value = 1"))
+        let superseded = try await first.value
+
+        #expect(superseded.outcome == "Cancelled")
+        // Set only when a running job, not a queued one, was cancelled.
+        #expect(superseded.observation.cancelRequestedToStopNanoseconds != nil)
+        #expect(second.outcome == "Highlighted")
+    }
+
+    private func request(key: String, revision: Int64, source: String) -> TextMateHighlightRequest {
+        TextMateHighlightRequest(
+            key: TextMateCodeBlockKey(value: key),
+            revision: TextMateHighlightRevision(value: revision),
+            language: "typescript",
+            source: source,
+            intent: .interactiveFinal,
+            policyEpoch: 1,
+            messageCharacters: source.utf16.count,
+            fenceIndex: 0,
+            fenceCount: 1
+        )
+    }
+
     private func message(id: String, text: String) -> Message {
         Message(
             id: id,

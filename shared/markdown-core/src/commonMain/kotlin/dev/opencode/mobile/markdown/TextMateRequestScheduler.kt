@@ -1,10 +1,13 @@
 package dev.opencode.mobile.markdown
 
+import kotlin.concurrent.Volatile
 import kotlin.time.TimeSource
 
 /**
  * Pure TextMate request queue policy. Platforms own serial execution and drive
  * [pickNext] / [finishActive]; this type never touches regex, grammar, or UI.
+ * Not thread-safe: callers serialize access, but a job's [TextMateScheduledJob.cancelRequested]
+ * may be polled from the executing thread while another thread admits.
  */
 class TextMateRequestScheduler(
     private val limits: TextMateSchedulerLimits = TextMateSchedulerLimits(),
@@ -113,6 +116,8 @@ class TextMateRequestScheduler(
         recordHighWater()
         return TextMateAdmitResult(ticketId = ticket.id, completed = completed)
     }
+
+    fun isIdle(): Boolean = active == null && pending.isEmpty()
 
     fun pickNext(): TextMateScheduledJob? {
         if (active != null) return null
@@ -374,9 +379,11 @@ class TextMateRequestScheduler(
         val request: HighlightRequest,
         val enqueuedAtMs: Long,
         var startedAtMs: Long = enqueuedAtMs,
-        var cancelRequested: Boolean = false,
-        var cancelRequestedAtMs: Long? = null,
-    )
+    ) {
+        @Volatile
+        var cancelRequested: Boolean = false
+        var cancelRequestedAtMs: Long? = null
+    }
 }
 
 data class TextMateSchedulerLimits(
@@ -436,8 +443,11 @@ data class TextMateSchedulerSnapshot(
     val trimDropCount: Int,
 )
 
+private val MonotonicClockOrigin = TimeSource.Monotonic.markNow()
+
+// Milliseconds since one fixed origin; a fresh mark per call would always read 0.
 private val MonotonicMillisClock: () -> Long = {
-    TimeSource.Monotonic.markNow().elapsedNow().inWholeMilliseconds
+    MonotonicClockOrigin.elapsedNow().inWholeMilliseconds
 }
 
 fun emptyResult(
