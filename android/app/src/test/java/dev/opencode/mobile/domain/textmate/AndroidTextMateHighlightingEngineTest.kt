@@ -24,6 +24,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import kotlin.coroutines.cancellation.CancellationException
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -184,6 +185,40 @@ class AndroidTextMateHighlightingEngineTest {
         }
 
     @Test
+    fun cancellationThrownByDelegateDoesNotStallLaterRequests() =
+        runBlocking {
+            val delegate =
+                object : TextMateHighlightingEngine {
+                    override suspend fun highlight(request: HighlightRequest): HighlightResult {
+                        // e.g. a TimeoutCancellationException from a withTimeout inside the delegate
+                        if (request.key.value == "times-out") throw CancellationException("delegate timed out")
+                        return highlighted(request)
+                    }
+                }
+            val executor =
+                Executors.newSingleThreadExecutor { runnable ->
+                    Thread(runnable, "textmate-owner-test")
+                }
+            val dispatcher = executor.asCoroutineDispatcher()
+            try {
+                val engine = AndroidTextMateHighlightingEngine(delegate, dispatcher)
+                val timedOut =
+                    withTimeout(2_000) {
+                        engine.highlight(request(key = "times-out", revision = 1))
+                    }
+                val next =
+                    withTimeout(2_000) {
+                        engine.highlight(request(key = "next", revision = 1))
+                    }
+
+                assertEquals(TextMateParseOutcome.Cancelled, timedOut.outcome)
+                assertEquals(TextMateParseOutcome.Highlighted, next.outcome)
+            } finally {
+                executor.shutdown()
+            }
+        }
+
+    @Test
     fun initializerErrorDuringHighlightDoesNotEscapePump() =
         runBlocking {
             val delegate =
@@ -263,6 +298,31 @@ class AndroidTextMateHighlightingEngineTest {
                 textMateOutcome = outcome,
             )
     }
+
+    private fun highlighted(request: HighlightRequest): HighlightResult =
+        HighlightResult(
+            key = request.key,
+            revision = request.revision,
+            source = request.source,
+            canonicalLanguage = "Kotlin",
+            policyEpoch = request.policyEpoch,
+            spans = emptyList(),
+            outcome = TextMateParseOutcome.Highlighted,
+            diagnostics = emptyList(),
+            observation =
+                TextMateParseObservation(
+                    outcome = TextMateParseOutcome.Highlighted,
+                    messageCharacters = request.source.length,
+                    fenceCharacters = request.source.length,
+                    fenceLines = 1,
+                    fenceIndex = 0,
+                    fenceCount = 1,
+                    spanCount = 0,
+                    totalNanoseconds = 1,
+                    stages = emptyList(),
+                    diagnosticKinds = emptyList(),
+                ),
+        )
 
     private class RacingEngine : TextMateHighlightingEngine {
         val maximumActive = AtomicInteger(0)
