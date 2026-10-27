@@ -3,3 +3,6 @@ contact_links:
   - name: Report a security vulnerability
     url: https://github.com/opencode-mobile/opencode-mobile/security/advisories/new
     about: Report vulnerabilities privately, not in a public issue.
+  - name: Problem with opencode itself
+    url: https://github.com/sst/opencode/issues
+    about: This app is unofficial. Report app problems here; report opencode server or CLI bugs to opencode.

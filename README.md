@@ -1,12 +1,16 @@
-# OpenCode Mobile
+# Unofficial OpenCode Client
 
-Native iOS and Android apps for driving [opencode](https://github.com/sst/opencode)
-sessions from your phone. Start a session, follow it live, answer permission
-prompts and questions, and review changes while opencode runs on your own
-machine.
+> [!IMPORTANT]
+> **This is not an official opencode app.** It is an independent community
+> project, not made by, affiliated with, or endorsed by the
+> [opencode](https://github.com/sst/opencode) project or its maintainers.
+> Report problems with this app in
+> [this repository](https://github.com/opencode-mobile/opencode-mobile/issues),
+> not to opencode.
 
-OpenCode Mobile is an unofficial client. It is not affiliated with or endorsed
-by the opencode project or its authors.
+Native iOS and Android apps for driving opencode sessions from your phone.
+Start a session, follow it live, answer permission prompts and questions, and
+review changes while opencode runs on your own machine.
 
 | Android | iOS |
 |:---:|:---:|
@@ -123,6 +127,9 @@ The source code is licensed under the [GNU General Public License v3.0](LICENSE)
 with an additional permission to link with the Firebase SDKs and Google Play
 services libraries; see [NOTICE](NOTICE). Third-party components keep their own
 licenses; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+The opencode name belongs to the opencode project and is used here only to
+say what this app connects to.
 
 The app icon and store graphics are not covered by the GPL; all rights
 reserved. A fork that you distribute must use its own icon, store graphics,
