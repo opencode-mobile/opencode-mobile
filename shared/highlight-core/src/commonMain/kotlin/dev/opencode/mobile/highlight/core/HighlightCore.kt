@@ -54,6 +54,12 @@ internal object HighlightLanguages {
             Entry("c", listOf("h"), CLikeLanguages.c),
             Entry("cpp", listOf("c++", "cc", "cxx", "hpp", "hh", "hxx"), CLikeLanguages.cpp),
             Entry("csharp", listOf("cs", "c#"), CLikeLanguages.cSharp),
+            Entry("shellscript", listOf("sh", "bash", "zsh", "shell", "console", "ksh"), ShellLexer),
+            Entry("yaml", listOf("yml"), YamlLexer),
+            Entry("toml", emptyList(), TomlLexer),
+            Entry("docker", listOf("dockerfile", "containerfile"), DockerfileLexer),
+            Entry("sql", emptyList(), SqlLexer),
+            Entry("ruby", listOf("rb", "gemspec", "rake"), RubyLexer),
         )
 
     private val byName: Map<String, Entry> =
