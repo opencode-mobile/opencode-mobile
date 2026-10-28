@@ -60,6 +60,12 @@ internal object HighlightLanguages {
             Entry("docker", listOf("dockerfile", "containerfile"), DockerfileLexer),
             Entry("sql", emptyList(), SqlLexer),
             Entry("ruby", listOf("rb", "gemspec", "rake"), RubyLexer),
+            Entry("julia", listOf("jl"), JuliaLexer),
+            Entry("elixir", emptyList(), ElixirLexer),
+            Entry("erlang", listOf("erl"), ErlangLexer),
+            Entry("crystal", emptyList(), CrystalLexer),
+            Entry("nim", emptyList(), NimLexer),
+            Entry("coffee", listOf("coffeescript"), CoffeeScriptLexer),
         )
 
     private val byName: Map<String, Entry> =
