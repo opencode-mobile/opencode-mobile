@@ -36,6 +36,7 @@ class OpenCodeMobileApplication : Application() {
         ThemeManager.initialize(this)
         HomeDisplayPreferences.initialize(this)
         MarkdownHighlightPreferences.initialize(this)
+        HighlightingEngineSeam.initialize(this)
         AnalyticsConsentPreferences.initialize(this)
         AppLockPreferences.initialize(this)
         AppOnboardingPreferences.initialize(this)

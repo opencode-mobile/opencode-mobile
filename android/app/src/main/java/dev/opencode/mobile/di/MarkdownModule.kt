@@ -6,6 +6,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import dev.opencode.mobile.HighlightingEngineSeam
 import dev.opencode.mobile.domain.textmate.AndroidTextMateHighlightingEngine
 import dev.opencode.mobile.domain.textmate.TextMateLogbook
 import dev.opencode.mobile.domain.textmate.TextMateLogbookRecorder
@@ -20,9 +21,9 @@ import javax.inject.Singleton
 object MarkdownModule {
     @Provides
     @Singleton
-    fun provideTextMateHighlightingEngine(
+    fun provideAndroidTextMateHighlightingEngine(
         @ApplicationContext context: Context,
-    ): TextMateHighlightingEngine =
+    ): AndroidTextMateHighlightingEngine =
         AndroidTextMateHighlightingEngine(
             delegateFactory = {
                 OpenCodeTextMateHighlightingEngine(
@@ -31,6 +32,12 @@ object MarkdownModule {
             },
             ownerDispatcher = Dispatchers.Default.limitedParallelism(1),
         )
+
+    /** TextMate, or in developer builds the engine the Highlighting engine setting picks (#872). */
+    @Provides
+    @Singleton
+    fun provideTextMateHighlightingEngine(textMate: AndroidTextMateHighlightingEngine): TextMateHighlightingEngine =
+        HighlightingEngineSeam.chatEngine(textMate)
 
     @Provides
     @Singleton

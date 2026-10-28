@@ -24,6 +24,7 @@ class TextMateProcessPressureObserver
     constructor(
         @ApplicationContext private val context: Context,
         private val engine: TextMateHighlightingEngine,
+        private val textMate: AndroidTextMateHighlightingEngine,
     ) : ComponentCallbacks2 {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         private var registered = false
@@ -64,9 +65,8 @@ class TextMateProcessPressureObserver
         private fun publishPowerState() {
             val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
             val lowPower = power.isPowerSaveMode
-            val androidEngine = engine as? AndroidTextMateHighlightingEngine ?: return
             scope.launch {
-                androidEngine.setLowPowerOrThermal(lowPower)
+                textMate.setLowPowerOrThermal(lowPower)
             }
         }
     }

@@ -154,6 +154,13 @@ class SettingsViewModel
             BlockDecorationCache.clear()
         }
 
+        /** After the developer highlighting engine changed (#872): prepared chat and open files color again. */
+        fun onHighlightingEngineChange() {
+            MarkdownHighlightPreferences.invalidate()
+            messageContentPreparer.clearDocumentCache()
+            BlockDecorationCache.clear()
+        }
+
         /** Through the observability seam so Crashlytics and automatic Analytics follow at once. */
         fun setProductAnalyticsConsented(enabled: Boolean) {
             OpenCodeReleaseObservability.setProductAnalyticsConsented(enabled)

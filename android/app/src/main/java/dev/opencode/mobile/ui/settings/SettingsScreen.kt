@@ -94,6 +94,8 @@ fun SettingsScreen(
     supportsFollowUpDelivery: Boolean,
     textMateEnabled: Boolean,
     onTextMateEnabledChange: (Boolean) -> Unit,
+    /** Developer builds only: the Highlighting engine row (#872). Null hides it. */
+    highlightingEngineSetting: (@Composable (Modifier) -> Unit)? = null,
     productAnalyticsConsented: Boolean,
     onProductAnalyticsConsentedChange: (Boolean) -> Unit,
     appLockEnabled: Boolean = false,
@@ -526,6 +528,8 @@ fun SettingsScreen(
                             modifier = Modifier.padding(horizontal = 16.dp),
                         )
                     }
+
+                    highlightingEngineSetting?.invoke(Modifier.padding(horizontal = 16.dp))
 
                     OpenCodeListItem(
                         title = "Feature Flags",

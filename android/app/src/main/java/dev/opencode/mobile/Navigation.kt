@@ -567,6 +567,10 @@ fun MainNavigation() {
                                                         settingsViewModel.supportsFollowUpDelivery(),
                                                     textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
                                                     onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
+                                                    highlightingEngineSetting =
+                                                        HighlightingEngineSeam.settingRow {
+                                                            settingsViewModel.onHighlightingEngineChange()
+                                                        },
                                                     productAnalyticsConsented =
                                                         AnalyticsConsentPreferences.productAnalyticsConsented,
                                                     onProductAnalyticsConsentedChange =

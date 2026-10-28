@@ -63,6 +63,11 @@ object MarkdownHighlightPreferences {
         epoch += 1
     }
 
+    /** New colors without a policy change here, such as the developer highlighting engine (#872). */
+    fun invalidate() {
+        epoch += 1
+    }
+
     fun isLanguageEnabled(canonicalLanguage: String): Boolean {
         val canonical = canonicalLanguage.trim().lowercase()
         if (canonical.isEmpty()) return false
