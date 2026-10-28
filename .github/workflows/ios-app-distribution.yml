@@ -24,6 +24,14 @@ on:
         description: "Optional protected branch to check out (main). Leave empty to distribute the selected workflow branch."
         required: false
         type: string
+      variant:
+        description: "release: the store-like build. lab: the Lab configuration with the Highlighting Lab and engine setting (#872)."
+        required: false
+        type: choice
+        options:
+          - release
+          - lab
+        default: release
 
 permissions:
   contents: read
@@ -51,6 +59,7 @@ jobs:
       FIREBASE_TESTER_GROUP: ios-internal
       FIREBASE_TOOLS_VERSION: 15.24.0
       SOURCE_REF: ${{ github.event.inputs.source_ref }}
+      DISTRIBUTION_VARIANT: ${{ github.event.inputs.variant || 'release' }}
 
     steps:
       - name: Validate source ref
@@ -197,16 +206,21 @@ jobs:
       - name: Resolve Swift Package dependencies
         run: bash ../../.github/scripts/resolve-ios-packages.sh
 
-      - name: Archive Release for iOS device
+      - name: Archive for iOS device
         run: |
           set -euo pipefail
           archive_path="$RUNNER_TEMP/OpenCode-Mobile-AppDistribution.xcarchive"
           keychain_password="$(tr -d '\n' < "$IOS_RELEASE_KEYCHAIN_PASSWORD_PATH")"
           security unlock-keychain -p "$keychain_password" "$IOS_RELEASE_KEYCHAIN_PATH"
+          case "$DISTRIBUTION_VARIANT" in
+            release) scheme="OpenCode Mobile"; configuration=Release ;;
+            lab) scheme="OpenCode Mobile Lab"; configuration=Lab ;;
+            *) echo "variant must be release or lab. Got: $DISTRIBUTION_VARIANT" >&2; exit 1 ;;
+          esac
           xcodebuild archive \
             -project "OpenCode Mobile.xcodeproj" \
-            -scheme "OpenCode Mobile" \
-            -configuration Release \
+            -scheme "$scheme" \
+            -configuration "$configuration" \
             -destination 'generic/platform=iOS' \
             -archivePath "$archive_path" \
             -allowProvisioningUpdates \
@@ -275,6 +289,9 @@ jobs:
           if [[ -n "$distributed_ref" && "$distributed_ref" != "main" ]]; then
             release_notes="Not from main: $distributed_ref"$'\n'"$release_notes"
           fi
+          if [[ "$DISTRIBUTION_VARIANT" == "lab" ]]; then
+            release_notes="Lab build (#872): Highlighting Lab and engine setting, no Crashlytics"$'\n'"$release_notes"
+          fi
           if ! distribution_output="$(
             npx --yes "firebase-tools@$FIREBASE_TOOLS_VERSION" \
               appdistribution:distribute \
@@ -305,6 +322,7 @@ jobs:
               echo "- **Not from main:** \`$distributed_ref\`"
             fi
             echo "- Commit: \`$distributed_sha\`"
+            echo "- Variant: \`$DISTRIBUTION_VARIANT\`"
             if [[ -n "${SOURCE_REF:-}" ]]; then
               echo "- Source ref: \`$SOURCE_REF\`"
             fi
