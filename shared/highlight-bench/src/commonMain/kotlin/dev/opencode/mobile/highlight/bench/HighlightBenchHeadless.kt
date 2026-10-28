@@ -23,7 +23,7 @@ package dev.opencode.mobile.highlight.bench
  * - `limitMs=<n>`: per-call limit (default 10000). `graceMs=<n>`: cancel grace (default 2000).
  * - `whileStuck=skip|run`: [HighlightBenchStuckPolicy] (default skip).
  *
- * Examples: `quick`, `basic:engines=textmate,highlight-core`, `full-languages:engines=textmate,highlight-core`, `full:engines=textmate`, `typical/kotlin/16k,worst/binary-200k:engines=textmate,semantic-fallback:limitMs=5000`.
+ * Examples: `quick`, `basic:engines=highlight-core`, `full-languages`, `full:engines=highlight-core`, `typical/kotlin/16k,worst/binary-200k:limitMs=5000`.
  */
 object HighlightBenchHeadless {
     const val ARGUMENT_NAME: String = "labRun"

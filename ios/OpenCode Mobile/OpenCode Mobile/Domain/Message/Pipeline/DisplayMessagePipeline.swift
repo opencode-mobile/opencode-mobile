@@ -103,31 +103,6 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                 await Container.codeHighlighter.trim(.critical)
             }
         }
-        observeThermalAndLowPower()
-    }
-
-    private func observeThermalAndLowPower() {
-        let publish: @Sendable () -> Void = {
-            let thermalRestricted =
-                ProcessInfo.processInfo.thermalState == .serious ||
-                ProcessInfo.processInfo.thermalState == .critical
-            let lowPower = ProcessInfo.processInfo.isLowPowerModeEnabled
-            let disabled = thermalRestricted || lowPower
-            Task {
-                await KMPTextMateHighlightingEngine.shared.setLowPowerOrThermal(disabled)
-            }
-        }
-        publish()
-        NotificationCenter.default.addObserver(
-            forName: ProcessInfo.thermalStateDidChangeNotification,
-            object: nil,
-            queue: .main
-        ) { _ in publish() }
-        NotificationCenter.default.addObserver(
-            forName: .NSProcessInfoPowerStateDidChange,
-            object: nil,
-            queue: .main
-        ) { _ in publish() }
     }
 
     func observeDisplayMessages(sessionID: String, directory: String?) -> AsyncStream<DisplayMessageListUpdate> {
@@ -135,7 +110,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
             let task = Task {
                 let cacheKey = self.cacheKey(sessionID: sessionID, directory: directory)
                 // Recursive lock serializes observation state across the intake loop and
-                // child prepare/decoration/enrichment tasks (replaces former @MainActor).
+                // child prepare/enrichment tasks (replaces former @MainActor).
                 let gate = NSRecursiveLock()
                 func synced<T>(_ body: () throws -> T) rethrows -> T {
                     gate.lock()
@@ -148,13 +123,11 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                 var currentGeneration: UInt64 = 0
                 var debounceTask: Task<Void, Never>?
                 var prepareTask: Task<Void, Never>?
-                var decorationTask: Task<Void, Never>?
                 var enrichmentTask: Task<Void, Never>?
                 var lastPublishedAt: Duration?
                 /// True while coalescing a live streaming reply (including in-flight prepare).
                 var isStreamingSession = false
                 var sourceIsFromCache = false
-                let decorationBacklog = DecorationBacklog()
 
                 func isDueForMaxBatch() -> Bool {
                     guard let lastPublishedAt else { return true }
@@ -178,11 +151,8 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                         debounceTask = nil
                         prepareTask?.cancel()
                         prepareTask = nil
-                        decorationTask?.cancel()
-                        decorationTask = nil
                         enrichmentTask?.cancel()
                         enrichmentTask = nil
-                        decorationBacklog.clear()
                     }
                 }
 
@@ -238,8 +208,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                                     DisplayMessage(
                                         message: message,
                                         renderedMarkdown: previous.renderedMarkdown,
-                                        awaitingTextMateUpgrade: previous.awaitingTextMateUpgrade,
-                                        highlightEpoch: previous.highlightEpoch
+                                        awaitingTextMateUpgrade: previous.awaitingTextMateUpgrade
                                     )
                                 )
                             } else {
@@ -277,103 +246,6 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                     return out
                 }
 
-                func decorationIdentityMatches(_ job: DecorationJob) -> Bool {
-                    let current = synced { lastPublishedMessages?.first(where: { $0.id == job.messageID }) }
-                    guard let current else { return false }
-                    guard let target = StreamingTextBlockIdentity.resolveStreaming(message: current) else {
-                        return false
-                    }
-                    return target.blockID == job.blockID
-                        && ContentRevision.of(target.plain) == job.contentRevision
-                        && messageHasStreamingText(current) == job.isStreaming
-                }
-
-                func drainDecorationBacklog() {
-                    synced {
-                        guard decorationTask == nil else { return }
-                        decorationTask = Task {
-                            defer { synced { decorationTask = nil } }
-                            while !Task.isCancelled {
-                                guard let job = decorationBacklog.poll() else { break }
-                                guard isCurrent(job.generation), decorationIdentityMatches(job) else { continue }
-                                let document = await contentPreparer.prepareTextBlock(
-                                    blockID: job.blockID,
-                                    plain: job.plainText,
-                                    isStreaming: job.isStreaming,
-                                    sessionKey: job.sessionKey,
-                                    mode: .streaming
-                                )
-                                guard !Task.isCancelled, isCurrent(job.generation) else { continue }
-                                guard decorationIdentityMatches(job) else { continue }
-                                guard let document else { continue }
-
-                                // Generation + identity reject before cache mutation.
-                                decorationCache.put(
-                                    sessionKey: job.sessionKey,
-                                    blockID: job.blockID,
-                                    contentRevision: job.contentRevision,
-                                    isStreaming: job.isStreaming,
-                                    document: document
-                                )
-
-                                var changed = false
-                                let previousByIDSnapshot = synced { previousByID }
-                                let merged = job.messages.map { message -> DisplayMessage in
-                                    let previous = previousByIDSnapshot[message.id]
-                                    if message.id == job.messageID {
-                                        let bridge =
-                                            StreamingTextBlockIdentity.isSoleTextBlock(message: message)
-                                            ? document
-                                            : nil
-                                        changed = true
-                                        return DisplayMessage(
-                                            message: message,
-                                            renderedMarkdown: bridge
-                                        )
-                                    }
-                                    if let previous, previous.text == message.text {
-                                        return previous
-                                    }
-                                    return DisplayMessage(message: message, renderedMarkdown: nil)
-                                }
-                                guard changed else { continue }
-                                guard commitPrepared(
-                                    generation: job.generation,
-                                    prepared: merged,
-                                    mode: .streaming
-                                ) else { continue }
-                                OpenCodeLog.messageContent.info(
-                                    "displayPublish reason=streaming-decoration generation=\(job.generation)"
-                                )
-                                emitDisplayMessages(merged)
-                            }
-                        }
-                    }
-                }
-
-                func scheduleStreamingDecoration(generation: UInt64, messages: [Message]) {
-                    // TextMate on: keep structure-only until Final colors. Skip
-                    // streaming semantic decoration so colors do not flash early.
-                    guard !MarkdownHighlightPreferences.currentTextMateEnabled() else { return }
-                    guard let streamingMessage = messages.first(where: messageHasStreamingText) else { return }
-                    guard let target = StreamingTextBlockIdentity.resolveStreaming(message: streamingMessage)
-                    else { return }
-                    guard OpenCodeRenderedMarkdownDetector.shouldRender(target.plain) else { return }
-                    let job = DecorationJob(
-                        generation: generation,
-                        sessionKey: sessionID,
-                        messageID: streamingMessage.id,
-                        blockID: target.blockID,
-                        contentRevision: ContentRevision.of(target.plain),
-                        plainText: target.plain,
-                        isStreaming: true,
-                        messages: messages,
-                        priority: 2
-                    )
-                    guard decorationBacklog.replaceStreamingJob(job) else { return }
-                    drainDecorationBacklog()
-                }
-
                 func publishPlainStreamingFrame(generation: UInt64, messages: [Message]) async {
                     guard isCurrent(generation) else { return }
                     let frame = await buildStructureFirstStreamingFrame(messages: messages)
@@ -393,7 +265,6 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                         "displayPublish reason=streaming-structure-first chars=\(streamingMessageCharCount(messages)) generation=\(generation)"
                     )
                     emitDisplayMessages(frame)
-                    scheduleStreamingDecoration(generation: generation, messages: messages)
                 }
 
                 func scheduleStreamingPublish(generation: UInt64) {
@@ -472,7 +343,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                             ) else { return }
                             synced { lastPublishedMessages = messages }
                             // Format-first history is publishable; do not hold Ready on
-                            // unprocessed plain while TextMate enrichment catches up.
+                            // unprocessed plain while highlight-core enrichment catches up.
                             OpenCodeLog.messageContent.info(
                                 "displayPublish reason=\(reason) streaming=\(streaming) chars=\(streamingChars) sinceLastMs=\(meta.sinceLastPublishMs) generation=\(generation)"
                             )
@@ -610,7 +481,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                         enrichmentTask = Task {
                         let holdReady = MessageContentPreparer.holdReadyUntilNewestMarkdown
                         await Task.yield()
-                        // Spinner is already up when holding Ready — start TextMate ASAP.
+                        // Spinner is already up when holding Ready — start highlighting ASAP.
                         if !holdReady {
                             await clock.sleep(for: .milliseconds(48))
                         }
@@ -757,7 +628,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                             sourceIsFromCache = isFromCache
                             if messagesContainStreamingText(messages) {
                                 // Coalesce streaming tokens into `pendingMessages`. Do not bump
-                                // generation on every delta — decoration stays generation-gated
+                                // generation on every delta — prepare stays generation-gated
                                 // and rejects on text-identity mismatch within the session.
                                 if !isStreamingSession {
                                     isStreamingSession = true
@@ -766,11 +637,8 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                                     debounceTask = nil
                                     prepareTask?.cancel()
                                     prepareTask = nil
-                                    decorationTask?.cancel()
-                                    decorationTask = nil
                                     enrichmentTask?.cancel()
                                     enrichmentTask = nil
-                                    decorationBacklog.clear()
                                 } else {
                                     enrichmentTask?.cancel()
                                     enrichmentTask = nil
@@ -805,11 +673,8 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                                 debounceTask = nil
                                 prepareTask?.cancel()
                                 prepareTask = nil
-                                decorationTask?.cancel()
-                                decorationTask = nil
                                 enrichmentTask?.cancel()
                                 enrichmentTask = nil
-                                decorationBacklog.clear()
                                 pendingMessages = nil
                                 isStreamingSession = false
                                 return (

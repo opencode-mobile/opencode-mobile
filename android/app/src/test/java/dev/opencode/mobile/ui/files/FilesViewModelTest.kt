@@ -403,7 +403,6 @@ class FilesViewModelTest {
                 listOf(0 until first, first until first + 2_000, first + 2_000 until first + 4_000, first + 4_000 until 5_000),
                 highlighter.calls,
             )
-            assertEquals(0, highlighter.wholeFileCalls)
             val lines = viewModel.activeText().lines
             assertEquals(5_000, lines.size)
             assertTrue(lines.all { it.spans == listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)) })
@@ -440,29 +439,6 @@ class FilesViewModelTest {
             assertEquals(true to false, coloredWhileFilling)
             val lines = viewModel.activeText().lines
             assertTrue(lines.all { it.spans.isNotEmpty() })
-        }
-
-    @Test
-    fun highlightingChange_colorsOpenFilesAgain() =
-        runTest(dispatcher) {
-            val highlighter = FakeHighlighter()
-            val viewModel = viewModel(FakeFilesRepository(), highlighter)
-            viewModel.bind("/repo")
-            viewModel.onHighlightingChange(3)
-            advanceUntilIdle()
-            viewModel.openFile("src/main.kt")
-            advanceUntilIdle()
-            assertEquals(1, highlighter.calls)
-
-            viewModel.onHighlightingChange(3)
-            advanceUntilIdle()
-            assertEquals(1, highlighter.calls)
-
-            viewModel.onHighlightingChange(4)
-            advanceUntilIdle()
-            assertEquals(2, highlighter.calls)
-            val firstLine = viewModel.activeText().lines.first()
-            assertEquals(listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)), firstLine.spans)
         }
 
     private fun FilesViewModel.activeText(): FilesViewerContent.Text {
@@ -543,36 +519,32 @@ private class FakeFilesRepository(
     private fun file(path: String) = ProjectEntry(path.substringAfterLast('/'), path, isDirectory = false)
 }
 
+/** A session that marks the first three characters of a source starting with `fun`. */
 private class FakeHighlighter : ProjectFileHighlighter {
-    var calls = 0
-
-    override suspend fun highlight(
+    override fun openSession(
         path: String,
         grammar: String,
         source: String,
-    ): List<CodeSpan> {
-        calls++
-        return if (source.startsWith("fun")) listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)) else emptyList()
-    }
+    ): ProjectFileHighlightSession =
+        object : ProjectFileHighlightSession {
+            override fun highlight(
+                startLine: Int,
+                endLine: Int,
+                deadlineMillis: Double,
+            ): ProjectFileLineSpans {
+                val marked = startLine == 0 && source.startsWith("fun")
+                return ProjectFileLineSpans(startLine, endLine, if (marked) listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)) else emptyList())
+            }
+        }
 }
 
 /** A progressive session that marks the first three characters of every line it reaches. */
 private class SessionHighlighter : ProjectFileHighlighter {
     val calls = mutableListOf<IntRange>()
-    var wholeFileCalls = 0
     var onCall: (Int) -> Unit = {}
 
     /** The first call starting at or after this line reaches none, like a state-only pass cut by its deadline. */
     var stallFrom = Int.MAX_VALUE
-
-    override suspend fun highlight(
-        path: String,
-        grammar: String,
-        source: String,
-    ): List<CodeSpan> {
-        wholeFileCalls++
-        return emptyList()
-    }
 
     override fun openSession(
         path: String,

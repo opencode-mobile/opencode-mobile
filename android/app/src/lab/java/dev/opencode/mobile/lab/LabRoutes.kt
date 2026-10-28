@@ -3,7 +3,7 @@ package dev.opencode.mobile.lab
 import androidx.navigation3.runtime.NavKey
 import kotlinx.serialization.Serializable
 
-/** Highlighting Lab home: Data sets, Benchmark, Compare. */
+/** Highlighting Lab home: Data sets, Benchmark. */
 @Serializable data object LabHome : NavKey
 
 @Serializable data object LabDataSets : NavKey
@@ -17,8 +17,3 @@ import kotlinx.serialization.Serializable
 ) : NavKey
 
 @Serializable data object LabBenchmark : NavKey
-
-/** Two engines on one data set; with no [dataSetId] the screen asks for one first. */
-@Serializable data class LabCompare(
-    val dataSetId: String? = null,
-) : NavKey

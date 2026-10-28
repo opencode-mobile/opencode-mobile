@@ -5,13 +5,13 @@ import kotlin.time.TimeSource
 
 /**
  * The seam the benchmark measures: any highlighting engine, current or new, behind one
- * synchronous call. Adapters live with the engine (markdown-core wraps the TextMate engine).
+ * synchronous call. Adapters live with the engine (markdown-core wraps highlight-core).
  */
 interface HighlightBenchEngine {
-    /** Stable key for pairing results, for example "textmate". */
+    /** Stable key for pairing results, for example "highlight-core". */
     val id: String
 
-    /** Shown in tables and reports, for example "TextMate". */
+    /** Shown in tables and reports, for example "highlight-core". */
     val displayName: String
 
     /**

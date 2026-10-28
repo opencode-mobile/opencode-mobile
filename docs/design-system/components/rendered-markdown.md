@@ -50,11 +50,11 @@ inline code, emphasis, and links. Messages with no markdown markers stay on the
 plain native text path.
 
 Streaming callers pass the streaming state through the public API. When
-markdown is detected, the text lane always attaches a formatted scaffold
-(structure-only when TextMate is on, full semantic when off — OPE-92). Token
-colors may arrive later via Final / history enrichment; the renderer must not
-strip structure to unprocessed plain source. Finalization may briefly reuse the
-last streaming document while the complete TextMate document is prepared. Large
+markdown is detected, the text lane always attaches a structure-only
+formatted scaffold (OPE-92). Token colors from highlight-core (#872) arrive
+later; the renderer must not strip structure to unprocessed plain source.
+Finalization may briefly reuse the last streaming document while the colored
+document is prepared. Large
 finalized code, diff, and inline attributed-string construction must stay off
 the UI thread; a temporary uncolored representation is preferable to blocking
 scroll or input.

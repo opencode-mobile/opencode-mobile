@@ -1,7 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,9 +27,9 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -39,7 +39,7 @@ import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.markdown.CodeSpan
 import dev.opencode.mobile.markdown.CodeTokenRole
-import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
+import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
@@ -286,7 +286,7 @@ private fun SourceBody(presentation: ToolResultPresentation.Source) {
         value =
             withContext(Dispatchers.Default) {
                 runCatching {
-                    OpenCodeSemanticFallbackHighlighter.highlight(presentation.highlightLanguage, source).spans
+                    OpenCodeHighlightCoreCodeHighlighter.highlight(presentation.highlightLanguage, source).spans
                 }.getOrDefault(emptyList())
             }
     }

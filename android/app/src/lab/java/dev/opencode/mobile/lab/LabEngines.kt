@@ -34,8 +34,8 @@ class LabProbe(
 )
 
 /**
- * The engines the Lab's screens use, and where their work runs. Viewer and compare calls reuse an
- * idle warm highlighter per engine; a benchmark run makes its own.
+ * The engines the Lab's screens use, and where their work runs. Viewer calls reuse an idle warm
+ * highlighter per engine; a benchmark run makes its own.
  *
  * A [probe] never holds up its caller: cancelling the calling coroutine stops the wait at once
  * and fires the call's [HighlightBenchCanceller], so an engine that checks its cancel signal

@@ -32,18 +32,10 @@ interface DisplayMessagePreparing {
         mode: MessagePreparationMode = MessagePreparationMode.Final,
     ): DisplayMessage
 
-    suspend fun prepareTextBlock(
-        blockID: String,
-        plain: String,
-        isStreaming: Boolean,
-        sessionKey: String = "",
-        mode: MessagePreparationMode = MessagePreparationMode.Streaming,
-    ): MarkdownDocument?
-
     /**
-     * Format-first streaming parse. TextMate on → empty code spans; TextMate off →
-     * semantic fallback. Does not touch the preparer LRU or TextMate. Returns null
-     * only when markdown is not detected (or parse fails).
+     * Format-first streaming parse with empty code spans; colors arrive with the
+     * Final prepare. Does not touch the preparer LRU or the highlighting engine.
+     * Returns null only when markdown is not detected (or parse fails).
      */
     suspend fun prepareStructureOnlyTextBlock(
         blockID: String,
@@ -79,21 +71,6 @@ fun MessageContentPreparer.asDisplayMessagePreparing(): DisplayMessagePreparing 
                 message,
                 previous,
                 mode,
-            )
-
-        override suspend fun prepareTextBlock(
-            blockID: String,
-            plain: String,
-            isStreaming: Boolean,
-            sessionKey: String,
-            mode: MessagePreparationMode,
-        ): MarkdownDocument? =
-            this@asDisplayMessagePreparing.prepareTextBlock(
-                blockID = blockID,
-                plain = plain,
-                isStreaming = isStreaming,
-                sessionKey = sessionKey,
-                mode = mode,
             )
 
         override suspend fun prepareStructureOnlyTextBlock(

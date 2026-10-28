@@ -1,13 +1,10 @@
 package dev.opencode.mobile.markdown
 
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encodeToString
-import kotlin.concurrent.Volatile
-import kotlin.coroutines.cancellation.CancellationException
-import kotlin.time.TimeSource
 
 /**
- * The only caller-facing TextMate seam.
+ * The caller-facing seam for highlighting one code fence at a time; [HighlightCoreHighlightingEngine]
+ * is the implementation.
  *
  * Callers own publication, revisions, and stale-result rejection. Implementations
  * own the highlighter and all mutable state behind it.
@@ -16,32 +13,6 @@ interface TextMateHighlightingEngine {
     suspend fun highlight(request: HighlightRequest): HighlightResult
 
     suspend fun trim(level: MemoryPressure) = Unit
-
-    fun schedulerSnapshot(): TextMateSchedulerSnapshot? = null
-}
-
-/**
- * Small JSON adapter for Swift/Objective-C interop. The adapter owns exactly one
- * KMP engine instance; Swift supplies the serial asynchronous executor.
- */
-class OpenCodeTextMateHighlightingEngineJson private constructor(
-    private val engine: OpenCodeTextMateHighlightingEngine,
-) {
-    fun highlightJson(requestJson: String): String {
-        val request = OpenCodeMarkdownJson.json.decodeFromString<HighlightRequest>(requestJson)
-        return OpenCodeMarkdownJson.json.encodeToString(engine.highlightNow(request))
-    }
-
-    suspend fun trim(level: MemoryPressure) {
-        engine.trim(level)
-    }
-
-    companion object {
-        fun createDefault(): OpenCodeTextMateHighlightingEngineJson =
-            OpenCodeTextMateHighlightingEngineJson(
-                OpenCodeTextMateHighlightingEngine(createOpenCodePlatformMarkdownHighlighter()),
-            )
-    }
 }
 
 @Serializable
@@ -91,9 +62,6 @@ data class HighlightRequest(
     val source: String,
     val intent: HighlightIntent,
     val policyEpoch: Long,
-    val messageCharacters: Int = source.length,
-    val fenceIndex: Int = 0,
-    val fenceCount: Int = 1,
 )
 
 @Serializable
@@ -106,211 +74,15 @@ data class HighlightResult(
     val spans: List<CodeSpan>,
     val outcome: TextMateParseOutcome,
     val diagnostics: List<MarkdownDiagnostic>,
-    val observation: TextMateParseObservation,
 )
 
-/**
- * Synchronous internals behind an asynchronous contract. Platform adapters choose
- * and enforce the single owner/executor on which this instance is invoked.
- */
-class OpenCodeTextMateHighlightingEngine(
-    private val highlighter: OpenCodeCodeHighlighter,
-    private val cacheCoordinator: TextMateWeightedCacheCoordinator = TextMateWeightedCacheCoordinator(),
-    private val incrementalStore: TextMateIncrementalStateStore =
-        TextMateIncrementalStateStore(cacheCoordinator),
-    private val suffixConvergenceEnabled: Boolean = true,
-) : TextMateHighlightingEngine {
-    private val latestRevisionByKey = mutableMapOf<String, Long>()
-
-    /**
-     * When true, observations include per-call RegexSearch / NativeRegexSearch
-     * stage events. Default false — those stages dominate wall time on dense
-     * grammars and are only needed for calibration drill-down.
-     */
-    @Volatile
-    var recordPerSearchMetrics: Boolean = false
-
-    override suspend fun highlight(request: HighlightRequest): HighlightResult = highlightNow(request)
-
-    override suspend fun trim(level: MemoryPressure) {
-        trimNow(level)
-    }
-
-    fun trimNow(level: MemoryPressure) {
-        incrementalStore.trim(level)
-        cacheCoordinator.trim(level)
-        when (highlighter) {
-            is OpenCodeSyntaxHighlighter -> highlighter.trimCaches(level)
-            is TextMateCacheTrimmable -> highlighter.trimCaches(level)
-            else -> Unit
-        }
-    }
-
-    fun highlightNow(
-        request: HighlightRequest,
-        shouldCancel: () -> Boolean = { false },
-    ): HighlightResult {
-        if (shouldCancel()) {
-            return emptyResult(
-                request = request,
-                outcome = TextMateParseOutcome.Cancelled,
-                queueWaitNanoseconds = 0,
-                schedulingReason = TextMateSchedulingReason.Supersession.name,
-            )
-        }
-        val metrics = OpenCodeTextMateMetricsAccumulator(recordPerSearch = recordPerSearchMetrics)
-        val startedAt = TimeSource.Monotonic.markNow()
-        val previousRevision = latestRevisionByKey[request.key.value]
-        latestRevisionByKey[request.key.value] = maxOf(previousRevision ?: -1L, request.revision.value)
-        return try {
-            val supported = highlighter.supportsLanguage(request.language)
-            val session =
-                if (highlighter is OpenCodeSyntaxHighlighter) {
-                    TextMateIncrementalHighlightSession(
-                        identity =
-                            IncrementalBlockIdentity(
-                                key = request.key,
-                                canonicalLanguage = request.language.orEmpty(),
-                                grammarResourcePath = "",
-                                grammarId = GrammarId(-1),
-                                policyEpoch = request.policyEpoch,
-                            ),
-                        intent = request.intent,
-                        revision = request.revision,
-                        previous = incrementalStore.get(request.key),
-                        suffixConvergenceEnabled = suffixConvergenceEnabled,
-                    )
-                } else {
-                    null
-                }
-            val highlighted =
-                if (highlighter is OpenCodeSyntaxHighlighter && session != null) {
-                    highlighter.highlight(
-                        languageOrAlias = request.language,
-                        code = request.source,
-                        metricsSink = metrics,
-                        shouldCancel = shouldCancel,
-                        incremental = session,
-                    )
-                } else {
-                    highlighter.highlight(
-                        languageOrAlias = request.language,
-                        code = request.source,
-                        metricsSink = metrics,
-                        shouldCancel = shouldCancel,
-                    )
-                }
-            if (shouldCancel()) {
-                return emptyResult(
-                    request = request,
-                    outcome = TextMateParseOutcome.Cancelled,
-                    queueWaitNanoseconds = 0,
-                    schedulingReason = TextMateSchedulingReason.Supersession.name,
-                    cancelRequestedToStopNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
-                )
-            }
-            val stillLatest = latestRevisionByKey[request.key.value] == request.revision.value
-            if (stillLatest) {
-                session?.produced?.let(incrementalStore::promote)
-            }
-            val diagnostics =
-                buildList {
-                    if (request.language != null && !supported) {
-                        add(
-                            MarkdownDiagnostic(
-                                kind = MarkdownDiagnosticKind.UnsupportedLanguage,
-                                message = "No bundled grammar is registered for '${request.language}'.",
-                            ),
-                        )
-                    }
-                    addAll(highlighted.diagnostics)
-                }.distinct()
-            val outcome =
-                highlighted.textMateOutcome
-                    ?: if (highlighted.source == SyntaxHighlightSource.TextMate) {
-                        TextMateParseOutcome.Highlighted
-                    } else {
-                        TextMateParseOutcome.Fallback
-                    }
-            result(
-                request = request,
-                canonicalLanguage = highlighted.canonicalLanguage,
-                spans = highlighted.spans,
-                outcome = outcome,
-                diagnostics = diagnostics,
-                metrics = metrics,
-                totalNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
-                reusedLineCount = session?.reusedLineCount ?: 0,
-                retokenizedLineCount = session?.retokenizedLineCount ?: 0,
-                suffixReusedLineCount = session?.suffixReusedLineCount ?: 0,
-                incrementalMode = session?.mode?.name,
-            )
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Throwable) {
-            result(
-                request = request,
-                canonicalLanguage = null,
-                spans = emptyList(),
-                outcome = TextMateParseOutcome.Failed,
-                diagnostics =
-                    listOf(
-                        MarkdownDiagnostic(
-                            kind = MarkdownDiagnosticKind.HighlighterFallback,
-                            message = error.message ?: "TextMate highlighting failed; semantic fallback was preserved.",
-                        ),
-                    ),
-                metrics = metrics,
-                totalNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
-            )
-        }
-    }
-
-    private fun result(
-        request: HighlightRequest,
-        canonicalLanguage: String?,
-        spans: List<CodeSpan>,
-        outcome: TextMateParseOutcome,
-        diagnostics: List<MarkdownDiagnostic>,
-        metrics: OpenCodeTextMateMetricsAccumulator,
-        totalNanoseconds: Long,
-        reusedLineCount: Int = 0,
-        retokenizedLineCount: Int = 0,
-        suffixReusedLineCount: Int = 0,
-        incrementalMode: String? = null,
-    ): HighlightResult =
-        HighlightResult(
-            key = request.key,
-            revision = request.revision,
-            source = request.source,
-            canonicalLanguage = canonicalLanguage,
-            policyEpoch = request.policyEpoch,
-            spans = spans,
-            outcome = outcome,
-            diagnostics = diagnostics,
-            observation =
-                TextMateParseObservation(
-                    requestedLanguage = request.language,
-                    canonicalLanguage = canonicalLanguage,
-                    outcome = outcome,
-                    messageCharacters = request.messageCharacters,
-                    fenceCharacters = request.source.length,
-                    fenceLines = request.source.lineCount(),
-                    fenceIndex = request.fenceIndex,
-                    fenceCount = request.fenceCount,
-                    spanCount = spans.size,
-                    backend = metrics.backendName(),
-                    totalNanoseconds = totalNanoseconds,
-                    stages = metrics.stageSummaries(),
-                    diagnosticKinds = diagnostics.map(MarkdownDiagnostic::kind).distinct(),
-                    reusedLineCount = reusedLineCount,
-                    retokenizedLineCount = retokenizedLineCount,
-                    suffixReusedLineCount = suffixReusedLineCount,
-                    incrementalMode = incrementalMode,
-                ),
-        )
-
-    private fun String.lineCount(): Int = if (isEmpty()) 0 else count { character -> character == '\n' } + 1
+@Serializable
+enum class TextMateParseOutcome {
+    Highlighted,
+    NoSpans,
+    Unsupported,
+    Failed,
+    Cancelled,
 }
 
 data class MarkdownCodeFence(
@@ -321,11 +93,7 @@ data class MarkdownCodeFence(
     val source: String,
     val policyEpoch: Long,
 ) {
-    fun request(
-        intent: HighlightIntent,
-        messageCharacters: Int,
-        fenceCount: Int,
-    ): HighlightRequest =
+    fun request(intent: HighlightIntent): HighlightRequest =
         HighlightRequest(
             key = key,
             revision = revision,
@@ -333,9 +101,6 @@ data class MarkdownCodeFence(
             source = source,
             intent = intent,
             policyEpoch = policyEpoch,
-            messageCharacters = messageCharacters,
-            fenceIndex = locator.fenceIndex,
-            fenceCount = fenceCount,
         )
 }
 
@@ -418,13 +183,7 @@ fun MarkdownDocument.attachTextMateResult(
     if (result.source != fence.source || block.code != fence.source) {
         return MarkdownHighlightAttachment.Rejected(MarkdownHighlightAttachment.RejectionReason.SourceChanged)
     }
-    if (result.outcome in
-        setOf(
-            TextMateParseOutcome.Failed,
-            TextMateParseOutcome.Cancelled,
-            TextMateParseOutcome.BudgetExceeded,
-        )
-    ) {
+    if (result.outcome == TextMateParseOutcome.Failed || result.outcome == TextMateParseOutcome.Cancelled) {
         return MarkdownHighlightAttachment.Rejected(MarkdownHighlightAttachment.RejectionReason.ResultNotAttachable)
     }
 

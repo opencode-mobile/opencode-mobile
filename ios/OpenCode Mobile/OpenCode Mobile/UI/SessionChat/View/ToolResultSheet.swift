@@ -270,7 +270,7 @@ private struct SourceBody: View {
                 return
             }
             let highlighted = await Task.detached(priority: .userInitiated) {
-                FileFallbackCodeHighlighter.spans(language: language, source: source)
+                HighlightCoreOneShotHighlighter.spans(language: language, source: source)
             }.value
             spans = highlighted
         }

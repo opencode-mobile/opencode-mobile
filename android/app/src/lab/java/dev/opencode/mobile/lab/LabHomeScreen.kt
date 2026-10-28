@@ -26,7 +26,6 @@ internal fun LabHomeScreen(
     onNavigateBack: () -> Unit,
     onDataSets: () -> Unit,
     onBenchmark: () -> Unit,
-    onCompare: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         OpenCodeTopBar(
@@ -63,15 +62,6 @@ internal fun LabHomeScreen(
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "Benchmark"),
                     accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = onBenchmark,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-                OpenCodeListItem(
-                    title = "Compare",
-                    subtitle = "Two engines on one data set, differences marked",
-                    style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, "Compare"),
-                    accessory = OpenCodeListItemAccessory.Disclosure,
-                    onClick = onCompare,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
             }

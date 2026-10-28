@@ -19,7 +19,6 @@ internal fun EntryProviderScope<NavKey>.labEntries(
                 onNavigateBack = navigateBack,
                 onDataSets = { push(LabDataSets) },
                 onBenchmark = { push(LabBenchmark) },
-                onCompare = { push(LabCompare()) },
             )
         }
     }
@@ -68,7 +67,6 @@ internal fun EntryProviderScope<NavKey>.labEntries(
                 onNavigateBack = navigateBack,
                 onRender = viewModel::render,
                 onCancel = viewModel::cancel,
-                onCompare = { push(LabCompare(key.dataSetId)) },
             )
         }
     }
@@ -84,21 +82,6 @@ internal fun EntryProviderScope<NavKey>.labEntries(
                 onToggleEngine = viewModel::toggleEngine,
                 onRun = viewModel::run,
                 onStop = viewModel::stop,
-            )
-        }
-    }
-    entry<LabCompare> { key ->
-        RouteSurface {
-            val viewModel: LabCompareViewModel = hiltViewModel(key = "lab-compare-${key.dataSetId}")
-            LaunchedEffect(key.dataSetId) { viewModel.bind(key.dataSetId) }
-            val state by viewModel.state.collectAsStateWithLifecycle()
-            LabCompareScreen(
-                state = state,
-                onNavigateBack = navigateBack,
-                onSelectDataSet = viewModel::selectDataSet,
-                onChangeDataSet = viewModel::changeDataSet,
-                onSelectLeftEngine = viewModel::selectLeftEngine,
-                onSelectRightEngine = viewModel::selectRightEngine,
             )
         }
     }

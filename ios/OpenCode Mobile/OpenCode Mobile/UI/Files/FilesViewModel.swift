@@ -129,9 +129,6 @@ final class FilesViewModel {
 
     let worktree: String
     @ObservationIgnored private let repository: any ProjectFilesRepository
-    @ObservationIgnored private let highlighter: any TextMateHighlighting
-    @ObservationIgnored private let textMateEnabled: () -> Bool
-    @ObservationIgnored private let fallbackHighlighter: @Sendable (String, String) -> [NativeCodeSpan]
     @ObservationIgnored private let findDebounce: Duration
     @ObservationIgnored private let copyToPasteboard: (String) -> Void
 
@@ -140,17 +137,10 @@ final class FilesViewModel {
     @ObservationIgnored private var folderTasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored private var findTask: Task<Void, Never>?
     @ObservationIgnored private var fileTasks: [String: Task<Void, Never>] = [:]
-    @ObservationIgnored private var highlightTasks: [String: Task<Void, Never>] = [:]
-    @ObservationIgnored private var highlightRevision: Int64 = 0
     @ObservationIgnored private var started = false
 
-    #if HIGHLIGHT_LAB
-    /// The developer Highlighting Engine setting (#872): highlight-core colors files it has a lexer for.
-    @ObservationIgnored var highlightCoreEnabled: () -> Bool = { HighlightEnginePreferences.usesHighlightCore() }
     @ObservationIgnored var highlightCoreConfiguration = FileHighlightCorePass.Configuration.standard
     @ObservationIgnored private var highlightCorePasses: [String: FileHighlightCorePass] = [:]
-    @ObservationIgnored private var engineChangeTask: Task<Void, Never>?
-    #endif
 
     private enum FolderLoad: Equatable {
         case loading
@@ -161,27 +151,14 @@ final class FilesViewModel {
     init(
         worktree: String,
         repository: any ProjectFilesRepository,
-        highlighter: any TextMateHighlighting = KMPTextMateHighlightingEngine.shared,
-        textMateEnabled: @escaping () -> Bool = { MarkdownHighlightPreferences.currentTextMateEnabled() },
-        fallbackHighlighter: @escaping @Sendable (String, String) -> [NativeCodeSpan] = FileFallbackCodeHighlighter.spans,
         findDebounce: Duration = .milliseconds(250),
         copyToPasteboard: @escaping (String) -> Void = { UIPasteboard.general.string = $0 }
     ) {
         self.worktree = worktree
         self.repository = repository
-        self.highlighter = highlighter
-        self.textMateEnabled = textMateEnabled
-        self.fallbackHighlighter = fallbackHighlighter
         self.findDebounce = findDebounce
         self.copyToPasteboard = copyToPasteboard
         state = FilesUiState(projectName: ProjectPaths.projectName(worktree: worktree))
-        #if HIGHLIGHT_LAB
-        engineChangeTask = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: HighlightEnginePreferences.didChange) {
-                self?.rehighlightOpenFiles()
-            }
-        }
-        #endif
     }
 
     // MARK: Tree
@@ -368,9 +345,7 @@ final class FilesViewModel {
         state.viewers[relativePath] = nil
         fileTasks[relativePath]?.cancel()
         fileTasks[relativePath] = nil
-        highlightTasks[relativePath]?.cancel()
-        highlightTasks[relativePath] = nil
-        cancelHighlightCore(relativePath)
+        cancelHighlighting(relativePath)
         if state.activePath == relativePath {
             state.activePath = state.tabs.last?.relativePath
         }
@@ -403,9 +378,7 @@ final class FilesViewModel {
 
     private func loadFile(_ path: String) {
         fileTasks[path]?.cancel()
-        highlightTasks[path]?.cancel()
-        highlightTasks[path] = nil
-        cancelHighlightCore(path)
+        cancelHighlighting(path)
         let name = ProjectPaths.name(of: path)
         state.viewers[path] = ProjectFileViewerState(relativePath: path, name: name)
         let worktree = worktree
@@ -460,46 +433,26 @@ final class FilesViewModel {
 
     // MARK: Highlighting
 
-    /// Colors the whole file in one pass off the main actor, after the plain text is showing:
-    /// the shared TextMate engine (grammar state carries across the file), or the semantic
-    /// fallback when TextMate is off or its result is not attachable. Closing the tab or
-    /// reloading the file cancels the pass.
+    /// Colors an open file with highlight-core after the plain text shows (#872): the first
+    /// screen, then rows as they appear, then the rest in background chunks. A language with no
+    /// highlight-core lexer stays plain. Closing the tab or reloading the file cancels the pass.
     private func startHighlighting(_ path: String, document: FileTextDocument) {
-        guard let language = document.language else { return }
-        highlightTasks[path]?.cancel()
-        cancelHighlightCore(path)
-        #if HIGHLIGHT_LAB
-        if highlightCoreEnabled(), startHighlightCore(path, document: document, language: language.id) { return }
-        #endif
-        let textMate: (any TextMateHighlighting)? = textMateEnabled() ? highlighter : nil
-        highlightRevision += 1
-        let revision = highlightRevision
-        let policyEpoch = Int64(MarkdownHighlightPreferences.currentEpoch())
-        let fallbackHighlighter = fallbackHighlighter
-        highlightTasks[path] = Task { [weak self] in
-            let spans = await Self.lineSpans(
-                document: document,
-                language: language.id,
-                textMate: textMate,
-                revision: revision,
-                policyEpoch: policyEpoch,
-                fallback: fallbackHighlighter
-            )
-            guard let spans, !Task.isCancelled, let self,
-                  self.state.viewers[path]?.textDocument == document
-            else { return }
-            self.state.viewers[path]?.lineSpans = spans
-            self.highlightTasks[path] = nil
+        cancelHighlighting(path)
+        guard let language = document.language,
+              let session = HighlightCoreFileSession(document: document, language: language.id)
+        else { return }
+        let pass = FileHighlightCorePass(session: session, configuration: highlightCoreConfiguration) { [weak self] spans in
+            guard let self, self.state.viewers[path]?.textDocument == document else { return }
+            self.state.viewers[path]?.lineSpans.merge(spans) { _, new in new }
         }
+        highlightCorePasses[path] = pass
+        pass.start()
     }
 
-    private func cancelHighlightCore(_ path: String) {
-        #if HIGHLIGHT_LAB
+    private func cancelHighlighting(_ path: String) {
         highlightCorePasses.removeValue(forKey: path)?.cancel()
-        #endif
     }
 
-    #if HIGHLIGHT_LAB
     /// A row of an open file appeared; highlight-core colors uncolored visible rows first.
     func lineAppeared(_ path: String, line: Int) {
         highlightCorePasses[path]?.lineAppeared(line)
@@ -507,67 +460,5 @@ final class FilesViewModel {
 
     func highlightCorePass(_ path: String) -> FileHighlightCorePass? {
         highlightCorePasses[path]
-    }
-
-    /// The engine setting changed: color every open file again with the engine now selected.
-    func rehighlightOpenFiles() {
-        for (path, viewer) in state.viewers {
-            guard let document = viewer.textDocument else { continue }
-            state.viewers[path]?.lineSpans = [:]
-            startHighlighting(path, document: document)
-        }
-    }
-
-    /// highlight-core session per open file (#872): first screen, visible rows, then background
-    /// chunks. false when highlight-core has no lexer for the language (TextMate keeps it).
-    private func startHighlightCore(_ path: String, document: FileTextDocument, language: String) -> Bool {
-        guard let session = HighlightCoreFileSession(document: document, language: language) else { return false }
-        let pass = FileHighlightCorePass(session: session, configuration: highlightCoreConfiguration) { [weak self] spans in
-            guard let self, self.state.viewers[path]?.textDocument == document else { return }
-            self.state.viewers[path]?.lineSpans.merge(spans) { _, new in new }
-        }
-        highlightCorePasses[path] = pass
-        pass.start()
-        return true
-    }
-    #endif
-
-    /// Outcomes Session Chat code fences do not attach (`attachTextMateResult`).
-    nonisolated static let unattachableOutcomes: Set<String> = ["Failed", "Cancelled", "BudgetExceeded"]
-
-    /// nil when cancelled.
-    @concurrent
-    private nonisolated static func lineSpans(
-        document: FileTextDocument,
-        language: String,
-        textMate: (any TextMateHighlighting)?,
-        revision: Int64,
-        policyEpoch: Int64,
-        fallback: @Sendable (String, String) -> [NativeCodeSpan]
-    ) async -> [Int: [NativeCodeSpan]]? {
-        let source = document.lines.joined(separator: "\n")
-        var spans: [NativeCodeSpan]?
-        if let textMate {
-            let request = TextMateHighlightRequest(
-                key: TextMateCodeBlockKey(value: "files:\(document.id.uuidString)"),
-                revision: TextMateHighlightRevision(value: revision),
-                language: language,
-                source: source,
-                intent: .interactiveFinal,
-                policyEpoch: policyEpoch,
-                messageCharacters: source.utf16.count,
-                fenceIndex: 0,
-                fenceCount: 1
-            )
-            if let result = try? await textMate.highlight(request),
-               result.source == source,
-               !unattachableOutcomes.contains(result.outcome) {
-                spans = result.spans
-            }
-        }
-        guard !Task.isCancelled else { return nil }
-        let resolved = spans ?? fallback(language, source)
-        guard !Task.isCancelled else { return nil }
-        return FileCodeHighlightMapper.lineSpans(resolved, lines: document.lines[...], firstLine: 0)
     }
 }

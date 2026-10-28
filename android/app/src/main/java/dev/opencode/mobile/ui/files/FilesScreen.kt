@@ -22,7 +22,6 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.backwardRouteTransition
-import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.forwardRouteTransition
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeFileTab
@@ -60,8 +59,6 @@ fun FilesScreen(
     viewModel: FilesViewModel = hiltViewModel(key = "files-$worktree"),
 ) {
     LaunchedEffect(worktree) { viewModel.bind(worktree) }
-    val highlightEpoch = MarkdownHighlightPreferences.epoch
-    LaunchedEffect(highlightEpoch) { viewModel.onHighlightingChange(highlightEpoch) }
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val backStack = rememberNavBackStack(FilesTreeRoute)
     val useSplitLayout = currentOpenCodeUsesSplitLayout()

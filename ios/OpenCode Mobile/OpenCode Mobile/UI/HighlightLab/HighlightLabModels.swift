@@ -103,12 +103,6 @@ nonisolated struct HighlightLabProbeResult: Sendable {
     let timing: HighlightLabTiming
 }
 
-nonisolated struct HighlightLabAgreement: Equatable, Sendable {
-    let agreement: Double
-    let differingCharacters: Int
-    let differingRanges: [Range<Int>]
-}
-
 nonisolated enum HighlightLabPlan: Hashable, Sendable {
     case quick
     case full

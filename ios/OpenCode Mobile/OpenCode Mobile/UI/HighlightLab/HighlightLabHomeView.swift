@@ -4,10 +4,9 @@ import SwiftUI
 nonisolated enum HighlightLabRoute: Hashable {
     case dataSets
     case benchmark
-    case compare
 }
 
-/// Highlighting Lab home (#872): data sets, benchmark, and compare. Lab builds only.
+/// Highlighting Lab home (#872): data sets and benchmark. Lab builds only.
 struct HighlightLabHomeView: View {
     /// Set when shown as the trailing root of the tablet Settings split view.
     var detailControl: OpenCodeSplitPaneDetailControl? = nil
@@ -30,7 +29,6 @@ struct HighlightLabHomeView: View {
                 VStack(spacing: 8) {
                     entry("Data sets", "Browse bundled inputs, paste text, view them highlighted with timings", icon: .description, route: .dataSets)
                     entry("Benchmark", benchmarkSubtitle, icon: .settings, route: .benchmark)
-                    entry("Compare", "One data set on two engines, differences marked", icon: .architecture, route: .compare)
                 }
                 .padding(.vertical, 12)
             }
@@ -48,15 +46,13 @@ struct HighlightLabHomeView: View {
                 if let benchmarkModel {
                     HighlightLabBenchmarkView(model: benchmarkModel)
                 }
-            case .compare:
-                HighlightLabCompareView(service: service)
             }
         }
     }
 
     private var benchmarkSubtitle: String {
         if case .running = benchmarkModel?.state.phase { return "Running…" }
-        return "Quick or full tier, or picked data sets, on one or more engines"
+        return "Quick or full tier, or picked data sets"
     }
 
     private func entry(_ title: String, _ subtitle: String, icon: OpenCodeIcon, route: HighlightLabRoute) -> some View {

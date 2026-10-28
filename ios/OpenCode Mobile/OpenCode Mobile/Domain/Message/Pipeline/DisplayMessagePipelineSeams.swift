@@ -22,16 +22,8 @@ protocol DisplayMessagePreparing: AnyObject, Sendable {
         mode: MessagePreparationMode
     ) async -> DisplayMessage
 
-    func prepareTextBlock(
-        blockID: String,
-        plain: String,
-        isStreaming: Bool,
-        sessionKey: String,
-        mode: MessagePreparationMode
-    ) async -> NativeMarkdownDocument?
-
-    /// Format-first streaming parse. TextMate on → empty code spans; TextMate off →
-    /// semantic fallback. Does not touch the preparer LRU or TextMate.
+    /// Format-first streaming parse with empty code spans; highlight-core colors attach
+    /// once the message is final. Does not touch the preparer LRU or the highlighter.
     func prepareStructureOnlyTextBlock(
         blockID: String,
         plain: String,

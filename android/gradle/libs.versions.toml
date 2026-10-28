@@ -14,7 +14,6 @@ androidxTestUiautomator = "2.4.0"
 coroutines = "1.11.0"
 desugarJdkLibs = "2.1.5"
 junit = "4.13.2"
-joni = "2.2.7"
 kotlin = "2.4.21"
 nav3Core = "1.0.1"
 lifecycleViewmodelNav3 = "2.10.0"
@@ -56,7 +55,6 @@ androidx-test-espresso-core = { module = "androidx.test.espresso:espresso-core",
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 androidx-test-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version.ref = "androidxTestUiautomator" }
 junit = { module = "junit:junit", version.ref = "junit" }
-joni = { module = "org.jruby.joni:joni", version.ref = "joni" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 androidx-navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "nav3Core" }
 androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "nav3Core" }

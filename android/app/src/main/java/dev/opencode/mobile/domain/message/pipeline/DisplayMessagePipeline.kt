@@ -1,6 +1,5 @@
 package dev.opencode.mobile.domain.message
 
-import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
 import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
@@ -14,7 +13,6 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
-import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.TimeSource
 
 /** Open window that coalesces a burst of streaming tokens into one UI frame. */
@@ -55,13 +53,11 @@ class DisplayMessagePipeline(
             var currentGeneration = 0L
             var debounceJob: Job? = null
             var prepareJob: Job? = null
-            var decorationJob: Job? = null
             var enrichmentJob: Job? = null
             var lastPublishedAt: kotlin.time.TimeMark? = null
             // True while coalescing a live streaming reply (including in-flight prepare).
             var isStreamingSession = false
             var sourceIsFromCache = false
-            val decorationBacklog = DecorationBacklog()
 
             var sourceHasOlder = false
 
@@ -80,11 +76,8 @@ class DisplayMessagePipeline(
                 debounceJob = null
                 prepareJob?.cancel()
                 prepareJob = null
-                decorationJob?.cancel()
-                decorationJob = null
                 enrichmentJob?.cancel()
                 enrichmentJob = null
-                decorationBacklog.clear()
             }
 
             fun nextGeneration(): Long {
@@ -160,114 +153,6 @@ class DisplayMessagePipeline(
                 return out
             }
 
-            fun decorationIdentityMatches(job: DecorationJob): Boolean {
-                val messages = lastPublishedMessages ?: return false
-                return messages.any { message ->
-                    val target = resolveStreamingDecorationTarget(message) ?: return@any false
-                    target.blockID == job.blockID &&
-                        target.textHash == job.textHash &&
-                        target.textLength == job.textLength &&
-                        target.isStreaming == job.isStreaming
-                }
-            }
-
-            fun drainDecorationBacklog() {
-                if (decorationJob?.isActive == true) return
-                decorationJob =
-                    launch {
-                        while (isActive) {
-                            val job = decorationBacklog.poll() ?: break
-                            if (!isCurrent(job.generation) || !decorationIdentityMatches(job)) {
-                                continue
-                            }
-                            val targetMessage =
-                                job.messages.firstOrNull { message ->
-                                    resolveStreamingDecorationTarget(message)?.blockID == job.blockID
-                                } ?: continue
-                            val target =
-                                resolveStreamingDecorationTarget(targetMessage) ?: continue
-                            val document =
-                                try {
-                                    contentPreparer.prepareTextBlock(
-                                        blockID = job.blockID,
-                                        plain = target.plain,
-                                        isStreaming = job.isStreaming,
-                                        sessionKey = job.sessionKey,
-                                        mode = MessagePreparationMode.Streaming,
-                                    )
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (_: Exception) {
-                                    // Keep current plain text; disposable decoration may retry later.
-                                    continue
-                                }
-                            if (document == null) continue
-                            if (!isActive || !isCurrent(job.generation)) continue
-                            if (!decorationIdentityMatches(job)) continue
-                            // Generation + identity reject completed before cache mutation.
-                            BlockDecorationCache.put(
-                                sessionKey = job.sessionKey,
-                                blockID = job.blockID,
-                                textHash = job.textHash,
-                                textLength = job.textLength,
-                                isStreaming = job.isStreaming,
-                                document = document,
-                            )
-                            val soleTextBridge = messageHasSoleTextBlock(targetMessage)
-                            var changed = false
-                            val merged =
-                                job.messages.map { message ->
-                                    val previous = previousById[message.id]
-                                    when {
-                                        message.id == targetMessage.id &&
-                                            (previous == null || previous.text == message.text) -> {
-                                            changed = true
-                                            DisplayMessage(
-                                                message = message,
-                                                renderedMarkdown =
-                                                    document.takeIf { soleTextBridge },
-                                            )
-                                        }
-                                        previous != null && previous.text == message.text -> previous
-                                        else -> DisplayMessage(message = message, renderedMarkdown = null)
-                                    }
-                                }
-                            if (!changed) continue
-                            if (!commitPrepared(job.generation, merged, MessagePreparationMode.Streaming)) {
-                                continue
-                            }
-                            emitDisplayMessages(merged)
-                        }
-                        decorationJob = null
-                    }
-            }
-
-            fun scheduleStreamingDecoration(
-                generation: Long,
-                messages: List<Message>,
-            ) {
-                // TextMate on: keep structure-only until Final colors. Skip
-                // streaming semantic decoration so colors do not flash early.
-                if (MarkdownHighlightPreferences.textMateEnabled) return
-                val streamingMessage =
-                    messages.firstOrNull(::messageHasStreamingText) ?: return
-                val target = resolveStreamingDecorationTarget(streamingMessage) ?: return
-                if (!OpenCodeMarkdownDetector.shouldRender(target.plain)) return
-                val job =
-                    DecorationJob(
-                        generation = generation,
-                        sessionKey = sessionId,
-                        blockID = target.blockID,
-                        textHash = target.textHash,
-                        textLength = target.textLength,
-                        isStreaming = true,
-                        messages = messages,
-                        priority = 2,
-                    )
-                if (!decorationBacklog.replaceStreamingJob(job)) return
-                drainDecorationBacklog()
-            }
-
             suspend fun publishPlainStreamingFrame(
                 generation: Long,
                 messages: List<Message>,
@@ -278,7 +163,6 @@ class DisplayMessagePipeline(
                 lastPublishedMessages = messages
                 lastPublishedAt = timeSource.markNow()
                 emitDisplayMessages(frame)
-                scheduleStreamingDecoration(generation, messages)
             }
 
             fun isDueForMaxBatch(): Boolean {
@@ -356,7 +240,7 @@ class DisplayMessagePipeline(
                 enrichmentJob =
                     launch {
                         val holdReady = MessageContentPreparer.HOLD_READY_UNTIL_NEWEST_MARKDOWN
-                        // Spinner is already up when holding Ready — start TextMate ASAP.
+                        // Spinner is already up when holding Ready — start highlighting ASAP.
                         if (!holdReady) {
                             delayMillis(48)
                         }
@@ -458,7 +342,7 @@ class DisplayMessagePipeline(
                         if (!commitPrepared(generation, prepared, mode)) return@launch
                         lastPublishedMessages = messages
                         // Format-first history is publishable; do not hold Ready on
-                        // unprocessed plain while TextMate enrichment catches up.
+                        // unprocessed plain while highlighting enrichment catches up.
                         emitDisplayMessages(prepared)
                         onCommitted?.invoke()
                     }
@@ -605,7 +489,7 @@ class DisplayMessagePipeline(
                                     // Newest-first HistoryPlainFirst: format the open
                                     // viewport (last message) before older history.
                                     // Skip null-markdown flash. REST identity-unchanged
-                                    // keeps TextMate enrich from being cancelled.
+                                    // keeps highlighting enrichment from being cancelled.
                                     schedulePlainFirstNewestFirst(
                                         generation = generation,
                                         messages = update.messages,

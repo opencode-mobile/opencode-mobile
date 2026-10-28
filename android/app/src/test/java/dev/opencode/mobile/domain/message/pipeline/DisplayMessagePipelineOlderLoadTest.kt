@@ -102,14 +102,6 @@ class DisplayMessagePipelineOlderLoadTest {
             mode: MessagePreparationMode,
         ): DisplayMessage = DisplayMessage(message)
 
-        override suspend fun prepareTextBlock(
-            blockID: String,
-            plain: String,
-            isStreaming: Boolean,
-            sessionKey: String,
-            mode: MessagePreparationMode,
-        ): MarkdownDocument? = null
-
         override suspend fun prepareStructureOnlyTextBlock(
             blockID: String,
             plain: String,

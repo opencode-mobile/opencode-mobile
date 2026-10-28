@@ -32,17 +32,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-## TextMate grammars from Shiki
-
-Generated into
-`shared/markdown-core/src/commonMain/resources/textmate-grammars/` from
-[Shiki](https://github.com/shikijs/shiki) 4.2.0 (`@shikijs/langs`, MIT,
-Copyright (c) 2021 Pine Wu, Copyright (c) 2023 Anthony Fu). Shiki bundles the
-grammars from the
-[textmate-grammars-themes](https://github.com/shikijs/textmate-grammars-themes)
-collection. Each grammar keeps the license of its upstream repository, which
-that collection lists per grammar.
-
 ## Lucide icons
 
 Generated into the Android and iOS icon sets from
@@ -92,13 +81,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
-
-## Oniguruma
-
-Downloaded and compiled at build time by
-`shared/markdown-core/native/build-oniguruma-ios.sh` and linked into the iOS
-app. BSD 2-Clause License, Copyright (c) 2002-2021 K.Kosako.
-<https://github.com/kkos/oniguruma>
 
 ## Libraries resolved by Gradle and Swift Package Manager
 

@@ -1,4 +1,5 @@
 import Foundation
+import OpenCodeMarkdownCore
 import Testing
 @testable import OpenCode_Mobile
 
@@ -114,10 +115,18 @@ struct FileTextDocumentTests {
         #expect(document.lines[1] == String(repeating: "x", count: FileTextDocument.maxDisplayLineLength) + " …")
     }
 
-    @Test func semanticFallbackColorsKeywordsLikeCodeFences() {
-        let spans = FileFallbackCodeHighlighter.spans(language: "kotlin", source: "val answer = 42")
+    @Test func oneShotHighlighterColorsKeywordsLikeCodeFences() {
+        let spans = HighlightCoreOneShotHighlighter.spans(language: "kotlin", source: "val answer = 42")
         #expect(spans.contains(NativeCodeSpan(start: 0, end: 3, role: .keyword)))
-        #expect(FileFallbackCodeHighlighter.spans(language: "kotlin", source: "").isEmpty)
+        #expect(HighlightCoreOneShotHighlighter.spans(language: "kotlin", source: "").isEmpty)
+        #expect(HighlightCoreOneShotHighlighter.spans(language: "brainfuck", source: "++[>+<-]").isEmpty)
+    }
+
+    @Test func everyFileLanguageIsACanonicalHighlightCoreID() {
+        let languages = Set(ProjectFileLanguage.extensions.values).union(ProjectFileLanguage.fileNames.values)
+        for language in languages {
+            #expect(HighlightCore.shared.canonicalLanguage(language: language.id) == language.id, "\(language.id)")
+        }
     }
 
     @Test func mapperSplitsSpansAcrossLines() {

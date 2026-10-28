@@ -3,8 +3,7 @@ import Testing
 
 @Suite struct SettingsDetailTests {
     private let all: [SettingsDetail] = [
-        .servers, .appearance, .componentGallery, .textMateLanguages,
-        .textMateLogbook, .featureFlags, .diagnosticLogs,
+        .servers, .appearance, .componentGallery, .featureFlags, .diagnosticLogs,
     ]
 
     @Test func resolved_unlocked_keepsEveryDetail() {
@@ -14,7 +13,7 @@ import Testing
     }
 
     @Test func resolved_locked_fallsBackToServersForDeveloperTools() {
-        let developerTools: [SettingsDetail] = [.componentGallery, .textMateLanguages, .textMateLogbook, .featureFlags]
+        let developerTools: [SettingsDetail] = [.componentGallery, .featureFlags]
         for detail in developerTools {
             #expect(detail.resolved(developerToolsUnlocked: false) == .servers)
         }

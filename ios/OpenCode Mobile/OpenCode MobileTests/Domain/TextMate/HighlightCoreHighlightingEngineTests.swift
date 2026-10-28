@@ -1,4 +1,3 @@
-#if HIGHLIGHT_LAB
 import Foundation
 import OpenCodeMarkdownCore
 import Testing
@@ -155,27 +154,20 @@ struct HighlightCoreHighlightingEngineTests {
         #expect(HighlightCoreSpans.role(code: 999) == .plain)
     }
 
-    @Test func engineHighlightsSupportedFencesAndFallsBackForOthers() async throws {
-        let fallback = RecordingTextMate()
-        let engine = HighlightCoreHighlightingEngine(fallback: fallback)
+    @Test func engineHighlightsSupportedFences() async throws {
+        let engine = HighlightCoreHighlightingEngine()
         let source = "val answer = 42"
         let result = try await engine.highlight(Self.request(language: "kt", source: source))
         #expect(result.outcome == "Highlighted")
         #expect(result.canonicalLanguage == "kotlin")
         #expect(result.source == source)
         #expect(result.policyEpoch == 7)
-        #expect(result.observation.backend == "highlight-core")
         #expect(result.spans == Self.oneShot("kotlin", source))
-        #expect(fallback.languages.isEmpty)
 
-        _ = try await engine.highlight(Self.request(language: "brainfuck", source: "++[>+<-]"))
-        _ = try await engine.highlight(Self.request(language: nil, source: "plain"))
-        #expect(fallback.languages == ["brainfuck", nil])
-
-        // The result attaches to the fence like a TextMate result.
+        // The result attaches to the fence.
         let document = NativeMarkdownDocument(sourceHash: 1, blocks: [.codeBlock(language: "kotlin", code: source, spans: [])])
         let fence = document.textMateFences(ownerKey: "m", revision: TextMateHighlightRevision(value: 1), policyEpoch: 7)[0]
-        let attached = try await engine.highlight(fence.request(intent: .interactiveFinal, messageCharacters: 20, fenceCount: 1))
+        let attached = try await engine.highlight(fence.request(intent: .interactiveFinal))
         guard case .attached(let upgraded) = document.attachingTextMate(fence: fence, result: attached),
               case .codeBlock(_, _, let spans) = upgraded.blocks[0]
         else {
@@ -186,11 +178,37 @@ struct HighlightCoreHighlightingEngineTests {
 
         await engine.trim(.critical)
         #expect(await engine.sessionStats().count == 0)
-        #expect(fallback.trims == [.critical])
+    }
+
+    @Test func unsupportedOrMissingLanguageComesBackPlain() async throws {
+        let engine = HighlightCoreHighlightingEngine()
+        for language in ["brainfuck", nil] as [String?] {
+            let source = "++[>+<-]"
+            let result = try await engine.highlight(Self.request(language: language, source: source))
+            #expect(result.outcome == "Unsupported")
+            #expect(result.spans.isEmpty)
+            #expect(result.canonicalLanguage == nil)
+            #expect(result.source == source)
+            #expect(result.diagnostics.isEmpty)
+
+            // It attaches as plain text: a stale colored fence loses its spans.
+            let stale = [NativeCodeSpan(start: 0, end: 2, role: .keyword)]
+            let document = NativeMarkdownDocument(sourceHash: 1, blocks: [.codeBlock(language: language, code: source, spans: stale)])
+            let fence = document.textMateFences(ownerKey: "m", revision: TextMateHighlightRevision(value: 1), policyEpoch: 7)[0]
+            let plain = try await engine.highlight(fence.request(intent: .interactiveFinal))
+            guard case .attached(let upgraded) = document.attachingTextMate(fence: fence, result: plain),
+                  case .codeBlock(_, _, let spans) = upgraded.blocks[0]
+            else {
+                Issue.record("an unsupported result should attach as plain text")
+                return
+            }
+            #expect(spans.isEmpty)
+        }
+        #expect(await engine.sessionStats().count == 0)
     }
 
     @Test func engineHonorsTaskCancellation() async throws {
-        let engine = HighlightCoreHighlightingEngine(fallback: RecordingTextMate())
+        let engine = HighlightCoreHighlightingEngine()
         let request = Self.request(language: "swift", source: "let a = 1")
         let task = Task {
             withUnsafeCurrentTask { $0?.cancel() }
@@ -201,53 +219,6 @@ struct HighlightCoreHighlightingEngineTests {
         #expect(result.spans.isEmpty)
         let again = try await engine.highlight(request)
         #expect(again.outcome == "Highlighted")
-    }
-
-    @Test func developerSelectionRoutesEachRequestBySetting() async throws {
-        let textMate = RecordingTextMate()
-        let highlightCore = RecordingTextMate()
-        let usesHighlightCore = LockedFlag()
-        let engine = DeveloperSelectedHighlightingEngine(
-            textMate: textMate,
-            highlightCore: highlightCore,
-            usesHighlightCore: { usesHighlightCore.value }
-        )
-        _ = try await engine.highlight(Self.request(language: "swift", source: "a"))
-        usesHighlightCore.value = true
-        _ = try await engine.highlight(Self.request(language: "swift", source: "b"))
-        usesHighlightCore.value = false
-        _ = try await engine.highlight(Self.request(language: "swift", source: "c"))
-        #expect(textMate.sources == ["a", "c"])
-        #expect(highlightCore.sources == ["b"])
-        await engine.trim(.moderate)
-        #expect(textMate.trims == [.moderate])
-        #expect(highlightCore.trims == [.moderate])
-    }
-
-    @Test func enginePreferencePersistsAndInvalidatesHighlightingOnChange() {
-        let defaults = UserDefaults(suiteName: "HighlightEnginePreferencesTests")!
-        defaults.removePersistentDomain(forName: "HighlightEnginePreferencesTests")
-        var invalidations = 0
-        let center = NotificationCenter()
-        var notifications = 0
-        let observer = center.addObserver(forName: HighlightEnginePreferences.didChange, object: nil, queue: nil) { _ in
-            notifications += 1
-        }
-        defer { center.removeObserver(observer) }
-        let preferences = HighlightEnginePreferences(
-            defaults: defaults,
-            invalidateHighlighting: { invalidations += 1 },
-            notificationCenter: center
-        )
-        #expect(preferences.engine == .textMate)
-        preferences.setEngine(.highlightCore)
-        preferences.setEngine(.highlightCore)
-        #expect(HighlightEnginePreferences.current(defaults: defaults) == .highlightCore)
-        #expect(HighlightEnginePreferences(defaults: defaults).engine == .highlightCore)
-        #expect(invalidations == 1)
-        #expect(notifications == 1)
-        preferences.clear()
-        #expect(HighlightEnginePreferences.current(defaults: defaults) == .textMate)
     }
 
     // MARK: Helpers
@@ -285,65 +256,7 @@ struct HighlightCoreHighlightingEngineTests {
             language: language,
             source: source,
             intent: .interactiveFinal,
-            policyEpoch: 7,
-            messageCharacters: source.utf16.count,
-            fenceIndex: 0,
-            fenceCount: 1
+            policyEpoch: 7
         )
     }
 }
-
-private final class LockedFlag: @unchecked Sendable {
-    private let lock = NSLock()
-    private var stored = false
-
-    var value: Bool {
-        get { lock.withLock { stored } }
-        set { lock.withLock { stored = newValue } }
-    }
-}
-
-private final class RecordingTextMate: TextMateHighlighting, @unchecked Sendable {
-    private let lock = NSLock()
-    private var storedLanguages: [String?] = []
-    private var storedSources: [String] = []
-    private var storedTrims: [TextMateMemoryPressure] = []
-
-    var languages: [String?] { lock.withLock { storedLanguages } }
-    var sources: [String] { lock.withLock { storedSources } }
-    var trims: [TextMateMemoryPressure] { lock.withLock { storedTrims } }
-
-    func highlight(_ request: TextMateHighlightRequest) async throws -> TextMateHighlightResult {
-        lock.withLock {
-            storedLanguages.append(request.language)
-            storedSources.append(request.source)
-        }
-        return TextMateHighlightResult(
-            key: request.key,
-            revision: request.revision,
-            source: request.source,
-            canonicalLanguage: request.language,
-            policyEpoch: request.policyEpoch,
-            spans: [],
-            outcome: "NoSpans",
-            diagnostics: [],
-            observation: NativeTextMateParseObservation(
-                outcome: "NoSpans",
-                messageCharacters: request.messageCharacters,
-                fenceCharacters: request.source.utf16.count,
-                fenceLines: 1,
-                fenceIndex: 0,
-                fenceCount: 1,
-                spanCount: 0,
-                totalNanoseconds: 1,
-                stages: [],
-                diagnosticKinds: []
-            )
-        )
-    }
-
-    func trim(_ level: TextMateMemoryPressure) async {
-        lock.withLock { storedTrims.append(level) }
-    }
-}
-#endif

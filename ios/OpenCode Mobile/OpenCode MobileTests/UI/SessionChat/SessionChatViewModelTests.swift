@@ -747,7 +747,7 @@ struct SessionChatViewModelTests {
             await Task.detached(priority: .userInitiated) {
                 for message in messages {
                     guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
-                    _ = OpenCodeRenderedMarkdownParser.parse(message.text, isStreaming: false)
+                    _ = OpenCodeRenderedMarkdownParser.parse(message.text)
                 }
             }.value
         }

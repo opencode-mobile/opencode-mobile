@@ -231,41 +231,6 @@ struct HighlightLabBenchmarkModelTests {
     }
 }
 
-@MainActor
-struct HighlightLabCompareModelTests {
-    @Test func comparesBothEnginesAndMarksDifferingLines() async throws {
-        let service = FakeHighlightLabService()
-        let model = HighlightLabCompareModel(service: service, dataSetID: "typical/kotlin/2k")
-        #expect(model.state.baselineEngineID == "a")
-        #expect(model.state.candidateEngineID == "b")
-
-        await model.compare()
-
-        guard case let .ready(comparison) = model.state.phase else {
-            Issue.record("Expected a comparison")
-            return
-        }
-        let agreement = try #require(comparison.agreement)
-        // Engine B colors "let" on line 2 as a type instead of a keyword.
-        #expect(agreement.differingRanges == [10..<13])
-        #expect(comparison.lineMarks == [1: [0..<3]])
-        #expect(comparison.baseline.timing.engineName == "Engine A")
-        #expect(comparison.candidate.timing.engineName == "Engine B")
-        #expect(model.nextDifference(after: nil) == 1)
-        #expect(model.nextDifference(after: 1) == 1)
-    }
-
-    @Test func changingTheInputClearsTheResult() async {
-        let model = HighlightLabCompareModel(service: FakeHighlightLabService(), dataSetID: "typical/kotlin/2k")
-        await model.compare()
-        model.swapEngines()
-        #expect(model.state.phase == .idle)
-        #expect(model.state.baselineEngineID == "b")
-        model.selectDataSet("worst/deep")
-        #expect(model.state.dataSetName == "deep nesting")
-    }
-}
-
 nonisolated struct HighlightLabRenderedTextTests {
     @Test func splitsOnNewlinesAndKeepsSourceOffsets() {
         let source = "ab\r\ncd\n\nef"
@@ -298,7 +263,7 @@ nonisolated struct HighlightLabRenderedTextTests {
 
 nonisolated struct HighlightLabTimingTests {
     private func timing(_ status: String, ms: Double = 12_000) -> HighlightLabTiming {
-        HighlightLabTiming(engineName: "TextMate", elapsedMs: ms, characters: 100_000, status: status, outcome: nil, spanCount: 0, cold: true)
+        HighlightLabTiming(engineName: "highlight-core", elapsedMs: ms, characters: 100_000, status: status, outcome: nil, spanCount: 0, cold: true)
     }
 
     @Test func rateOnlyForCompletedCalls() {
@@ -330,7 +295,7 @@ struct OpenCodeCodeFileTopLineTests {
 
 nonisolated struct HighlightLabStorageTests {
     @Test func fileSafeLabels() {
-        #expect(HighlightLabStorage.fileSafe("typical/kotlin/16k,worst/x:engines=textmate") == "typical_kotlin_16k_worst_x_engines_textmate")
+        #expect(HighlightLabStorage.fileSafe("typical/kotlin/16k,worst/x:engines=highlight-core") == "typical_kotlin_16k_worst_x_engines_highlight-core")
         #expect(HighlightLabStorage.stamp(Date(timeIntervalSince1970: 0)) == "19700101-000000")
     }
 
@@ -345,16 +310,21 @@ nonisolated struct HighlightLabStorageTests {
     }
 
     @Test func headlessValueComesAfterTheFlag() {
-        #expect(HighlightLabHeadless.value(in: ["app", "-labRun", "quick:engines=textmate"]) == "quick:engines=textmate")
+        #expect(HighlightLabHeadless.value(in: ["app", "-labRun", "quick:engines=highlight-core"]) == "quick:engines=highlight-core")
         #expect(HighlightLabHeadless.value(in: ["app", "-labRun"]) == nil)
         #expect(HighlightLabHeadless.value(in: ["app"]) == nil)
     }
 
     @Test func screenLaunchArguments() {
-        #expect(HighlightLabScreenLaunch.parse(["app", "-labScreen", "compare", "-labAutoRun", "YES"]) == .compare(autoRun: true))
+        #expect(HighlightLabScreenLaunch.parse(["app", "-labScreen", "benchmark", "-labAutoRun", "YES"]) == .benchmark(autoRun: true))
+        #expect(HighlightLabScreenLaunch.parse(["app", "-labScreen", "compare"]) == nil)
         #expect(HighlightLabScreenLaunch.parse(["app", "-labScreen", "benchmark"]) == .benchmark(autoRun: false))
         #expect(HighlightLabScreenLaunch.parse(["app", "-labScreen", "viewer=typical/kotlin/16k"]) == .viewer("typical/kotlin/16k"))
         #expect(HighlightLabScreenLaunch.parse(["app", "-labScreen", "nope"]) == nil)
+    }
+
+    @Test func labServiceOffersHighlightCoreOnly() {
+        #expect(KMPHighlightLabService.shared.engines.map(\.id) == ["highlight-core"])
     }
 }
 
@@ -458,29 +428,6 @@ nonisolated final class FakeHighlightLabService: HighlightLabService, @unchecked
 
     func unsupportedReason(engineID: String, language: String) -> String? {
         engineID == "b" && language == "json" ? "No Engine B lexer for json" : nil
-    }
-
-    /// Character by character, like `HighlightBenchSpanDiff`.
-    func agreement(length: Int, baseline: [HighlightLabSpan], candidate: [HighlightLabSpan]) async -> HighlightLabAgreement {
-        func roles(_ spans: [HighlightLabSpan]) -> [String] {
-            var roles = Array(repeating: "", count: length)
-            for span in spans { for index in span.start..<min(span.end, length) { roles[index] = span.role } }
-            return roles
-        }
-        let left = roles(baseline)
-        let right = roles(candidate)
-        var ranges: [Range<Int>] = []
-        var start: Int?
-        for index in 0...length {
-            let differs = index < length && left[index] != right[index]
-            if differs, start == nil { start = index }
-            if !differs, let open = start {
-                ranges.append(open..<index)
-                start = nil
-            }
-        }
-        let differing = ranges.reduce(0) { $0 + $1.count }
-        return HighlightLabAgreement(agreement: 1 - Double(differing) / Double(length), differingCharacters: differing, differingRanges: ranges)
     }
 
     func runBenchmark(_ request: HighlightLabBenchmarkRequest, onProgress: @escaping @Sendable (HighlightLabProgress) -> Void) -> any HighlightLabBenchmarkRun {

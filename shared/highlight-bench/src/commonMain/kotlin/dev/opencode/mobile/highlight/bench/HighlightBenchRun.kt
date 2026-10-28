@@ -36,8 +36,8 @@ data class HighlightBenchSettings(
  *
  * **Engines.** [HighlightBenchEngine] (id, display name, fresh instances) and
  * [HighlightBenchHighlighter] (one synchronous call with a cancel signal, spans optional). The apps
- * get theirs from markdown-core's `HighlightBenchEngines.available()`: TextMate (`textmate`), the
- * #872 library (`highlight-core`), and the semantic fallback (`semantic-fallback`).
+ * get theirs from markdown-core's `HighlightBenchEngines.available()`: the #872 library
+ * (`highlight-core`). Runs take any number of engines; tests pass fakes.
  *
  * **Viewing.** [HighlightBenchProbe.highlight] makes one timed call that returns
  * [HighlightBenchCall.spans], and the caller's [HighlightBenchCanceller] cancels it while it runs;

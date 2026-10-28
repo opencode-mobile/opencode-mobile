@@ -1,5 +1,4 @@
 import Foundation
-import OpenCodeMarkdownCore
 
 /// Prepared text for the File Viewer: display lines and language.
 /// A reference type so the Screen Model can cache up to 1 MiB per open tab and compare by identity.
@@ -106,19 +105,5 @@ nonisolated enum FileCodeHighlightMapper {
             }
         }
         return answer
-    }
-}
-
-/// The non-TextMate highlighter Session Chat code fences use when TextMate is off
-/// (`OpenCodeSemanticFallbackHighlighter` in the shared markdown core).
-nonisolated enum FileFallbackCodeHighlighter {
-    static func spans(language: String, source: String) -> [NativeCodeSpan] {
-        OpenCodeSemanticFallbackHighlighter.shared
-            .highlight(languageOrAlias: language, code: source)
-            .spans
-            .compactMap { span in
-                guard let role = NativeCodeTokenRole(rawValue: span.role.name) else { return nil }
-                return NativeCodeSpan(start: Int(span.start), end: Int(span.end), role: role)
-            }
     }
 }

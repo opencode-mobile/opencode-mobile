@@ -12,14 +12,14 @@ object HighlightBenchCorpus {
     /** The languages the quick tier runs: the Minimum languages except javascript, unchanged since the first baseline. */
     val quickLanguages: List<String> = listOf("typescript", "kotlin", "swift", "python", "json", "diff")
 
-    /** The Basic milestone's languages (#872), by their TextMate manifest ids. */
+    /** The Basic milestone's languages (#872), by their canonical language ids. */
     val basicLanguages: List<String> =
         listOf(
             "shellscript", "yaml", "markdown", "html", "css", "rust", "go", "java", "c", "cpp", "csharp",
             "ruby", "php", "sql", "toml", "docker", "xml",
         )
 
-    /** The Full milestone's 38 remaining languages (#872), by their TextMate manifest ids. */
+    /** The Full milestone's 38 remaining languages (#872), by their canonical language ids. */
     val fullLanguages: List<String> =
         listOf(
             "abap", "ada", "apex", "asm", "awk", "clojure", "cobol", "coffee", "common-lisp", "crystal", "dart",

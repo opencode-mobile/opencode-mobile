@@ -8,11 +8,11 @@ import dev.opencode.mobile.highlight.core.HighlightDeadline
 import dev.opencode.mobile.highlight.core.HighlightRole
 import dev.opencode.mobile.highlight.core.HighlightSession
 import dev.opencode.mobile.highlight.core.HighlightStatus
-import kotlin.time.TimeSource
 
 /**
- * Session Chat code fences on the #872 highlight-core library instead of TextMate, for developer
- * builds that opt in. Languages highlight-core does not support go to [fallback] unchanged.
+ * Session Chat code fences on the #872 highlight-core library. A fence in a language
+ * highlight-core does not support (or with no language) comes back with no spans and
+ * [TextMateParseOutcome.Unsupported]: plain text, never an error.
  *
  * Each [CodeBlockKey] keeps one [HighlightSession] and the spans of its last revision. A new
  * revision is applied as an edit of the range between the common prefix and the common suffix,
@@ -28,7 +28,6 @@ import kotlin.time.TimeSource
  * Calls may come from any thread; the sessions behind them run one call at a time.
  */
 class HighlightCoreHighlightingEngine(
-    private val fallback: TextMateHighlightingEngine,
     private val maxSessions: Int = DEFAULT_MAX_SESSIONS,
     private val maxCharacters: Int = DEFAULT_MAX_CHARACTERS,
     private val deadlineMillis: Double = DEFAULT_DEADLINE_MILLIS,
@@ -70,18 +69,14 @@ class HighlightCoreHighlightingEngine(
     val sessionCount: Int
         get() = sessionLock.withLock { sessions.size }
 
-    /** True when highlight-core handles [language]; anything else goes to the fallback engine. */
+    /** True when highlight-core handles [language]; anything else comes back unsupported. */
     fun supports(language: String?): Boolean = language != null && HighlightCore.supports(language)
 
-    override suspend fun highlight(request: HighlightRequest): HighlightResult =
-        if (supports(request.language)) highlightNow(request) else fallback.highlight(request)
+    override suspend fun highlight(request: HighlightRequest): HighlightResult = highlightNow(request)
 
     override suspend fun trim(level: MemoryPressure) {
         trimNow(level)
-        fallback.trim(level)
     }
-
-    override fun schedulerSnapshot(): TextMateSchedulerSnapshot? = fallback.schedulerSnapshot()
 
     /** Drops sessions for [level]: Moderate keeps the most recent half, Critical keeps none. */
     fun trimNow(level: MemoryPressure) {
@@ -98,17 +93,22 @@ class HighlightCoreHighlightingEngine(
     }
 
     /**
-     * The synchronous core of [highlight] for a supported language, on the caller's thread.
-     * [cancel] stops it early (with a coroutine, pass one that reads the job), as does a newer
-     * revision of the same key. An unsupported language comes back [TextMateParseOutcome.Unsupported].
+     * The synchronous core of [highlight], on the caller's thread. [cancel] stops it early (with a
+     * coroutine, pass one that reads the job), as does a newer revision of the same key. An
+     * unsupported or missing language comes back [TextMateParseOutcome.Unsupported].
      */
     fun highlightNow(
         request: HighlightRequest,
         cancel: HighlightCancellation = HighlightCancellation.Never,
-    ): HighlightResult {
-        val startedAt = TimeSource.Monotonic.markNow()
+    ): HighlightResult = highlightReporting(request, cancel).result
+
+    /** [highlightNow] plus how the call reached its spans, for tests. */
+    internal fun highlightReporting(
+        request: HighlightRequest,
+        cancel: HighlightCancellation = HighlightCancellation.Never,
+    ): Reported {
         val language = request.language?.let(HighlightCore::canonicalLanguage)
-        if (language == null) return emptyResult(request, TextMateParseOutcome.Unsupported, 0, null)
+        if (language == null) return Reported(emptyResult(request, TextMateParseOutcome.Unsupported))
         val flag = HighlightCancelFlag()
         flagLock.withLock {
             val running = inFlight[request.key.value]
@@ -119,7 +119,7 @@ class HighlightCoreHighlightingEngine(
         }
         return try {
             val combined = if (cancel === HighlightCancellation.Never) flag else Either(flag, cancel)
-            sessionLock.withLock { highlightLocked(request, language, combined, startedAt) }
+            sessionLock.withLock { highlightLocked(request, language, combined) }
         } finally {
             flagLock.withLock {
                 if (inFlight[request.key.value]?.flag === flag) inFlight.remove(request.key.value)
@@ -131,15 +131,14 @@ class HighlightCoreHighlightingEngine(
         request: HighlightRequest,
         language: String,
         cancel: HighlightCancellation,
-        startedAt: TimeSource.Monotonic.ValueTimeMark,
-    ): HighlightResult {
+    ): Reported {
         val key = request.key.value
         val revision = request.revision.value
         val existing = sessions.remove(key)
         existing?.let { retainedCharacters -= it.source.length }
         if (existing != null && revision < existing.revision) {
             keep(key, existing)
-            return emptyResult(request, TextMateParseOutcome.Cancelled, 0, STALE_REVISION)
+            return Reported(emptyResult(request, TextMateParseOutcome.Cancelled))
         }
         val deadline = HighlightDeadline.after(deadlineMillis)
         val source = request.source
@@ -182,9 +181,9 @@ class HighlightCoreHighlightingEngine(
             // Spans past the edit are unknown now; the next request opens the fence again.
             val outcome =
                 if (call.status == HighlightStatus.Cancelled) TextMateParseOutcome.Cancelled else TextMateParseOutcome.Failed
-            val failed = emptyResult(request, outcome, 0, null)
-            val failure = call.failure ?: return failed
-            return failed.copy(diagnostics = listOf(MarkdownDiagnostic(MarkdownDiagnosticKind.HighlighterFallback, failure)))
+            val failed = emptyResult(request, outcome)
+            val failure = call.failure ?: return Reported(failed)
+            return Reported(failed.copy(diagnostics = listOf(MarkdownDiagnostic(MarkdownDiagnosticKind.HighlighterFallback, failure))))
         }
         var reusedLines = 0
         var suffixLines = 0
@@ -215,36 +214,23 @@ class HighlightCoreHighlightingEngine(
         val spans = toCodeSpans(entry.spans)
         val partial = call != null && call.status == HighlightStatus.Partial
         val outcome = if (spans.isEmpty()) TextMateParseOutcome.NoSpans else TextMateParseOutcome.Highlighted
-        return HighlightResult(
-            key = request.key,
-            revision = request.revision,
-            source = source,
-            canonicalLanguage = language,
-            policyEpoch = request.policyEpoch,
-            spans = spans,
-            outcome = outcome,
-            diagnostics = emptyList(),
-            observation =
-                TextMateParseObservation(
-                    requestedLanguage = request.language,
+        return Reported(
+            result =
+                HighlightResult(
+                    key = request.key,
+                    revision = request.revision,
+                    source = source,
                     canonicalLanguage = language,
+                    policyEpoch = request.policyEpoch,
+                    spans = spans,
                     outcome = outcome,
-                    messageCharacters = request.messageCharacters,
-                    fenceCharacters = source.length,
-                    fenceLines = if (source.isEmpty()) 0 else session.lineCount,
-                    fenceIndex = request.fenceIndex,
-                    fenceCount = request.fenceCount,
-                    spanCount = spans.size,
-                    backend = BACKEND,
-                    totalNanoseconds = startedAt.elapsedNow().inWholeNanoseconds,
-                    stages = emptyList(),
-                    diagnosticKinds = emptyList(),
-                    schedulingReason = if (partial) DEADLINE_PASSED else null,
-                    reusedLineCount = if (call == null) session.lineCount else reusedLines,
-                    retokenizedLineCount = call?.let { it.highlightedEndLine - it.startLine } ?: 0,
-                    suffixReusedLineCount = suffixLines,
-                    incrementalMode = mode,
+                    diagnostics = emptyList(),
                 ),
+            mode = mode,
+            reusedLines = if (call == null) session.lineCount else reusedLines,
+            retokenizedLines = call?.let { it.highlightedEndLine - it.startLine } ?: 0,
+            suffixReusedLines = suffixLines,
+            partial = partial,
         )
     }
 
@@ -305,25 +291,34 @@ class HighlightCoreHighlightingEngine(
         fun toIntArray(): IntArray = ints.copyOf(size)
     }
 
+    /**
+     * One call's result and how it got there: [mode] is Open, Edit, Continue, or Reuse (null when
+     * the call returned before reaching a session), and [partial] means the deadline passed.
+     */
+    internal class Reported(
+        val result: HighlightResult,
+        val mode: String? = null,
+        val reusedLines: Int = 0,
+        val retokenizedLines: Int = 0,
+        val suffixReusedLines: Int = 0,
+        val partial: Boolean = false,
+    )
+
     companion object {
         const val DEFAULT_MAX_SESSIONS = 64
         const val DEFAULT_MAX_CHARACTERS = 1_000_000
         const val DEFAULT_DEADLINE_MILLIS = 50.0
 
-        /** [TextMateParseObservation.backend] for results from this engine. */
-        const val BACKEND = "highlight-core"
-
         private const val MODE_OPEN = "Open"
         private const val MODE_EDIT = "Edit"
         private const val MODE_CONTINUE = "Continue"
         private const val MODE_REUSE = "Reuse"
-        private const val DEADLINE_PASSED = "Deadline"
-        private const val STALE_REVISION = "StaleRevision"
 
         private val roles: Array<CodeTokenRole> =
             HighlightRole.entries.map { role -> CodeTokenRole.valueOf(role.name) }.toTypedArray()
 
-        private fun toCodeSpans(packed: IntArray): List<CodeSpan> =
+        /** Packed `start, length, role` triples as [CodeSpan]s, leaving out Plain. */
+        internal fun toCodeSpans(packed: IntArray): List<CodeSpan> =
             buildList(packed.size / 3) {
                 var index = 0
                 while (index < packed.size) {
@@ -361,3 +356,19 @@ class HighlightCoreHighlightingEngine(
         }
     }
 }
+
+/** A result for [request] with no spans and no language, for calls that end before highlighting. */
+fun emptyResult(
+    request: HighlightRequest,
+    outcome: TextMateParseOutcome,
+): HighlightResult =
+    HighlightResult(
+        key = request.key,
+        revision = request.revision,
+        source = request.source,
+        canonicalLanguage = null,
+        policyEpoch = request.policyEpoch,
+        spans = emptyList(),
+        outcome = outcome,
+        diagnostics = emptyList(),
+    )

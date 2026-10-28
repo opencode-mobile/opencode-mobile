@@ -1,4 +1,3 @@
-#if HIGHLIGHT_LAB
 import Foundation
 import OpenCodeMarkdownCore
 
@@ -269,4 +268,3 @@ final class FileHighlightCorePass {
         return String(format: "%.1f", value)
     }
 }
-#endif

@@ -14,8 +14,8 @@ import dev.opencode.mobile.domain.filesystem.ProjectFileListingPolicy
 import dev.opencode.mobile.domain.filesystem.ProjectFilesException
 import dev.opencode.mobile.domain.filesystem.ProjectFilesRepository
 import dev.opencode.mobile.markdown.CodeSpan
+import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import dev.opencode.mobile.ui.components.OpenCodeCodeLine
 import dev.opencode.mobile.ui.components.OpenCodeCodeLines
 import kotlinx.coroutines.CancellationException
@@ -57,7 +57,6 @@ class FilesViewModel internal constructor(
     private val fileJobs = mutableMapOf<String, Job>()
     private var findJob: Job? = null
     private val visibleLines = mutableMapOf<String, MutableStateFlow<IntRange>>()
-    private var highlightEpoch: Int? = null
 
     fun bind(worktree: String) {
         if (_uiState.value.worktree == worktree) return
@@ -159,21 +158,6 @@ class FilesViewModel internal constructor(
         lastLine: Int,
     ) {
         visibleLinesOf(path).value = firstLine..maxOf(firstLine, lastLine)
-    }
-
-    /**
-     * The highlighting policy epoch ([dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences.epoch]);
-     * when it changed since the last call (an engine or TextMate setting), open text files are colored again.
-     */
-    fun onHighlightingChange(epoch: Int) {
-        val previous = highlightEpoch
-        highlightEpoch = epoch
-        if (previous == null || previous == epoch) return
-        _uiState.value.viewers.forEach { (path, viewer) ->
-            val content = viewer.content as? FilesViewerContent.Text ?: return@forEach
-            fileJobs.remove(path)?.cancel()
-            fileJobs[path] = viewModelScope.launch { highlightText(path, content) }
-        }
     }
 
     fun toggleWrap() {
@@ -283,7 +267,7 @@ class FilesViewModel internal constructor(
                 val markdown =
                     if (language.isMarkdown) {
                         runCatching {
-                            OpenCodeMarkdownParser.parse(content.text, codeHighlighter = OpenCodeSemanticFallbackHighlighter)
+                            OpenCodeMarkdownParser.parse(content.text, codeHighlighter = OpenCodeHighlightCoreCodeHighlighter)
                         }.getOrNull()
                     } else {
                         null
@@ -302,7 +286,7 @@ class FilesViewModel internal constructor(
         highlightText(path, plain)
     }
 
-    /** Colors [shown] (the content on screen) with one whole-file pass, or progressively through a session. */
+    /** Colors [shown] (the content on screen) progressively through a session; files without a highlighter stay plain. */
     private suspend fun highlightText(
         path: String,
         shown: FilesViewerContent.Text,
@@ -310,21 +294,8 @@ class FilesViewModel internal constructor(
         val grammar = ProjectFileLanguage.forPath(path).grammar ?: return
         try {
             val startedAt = System.nanoTime()
-            val session = withContext(workDispatcher) { highlighter.openSession(path, grammar, shown.source) }
-            if (session != null) {
-                colorProgressively(path, shown, session, startedAt)
-                return
-            }
-            val spans = highlighter.highlight(path, grammar, shown.source)
-            if (spans.isEmpty()) return
-            val highlighted = withContext(workDispatcher) { OpenCodeCodeLines.split(shown.source, spans) }
-            updateViewer(path) { viewer ->
-                if (viewer.content === shown) viewer.copy(content = shown.copy(lines = highlighted)) else viewer
-            }
-            DiagnosticLog.info(
-                DiagnosticLogArea.Connection,
-                "files whole-file highlight lines=${shown.lines.size} ms=${(System.nanoTime() - startedAt) / 1_000_000}",
-            )
+            val session = withContext(workDispatcher) { highlighter.openSession(path, grammar, shown.source) } ?: return
+            colorProgressively(path, shown, session, startedAt)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {

@@ -3,14 +3,13 @@ import Foundation
 import SwiftUI
 
 /// `-labScreen <screen>` opens one Lab screen at launch, for checks and screenshots on a
-/// simulator: `home`, `dataSets`, `paste`, `benchmark`, `compare`, or `viewer=<data set id>`.
-/// `-labAutoRun YES` also starts the screen's action (benchmark run, comparison).
+/// simulator: `home`, `dataSets`, `paste`, `benchmark`, or `viewer=<data set id>`.
+/// `-labAutoRun YES` also starts the benchmark run.
 nonisolated enum HighlightLabScreenLaunch: Equatable {
     case home
     case dataSets
     case paste
     case benchmark(autoRun: Bool)
-    case compare(autoRun: Bool)
     case viewer(String)
 
     static var requested: HighlightLabScreenLaunch? {
@@ -26,7 +25,6 @@ nonisolated enum HighlightLabScreenLaunch: Equatable {
         case "dataSets": return .dataSets
         case "paste": return .paste
         case "benchmark": return .benchmark(autoRun: autoRun)
-        case "compare": return .compare(autoRun: autoRun)
         default:
             guard value.hasPrefix("viewer=") else { return nil }
             return .viewer(String(value.dropFirst("viewer=".count)))
@@ -51,8 +49,6 @@ struct HighlightLabScreenLaunchView: View {
             case let .benchmark(autoRun):
                 HighlightLabBenchmarkView(model: benchmarkModel)
                     .task { if autoRun { benchmarkModel.start() } }
-            case let .compare(autoRun):
-                HighlightLabCompareView(service: service, autoRun: autoRun)
             case let .viewer(id):
                 HighlightLabViewerView(input: .catalog(id: id), service: service)
             }

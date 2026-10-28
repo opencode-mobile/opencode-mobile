@@ -2,16 +2,12 @@ package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
-import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
-import dev.opencode.mobile.domain.textmate.NoOpTextMateLogbookRecorder
-import dev.opencode.mobile.domain.textmate.TextMateLogbookRecorder
 import dev.opencode.mobile.markdown.HighlightIntent
 import dev.opencode.mobile.markdown.HighlightRevision
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownHighlightAttachment
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import dev.opencode.mobile.markdown.OpenCodeStructureOnlyHighlighter
 import dev.opencode.mobile.markdown.TextMateHighlightingEngine
 import dev.opencode.mobile.markdown.attachTextMateResult
@@ -32,7 +28,6 @@ class MessageContentPreparer
     @Inject
     constructor(
         private val textMateEngine: TextMateHighlightingEngine,
-        private val textMateLogbook: TextMateLogbookRecorder = NoOpTextMateLogbookRecorder,
     ) {
         internal var computationDispatcher: CoroutineDispatcher = Dispatchers.Default
         private val nextHighlightRevision = AtomicLong(0)
@@ -124,40 +119,8 @@ class MessageContentPreparer
             }
 
         /**
-         * Prepare Markdown for one presentation text block.
-         * Writes the preparer LRU keyed by session + block + content revision + streaming.
-         */
-        suspend fun prepareTextBlock(
-            blockID: String,
-            plain: String,
-            isStreaming: Boolean,
-            sessionKey: String = "",
-            mode: MessagePreparationMode = MessagePreparationMode.Streaming,
-        ): MarkdownDocument? =
-            withContext(computationDispatcher) {
-                if (mode == MessagePreparationMode.Streaming &&
-                    plain.length >= STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD
-                ) {
-                    return@withContext null
-                }
-                if (!OpenCodeMarkdownDetector.shouldRender(plain)) {
-                    return@withContext null
-                }
-                parseDocumentSafely(
-                    sessionKey = sessionKey,
-                    blockID = blockID,
-                    text = plain,
-                    isStreaming = isStreaming,
-                    textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
-                    policyEpoch = MarkdownHighlightPreferences.epoch.toLong(),
-                    intent = mode.highlightIntent(),
-                )
-            }
-
-        /**
-         * Format-first streaming paint: always structure when markdown is
-         * detected. TextMate on → empty spans (colors later); TextMate off → full
-         * semantic fallback. Never writes the preparer LRU.
+         * Format-first streaming paint: always structure when markdown is detected, with
+         * empty code spans (colors arrive with the Final prepare). Never writes the preparer LRU.
          */
         suspend fun prepareStructureOnlyTextBlock(
             blockID: String,
@@ -168,16 +131,10 @@ class MessageContentPreparer
                 if (!OpenCodeMarkdownDetector.shouldRender(plain)) {
                     return@withContext null
                 }
-                val highlighter =
-                    if (MarkdownHighlightPreferences.textMateEnabled) {
-                        OpenCodeStructureOnlyHighlighter
-                    } else {
-                        OpenCodeSemanticFallbackHighlighter
-                    }
                 try {
                     OpenCodeMarkdownParser.parse(
                         markdown = plain,
-                        codeHighlighter = highlighter,
+                        codeHighlighter = OpenCodeStructureOnlyHighlighter,
                     )
                 } catch (cancelled: CancellationException) {
                     throw cancelled
@@ -197,15 +154,12 @@ class MessageContentPreparer
             sessionKey: String = "",
         ): DisplayMessage {
             val isStreaming = messageIsStreaming(message)
-            val highlightEpoch = MarkdownHighlightPreferences.epoch
-            val textMateEnabled = MarkdownHighlightPreferences.textMateEnabled
             if (mode == MessagePreparationMode.Streaming &&
                 message.text.length >= STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD
             ) {
                 return DisplayMessage(
                     message = message,
                     renderedMarkdown = null,
-                    highlightEpoch = highlightEpoch,
                 )
             }
             if (mode == MessagePreparationMode.HistoryPlainFirst) {
@@ -214,27 +168,19 @@ class MessageContentPreparer
                         message = message,
                         renderedMarkdown = reusable,
                         awaitingTextMateUpgrade = previous?.awaitingTextMateUpgrade == true,
-                        highlightEpoch = highlightEpoch,
                     )
                 }
                 if (!OpenCodeMarkdownDetector.shouldRender(message.text)) {
                     return DisplayMessage(
                         message = message,
                         renderedMarkdown = null,
-                        highlightEpoch = highlightEpoch,
                     )
                 }
-                val highlighter =
-                    if (textMateEnabled) {
-                        OpenCodeStructureOnlyHighlighter
-                    } else {
-                        OpenCodeSemanticFallbackHighlighter
-                    }
                 val document =
                     try {
                         OpenCodeMarkdownParser.parse(
                             markdown = message.text,
-                            codeHighlighter = highlighter,
+                            codeHighlighter = OpenCodeStructureOnlyHighlighter,
                         )
                     } catch (cancelled: CancellationException) {
                         throw cancelled
@@ -248,16 +194,14 @@ class MessageContentPreparer
                 return DisplayMessage(
                     message = message,
                     renderedMarkdown = document,
-                    // TextMate on: colors arrive in HistoryEnrichment / Final.
-                    awaitingTextMateUpgrade = textMateEnabled && document != null,
-                    highlightEpoch = highlightEpoch,
+                    // Colors arrive in HistoryEnrichment / Final.
+                    awaitingTextMateUpgrade = document != null,
                 )
             }
             if (!OpenCodeMarkdownDetector.shouldRender(message.text)) {
                 return DisplayMessage(
                     message = message,
                     renderedMarkdown = null,
-                    highlightEpoch = highlightEpoch,
                 )
             }
             val reused = reusableDocument(message, previous, mode)
@@ -271,14 +215,11 @@ class MessageContentPreparer
                             blockID = message.id,
                             text = message.text,
                             isStreaming = isStreaming,
-                            textMateEnabled = textMateEnabled,
-                            policyEpoch = highlightEpoch.toLong(),
                             intent = mode.highlightIntent(),
                         )
                     }
             val awaitingTextMateUpgrade =
                 when {
-                    !textMateEnabled -> false
                     mode == MessagePreparationMode.FinalPlaceholder && document != null ->
                         previous?.awaitingTextMateUpgrade == true || previous?.isStreaming == true
                     reused != null -> previous?.awaitingTextMateUpgrade == true
@@ -288,7 +229,6 @@ class MessageContentPreparer
                 message = message,
                 renderedMarkdown = document,
                 awaitingTextMateUpgrade = awaitingTextMateUpgrade,
-                highlightEpoch = highlightEpoch,
             )
         }
 
@@ -300,8 +240,6 @@ class MessageContentPreparer
             blockID: String,
             text: String,
             isStreaming: Boolean,
-            textMateEnabled: Boolean,
-            policyEpoch: Long,
             intent: HighlightIntent,
         ): MarkdownDocument? =
             try {
@@ -310,8 +248,6 @@ class MessageContentPreparer
                     blockID = blockID,
                     text = text,
                     isStreaming = isStreaming,
-                    textMateEnabled = textMateEnabled,
-                    policyEpoch = policyEpoch,
                     intent = intent,
                 )
             } catch (cancelled: kotlin.coroutines.cancellation.CancellationException) {
@@ -321,13 +257,15 @@ class MessageContentPreparer
                 null
             }
 
+        /**
+         * Structure first, then each code fence through [textMateEngine] (highlight-core) unless
+         * the text is still streaming; streaming documents keep empty code spans until Final.
+         */
         private suspend fun parseDocument(
             sessionKey: String,
             blockID: String,
             text: String,
             isStreaming: Boolean,
-            textMateEnabled: Boolean,
-            policyEpoch: Long,
             intent: HighlightIntent,
         ): MarkdownDocument? {
             if (!OpenCodeMarkdownDetector.shouldRender(text)) {
@@ -341,42 +279,30 @@ class MessageContentPreparer
                     textLength = text.length,
                     exactSource = text,
                     isStreaming = isStreaming,
-                    textMateEnabled = textMateEnabled,
-                    policyEpoch = policyEpoch,
                 )
             synchronized(cacheLock) {
                 cache[cacheKey]?.let { return it }
             }
-            val fallbackDocument =
+            val structure =
                 OpenCodeMarkdownParser.parse(
                     markdown = text,
-                    codeHighlighter = OpenCodeSemanticFallbackHighlighter,
-                    isStreaming = isStreaming,
-                    textMateEnabled = false,
+                    codeHighlighter = OpenCodeStructureOnlyHighlighter,
                 )
             val document =
-                if (!textMateEnabled || isStreaming) {
-                    fallbackDocument
+                if (isStreaming) {
+                    structure
                 } else {
                     val revision = HighlightRevision(nextHighlightRevision.incrementAndGet())
                     val fences =
-                        fallbackDocument.codeFences(
+                        structure.codeFences(
                             ownerKey = "${sessionKey.length}:$sessionKey:$blockID",
                             revision = revision,
-                            policyEpoch = policyEpoch,
+                            policyEpoch = HIGHLIGHT_POLICY_EPOCH,
                         )
-                    var upgraded = fallbackDocument
+                    var upgraded = structure
                     for (fence in fences) {
                         coroutineContext.ensureActive()
-                        val result =
-                            textMateEngine.highlight(
-                                fence.request(
-                                    intent = intent,
-                                    messageCharacters = text.length,
-                                    fenceCount = fences.size,
-                                ),
-                            )
-                        textMateLogbook.submit(listOf(result.observation))
+                        val result = textMateEngine.highlight(fence.request(intent = intent))
                         when (val attachment = upgraded.attachTextMateResult(fence, result)) {
                             is MarkdownHighlightAttachment.Attached -> upgraded = attachment.document
                             is MarkdownHighlightAttachment.Rejected -> Unit
@@ -396,14 +322,12 @@ class MessageContentPreparer
         ): MarkdownDocument? {
             val isStreaming = messageIsStreaming(message)
             val existing = previous?.renderedMarkdown
-            val highlightEpoch = MarkdownHighlightPreferences.epoch
-            // Final must not settle-reuse a FinalPlaceholder that still holds
-            // streaming semantic-fallback spans (`awaitingTextMateUpgrade`).
+            // Final must not settle-reuse a FinalPlaceholder that still holds a
+            // streaming structure-only parse (`awaitingTextMateUpgrade`).
             if (existing != null &&
                 !isStreaming &&
                 previous.isStreaming != true &&
                 !previous.awaitingTextMateUpgrade &&
-                previous.highlightEpoch == highlightEpoch &&
                 previous.text == message.text
             ) {
                 return existing
@@ -411,7 +335,6 @@ class MessageContentPreparer
             if (isStreaming &&
                 previous != null &&
                 previous.isStreaming &&
-                previous.highlightEpoch == highlightEpoch &&
                 previous.text == message.text
             ) {
                 return previous.renderedMarkdown
@@ -420,7 +343,6 @@ class MessageContentPreparer
                 !isStreaming &&
                 previous != null &&
                 previous.isStreaming &&
-                previous.highlightEpoch == highlightEpoch &&
                 previous.text == message.text
             ) {
                 return previous.renderedMarkdown
@@ -435,9 +357,12 @@ class MessageContentPreparer
         companion object {
             private const val MAX_CACHE_ENTRIES = 32
 
+            /** Highlighting policy never changes at runtime now that there is one engine (#872). */
+            private const val HIGHLIGHT_POLICY_EPOCH = 0L
+
             /**
-             * Legacy size gate still used by disposable streaming decoration and
-             * some characterization fixtures. Format-first text-lane parse no
+             * Legacy size gate still used by Streaming-mode prepares and some
+             * characterization fixtures. Format-first text-lane parse no
              * longer skips on size — markdown-bearing content always formats.
              */
             const val STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD = 8_000
@@ -447,7 +372,7 @@ class MessageContentPreparer
 
             /**
              * Legacy flag: format-first history is always published immediately.
-             * Enrichment still upgrades TextMate colors newest-first afterward.
+             * Enrichment still upgrades highlight-core colors newest-first afterward.
              */
             const val HOLD_READY_UNTIL_NEWEST_MARKDOWN = false
 
@@ -465,8 +390,6 @@ class MessageContentPreparer
             val textLength: Int,
             val exactSource: String,
             val isStreaming: Boolean,
-            val textMateEnabled: Boolean,
-            val policyEpoch: Long,
         )
 
         private fun MessagePreparationMode.highlightIntent(): HighlightIntent =

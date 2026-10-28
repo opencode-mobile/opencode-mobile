@@ -25,7 +25,6 @@ nonisolated protocol HighlightLabService: Sendable {
     func unsupportedReason(engineID: String, language: String) -> String?
     /// Engine calls that were abandoned and are still running.
     var backgroundCalls: Int { get }
-    func agreement(length: Int, baseline: [HighlightLabSpan], candidate: [HighlightLabSpan]) async -> HighlightLabAgreement
     /// Starts a run on its own thread; `onProgress` arrives on that thread.
     func runBenchmark(
         _ request: HighlightLabBenchmarkRequest,
@@ -270,21 +269,6 @@ nonisolated final class KMPHighlightLabService: HighlightLabService, @unchecked 
         }
     }
 
-    func agreement(length: Int, baseline: [HighlightLabSpan], candidate: [HighlightLabSpan]) async -> HighlightLabAgreement {
-        await HighlightLabThread.run("highlight-lab-diff") {
-            let comparison = HighlightBenchSpanDiff.shared.compare(
-                length: Int32(length),
-                baseline: baseline.map(Self.kotlinSpan),
-                candidate: candidate.map(Self.kotlinSpan)
-            )
-            return HighlightLabAgreement(
-                agreement: comparison.agreement,
-                differingCharacters: Int(comparison.differingCharacters),
-                differingRanges: comparison.differingRanges.map { Int($0.start)..<Int($0.end) }
-            )
-        }
-    }
-
     func runBenchmark(
         _ request: HighlightLabBenchmarkRequest,
         onProgress: @escaping @Sendable (HighlightLabProgress) -> Void
@@ -343,10 +327,6 @@ nonisolated final class KMPHighlightLabService: HighlightLabService, @unchecked 
         case .worstcase: .worstCase
         default: .custom
         }
-    }
-
-    private static func kotlinSpan(_ span: HighlightLabSpan) -> HighlightBenchSpan {
-        HighlightBenchSpan(start: Int32(span.start), end: Int32(span.end), role: span.role)
     }
 }
 

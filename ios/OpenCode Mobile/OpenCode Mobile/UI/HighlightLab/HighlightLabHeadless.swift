@@ -5,7 +5,7 @@ import SwiftUI
 
 /// `xcrun simctl launch <device> <bundle> -labRun <value>`: runs the plan off the main actor,
 /// writes the reports under Documents `highlight-lab/`, prints their paths, and exits.
-/// The value format is `HighlightBenchHeadless` (for example `quick:engines=textmate`).
+/// The value format is `HighlightBenchHeadless` (for example `quick` or `basic:engines=highlight-core`).
 enum HighlightLabHeadless {
     /// The `-labRun` launch argument's value, if the app was started with one.
     static var requestedValue: String? {

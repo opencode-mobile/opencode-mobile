@@ -1,5 +1,4 @@
 import Foundation
-import OpenCodeMarkdownCore
 
 nonisolated struct TextMateCodeBlockKey: Codable, Hashable, Sendable {
     let value: String
@@ -25,19 +24,18 @@ nonisolated enum TextMateMemoryPressure: String, Sendable {
     case critical = "Critical"
 }
 
-nonisolated struct TextMateHighlightRequest: Encodable, Sendable {
+nonisolated struct TextMateHighlightRequest: Sendable {
     let key: TextMateCodeBlockKey
     let revision: TextMateHighlightRevision
     let language: String?
     let source: String
     let intent: TextMateHighlightIntent
     let policyEpoch: Int64
-    let messageCharacters: Int
-    let fenceIndex: Int
-    let fenceCount: Int
 }
 
-nonisolated struct TextMateHighlightResult: Decodable, Sendable {
+/// `outcome` is `Highlighted`, `NoSpans`, `Partial` (deadline passed: highlighted prefix, plain
+/// rest), `Unsupported` (no highlight-core lexer: plain text), `Cancelled`, or `Failed`.
+nonisolated struct TextMateHighlightResult: Sendable {
     let key: TextMateCodeBlockKey
     let revision: TextMateHighlightRevision
     let source: String
@@ -46,14 +44,11 @@ nonisolated struct TextMateHighlightResult: Decodable, Sendable {
     let spans: [NativeCodeSpan]
     let outcome: String
     let diagnostics: [NativeMarkdownDiagnostic]
-    let observation: NativeTextMateParseObservation
 }
 
-nonisolated private struct SchedulerAdmitEnvelope: Decodable, Sendable {
-    let ticketId: Int64?
-    let completed: [TextMateHighlightResult]
-}
-
+/// Highlights one code fence at a time for Session Chat and the File Viewer;
+/// `HighlightCoreHighlightingEngine` is the implementation. Callers own revisions and
+/// stale-result rejection (`attachingTextMate`).
 nonisolated protocol TextMateHighlighting: Sendable {
     func highlight(_ request: TextMateHighlightRequest) async throws -> TextMateHighlightResult
     func trim(_ level: TextMateMemoryPressure) async
@@ -61,193 +56,6 @@ nonisolated protocol TextMateHighlighting: Sendable {
 
 extension TextMateHighlighting {
     func trim(_ level: TextMateMemoryPressure) async {}
-}
-
-/// iOS's asynchronous platform-to-KMP adapter. Actor isolation owns continuations;
-/// the shared Kotlin scheduler bridge owns queue policy. Highlight jobs run one at a
-/// time on `executor`, off the actor, so an admit for a newer revision can still reach
-/// the scheduler and cancel the job that is running.
-actor KMPTextMateHighlightingEngine: TextMateHighlighting {
-    static let shared = KMPTextMateHighlightingEngine()
-
-    private var bridge: OpenCodeTextMateSchedulerBridge?
-    private let encoder = JSONEncoder()
-    private let decoder = JSONDecoder()
-    private var waiters: [Int64: CheckedContinuation<TextMateHighlightResult, Error>] = [:]
-    private var ticketIdentity: [Int64: (TextMateCodeBlockKey, TextMateHighlightRevision)] = [:]
-    private var pumping = false
-    /// Serial owner of Kotlin engine state: highlight jobs and cache trims only.
-    private let executor = DispatchQueue(label: "dev.opencode.mobile.textmate", qos: .userInitiated)
-
-    init(bridge: OpenCodeTextMateSchedulerBridge? = nil) {
-        self.bridge = bridge
-    }
-
-    func highlight(_ request: TextMateHighlightRequest) async throws -> TextMateHighlightResult {
-        try await withCheckedThrowingContinuation { continuation in
-            Task { await self.enqueue(request, continuation: continuation) }
-        }
-    }
-
-    func trim(_ level: TextMateMemoryPressure) async {
-        let bridge = activeBridge()
-        deliverAll(resultsJSON: bridge.trimQueue(level: level.rawValue))
-        await onExecutor(bridge) { $0.trimEngine(level: level.rawValue) }
-    }
-
-    func setLowPowerOrThermal(_ disabled: Bool) async {
-        activeBridge().setLowPowerOrThermal(disabled: disabled)
-    }
-
-    private func enqueue(
-        _ request: TextMateHighlightRequest,
-        continuation: CheckedContinuation<TextMateHighlightResult, Error>
-    ) {
-        do {
-            let requestJSON = try encode(request)
-            let admitJSON = activeBridge().admit(requestJson: requestJSON)
-            let admit = try decoder.decode(SchedulerAdmitEnvelope.self, from: Data(admitJSON.utf8))
-            for completed in admit.completed {
-                resume(result: completed)
-            }
-            if let ticketId = admit.ticketId {
-                waiters[ticketId] = continuation
-                ticketIdentity[ticketId] = (request.key, request.revision)
-                startPumpIfNeeded()
-            } else if let rejected = admit.completed.last(where: {
-                $0.key == request.key && $0.revision == request.revision
-            }) ?? admit.completed.last {
-                continuation.resume(returning: rejected)
-            } else {
-                continuation.resume(throwing: TextMateHighlightingAdapterError.invalidUTF8)
-            }
-        } catch {
-            continuation.resume(throwing: error)
-        }
-    }
-
-    private func startPumpIfNeeded() {
-        guard !pumping else { return }
-        pumping = true
-        Task { await self.pump() }
-    }
-
-    private func pump() async {
-        let bridge = activeBridge()
-        repeat {
-            while let resultsJSON = await onExecutor(bridge, { $0.pumpOnce() }) {
-                deliverAll(resultsJSON: resultsJSON)
-            }
-            // An admit can land between the executor finding the queue empty and
-            // this actor resuming; it saw `pumping` and left the work to us.
-        } while bridge.hasPendingWork()
-        pumping = false
-    }
-
-    private nonisolated func onExecutor<T: Sendable>(
-        _ bridge: OpenCodeTextMateSchedulerBridge,
-        _ body: @escaping @Sendable (OpenCodeTextMateSchedulerBridge) -> T
-    ) async -> T {
-        let box = UncheckedSendableBridge(bridge: bridge)
-        return await withCheckedContinuation { continuation in
-            executor.async {
-                continuation.resume(returning: body(box.bridge))
-            }
-        }
-    }
-
-    private func deliverAll(resultsJSON: String) {
-        guard let data = resultsJSON.data(using: .utf8),
-              let results = try? decoder.decode([TextMateHighlightResult].self, from: data)
-        else {
-            return
-        }
-        for result in results {
-            resume(result: result)
-        }
-    }
-
-    private func resume(result: TextMateHighlightResult) {
-        if let ticketId = ticketIdentity.first(where: {
-            $0.value.0 == result.key && $0.value.1 == result.revision
-        })?.key {
-            ticketIdentity.removeValue(forKey: ticketId)
-            if let continuation = waiters.removeValue(forKey: ticketId) {
-                continuation.resume(returning: result)
-            }
-        }
-    }
-
-    private func activeBridge() -> OpenCodeTextMateSchedulerBridge {
-        if let bridge { return bridge }
-        let created = OpenCodeTextMateSchedulerBridge.companion.createDefault()
-        bridge = created
-        return created
-    }
-
-    private func encode(_ request: TextMateHighlightRequest) throws -> String {
-        // Kotlin HighlightRequest treats omitted nullables as missing unless they
-        // have defaults. Encode nil `language` explicitly as JSON null.
-        let data = try encoder.encode(EncodableHighlightRequest(request))
-        guard let json = String(data: data, encoding: .utf8) else {
-            throw TextMateHighlightingAdapterError.invalidUTF8
-        }
-        return json
-    }
-}
-
-nonisolated private struct EncodableHighlightRequest: Encodable {
-    let key: TextMateCodeBlockKey
-    let revision: TextMateHighlightRevision
-    let language: String?
-    let source: String
-    let intent: TextMateHighlightIntent
-    let policyEpoch: Int64
-    let messageCharacters: Int
-    let fenceIndex: Int
-    let fenceCount: Int
-
-    init(_ request: TextMateHighlightRequest) {
-        key = request.key
-        revision = request.revision
-        language = request.language
-        source = request.source
-        intent = request.intent
-        policyEpoch = request.policyEpoch
-        messageCharacters = request.messageCharacters
-        fenceIndex = request.fenceIndex
-        fenceCount = request.fenceCount
-    }
-
-    private enum CodingKeys: String, CodingKey {
-        case key, revision, language, source, intent, policyEpoch, messageCharacters, fenceIndex, fenceCount
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(key, forKey: .key)
-        try container.encode(revision, forKey: .revision)
-        if let language {
-            try container.encode(language, forKey: .language)
-        } else {
-            try container.encodeNil(forKey: .language)
-        }
-        try container.encode(source, forKey: .source)
-        try container.encode(intent, forKey: .intent)
-        try container.encode(policyEpoch, forKey: .policyEpoch)
-        try container.encode(messageCharacters, forKey: .messageCharacters)
-        try container.encode(fenceIndex, forKey: .fenceIndex)
-        try container.encode(fenceCount, forKey: .fenceCount)
-    }
-}
-
-/// The bridge locks its own queue state; engine state is confined to the executor.
-nonisolated private struct UncheckedSendableBridge: @unchecked Sendable {
-    let bridge: OpenCodeTextMateSchedulerBridge
-}
-
-nonisolated private enum TextMateHighlightingAdapterError: Error {
-    case invalidUTF8
 }
 
 nonisolated struct TextMateMarkdownFence: Sendable {
@@ -260,21 +68,14 @@ nonisolated struct TextMateMarkdownFence: Sendable {
     let source: String
     let policyEpoch: Int64
 
-    func request(
-        intent: TextMateHighlightIntent,
-        messageCharacters: Int,
-        fenceCount: Int
-    ) -> TextMateHighlightRequest {
+    func request(intent: TextMateHighlightIntent) -> TextMateHighlightRequest {
         TextMateHighlightRequest(
             key: key,
             revision: revision,
             language: language,
             source: source,
             intent: intent,
-            policyEpoch: policyEpoch,
-            messageCharacters: messageCharacters,
-            fenceIndex: fenceIndex,
-            fenceCount: fenceCount
+            policyEpoch: policyEpoch
         )
     }
 }
@@ -343,7 +144,7 @@ nonisolated extension NativeMarkdownDocument {
         guard result.source == fence.source, code == fence.source else {
             return .rejected(.sourceChanged)
         }
-        guard !["Failed", "Cancelled", "BudgetExceeded"].contains(result.outcome) else {
+        guard !["Failed", "Cancelled"].contains(result.outcome) else {
             return .rejected(.resultNotAttachable)
         }
 

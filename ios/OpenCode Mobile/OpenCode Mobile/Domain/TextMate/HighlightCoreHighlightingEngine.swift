@@ -1,49 +1,29 @@
-#if HIGHLIGHT_LAB
 import Foundation
 import OpenCodeMarkdownCore
 
-/// Routes each request to TextMate or highlight-core, reading the developer setting per call, so
-/// switching the setting back to TextMate takes effect on the next request.
-nonisolated struct DeveloperSelectedHighlightingEngine: TextMateHighlighting {
-    let textMate: any TextMateHighlighting
-    let highlightCore: any TextMateHighlighting
-    let usesHighlightCore: @Sendable () -> Bool
-
-    func highlight(_ request: TextMateHighlightRequest) async throws -> TextMateHighlightResult {
-        try await (usesHighlightCore() ? highlightCore : textMate).highlight(request)
-    }
-
-    func trim(_ level: TextMateMemoryPressure) async {
-        await highlightCore.trim(level)
-        await textMate.trim(level)
-    }
-}
-
-/// Session Chat code fences colored by highlight-core (#872), called directly from Swift without
-/// the JSON bridge. Each code block key keeps a `HighlightSession`; a new revision of a fence is
+/// Session Chat and File Viewer code fences colored by highlight-core (#872), the app's only
+/// highlighter. Each code block key keeps a `HighlightSession`; a new revision of a fence is
 /// applied as an edit from the common prefix, so a streamed fence re-lexes from its changed line
-/// only. Languages highlight-core does not know go to `fallback` (TextMate).
+/// only. A language highlight-core does not know (or no language) comes back with no spans and
+/// an `Unsupported` outcome: plain text, never an error.
 ///
 /// Sessions are single-threaded: every call runs on `queue`, and only the cancellation flag is
 /// touched from another thread.
 nonisolated final class HighlightCoreHighlightingEngine: TextMateHighlighting, @unchecked Sendable {
-    static let shared = HighlightCoreHighlightingEngine(fallback: KMPTextMateHighlightingEngine.shared)
+    static let shared = HighlightCoreHighlightingEngine()
 
     /// Per-request deadline. A fence that misses it attaches as Partial: highlighted prefix, plain rest.
     static let defaultDeadlineMilliseconds = 100.0
 
-    private let fallback: any TextMateHighlighting
     private let sessions: HighlightCoreFenceSessions
     private let deadlineMilliseconds: Double
     private let queue = DispatchQueue(label: "dev.opencode.mobile.highlight-core", qos: .userInitiated)
 
     init(
-        fallback: any TextMateHighlighting,
         maxSessions: Int = HighlightCoreFenceSessions.defaultMaxSessions,
         maxCharacters: Int = HighlightCoreFenceSessions.defaultMaxCharacters,
         deadlineMilliseconds: Double = defaultDeadlineMilliseconds
     ) {
-        self.fallback = fallback
         sessions = HighlightCoreFenceSessions(maxSessions: maxSessions, maxCharacters: maxCharacters)
         self.deadlineMilliseconds = deadlineMilliseconds
     }
@@ -55,17 +35,15 @@ nonisolated final class HighlightCoreHighlightingEngine: TextMateHighlighting, @
 
     func highlight(_ request: TextMateHighlightRequest) async throws -> TextMateHighlightResult {
         guard let language = request.language, Self.supports(language) else {
-            return try await fallback.highlight(request)
+            return Self.unsupported(request)
         }
         let cancel = HighlightCoreCancelBox()
         if Task.isCancelled { cancel.flag.cancel() }
-        let queued = DispatchTime.now().uptimeNanoseconds
         let sessions = sessions
         let deadlineMilliseconds = deadlineMilliseconds
         return await withTaskCancellationHandler {
             await withCheckedContinuation { continuation in
                 queue.async {
-                    let started = DispatchTime.now().uptimeNanoseconds
                     let update = sessions.update(
                         key: request.key,
                         language: language,
@@ -73,15 +51,7 @@ nonisolated final class HighlightCoreHighlightingEngine: TextMateHighlighting, @
                         cancel: cancel.flag,
                         deadline: HighlightDeadline.companion.after(milliseconds: deadlineMilliseconds)
                     )
-                    let finished = DispatchTime.now().uptimeNanoseconds
-                    continuation.resume(
-                        returning: Self.result(
-                            request: request,
-                            update: update,
-                            queueWaitNanoseconds: Int64(started - queued),
-                            totalNanoseconds: Int64(finished - started)
-                        )
-                    )
+                    continuation.resume(returning: Self.result(request: request, update: update))
                 }
             }
         } onCancel: {
@@ -98,7 +68,6 @@ nonisolated final class HighlightCoreHighlightingEngine: TextMateHighlighting, @
                 continuation.resume()
             }
         }
-        await fallback.trim(level)
     }
 
     /// Open sessions and their total UTF-16 length, for tests.
@@ -109,11 +78,23 @@ nonisolated final class HighlightCoreHighlightingEngine: TextMateHighlighting, @
         }
     }
 
+    /// No spans: the fence stays plain text.
+    private static func unsupported(_ request: TextMateHighlightRequest) -> TextMateHighlightResult {
+        TextMateHighlightResult(
+            key: request.key,
+            revision: request.revision,
+            source: request.source,
+            canonicalLanguage: nil,
+            policyEpoch: request.policyEpoch,
+            spans: [],
+            outcome: "Unsupported",
+            diagnostics: []
+        )
+    }
+
     private static func result(
         request: TextMateHighlightRequest,
-        update: HighlightCoreFenceUpdate,
-        queueWaitNanoseconds: Int64,
-        totalNanoseconds: Int64
+        update: HighlightCoreFenceUpdate
     ) -> TextMateHighlightResult {
         let outcome = switch update.status {
         case .complete: update.spans.isEmpty ? "NoSpans" : "Highlighted"
@@ -129,24 +110,7 @@ nonisolated final class HighlightCoreHighlightingEngine: TextMateHighlighting, @
             policyEpoch: request.policyEpoch,
             spans: update.status == .cancelled || update.status == .failed ? [] : update.spans,
             outcome: outcome,
-            diagnostics: [],
-            observation: NativeTextMateParseObservation(
-                requestedLanguage: request.language,
-                canonicalLanguage: update.canonicalLanguage,
-                outcome: outcome,
-                messageCharacters: request.messageCharacters,
-                fenceCharacters: request.source.utf16.count,
-                fenceLines: update.lineCount,
-                fenceIndex: request.fenceIndex,
-                fenceCount: request.fenceCount,
-                spanCount: update.spans.count,
-                backend: "highlight-core",
-                totalNanoseconds: totalNanoseconds,
-                stages: [],
-                diagnosticKinds: [],
-                queueWaitNanoseconds: queueWaitNanoseconds,
-                schedulingReason: "relexFromLine=\(update.relexedFromLine)"
-            )
+            diagnostics: []
         )
     }
 }
@@ -440,6 +404,21 @@ nonisolated final class HighlightCoreFenceSessions: @unchecked Sendable {
     }
 }
 
+/// One-shot highlight-core coloring for text that is highlighted once, such as tool output
+/// (`OpenCodeHighlightCoreCodeHighlighter` in the shared markdown core: per-call deadline, past
+/// it the rest stays plain). An unsupported language comes back with no spans.
+nonisolated enum HighlightCoreOneShotHighlighter {
+    static func spans(language: String, source: String) -> [NativeCodeSpan] {
+        OpenCodeHighlightCoreCodeHighlighter.shared
+            .highlight(languageOrAlias: language, code: source)
+            .spans
+            .compactMap { span in
+                guard let role = NativeCodeTokenRole(rawValue: span.role.name) else { return nil }
+                return NativeCodeSpan(start: Int(span.start), end: Int(span.end), role: role)
+            }
+    }
+}
+
 /// highlight-core's packed spans (`start, length, role code` per span) on the Swift side.
 nonisolated enum HighlightCoreSpans {
     /// `NativeCodeTokenRole` by `HighlightRole.code`; the names match one to one.
@@ -504,4 +483,3 @@ nonisolated enum HighlightCoreSpans {
         return low
     }
 }
-#endif

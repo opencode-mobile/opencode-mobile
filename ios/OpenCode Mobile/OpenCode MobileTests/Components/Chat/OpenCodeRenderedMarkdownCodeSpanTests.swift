@@ -65,7 +65,7 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         #expect(hex(secondColor) == "#0000ff")
     }
 
-    @Test func parallelTextMateFirstUsePreservesEveryFenceSource() async {
+    @Test func parallelHighlightCoreFirstUsePreservesEveryFenceSource() async {
         let fixtures = [
             ("swift", "struct PhaseOne { let value = 1 }"),
             ("kotlin", "data class PhaseOne(val value: Int)"),
@@ -204,14 +204,8 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
     }
 
     @Test func preparerFinalAfterPlaceholderUpgradesStreamingDocument() async {
-        let preferences = MarkdownHighlightPreferences.shared
-        let priorTextMateEnabled = preferences.textMateEnabled
-        preferences.setTextMateEnabled(true)
         MessageContentPreparer.shared.clearDocumentCache()
-        defer {
-            preferences.setTextMateEnabled(priorTextMateEnabled)
-            MessageContentPreparer.shared.clearDocumentCache()
-        }
+        defer { MessageContentPreparer.shared.clearDocumentCache() }
 
         let markdown = "```kotlin\nval answer = 42\n```"
         let streamingMessage = Message(
@@ -255,13 +249,15 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         )
         #expect(finalized.renderedMarkdown != nil)
         #expect(finalized.awaitingTextMateUpgrade == false)
-        // Streaming uses semantic fallback; Final must clear that diagnostic via TextMate.
-        #expect(
-            streaming.renderedMarkdown?.diagnostics.contains { $0.kind == "HighlighterFallback" } == true
-        )
-        #expect(
-            finalized.renderedMarkdown?.diagnostics.contains { $0.kind == "HighlighterFallback" } != true
-        )
+        // Streaming is structure-only; Final attaches highlight-core colors.
+        guard case .codeBlock(_, _, let streamingSpans) = streaming.renderedMarkdown?.blocks.first,
+              case .codeBlock(_, _, let finalSpans) = finalized.renderedMarkdown?.blocks.first
+        else {
+            Issue.record("Expected code blocks in both documents")
+            return
+        }
+        #expect(streamingSpans.isEmpty)
+        #expect(finalSpans.contains { $0.role == .keyword })
     }
 
     @Test func httpClientCodeBlockUsesWebAlignedTokenRoles() async {
@@ -298,24 +294,18 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         #expect(role(for: "constructor", in: code, spans: spans) == .keyword)
         #expect(role(for: "new", in: code, spans: spans) == .keyword)
         #expect(role(for: "options", in: code, spans: spans) == .variable)
-        #expect(role(for: "this", in: code, spans: spans) == .property)
+        // highlight-core roles, as pinned by its TypeScriptGoldenTest: `this` is a keyword and a
+        // private field declaration is a variable; a `this.#field` access is a property.
+        #expect(role(for: "this", in: code, spans: spans) == .keyword)
         #expect(role(for: "Map", in: code, spans: spans) == .function)
         #expect(role(for: "30000", in: code, spans: spans) == .number)
         #expect(role(for: "\"\"", in: code, spans: spans) == .string)
         #expect(role(for: "request", in: code, spans: spans) == .property)
-        #expect(role(for: "#baseUrl", in: code, spans: spans, occurrence: 0) == nil)
+        #expect(role(for: "#baseUrl", in: code, spans: spans, occurrence: 0) == .variable)
         #expect(role(for: "#baseUrl", in: code, spans: spans, occurrence: 1) == .property)
     }
 
     @Test func javaMainClassCodeBlockUsesWebAlignedTokenRoles() async {
-        let preferences = MarkdownHighlightPreferences.shared
-        let priorEnabled = preferences.isLanguageEnabled("java")
-        preferences.setTextMateEnabled(true)
-        preferences.setLanguageEnabled("java", enabled: true)
-        defer {
-            preferences.setLanguageEnabled("java", enabled: priorEnabled)
-        }
-
         let snippet = """
         public class Main {
             public static void main(String[] args) {
@@ -411,20 +401,16 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         _ markdown: String,
         ownerKey: String
     ) async -> NativeMarkdownDocument {
-        let fallback = OpenCodeRenderedMarkdownParser.parse(markdown, textMateEnabled: false)
-        let fences = fallback.textMateFences(
+        let structure = OpenCodeRenderedMarkdownParser.parse(markdown, structureOnly: true)
+        let fences = structure.textMateFences(
             ownerKey: ownerKey,
             revision: TextMateHighlightRevision(value: 1),
             policyEpoch: 1
         )
-        var document = fallback
+        var document = structure
         for fence in fences {
-            guard let result = try? await KMPTextMateHighlightingEngine.shared.highlight(
-                fence.request(
-                    intent: .interactiveFinal,
-                    messageCharacters: markdown.utf16.count,
-                    fenceCount: fences.count
-                )
+            guard let result = try? await HighlightCoreHighlightingEngine.shared.highlight(
+                fence.request(intent: .interactiveFinal)
             ) else {
                 continue
             }

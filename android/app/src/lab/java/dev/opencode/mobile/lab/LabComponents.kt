@@ -10,14 +10,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
@@ -183,24 +180,6 @@ private fun LabTableRow(
                         .width(widths.getOrElse(index) { widths.last() })
                         .padding(horizontal = LabTableCellPadding, vertical = 4.dp),
             )
-        }
-    }
-}
-
-/** Keeps two code panes over the same lines at the same scroll position, whichever the user drags. */
-@Composable
-internal fun LabSyncedScroll(
-    first: LazyListState,
-    second: LazyListState,
-) {
-    LaunchedEffect(first, second) {
-        snapshotFlow { first.firstVisibleItemIndex to first.firstVisibleItemScrollOffset }.collect { (index, offset) ->
-            if (first.isScrollInProgress && !second.isScrollInProgress) second.scrollToItem(index, offset)
-        }
-    }
-    LaunchedEffect(first, second) {
-        snapshotFlow { second.firstVisibleItemIndex to second.firstVisibleItemScrollOffset }.collect { (index, offset) ->
-            if (second.isScrollInProgress && !first.isScrollInProgress) first.scrollToItem(index, offset)
         }
     }
 }

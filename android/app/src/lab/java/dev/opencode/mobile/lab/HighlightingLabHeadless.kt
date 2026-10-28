@@ -23,7 +23,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Unattended benchmark runs (#872):
- * `adb shell am start -n dev.opencode.mobile/.MainActivity --es labRun quick:engines=textmate,semantic-fallback`
+ * `adb shell am start -n dev.opencode.mobile/.MainActivity --es labRun quick:engines=highlight-core`
  * (value format in [HighlightBenchHeadless]). The run happens off the main thread in the process
  * scope; the activity shows progress, writes `latest.md`/`latest.json` plus timestamped copies to
  * `files/highlight-lab/` (mirrored to external app storage for `adb pull` on benchmark builds),

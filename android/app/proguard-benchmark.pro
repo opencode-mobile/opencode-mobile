@@ -1,6 +1,6 @@
 # Benchmark build type only (#872 Highlighting Lab). The measured engines stay optimized as
 # in release; the Lab's measuring code keeps its class names so failure notes and stack
-# traces in reports stay readable. Grammar assets are never shrunk (isShrinkResources is off).
+# traces in reports stay readable.
 -keepnames class dev.opencode.mobile.highlight.bench.** { *; }
 -keepnames class dev.opencode.mobile.lab.** { *; }
 

@@ -25,7 +25,6 @@ import dev.opencode.mobile.ui.components.OpenCodeKeyValueStyle
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
-import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 
 @Composable
@@ -34,19 +33,12 @@ internal fun LabViewerScreen(
     onNavigateBack: () -> Unit,
     onRender: (String) -> Unit,
     onCancel: () -> Unit,
-    onCompare: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         OpenCodeTopBar(
             title = state.title,
             subtitle = state.subtitle.ifEmpty { null },
             leading = OpenCodeTopBarLeading.Back(onNavigateBack),
-            actions =
-                if (state.phase == LabViewerPhase.Missing || state.engines.size < 2) {
-                    emptyList()
-                } else {
-                    listOf(OpenCodeTopBarAction.Label("Compare", onClick = onCompare))
-                },
             showDivider = true,
         )
         if (state.phase == LabViewerPhase.Missing) {

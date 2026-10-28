@@ -824,24 +824,13 @@ extension Container {
         shared.terminalViewModel((worktree: worktree, ptyId: ptyId))
     }
 
-    /// Highlighter for Session Chat code fences and the File Viewer: TextMate, or highlight-core
-    /// when the developer Highlighting Engine setting picks it (#872). Store Release builds have
-    /// no setting and use TextMate.
-    nonisolated static let codeHighlighter: any TextMateHighlighting = {
-        #if HIGHLIGHT_LAB
-        DeveloperSelectedHighlightingEngine(
-            textMate: KMPTextMateHighlightingEngine.shared,
-            highlightCore: HighlightCoreHighlightingEngine.shared,
-            usesHighlightCore: { HighlightEnginePreferences.usesHighlightCore() }
-        )
-        #else
-        KMPTextMateHighlightingEngine.shared
-        #endif
-    }()
+    /// Highlighter for Session Chat code fences: highlight-core (#872) in every build. The File
+    /// Viewer keeps its own highlight-core session per open file (`HighlightCoreFileSession`).
+    nonisolated static let codeHighlighter: any TextMateHighlighting = HighlightCoreHighlightingEngine.shared
 
     @MainActor
     static func makeFilesViewModel(worktree: String) -> FilesViewModel {
-        FilesViewModel(worktree: worktree, repository: shared.projectFilesRepository(), highlighter: codeHighlighter)
+        FilesViewModel(worktree: worktree, repository: shared.projectFilesRepository())
     }
 
     @MainActor
@@ -856,7 +845,6 @@ extension Container {
             await shared.sessionCache().clearAll()
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()
-            MarkdownHighlightPreferences.shared.clear()
             AnalyticsConsentPreferences.shared.clear()
             // Apply the reset default to Crashlytics and Analytics collection now, not at next launch.
             OpenCodeReleaseObservability.setProductAnalyticsConsented(
@@ -866,10 +854,7 @@ extension Container {
             AppOnboardingPreferences.shared.clear()
             DeveloperToolsPreferences.shared.clear()
             PerformanceOverlayPreferences.shared.clear()
-            #if HIGHLIGHT_LAB
-            HighlightEnginePreferences.shared.clear()
-            await HighlightCoreHighlightingEngine.shared.trim(.critical)
-            #endif
+            await codeHighlighter.trim(.critical)
             SessionChatDisplayPreferences.shared.clear()
             // A wipe is a fresh install: settle the timeline now so the update-only picker never shows.
             SessionChatDisplayPreferences.shared.resolveTimelineForInstall(existingInstall: false)
@@ -877,7 +862,6 @@ extension Container {
             FeatureFlags.shared.clearOverrides()
             MessageContentPreparer.shared.clearDocumentCache()
             BlockDecorationCache.shared.clear()
-            await TextMateLogbook.shared.clear()
             DiagnosticLogBuffer.shared.clear()
         }
     }

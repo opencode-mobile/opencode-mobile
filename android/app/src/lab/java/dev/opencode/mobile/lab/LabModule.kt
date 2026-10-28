@@ -41,7 +41,6 @@ object LabModule {
     @Singleton
     fun provideLabEngines(): LabEngines =
         LabEngines(
-            // TextMate reads grammars through the app context set in Application.onCreate.
             engines = HighlightBenchEngines.available(),
             newCallGuard = { HighlightBenchThreadGuard() },
             dispatcher = Dispatchers.Default,

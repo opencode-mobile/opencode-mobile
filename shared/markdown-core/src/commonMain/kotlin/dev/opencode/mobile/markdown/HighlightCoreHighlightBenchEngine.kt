@@ -11,9 +11,8 @@ import dev.opencode.mobile.highlight.core.HighlightDeadline
 import dev.opencode.mobile.highlight.core.HighlightStatus
 
 /**
- * The #872 highlight-core library behind the Highlighting Lab's benchmark seam, for comparing it
- * with TextMate. Lab only: nothing else in the apps uses highlight-core yet. Languages without a
- * lexer come back as unsupported (and runs skip them), never as plain "highlighted" text.
+ * The #872 highlight-core library behind the Highlighting Lab's benchmark seam. Languages without
+ * a lexer come back as unsupported (and runs skip them), never as plain "highlighted" text.
  */
 object HighlightCoreHighlightBenchEngine : HighlightBenchEngine {
     override val id: String = "highlight-core"

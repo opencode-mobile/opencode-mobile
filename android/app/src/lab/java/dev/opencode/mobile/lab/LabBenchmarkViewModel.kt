@@ -11,8 +11,8 @@ import dev.opencode.mobile.highlight.bench.HighlightBenchRun
 import dev.opencode.mobile.highlight.bench.HighlightBenchSection
 import dev.opencode.mobile.highlight.bench.HighlightBenchTier
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -89,7 +89,7 @@ data class LabBenchmarkUiState(
     val canRun: Boolean
         get() = !running && engineOrder.isNotEmpty() && (scope != LabBenchmarkScope.Selected || selectedDataSetIds.isNotEmpty())
 
-    /** Engine order for display: "1. TextMate (baseline)". */
+    /** Engine order for display: "1. highlight-core (baseline)". */
     fun engineLabel(option: LabEngineOption): String {
         val position = engineOrder.indexOf(option.id)
         return when {
@@ -226,7 +226,7 @@ class LabBenchmarkViewModel
 
         private fun parseReport(markdown: String): MarkdownDocument? =
             runCatching {
-                OpenCodeMarkdownParser.parse(markdown, codeHighlighter = OpenCodeSemanticFallbackHighlighter)
+                OpenCodeMarkdownParser.parse(markdown, codeHighlighter = OpenCodeHighlightCoreCodeHighlighter)
             }.getOrNull()
 
         /** Cancels the call in progress and skips the remaining cases; the partial report is kept. */

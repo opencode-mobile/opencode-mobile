@@ -88,67 +88,6 @@ class LabScreenModelsTest {
     }
 
     @Test
-    fun compareMarksWhereTheEnginesDisagree() =
-        runTest(dispatcher) {
-            val store = smallStore()
-            val id = store.addPasted("kotlin", KOTLIN_SOURCE).id
-            val model = LabCompareViewModel(store, labEngines(dispatcher))
-
-            model.bind(null)
-            assertEquals(LabComparePhase.Picking, model.state.value.phase)
-            assertFalse(model.state.value.backReturnsToPicker)
-            assertEquals(HighlightBenchCatalog.languages.size + 1, model.state.value.pickerRows.size)
-
-            model.selectDataSet(id)
-            advanceUntilIdle()
-            val state = model.state.value
-            assertEquals(LabComparePhase.Compared, state.phase)
-            // Opened on the picker, so Back goes to it rather than out of Compare.
-            assertTrue(state.backReturnsToPicker)
-            val summary = requireNotNull(state.summary)
-            // Only "val" (3 characters) differs: colored by beta, plain for alpha.
-            assertEquals(1, summary.differingRanges)
-            assertEquals(3, summary.differingCharacters)
-            assertEquals(1.0 - 3.0 / KOTLIN_SOURCE.length, summary.agreement, 1e-9)
-            // The tab before "val" expands to four spaces, and the mark moves with it.
-            val marked = requireNotNull(state.right).lines[1]
-            assertEquals("    val x = 1", marked.text)
-            assertEquals(4, marked.marks.single().start)
-            assertEquals(7, marked.marks.single().end)
-            assertEquals(marked.marks, requireNotNull(state.left).lines[1].marks)
-
-            model.selectRightEngine("alpha")
-            advanceUntilIdle()
-            assertEquals(
-                1.0,
-                model.state.value.summary
-                    ?.agreement,
-            )
-            assertEquals(
-                0,
-                model.state.value.summary
-                    ?.differingRanges,
-            )
-
-            model.changeDataSet()
-            assertEquals(LabComparePhase.Picking, model.state.value.phase)
-            assertNull(model.state.value.summary)
-            assertFalse(model.state.value.backReturnsToPicker)
-        }
-
-    @Test
-    fun compareOpenedOnADataSetLeavesBackToTheRoute() =
-        runTest(dispatcher) {
-            val store = smallStore()
-            val id = store.addPasted("kotlin", KOTLIN_SOURCE).id
-            val model = LabCompareViewModel(store, labEngines(dispatcher))
-            model.bind(id)
-            advanceUntilIdle()
-            assertEquals(LabComparePhase.Compared, model.state.value.phase)
-            assertFalse(model.state.value.backReturnsToPicker)
-        }
-
-    @Test
     fun benchmarkKeepsEngineOrderAndNeedsDataSetsWhenSelected() =
         runTest(dispatcher) {
             val model = benchmark(smallStore(), LabReportStore(createTempDirectory()))

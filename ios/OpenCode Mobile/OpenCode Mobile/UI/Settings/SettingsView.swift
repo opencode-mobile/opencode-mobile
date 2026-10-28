@@ -7,8 +7,6 @@ enum SettingsDetail: Hashable {
     case servers
     case appearance
     case componentGallery
-    case textMateLanguages
-    case textMateLogbook
     case featureFlags
     case diagnosticLogs
     #if HIGHLIGHT_LAB
@@ -20,7 +18,7 @@ enum SettingsDetail: Hashable {
         switch self {
         case .servers, .appearance, .diagnosticLogs:
             false
-        case .componentGallery, .textMateLanguages, .textMateLogbook, .featureFlags:
+        case .componentGallery, .featureFlags:
             true
         #if HIGHLIGHT_LAB
         case .highlightLab:
@@ -47,9 +45,7 @@ struct SettingsView: View {
     /// Trailing-pane sub-screen in the regular-width split view. Unused on compact.
     @State private var selectedDetail: SettingsDetail = .servers
     @State private var showComponentGallery = false
-    @State private var showTextMateLogbook = false
     @State private var showDiagnosticLogs = false
-    @State private var showTextMateLanguages = false
     @State private var showFeatureFlags = false
     #if HIGHLIGHT_LAB
     @State private var showHighlightLab = false
@@ -64,16 +60,12 @@ struct SettingsView: View {
     @State private var showSessionRowsPicker = false
     @State private var themeManager = ThemeManager.shared
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
-    @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
     @State private var analyticsConsentPreferences = AnalyticsConsentPreferences.shared
     @State private var appLockPreferences = AppLockPreferences.shared
     private let appLockAuthenticator: any AppLockAuthenticating = LocalAuthenticationAppLockAuthenticator()
     @State private var sessionChatDisplayPreferences = SessionChatDisplayPreferences.shared
     @State private var developerToolsPreferences = DeveloperToolsPreferences.shared
     @State private var performanceOverlayPreferences = PerformanceOverlayPreferences.shared
-    #if HIGHLIGHT_LAB
-    @State private var highlightEnginePreferences = HighlightEnginePreferences.shared
-    #endif
     @State private var showServers = false
     @State private var serversSubtitleState = "No servers saved"
     @State private var serversLetter: Character = "S"
@@ -108,12 +100,6 @@ struct SettingsView: View {
         .onDisappear { isOnScreen = false }
         .navigationDestination(isPresented: $showComponentGallery) {
             ComponentGalleryHomeView()
-        }
-        .navigationDestination(isPresented: $showTextMateLanguages) {
-            TextMateLanguagesView()
-        }
-        .navigationDestination(isPresented: $showTextMateLogbook) {
-            TextMateLogbookView()
         }
         .navigationDestination(isPresented: $showFeatureFlags) {
             FeatureFlagsView()
@@ -638,49 +624,10 @@ struct SettingsView: View {
                         )
                         .padding(.horizontal, 16)
 
-                        OpenCodeListItem(
-                            title: "TextMate Highlighting",
-                            subtitle: "On by default for all packaged languages; semantic fallback otherwise (can disable)",
-                            style: .card,
-                            startDecorator: .icon(.description, accessibilityLabel: "TextMate Highlighting"),
-                            accessory: .toggle(
-                                isOn: Binding(
-                                    get: { markdownHighlightPreferences.textMateEnabled },
-                                    set: { newValue in
-                                        markdownHighlightPreferences.setTextMateEnabled(newValue)
-                                        MessageContentPreparer.shared.clearDocumentCache()
-                                        BlockDecorationCache.shared.clear()
-                                    }
-                                ),
-                                accessibilityLabel: "TextMate Highlighting"
-                            )
-                        )
-                        .padding(.horizontal, 16)
-
-                        OpenCodeListItem(
-                            title: "TextMate Languages",
-                            subtitle: "Opt out of any packaged language (all default on)",
-                            selected: isDetailSelected(.textMateLanguages),
-                            style: .card,
-                            startDecorator: .icon(.architecture, accessibilityLabel: "TextMate Languages"),
-                            action: { open(.textMateLanguages) }
-                        )
-                        .padding(.horizontal, 16)
-
-                        OpenCodeListItem(
-                            title: "TextMate Logbook",
-                            subtitle: "Persisted code-fence parsing measurements",
-                            selected: isDetailSelected(.textMateLogbook),
-                            style: .card,
-                            startDecorator: .icon(.description, accessibilityLabel: "TextMate Logbook"),
-                            action: { open(.textMateLogbook) }
-                        )
-                        .padding(.horizontal, 16)
-
                         #if HIGHLIGHT_LAB
                         OpenCodeListItem(
                             title: "Highlighting Lab",
-                            subtitle: "Data sets, on-device benchmarks, and engine comparison",
+                            subtitle: "Data sets and on-device benchmarks",
                             selected: isDetailSelected(.highlightLab),
                             style: .card,
                             startDecorator: .icon(.code, accessibilityLabel: "Highlighting Lab"),
@@ -688,27 +635,6 @@ struct SettingsView: View {
                         )
                         .padding(.horizontal, 16)
                         .accessibilityIdentifier("settings.highlightLab")
-
-                        OpenCodeListItem(
-                            title: "Highlighting Engine",
-                            subtitle: highlightEnginePreferences.engine.title
-                                + " · chat code fences and the File Viewer",
-                            style: .card,
-                            startDecorator: .icon(.code, accessibilityLabel: "Highlighting Engine"),
-                            accessory: .toggle(
-                                isOn: Binding(
-                                    get: { highlightEnginePreferences.engine == .highlightCore },
-                                    set: { usesHighlightCore in
-                                        highlightEnginePreferences.setEngine(usesHighlightCore ? .highlightCore : .textMate)
-                                        MessageContentPreparer.shared.clearDocumentCache()
-                                        BlockDecorationCache.shared.clear()
-                                    }
-                                ),
-                                accessibilityLabel: "Use highlight-core"
-                            )
-                        )
-                        .padding(.horizontal, 16)
-                        .accessibilityIdentifier("settings.highlightingEngine")
                         #endif
 
                         OpenCodeListItem(
@@ -772,8 +698,6 @@ struct SettingsView: View {
         case .servers: showServers = true
         case .appearance: showAppearance = true
         case .componentGallery: showComponentGallery = true
-        case .textMateLanguages: showTextMateLanguages = true
-        case .textMateLogbook: showTextMateLogbook = true
         case .featureFlags: showFeatureFlags = true
         case .diagnosticLogs: showDiagnosticLogs = true
         #if HIGHLIGHT_LAB
@@ -807,10 +731,6 @@ struct SettingsView: View {
             AppearanceSettingsView(detailControl: control)
         case .componentGallery:
             ComponentGalleryHomeView(detailControl: control)
-        case .textMateLanguages:
-            TextMateLanguagesView(detailControl: control)
-        case .textMateLogbook:
-            TextMateLogbookView(detailControl: control)
         case .featureFlags:
             FeatureFlagsView(detailControl: control)
         case .diagnosticLogs:

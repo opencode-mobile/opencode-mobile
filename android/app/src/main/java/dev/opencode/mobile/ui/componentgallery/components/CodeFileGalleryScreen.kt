@@ -17,7 +17,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
+import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
@@ -57,7 +57,7 @@ fun CodeFileGalleryScreen(modifier: Modifier = Modifier) {
     val (_, grammar, source) = CodeFileSamples[sample]
     val lines =
         remember(sample) {
-            val spans = grammar?.let { OpenCodeSemanticFallbackHighlighter.highlight(it, source).spans }.orEmpty()
+            val spans = grammar?.let { OpenCodeHighlightCoreCodeHighlighter.highlight(it, source).spans }.orEmpty()
             OpenCodeCodeLines.split(source, spans)
         }
     // Marks every other line's first word, the way the Highlighting Lab marks engine disagreements.

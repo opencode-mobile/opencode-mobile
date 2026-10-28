@@ -15,7 +15,5 @@ internal object LabFormat {
 
     fun rate(value: Double): String = String.format(Locale.US, if (value < 100) "%.1f" else "%,.0f", value)
 
-    fun percent(share: Double): String = String.format(Locale.US, "%.2f%%", share * 100)
-
     fun ratio(value: Double): String = String.format(Locale.US, "%.2f×", value)
 }

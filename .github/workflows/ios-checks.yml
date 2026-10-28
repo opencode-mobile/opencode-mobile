@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       run_markdown_core_ios_tests:
-        description: "Also run markdown-core libonig Kotlin/Native iOS tests (~2–3 min)"
+        description: "Also run markdown-core Kotlin/Native iOS tests (~2–3 min)"
         type: boolean
         default: false
 
@@ -59,11 +59,11 @@ jobs:
         working-directory: .
         run: ./scripts/ensure-android-platform.sh 37
 
-      # Soft-disabled on PRs to save macOS minutes. Android Joni covers shared
-      # highlighter logic; this step uniquely covers libonig / Kotlin/Native.
+      # Soft-disabled on PRs to save macOS minutes. The Android unit tests run the
+      # same common tests; this step uniquely covers Kotlin/Native.
       # Re-enable on every PR: change the if below to always().
       # One-off: Actions → iOS Checks → Run workflow → enable the input.
-      - name: Run markdown-core libonig iOS tests
+      - name: Run markdown-core iOS tests
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_markdown_core_ios_tests }}
         working-directory: android
         run: ./gradlew :markdown-core:iosSimulatorArm64Test --stacktrace
