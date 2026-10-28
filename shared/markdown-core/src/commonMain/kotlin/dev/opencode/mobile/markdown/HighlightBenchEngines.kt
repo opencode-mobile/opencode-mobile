@@ -24,6 +24,8 @@ object SemanticFallbackHighlightBenchEngine : HighlightBenchEngine {
 
     override val displayName: String = "Semantic fallback"
 
+    override fun supportsLanguage(language: String): Boolean = OpenCodeSemanticFallbackHighlighter.supportsLanguage(language)
+
     override fun newHighlighter(): HighlightBenchHighlighter =
         HighlightBenchHighlighter { language, source, _, collectSpans ->
             val supported = OpenCodeSemanticFallbackHighlighter.supportsLanguage(language)

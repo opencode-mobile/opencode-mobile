@@ -1,5 +1,6 @@
 package dev.opencode.mobile.lab
 
+import dev.opencode.mobile.highlight.bench.HighlightBenchCatalog
 import dev.opencode.mobile.highlight.bench.HighlightBenchDataKind
 import dev.opencode.mobile.highlight.bench.HighlightBenchDataSet
 import dev.opencode.mobile.highlight.bench.HighlightBenchSizeClass
@@ -37,7 +38,8 @@ class LabScreenModelsTest {
         runTest(dispatcher) {
             val pasted = HighlightBenchDataSet.custom("t", "Pasted kotlin", "kotlin", KOTLIN_SOURCE)
             val model = LabDataSetsViewModel(smallStore(listOf(pasted)), labEngines(dispatcher))
-            assertEquals(7, model.state.value.rows.size)
+            // One 2K data set per catalog language, plus the pasted one.
+            assertEquals(HighlightBenchCatalog.languages.size + 1, model.state.value.rows.size)
 
             model.selectLanguage("kotlin")
             assertEquals(
@@ -95,7 +97,7 @@ class LabScreenModelsTest {
             model.bind(null)
             assertEquals(LabComparePhase.Picking, model.state.value.phase)
             assertFalse(model.state.value.backReturnsToPicker)
-            assertEquals(7, model.state.value.pickerRows.size)
+            assertEquals(HighlightBenchCatalog.languages.size + 1, model.state.value.pickerRows.size)
 
             model.selectDataSet(id)
             advanceUntilIdle()
