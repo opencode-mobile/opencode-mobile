@@ -101,13 +101,36 @@ struct TextMateHighlightingEngineTests {
         #expect(second.outcome == "Highlighted")
     }
 
-    private func request(key: String, revision: Int64, source: String) -> TextMateHighlightRequest {
+    @Test func normalTrimAfterMemoryWarningRestoresHistoryHighlighting() async throws {
+        let engine = KMPTextMateHighlightingEngine()
+        await engine.trim(.critical)
+
+        let duringWarning = try await engine.highlight(
+            request(key: "history", revision: 1, source: "let value = 1", intent: .visibleHistory)
+        )
+        #expect(duringWarning.outcome == "BudgetExceeded")
+        #expect(duringWarning.observation.schedulingReason == "Trim")
+
+        await engine.trim(.normal)
+
+        let afterForeground = try await engine.highlight(
+            request(key: "history", revision: 2, source: "let value = 1", intent: .backgroundHistory)
+        )
+        #expect(afterForeground.outcome == "Highlighted")
+    }
+
+    private func request(
+        key: String,
+        revision: Int64,
+        source: String,
+        intent: TextMateHighlightIntent = .interactiveFinal
+    ) -> TextMateHighlightRequest {
         TextMateHighlightRequest(
             key: TextMateCodeBlockKey(value: key),
             revision: TextMateHighlightRevision(value: revision),
             language: "typescript",
             source: source,
-            intent: .interactiveFinal,
+            intent: intent,
             policyEpoch: 1,
             messageCharacters: source.utf16.count,
             fenceIndex: 0,

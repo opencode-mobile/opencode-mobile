@@ -85,8 +85,9 @@ class AndroidTextMateHighlightingEngine(
                 waiters.remove(completion.ticketId)?.complete(completion.result)
             }
         }
+        // Never build the engine just to trim it; a foreground Normal arrives on every app start.
         withContext(ownerDispatcher) {
-            ownedDelegate().trim(level)
+            delegate?.trim(level)
         }
     }
 

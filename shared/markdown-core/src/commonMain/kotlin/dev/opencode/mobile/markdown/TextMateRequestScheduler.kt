@@ -19,6 +19,9 @@ class TextMateRequestScheduler(
     private var backgroundDisabledByTrim = false
     private var backgroundDisabledByPower = false
     private var historyAdmissionDisabled = false
+
+    // Platforms rarely say when pressure is over, so trim restrictions lapse on their own.
+    private var trimRecoversAtMs: Long? = null
     private var interactiveCredit = limits.deficitInteractive
     private var visibleCredit = limits.deficitVisible
     private var backgroundCredit = limits.deficitBackground
@@ -34,15 +37,17 @@ class TextMateRequestScheduler(
     private var deadlinePriorityCount = 0
     private var trimDropCount = 0
 
-    fun snapshot(): TextMateSchedulerSnapshot =
-        TextMateSchedulerSnapshot(
+    fun snapshot(): TextMateSchedulerSnapshot {
+        // Read-only: some platforms read snapshots without serializing with admits.
+        val trimActive = trimRecoversAtMs?.let { clock() < it } ?: false
+        return TextMateSchedulerSnapshot(
             pendingInteractive = pending.count { it.request.intent == HighlightIntent.InteractiveFinal },
             pendingHistory = pending.count { it.request.intent != HighlightIntent.InteractiveFinal },
             pendingCharacters = pending.sumOf { it.request.source.length },
             active = active != null,
             activeCancelRequested = active?.cancelRequested == true,
-            backgroundDisabled = backgroundDisabled,
-            historyAdmissionDisabled = historyAdmissionDisabled,
+            backgroundDisabled = backgroundDisabledByPower || (trimActive && backgroundDisabled),
+            historyAdmissionDisabled = trimActive && historyAdmissionDisabled,
             pendingInteractiveHwm = pendingInteractiveHwm,
             pendingHistoryHwm = pendingHistoryHwm,
             pendingCharsHwm = pendingCharsHwm,
@@ -51,9 +56,11 @@ class TextMateRequestScheduler(
             deadlinePriorityCount = deadlinePriorityCount,
             trimDropCount = trimDropCount,
         )
+    }
 
     fun admit(request: HighlightRequest): TextMateAdmitResult {
         val nowMs = clock()
+        recoverFromTrimIfDue(nowMs)
         val completed = mutableListOf<TextMateTicketCompletion>()
 
         pending.removeAll { ticket ->
@@ -122,6 +129,7 @@ class TextMateRequestScheduler(
     fun pickNext(): TextMateScheduledJob? {
         if (active != null) return null
         val nowMs = clock()
+        recoverFromTrimIfDue(nowMs)
         val selected = selectPending(nowMs) ?: return null
         pending.remove(selected)
         selected.startedAtMs = nowMs
@@ -184,17 +192,24 @@ class TextMateRequestScheduler(
         )
     }
 
+    /**
+     * Moderate and Critical restrictions last until [MemoryPressure.Normal] or until
+     * [TextMateSchedulerLimits.trimRecoveryMs] passes without another trim, whichever comes first.
+     */
     fun trim(level: MemoryPressure): List<TextMateTicketCompletion> {
         val nowMs = clock()
+        recoverFromTrimIfDue(nowMs)
         val completed = mutableListOf<TextMateTicketCompletion>()
         when (level) {
             MemoryPressure.Moderate -> {
                 backgroundDisabledByTrim = true
+                trimRecoversAtMs = nowMs + limits.trimRecoveryMs
                 completed += dropPending(nowMs, intents = setOf(HighlightIntent.BackgroundHistory), TextMateSchedulingReason.Trim)
             }
             MemoryPressure.Critical -> {
                 backgroundDisabledByTrim = true
                 historyAdmissionDisabled = true
+                trimRecoversAtMs = nowMs + limits.trimRecoveryMs
                 completed +=
                     dropPending(
                         nowMs,
@@ -208,14 +223,22 @@ class TextMateRequestScheduler(
                     }
                 }
             }
-            MemoryPressure.Normal -> {
-                backgroundDisabledByTrim = false
-                historyAdmissionDisabled = false
-            }
+            MemoryPressure.Normal -> clearTrimRestrictions()
         }
         trimDropCount += completed.size
         recordHighWater()
         return completed
+    }
+
+    private fun recoverFromTrimIfDue(nowMs: Long) {
+        val recoversAt = trimRecoversAtMs ?: return
+        if (nowMs >= recoversAt) clearTrimRestrictions()
+    }
+
+    private fun clearTrimRestrictions() {
+        backgroundDisabledByTrim = false
+        historyAdmissionDisabled = false
+        trimRecoversAtMs = null
     }
 
     /**
@@ -397,6 +420,7 @@ data class TextMateSchedulerLimits(
     val deficitInteractive: Int = 8,
     val deficitVisible: Int = 2,
     val deficitBackground: Int = 1,
+    val trimRecoveryMs: Long = 30_000,
 )
 
 enum class TextMateSchedulingReason {
