@@ -6,7 +6,8 @@ import dev.opencode.mobile.highlight.core.LexerScan.isHexDigit
 
 /**
  * The shared lexer for C-like languages, configured per language by a [CLikeSyntax]: TypeScript
- * and JavaScript (with JSX), Kotlin, Swift, Rust, Go, Java, C, C++, and C#.
+ * and JavaScript (with JSX), Kotlin, Swift, Rust, Go, Java, C, C++, C#, Dart, Scala, Groovy,
+ * Objective-C, Zig, and Apex.
  *
  * Roles: keywords from the syntax's word table (contextual ones only before something a keyword
  * can precede), strings with escapes as Constant and interpolation delimiters as Punctuation,
@@ -16,13 +17,17 @@ import dev.opencode.mobile.highlight.core.LexerScan.isHexDigit
  * `@` annotations (and Rust `#[…]`, C++ `[[…]]`, C# line-leading `[…]` attributes), Operator and
  * Punctuation. Plain identifiers take the syntax's identifier role. C-family `#` directives are a
  * Punctuation `#` and a Keyword name; Rust macros (`name!`) are Functions and lifetimes Types;
- * printf-style placeholders in Go and C strings are Constant.
+ * printf-style placeholders in Go and C strings are Constant. Dart, Scala, and Groovy strings mark
+ * `$name` and `${…}` interpolations; Objective-C `@` directives are Keywords and selector parts
+ * in a `[…]` message or a method declaration Functions; Zig `@builtin`s are Functions and `\`
+ * lines Strings; Apex keywords match in any case, and a `[SELECT …]` query lexes as SOQL.
  *
  * Everything still open at a line end is packed into the state as a stack of up to four frames,
  * one byte each, innermost in the low byte: a block comment (nesting depth), a string that can
  * span lines or holds an interpolation (its kind, or a Swift raw string's `#` count), the code of
  * an interpolation or JSX expression (its open brace or paren depth), and a JSX element (inside a
- * tag, and how many elements are open), and a C or C++ directive continued with a trailing `\`.
+ * tag, and how many elements are open), a C or C++ directive continued with a trailing `\`, and
+ * an Apex SOQL query (its `[` depth).
  * A C++ raw string is the one frame that uses the whole state: its delimiter's length and a hash
  * of it ride above the frame byte, and it only opens with nothing else open. State 0 is code at
  * the top of a document. Past four frames a construct degrades instead of nesting: a string or
@@ -65,14 +70,26 @@ internal class CLikeSyntax(
     val hash: Int,
     /** Capitalized identifiers of capitals and digits only (`MAX`, `EOF`) are constants too, not types. */
     val allCapsConstants: Boolean = false,
+    /** `/* … */` comments exist (all but Zig). */
+    val blockComments: Boolean = true,
+    /** Words match in any ASCII case (Apex). */
+    caseInsensitive: Boolean = false,
+    /** `#!` on the first line is a comment. */
+    val shebang: Boolean = hash == HASH_PRIVATE,
+    /** Words inside a `[SELECT …]` or `[FIND …]` query (Apex SOQL and SOSL); null where there are no queries. */
+    soqlWords: Map<String, Int>? = null,
 ) {
-    val words = WordTable(words)
+    val words = WordTable(words, caseInsensitive)
+
+    val soqlWords: WordTable? = soqlWords?.let { WordTable(it, caseInsensitive = true) }
+
+    val objc: Boolean = strings == STRINGS_OBJC
 
     /** `name!` is a macro call (Rust). */
     val macros: Boolean = strings == STRINGS_RUST
 
     /** C and C++: `_t` names are types, `'` separates digits, and strings continue after a trailing `\`. */
-    val cFamily: Boolean = strings == STRINGS_C || strings == STRINGS_CPP
+    val cFamily: Boolean = strings == STRINGS_C || strings == STRINGS_CPP || strings == STRINGS_OBJC
 
     /** `%d`-style placeholders in double-quoted strings are Constant. */
     val placeholders: Boolean = cFamily || strings == STRINGS_GO
@@ -105,6 +122,24 @@ internal class CLikeSyntax(
         /** `"` on one line, verbatim `@"…"` and raw `"""…"""` across lines, `$` interpolation in any of them. */
         const val STRINGS_CSHARP = 8
 
+        /** `'` and `"` with `$name` and `${}`, `'''` and `"""` across lines, raw `r'…'` strings. */
+        const val STRINGS_DART = 9
+
+        /** `"` on one line, raw `"""` across lines, `s"…"`-style interpolators with `$name` and `${}`, `'c'` and `'symbol`. */
+        const val STRINGS_SCALA = 10
+
+        /** `'` plain, `"` GStrings with `$name` and `${}`, triple quotes across lines, `/slashy/` and `$/dollar slashy/$`. */
+        const val STRINGS_GROOVY = 11
+
+        /** [STRINGS_C] plus `@"…"` strings and `@` literals and directives. */
+        const val STRINGS_OBJC = 12
+
+        /** `"` on one line, `'c'` characters, and `\\` multiline string lines. */
+        const val STRINGS_ZIG = 13
+
+        /** `'` strings on one line; `"` is not a string. */
+        const val STRINGS_APEX = 14
+
         const val HASH_NONE = 0
 
         /** `#name` is a private name (JavaScript); `#!` on the first line is a comment. */
@@ -118,6 +153,9 @@ internal class CLikeSyntax(
 
         /** `#` first on a line starts a preprocessor directive (C, C++, C#). */
         const val HASH_DIRECTIVE = 4
+
+        /** `#name` is a symbol literal, a Constant (Dart). */
+        const val HASH_SYMBOL = 5
 
         // Word flags, above the role code.
         const val ROLE_MASK = 0xFF
@@ -139,6 +177,8 @@ internal class CLikeSyntax(
 /** An immutable open-addressing table from words to ints, looked up without allocating. */
 internal class WordTable(
     entries: Map<String, Int>,
+    /** Keys match in any ASCII case; they are stored in lower case. */
+    private val caseInsensitive: Boolean = false,
 ) {
     private val size = tableSize(entries.size)
     private val keys = arrayOfNulls<String>(size)
@@ -146,7 +186,8 @@ internal class WordTable(
     private val maxLength = entries.keys.maxOfOrNull { it.length } ?: 0
 
     init {
-        for ((word, value) in entries) {
+        for ((entry, value) in entries) {
+            val word = if (caseInsensitive) entry.lowercase() else entry
             var slot = hash(word) and (size - 1)
             while (keys[slot] != null) slot = (slot + 1) and (size - 1)
             keys[slot] = word
@@ -163,14 +204,28 @@ internal class WordTable(
         val length = to - from
         if (length > maxLength) return 0
         var hash = length
-        for (index in from until to) hash = hash * 31 + text[index].code
+        for (index in from until to) hash = hash * 31 + fold(text[index]).code
         var slot = hash and (size - 1)
         while (true) {
             val key = keys[slot] ?: return 0
-            if (LexerScan.equals(text, from, to, key)) return values[slot]
+            if (matches(text, from, to, key)) return values[slot]
             slot = (slot + 1) and (size - 1)
         }
     }
+
+    private fun matches(
+        text: CharArray,
+        from: Int,
+        to: Int,
+        key: String,
+    ): Boolean {
+        if (!caseInsensitive) return LexerScan.equals(text, from, to, key)
+        if (to - from != key.length) return false
+        for (index in key.indices) if (fold(text[from + index]) != key[index]) return false
+        return true
+    }
+
+    private fun fold(char: Char): Char = if (caseInsensitive && char in 'A'..'Z') char + 32 else char
 
     private fun hash(word: String): Int {
         var hash = word.length
@@ -205,16 +260,30 @@ private class CLikeLine(
     private var brackets = 0L
     private var bracketDepth = 0
 
+    // 1 bits for `[` among the innermost brackets (Objective-C messages), in step with [brackets].
+    private var squares = 0L
+
+    // An Objective-C method declaration (`- (void)name:…`) and whether its first name is still ahead.
+    private var methodLine = false
+    private var methodNamePending = false
+
     // Where a directive or a C# attribute may start: the first non-blank, on a line begun in code.
     private var firstNonBlank = -1
 
     fun run(state: Int): Int {
         stack = state
-        if (lineStart == 0 && state == 0 && syntax.hash == CLikeSyntax.HASH_PRIVATE && LexerScan.startsWith(text, 0, end, "#!")) {
+        if (lineStart == 0 && state == 0 && syntax.shebang && LexerScan.startsWith(text, 0, end, "#!")) {
             out.span(0, end, RoleCode.COMMENT)
             return 0
         }
-        if (state == 0) firstNonBlank = LexerScan.skipBlanks(text, lineStart, end)
+        if (state == 0) {
+            firstNonBlank = LexerScan.skipBlanks(text, lineStart, end)
+            if (syntax.objc && firstNonBlank < end && (text[firstNonBlank] == '-' || text[firstNonBlank] == '+')) {
+                val paren = LexerScan.skipBlanks(text, firstNonBlank + 1, end)
+                methodLine = paren < end && text[paren] == '('
+                methodNamePending = methodLine
+            }
+        }
         while (index < end && !out.stopped) {
             val top = stack and 0xFF
             when (top ushr 5) {
@@ -223,6 +292,7 @@ private class CLikeLine(
                     when (val kind = top and 31) {
                         CPP_RAW -> cppRawString()
                         in TEMPLATE..SWIFT_MULTILINE -> string(kind)
+                        in DART_SINGLE..GROOVY_DOLLAR_SLASHY -> scriptString(kind)
                         else -> familyString(kind)
                     }
                 RAW -> rawString(top and 31, multiline = false)
@@ -240,7 +310,7 @@ private class CLikeLine(
         val top = stack and 0xFF
         val kind = top ushr 5
         val value = top and 31
-        if (kind == RAW || (kind == STRING && (value == KOTLIN_LINE || value == SWIFT_LINE || value == CS_INTERPOLATED))) {
+        if (kind == RAW || (kind == STRING && (value == KOTLIN_LINE || value == SWIFT_LINE || value == CS_INTERPOLATED || isLineScriptString(value)))) {
             pop()
         } else if (kind == STRING && value == C_LINE && !escapedLineEnd()) {
             pop()
@@ -291,6 +361,12 @@ private class CLikeLine(
             char == '"' -> doubleQuote()
             char == '\'' -> singleQuote()
             char == '`' -> backtick()
+            char == '\\' && syntax.strings == CLikeSyntax.STRINGS_ZIG && index + 1 < end && text[index + 1] == '\\' -> {
+                // A Zig multiline string line: `\\` to the line end.
+                out.span(index, end, RoleCode.STRING)
+                index = end
+                value()
+            }
             isDigit(char) -> number()
             char == '.' -> dot()
             char == '{' || char == '}' || char == '(' || char == ')' || char == '[' || char == ']' -> bracket(char)
@@ -298,6 +374,8 @@ private class CLikeLine(
             char == '@' -> at()
             char == '#' -> hash()
             char == '$' && syntax.strings == CLikeSyntax.STRINGS_CSHARP -> cSharpDollar()
+            char == '$' && syntax.strings == CLikeSyntax.STRINGS_GROOVY && previous == START && index + 1 < end && text[index + 1] == '/' ->
+                openScriptString(GROOVY_DOLLAR_SLASHY)
             char == '<' && syntax.jsx && previous == START && jsxStart() -> Unit
             isOperator(char) -> operator()
             isIdentifierStart(char) -> {
@@ -323,7 +401,7 @@ private class CLikeLine(
                 out.span(index, end, RoleCode.COMMENT)
                 index = end
             }
-            next == '*' -> {
+            next == '*' && syntax.blockComments -> {
                 if (canPush()) {
                     out.span(index, index + 2, RoleCode.COMMENT)
                     index += 2
@@ -336,6 +414,7 @@ private class CLikeLine(
                 }
             }
             syntax.regexLiterals && previous == START && regexAllowed && regex() -> Unit
+            syntax.strings == CLikeSyntax.STRINGS_GROOVY && previous == START && regexAllowed && slashy() -> Unit
             else -> {
                 val to = if (next == '=') index + 2 else index + 1
                 out.span(index, to, RoleCode.OPERATOR)
@@ -370,6 +449,25 @@ private class CLikeLine(
         return false
     }
 
+    /** A Groovy `/slashy/` string from the `/` at [index], when one closes on this line; false otherwise. */
+    private fun slashy(): Boolean {
+        var at = index + 1
+        while (at < end) {
+            val char = text[at]
+            if (char == '\\') {
+                at += 2
+                continue
+            }
+            if (char == '/') {
+                openScriptString(GROOVY_SLASHY)
+                return true
+            }
+            at += 1
+        }
+        regexAllowed = false
+        return false
+    }
+
     private fun number() {
         var at = digitsEnd(index)
         if (at + 1 < end && text[at] == '.' && isDigit(text[at + 1])) at = digitsEnd(at + 1)
@@ -381,7 +479,12 @@ private class CLikeLine(
         // Prefixes after a leading 0 (0x, 0b, 0o), hex digits, and suffixes (n, L, f, u, i32) ride
         // along, and so do a hex float's fraction and `p` exponent (`0x1.8p-3`) where there are some.
         val hex = text[index] == '0' && index + 1 < end && (text[index + 1] == 'x' || text[index + 1] == 'X')
-        val hexFloats = hex && (syntax.cFamily || syntax.strings == CLikeSyntax.STRINGS_GO || syntax.strings == CLikeSyntax.STRINGS_JAVA)
+        val hexFloats =
+            hex &&
+                (
+                    syntax.cFamily || syntax.strings == CLikeSyntax.STRINGS_GO || syntax.strings == CLikeSyntax.STRINGS_JAVA ||
+                        syntax.strings == CLikeSyntax.STRINGS_ZIG
+                )
         while (at < end) {
             val char = text[at]
             at +=
@@ -477,11 +580,23 @@ private class CLikeLine(
                 value()
             }
             '[' -> {
-                if (attributeBracket()) return
-                openBracket(1)
+                if (attributeBracket() || soqlStart()) return
+                if (kind == NONE && top >= SOQL) setTop(NONE, minOf(top + 1, SOQL + SOQL_DEPTH))
+                openBracket(1, square = true)
                 expressionStart()
             }
             else -> {
+                if (kind == NONE && top >= SOQL) {
+                    if (top == SOQL) {
+                        // Closes an Apex query.
+                        out.span(index, index + 1, RoleCode.PUNCTUATION)
+                        index += 1
+                        pop()
+                        value()
+                        return
+                    }
+                    setTop(NONE, top - 1)
+                }
                 closeBracket()
                 value()
             }
@@ -529,16 +644,59 @@ private class CLikeLine(
         index = to
     }
 
-    private fun openBracket(bit: Long) {
-        if (bracketDepth < 63) brackets = (brackets shl 1) or bit
+    /** An Apex `[SELECT` or `[FIND` at [index]: the `[` and a query frame; false when this `[` is neither. */
+    private fun soqlStart(): Boolean {
+        if (syntax.soqlWords == null || !canPush()) return false
+        val word = LexerScan.skipBlanks(text, index + 1, end)
+        if (word >= end || !isAsciiLetter(text[word])) return false
+        var to = word + 1
+        while (to < end && to - word <= 6 && isIdentifierPart(text[to])) to += 1
+        if (!wordIs(word, to, "select") && !wordIs(word, to, "find")) return false
+        out.span(index, index + 1, RoleCode.PUNCTUATION)
+        index += 1
+        push(NONE, SOQL)
+        expressionStart()
+        return true
+    }
+
+    /** True when `text[from, to)` is [lower] in any ASCII case. */
+    private fun wordIs(
+        from: Int,
+        to: Int,
+        lower: String,
+    ): Boolean {
+        if (to - from != lower.length) return false
+        for (offset in lower.indices) {
+            val char = text[from + offset]
+            if ((if (char in 'A'..'Z') char + 32 else char) != lower[offset]) return false
+        }
+        return true
+    }
+
+    private fun inSoql(): Boolean = syntax.soqlWords != null && (stack and 0xFF) in SOQL..SOQL + SOQL_DEPTH
+
+    private fun openBracket(
+        bit: Long,
+        square: Boolean = false,
+    ) {
+        if (bracketDepth < 63) {
+            brackets = (brackets shl 1) or bit
+            squares = (squares shl 1) or (if (square) 1L else 0L)
+        }
         bracketDepth += 1
     }
 
     private fun closeBracket() {
         if (bracketDepth == 0) return
         bracketDepth -= 1
-        if (bracketDepth < 63) brackets = brackets ushr 1
+        if (bracketDepth < 63) {
+            brackets = brackets ushr 1
+            squares = squares ushr 1
+        }
     }
+
+    /** The innermost bracket open on this line is a `[`. */
+    private fun inSquare(): Boolean = bracketDepth in 1..63 && (squares and 1L) != 0L
 
     private fun separator() {
         out.span(index, index + 1, RoleCode.PUNCTUATION)
@@ -559,7 +717,8 @@ private class CLikeLine(
         var at = index + 1
         while (at < end && isOperator(text[at])) at += 1
         // A lone `:` is punctuation, except in Rust, where Shiki and TextMate both call it an operator.
-        val role = if (at - index == 1 && text[index] == ':' && syntax.strings != CLikeSyntax.STRINGS_RUST) RoleCode.PUNCTUATION else RoleCode.OPERATOR
+        val colonOperator = syntax.strings == CLikeSyntax.STRINGS_RUST || syntax.strings == CLikeSyntax.STRINGS_SCALA
+        val role = if (at - index == 1 && text[index] == ':' && !colonOperator) RoleCode.PUNCTUATION else RoleCode.OPERATOR
         out.span(index, at, role)
         index = at
         expressionStart()
@@ -581,6 +740,14 @@ private class CLikeLine(
             }
             CLikeSyntax.STRINGS_GO, CLikeSyntax.STRINGS_C, CLikeSyntax.STRINGS_CPP -> {
                 index += 1
+                return
+            }
+            CLikeSyntax.STRINGS_OBJC -> {
+                objcAt()
+                return
+            }
+            CLikeSyntax.STRINGS_ZIG -> {
+                zigAt()
                 return
             }
         }
@@ -619,6 +786,17 @@ private class CLikeLine(
                 }
             }
             CLikeSyntax.HASH_RUST -> rustAttribute()
+            CLikeSyntax.HASH_SYMBOL ->
+                if (index + 1 < end && isIdentifierStart(text[index + 1])) {
+                    // A Dart symbol, `#name` or `#a.b`.
+                    var to = identifierEnd(index + 2)
+                    while (to + 1 < end && text[to] == '.' && isIdentifierStart(text[to + 1])) to = identifierEnd(to + 2)
+                    out.span(index, to, RoleCode.CONSTANT)
+                    index = to
+                    value()
+                } else {
+                    index += 1
+                }
             CLikeSyntax.HASH_DIRECTIVE ->
                 if (index == firstNonBlank && stack == 0) {
                     directive()
@@ -705,7 +883,9 @@ private class CLikeLine(
             return
         }
         if (previous != DOT) {
-            val entry = syntax.words.find(text, from, to)
+            val soql = syntax.soqlWords
+            var entry = if (soql != null && inSoql()) soql.find(text, from, to) else syntax.words.find(text, from, to)
+            if (entry == 0 && syntax.strings == CLikeSyntax.STRINGS_ZIG && isZigIntegerType(from, to)) entry = RoleCode.KEYWORD
             if (entry != 0 && (entry and CLikeSyntax.CONTEXTUAL == 0 || keywordFollows(to))) {
                 val role = entry and CLikeSyntax.ROLE_MASK
                 out.span(from, to, role)
@@ -718,11 +898,42 @@ private class CLikeLine(
         identifier(from, to)
     }
 
+    /** Zig's arbitrary-width integer types: `u7`, `i48`. */
+    private fun isZigIntegerType(
+        from: Int,
+        to: Int,
+    ): Boolean {
+        if (to - from < 2 || to - from > 6 || (text[from] != 'u' && text[from] != 'i')) return false
+        for (at in from + 1 until to) if (!isDigit(text[at])) return false
+        return true
+    }
+
+    /**
+     * An Objective-C selector part: after a value, the name before `:` or the closing `]` of a
+     * `[receiver message]`, or on a method declaration line the first name and every `name:`.
+     */
+    private fun isSelector(
+        from: Int,
+        to: Int,
+    ): Boolean {
+        if (!syntax.objc || previous != VALUE) return false
+        val at = LexerScan.skipBlanks(text, to, end)
+        val char = if (at < end) text[at] else ' '
+        val colon = char == ':' && (at + 1 >= end || text[at + 1] != ':')
+        return when {
+            inSquare() -> colon || (char == ']' && text[from - 1] != ')')
+            methodLine && bracketDepth == 0 -> methodNamePending || colon
+            else -> false
+        }
+    }
+
     private fun identifier(
         from: Int,
         to: Int,
     ) {
         val next = if (to < end) text[to] else ' '
+        val selector = isSelector(from, to)
+        if (bracketDepth == 0) methodNamePending = false
         if (syntax.macros && next == '!' && (to + 1 >= end || text[to + 1] != '=')) {
             // A Rust macro call, `!` included.
             out.span(from, to + 1, RoleCode.FUNCTION)
@@ -730,9 +941,11 @@ private class CLikeLine(
             expressionStart()
             return
         }
-        val capitalized = syntax.capitalizedTypes && text[from] in 'A'..'Z'
+        // Inside an Apex query, capitalized names are fields and objects, not types.
+        val capitalized = syntax.capitalizedTypes && text[from] in 'A'..'Z' && !inSoql()
         val role =
             when {
+                selector -> RoleCode.FUNCTION
                 // In Rust a capitalized name before `(` is a tuple struct or variant: `Some(x)`.
                 next == '(' && declaring != CLikeSyntax.DECLARES_TYPE && !(capitalized && syntax.strings == CLikeSyntax.STRINGS_RUST) -> RoleCode.FUNCTION
                 capitalized && previous == DOT -> if (isConstantCase(from, to)) RoleCode.CONSTANT else RoleCode.TYPE
@@ -801,6 +1014,12 @@ private class CLikeLine(
             CLikeSyntax.STRINGS_RUST -> openString(RUST)
             CLikeSyntax.STRINGS_JAVA -> if (isTripleQuote(index)) openString(JAVA_TEXT_BLOCK) else quotedString('"')
             CLikeSyntax.STRINGS_CSHARP -> cSharpQuote(0)
+            CLikeSyntax.STRINGS_DART -> openScriptString(if (tripleAt(index, '"')) DART_TRIPLE_DOUBLE else DART_DOUBLE)
+            CLikeSyntax.STRINGS_SCALA -> if (tripleAt(index, '"')) openScriptString(SCALA_RAW) else quotedString('"')
+            CLikeSyntax.STRINGS_GROOVY -> openScriptString(if (tripleAt(index, '"')) GROOVY_TRIPLE_DOUBLE else GROOVY_DOUBLE)
+            CLikeSyntax.STRINGS_ZIG -> quotedString('"')
+            // Apex has no double-quoted strings.
+            CLikeSyntax.STRINGS_APEX -> index += 1
             else -> cString()
         }
     }
@@ -809,7 +1028,11 @@ private class CLikeLine(
         when (syntax.strings) {
             // Swift has no single quotes.
             CLikeSyntax.STRINGS_SWIFT -> index += 1
-            CLikeSyntax.STRINGS_RUST -> rustQuote()
+            CLikeSyntax.STRINGS_RUST -> characterOrName(RoleCode.TYPE)
+            // A Scala character, or a symbol: `'name`.
+            CLikeSyntax.STRINGS_SCALA -> characterOrName(RoleCode.CONSTANT)
+            CLikeSyntax.STRINGS_DART -> openScriptString(if (tripleAt(index, '\'')) DART_TRIPLE_SINGLE else DART_SINGLE)
+            CLikeSyntax.STRINGS_GROOVY -> if (tripleAt(index, '\'')) openScriptString(GROOVY_TRIPLE_SINGLE) else quotedString('\'')
             // A JavaScript string, or a character everywhere else.
             else -> quotedString('\'')
         }
@@ -825,13 +1048,13 @@ private class CLikeLine(
                 openString(GO_RAW)
                 return
             }
-            CLikeSyntax.STRINGS_KOTLIN, CLikeSyntax.STRINGS_SWIFT -> Unit
+            CLikeSyntax.STRINGS_KOTLIN, CLikeSyntax.STRINGS_SWIFT, CLikeSyntax.STRINGS_SCALA -> Unit
             else -> {
                 index += 1
                 return
             }
         }
-        // A backtick-quoted name in Kotlin or Swift; a lone backtick stays plain.
+        // A backtick-quoted name in Kotlin, Swift, or Scala; a lone backtick stays plain.
         var close = index + 1
         while (close < end && text[close] != '`') close += 1
         if (close >= end) {
@@ -842,6 +1065,12 @@ private class CLikeLine(
     }
 
     private fun isTripleQuote(at: Int): Boolean = at + 2 < end && text[at + 1] == '"' && text[at + 2] == '"'
+
+    /** Three [quote]s from [at]. */
+    private fun tripleAt(
+        at: Int,
+        quote: Char,
+    ): Boolean = at + 2 < end && text[at] == quote && text[at + 1] == quote && text[at + 2] == quote
 
     /** A string that never holds frames: JavaScript quotes and Kotlin characters. Ends at its line. */
     private fun quotedString(quote: Char) {
@@ -890,7 +1119,19 @@ private class CLikeLine(
         from: Int,
         to: Int,
     ): Boolean {
-        if (to >= end || to - from > 3) return false
+        if (to >= end) return false
+        if (syntax.strings == CLikeSyntax.STRINGS_DART && to - from == 1 && text[from] == 'r' && (text[to] == '\'' || text[to] == '"')) {
+            dartRawString(from, to)
+            return true
+        }
+        if (syntax.strings == CLikeSyntax.STRINGS_SCALA && text[to] == '"' && syntax.words.find(text, from, to) == 0) {
+            // An interpolator: `s"…"`, `f"…"`, `raw"…"`, `sql"""…"""`.
+            out.span(from, to, RoleCode.KEYWORD)
+            index = to
+            openScriptString(if (tripleAt(to, '"')) SCALA_TRIPLE else SCALA_LINE)
+            return true
+        }
+        if (to - from > 3) return false
         val next = text[to]
         if (next != '"' && next != '\'' && next != '#') return false
         val first = text[from]
@@ -913,7 +1154,7 @@ private class CLikeLine(
             if (length != 1 || (first != 'b' && first != 'c') || next == '#' || (first == 'c' && next == '\'')) return false
             out.span(from, to, RoleCode.STRING)
             index = to
-            if (next == '"') openString(RUST) else rustQuote()
+            if (next == '"') openString(RUST) else characterOrName(RoleCode.TYPE)
             return true
         }
         if (!syntax.cFamily || next == '#') return false
@@ -939,8 +1180,11 @@ private class CLikeLine(
             else -> false
         }
 
-    /** A Rust `'`: a character (`'x'`, `'\n'`, `'😀'`), else a lifetime or label (`'a`) as a Type. */
-    private fun rustQuote() {
+    /**
+     * A Rust or Scala `'`: a character (`'x'`, `'\n'`, `'😀'`), else a name as [nameRole]: a Rust
+     * lifetime or label (`'a`) or a Scala symbol (`'sym`).
+     */
+    private fun characterOrName(nameRole: Int) {
         val at = index + 1
         if (at >= end) {
             index += 1
@@ -958,7 +1202,7 @@ private class CLikeLine(
             value()
         } else if (isIdentifierStart(char)) {
             val to = identifierEnd(at + 1)
-            out.span(index, to, RoleCode.TYPE)
+            out.span(index, to, nameRole)
             index = to
             value()
         } else {
@@ -1311,7 +1555,7 @@ private class CLikeLine(
             while (to < end && (isDigit(text[to]) || text[to] == '*')) to += 1
         }
         while (to < end && text[to] in PLACEHOLDER_LENGTHS) to += 1
-        return if (to < end && text[to] in PLACEHOLDER_VERBS) to + 1 else at
+        return if (to < end && (text[to] in PLACEHOLDER_VERBS || (syntax.objc && text[to] == '@'))) to + 1 else at
     }
 
     private fun openInterpolation(
@@ -1409,7 +1653,7 @@ private class CLikeLine(
                 at += 2
                 continue
             }
-            if (char == quote && (quotes == 1 || isTripleQuote(at)) && hashesAt(at + quotes, hashes)) {
+            if (char == quote && (quotes == 1 || tripleAt(at, quote)) && hashesAt(at + quotes, hashes)) {
                 to = at + quotes + hashes
                 break
             }
@@ -1486,6 +1730,248 @@ private class CLikeLine(
         if (from + count > end) return false
         for (at in from until from + count) if (!isHexDigit(text[at])) return false
         return true
+    }
+
+    // endregion
+
+    // region Dart, Scala, and Groovy strings
+
+    /** A Dart `r'…'` or `r"""…"""` raw string from the `r` at [from]; the quote is at [quote]. */
+    private fun dartRawString(
+        from: Int,
+        quote: Int,
+    ) {
+        val char = text[quote]
+        out.span(from, quote, RoleCode.STRING)
+        index = quote
+        if (tripleAt(quote, char)) {
+            openScriptString(if (char == '\'') DART_RAW_TRIPLE_SINGLE else DART_RAW_TRIPLE_DOUBLE)
+            return
+        }
+        var close = quote + 1
+        while (close < end && text[close] != char) close += 1
+        val to = minOf(close + 1, end)
+        out.span(quote, to, RoleCode.STRING)
+        index = to
+        value()
+    }
+
+    /** Opens a Dart, Scala, or Groovy string frame at its opening delimiter; flat when no frame fits. */
+    private fun openScriptString(kind: Int) {
+        val delimiter = if (isTripleScriptString(kind)) 3 else if (kind == GROOVY_DOLLAR_SLASHY) 2 else 1
+        if (!canPush()) {
+            if (kind == GROOVY_DOLLAR_SLASHY) {
+                var close = index + 2
+                while (close + 1 < end && !(text[close] == '/' && text[close + 1] == '$')) close += 1
+                val to = if (close + 1 < end) close + 2 else end
+                out.span(index, to, RoleCode.STRING)
+                index = to
+                value()
+            } else {
+                flatString(index + delimiter, scriptQuote(kind), if (delimiter == 3) 3 else 1, 0, scriptEscapes(kind))
+            }
+            return
+        }
+        out.span(index, index + delimiter, RoleCode.STRING)
+        index += delimiter
+        push(STRING, kind)
+    }
+
+    private fun isTripleScriptString(kind: Int): Boolean =
+        kind == DART_TRIPLE_SINGLE || kind == DART_TRIPLE_DOUBLE || kind == DART_RAW_TRIPLE_SINGLE || kind == DART_RAW_TRIPLE_DOUBLE ||
+            kind == SCALA_RAW || kind == SCALA_TRIPLE || kind == GROOVY_TRIPLE_SINGLE || kind == GROOVY_TRIPLE_DOUBLE
+
+    /** Script strings that end with their line. */
+    private fun isLineScriptString(kind: Int): Boolean =
+        kind == DART_SINGLE || kind == DART_DOUBLE || kind == SCALA_LINE || kind == GROOVY_DOUBLE || kind == GROOVY_SLASHY
+
+    private fun scriptQuote(kind: Int): Char =
+        when (kind) {
+            DART_SINGLE, DART_TRIPLE_SINGLE, DART_RAW_TRIPLE_SINGLE, GROOVY_TRIPLE_SINGLE -> '\''
+            GROOVY_SLASHY, GROOVY_DOLLAR_SLASHY -> '/'
+            else -> '"'
+        }
+
+    /** Backslash escapes count (a slashy string only escapes `/`, handled on its own). */
+    private fun scriptEscapes(kind: Int): Boolean =
+        kind != DART_RAW_TRIPLE_SINGLE && kind != DART_RAW_TRIPLE_DOUBLE && kind != SCALA_RAW && kind != GROOVY_SLASHY &&
+            kind != GROOVY_DOLLAR_SLASHY
+
+    private fun scriptInterpolates(kind: Int): Boolean =
+        kind == DART_SINGLE || kind == DART_DOUBLE || kind == DART_TRIPLE_SINGLE || kind == DART_TRIPLE_DOUBLE || kind == SCALA_LINE ||
+            kind == SCALA_TRIPLE || kind == GROOVY_DOUBLE || kind == GROOVY_TRIPLE_DOUBLE || kind == GROOVY_SLASHY ||
+            kind == GROOVY_DOLLAR_SLASHY
+
+    /**
+     * The body of a Dart, Scala, or Groovy string frame: text, escapes, `$name` (Groovy `$a.b`)
+     * and `${…}` interpolations, up to the closing delimiter. `$name` is a Variable; Dart keeps
+     * the `$` in the String and Scala makes it Punctuation, as Shiki does. Scala's `$$`, a
+     * slashy string's `\/`, and a dollar-slashy string's `$$` and `$/` are escapes.
+     */
+    private fun scriptString(kind: Int) {
+        val quote = scriptQuote(kind)
+        val triple = isTripleScriptString(kind)
+        val escapes = scriptEscapes(kind)
+        val interpolates = scriptInterpolates(kind)
+        val dollarSlashy = kind == GROOVY_DOLLAR_SLASHY
+        var segment = index
+        var at = index
+        while (at < end) {
+            val char = text[at]
+            val next = if (at + 1 < end) text[at + 1] else ' '
+            val escapeEnd =
+                when {
+                    char == '\\' && escapes -> escapeEnd(at)
+                    char == '\\' && kind == GROOVY_SLASHY && next == '/' -> at + 2
+                    char == '$' && dollarSlashy && (next == '$' || next == '/') -> at + 2
+                    char == '$' && next == '$' && (kind == SCALA_LINE || kind == SCALA_TRIPLE) -> at + 2
+                    else -> -1
+                }
+            if (escapeEnd >= 0) {
+                if (out.collecting) {
+                    out.span(segment, at, RoleCode.STRING)
+                    out.span(at, escapeEnd, RoleCode.CONSTANT)
+                    segment = escapeEnd
+                }
+                at = escapeEnd
+                continue
+            }
+            if (char == '$' && interpolates) {
+                if (next == '{' && canPush()) {
+                    out.span(segment, at, RoleCode.STRING)
+                    openInterpolation(at, at + 2, BRACE)
+                    return
+                }
+                if (isAsciiLetter(next) || next == '_' || (next.code >= 0x80 && next.isLetter())) {
+                    var nameEnd = scriptNameEnd(at + 2)
+                    if (syntax.strings == CLikeSyntax.STRINGS_GROOVY) {
+                        while (nameEnd + 1 < end && text[nameEnd] == '.' && (isAsciiLetter(text[nameEnd + 1]) || text[nameEnd + 1] == '_')) {
+                            nameEnd = scriptNameEnd(nameEnd + 2)
+                        }
+                    }
+                    if (out.collecting) {
+                        when (syntax.strings) {
+                            CLikeSyntax.STRINGS_DART -> out.span(segment, at + 1, RoleCode.STRING)
+                            CLikeSyntax.STRINGS_SCALA -> {
+                                out.span(segment, at, RoleCode.STRING)
+                                out.span(at, at + 1, RoleCode.PUNCTUATION)
+                            }
+                            else -> out.span(segment, at, RoleCode.STRING)
+                        }
+                        out.span(if (syntax.strings == CLikeSyntax.STRINGS_GROOVY) at else at + 1, nameEnd, RoleCode.VARIABLE)
+                        segment = nameEnd
+                    }
+                    at = nameEnd
+                    continue
+                }
+            }
+            val close =
+                when {
+                    dollarSlashy -> if (char == '/' && next == '$') at + 2 else -1
+                    char != quote -> -1
+                    !triple -> at + 1
+                    tripleAt(at, quote) -> {
+                        var to = at + 3
+                        // Scala: in `""""`, the last three quotes close the string.
+                        if (kind == SCALA_RAW || kind == SCALA_TRIPLE) while (to < end && text[to] == '"') to += 1
+                        to
+                    }
+                    else -> -1
+                }
+            if (close >= 0) {
+                out.span(segment, close, RoleCode.STRING)
+                index = close
+                pop()
+                value()
+                return
+            }
+            at += 1
+        }
+        out.span(segment, end, RoleCode.STRING)
+        index = end
+    }
+
+    /** The end of a `$name` in a string: ASCII letters, digits, `_`, and other letters; never `$`. */
+    private fun scriptNameEnd(from: Int): Int {
+        var at = from
+        while (at < end) {
+            val char = text[at]
+            if (isAsciiLetter(char) || isDigit(char) || char == '_' || (char.code >= 0x80 && char.isLetterOrDigit())) at += 1 else break
+        }
+        return at
+    }
+
+    // endregion
+
+    // region Objective-C and Zig
+
+    /**
+     * Objective-C `@`: `@"…"` strings, `@[`, `@{`, and `@(` literals (the `@` as Punctuation),
+     * `@42` numbers, `@YES`, and directives (`@interface Name`, `@end`, `@property`) as Keywords.
+     */
+    private fun objcAt() {
+        val next = if (index + 1 < end) text[index + 1] else ' '
+        when {
+            next == '"' -> {
+                out.span(index, index + 1, RoleCode.STRING)
+                index += 1
+                cString()
+            }
+            next == '[' || next == '{' || next == '(' -> {
+                out.span(index, index + 1, RoleCode.PUNCTUATION)
+                index += 1
+                expressionStart()
+            }
+            isDigit(next) -> {
+                out.span(index, index + 1, RoleCode.NUMBER)
+                index += 1
+                number()
+            }
+            isIdentifierStart(next) -> {
+                val to = identifierEnd(index + 2)
+                val from = index + 1
+                val constant = wordAt(from, to, "YES") || wordAt(from, to, "NO") || wordAt(from, to, "true") || wordAt(from, to, "false")
+                out.span(index, to, if (constant) RoleCode.CONSTANT else RoleCode.KEYWORD)
+                index = to
+                if (constant) {
+                    value()
+                } else {
+                    expressionStart()
+                    if (wordAt(from, to, "interface") || wordAt(from, to, "implementation") || wordAt(from, to, "protocol") || wordAt(from, to, "class")) {
+                        declaring = CLikeSyntax.DECLARES_TYPE
+                    }
+                }
+            }
+            else -> index += 1
+        }
+    }
+
+    private fun wordAt(
+        from: Int,
+        to: Int,
+        word: String,
+    ): Boolean = LexerScan.equals(text, from, to, word)
+
+    /** Zig `@`: a builtin call (`@import`) as a Function, or an `@"quoted"` identifier. */
+    private fun zigAt() {
+        val next = if (index + 1 < end) text[index + 1] else ' '
+        when {
+            next == '"' -> {
+                var at = index + 2
+                while (at < end && text[at] != '"') at += if (text[at] == '\\') 2 else 1
+                val to = minOf(at + 1, end)
+                emit(index, to, syntax.identifierRole)
+                index = to
+                value()
+            }
+            isIdentifierStart(next) -> {
+                val to = identifierEnd(index + 2)
+                out.span(index, to, RoleCode.FUNCTION)
+                index = to
+                value()
+            }
+            else -> index += 1
+        }
     }
 
     // endregion
@@ -1688,6 +2174,26 @@ private class CLikeLine(
         const val CS_VERBATIM = 11
         const val CS_VERBATIM_INTERPOLATED = 12
         const val CPP_RAW = 13
+
+        // Dart, Scala, and Groovy strings, read by [scriptString]; keep them one contiguous range.
+        const val DART_SINGLE = 14
+        const val DART_DOUBLE = 15
+        const val DART_TRIPLE_SINGLE = 16
+        const val DART_TRIPLE_DOUBLE = 17
+        const val DART_RAW_TRIPLE_SINGLE = 18
+        const val DART_RAW_TRIPLE_DOUBLE = 19
+        const val SCALA_RAW = 20
+        const val SCALA_LINE = 21
+        const val SCALA_TRIPLE = 22
+        const val GROOVY_TRIPLE_SINGLE = 23
+        const val GROOVY_DOUBLE = 24
+        const val GROOVY_TRIPLE_DOUBLE = 25
+        const val GROOVY_SLASHY = 26
+        const val GROOVY_DOLLAR_SLASHY = 27
+
+        // A NONE frame value from SOQL up: an Apex query, plus how many `[` it has open inside.
+        const val SOQL = 16
+        const val SOQL_DEPTH = 15
 
         // A C++ raw string's delimiter: up to 16 characters, kept as its length and an 18-bit hash.
         const val MAX_DELIMITER = 16

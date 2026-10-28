@@ -5,7 +5,8 @@ import kotlin.random.Random
 /** Random inputs for property tests and the randomized run: plausible code per language, damaged freely. */
 internal object HighlightGenerators {
     val languages = listOf("json", "diff", "typescript", "javascript", "kotlin", "swift", "python", "rust", "go", "java", "c", "cpp", "csharp", "plaintext") + ScriptingGenerators.languages + GlueGenerators.languages + WebGenerators.languages + SpecialtyGenerators.languages +
-            LiteralStackGenerators.languages + ClassicGenerators.languages
+            LiteralStackGenerators.languages + ClassicGenerators.languages +
+            CLikeExtraGenerators.languages
 
     private val jsonPieces =
         listOf(
@@ -91,7 +92,7 @@ internal object HighlightGenerators {
                     "{{", "}}", "{", "}", "!r", ":>4", "123", "0x1F", "1_000", ".5e-3", "2j", "def", "class", "match", "case", "_",
                     "lambda", "True", "None", "self", "foo", "Bar", "MAX_X", "@dec", "->", "=", "==", "and", "😀", "\uD83D", "\uDE00", "​",
                 ),
-        ) + ScriptingGenerators.pieces + GlueGenerators.pieces + WebGenerators.pieces + SpecialtyGenerators.pieces + LiteralStackGenerators.pieces + ClassicGenerators.pieces
+        ) + ScriptingGenerators.pieces + GlueGenerators.pieces + WebGenerators.pieces + SpecialtyGenerators.pieces + LiteralStackGenerators.pieces + ClassicGenerators.pieces + CLikeExtraGenerators.pieces
 
     private val diffLines =
         listOf(

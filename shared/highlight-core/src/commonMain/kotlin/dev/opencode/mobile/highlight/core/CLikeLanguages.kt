@@ -189,6 +189,117 @@ internal object CLikeLanguages {
             add(CONSTANT, "true false null")
         }
 
+    private val dartWords: Map<String, Int> =
+        buildMap {
+            add(
+                KEYWORD,
+                "abstract as assert await base break case catch const continue covariant default deferred do else export extends " +
+                    "external factory final finally for if implements import in interface is late library new operator part " +
+                    "required rethrow return sealed static switch throw try var when while with yield",
+            )
+            add(KEYWORD or CONTEXTUAL, "async sync get set on show hide of")
+            add(KEYWORD or VALUE, "this super")
+            add(KEYWORD or DECLARES_TYPE, "class mixin enum extension typedef")
+            add(TYPE, "int double num bool void dynamic")
+            add(CONSTANT, "true false null")
+        }
+
+    private val scalaWords: Map<String, Int> =
+        buildMap {
+            add(
+                KEYWORD,
+                "abstract case catch do else extends final finally for forSome if implicit import lazy match new override package " +
+                    "private protected return sealed throw try val var while with yield then given export extension",
+            )
+            add(KEYWORD or CONTEXTUAL, "using derives end inline opaque transparent open infix as")
+            add(KEYWORD or VALUE, "this super")
+            add(KEYWORD or DECLARES_FUNCTION, "def")
+            add(KEYWORD or DECLARES_TYPE, "class object trait type enum")
+            add(CONSTANT, "true false null")
+        }
+
+    private val groovyWords: Map<String, Int> =
+        buildMap {
+            add(
+                KEYWORD,
+                "abstract as assert break case catch const continue def default do else extends final finally for goto if implements " +
+                    "import in instanceof native new package private protected public return static strictfp switch synchronized " +
+                    "throw throws transient try var volatile while boolean byte char short int long float double void",
+            )
+            add(KEYWORD or VALUE, "this super")
+            add(KEYWORD or DECLARES_TYPE, "class interface enum trait")
+            add(CONSTANT, "true false null")
+        }
+
+    private val objectiveCWords: Map<String, Int> =
+        buildMap {
+            putAll(cWords)
+            add(
+                KEYWORD,
+                "id instancetype BOOL SEL IMP __weak __strong __block __unsafe_unretained __autoreleasing __kindof __bridge " +
+                    "__bridge_transfer __bridge_retained _Nonnull _Nullable _Null_unspecified nonnull nullable nonatomic atomic " +
+                    "readonly readwrite",
+            )
+            add(KEYWORD or CONTEXTUAL, "in")
+            add(KEYWORD or VALUE, "self super")
+            add(CONSTANT, "nil Nil YES NO")
+        }
+
+    private val zigWords: Map<String, Int> =
+        buildMap {
+            add(
+                KEYWORD,
+                "addrspace align allowzero and anyframe anytype asm async await break callconv catch comptime const continue defer " +
+                    "else enum errdefer error export extern for if inline linksection noalias noinline nosuspend opaque or orelse " +
+                    "packed pub resume return struct suspend switch test threadlocal try union unreachable usingnamespace var " +
+                    "volatile while",
+            )
+            add(KEYWORD or DECLARES_FUNCTION, "fn")
+            // Primitive types read as keywords, as Shiki colors them; `u7`-style widths are matched by the lexer.
+            add(
+                KEYWORD,
+                "isize usize f16 f32 f64 f80 f128 bool void noreturn type anyerror anyopaque comptime_int comptime_float c_char " +
+                    "c_short c_ushort c_int c_uint c_long c_ulong c_longlong c_ulonglong c_longdouble",
+            )
+            add(CONSTANT, "true false null undefined")
+        }
+
+    // Apex words match in any case.
+    private val apexWords: Map<String, Int> =
+        buildMap {
+            add(
+                KEYWORD,
+                "abstract break catch continue do else extends final finally for global if implements instanceof new override " +
+                    "private protected public return static switch throw transient try virtual void webservice while with without " +
+                    "sharing inherited testmethod insert update upsert delete undelete merge when get set",
+            )
+            add(KEYWORD or CONTEXTUAL, "on before after")
+            // Primitive types read as keywords, as Shiki colors them.
+            add(KEYWORD, "blob boolean date datetime decimal double id integer long object string time")
+            add(KEYWORD or VALUE, "this super")
+            add(KEYWORD or DECLARES_TYPE, "class interface enum")
+            // `trigger Name on Account`, but `Trigger.new` is the system class.
+            add(KEYWORD or CONTEXTUAL or DECLARES_TYPE, "trigger")
+            add(CONSTANT, "true false null")
+        }
+
+    private val soqlWords: Map<String, Int> =
+        buildMap {
+            add(
+                KEYWORD,
+                "select from where and or not in includes excludes like limit offset order by group having asc desc nulls first " +
+                    "last with typeof when then else end using scope for view reference update tracking viewstat rollup cube " +
+                    "format data category above below at above_or_below security_enforced user_mode system_mode all rows find " +
+                    "returning fields",
+            )
+            add(
+                CONSTANT,
+                "true false null today yesterday tomorrow last_week this_week next_week last_month this_month next_month " +
+                    "last_90_days next_90_days last_n_days next_n_days this_quarter last_quarter next_quarter this_year last_year " +
+                    "next_year this_fiscal_quarter this_fiscal_year",
+            )
+        }
+
     val javaScript =
         CLikeLexer(
             CLikeSyntax(
@@ -339,6 +450,103 @@ internal object CLikeLanguages {
                 objectKeys = false,
                 capitalizedTypes = true,
                 hash = CLikeSyntax.HASH_DIRECTIVE,
+            ),
+        )
+
+    val dart =
+        CLikeLexer(
+            CLikeSyntax(
+                words = dartWords,
+                identifierRole = 0,
+                strings = CLikeSyntax.STRINGS_DART,
+                nestedComments = true,
+                regexLiterals = false,
+                jsx = false,
+                objectKeys = false,
+                capitalizedTypes = true,
+                hash = CLikeSyntax.HASH_SYMBOL,
+                shebang = true,
+            ),
+        )
+
+    val scala =
+        CLikeLexer(
+            CLikeSyntax(
+                words = scalaWords,
+                identifierRole = 0,
+                strings = CLikeSyntax.STRINGS_SCALA,
+                nestedComments = true,
+                regexLiterals = false,
+                jsx = false,
+                objectKeys = false,
+                capitalizedTypes = true,
+                hash = CLikeSyntax.HASH_NONE,
+                shebang = true,
+            ),
+        )
+
+    val groovy =
+        CLikeLexer(
+            CLikeSyntax(
+                words = groovyWords,
+                identifierRole = 0,
+                strings = CLikeSyntax.STRINGS_GROOVY,
+                nestedComments = false,
+                regexLiterals = false,
+                jsx = false,
+                objectKeys = false,
+                capitalizedTypes = true,
+                hash = CLikeSyntax.HASH_NONE,
+                shebang = true,
+            ),
+        )
+
+    val objectiveC =
+        CLikeLexer(
+            CLikeSyntax(
+                words = objectiveCWords,
+                identifierRole = 0,
+                strings = CLikeSyntax.STRINGS_OBJC,
+                nestedComments = false,
+                regexLiterals = false,
+                jsx = false,
+                objectKeys = false,
+                capitalizedTypes = true,
+                // `NSURL` and `UIView` are classes: only `MAX_ITEMS`-style names are constants.
+                hash = CLikeSyntax.HASH_DIRECTIVE,
+            ),
+        )
+
+    val zig =
+        CLikeLexer(
+            CLikeSyntax(
+                words = zigWords,
+                identifierRole = RoleCode.VARIABLE,
+                strings = CLikeSyntax.STRINGS_ZIG,
+                nestedComments = false,
+                regexLiterals = false,
+                jsx = false,
+                objectKeys = false,
+                capitalizedTypes = true,
+                hash = CLikeSyntax.HASH_NONE,
+                blockComments = false,
+            ),
+        )
+
+    val apex =
+        CLikeLexer(
+            CLikeSyntax(
+                words = apexWords,
+                identifierRole = RoleCode.VARIABLE,
+                strings = CLikeSyntax.STRINGS_APEX,
+                nestedComments = false,
+                regexLiterals = false,
+                jsx = false,
+                objectKeys = false,
+                capitalizedTypes = true,
+                hash = CLikeSyntax.HASH_NONE,
+                caseInsensitive = true,
+                soqlWords = soqlWords,
             ),
         )
 }
