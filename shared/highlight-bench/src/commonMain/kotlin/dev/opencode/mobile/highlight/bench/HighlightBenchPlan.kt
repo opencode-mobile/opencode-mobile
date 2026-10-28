@@ -1,8 +1,18 @@
 package dev.opencode.mobile.highlight.bench
 
-/** Quick runs in seconds on a host; full adds 128K throughput, 1 MB files, and worst cases. */
+/**
+ * Which cases a run covers, see [HighlightBenchPlan.cases]. [Quick] and [Basic] run cold start,
+ * 2K and 16K throughput, and chat fences, inline only; [Full] adds 128K throughput, 1 MB files,
+ * and worst cases. Languages per tier: [HighlightBenchPlan.languages].
+ */
 enum class HighlightBenchTier {
+    /** The six languages of the first baseline (seconds on a host), kept so runs stay comparable over time. */
     Quick,
+
+    /** Javascript and the 17 Basic languages, at quick depth (about a minute with TextMate on a host). */
+    Basic,
+
+    /** Every language at every size, plus every worst case (minutes). */
     Full,
 }
 
@@ -104,9 +114,17 @@ internal sealed class CaseSpec {
 }
 
 object HighlightBenchPlan {
+    /** The languages [tier] runs, in report order. */
+    fun languages(tier: HighlightBenchTier): List<String> =
+        when (tier) {
+            HighlightBenchTier.Quick -> HighlightBenchCorpus.quickLanguages
+            HighlightBenchTier.Basic -> HighlightBenchCorpus.languages - HighlightBenchCorpus.quickLanguages.toSet()
+            HighlightBenchTier.Full -> HighlightBenchCorpus.languages
+        }
+
     /** The cases a tier runs, in report order. */
     fun cases(tier: HighlightBenchTier): List<HighlightBenchCase> {
-        val languages = HighlightBenchCorpus.languages
+        val languages = languages(tier)
         val throughputSizes =
             listOf(HighlightBenchSizeClass.Small, HighlightBenchSizeClass.Medium) +
                 if (tier == HighlightBenchTier.Full) listOf(HighlightBenchSizeClass.Large) else emptyList()

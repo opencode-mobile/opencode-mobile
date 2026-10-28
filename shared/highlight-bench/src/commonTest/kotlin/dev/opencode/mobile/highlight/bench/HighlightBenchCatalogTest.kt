@@ -51,19 +51,75 @@ class HighlightBenchCatalogTest {
     fun worstCasesHaveTheirAdvertisedShape() {
         val cases = HighlightBenchCatalog.filter(null, null, HighlightBenchDataKind.WorstCase).associateBy { it.id.removePrefix("worst/") }
 
-        assertEquals(15, cases.size)
+        assertEquals(28, cases.size)
         assertTrue(cases.getValue("minified-js-1mb").generate().let { it.length >= 1_000_000 && '\n' !in it })
         assertEquals(100_000, cases.getValue("typescript-line-100k").generate().length)
         assertEquals(100_000, cases.getValue("json-deep-50k").generate().length)
         assertEquals(200_000, cases.getValue("binary-200k").generate().length)
         assertTrue(cases.getValue("crlf-typescript-250k").generate().contains("\r\n"))
         assertTrue(cases.getValue("diff-long-line-1mb").generate().lines().maxOf { it.length } > 50_000)
+
+        // The Basic languages' worst cases: the construct opens once, at the start, and never closes.
+        fun text(id: String) = cases.getValue(id).generate()
+        fun count(
+            text: String,
+            token: String,
+        ) = generateSequence(text.indexOf(token).takeIf { it >= 0 }) { at -> text.indexOf(token, at + 1).takeIf { it >= 0 } }.count()
+        mapOf(
+            "markdown-unclosed-fence-1mb" to ("```" to 1),
+            "shell-unclosed-heredoc-1mb" to ("NEVER_ENDS" to 1),
+            "ruby-unclosed-heredoc-1mb" to ("NEVER_ENDS" to 1),
+            "php-unclosed-heredoc-1mb" to ("NEVER_ENDS" to 1),
+            "html-unclosed-script-1mb" to ("</script" to 0),
+            "rust-unclosed-raw-string-1mb" to ("\"##" to 0),
+            "cpp-unclosed-raw-string-1mb" to (")never\"" to 0),
+            "csharp-unclosed-raw-string-1mb" to ("\"\"\"\"" to 1),
+        ).forEach { (id, expected) ->
+            val text = text(id)
+            assertTrue(text.length >= 998_000, "$id: ${text.length}")
+            assertEquals(expected.second, count(text, expected.first), id)
+        }
+        listOf("css-minified-1mb", "sql-in-list-1mb").forEach { id ->
+            assertTrue(text(id).trimEnd().let { it.length >= 1_000_000 && '\n' !in it }, id)
+        }
+        assertTrue(text("sql-in-list-1mb").startsWith("SELECT * FROM sessions WHERE id IN ('ses_1', 'ses_2', "))
+        assertEquals(350_000, text("xml-deep-50k").length)
+        assertTrue(text("yaml-deep-1k").lines().maxOf { it.length } >= 2_000)
+        assertTrue(text("c-byte-array-1mb").let { it.length in 999_000..1_000_100 && it.endsWith(";\n") && it.lines()[2].startsWith("  0x") })
+    }
+
+    @Test
+    fun everyLanguageHasTheFourTypicalSizesAndChatFences() {
+        assertEquals(17, HighlightBenchCorpus.basicLanguages.size)
+        assertEquals(24, HighlightBenchCatalog.languages.size)
+        HighlightBenchCatalog.languages.forEach { language ->
+            val typical = HighlightBenchCatalog.filter(language, null, HighlightBenchDataKind.TypicalCode)
+            assertEquals(listOf("2k", "16k", "128k", "1mb").map { "typical/$language/$it" }, typical.map { it.id })
+            assertEquals(HighlightBenchCatalog.TYPICAL_SIZES.map { it.first }, typical.map { it.sizeClass })
+            if (language in HighlightBenchCorpus.quickLanguages) return@forEach
+            val huge = typical.last().generate()
+            assertTrue(huge.length in HighlightBenchCorpus.ONE_MB - 2_000..HighlightBenchCorpus.ONE_MB && huge.endsWith("\n"), "$language ${huge.length}")
+            assertEquals(150, HighlightBenchCatalog.fences(language).pieces().size)
+        }
+    }
+
+    @Test
+    fun basicTemplatesRepeatWithVaryingIdentifiers() {
+        assertEquals(HighlightBenchCatalog.languages - HighlightBenchCorpus.quickLanguages.toSet(), HighlightBenchCorpusTemplates.basic.keys.toList())
+        HighlightBenchCorpusTemplates.basic.forEach { (language, template) ->
+            assertTrue(template.length in 800..2_500, "$language ${template.length}")
+            assertTrue(Regex("\\{n\\}").findAll(template).count() >= 3, language)
+            val code = HighlightBenchCorpus.code(language, 16_000)
+            assertTrue("{n}" !in code, language)
+            // The sixth copy is in 16K, with its own identifiers.
+            assertTrue(template.replace("{n}", "5") in code, language)
+        }
     }
 
     @Test
     fun theCatalogListsAndFiltersDataSets() {
         val all = HighlightBenchCatalog.dataSets
-        assertEquals(6 * 4 + 6 + 15, all.size)
+        assertEquals(24 * 4 + 24 + 28, all.size)
         assertEquals(all.size, all.map { it.id }.toSet().size)
 
         val kotlin = HighlightBenchCatalog.filter("kotlin", null, null)
@@ -91,12 +147,18 @@ class HighlightBenchCatalogTest {
     @Test
     fun tierPlansCoverTheExpectedCases() {
         val quick = HighlightBenchPlan.cases(HighlightBenchTier.Quick)
+        val basic = HighlightBenchPlan.cases(HighlightBenchTier.Basic)
         val full = HighlightBenchPlan.cases(HighlightBenchTier.Full)
         assertEquals(6 + 12 + 6, quick.size)
-        assertEquals(6 + 18 + 6 + 6 + 15, full.size)
+        assertEquals(18 + 36 + 18, basic.size)
+        assertEquals(24 + 72 + 24 + 24 + 28, full.size)
         assertEquals(full.size, full.map { it.id }.toSet().size)
-        assertTrue(quick.none { it.isolated })
-        assertEquals(21, full.count { it.isolated })
+        assertTrue(quick.none { it.isolated } && basic.none { it.isolated })
+        assertEquals(52, full.count { it.isolated })
+        assertEquals(listOf("typescript", "kotlin", "swift", "python", "json", "diff"), HighlightBenchPlan.languages(HighlightBenchTier.Quick))
+        assertEquals(listOf("javascript") + HighlightBenchCorpus.basicLanguages, HighlightBenchPlan.languages(HighlightBenchTier.Basic))
+        assertEquals(HighlightBenchPlan.languages(HighlightBenchTier.Basic), basic.map { it.language }.distinct())
+        assertTrue(full.map { it.id }.containsAll(quick.map { it.id } + basic.map { it.id }))
         assertEquals(HighlightBenchSection.entries.dropLast(1), full.map { it.section }.distinct())
     }
 

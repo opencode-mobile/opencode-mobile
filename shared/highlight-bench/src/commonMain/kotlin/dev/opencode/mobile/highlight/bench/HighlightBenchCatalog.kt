@@ -78,7 +78,7 @@ class HighlightBenchDataSet internal constructor(
 
 /** Every bundled data set, listable and filterable for a Lab's browser. */
 object HighlightBenchCatalog {
-    /** Languages with typical code and chat fences; worst cases add javascript and markdown. */
+    /** Languages with typical code and chat fences ([HighlightBenchCorpus.languages]); every worst case uses one of them. */
     val languages: List<String>
         get() = HighlightBenchCorpus.languages
 

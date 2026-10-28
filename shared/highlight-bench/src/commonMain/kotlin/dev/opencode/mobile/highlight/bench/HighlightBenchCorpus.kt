@@ -9,8 +9,18 @@ import kotlin.random.Random
  * pathological inputs.
  */
 object HighlightBenchCorpus {
-    /** Languages with typical code; the worst cases add javascript and markdown. */
-    val languages: List<String> = listOf("typescript", "kotlin", "swift", "python", "json", "diff")
+    /** The languages the quick tier runs: the Minimum languages except javascript, unchanged since the first baseline. */
+    val quickLanguages: List<String> = listOf("typescript", "kotlin", "swift", "python", "json", "diff")
+
+    /** The Basic milestone's languages (#872), by their TextMate manifest ids. */
+    val basicLanguages: List<String> =
+        listOf(
+            "shellscript", "yaml", "markdown", "html", "css", "rust", "go", "java", "c", "cpp", "csharp",
+            "ruby", "php", "sql", "toml", "docker", "xml",
+        )
+
+    /** Every language with typical code and chat fences: [quickLanguages], javascript, then [basicLanguages]. */
+    val languages: List<String> = quickLanguages + "javascript" + basicLanguages
 
     const val ONE_MB: Int = 1_000_000
 
@@ -21,14 +31,14 @@ object HighlightBenchCorpus {
     ): String {
         require(language in languages) { "No typical code for $language" }
         if (language == "json") return json(size)
-        val template = TEMPLATES.getValue(language)
+        val template = TEMPLATES[language] ?: HighlightBenchCorpusTemplates.basic.getValue(language)
         val builder = StringBuilder(size + template.length)
         var index = 0
         while (builder.length < size) {
             builder.append(template.replace("{n}", index.toString()))
             index += 1
         }
-        val cut = builder.lastIndexOf("\n", size)
+        val cut = builder.lastIndexOf("\n", size - 1)
         return builder.substring(0, if (cut > 0) cut + 1 else size)
     }
 
@@ -49,7 +59,7 @@ object HighlightBenchCorpus {
         }
     }
 
-    /** Pathological inputs; each is generated on demand because several are megabytes. */
+    /** Pathological inputs, each generated on demand because several are megabytes; the Basic languages add their own after the first 15. */
     internal fun worstCases(): List<HighlightBenchDataSet> =
         listOf(
             worst("minified-js-1mb", "Minified JS, one 1 MB line", "javascript", ONE_MB) {
@@ -76,6 +86,35 @@ object HighlightBenchCorpus {
             worst("crlf-typescript-250k", "CRLF TypeScript, 250K", "typescript", 250_000) { code("typescript", 250_000).replace("\n", "\r\n") },
             worst("diff-long-line-1mb", "Diff with a 50K line, 1 MB", "diff", ONE_MB) { code("diff", 950_000) + "+" + "x".repeat(50_000) + "\n" },
             worst("markdown-fence-1mb", "Markdown fence of 1 MB TypeScript", "markdown", ONE_MB) { "# Title\n\n```ts\n" + code("typescript", ONE_MB) + "```\n" },
+            worst("markdown-unclosed-fence-1mb", "Markdown fence never closed, 1 MB", "markdown", ONE_MB) { "# Title\n\n```kotlin\n" + code("kotlin", ONE_MB) },
+            worst("shell-unclosed-heredoc-1mb", "Shell heredoc never closed, 1 MB", "shellscript", ONE_MB) { "cat <<NEVER_ENDS\n" + code("shellscript", ONE_MB) },
+            worst("yaml-deep-1k", "YAML nested 1K deep, block style", "yaml", 1_100_000) { nestedYaml(1_000) },
+            worst("html-unclosed-script-1mb", "HTML <script> never closed, 1 MB", "html", ONE_MB) {
+                "<!DOCTYPE html>\n<html>\n<body>\n<script>\n" + code("javascript", ONE_MB)
+            },
+            worst("css-minified-1mb", "Minified CSS, one 1 MB line", "css", ONE_MB) {
+                buildString {
+                    while (length < ONE_MB) {
+                        append(".a$length>.b:hover{color:#3b82f6;margin:0 auto;background:url(i.png)}")
+                        append("@media(max-width:600px){.c$length{display:none!important}}")
+                    }
+                }
+            },
+            worst("rust-unclosed-raw-string-1mb", "Rust raw string never closed, 1 MB", "rust", ONE_MB) { "let s = r##\"\n" + code("rust", ONE_MB) },
+            worst("cpp-unclosed-raw-string-1mb", "C++ raw string never closed, 1 MB", "cpp", ONE_MB) { "auto s = R\"never(\n" + code("cpp", ONE_MB) },
+            worst("csharp-unclosed-raw-string-1mb", "C# raw string never closed, 1 MB", "csharp", ONE_MB) { "var s = \"\"\"\"\n" + code("csharp", ONE_MB) },
+            worst("ruby-unclosed-heredoc-1mb", "Ruby heredoc never closed, 1 MB", "ruby", ONE_MB) { "text = <<~NEVER_ENDS\n" + code("ruby", ONE_MB) },
+            worst("php-unclosed-heredoc-1mb", "PHP heredoc never closed, 1 MB", "php", ONE_MB) { "<?php\n${'$'}s = <<<NEVER_ENDS\n" + code("php", ONE_MB) },
+            worst("sql-in-list-1mb", "SQL IN list, one 1 MB line", "sql", ONE_MB) {
+                buildString {
+                    append("SELECT * FROM sessions WHERE id IN (")
+                    var index = 0
+                    while (length < ONE_MB) append(if (index++ == 0) "" else ", ").append("'ses_").append(index).append('\'')
+                    append(");\n")
+                }
+            },
+            worst("c-byte-array-1mb", "C byte array initializer, 1 MB", "c", ONE_MB) { byteArrayC(Random(874)) },
+            worst("xml-deep-50k", "XML nested 50K deep, one line", "xml", 350_000) { "<n>".repeat(50_000) + "</n>".repeat(50_000) },
         )
 
     private fun worst(
@@ -108,6 +147,27 @@ object HighlightBenchCorpus {
             repeat(depth) { level -> append("  ".repeat(level)).append("{\"k$level\": \"v\", \"child\":\n") }
             append("  ".repeat(depth)).append("null\n")
             repeat(depth) { level -> append("  ".repeat(depth - level - 1)).append("}\n") }
+        }
+
+    private fun nestedYaml(depth: Int): String =
+        buildString {
+            append("---\n")
+            repeat(depth) { level -> append("  ".repeat(level)).append("k").append(level).append(": # level ").append(level).append('\n') }
+            append("  ".repeat(depth)).append("leaf: |\n").append("  ".repeat(depth + 1)).append("block scalar at the bottom\n")
+        }
+
+    /** `xxd -i` output: a 1 MB `unsigned char` array, twelve bytes per line. */
+    private fun byteArrayC(random: Random): String =
+        buildString {
+            append("/* Generated by xxd -i */\nunsigned char image_png[] = {\n")
+            var count = 0
+            while (length < ONE_MB - 40) {
+                append(if (count % 12 == 0) "  " else " ")
+                append("0x").append(random.nextInt(256).toString(16).padStart(2, '0')).append(',')
+                count += 1
+                if (count % 12 == 0) append('\n')
+            }
+            append("\n};\nunsigned int image_png_len = ").append(count).append(";\n")
         }
 
     private fun unicodeSoup(random: Random): String {

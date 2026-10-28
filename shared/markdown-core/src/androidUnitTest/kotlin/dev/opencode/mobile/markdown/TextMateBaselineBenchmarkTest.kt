@@ -17,7 +17,8 @@ import kotlin.test.Test
  *
  * Opt-in, run from `android/` (`--rerun` because Gradle does not see the variable as an input):
  * `HIGHLIGHT_BASELINE=quick ./gradlew :markdown-core:testDebugUnitTest --tests '*TextMateBaselineBenchmarkTest*' --rerun`
- * (seconds) or `HIGHLIGHT_BASELINE=full` (adds 128K throughput, 1 MB files, worst cases; minutes).
+ * (seconds), `HIGHLIGHT_BASELINE=basic` (javascript and the 17 Basic languages at quick depth), or
+ * `HIGHLIGHT_BASELINE=full` (every language; adds 128K throughput, 1 MB files, worst cases; minutes).
  * Any Lab `labRun` value works too (see `HighlightBenchHeadless`), for example
  * `HIGHLIGHT_BASELINE=quick:engines=textmate,highlight-core,semantic-fallback`; without `engines=` only TextMate runs.
  * Report: `shared/markdown-core/build/reports/highlight-baseline/engine.md`, summary `engine.json`.

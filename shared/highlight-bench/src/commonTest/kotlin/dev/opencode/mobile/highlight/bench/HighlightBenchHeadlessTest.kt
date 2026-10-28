@@ -16,6 +16,10 @@ class HighlightBenchHeadlessTest {
         assertEquals(HighlightBenchSettings.standard, request.settings)
         assertEquals(HighlightBenchPlan.cases(HighlightBenchTier.Quick).map { it.id }, request.cases().map { it.id })
         assertEquals(HighlightBenchTier.Full, HighlightBenchHeadless.parse(" full ").tier)
+        val basic = HighlightBenchHeadless.parse("basic:engines=textmate,highlight-core")
+        assertEquals(HighlightBenchTier.Basic, basic.tier)
+        assertEquals(HighlightBenchPlan.cases(HighlightBenchTier.Basic).map { it.id }, basic.cases().map { it.id })
+        assertEquals(listOf("textmate", "highlight-core"), basic.engineIds)
     }
 
     @Test
