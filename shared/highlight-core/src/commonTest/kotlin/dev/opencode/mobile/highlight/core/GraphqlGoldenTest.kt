@@ -112,4 +112,15 @@ class GraphqlGoldenTest {
             ),
         )
     }
+
+    @Test
+    fun namesWithoutARoleStayPlainWithNoSpan() {
+        // A name that only the line above could have given a role (an operation name after a
+        // line break, words outside any definition) emits no span at all: never a Plain one.
+        assertGolden(
+            "graphql",
+            goldenLines("query", "Name { a }", "garbage words", "true"),
+            goldenLines("«Keyword|query»", "Name «Punctuation|{» «Property|a» «Punctuation|}»", "garbage words", "«Constant|true»"),
+        )
+    }
 }
