@@ -1,5 +1,10 @@
 package dev.opencode.mobile.ui.main
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -413,7 +418,15 @@ internal fun MainScreen(
                     },
             )
 
-            when (uiState) {
+            AnimatedContent(
+                targetState = serversChrome.active?.id.orEmpty(),
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(180)) togetherWith fadeOut(animationSpec = tween(120))
+                },
+                label = "serverSwitch",
+                modifier = Modifier.weight(1f).fillMaxSize(),
+            ) { _ ->
+                when (uiState) {
                 is MainScreenUiState.Disconnected -> {
                     Box(
                         modifier = Modifier.fillMaxSize().navigationBarsPadding(),
@@ -492,8 +505,9 @@ internal fun MainScreen(
                         onSelectedFilterIdChange = { selectedFilterId = it },
                         selectedSessionId = selectedSessionId,
                         sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxSize(),
                     )
+                }
                 }
             }
         }

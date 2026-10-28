@@ -18,6 +18,8 @@ final class ActiveConnectionManager: @unchecked Sendable {
     private var probeFailed = false
     private var addressResolution: Task<Void, Never>?
     private var addressResolutionGeneration = 0
+    /// Fired after a background probe binds a different host than the one already in use.
+    var onAddressRetargeted: ((Int) -> Void)?
 
     init(
         connectionProbing: (any ConnectionProbing)? = nil,
@@ -80,14 +82,24 @@ final class ActiveConnectionManager: @unchecked Sendable {
         }
     }
 
-    func reloadFromStore() async {
+    /// Binds the stored address immediately. When [waitForAddressResolution] is false, a better
+    /// saved address is applied later and [onAddressRetargeted] fires if the host changes.
+    func reloadFromStore(waitForAddressResolution: Bool = true) async {
         guard let store = profileStore else { return }
         if let profile = await store.activeProfile() {
             apply(profile)
-            await addressResolution?.value
+            if waitForAddressResolution {
+                await addressResolution?.value
+            }
         } else {
             disconnect()
         }
+    }
+
+    func addressResolutionIsCurrent(_ generation: Int) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return addressResolutionGeneration == generation
     }
 
     func apply(_ profile: ConnectionProfile, serverProtocol: ServerProtocol? = nil) {
@@ -179,6 +191,11 @@ final class ActiveConnectionManager: @unchecked Sendable {
         updated.serverProtocol = detected
         install(updated, serverProtocol: detected)
         try? await store.saveProfile(updated)
+        lock.lock()
+        let stillCurrent = addressResolutionGeneration == generation
+        lock.unlock()
+        guard stillCurrent else { return }
+        onAddressRetargeted?(generation)
     }
 
     func applyConnection(_ connection: ServerConnection) {
@@ -426,8 +443,10 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     private let hasActiveConnection: @Sendable () -> Bool
     private let profileChangeGate = ProfileChangeGate()
     private let lock = NSLock()
+    private var profileSwitchingHandlers: [(String) -> Void] = []
     private var profileSavedHandlers: [() -> Void] = []
     private var profileClearedHandlers: [() -> Void] = []
+    private var connectionRetargetedHandlers: [() -> Void] = []
     private var switchGeneration: UInt64 = 0
 
     var profileGeneration: UInt64 {
@@ -466,6 +485,16 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         self.occupancy = occupancy
         self.emitProfileSwitched = emitProfileSwitched
         self.hasActiveConnection = hasActiveConnection
+        activeConnectionManager.onAddressRetargeted = { [weak self] generation in
+            guard let self else { return }
+            Task { await self.restartAfterAddressRetarget(generation: generation) }
+        }
+    }
+
+    func onProfileSwitching(_ handler: @escaping (String) -> Void) {
+        lock.lock()
+        profileSwitchingHandlers.append(handler)
+        lock.unlock()
     }
 
     func onProfileSaved(_ handler: @escaping () -> Void) {
@@ -477,6 +506,12 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     func onProfileCleared(_ handler: @escaping () -> Void) {
         lock.lock()
         profileClearedHandlers.append(handler)
+        lock.unlock()
+    }
+
+    func onConnectionRetargeted(_ handler: @escaping () -> Void) {
+        lock.lock()
+        connectionRetargetedHandlers.append(handler)
         lock.unlock()
     }
 
@@ -499,9 +534,10 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     }
 
     func switchProfile(id: String) async {
+        notifySwitching(id)
         await profileChangeGate.run {
             await self.connectionProfileStore.applyProfile(id: id)
-            await self.applyActiveProfileChange(notify: .saved)
+            await self.applyActiveProfileChange(notify: .saved, waitForAddressResolution: false)
         }
     }
 
@@ -549,16 +585,21 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         case cleared
     }
 
-    private func applyActiveProfileChange(notify: ProfileNotify) async {
+    private func applyActiveProfileChange(
+        notify: ProfileNotify,
+        waitForAddressResolution: Bool = true
+    ) async {
         lock.lock()
         switchGeneration += 1
         let generation = switchGeneration
         lock.unlock()
 
+        // Cancel in-flight loads before the disconnect, so stopping the stream does not
+        // refetch the server we are leaving.
+        syncCoordinator()?.beginProfileSwitch(generation: generation)
         if let stream = eventStream() {
             await stream.stop()
         }
-        syncCoordinator()?.beginProfileSwitch(generation: generation)
 
         let nextProfile = await connectionProfileStore.activeProfile()
         await MainActor.run {
@@ -573,7 +614,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         if nextProfile == nil {
             activeConnectionManager.disconnect()
         } else {
-            await rebindActive()
+            await rebindActive(waitForAddressResolution: waitForAddressResolution)
         }
 
         emitProfileSwitched()
@@ -590,8 +631,8 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         }
     }
 
-    private func rebindActive() async {
-        await activeConnectionManager.reloadFromStore()
+    private func rebindActive(waitForAddressResolution: Bool) async {
+        await activeConnectionManager.reloadFromStore(waitForAddressResolution: waitForAddressResolution)
         if activeConnectionManager.currentProfile() == nil,
            let active = await connectionProfileStore.activeProfile()
         {
@@ -599,11 +640,40 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         }
     }
 
+    private func notifySwitching(_ id: String) {
+        lock.lock()
+        let handlers = profileSwitchingHandlers
+        lock.unlock()
+        handlers.forEach { $0(id) }
+    }
+
     private func notifySaved() {
         lock.lock()
         let handlers = profileSavedHandlers
         lock.unlock()
         handlers.forEach { $0() }
+    }
+
+    private func notifyRetargeted() {
+        lock.lock()
+        let handlers = connectionRetargetedHandlers
+        lock.unlock()
+        handlers.forEach { $0() }
+    }
+
+    private func restartAfterAddressRetarget(generation: Int) async {
+        guard activeConnectionManager.addressResolutionIsCurrent(generation) else { return }
+        await profileChangeGate.run {
+            guard self.activeConnectionManager.addressResolutionIsCurrent(generation) else { return }
+            guard self.hasActiveConnection() else { return }
+            if let stream = self.eventStream() {
+                await stream.stop()
+                if self.occupancy() != .stopped {
+                    stream.start()
+                }
+            }
+            self.notifyRetargeted()
+        }
     }
 
     private func notifyCleared() {

@@ -457,6 +457,9 @@ final class ProjectListHomeViewModel {
     private var connectionStateObservationTask: Task<Void, Never>?
     private(set) var liveUpdatesConnectionStatus: SessionConnectionStatus = .offline
     private(set) var serversChrome = HomeServersChrome()
+    /// Server the user just picked. A late save from the previous server must not paint over it.
+    private var pendingSwitchID: String?
+    private var switchPaintGeneration = 0
     private var serverBaseURL: String {
         activeConnectionManager.connection?.baseURL.absoluteString ?? ""
     }
@@ -585,9 +588,23 @@ final class ProjectListHomeViewModel {
         sessionReadyStore.bindProfile(profileID: activeConnectionManager.currentProfile()?.id)
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
-                self?.clearProjectLoads()
-                self?.stopLiveObservations()
-                await self?.refresh()
+                guard let self else { return }
+                if let pending = self.pendingSwitchID {
+                    let active = await self.connectionProfileStore.activeProfile()
+                    guard active?.id == pending else { return }
+                    self.pendingSwitchID = nil
+                    self.switchPaintGeneration += 1
+                }
+                self.clearProjectLoads()
+                self.stopLiveObservations()
+                await self.refresh()
+            }
+        }
+        connectionSessionCoordinator.onConnectionRetargeted { [weak self] in
+            Task { @MainActor in
+                guard let self, self.pendingSwitchID == nil else { return }
+                await self.sessionLiveStore.invalidate(directory: nil)
+                await self.sessionStatusLiveStore.invalidate(directory: nil)
             }
         }
         connectionSessionCoordinator.onProfileCleared { [weak self] in
@@ -678,9 +695,62 @@ final class ProjectListHomeViewModel {
         serversChrome.sheetVisible = false
     }
 
-    func switchProfile(id: String) async {
-        await connectionSessionCoordinator.switchProfile(id: id)
-        dismissServersSheet()
+    func switchProfile(id: String) {
+        guard let target = serversChrome.others.first(where: { $0.id == id }) else { return }
+        pendingSwitchID = id
+        switchPaintGeneration += 1
+        let generation = switchPaintGeneration
+        let previous = serversChrome.active
+        serversChrome = HomeServersChrome(
+            title: target.displayName,
+            isSwitcher: true,
+            active: target,
+            others: ([previous].compactMap { $0 } + serversChrome.others).filter { $0.id != id },
+            sheetVisible: false
+        )
+        // Drop the previous server's live updates immediately. Local projects paint next;
+        // the connection switch and session lists catch up in the background.
+        stopLiveObservations()
+        DiagnosticLog.info(.connection, "switch profile ui id=\(id)")
+        Task { [weak self] in
+            await self?.paintSwitchedServer(baseURL: target.baseURL, id: id, generation: generation)
+        }
+        Task { [weak self] in
+            await self?.connectionSessionCoordinator.switchProfile(id: id)
+        }
+    }
+
+    /// Projects already saved for the target server, with no sessions yet. Network fills those in.
+    private func paintSwitchedServer(baseURL: String, id: String, generation: Int) async {
+        let worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: baseURL)
+        guard generation == switchPaintGeneration, pendingSwitchID == id else { return }
+        clearProjectLoads()
+        clearHomeProjectInputs()
+        if worktrees.isEmpty {
+            state = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: nil)
+        } else {
+            state = .loaded(
+                sections: worktrees.map(placeholderSection),
+                showAddProjectSheet: false,
+                addProjectSheet: nil,
+                projectSessionCreateError: nil
+            )
+        }
+    }
+
+    private func placeholderSection(worktree: String) -> ProjectSectionItem {
+        let name = ProjectDomainAdapter.displayName(from: worktree)
+        return ProjectSectionItem(
+            id: worktree,
+            worktree: worktree,
+            displayName: name,
+            pathSubtitle: worktree,
+            letter: letterCharacter(for: name),
+            letterAccent: letterAccent(for: worktree),
+            allSessions: [],
+            loadError: nil,
+            sessionsFromCache: false
+        )
     }
 
     func refreshServersChrome() async {

@@ -370,14 +370,14 @@ class ConnectionSessionCoordinatorTest {
                 )
             val switch = backgroundScope.async { coordinator.switchProfile(home.id) }
             enteredStop.await()
-            assertEquals(listOf("stop"), order.toList())
+            assertEquals(listOf("beginProfileSwitch", "stop"), order.toList())
             releaseStop.complete(Unit)
             switch.await()
             advanceUntilIdle()
             assertEquals(
                 listOf(
-                    "stop",
                     "beginProfileSwitch",
+                    "stop",
                     "clearLiveProjections",
                     "bindProfile",
                     "ProfileSwitched",
@@ -388,6 +388,54 @@ class ConnectionSessionCoordinatorTest {
             assertEquals(1, order.count { it == "ProfileSwitched" })
             assertEquals(1, order.count { it == "stop" })
             assertEquals(1, order.count { it == "start" })
+        }
+
+    @Test
+    fun switchProfile_signalsTheUiBeforeStopFinishes() =
+        runTest {
+            val connectionProfileStore = CatalogConnectionProfileStore()
+            connectionProfileStore.saveProfile(
+                ConnectionProfile(
+                    baseUrl = "http://10.0.0.1:4096/",
+                    username = "opencode",
+                    password = "secret",
+                    name = "Home",
+                ),
+            )
+            val home = connectionProfileStore.listProfiles().first { it.name == "Home" }
+            val json = Json { ignoreUnknownKeys = true }
+            val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+            val enteredStop = CompletableDeferred<Unit>()
+            val releaseStop = CompletableDeferred<Unit>()
+            val fake = FakeForegroundEventStream()
+            val stream =
+                object : LiveConnection by fake {
+                    override suspend fun stop() {
+                        enteredStop.complete(Unit)
+                        releaseStop.await()
+                        fake.stop()
+                    }
+                }
+            val coordinator =
+                testConnectionSessionCoordinator(
+                    activeConnectionManager = activeConnectionManager,
+                    connectionProfileStore = connectionProfileStore,
+                    secureCredentialStore = FakeSecureCredentialStore(),
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+                    composerDraftStore = InMemoryComposerDraftStore(),
+                    httpClient = OpencodeHttpClient(json, activeConnectionManager),
+                    sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                    eventStream = stream,
+                )
+            val switching = CopyOnWriteArrayList<String>()
+            backgroundScope.launch { coordinator.profileSwitching.collect { switching += it } }
+            val switch = backgroundScope.async { coordinator.switchProfile(home.id) }
+
+            enteredStop.await()
+
+            assertEquals(listOf(home.id), switching.toList())
+            releaseStop.complete(Unit)
+            switch.await()
         }
 
     @Test

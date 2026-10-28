@@ -14,9 +14,14 @@ import dev.opencode.mobile.domain.sync.SyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicLong
@@ -59,12 +64,22 @@ class ConnectionSessionCoordinator
     ) {
         private val mutex = Mutex()
         private val switchGeneration = AtomicLong(0)
+        private val retargetScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        private var retargetJob: Job? = null
 
         val profileGeneration: Long
             get() = switchGeneration.get()
 
+        private val profileSwitchingEvents = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 1)
+        val profileSwitching: SharedFlow<String> = profileSwitchingEvents.asSharedFlow()
+
         private val profileSavedEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         val profileSaved: SharedFlow<Unit> = profileSavedEvents.asSharedFlow()
+
+        private val connectionRetargetedEvents = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 1)
+
+        /** The bound address changed after a background probe. Home should refresh in place. */
+        val connectionRetargeted: SharedFlow<Unit> = connectionRetargetedEvents.asSharedFlow()
 
         private val profileClearedEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         val profileCleared: SharedFlow<Unit> = profileClearedEvents.asSharedFlow()
@@ -82,26 +97,44 @@ class ConnectionSessionCoordinator
             serverProtocol: ServerProtocol? = null,
         ) {
             val stamped = profile.copy(serverProtocol = serverProtocol ?: profile.serverProtocol)
-            mutex.withLock {
-                val wasNew = stamped.id.isBlank()
-                connectionProfileStore.saveProfile(stamped)
-                val active = connectionProfileStore.activeProfile()
-                val savedIsActive = wasNew || (stamped.id.isNotBlank() && active?.id == stamped.id)
-                if (savedIsActive) {
+            val generation =
+                mutex.withLock {
+                    val wasNew = stamped.id.isBlank()
+                    connectionProfileStore.saveProfile(stamped)
+                    val active = connectionProfileStore.activeProfile()
+                    val savedIsActive = wasNew || (stamped.id.isNotBlank() && active?.id == stamped.id)
+                    if (!savedIsActive) return@withLock null
                     applyProfileChangeLocked(ProfileChange.Saved(stamped))
+                    switchGeneration.get()
                 }
-            }
+            // Setup waits for the winning address. A switch does not: that probe runs after the UI moves.
+            if (generation != null) retargetReachableAddress(generation)
         }
 
         suspend fun switchProfile(id: String) {
-            mutex.withLock {
-                applyProfileChangeLocked(ProfileChange.Switch(id))
-            }
+            // Tell the UI before any stop, probe, or list fetch. The sheet and home move now;
+            // this function keeps going in the background.
+            profileSwitchingEvents.tryEmit(id)
+            retargetJob?.cancel()
+            val generation =
+                mutex.withLock {
+                    applyProfileChangeLocked(ProfileChange.Switch(id))
+                    switchGeneration.get()
+                }
+            retargetJob =
+                retargetScope.launch {
+                    retargetReachableAddress(generation)
+                }
         }
 
         suspend fun removeProfile(id: String) {
-            mutex.withLock {
-                applyProfileChangeLocked(ProfileChange.Removed(id))
+            val generation =
+                mutex.withLock {
+                    applyProfileChangeLocked(ProfileChange.Removed(id))
+                    switchGeneration.get()
+                }
+            if (activeConnectionManager.current() != null) {
+                retargetReachableAddress(generation)
             }
         }
 
@@ -111,10 +144,34 @@ class ConnectionSessionCoordinator
             }
         }
 
+        private suspend fun retargetReachableAddress(generation: Long) {
+            val profile = activeConnectionManager.currentProfile() ?: return
+            if (switchGeneration.get() != generation) return
+            val changed =
+                runCatching { activeConnectionManager.resolveReachableAddress(profile) }
+                    .getOrDefault(false)
+            if (!changed || switchGeneration.get() != generation) return
+            mutex.withLock {
+                if (switchGeneration.get() != generation) return
+                eventStream.stop()
+                httpClient.rebuild()
+                sseHttpClient.rebuild()
+                if (
+                    worldSignals.occupancy.value != StreamOccupancy.Stopped &&
+                    activeConnectionManager.current() != null
+                ) {
+                    eventStream.start()
+                }
+            }
+            connectionRetargetedEvents.emit(Unit)
+        }
+
         private suspend fun applyProfileChangeLocked(target: ProfileChange) {
             val generation = switchGeneration.incrementAndGet()
-            eventStream.stop()
+            // Cancel in-flight loads before the disconnect, so stopping the stream does not
+            // refetch the server we are leaving.
             syncCoordinator.beginProfileSwitch(generation)
+            eventStream.stop()
             when (target) {
                 is ProfileChange.Switch -> connectionProfileStore.applyProfile(target.id)
                 is ProfileChange.Saved -> Unit

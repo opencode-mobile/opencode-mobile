@@ -133,6 +133,10 @@ class MainScreenViewModel
         private val _serversChrome = MutableStateFlow(HomeServersChrome())
         val serversChrome: StateFlow<HomeServersChrome> = _serversChrome.asStateFlow()
         private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
+
+        /** Server the user just picked. A late save from the previous server must not paint over it. */
+        private var pendingSwitchId: String? = null
+        private var switchPaintGeneration = 0
         val liveUpdatesConnectionStatus: StateFlow<SessionConnectionStatus> =
             liveUpdates.chrome
                 .map { it.label.toSessionConnectionStatus() }
@@ -234,12 +238,24 @@ class MainScreenViewModel
             }
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
+                    val active = connectionProfileStore.activeProfile()
+                    val pending = pendingSwitchId
+                    if (pending != null && active?.id != pending) return@collect
+                    pendingSwitchId = null
+                    switchPaintGeneration++
                     worktreeCreate.dismiss()
                     stopLiveObservations()
                     projectFirstLoads.clearAll()
                     pendingFirstServerSnapshots.clear()
                     resetHomeIndex()
                     refresh()
+                }
+            }
+            viewModelScope.launch {
+                connectionSessionCoordinator.connectionRetargeted.collect {
+                    if (pendingSwitchId != null) return@collect
+                    sessionLiveStore.invalidate(null)
+                    sessionStatusLiveStore.invalidate(null)
                 }
             }
             viewModelScope.launch {
@@ -275,10 +291,59 @@ class MainScreenViewModel
         }
 
         fun switchProfile(id: String) {
-            viewModelScope.launch {
-                connectionSessionCoordinator.switchProfile(id)
-                dismissServersSheet()
-            }
+            val chrome = _serversChrome.value
+            val target = chrome.others.firstOrNull { it.id == id } ?: return
+            pendingSwitchId = id
+            val generation = ++switchPaintGeneration
+            _serversChrome.value =
+                chrome.copy(
+                    title = target.displayName,
+                    isSwitcher = true,
+                    active = target,
+                    others = (listOfNotNull(chrome.active) + chrome.others).filter { it.id != id },
+                    sheetVisible = false,
+                )
+            // Drop the previous server's live updates immediately. Local projects paint next;
+            // the connection switch and session lists catch up in the background.
+            stopLiveObservations()
+            DiagnosticLog.info(DiagnosticLogArea.Connection, "switch profile ui id=$id")
+            viewModelScope.launch { paintSwitchedServer(target.baseUrl, id, generation) }
+            viewModelScope.launch { connectionSessionCoordinator.switchProfile(id) }
+        }
+
+        /** Projects already saved for the target server, with no sessions yet. Network fills those in. */
+        private suspend fun paintSwitchedServer(
+            baseUrl: String,
+            id: String,
+            generation: Int,
+        ) {
+            val worktrees = connectionProfileStore.addedWorktrees(baseUrl)
+            if (generation != switchPaintGeneration || pendingSwitchId != id) return
+            resetHomeIndex()
+            projectFirstLoads.clearAll()
+            pendingFirstServerSnapshots.clear()
+            _uiState.value =
+                if (worktrees.isEmpty()) {
+                    MainScreenUiState.Empty()
+                } else {
+                    MainScreenUiState.Loaded(
+                        sections = worktrees.map(::placeholderSection),
+                        projectLoads = projectFirstLoads.visible,
+                        home = homeIndex,
+                    )
+                }
+        }
+
+        private fun placeholderSection(worktree: String): ProjectSectionUi {
+            val displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree)
+            return ProjectSectionUi(
+                worktree = worktree,
+                displayName = displayName,
+                pathSubtitle = worktree,
+                letter = letterCharacterForProject(displayName),
+                letterAccent = letterAccentForWorktree(worktree),
+                allSessions = emptyList(),
+            )
         }
 
         private suspend fun refreshServersChrome() {

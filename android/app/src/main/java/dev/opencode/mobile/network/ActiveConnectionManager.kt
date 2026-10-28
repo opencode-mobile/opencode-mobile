@@ -54,12 +54,34 @@ class ActiveConnectionManager(
         }
     }
 
+    /**
+     * Binds the stored address immediately. Address probing is not part of this call:
+     * a server switch paints that address while [resolveReachableAddress] looks for a
+     * better one in the background.
+     */
     suspend fun reloadFromStore() {
-        val loaded = mutex.withLock { connectionProfileStore.activeProfile() }
-        val resolved = loaded?.let { selectReachableAddress(it) }
+        val loaded = connectionProfileStore.activeProfile()
         mutex.withLock {
-            persistAddressChange(loaded, resolved)
-            bindLocked(connectionProfileStore.activeProfile())
+            bindLocked(loaded)
+        }
+    }
+
+    /**
+     * Probes the profile's saved addresses and rebinds when a different host wins.
+     * Returns false when nothing changed, or when [profile] is no longer the active one.
+     */
+    suspend fun resolveReachableAddress(profile: ConnectionProfile): Boolean {
+        val resolved = selectReachableAddress(profile)
+        val before = ConnectionProfileIdentity.normalizeBaseUrl(profile.baseUrl)
+        val after = ConnectionProfileIdentity.normalizeBaseUrl(resolved.baseUrl)
+        if (before == after) return false
+        return mutex.withLock {
+            val active = this.profile
+            if (active == null || active.id != profile.id) return@withLock false
+            if (ConnectionProfileIdentity.normalizeBaseUrl(active.baseUrl) != before) return@withLock false
+            persistAddressChange(profile, resolved)
+            bindLocked(connectionProfileStore.activeProfile() ?: resolved)
+            true
         }
     }
 
