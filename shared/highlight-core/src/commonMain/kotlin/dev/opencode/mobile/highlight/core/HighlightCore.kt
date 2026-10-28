@@ -66,6 +66,11 @@ internal object HighlightLanguages {
             Entry("crystal", emptyList(), CrystalLexer),
             Entry("nim", emptyList(), NimLexer),
             Entry("coffee", listOf("coffeescript"), CoffeeScriptLexer),
+            Entry("vue", emptyList(), VueLexer),
+            Entry("svelte", emptyList(), SvelteLexer),
+            Entry("graphql", listOf("gql"), GraphqlLexer),
+            Entry("matlab", emptyList(), MatlabLexer),
+            Entry("asm", listOf("assembly"), AsmLexer),
         )
 
     private val byName: Map<String, Entry> =
