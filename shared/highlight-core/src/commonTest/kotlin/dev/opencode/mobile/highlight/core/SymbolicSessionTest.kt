@@ -195,5 +195,4 @@ class SymbolicSessionTest {
             aliases.forEach { assertEquals(id, HighlightCore.canonicalLanguage(it), it) }
         }
     }
-
 }
