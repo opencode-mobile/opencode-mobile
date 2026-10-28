@@ -77,6 +77,14 @@ internal object HighlightLanguages {
             Entry("graphql", listOf("gql"), GraphqlLexer),
             Entry("matlab", emptyList(), MatlabLexer),
             Entry("asm", listOf("assembly"), AsmLexer),
+            Entry("cobol", emptyList(), CobolLexer),
+            Entry("fortran-fixed-form", listOf("f", "f77", "for"), FortranLexer.fixedForm),
+            Entry("fortran-free-form", listOf("f03", "f08", "f18", "f90", "f95", "fortran"), FortranLexer.freeForm),
+            Entry("ada", emptyList(), AdaLexer),
+            Entry("pascal", listOf("delphi", "object-pascal"), PascalLexer),
+            Entry("vb", listOf("cmd", "visual-basic"), VisualBasicLexer),
+            Entry("abap", emptyList(), AbapLexer),
+            Entry("sas", emptyList(), SasLexer),
         )
 
     private val byName: Map<String, Entry> =

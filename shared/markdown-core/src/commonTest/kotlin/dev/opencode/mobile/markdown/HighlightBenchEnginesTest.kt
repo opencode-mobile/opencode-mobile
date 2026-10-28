@@ -34,8 +34,8 @@ class HighlightBenchEnginesTest {
         assertTrue(engine.supportsLanguage("patch"))
 
         assertTrue(engine.supportsLanguage("kotlin"))
-        assertFalse(engine.supportsLanguage("cobol"))
-        val unsupported = probe(highlighter, "cobol", "DISPLAY 'HI'.\n")
+        assertFalse(engine.supportsLanguage("brainfuck"))
+        val unsupported = probe(highlighter, "brainfuck", "++[>+<-].\n")
         assertEquals("Unsupported", unsupported.outcome)
         assertFalse(unsupported.highlighted)
     }
