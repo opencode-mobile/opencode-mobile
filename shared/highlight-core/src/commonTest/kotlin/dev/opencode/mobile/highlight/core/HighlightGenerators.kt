@@ -4,7 +4,7 @@ import kotlin.random.Random
 
 /** Random inputs for property tests and the randomized run: plausible code per language, damaged freely. */
 internal object HighlightGenerators {
-    val languages = listOf("json", "diff", "typescript", "javascript", "kotlin", "swift", "plaintext")
+    val languages = listOf("json", "diff", "typescript", "javascript", "kotlin", "swift", "python", "plaintext")
 
     private val jsonPieces =
         listOf(
@@ -44,6 +44,13 @@ internal object HighlightGenerators {
                 listOf(
                     "\"\"\"", "\"\\(", "\\(", "#\"raw\"#", "##\"", "\"##", "#\"\"\"", "\"\"\"#", "\\#(", "#if", "#endif",
                     "/* /* nested */", "func", "let", "nil", "${'$'}0", "`default`",
+                ),
+            "python" to
+                listOf(
+                    "(", ")", "[", "]", "{", "}", ":", ",", ".", " ", " ", " ", "\n", "\n", "\n", "\r\n", "\t", "\\", "#", "# note",
+                    "'s'", "\"s\\\"q\"", "'open", "\"open", "'''", "\"\"\"", "r'\\d'", "b\"x\"", "f'", "f\"", "f\"{x!r:>{w}}\"", "rf'''",
+                    "{{", "}}", "{", "}", "!r", ":>4", "123", "0x1F", "1_000", ".5e-3", "2j", "def", "class", "match", "case", "_",
+                    "lambda", "True", "None", "self", "foo", "Bar", "MAX_X", "@dec", "->", "=", "==", "and", "😀", "\uD83D", "\uDE00", "​",
                 ),
         )
 
