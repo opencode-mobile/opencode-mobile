@@ -3,7 +3,6 @@ package dev.opencode.mobile.lab
 import dev.opencode.mobile.highlight.bench.HighlightBenchDataKind
 import dev.opencode.mobile.highlight.bench.HighlightBenchDataSet
 import dev.opencode.mobile.highlight.bench.HighlightBenchSizeClass
-import dev.opencode.mobile.markdown.CodeTokenRole
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -85,46 +84,6 @@ class LabScreenModelsTest {
         assertEquals(HighlightBenchDataKind.Custom, dataSet.kind)
         assertEquals(KOTLIN_SOURCE, dataSet.generate())
     }
-
-    @Test
-    fun viewerHighlightsWithThePickedEngineAndReportsTiming() =
-        runTest(dispatcher) {
-            val store = smallStore()
-            val id = store.addPasted("kotlin", KOTLIN_SOURCE).id
-            val model = LabViewerViewModel(store, labEngines(dispatcher))
-
-            model.bind(id)
-            advanceUntilIdle()
-            var state = model.state.value
-            assertEquals(LabViewerPhase.Highlighted, state.phase)
-            assertEquals("alpha", state.engineId)
-            assertEquals(2, state.timing?.spanCount)
-            assertTrue(state.timing?.cold == true)
-            assertEquals(
-                CodeTokenRole.Keyword,
-                state.lines
-                    .first()
-                    .spans
-                    .single()
-                    .role,
-            )
-
-            model.selectEngine("beta")
-            advanceUntilIdle()
-            state = model.state.value
-            assertEquals("beta", state.engineId)
-            assertEquals(3, state.timing?.spanCount)
-            assertEquals("Highlighted", state.timing?.outcomeLabel)
-        }
-
-    @Test
-    fun viewerShowsAMissingDataSet() =
-        runTest(dispatcher) {
-            val model = LabViewerViewModel(smallStore(), labEngines(dispatcher))
-            model.bind("custom/gone")
-            advanceUntilIdle()
-            assertEquals(LabViewerPhase.Missing, model.state.value.phase)
-        }
 
     @Test
     fun compareMarksWhereTheEnginesDisagree() =

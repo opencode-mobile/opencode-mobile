@@ -66,7 +66,8 @@ internal fun EntryProviderScope<NavKey>.labEntries(
             LabViewerScreen(
                 state = state,
                 onNavigateBack = navigateBack,
-                onSelectEngine = viewModel::selectEngine,
+                onRender = viewModel::render,
+                onCancel = viewModel::cancel,
                 onCompare = { push(LabCompare(key.dataSetId)) },
             )
         }

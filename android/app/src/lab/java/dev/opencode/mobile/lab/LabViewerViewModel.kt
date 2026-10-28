@@ -18,26 +18,64 @@ enum class LabViewerPhase {
     /** Generating the text. */
     Loading,
 
-    /** Plain text shown; the engine call is running. */
-    Highlighting,
-    Highlighted,
+    /** Plain text, no engine running: on open, and after Cancel. */
+    Plain,
+
+    /** Plain text shown while [LabViewerUiState.renderingEngineId] runs. */
+    Rendering,
+
+    /** Spans from [LabViewerUiState.shownEngineId] with its timing. */
+    Rendered,
 
     /** The data set is gone (a custom one from before a process restart). */
     Missing,
+}
+
+/** An engine button; a disabled one says why. */
+data class LabViewerEngine(
+    val id: String,
+    val name: String,
+    val disabledReason: String? = null,
+) {
+    val enabled: Boolean
+        get() = disabledReason == null
 }
 
 data class LabViewerUiState(
     val dataSetId: String? = null,
     val title: String = "",
     val subtitle: String = "",
-    val engines: List<LabEngineOption> = emptyList(),
-    val engineId: String? = null,
+    val engines: List<LabViewerEngine> = emptyList(),
     val lines: List<OpenCodeCodeLine> = emptyList(),
     val phase: LabViewerPhase = LabViewerPhase.Loading,
+    val renderingEngineId: String? = null,
+    val shownEngineId: String? = null,
     val timing: LabTiming? = null,
-)
+    /** True after Cancel, until the next render. */
+    val cancelled: Boolean = false,
+    /** Engines whose earlier calls the viewer stopped waiting for and that are still running. */
+    val busyInBackground: List<String> = emptyList(),
+) {
+    /** The engine the buttons mark: the one rendering, else the one whose spans are shown. */
+    val selectedEngineId: String?
+        get() = renderingEngineId ?: shownEngineId
 
-/** One data set highlighted by the picked engine, with the call's timing. */
+    fun engineName(id: String?): String = engines.firstOrNull { it.id == id }?.name ?: id.orEmpty()
+
+    /** A line under the strip about engine calls still running after Cancel or a switch. */
+    val backgroundNote: String?
+        get() =
+            busyInBackground
+                .distinct()
+                .takeIf { it.isNotEmpty() }
+                ?.let { names -> "Previous ${names.joinToString()} run still busy in the background" }
+}
+
+/**
+ * One data set as plain text, highlighted only when an engine button is tapped. A render never
+ * blocks the screen: Cancel or another engine stops waiting for it at once and shows plain text
+ * (or starts the other engine); a call that keeps running is listed until it returns.
+ */
 @HiltViewModel
 class LabViewerViewModel
     @Inject
@@ -45,23 +83,33 @@ class LabViewerViewModel
         private val store: LabDataSetStore,
         private val engines: LabEngines,
     ) : ViewModel() {
-        private val mutableState =
-            MutableStateFlow(LabViewerUiState(engines = engines.options, engineId = engines.options.firstOrNull()?.id))
+        private val mutableState = MutableStateFlow(LabViewerUiState())
         val state: StateFlow<LabViewerUiState> = mutableState.asStateFlow()
 
         private var dataSet: HighlightBenchDataSet? = null
         private var source: String? = null
-        private var highlightJob: Job? = null
+        private var plainLines: List<OpenCodeCodeLine> = emptyList()
+        private var renderJob: Job? = null
+
+        init {
+            viewModelScope.launch {
+                engines.busyInBackground.collect { busy -> mutableState.update { it.copy(busyInBackground = busy) } }
+            }
+        }
 
         fun bind(dataSetId: String) {
             if (mutableState.value.dataSetId == dataSetId) return
             val found = store.find(dataSetId)
             dataSet = found
-            mutableState.update { it.copy(dataSetId = dataSetId, title = found?.displayName ?: dataSetId) }
-            if (found == null) {
-                mutableState.update { it.copy(phase = LabViewerPhase.Missing) }
-                return
+            mutableState.update {
+                it.copy(
+                    dataSetId = dataSetId,
+                    title = found?.displayName ?: dataSetId,
+                    engines = found?.let(::engineButtons).orEmpty(),
+                    phase = if (found == null) LabViewerPhase.Missing else LabViewerPhase.Loading,
+                )
             }
+            if (found == null) return
             viewModelScope.launch {
                 val (text, plain) =
                     withContext(engines.dispatcher) {
@@ -69,47 +117,79 @@ class LabViewerViewModel
                         text to labCodeLines(text, emptyList())
                     }
                 source = text
+                plainLines = plain
                 mutableState.update {
                     it.copy(
                         subtitle = "${found.language} · ${found.sizeClass.label} · ${LabFormat.count(text.length)} chars",
                         lines = plain,
+                        phase = if (it.phase == LabViewerPhase.Loading) LabViewerPhase.Plain else it.phase,
                     )
                 }
-                highlight()
             }
         }
 
-        fun selectEngine(engineId: String) {
-            if (engineId == mutableState.value.engineId || engines.engine(engineId) == null) return
-            mutableState.update { it.copy(engineId = engineId) }
-            if (source != null) highlight()
-        }
-
-        private fun highlight() {
+        /** Renders with [engineId], replacing a render in progress. Ignored before the text is ready. */
+        fun render(engineId: String) {
             val dataSet = dataSet ?: return
             val source = source ?: return
-            val engineId = mutableState.value.engineId ?: return
-            highlightJob?.cancel()
-            mutableState.update { it.copy(phase = LabViewerPhase.Highlighting, timing = null) }
-            highlightJob =
+            val button = mutableState.value.engines.firstOrNull { it.id == engineId }
+            if (button?.enabled != true) return
+            renderJob?.cancel()
+            mutableState.update {
+                it.copy(
+                    lines = plainLines,
+                    phase = LabViewerPhase.Rendering,
+                    renderingEngineId = engineId,
+                    shownEngineId = null,
+                    timing = null,
+                    cancelled = false,
+                )
+            }
+            renderJob =
                 viewModelScope.launch {
                     val probe = engines.probe(engineId, dataSet.language, source)
-                    val lines =
-                        withContext(engines.dispatcher) {
-                            labCodeLines(
-                                source,
-                                probe.call.spans
-                                    .orEmpty()
-                                    .toCodeSpans(),
-                            )
-                        }
+                    val spans = probe.call.spans.orEmpty()
+                    val lines = withContext(engines.dispatcher) { labCodeLines(source, spans.toCodeSpans()) }
                     mutableState.update {
                         it.copy(
                             lines = lines,
-                            phase = LabViewerPhase.Highlighted,
+                            phase = LabViewerPhase.Rendered,
+                            renderingEngineId = null,
+                            shownEngineId = engineId,
                             timing = LabTiming.of(probe, source.length),
                         )
                     }
                 }
         }
+
+        /** Stops waiting for the render in progress and shows plain text. */
+        fun cancel() {
+            if (mutableState.value.phase != LabViewerPhase.Rendering) return
+            renderJob?.cancel()
+            renderJob = null
+            mutableState.update {
+                it.copy(
+                    lines = plainLines,
+                    phase = LabViewerPhase.Plain,
+                    renderingEngineId = null,
+                    shownEngineId = null,
+                    timing = null,
+                    cancelled = true,
+                )
+            }
+        }
+
+        private fun engineButtons(dataSet: HighlightBenchDataSet): List<LabViewerEngine> =
+            engines.engines.map { engine ->
+                LabViewerEngine(
+                    id = engine.id,
+                    name = engine.displayName,
+                    disabledReason =
+                        if (engine.supportsLanguage(dataSet.language)) {
+                            null
+                        } else {
+                            "${engine.displayName} has no ${dataSet.language} support yet"
+                        },
+                )
+            }
     }

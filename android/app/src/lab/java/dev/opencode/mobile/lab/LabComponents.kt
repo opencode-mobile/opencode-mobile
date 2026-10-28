@@ -42,6 +42,8 @@ internal fun <T> LabChoiceRow(
     onSelect: (T) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** Per option, on top of [enabled]. */
+    isEnabled: (T) -> Boolean = { true },
 ) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
@@ -62,7 +64,7 @@ internal fun <T> LabChoiceRow(
                 OpenCodeChoiceBadge(
                     label = title(option),
                     selected = selected(option),
-                    enabled = enabled,
+                    enabled = enabled && isEnabled(option),
                     onClick = { onSelect(option) },
                 )
             }
