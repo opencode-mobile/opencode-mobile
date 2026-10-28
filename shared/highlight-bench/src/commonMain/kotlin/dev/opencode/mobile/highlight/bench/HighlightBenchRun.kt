@@ -36,8 +36,8 @@ data class HighlightBenchSettings(
  *
  * **Engines.** [HighlightBenchEngine] (id, display name, fresh instances) and
  * [HighlightBenchHighlighter] (one synchronous call with a cancel signal, spans optional). The apps
- * get theirs from markdown-core's `HighlightBenchEngines.available()`: TextMate (`textmate`) and
- * the semantic fallback (`semantic-fallback`); the new library's adapter joins that list later.
+ * get theirs from markdown-core's `HighlightBenchEngines.available()`: TextMate (`textmate`), the
+ * #872 library (`highlight-core`), and the semantic fallback (`semantic-fallback`).
  *
  * **Viewing.** [HighlightBenchProbe.highlight] makes one timed call that returns
  * [HighlightBenchCall.spans]; [HighlightBenchSpanDiff.compare] finds where two engines' spans differ.
@@ -129,6 +129,9 @@ class HighlightBenchRun(
         engine: HighlightBenchEngine,
     ): HighlightBenchCaseResult {
         if (stopFlag.isStopped) return result(case, engine, skipped("Run stopped"), slowed = false)
+        if (!engine.supportsLanguage(case.dataSet.language)) {
+            return result(case, engine, skipped("Unsupported language: ${case.dataSet.language}"), slowed = false)
+        }
         val stuck = stuckCalls
         if (case.isolated && stuck > 0 && settings.whileCallStuck == HighlightBenchStuckPolicy.SkipIsolatedCases) {
             return result(case, engine, skipped("Skipped: $stuck abandoned call(s) still running"), slowed = false)

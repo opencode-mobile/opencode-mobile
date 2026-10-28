@@ -7,8 +7,9 @@ import dev.opencode.mobile.highlight.bench.HighlightBenchSpan
 
 /** The engines a Highlighting Lab can benchmark and compare, in the order it lists them. */
 object HighlightBenchEngines {
-    /** TextMate first, so comparisons use it as the baseline. Each call builds new engines. */
-    fun available(): List<HighlightBenchEngine> = listOf(TextMateHighlightBenchEngine(), SemanticFallbackHighlightBenchEngine)
+    /** TextMate first, so comparisons use it as the baseline, then highlight-core. Each call builds new engines. */
+    fun available(): List<HighlightBenchEngine> =
+        listOf(TextMateHighlightBenchEngine(), HighlightCoreHighlightBenchEngine, SemanticFallbackHighlightBenchEngine)
 
     fun engine(id: String): HighlightBenchEngine? = available().firstOrNull { it.id == id }
 }

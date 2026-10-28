@@ -19,6 +19,12 @@ interface HighlightBenchEngine {
      * new one; creating it is not timed, its first call is.
      */
     fun newHighlighter(): HighlightBenchHighlighter
+
+    /**
+     * False for a language the engine has no highlighter for yet. A run skips such cases for this
+     * engine instead of timing a call that returns plain text; viewers still call the highlighter.
+     */
+    fun supportsLanguage(language: String): Boolean = true
 }
 
 fun interface HighlightBenchHighlighter {

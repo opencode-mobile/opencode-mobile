@@ -36,6 +36,8 @@ include(":markdown-core")
 project(":markdown-core").projectDir = file("../shared/markdown-core")
 include(":highlight-bench")
 project(":highlight-bench").projectDir = file("../shared/highlight-bench")
+include(":highlight-core")
+project(":highlight-core").projectDir = file("../shared/highlight-core")
 
 val includeScreenshot =
     JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_21) ||

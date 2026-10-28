@@ -242,6 +242,22 @@ class HighlightBenchRunTest {
     }
 
     @Test
+    fun casesInALanguageAnEngineDoesNotSupportAreSkippedForThatEngine() {
+        val all = FakeEngine("all") { _, source, _ -> highlighted(source) }
+        val jsonOnly = FakeEngine("json-only", languages = setOf("json")) { _, source, _ -> highlighted(source) }
+        val cases = HighlightBenchPlan.cases(listOf(HighlightBenchCatalog.dataSet("typical/json/2k")!!, HighlightBenchCatalog.dataSet("typical/kotlin/2k")!!))
+
+        val report = HighlightBenchRun(listOf(all, jsonOnly), cases, settings(limitMs = 10_000), HighlightBenchInlineGuard).run {}
+
+        assertEquals(HighlightBenchCaseStatus.Completed, report.result("throughput/typical/json/2k", "json-only")!!.status)
+        assertEquals(HighlightBenchCaseStatus.Completed, report.result("throughput/typical/kotlin/2k", "all")!!.status)
+        val skipped = report.result("throughput/typical/kotlin/2k", "json-only")!!
+        assertEquals(HighlightBenchCaseStatus.Skipped, skipped.status)
+        assertEquals("Unsupported language: kotlin", skipped.note)
+        assertNull(skipped.measurement)
+    }
+
+    @Test
     fun theProbeReturnsSpansAndTiming() {
         val highlighter = fast.newHighlighter()
         val call = HighlightBenchProbe.highlight(highlighter, "kotlin", "x".repeat(50), settings(), platformThreadGuard())

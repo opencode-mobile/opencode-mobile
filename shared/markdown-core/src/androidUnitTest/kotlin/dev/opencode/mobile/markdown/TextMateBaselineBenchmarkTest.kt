@@ -19,7 +19,7 @@ import kotlin.test.Test
  * `HIGHLIGHT_BASELINE=quick ./gradlew :markdown-core:testDebugUnitTest --tests '*TextMateBaselineBenchmarkTest*' --rerun`
  * (seconds) or `HIGHLIGHT_BASELINE=full` (adds 128K throughput, 1 MB files, worst cases; minutes).
  * Any Lab `labRun` value works too (see `HighlightBenchHeadless`), for example
- * `HIGHLIGHT_BASELINE=quick:engines=textmate,semantic-fallback`; without `engines=` only TextMate runs.
+ * `HIGHLIGHT_BASELINE=quick:engines=textmate,highlight-core,semantic-fallback`; without `engines=` only TextMate runs.
  * Report: `shared/markdown-core/build/reports/highlight-baseline/engine.md`, summary `engine.json`.
  */
 class TextMateBaselineBenchmarkTest {
@@ -33,6 +33,7 @@ class TextMateBaselineBenchmarkTest {
             request.engines(
                 listOf(
                     TextMateHighlightBenchEngine { OpenCodeBundledJoniMarkdownHighlighter.create(bundledTestResourceReader()) },
+                    HighlightCoreHighlightBenchEngine,
                     SemanticFallbackHighlightBenchEngine,
                 ),
             )
@@ -66,7 +67,11 @@ class TextMateBaselineBenchmarkTest {
                 }
             }
         File("build/reports/highlight-baseline/engine.json").writeText(report.json())
-        val coldFailures = report.results(HighlightBenchSection.ColdStart).filter { it.status != HighlightBenchCaseStatus.Completed }
+        // Skipped: a language the engine does not support yet (highlight-core before its Full milestone).
+        val coldFailures =
+            report.results(HighlightBenchSection.ColdStart).filter {
+                it.status != HighlightBenchCaseStatus.Completed && it.status != HighlightBenchCaseStatus.Skipped
+            }
         check(coldFailures.isEmpty()) { "Did not highlight: ${coldFailures.joinToString { "${it.case.title} on ${it.engineName} (${it.note ?: it.status})" }}" }
     }
 

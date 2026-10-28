@@ -9,6 +9,7 @@ internal expect fun platformThreadGuard(): HighlightBenchCallGuard
 
 internal class FakeEngine(
     override val id: String = "fake",
+    private val languages: Set<String>? = null,
     private val behavior: (language: String, source: String, cancel: HighlightBenchCancelSignal) -> HighlightBenchOutput,
 ) : HighlightBenchEngine {
     var instances = 0
@@ -17,6 +18,8 @@ internal class FakeEngine(
         private set
 
     override val displayName: String = id.replaceFirstChar { it.uppercase() }
+
+    override fun supportsLanguage(language: String): Boolean = languages == null || language in languages
 
     override fun newHighlighter(): HighlightBenchHighlighter {
         instances += 1
