@@ -3,11 +3,13 @@ package dev.opencode.mobile.lab
 import dev.opencode.mobile.highlight.bench.HighlightBenchEngine
 import dev.opencode.mobile.highlight.bench.HighlightBenchHighlighter
 import dev.opencode.mobile.highlight.bench.HighlightBenchOutput
+import dev.opencode.mobile.highlight.bench.HighlightBenchSettings
 import dev.opencode.mobile.highlight.bench.HighlightBenchThreadGuard
 import dev.opencode.mobile.markdown.CodeTokenRole
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -26,6 +28,7 @@ import org.junit.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LabViewerViewModelTest {
@@ -139,7 +142,7 @@ class LabViewerViewModelTest {
         val executor = Executors.newFixedThreadPool(4)
         val stuck = StuckEngine()
         try {
-            val engines = LabEngines(listOf(stuck, baselineEngine), { HighlightBenchThreadGuard() }, executor.asCoroutineDispatcher())
+            val engines = LabEngines(listOf(stuck, baselineEngine), { HighlightBenchThreadGuard() }, executor.asCoroutineDispatcher(), shortGrace)
             val store = smallStore()
             val id = store.addPasted("kotlin", KOTLIN_SOURCE).id
             val model = LabViewerViewModel(store, engines)
@@ -150,11 +153,12 @@ class LabViewerViewModelTest {
                 model.render("stuck")
                 assertTrue(stuck.started.await(5, TimeUnit.SECONDS))
                 model.cancel()
-                // Cancel is immediate: plain text, and the stuck call is listed as still busy.
+                // Cancel is immediate: plain text; once the grace passes, the stuck call is listed as still busy.
                 var state = model.state.value
                 assertEquals(LabViewerPhase.Plain, state.phase)
                 assertTrue(state.cancelled)
                 assertTrue(state.lines.all { it.spans.isEmpty() })
+                assertNull(state.backgroundNote)
                 state = model.awaitState { it.busyInBackground == listOf("Stuck") }
                 assertEquals("Previous Stuck run still busy in the background", state.backgroundNote)
 
@@ -175,6 +179,44 @@ class LabViewerViewModelTest {
             executor.shutdownNow()
         }
     }
+
+    /** Real threads: Cancel reaches an engine that checks its signal, so nothing stays busy. */
+    @Test
+    fun cancelStopsAnEngineThatChecksItsSignalWithoutABackgroundNote() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
+        val executor = Executors.newFixedThreadPool(4)
+        val polling = PollingEngine()
+        try {
+            val engines = LabEngines(listOf(polling, baselineEngine), { HighlightBenchThreadGuard() }, executor.asCoroutineDispatcher(), shortGrace)
+            val store = smallStore()
+            val id = store.addPasted("kotlin", KOTLIN_SOURCE).id
+            val model = LabViewerViewModel(store, engines)
+            runBlocking {
+                model.bind(id)
+                model.awaitState { it.phase == LabViewerPhase.Plain }
+
+                model.render("polling")
+                assertTrue(polling.started.await(5, TimeUnit.SECONDS))
+                model.cancel()
+                assertTrue(polling.stopped.await(5, TimeUnit.SECONDS))
+                // Past the grace, the call is not listed: it returned when cancelled.
+                Thread.sleep(shortGrace.cancelGraceMs * 3)
+                assertNull(model.state.value.backgroundNote)
+
+                // Switching engines mid-render cancels the first call the same way.
+                model.render("polling")
+                model.render("alpha")
+                val state = model.awaitState { it.phase == LabViewerPhase.Rendered }
+                assertEquals("alpha", state.shownEngineId)
+                withTimeout(5_000) { while (polling.cancelledCalls.get() < 2) delay(10) }
+                assertTrue(model.state.value.busyInBackground.isEmpty())
+            }
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
+    private val shortGrace = HighlightBenchSettings(cancelGraceMs = 200)
 
     private suspend fun LabViewerViewModel.awaitState(predicate: (LabViewerUiState) -> Boolean): LabViewerUiState =
         withTimeout(5_000) { state.first(predicate) }
@@ -197,6 +239,24 @@ class LabViewerViewModelTest {
                 HighlightBenchOutput("Highlighted", 0, highlighted = true, spans = emptyList())
             }
         }
+    }
+
+    /** Spins until its cancel signal turns true, like an engine that checks every line. */
+    private class PollingEngine : HighlightBenchEngine {
+        override val id: String = "polling"
+        override val displayName: String = "Polling"
+        val started = CountDownLatch(1)
+        val stopped = CountDownLatch(1)
+        val cancelledCalls = AtomicInteger()
+
+        override fun newHighlighter(): HighlightBenchHighlighter =
+            HighlightBenchHighlighter { _, _, cancel, _ ->
+                started.countDown()
+                while (!cancel.isCancelled) Thread.onSpinWait()
+                cancelledCalls.incrementAndGet()
+                stopped.countDown()
+                HighlightBenchOutput("Cancelled", 0, highlighted = false, spans = emptyList())
+            }
     }
 
     /** Blocks every call until [release], ignoring its cancel signal. */

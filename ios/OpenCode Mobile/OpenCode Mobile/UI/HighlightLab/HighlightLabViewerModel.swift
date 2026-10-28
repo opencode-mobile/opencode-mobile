@@ -41,7 +41,7 @@ nonisolated struct HighlightLabViewerUiState: Equatable, Sendable {
     var rendered: HighlightLabRenderedText?
     /// The shown engine result; nil while plain.
     var timing: HighlightLabTiming?
-    /// Engine calls that were cancelled or given up on and have not returned yet.
+    /// Engine calls that ignored Cancel past the grace, or were given up on, and have not returned yet.
     var backgroundCalls = 0
 
     var isRendering: Bool { phase.renderingEngineID != nil }
@@ -114,7 +114,8 @@ final class HighlightLabViewerModel {
         state.timing = nil
         Task {
             let result = await service.highlight(text, engineID: engineID, cancellation: cancellation)
-            // A cancelled run returns once the guard abandons it; its call may still be busy.
+            // A cancelled run returns once its call stops or, if it ignores the cancel, once the
+            // guard gives up on it after the grace; then it counts as busy in the background.
             guard current == run else {
                 refreshBackgroundCalls()
                 return

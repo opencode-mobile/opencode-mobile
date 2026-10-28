@@ -1,6 +1,7 @@
 package dev.opencode.mobile.markdown
 
 import dev.opencode.mobile.highlight.bench.HighlightBenchCallStatus
+import dev.opencode.mobile.highlight.bench.HighlightBenchCanceller
 import dev.opencode.mobile.highlight.bench.HighlightBenchHighlighter
 import dev.opencode.mobile.highlight.bench.HighlightBenchInlineGuard
 import dev.opencode.mobile.highlight.bench.HighlightBenchProbe
@@ -37,6 +38,24 @@ class HighlightBenchEnginesTest {
         val unsupported = probe(highlighter, "cobol", "DISPLAY 'HI'.\n")
         assertEquals("Unsupported", unsupported.outcome)
         assertFalse(unsupported.highlighted)
+    }
+
+    @Test
+    fun highlightCoreStopsWhenTheCallersCancellerFires() {
+        val canceller = HighlightBenchCanceller().apply { cancel() }
+        val source = "val a = 1\n".repeat(5_000)
+        val call =
+            HighlightBenchProbe.highlight(
+                HighlightCoreHighlightBenchEngine.newHighlighter(),
+                "kotlin",
+                source,
+                HighlightBenchSettings.standard,
+                HighlightBenchInlineGuard,
+                canceller,
+            )
+
+        assertEquals("Cancelled", call.outcome)
+        assertFalse(call.highlighted)
     }
 
     @Test

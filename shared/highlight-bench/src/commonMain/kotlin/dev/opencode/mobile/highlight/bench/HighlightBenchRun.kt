@@ -40,7 +40,8 @@ data class HighlightBenchSettings(
  * #872 library (`highlight-core`), and the semantic fallback (`semantic-fallback`).
  *
  * **Viewing.** [HighlightBenchProbe.highlight] makes one timed call that returns
- * [HighlightBenchCall.spans]; [HighlightBenchSpanDiff.compare] finds where two engines' spans differ.
+ * [HighlightBenchCall.spans], and the caller's [HighlightBenchCanceller] cancels it while it runs;
+ * [HighlightBenchSpanDiff.compare] finds where two engines' spans differ.
  *
  * **Running.** Build cases with [HighlightBenchPlan.cases] (a [HighlightBenchTier] or picked data
  * sets), then call [run] off the main thread: a full tier takes minutes per engine. Progress arrives
@@ -55,9 +56,9 @@ data class HighlightBenchSettings(
  *
  * **Cancellation.** Each case runs on every engine before the next case starts, so paired
  * results share conditions. Every engine call gets a cancel signal that turns true at its
- * deadline. Light cases call the engine's shared warm instance inline. Isolated cases (1 MB files,
- * worst cases, custom inputs) make one call on a fresh instance through [callGuard], which can give
- * up on a call that ignores its signal; such a call becomes an
+ * deadline or when [stop] is called. Light cases call the engine's shared warm instance inline.
+ * Isolated cases (1 MB files, worst cases, custom inputs) make one call on a fresh instance through
+ * [callGuard], which can give up on a call that ignores its signal; such a call becomes an
  * [HighlightBenchCaseStatus.IgnoredCancel] row, and [HighlightBenchSettings.whileCallStuck] decides
  * what happens to the isolated cases after it.
  *
@@ -84,8 +85,8 @@ class HighlightBenchRun(
         require(engines.map { it.id }.toSet().size == engines.size) { "Engine ids must be unique." }
     }
 
-    private val stopFlag = HighlightBenchStopFlag()
-    private val caller = HighlightBenchCaller(settings, stopFlag)
+    private val canceller = HighlightBenchCanceller()
+    private val caller = HighlightBenchCaller(settings, canceller)
     private val labels = engines.map { HighlightBenchEngineLabel(it.id, it.displayName) }
     private val results = mutableListOf<HighlightBenchCaseResult>()
     private val abandoned = mutableListOf<HighlightBenchTask>()
@@ -94,11 +95,14 @@ class HighlightBenchRun(
     private var started = false
 
     val isStopped: Boolean
-        get() = stopFlag.isStopped
+        get() = canceller.isCancelled
 
-    /** Cancels the call in progress and skips the remaining cases; [run] then returns. */
+    /**
+     * Cancels the call in progress through its cancel signal and skips the remaining cases; [run]
+     * then returns, at most the cancel grace later if that call ignores its signal.
+     */
     fun stop() {
-        stopFlag.isStopped = true
+        canceller.cancel()
     }
 
     /** Runs every case on every engine, reporting before and after each, and returns the final report. */
@@ -128,7 +132,7 @@ class HighlightBenchRun(
         case: HighlightBenchCase,
         engine: HighlightBenchEngine,
     ): HighlightBenchCaseResult {
-        if (stopFlag.isStopped) return result(case, engine, skipped("Run stopped"), slowed = false)
+        if (canceller.isCancelled) return result(case, engine, skipped("Run stopped"), slowed = false)
         if (!engine.supportsLanguage(case.dataSet.language)) {
             return result(case, engine, skipped("Unsupported language: ${case.dataSet.language}"), slowed = false)
         }
@@ -142,7 +146,7 @@ class HighlightBenchRun(
             } catch (failure: Throwable) {
                 Measured(HighlightBenchCaseStatus.Failed, null, null, "Failed: ${failure.describe()}")
             }
-        if (stopFlag.isStopped) return result(case, engine, skipped("Run stopped"), slowed = false)
+        if (canceller.isCancelled) return result(case, engine, skipped("Run stopped"), slowed = false)
         return result(case, engine, measured, slowed = stuck > 0)
     }
 
@@ -325,7 +329,8 @@ object HighlightBenchProbe {
     /**
      * Highlights [source] with [highlighter] (keep one per engine to measure warm calls, or take
      * a fresh one to measure a cold call) through [callGuard], blocking until it returns or the
-     * guard gives up. Call it off the main thread.
+     * guard gives up. Call it off the main thread. [canceller] (any thread) turns the running
+     * call's cancel signal true; a call that ignores it is given up on after the cancel grace.
      */
     fun highlight(
         highlighter: HighlightBenchHighlighter,
@@ -333,8 +338,9 @@ object HighlightBenchProbe {
         source: String,
         settings: HighlightBenchSettings,
         callGuard: HighlightBenchCallGuard,
+        canceller: HighlightBenchCanceller = HighlightBenchCanceller(),
     ): HighlightBenchCall {
-        val caller = HighlightBenchCaller(settings, HighlightBenchStopFlag())
+        val caller = HighlightBenchCaller(settings, canceller)
         val task = caller.task(highlighter, language, source, collectSpans = true)
         return caller.call(task, callGuard.execute(task))
     }
@@ -343,7 +349,7 @@ object HighlightBenchProbe {
 /** Makes engine calls and judges them against the settings' limit and grace. */
 internal class HighlightBenchCaller(
     private val settings: HighlightBenchSettings,
-    private val stop: HighlightBenchStopFlag,
+    private val canceller: HighlightBenchCanceller,
 ) {
     private val limit = settings.callLimitMs.milliseconds
     private val grace = settings.cancelGraceMs.milliseconds
@@ -353,7 +359,7 @@ internal class HighlightBenchCaller(
         language: String,
         source: String,
         collectSpans: Boolean,
-    ) = HighlightBenchTask(highlighter, language, source, collectSpans, limit, grace, stop)
+    ) = HighlightBenchTask(highlighter, language, source, collectSpans, limit, grace, canceller)
 
     fun inline(
         highlighter: HighlightBenchHighlighter,

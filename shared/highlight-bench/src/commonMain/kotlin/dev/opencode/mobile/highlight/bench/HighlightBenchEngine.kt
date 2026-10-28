@@ -63,17 +63,35 @@ data class HighlightBenchSpan(
 
 /**
  * Cancellation for one engine call. It turns true on its own once the call's deadline passes
- * (no watcher thread needed) or as soon as the run is stopped. Safe to read from any thread.
+ * (no watcher thread needed) or as soon as the caller's [HighlightBenchCanceller] cancels.
+ * Safe to read from any thread.
  */
 class HighlightBenchCancelSignal internal constructor(
     private val deadline: TimeSource.Monotonic.ValueTimeMark,
-    private val stop: HighlightBenchStopFlag,
+    private val canceller: HighlightBenchCanceller,
 ) {
     val isCancelled: Boolean
-        get() = stop.isStopped || deadline.hasPassedNow()
+        get() = canceller.isCancelled || deadline.hasPassedNow()
 }
 
-internal class HighlightBenchStopFlag {
+/**
+ * The caller's side of cancellation: [cancel] from any thread turns the cancel signal of the
+ * call in progress (and of every later call it is passed to) true at once. A
+ * [HighlightBenchRun] owns one for [HighlightBenchRun.stop]; a viewer passes its own to
+ * [HighlightBenchProbe.highlight] per call.
+ */
+class HighlightBenchCanceller {
     @Volatile
-    var isStopped: Boolean = false
+    private var cancelledAt: TimeSource.Monotonic.ValueTimeMark? = null
+
+    val isCancelled: Boolean
+        get() = cancelledAt != null
+
+    fun cancel() {
+        if (cancelledAt == null) cancelledAt = TimeSource.Monotonic.markNow()
+    }
+
+    /** Milliseconds since [cancel], or null before it. */
+    internal val cancelledForMs: Long?
+        get() = cancelledAt?.elapsedNow()?.inWholeMilliseconds
 }

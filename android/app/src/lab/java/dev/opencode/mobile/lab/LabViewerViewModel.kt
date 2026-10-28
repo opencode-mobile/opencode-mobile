@@ -53,7 +53,7 @@ data class LabViewerUiState(
     val timing: LabTiming? = null,
     /** True after Cancel, until the next render. */
     val cancelled: Boolean = false,
-    /** Engines whose earlier calls the viewer stopped waiting for and that are still running. */
+    /** Engines whose earlier calls ignored Cancel past the grace and are still running. */
     val busyInBackground: List<String> = emptyList(),
 ) {
     /** The engine the buttons mark: the one rendering, else the one whose spans are shown. */
@@ -73,8 +73,9 @@ data class LabViewerUiState(
 
 /**
  * One data set as plain text, highlighted only when an engine button is tapped. A render never
- * blocks the screen: Cancel or another engine stops waiting for it at once and shows plain text
- * (or starts the other engine); a call that keeps running is listed until it returns.
+ * blocks the screen: Cancel or another engine cancels the engine call, stops waiting for it at
+ * once, and shows plain text (or starts the other engine); a call that ignores the cancel is
+ * listed until it returns.
  */
 @HiltViewModel
 class LabViewerViewModel

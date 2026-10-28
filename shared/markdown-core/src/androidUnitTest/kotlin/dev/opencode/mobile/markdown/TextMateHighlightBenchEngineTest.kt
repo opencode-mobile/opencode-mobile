@@ -1,10 +1,12 @@
 package dev.opencode.mobile.markdown
 
+import dev.opencode.mobile.highlight.bench.HighlightBenchCanceller
 import dev.opencode.mobile.highlight.bench.HighlightBenchInlineGuard
 import dev.opencode.mobile.highlight.bench.HighlightBenchProbe
 import dev.opencode.mobile.highlight.bench.HighlightBenchSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class TextMateHighlightBenchEngineTest {
@@ -20,5 +22,24 @@ class TextMateHighlightBenchEngineTest {
         assertTrue(call.highlighted)
         assertEquals(call.spanCount, call.spans!!.size)
         assertTrue(call.spans!!.any { it.role == CodeTokenRole.Comment.name })
+    }
+
+    @Test
+    fun stopsWhenTheCallersCancellerFires() {
+        val engine = TextMateHighlightBenchEngine { OpenCodeBundledJoniMarkdownHighlighter.create(bundledTestResourceReader()) }
+        val canceller = HighlightBenchCanceller().apply { cancel() }
+
+        val call =
+            HighlightBenchProbe.highlight(
+                engine.newHighlighter(),
+                "typescript",
+                "const a = 1;\n".repeat(1_000),
+                HighlightBenchSettings.standard,
+                HighlightBenchInlineGuard,
+                canceller,
+            )
+
+        assertEquals("Cancelled", call.outcome)
+        assertFalse(call.highlighted)
     }
 }

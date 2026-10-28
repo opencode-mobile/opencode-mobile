@@ -8,6 +8,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
 class HighlightBenchRunTest {
     @Test
@@ -265,6 +266,105 @@ class HighlightBenchRunTest {
         assertEquals(HighlightBenchCallStatus.Completed, call.status)
         assertEquals(5, call.spans?.size)
         assertEquals(HighlightBenchSpan(10, 15, "Keyword"), call.spans?.get(1))
+    }
+
+    @Test
+    fun cancellingAProbeStopsAnEngineThatChecksItPromptly() {
+        val canceller = HighlightBenchCanceller()
+        val startedAt = TimeSource.Monotonic.markNow()
+        onOtherThread {
+            spin(50.milliseconds)
+            canceller.cancel()
+        }
+
+        val call =
+            HighlightBenchProbe.highlight(
+                honorsCancel().newHighlighter(),
+                "typescript",
+                MARKER,
+                settings(limitMs = 10_000, graceMs = 2_000),
+                platformThreadGuard(),
+                canceller,
+            )
+
+        assertTrue(startedAt.elapsedNow() < 1_000.milliseconds, "took ${startedAt.elapsedNow()}")
+        assertEquals(HighlightBenchCallStatus.Completed, call.status)
+        assertEquals("Cancelled", call.outcome)
+        assertTrue(call.elapsedMs >= 40, "returned before the cancel: ${call.elapsedMs} ms")
+    }
+
+    @Test
+    fun aCancelledProbeIsGivenUpOnAfterTheGraceWhenTheEngineIgnoresIt() {
+        val release = Latch()
+        val canceller = HighlightBenchCanceller()
+        val startedAt = TimeSource.Monotonic.markNow()
+        try {
+            onOtherThread {
+                spin(50.milliseconds)
+                canceller.cancel()
+            }
+
+            val call =
+                HighlightBenchProbe.highlight(
+                    hangsUntil(release).newHighlighter(),
+                    "typescript",
+                    MARKER,
+                    settings(limitMs = 10_000, graceMs = 100),
+                    platformThreadGuard(),
+                    canceller,
+                )
+
+            assertEquals(HighlightBenchCallStatus.Abandoned, call.status)
+            assertTrue(startedAt.elapsedNow() < 2_000.milliseconds, "waited ${startedAt.elapsedNow()}, not the grace")
+        } finally {
+            release.isOpen = true
+        }
+    }
+
+    @Test
+    fun aProbeWithoutACancellerRunsToItsLimit() {
+        val call = HighlightBenchProbe.highlight(honorsCancel().newHighlighter(), "typescript", MARKER, settings(limitMs = 30), platformThreadGuard())
+
+        assertEquals(HighlightBenchCallStatus.CancelHonored, call.status)
+        assertTrue(call.elapsedMs >= 30)
+    }
+
+    @Test
+    fun stopReachesTheCallInProgress() {
+        val engine = honorsCancel()
+        val run = HighlightBenchRun(listOf(engine), listOf(custom("measured"), custom("after")), settings(limitMs = 10_000), platformThreadGuard())
+        val startedAt = TimeSource.Monotonic.markNow()
+        onOtherThread {
+            // Past the fresh instance's warm-up, into the measured call.
+            spin(100.milliseconds)
+            run.stop()
+        }
+
+        val report = run.run {}
+
+        assertTrue(startedAt.elapsedNow() < 1_000.milliseconds, "took ${startedAt.elapsedNow()}")
+        assertEquals(2, engine.calls)
+        assertTrue(report.results.all { it.status == HighlightBenchCaseStatus.Skipped && it.note == "Run stopped" })
+    }
+
+    @Test
+    fun stopGivesUpOnACallThatIgnoresItAfterTheGrace() {
+        val release = Latch()
+        val run = HighlightBenchRun(listOf(hangsUntil(release)), listOf(custom()), settings(limitMs = 10_000, graceMs = 100), platformThreadGuard())
+        val startedAt = TimeSource.Monotonic.markNow()
+        try {
+            onOtherThread {
+                spin(100.milliseconds)
+                run.stop()
+            }
+
+            val report = run.run {}
+
+            assertTrue(startedAt.elapsedNow() < 2_000.milliseconds, "waited ${startedAt.elapsedNow()}, not the grace")
+            assertEquals(HighlightBenchCaseStatus.Skipped, report.results.single().status)
+        } finally {
+            release.isOpen = true
+        }
     }
 
     @Test

@@ -4,6 +4,7 @@ import dev.opencode.mobile.highlight.bench.HighlightBenchCall
 import dev.opencode.mobile.highlight.bench.HighlightBenchCallGuard
 import dev.opencode.mobile.highlight.bench.HighlightBenchCallStatus
 import dev.opencode.mobile.highlight.bench.HighlightBenchCancelSignal
+import dev.opencode.mobile.highlight.bench.HighlightBenchCanceller
 import dev.opencode.mobile.highlight.bench.HighlightBenchEngine
 import dev.opencode.mobile.highlight.bench.HighlightBenchHighlighter
 import dev.opencode.mobile.highlight.bench.HighlightBenchOutput
@@ -11,11 +12,14 @@ import dev.opencode.mobile.highlight.bench.HighlightBenchProbe
 import dev.opencode.mobile.highlight.bench.HighlightBenchSettings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.runInterruptible
+import kotlin.time.TimeSource
 
 /** An engine as a picker option. */
 data class LabEngineOption(
@@ -33,9 +37,10 @@ class LabProbe(
  * The engines the Lab's screens use, and where their work runs. Viewer and compare calls reuse an
  * idle warm highlighter per engine; a benchmark run makes its own.
  *
- * A [probe] never holds up its caller: cancelling the calling coroutine stops the wait at once.
- * The engine call itself cannot be stopped from here, so it runs on until it returns (its cancel
- * signal turns true at the call limit); meanwhile [busyInBackground] lists it.
+ * A [probe] never holds up its caller: cancelling the calling coroutine stops the wait at once
+ * and fires the call's [HighlightBenchCanceller], so an engine that checks its cancel signal
+ * returns within moments. One that ignores it is given up on by the call guard after the cancel
+ * grace and runs on until it returns; only then is it listed in [busyInBackground].
  */
 class LabEngines(
     val engines: List<HighlightBenchEngine>,
@@ -43,11 +48,16 @@ class LabEngines(
     /** Generating text, highlighting, and benchmark runs; never the main thread. */
     val dispatcher: CoroutineDispatcher,
     val settings: HighlightBenchSettings = HighlightBenchSettings.standard,
+    /** Told how long each cancelled engine call took to return after its cancel, by engine name. */
+    private val onCancelledCallReturned: (engineName: String, afterCancelMs: Long) -> Unit = { _, _ -> },
 ) {
     private val idle = mutableMapOf<String, HighlightBenchHighlighter>()
     private val background = MutableStateFlow<List<String>>(emptyList())
 
-    /** Display names of engine calls the Lab stopped waiting for that have not returned yet. */
+    /** Probe waits outlive a cancelled caller, to tell an engine that stops from one that runs on. */
+    private val guardScope = CoroutineScope(SupervisorJob() + dispatcher)
+
+    /** Display names of engine calls the call guard gave up on that have not returned yet. */
     val busyInBackground: StateFlow<List<String>> = background.asStateFlow()
 
     val options: List<LabEngineOption>
@@ -59,9 +69,9 @@ class LabEngines(
 
     /**
      * One timed call with spans through the call guard, off the main thread. Cancelling the caller
-     * interrupts the wait and throws [kotlinx.coroutines.CancellationException] right away; a call
-     * the guard gives up on returns as [HighlightBenchCallStatus.Abandoned]. Either way the engine
-     * call goes on in the background until it returns.
+     * throws [kotlinx.coroutines.CancellationException] right away and cancels the engine call; a
+     * call the guard gives up on returns as [HighlightBenchCallStatus.Abandoned] and is listed in
+     * [busyInBackground] until it returns.
      */
     suspend fun probe(
         engineId: String,
@@ -72,30 +82,36 @@ class LabEngines(
         val reused = synchronized(idle) { idle.remove(engineId) }
         val highlighter = reused ?: engine.newHighlighter()
         val call = TrackedCall(engineId, engine.displayName, highlighter)
+        val canceller = HighlightBenchCanceller()
+        val guarded =
+            guardScope.async {
+                HighlightBenchProbe.highlight(call, language, source, settings, newCallGuard(), canceller).also { result ->
+                    if (result.status == HighlightBenchCallStatus.Abandoned) call.listUntilReturned()
+                }
+            }
         try {
-            val result = runInterruptible(dispatcher) { HighlightBenchProbe.highlight(call, language, source, settings, newCallGuard()) }
-            call.leaveIfRunning()
-            return LabProbe(result, cold = reused == null)
+            return LabProbe(guarded.await(), cold = reused == null)
         } catch (cancelled: CancellationException) {
-            call.leaveIfRunning()
+            call.cancelledAt = TimeSource.Monotonic.markNow()
+            canceller.cancel()
             throw cancelled
         }
     }
 
     /**
-     * Wraps one engine call: once it returns, its highlighter is idle again (and warm). If the
-     * caller left while it ran, or before the guard's thread got to it, it is listed in
-     * [busyInBackground] from its start until it returns. A call that never starts is not listed.
+     * Wraps one engine call: once it returns, its highlighter is idle again (and warm), and it
+     * leaves [busyInBackground] if the guard had given up on it.
      */
     private inner class TrackedCall(
         private val engineId: String,
         private val engineName: String,
         private val highlighter: HighlightBenchHighlighter,
     ) : HighlightBenchHighlighter {
-        private var started = false
         private var finished = false
-        private var callerLeft = false
         private var listed = false
+
+        @Volatile
+        var cancelledAt: TimeSource.Monotonic.ValueTimeMark? = null
 
         override fun highlight(
             language: String,
@@ -103,10 +119,6 @@ class LabEngines(
             cancel: HighlightBenchCancelSignal,
             collectSpans: Boolean,
         ): HighlightBenchOutput {
-            synchronized(this) {
-                started = true
-                if (callerLeft) list()
-            }
             try {
                 return highlighter.highlight(language, source, cancel, collectSpans)
             } finally {
@@ -115,21 +127,17 @@ class LabEngines(
                     if (listed) background.update { it - engineName }
                 }
                 synchronized(idle) { idle.putIfAbsent(engineId, highlighter) }
+                cancelledAt?.let { onCancelledCallReturned(engineName, it.elapsedNow().inWholeMilliseconds) }
             }
         }
 
-        /** The caller stopped waiting, with a result or cancelled. */
-        fun leaveIfRunning() {
+        /** The guard gave up on the call: list it unless it returned meanwhile. */
+        fun listUntilReturned() {
             synchronized(this) {
-                callerLeft = true
-                if (started && !finished) list()
-            }
-        }
-
-        private fun list() {
-            if (!listed) {
-                listed = true
-                background.update { it + engineName }
+                if (!finished && !listed) {
+                    listed = true
+                    background.update { it + engineName }
+                }
             }
         }
     }

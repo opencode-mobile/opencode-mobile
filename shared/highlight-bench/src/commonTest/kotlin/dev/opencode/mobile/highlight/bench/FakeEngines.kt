@@ -7,6 +7,9 @@ import kotlin.time.TimeSource
 /** Runs isolated calls on a platform thread, like the Lab does. */
 internal expect fun platformThreadGuard(): HighlightBenchCallGuard
 
+/** Runs [block] on a new platform thread, like a viewer's Cancel button on the main thread. */
+internal expect fun onOtherThread(block: () -> Unit)
+
 internal class FakeEngine(
     override val id: String = "fake",
     private val languages: Set<String>? = null,

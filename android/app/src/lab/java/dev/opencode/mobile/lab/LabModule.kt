@@ -2,6 +2,7 @@ package dev.opencode.mobile.lab
 
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -44,6 +45,9 @@ object LabModule {
             engines = HighlightBenchEngines.available(),
             newCallGuard = { HighlightBenchThreadGuard() },
             dispatcher = Dispatchers.Default,
+            onCancelledCallReturned = { engine, afterCancelMs ->
+                Log.i(HighlightingLabHeadless.LOG_TAG, "Cancelled $engine call returned $afterCancelMs ms after Cancel")
+            },
         )
 
     @Provides

@@ -16,9 +16,10 @@ nonisolated protocol HighlightLabService: Sendable {
     func highlight(_ input: HighlightLabInput, engineID: String) async -> HighlightLabProbeResult
     /// The input's text and language, generated off the main actor; no engine runs.
     func text(of input: HighlightLabInput) async -> HighlightLabText
-    /// One timed call with spans that `cancellation` can end at once. A cancelled or given-up call
-    /// that has not returned keeps running in the background (threads cannot be stopped); it
-    /// counts in `backgroundCalls` until it returns.
+    /// One timed call with spans that `cancellation` ends at once: it stops waiting and turns the
+    /// engine call's cancel signal true. A call that ignores the signal past the cancel grace, or
+    /// is given up on at its limit, keeps running in the background (threads cannot be stopped);
+    /// it counts in `backgroundCalls` until it returns.
     func highlight(_ text: HighlightLabText, engineID: String, cancellation: HighlightLabCancellation) async -> HighlightLabProbeResult
     /// Why `engineID` cannot highlight `language`, or nil when it can.
     func unsupportedReason(engineID: String, language: String) -> String?
@@ -63,20 +64,29 @@ nonisolated enum HighlightLabThread {
     }
 }
 
-/// Ends one viewer call: the call guard stops waiting for it as soon as `cancel()` runs.
+/// Ends one viewer call: `cancel()` turns the engine call's cancel signal true and wakes the call
+/// guard, which gives the call the cancel grace to return before leaving it in the background.
 nonisolated final class HighlightLabCancellation: @unchecked Sendable {
+    /// Passed to the probe; the engine sees it through its cancel signal.
+    let canceller = HighlightBenchCanceller()
     private let lock = NSLock()
-    private var cancelled = false
+    private var cancelledAt: ContinuousClock.Instant?
     private var wake: (() -> Void)?
 
     init() {}
 
-    var isCancelled: Bool { lock.withLock { cancelled } }
+    var isCancelled: Bool { lock.withLock { cancelledAt != nil } }
+
+    /// Milliseconds since `cancel()`, or nil before it.
+    var millisecondsSinceCancel: Int? {
+        lock.withLock { cancelledAt.map { Int((ContinuousClock.now - $0) / .milliseconds(1)) } }
+    }
 
     func cancel() {
+        canceller.cancel()
         let action: (() -> Void)? = lock.withLock {
-            guard !cancelled else { return nil }
-            cancelled = true
+            guard cancelledAt == nil else { return nil }
+            cancelledAt = .now
             defer { wake = nil }
             return wake
         }
@@ -86,7 +96,7 @@ nonisolated final class HighlightLabCancellation: @unchecked Sendable {
     /// Runs `action` on cancel, or right away if already cancelled.
     fileprivate func onCancel(_ action: @escaping () -> Void) {
         let now: Bool = lock.withLock {
-            if cancelled { return true }
+            if cancelledAt != nil { return true }
             wake = action
             return false
         }
@@ -95,13 +105,16 @@ nonisolated final class HighlightLabCancellation: @unchecked Sendable {
 }
 
 /// Like `HighlightBenchThreadGuard` (one big-stack thread per call, given up on after the limit
-/// and grace), but also stops waiting when the viewer cancels. Abandoned tasks go to `abandoned`.
+/// and grace, or the grace after a cancel), but woken by the viewer's cancel instead of polling.
+/// Abandoned tasks go to `abandoned`.
 private nonisolated final class HighlightLabCancellableGuard: NSObject, HighlightBenchCallGuard, @unchecked Sendable {
     private let cancellation: HighlightLabCancellation
+    private let engineName: String
     private let abandoned: (HighlightBenchTask) -> Void
 
-    init(cancellation: HighlightLabCancellation, abandoned: @escaping (HighlightBenchTask) -> Void) {
+    init(cancellation: HighlightLabCancellation, engineName: String, abandoned: @escaping (HighlightBenchTask) -> Void) {
         self.cancellation = cancellation
+        self.engineName = engineName
         self.abandoned = abandoned
     }
 
@@ -110,11 +123,21 @@ private nonisolated final class HighlightLabCancellableGuard: NSObject, Highligh
         if cancellation.isCancelled { return .abandoned }
         let wake = DispatchSemaphore(value: 0)
         cancellation.onCancel { wake.signal() }
-        HighlightLabThread.start("highlight-lab-viewer-call") {
+        HighlightLabThread.start("highlight-lab-viewer-call") { [cancellation, engineName] in
             task.execute()
             wake.signal()
+            if let afterCancel = cancellation.millisecondsSinceCancel {
+                print("HighlightLab: Cancelled \(engineName) call returned \(afterCancel) ms after Cancel")
+            }
         }
-        _ = wake.wait(timeout: .now() + .milliseconds(Int(task.giveUpAfterMs)))
+        // Woken by the call returning or by a cancel, which cuts the remaining wait to the grace.
+        let started = ContinuousClock.now
+        while !task.isFinished {
+            let waited = Int64((ContinuousClock.now - started) / .milliseconds(1))
+            let remaining = task.remainingWaitMs(waitedMs: waited)
+            if remaining <= 0 { break }
+            _ = wake.wait(timeout: .now() + .milliseconds(Int(remaining)))
+        }
         if task.isFinished { return .finished }
         abandoned(task)
         return .abandoned
@@ -170,7 +193,8 @@ nonisolated final class KMPHighlightLabService: HighlightLabService, @unchecked 
                 language: language,
                 source: source,
                 settings: HighlightBenchSettings.companion.standard,
-                callGuard: HighlightLabThread.callGuard()
+                callGuard: HighlightLabThread.callGuard(),
+                canceller: HighlightBenchCanceller()
             )
             // A call the guard gave up on still owns its instance.
             if call.status != .abandoned, call.status != .forcestopped {
@@ -206,7 +230,7 @@ nonisolated final class KMPHighlightLabService: HighlightLabService, @unchecked 
                 let timing = HighlightLabTiming(engineName: engineID, elapsedMs: 0, characters: source.utf16.count, status: "Unknown engine", outcome: nil, spanCount: 0, cold: true)
                 return HighlightLabProbeResult(source: source, language: text.language, spans: nil, timing: timing)
             }
-            let callGuard = HighlightLabCancellableGuard(cancellation: cancellation) { [self] task in
+            let callGuard = HighlightLabCancellableGuard(cancellation: cancellation, engineName: engine?.displayName ?? engineID) { [self] task in
                 lock.withLock { abandonedTasks.append(task) }
             }
             let call = HighlightBenchProbe.shared.highlight(
@@ -214,7 +238,8 @@ nonisolated final class KMPHighlightLabService: HighlightLabService, @unchecked 
                 language: text.language,
                 source: source,
                 settings: HighlightBenchSettings.companion.standard,
-                callGuard: callGuard
+                callGuard: callGuard,
+                canceller: cancellation.canceller
             )
             if call.status != .abandoned, call.status != .forcestopped {
                 lock.withLock { if warm[engineID] == nil { warm[engineID] = highlighter } }
@@ -223,7 +248,7 @@ nonisolated final class KMPHighlightLabService: HighlightLabService, @unchecked 
                 engineName: engine?.displayName ?? engineID,
                 elapsedMs: call.elapsedMs,
                 characters: source.utf16.count,
-                status: cancellation.isCancelled && call.status == .abandoned ? "Cancelled" : call.status.name,
+                status: cancellation.isCancelled ? "Cancelled" : call.status.name,
                 outcome: call.outcome,
                 spanCount: Int(call.spanCount),
                 cold: reused == nil
