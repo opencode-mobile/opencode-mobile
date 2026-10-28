@@ -48,6 +48,9 @@ class HighlightSession internal constructor(
     private var endStates = IntArray(INITIAL_LINES)
     private var stateCount = 0
 
+    // Composite end states of embedding lexers; the indexes in endStates refer to it.
+    private val embedded = EmbeddedStates()
+
     // After an edit, the old end states of the lines from the edit's last line on, kept so
     // re-lexing can stop at the first line whose end state matches its old one.
     private var staleStart = 0
@@ -97,6 +100,7 @@ class HighlightSession internal constructor(
         stateCount = 0
         staleStart = 0
         staleEnd = 0
+        embedded.clear()
         return lex(0, endLine.coerceIn(0, lineCount), cancel, deadline, collect = true, stopAtConvergence = false)
     }
 
@@ -195,7 +199,7 @@ class HighlightSession internal constructor(
         stopAtConvergence: Boolean,
     ): HighlightCallResult {
         val lexer = lexer ?: return plain(startLine, endLine)
-        val sink = SpanSink(cancel, deadline)
+        val sink = SpanSink(cancel, deadline, embedded)
         var line = minOf(stateCount, startLine)
         var state = if (line == 0) 0 else endStates[line - 1]
         var resultEnd = endLine

@@ -60,4 +60,20 @@ internal object HighlightLanguages {
     fun lexer(language: String): HighlightLexer? = byName[normalize(language)]?.lexer
 
     fun canonical(language: String): String? = byName[normalize(language)]?.id
+
+    private val positions: Map<String, Int> =
+        buildMap {
+            registered.forEachIndexed { index, entry ->
+                put(entry.id, index)
+                entry.aliases.forEach { put(it, index) }
+            }
+        }
+
+    /**
+     * A language's position among the registered ones, for a lexer that keeps which language it
+     * embeds in its state (a Markdown fence); -1 when unsupported. Stable for the process.
+     */
+    fun position(language: String): Int = positions[normalize(language)] ?: -1
+
+    fun lexerAt(position: Int): HighlightLexer = registered[position].lexer
 }

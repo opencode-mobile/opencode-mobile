@@ -14,11 +14,16 @@ package dev.opencode.mobile.highlight.core
  * - State 0 is the state at the top of a document. Keep states small and canonical: equal
  *   states must mean equal lexing of everything after, because an edit stops re-lexing at the
  *   first line whose end state matches its old one.
+ * - A lexer that embeds another language (HTML `<script>`, Markdown fences) calls the other
+ *   lexer's [lexLine] on the stretch of the line it hands over, and keeps both states in one
+ *   [Int] through [SpanSink.embedded]. So any lexer may be handed part of a line, starting or
+ *   ending mid-line; it lexes that stretch as if it were a whole line.
  */
 internal abstract class HighlightLexer {
     /**
      * Lexes `text[start, end)`, one line without its terminator (and cut at the line-length
-     * cap), starting in [state]. Returns the state at [end].
+     * cap) or the stretch of one an embedding lexer hands over, starting in [state]. Returns
+     * the state at [end].
      */
     abstract fun lexLine(
         text: CharArray,
@@ -37,6 +42,8 @@ internal abstract class HighlightLexer {
 internal class SpanSink(
     private val cancel: HighlightCancellation,
     private val deadline: HighlightDeadline,
+    /** The session's composite states, for lexers that embed another language. */
+    val embedded: EmbeddedStates = EmbeddedStates(),
 ) {
     private var ints = IntArray(INITIAL_CAPACITY)
     var count: Int = 0
