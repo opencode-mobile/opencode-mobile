@@ -20,7 +20,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -33,6 +32,8 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogExportWindow
+import dev.opencode.mobile.domain.feedback.FeedbackLogRedactor
+import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
@@ -48,10 +49,10 @@ import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeTone
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
-import dev.opencode.mobile.ui.components.OpenCodeStatusStack
-import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
+import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -91,6 +92,7 @@ class DiagnosticLogsViewModel
     constructor(
         @param:ApplicationContext private val context: Context,
         private val buffer: DiagnosticLogBuffer,
+        private val activeConnectionManager: ActiveConnectionManager,
     ) : ViewModel() {
         private val mutableState = MutableStateFlow(DiagnosticLogsUiState())
         val state: StateFlow<DiagnosticLogsUiState> = mutableState.asStateFlow()
@@ -171,7 +173,7 @@ class DiagnosticLogsViewModel
         ) {
             viewModelScope.launch {
                 runCatching {
-                    val jsonl = withContext(Dispatchers.Default) { buffer.exportJsonl(mutableState.value.exportWindow) }
+                    val jsonl = redactedExport()
                     withContext(Dispatchers.IO) {
                         context.contentResolver.openOutputStream(uri)?.use { output ->
                             output.write(jsonl.toByteArray(Charsets.UTF_8))
@@ -197,11 +199,20 @@ class DiagnosticLogsViewModel
             }
         }
 
+        /** Shared and saved logs get the same address and credential masking as a feedback upload. */
+        private suspend fun redactedExport(): String =
+            withContext(Dispatchers.Default) {
+                FeedbackLogRedactor.redactJsonl(
+                    buffer.exportJsonl(mutableState.value.exportWindow),
+                    FeedbackLogRedactor.knownValues(activeConnectionManager.currentProfile()),
+                )
+            }
+
         private suspend fun writeCacheExport(): Uri {
-            val jsonl = withContext(Dispatchers.Default) { buffer.exportJsonl(mutableState.value.exportWindow) }
+            val jsonl = redactedExport()
             val file =
                 withContext(Dispatchers.IO) {
-                    File(context.cacheDir, EXPORT_FILE_NAME).also { it.writeText(jsonl) }
+                    File(File(context.cacheDir, "diagnostic").apply { mkdirs() }, EXPORT_FILE_NAME).also { it.writeText(jsonl) }
                 }
             return FileProvider.getUriForFile(
                 context,
@@ -370,12 +381,7 @@ fun DiagnosticLogsScreen(
         DiagnosticLogExportWindow.entries.forEach { window ->
             OpenCodeBottomSheetEntry(
                 title = window.label,
-                endDecorator =
-                    if (window == state.exportWindow) {
-                        BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
-                    } else {
-                        BottomSheetEntryDecorator.None
-                    },
+                selected = window == state.exportWindow,
                 onClick = {
                     onExportWindowChange(window)
                     showExportWindowPicker = false
@@ -391,7 +397,7 @@ fun DiagnosticLogsScreen(
     ) {
         OpenCodeBottomSheetEntry(
             title = "Share via apps",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description, "Share"),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description),
             onClick = {
                 showExportSheet = false
                 onShareViaApps()
@@ -399,7 +405,7 @@ fun DiagnosticLogsScreen(
         )
         OpenCodeBottomSheetEntry(
             title = "Save to files",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder, "Save to files"),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
             onClick = {
                 showExportSheet = false
                 saveLauncher.launch(EXPORT_FILE_NAME)

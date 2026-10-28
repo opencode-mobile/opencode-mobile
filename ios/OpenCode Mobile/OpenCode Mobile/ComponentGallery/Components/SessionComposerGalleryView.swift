@@ -8,6 +8,8 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     case attachments
     case revert
     case runtimeMode
+    case shell
+    case sideQuestion
     case childLockout
     case permission
     case permissionEdit
@@ -33,6 +35,8 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
         case .attachments: "Attachments"
         case .revert: "Revert"
         case .runtimeMode: "Runtime mode"
+        case .shell: "Shell"
+        case .sideQuestion: "/btw"
         case .childLockout: "Child"
         case .permission: "Permission"
         case .permissionEdit: "Edit"
@@ -63,6 +67,9 @@ struct SessionComposerGalleryView: View {
     @State private var scenario: SessionComposerGalleryScenario = .empty
     @State private var draftText = "Summarize the current changes"
     @State private var mentionText = mentionGalleryText
+    @State private var shellText = "!git status"
+    @State private var sideQuestionText = "What did we change so far?"
+    @State private var sideQuestionMode = true
     @State private var mentionsCleared = false
     @State private var lastAction = "None"
     @State private var selectedLabels = ["Minimal patch"]
@@ -156,6 +163,10 @@ struct SessionComposerGalleryView: View {
             promptState(text: "Add a dark mode toggle to Settings", showPendingRevert: true)
         case .runtimeMode:
             promptState(text: "", runtimeModeLabel: "Supervised")
+        case .shell:
+            promptState(text: shellText, shellMode: ComposerShellCommand.isShellMode(shellText))
+        case .sideQuestion:
+            promptState(text: sideQuestionText, showStop: true, sideQuestionMode: sideQuestionMode)
         case .childLockout:
             .childLockout(
                 .init(
@@ -251,7 +262,9 @@ struct SessionComposerGalleryView: View {
         attachments: [OpenCodeAttachmentPresentation] = [],
         showPendingRevert: Bool = false,
         showStop: Bool = false,
-        runtimeModeLabel: String? = nil
+        runtimeModeLabel: String? = nil,
+        shellMode: Bool = false,
+        sideQuestionMode: Bool = false
     ) -> OpenCodeSessionComposerState {
         .prompt(
             .init(
@@ -266,9 +279,14 @@ struct SessionComposerGalleryView: View {
                 showRuntimeMode: runtimeModeLabel != nil,
                 runtimeModeLabel: runtimeModeLabel ?? "",
                 runtimeModeEnabled: runtimeModeLabel != nil,
-                sendEnabled: !text.isEmpty || !attachments.isEmpty,
+                sendEnabled: shellMode
+                    ? ComposerShellCommand.command(text) != nil
+                    : !text.isEmpty || !attachments.isEmpty,
+                attachEnabled: !shellMode && !sideQuestionMode,
                 showStop: showStop,
-                stopEnabled: showStop
+                stopEnabled: showStop,
+                shellMode: shellMode,
+                sideQuestionMode: sideQuestionMode
             )
         )
     }
@@ -371,9 +389,17 @@ struct SessionComposerGalleryView: View {
             case .mentions:
                 mentionText = text
                 mentionsCleared = true
+            case .shell:
+                shellText = text
+            case .sideQuestion:
+                sideQuestionText = text
             default:
                 draftText = text
             }
+        case .exitShellMode:
+            shellText = ComposerShellCommand.exitShellMode(shellText)
+        case .exitSideQuestionMode:
+            sideQuestionMode = false
         case let .toggleQuestionOption(_, _, label):
             if scenario == .multiSelect || scenario == .multiSelectBounded {
                 if selectedLabels.contains(label) {
@@ -414,7 +440,10 @@ private extension OpenCodeSessionComposerAction {
         case .attach: "Attach"
         case .openCommands: "Open commands"
         case .removeAttachment: "Remove attachment"
+        case .pasteAttachments: "Paste attachment"
         case .cancelRevert: "Cancel revert"
+        case .exitShellMode: "Exit shell mode"
+        case .exitSideQuestionMode: "Exit side question mode"
         case .send: "Send"
         case .toggleFollowUp: "Toggle follow-up"
         case .stop: "Stop"

@@ -80,6 +80,17 @@ struct SessionListSession: Identifiable, Hashable {
     let settleGestures: [HomeSettleGesture]
     /// Settled-page rows keep the letter and caption and drop the status pill.
     let showStatus: Bool
+    /// Directory the session runs in. `worktree` is the Home project key for filters and counts.
+    let directory: String
+    /// Worktree scope this row belongs to, when its project lists more than one worktree.
+    let worktreeScopeID: String?
+    /// Worktree line of a git project row (branch · folder). Nil keeps the `subtitle` path.
+    let location: HomeRowLocation?
+    /// Project name shown on the line above `location`.
+    let projectName: String?
+    /// Worktree part of a compact row: the shortened branch, or the folder on a detached HEAD.
+    /// Nil on the main checkout, for non-git projects, and while worktrees are off.
+    let worktreeLabel: String?
 
     init(
         id: String,
@@ -93,7 +104,12 @@ struct SessionListSession: Identifiable, Hashable {
         caption: String,
         updatedAtEpochMs: Int64? = nil,
         settleGestures: [HomeSettleGesture] = [],
-        showStatus: Bool = true
+        showStatus: Bool = true,
+        directory: String? = nil,
+        worktreeScopeID: String? = nil,
+        location: HomeRowLocation? = nil,
+        projectName: String? = nil,
+        worktreeLabel: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -107,6 +123,40 @@ struct SessionListSession: Identifiable, Hashable {
         self.updatedAtEpochMs = updatedAtEpochMs
         self.settleGestures = settleGestures
         self.showStatus = showStatus
+        self.directory = directory ?? worktree
+        self.worktreeScopeID = worktreeScopeID
+        self.location = location
+        self.projectName = projectName
+        self.worktreeLabel = worktreeLabel
+    }
+}
+
+/// A project scope whose first server load has not landed yet.
+enum SessionListScopeLoad: Hashable {
+    case loading(isSlow: Bool)
+    case failed(message: String)
+
+    static let loadingSubtitle = "Loading sessions\u{2026}"
+    static let slowSubtitle = "Still loading\u{2026}"
+    static let slowListCaption = "Still loading \u{2014} large projects can take a moment"
+    static let failedListMessage = "The server didn\u{2019}t return this project\u{2019}s sessions."
+    static let retryTitle = "Retry"
+
+    /// Dock subtitle in place of the project path.
+    var subtitle: String {
+        switch self {
+        case let .loading(isSlow): isSlow ? Self.slowSubtitle : Self.loadingSubtitle
+        case let .failed(message): message
+        }
+    }
+
+    var isLoading: Bool {
+        if case .loading = self { return true }
+        return false
+    }
+
+    static func failedListTitle(projectTitle: String) -> String {
+        "Couldn\u{2019}t load \(projectTitle)"
     }
 }
 
@@ -121,9 +171,21 @@ struct SessionListFilterTab: Identifiable, Hashable {
     let count: Int
     let letter: Character?
     let accent: LetterAccent?
+    /// Set while this project's sessions are still loading or failed to load.
+    let load: SessionListScopeLoad?
+    /// One worktree of a multi-worktree project: an indented branch row in the picker.
+    let isWorktree: Bool
+    /// The tab a worktree scope sits inside (its project), for the dock swipe.
+    let parentId: String?
+    /// Picker row text when it differs from the dock (worktree rows, project worktree counts).
+    let pickerTitleOverride: String?
+    let pickerSubtitleOverride: String?
 
     var isAll: Bool { id == Self.allId }
-    var pickerTitle: String { isAll ? Self.pickerAllTitle : title }
+    var pickerTitle: String { pickerTitleOverride ?? (isAll ? Self.pickerAllTitle : title) }
+    var pickerSubtitle: String { pickerSubtitleOverride ?? subtitle }
+    /// The dock keeps the project identity on a worktree scope; the picker names the worktree.
+    var dockTitle: String { isWorktree ? title : pickerTitle }
 
     init(
         id: String,
@@ -131,7 +193,12 @@ struct SessionListFilterTab: Identifiable, Hashable {
         count: Int,
         subtitle: String = "",
         letter: Character? = nil,
-        accent: LetterAccent? = nil
+        accent: LetterAccent? = nil,
+        load: SessionListScopeLoad? = nil,
+        isWorktree: Bool = false,
+        parentId: String? = nil,
+        pickerTitle: String? = nil,
+        pickerSubtitle: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -139,6 +206,11 @@ struct SessionListFilterTab: Identifiable, Hashable {
         self.count = count
         self.letter = letter
         self.accent = accent
+        self.load = load
+        self.isWorktree = isWorktree
+        self.parentId = parentId
+        self.pickerTitleOverride = pickerTitle
+        self.pickerSubtitleOverride = pickerSubtitle
     }
 
     static func all(projectCount: Int, sessionCount: Int) -> SessionListFilterTab {
@@ -150,22 +222,124 @@ struct SessionListFilterTab: Identifiable, Hashable {
         )
     }
 
-    static func project(worktree: String, title: String, count: Int) -> SessionListFilterTab {
+    /// A Home project. The dock reads "All N worktrees" while worktrees are shown and the
+    /// project has several, else the path; the picker row reads the path (its worktree pill
+    /// carries the count).
+    static func homeProject(
+        _ project: HomeProject,
+        count: Int,
+        load: SessionListScopeLoad? = nil,
+        worktreesEnabled: Bool = true
+    ) -> SessionListFilterTab {
+        let many = worktreesEnabled && project.hasManyWorktrees
+        return SessionListFilterTab(
+            id: HomeScope.project(project.key).id,
+            title: project.displayName,
+            count: count,
+            subtitle: many ? HomeProjectCopy.allWorktrees(project.worktrees.count) : project.primaryPath,
+            letter: letterCharacter(for: project.displayName),
+            accent: letterAccent(for: project.primaryPath),
+            load: load,
+            pickerSubtitle: project.primaryPath
+        )
+    }
+
+    /// One worktree of a multi-worktree project. The dock keeps the project identity and reads
+    /// "branch · folder" ("branch" for the main checkout, the folder when the branch is unknown).
+    static func homeWorktree(
+        _ worktree: HomeWorktree,
+        of project: HomeProject,
+        count: Int
+    ) -> SessionListFilterTab {
+        let dockSubtitle: String
+        if let branch = worktree.branch {
+            dockSubtitle = worktree.isMain ? branch : branch + HomeRowLocation.separator + worktree.folderName
+        } else {
+            dockSubtitle = worktree.folderName
+        }
+        return SessionListFilterTab(
+            id: HomeScope.worktree(projectKey: project.key, directory: worktree.directory).id,
+            title: project.displayName,
+            count: count,
+            subtitle: dockSubtitle,
+            letter: letterCharacter(for: project.displayName),
+            accent: letterAccent(for: project.primaryPath),
+            isWorktree: true,
+            parentId: HomeScope.project(project.key).id,
+            pickerTitle: worktree.title,
+            pickerSubtitle: worktree.subtitle
+        )
+    }
+
+    static func project(
+        worktree: String,
+        title: String,
+        count: Int,
+        load: SessionListScopeLoad? = nil
+    ) -> SessionListFilterTab {
         SessionListFilterTab(
             id: worktree,
             title: title,
             count: count,
             subtitle: worktree,
             letter: letterCharacter(for: title),
-            accent: letterAccent(for: worktree)
+            accent: letterAccent(for: worktree),
+            load: load
         )
     }
+
+    /// Broader scope to offer when this worktree filter has no sessions. Nil while the
+    /// project is still loading or failed, and for any scope that is not a worktree.
+    /// Prefers the project when another worktree has sessions, otherwise All when another
+    /// project does, otherwise the project so the empty worktree is not a dead end.
+    func worktreeFilterClear(
+        broaderTabs: [SessionListFilterTab],
+        visibleIsEmpty: Bool
+    ) -> WorktreeFilterClear? {
+        guard isWorktree, visibleIsEmpty, load == nil else { return nil }
+        let parent = parentId.flatMap { id in broaderTabs.first { $0.id == id } }
+        if parent?.load != nil { return nil }
+        let all = broaderTabs.first { $0.isAll }
+        if let parent, parent.count > 0 {
+            return WorktreeFilterClear(filterId: parent.id, message: SessionListWorktreeEmptyCopy.otherWorktrees)
+        }
+        if let all, all.count > 0 {
+            return WorktreeFilterClear(filterId: all.id, message: SessionListWorktreeEmptyCopy.otherProjects)
+        }
+        if let parent {
+            return WorktreeFilterClear(filterId: parent.id, message: SessionListWorktreeEmptyCopy.everyWorktree)
+        }
+        if let parentId {
+            return WorktreeFilterClear(filterId: parentId, message: SessionListWorktreeEmptyCopy.everyWorktree)
+        }
+        if let all {
+            return WorktreeFilterClear(filterId: all.id, message: SessionListWorktreeEmptyCopy.everyProject)
+        }
+        return nil
+    }
+}
+
+/// Scope a "Clear filter" action selects, and the line that explains why.
+struct WorktreeFilterClear: Equatable {
+    let filterId: String
+    let message: String
+}
+
+enum SessionListWorktreeEmptyCopy {
+    static let title = "No sessions in this worktree"
+    static let action = "Clear filter"
+    static let otherWorktrees = "Clear the filter to see sessions on other worktrees."
+    static let otherProjects = "Clear the filter to see sessions on other projects."
+    static let everyWorktree = "Clear the filter to see every worktree."
+    static let everyProject = "Clear the filter to see every project."
 }
 
 struct SessionList<EmptyContent: View>: View {
     let sessions: [SessionListSession]
     let filterTabs: [SessionListFilterTab]
     let selectedFilterId: String
+    /// Dock tab of a selection that is not one of `filterTabs` (a worktree scope).
+    let selectedScopeTab: SessionListFilterTab?
     /// Session highlighted as the open trailing pane on tablets; nil on phones.
     let selectedSessionId: String?
     let createError: String?
@@ -176,6 +350,8 @@ struct SessionList<EmptyContent: View>: View {
     let onAddProject: () -> Void
     let onNewSession: () -> Void
     let onNewSessionLongPress: (() -> Void)?
+    /// Retry for a project scope whose load failed; receives the project worktree.
+    let onRetryScopeLoad: ((String) -> Void)?
     let onRefresh: (() async -> Void)?
     let revealNewestToken: Int
     /// Change to scroll `selectedSessionId` into view (keyboard session navigation).
@@ -184,6 +360,8 @@ struct SessionList<EmptyContent: View>: View {
     /// rendered order changes. Empty while nothing is rendered.
     let onDisplayedSessionsChange: (([SessionListSession]) -> Void)?
     let showsEmptyContent: Bool
+    /// Row style override, such as in the gallery. Nil follows the Session rows setting.
+    let rowStyle: HomeSessionRowStyle?
     let emptyContent: EmptyContent
     let settledSessions: [SessionListSession]
     let onOpenSettled: (() -> Void)?
@@ -194,6 +372,8 @@ struct SessionList<EmptyContent: View>: View {
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var followingTop = true
     @State private var incomingFilterId: String
+    /// Worktree scope of the incoming layer, held so the outgoing fade keeps it after the selection moves on.
+    @State private var incomingScopeTab: SessionListFilterTab?
     @State private var feedLayers: [SessionListFeedLayer]
     @State private var incomingOpacity: CGFloat = 1
     @State private var outgoingOpacity: CGFloat = 0
@@ -203,6 +383,7 @@ struct SessionList<EmptyContent: View>: View {
         sessions: [SessionListSession],
         filterTabs: [SessionListFilterTab],
         selectedFilterId: String,
+        selectedScopeTab: SessionListFilterTab? = nil,
         selectedSessionId: String? = nil,
         createError: String? = nil,
         onOpenProjectPicker: @escaping () -> Void = {},
@@ -212,6 +393,7 @@ struct SessionList<EmptyContent: View>: View {
         onAddProject: @escaping () -> Void,
         onNewSession: @escaping () -> Void,
         onNewSessionLongPress: (() -> Void)? = nil,
+        onRetryScopeLoad: ((String) -> Void)? = nil,
         onRefresh: (() async -> Void)? = nil,
         revealNewestToken: Int = 0,
         revealSelectedSessionToken: Int = 0,
@@ -220,11 +402,13 @@ struct SessionList<EmptyContent: View>: View {
         settledSessions: [SessionListSession] = [],
         onOpenSettled: (() -> Void)? = nil,
         onSettleGesture: ((SessionListSession, HomeSettleGesture) -> Void)? = nil,
+        rowStyle: HomeSessionRowStyle? = nil,
         @ViewBuilder emptyContent: () -> EmptyContent = { EmptyView() }
     ) {
         self.sessions = sessions
         self.filterTabs = filterTabs
         self.selectedFilterId = selectedFilterId
+        self.selectedScopeTab = selectedScopeTab
         self.selectedSessionId = selectedSessionId
         self.createError = createError
         self.onOpenProjectPicker = onOpenProjectPicker
@@ -234,16 +418,19 @@ struct SessionList<EmptyContent: View>: View {
         self.onAddProject = onAddProject
         self.onNewSession = onNewSession
         self.onNewSessionLongPress = onNewSessionLongPress
+        self.onRetryScopeLoad = onRetryScopeLoad
         self.onRefresh = onRefresh
         self.revealNewestToken = revealNewestToken
         self.revealSelectedSessionToken = revealSelectedSessionToken
         self.onDisplayedSessionsChange = onDisplayedSessionsChange
         self.showsEmptyContent = showsEmptyContent
+        self.rowStyle = rowStyle
         self.emptyContent = emptyContent()
         self.settledSessions = settledSessions
         self.onOpenSettled = onOpenSettled
         self.onSettleGesture = onSettleGesture
         _incomingFilterId = State(initialValue: selectedFilterId)
+        _incomingScopeTab = State(initialValue: selectedScopeTab?.id == selectedFilterId ? selectedScopeTab : nil)
         _feedLayers = State(initialValue: [SessionListFeedLayer(id: selectedFilterId, isOutgoing: false)])
     }
 
@@ -251,7 +438,7 @@ struct SessionList<EmptyContent: View>: View {
         ZStack(alignment: .bottom) {
             ZStack {
                 ForEach(feedLayers) { layer in
-                    listBody(filterId: layer.id, isCurrent: !layer.isOutgoing)
+                    listBody(layer: layer)
                         .background(OpenCodeColors.backgroundBase)
                         .opacity(layer.isOutgoing ? outgoingOpacity : incomingOpacity)
                         .allowsHitTesting(!layer.isOutgoing)
@@ -260,6 +447,10 @@ struct SessionList<EmptyContent: View>: View {
             }
             .onChange(of: selectedFilterId) { _, newId in
                 scheduleListCrossfade(to: newId)
+            }
+            .onChange(of: selectedScopeTab) { _, tab in
+                guard let tab, tab.id == incomingFilterId else { return }
+                incomingScopeTab = tab
             }
 
             OpenCodeBottomFade(
@@ -272,6 +463,7 @@ struct SessionList<EmptyContent: View>: View {
             OpenCodeSessionListDock(
                 filterTabs: filterTabs,
                 selectedFilterId: selectedFilterId,
+                selectedScopeTab: selectedScopeTab,
                 createError: createError,
                 onOpenProjectPicker: onOpenProjectPicker,
                 onFilterSelected: onFilterSelected,
@@ -307,10 +499,51 @@ struct SessionList<EmptyContent: View>: View {
     }
 
     @ViewBuilder
-    private func listBody(filterId: String, isCurrent: Bool) -> some View {
+    private func listBody(layer: SessionListFeedLayer) -> some View {
+        let filterId = layer.id
+        let isCurrent = !layer.isOutgoing
         let visible = sessions.visibleForFilter(filterId)
+        // Worktree tabs are not in `filterTabs`. The outgoing layer keeps the tab it was
+        // showing, since `selectedScopeTab` has already moved with the selection.
+        let scopeTab = filterTabs.first { $0.id == filterId }
+            ?? layer.scopeTab
+            ?? (selectedScopeTab?.id == filterId ? selectedScopeTab : nil)
+        let loadingTab = visible.isEmpty ? scopeTab.flatMap { $0.load == nil ? nil : $0 } : nil
+        let worktreeClear = scopeTab?.worktreeFilterClear(broaderTabs: filterTabs, visibleIsEmpty: visible.isEmpty)
         Group {
-            if visible.isEmpty, showsEmptyContent {
+            if let loadingTab, let load = loadingTab.load {
+                ScrollView {
+                    scopeLoadContent(tab: loadingTab, load: load)
+                        .padding(.bottom, max(dockHeight, sessionListFallbackBottomSpacer))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(OpenCodeColors.backgroundBase)
+                .modifier(SessionListRefreshableModifier(onRefresh: isCurrent ? onRefresh : nil))
+                .onAppear {
+                    if isCurrent { onDisplayedSessionsChange?([]) }
+                }
+                .transition(.opacity)
+            } else if let worktreeClear {
+                ScrollView {
+                    OpenCodeEmptyState(
+                        title: SessionListWorktreeEmptyCopy.title,
+                        message: worktreeClear.message,
+                        icon: .callSplit,
+                        primaryAction: OpenCodeEmptyStateAction(title: SessionListWorktreeEmptyCopy.action) {
+                            onFilterSelected(worktreeClear.filterId)
+                        }
+                    )
+                    .frame(maxWidth: .infinity, minHeight: 420)
+                    .padding(.bottom, max(dockHeight, sessionListFallbackBottomSpacer))
+                    .accessibilityIdentifier("sessionListWorktreeEmpty")
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(OpenCodeColors.backgroundBase)
+                .modifier(SessionListRefreshableModifier(onRefresh: isCurrent ? onRefresh : nil))
+                .onAppear {
+                    if isCurrent { onDisplayedSessionsChange?([]) }
+                }
+            } else if visible.isEmpty, showsEmptyContent {
                 ScrollView {
                     emptyContent
                         .frame(maxWidth: .infinity, minHeight: 420)
@@ -343,7 +576,34 @@ struct SessionList<EmptyContent: View>: View {
                     }
                 }
                 .id(filterId)
+                .transition(.opacity)
             }
+        }
+        .animation(.easeInOut(duration: 0.25), value: loadingTab?.load)
+    }
+
+    @ViewBuilder
+    private func scopeLoadContent(tab: SessionListFilterTab, load: SessionListScopeLoad) -> some View {
+        switch load {
+        case let .loading(isSlow):
+            VStack(alignment: .leading, spacing: 0) {
+                OpenCodeSectionHeader(title: tab.title)
+                OpenCodeSessionListSkeleton(
+                    accent: tab.accent,
+                    caption: isSlow ? SessionListScopeLoad.slowListCaption : nil
+                )
+            }
+        case .failed:
+            OpenCodeEmptyState(
+                title: SessionListScopeLoad.failedListTitle(projectTitle: tab.title),
+                message: SessionListScopeLoad.failedListMessage,
+                fillsAvailableSpace: false,
+                primaryAction: onRetryScopeLoad.map { retry in
+                    OpenCodeEmptyStateAction(title: SessionListScopeLoad.retryTitle) { retry(tab.id) }
+                }
+            )
+            .padding(.top, 64)
+            .accessibilityIdentifier("sessionListScopeLoadFailed")
         }
     }
 
@@ -356,7 +616,7 @@ struct SessionList<EmptyContent: View>: View {
             if sessionListShowsDivider(after: index, in: section.items, selectedSessionId: selectedSessionId) {
                 Divider()
                     .overlay(OpenCodeColors.borderWeakerBase)
-                    .padding(.leading, 60)
+                    .padding(.leading, dividerLeadingInset)
             }
         }
     }
@@ -370,33 +630,33 @@ struct SessionList<EmptyContent: View>: View {
             if sessionListShowsDivider(after: index, in: section.items, selectedSessionId: selectedSessionId) {
                 Divider()
                     .overlay(OpenCodeColors.borderWeakerBase)
-                    .padding(.leading, 60)
+                    .padding(.leading, dividerLeadingInset)
             }
         }
     }
 
+    private var effectiveRowStyle: HomeSessionRowStyle {
+        rowStyle ?? homeDisplayPreferences.sessionRowStyle
+    }
+
+    private var dividerLeadingInset: CGFloat {
+        switch effectiveRowStyle {
+        case .compact: 58
+        case .classic: 60
+        }
+    }
+
+    @ViewBuilder
     private func sessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
-        let status = listItemStatus(session.status, isStale: session.statusIsStale)
-        return SettleSwipeRow(gestures: session.settleGestures) { gesture in
+        SettleSwipeRow(gestures: session.settleGestures) { gesture in
             onSettleGesture?(session, gesture)
         } content: {
-            OpenCodeListItem(
-                title: session.title,
-                subtitle: session.subtitle.isEmpty ? nil : compactHomePath(
-                    session.subtitle,
-                    hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
-                ),
-                status: session.showStatus ? status : nil,
-                caption: session.caption.isEmpty ? nil : session.caption,
-                selected: selectedSessionId == session.id,
-                startDecorator: .letter(
-                    session.letter,
-                    session.letterAccent,
-                    statusDot: showStatusDot && session.showStatus ? status.tone : nil
-                ),
-                action: { onSessionSelected(session) },
-                onLongPress: onSessionLongPress.map { handler in { handler(session) } }
-            )
+            Group {
+                switch effectiveRowStyle {
+                case .compact: compactSessionRow(session)
+                case .classic: classicSessionRow(session, showStatusDot: showStatusDot)
+                }
+            }
             .background {
                 if selectedSessionId == session.id {
                     GeometryReader { geometry in
@@ -408,6 +668,55 @@ struct SessionList<EmptyContent: View>: View {
                 }
             }
         }
+    }
+
+    private func compactSessionRow(_ session: SessionListSession) -> some View {
+        let row = session.compactRow
+        let status = session.showStatus ? row.status : nil
+        return OpenCodeListItem(
+            variant: .compact,
+            title: session.title,
+            emphasized: row.emphasized,
+            path: row.path,
+            status: status,
+            caption: session.caption.isEmpty ? nil : session.caption,
+            selected: selectedSessionId == session.id,
+            startDecorator: .compactLetter(
+                session.letter,
+                session.letterAccent,
+                statusDot: session.showStatus ? status?.tone : nil,
+                pulsing: session.showStatus && row.pulsing
+            ),
+            action: { onSessionSelected(session) },
+            onLongPress: onSessionLongPress.map { handler in { handler(session) } }
+        )
+    }
+
+    private func classicSessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
+        let lines = session.locationLines
+        let status = listItemStatus(session.status, isStale: session.statusIsStale)
+        let pathSubtitle = session.subtitle.isEmpty
+            ? nil
+            : compactHomePath(
+                session.subtitle,
+                hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
+            )
+        return OpenCodeListItem(
+            title: session.title,
+            subtitle: lines == nil ? pathSubtitle : nil,
+            subtitleSegments: lines?.subtitle,
+            detailSegments: lines?.detail,
+            status: session.showStatus ? status : nil,
+            caption: session.caption.isEmpty ? nil : session.caption,
+            selected: selectedSessionId == session.id,
+            startDecorator: .letter(
+                session.letter,
+                session.letterAccent,
+                statusDot: showStatusDot && session.showStatus ? status.tone : nil
+            ),
+            action: { onSessionSelected(session) },
+            onLongPress: onSessionLongPress.map { handler in { handler(session) } }
+        )
     }
 
     private func settledLink(for filterId: String) -> AnyView {
@@ -431,9 +740,10 @@ struct SessionList<EmptyContent: View>: View {
             incomingOpacity = 0
             feedLayers = [
                 SessionListFeedLayer(id: newId, isOutgoing: false),
-                SessionListFeedLayer(id: incomingFilterId, isOutgoing: true),
+                SessionListFeedLayer(id: incomingFilterId, isOutgoing: true, scopeTab: incomingScopeTab),
             ]
             incomingFilterId = newId
+            incomingScopeTab = selectedScopeTab?.id == newId ? selectedScopeTab : nil
         }
         listCrossfadeTask = Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(16))
@@ -463,6 +773,8 @@ struct SessionList<EmptyContent: View>: View {
 private struct SessionListFeedLayer: Identifiable, Equatable {
     let id: String
     let isOutgoing: Bool
+    /// Worktree scope the layer shows, captured when it became the outgoing fade.
+    var scopeTab: SessionListFilterTab? = nil
 }
 
 private let sessionListTopAnchorID = "session-list-top"
@@ -842,12 +1154,79 @@ private struct SettledSessionsLink: View {
     }
 }
 
+/// Row lines of a session on Home.
+struct SessionListLocationLines: Equatable {
+    let subtitle: [OpenCodeListItemSubtitleSegment]
+    let detail: [OpenCodeListItemSubtitleSegment]?
+}
+
+extension SessionListSession {
+    /// Git project rows: the project name (folder icon) on the subtitle line, and the worktree
+    /// (branch icon, then folder) on the detail line under it, in every scope. Each line cuts on
+    /// its own, so a long project name never hides the branch. Nil keeps the path subtitle.
+    var locationLines: SessionListLocationLines? {
+        guard let location else { return nil }
+        guard let projectName, !projectName.isEmpty else {
+            return SessionListLocationLines(subtitle: location.listItemSegments(tone: .secondary), detail: nil)
+        }
+        let worktree = location.listItemSegments(tone: .tertiary)
+        return SessionListLocationLines(
+            subtitle: [OpenCodeListItemSubtitleSegment(text: projectName, tone: .secondary, icon: .folder)],
+            detail: worktree.isEmpty ? nil : worktree
+        )
+    }
+}
+
+/// What a compact Home row shows beyond the title and time (#803).
+struct SessionListCompactRow: Equatable {
+    let path: OpenCodeListItemPath
+    /// Nil while Idle: no status and no dot.
+    let status: OpenCodeListItemStatus?
+    /// Bold title for an unread finish.
+    let emphasized: Bool
+    /// The dot fades slowly while Running.
+    let pulsing: Bool
+}
+
+extension SessionListSession {
+    /// `project / worktree`, the project always shown; the status unless Idle.
+    var compactRow: SessionListCompactRow {
+        let project = projectName.flatMap { $0.isEmpty ? nil : $0 } ?? ServerPathPolicy.name(subtitle)
+        return SessionListCompactRow(
+            path: OpenCodeListItemPath(primary: project, secondary: worktreeLabel),
+            status: status == .idle ? nil : status.listItemStatus(isStale: statusIsStale),
+            emphasized: status.isReady,
+            pulsing: status == .running && !statusIsStale
+        )
+    }
+}
+
+extension HomeRowLocation {
+    /// Branch (with the branch icon) and folder, joined with " · ".
+    func listItemSegments(tone: OpenCodeListItemSubtitleTone) -> [OpenCodeListItemSubtitleSegment] {
+        var segments: [OpenCodeListItemSubtitleSegment] = []
+        for (index, part) in parts.enumerated() {
+            let prefix = index == 0 ? "" : Self.separator
+            switch part {
+            case let .text(text):
+                segments.append(OpenCodeListItemSubtitleSegment(text: prefix + text, tone: tone))
+            case let .branch(branch):
+                if !prefix.isEmpty {
+                    segments.append(OpenCodeListItemSubtitleSegment(text: prefix, tone: tone))
+                }
+                segments.append(OpenCodeListItemSubtitleSegment(text: branch, tone: tone, icon: .callSplit))
+            }
+        }
+        return segments
+    }
+}
+
 extension Array where Element == SessionListSession {
     func visibleForFilter(_ selectedFilterId: String) -> [SessionListSession] {
         if selectedFilterId == SessionListFilterTab.allId {
             return self
         }
-        return filter { $0.worktree == selectedFilterId }
+        return filter { $0.worktree == selectedFilterId || $0.worktreeScopeID == selectedFilterId }
     }
 }
 

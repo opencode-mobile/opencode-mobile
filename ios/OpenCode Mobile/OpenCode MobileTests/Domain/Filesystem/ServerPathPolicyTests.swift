@@ -3,10 +3,10 @@ import Testing
 
 struct ServerPathPolicyTests {
     @Test func parentPath_posix_returnsParentUntilRoot() {
-        #expect(ServerPathPolicy.parentPath("/Users/ivan/Projects") == "/Users/ivan")
-        #expect(ServerPathPolicy.parentPath("/Users/ivan") == "/Users")
+        #expect(ServerPathPolicy.parentPath("/Users/example/Projects") == "/Users/example")
+        #expect(ServerPathPolicy.parentPath("/Users/example") == "/Users")
         #expect(ServerPathPolicy.parentPath("/Users") == "/")
-        #expect(ServerPathPolicy.parentPath("/Users/ivan/") == "/Users")
+        #expect(ServerPathPolicy.parentPath("/Users/example/") == "/Users")
         #expect(ServerPathPolicy.parentPath("/") == nil)
         #expect(ServerPathPolicy.parentPath("") == nil)
     }

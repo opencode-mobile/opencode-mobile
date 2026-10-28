@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.domain.message.ClientMessageId
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
@@ -49,7 +50,16 @@ data class TimelineFrame(
      * Not inferred from ID sets.
      */
     val isRequired: Boolean = false,
+    /**
+     * Server row id → list key for server echoes that replaced an optimistic send row.
+     * The list keys the echo under the optimistic id, so its item slot is reused instead
+     * of removed and inserted. Carried across frames while the row stays.
+     */
+    val listIdAliases: Map<String, String> = emptyMap(),
 ) {
+    /** LazyColumn key for [rowId]. */
+    fun listKey(rowId: String): String = listIdAliases[rowId] ?: rowId
+
     /** Row IDs whose apply can change list geometry (inserts ∪ layout-affecting restyles). */
     fun layoutAffectingRowIDs(): Set<String> = insertedRowIDs + layoutChangedRowIDs
 
@@ -80,7 +90,8 @@ data class TimelineFrame(
  */
 data class OptimisticInputs(
     val pendingRows: List<TimelineRow> = emptyList(),
-    val baselineSignatures: Map<String, String> = emptyMap(),
+    /** Server row ids loaded when the send began. None of them is the send's echo. */
+    val baselineIds: Set<String> = emptySet(),
 )
 
 object TimelineProjector {
@@ -97,19 +108,26 @@ object TimelineProjector {
                 projectRow(body, previousById[body.message.id])
             }
         val merged = mergeWithPending(authoritative, optimisticInputs)
+        val rows = merged.rows.filterNot(::isHiddenPendingPrompt)
+        val previousIds = previousById.keys
+        val currentIds = rows.mapTo(HashSet()) { it.id }
+        // Alias only an echo that replaces its optimistic row in this frame. A server
+        // row the list already shows under its own id keeps that key.
+        val listIdAliases =
+            previous?.listIdAliases.orEmpty().filterKeys { it in currentIds } +
+                merged.echoes.filter { (serverId, pendingId) ->
+                    pendingId in previousIds && serverId !in previousIds && serverId in currentIds
+                }
         return diffFrame(
             frameRevision = frame.frameRevision,
-            rows = merged.filterNot(::isHiddenPendingPrompt),
+            rows = rows,
             previous = previous,
-        )
+        ).copy(listIdAliases = listIdAliases)
     }
 
     /** Project server bodies without hiding inbox rows. Used for send-time baselines. */
     fun projectServerRows(bodies: List<DisplayMessageBody>): List<TimelineRow> =
         bodies.mapNotNull { body -> projectRow(body, previous = null) }
-
-    fun reconciliationSignaturesById(rows: List<TimelineRow>): Map<String, String> =
-        rows.associate { row -> row.id to reconciliationSignature(row) }
 
     fun isHiddenPendingPrompt(item: SessionChatMessageItem): Boolean = item.role == MessageRole.User && item.pendingDelivery != null
 
@@ -124,25 +142,44 @@ object TimelineProjector {
     /**
      * Pending rows that no new server echo accounts for yet. Same match
      * [mergeWithPending] and [SessionChatTimeline] reconciliation use.
+     *
+     * A shown optimistic row is not retired by a waiting steer echo. v2 enqueues every
+     * prompt, idle sends included, as a steer delivered at the next step boundary;
+     * retiring on that hidden copy left a frame with neither bubble. A queued echo still
+     * retires it, since the pending strip owns a real queue.
      */
     fun unmatchedPending(
         pendingRows: List<TimelineRow>,
         serverRows: List<TimelineRow>,
-        baselineSignatures: Map<String, String>,
+        baselineIds: Set<String>,
     ): List<TimelineRow> =
         pendingRows.filter { pending ->
             serverRows.none { server ->
-                isNewServerEchoOf(server, pending, baselineSignatures)
+                retiresPending(server, pending) && isNewServerEchoOf(server, pending, baselineIds)
             }
         }
 
+    private fun retiresPending(
+        server: TimelineRow,
+        pending: TimelineRow,
+    ): Boolean = isHiddenPendingPrompt(pending) || server.pendingDelivery != FollowUpDelivery.Steer
+
+    /**
+     * A pending row whose send carried a [ClientMessageId] is echoed only by the user row
+     * the server created under that id, whatever its text or filenames.
+     *
+     * A v2 command takes no id, and its echo is the expanded template, so the first user
+     * row that was not loaded when the send began stands for it.
+     */
     fun isNewServerEchoOf(
         server: TimelineRow,
         pending: TimelineRow,
-        baselineSignatures: Map<String, String>,
-    ): Boolean =
-        baselineSignatures[server.id] != reconciliationSignature(server) &&
-            matchesOptimistic(server, pending)
+        baselineIds: Set<String>,
+    ): Boolean {
+        if (server.role != MessageRole.User) return false
+        if (ClientMessageId.isClientId(pending.id)) return server.id == pending.id
+        return server.id !in baselineIds
+    }
 
     fun rowFromMessageItem(
         item: SessionChatMessageItem,
@@ -226,19 +263,6 @@ object TimelineProjector {
     }
 
     fun isStreaming(message: Message): Boolean = message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
-
-    fun reconciliationSignature(row: TimelineRow): String =
-        buildString {
-            append(row.role.name)
-            append('\u0000')
-            append(row.text)
-            row.attachments.forEach { attachment ->
-                append('\u0000')
-                append(attachment.id)
-                append('\u0000')
-                append(attachment.signature)
-            }
-        }
 
     private fun projectRow(
         body: DisplayMessageBody,
@@ -346,9 +370,15 @@ object TimelineProjector {
                 "n:${block.blockID}"
             is SessionChatTimelineBlock.StepParagraph ->
                 "s:${block.blockID}:${block.renderedMarkdown != null}:${stepParagraphChipFingerprint(block)}"
+            is SessionChatTimelineBlock.StepRail ->
+                "sr:${block.blockID}:${stepRailFingerprint(block)}:${block.thinking}"
+            is SessionChatTimelineBlock.ActivityCard ->
+                "ac:${block.blockID}:${activityCardFingerprint(block)}:${block.isLive}:${block.thinking}"
             is SessionChatTimelineBlock.StopNote -> "x:${block.blockID}:${block.reason}"
             is SessionChatTimelineBlock.FailureLine ->
-                "f:${block.blockID}:${block.providerBody != null}:${block.isNeutral}:${block.action != null}"
+                "f:${block.blockID}:${block.providerBody != null}:${block.isNeutral}:${block.action != null}:" +
+                    "${block.retryAtEpochMs != null}"
+            is SessionChatTimelineBlock.Notice -> "o:${block.blockID}:${block.notice.hashCode()}"
         }
 
     /** Chip status / counts change chip width and error captions, so they are layout. */
@@ -356,6 +386,16 @@ object TimelineProjector {
         block.chips.joinToString(",") { chip ->
             "${chip.status.ordinal}:${chip.additions}:${chip.deletions}:${chip.trailingText != null}"
         } + ":${block.errorLines.size}"
+
+    /** Step count, status, branch and detail presence change rail rows and their height. */
+    private fun stepRailFingerprint(block: SessionChatTimelineBlock.StepRail): String =
+        block.steps.joinToString(",") { step ->
+            "${step.kind.ordinal}:${step.status.ordinal}:${step.isBranch}:${step.detail != null}"
+        }
+
+    /** Step count and status change the card's running lines, footer and settled line. */
+    private fun activityCardFingerprint(block: SessionChatTimelineBlock.ActivityCard): String =
+        block.steps.joinToString(",") { step -> "${step.kind.ordinal}:${step.status.ordinal}" }
 
     private data class LayoutKey(
         val blockCount: Int,
@@ -374,23 +414,30 @@ object TimelineProjector {
      */
     fun isHiddenPendingPrompt(row: TimelineRow): Boolean = row.role == MessageRole.User && row.pendingDelivery != null
 
+    /** Merged rows plus, for each dropped optimistic row matched to its echo, `serverId → pendingId`. */
+    private data class PendingMerge(
+        val rows: List<TimelineRow>,
+        val echoes: Map<String, String> = emptyMap(),
+    )
+
     private fun mergeWithPending(
         serverRows: List<TimelineRow>,
         optimisticInputs: OptimisticInputs,
-    ): List<TimelineRow> {
+    ): PendingMerge {
         val pendingRows = optimisticInputs.pendingRows
-        if (pendingRows.isEmpty()) return serverRows
-        val baselineSignatures = optimisticInputs.baselineSignatures
+        if (pendingRows.isEmpty()) return PendingMerge(serverRows)
+        val baselineIds = optimisticInputs.baselineIds
         val pendingToKeep =
             unmatchedPending(
                 pendingRows = pendingRows,
                 serverRows = serverRows,
-                baselineSignatures = baselineSignatures,
+                baselineIds = baselineIds,
             )
         val dropped = pendingRows.filter { pending -> pendingToKeep.none { it.id == pending.id } }
-        return splicePending(
-            applyPendingMetadata(serverRows, dropped, baselineSignatures),
-            pendingToKeep,
+        val withMetadata = applyPendingMetadata(serverRows, dropped, baselineIds)
+        return PendingMerge(
+            rows = splicePending(withMetadata.rows, pendingToKeep),
+            echoes = withMetadata.echoes,
         )
     }
 
@@ -412,82 +459,43 @@ object TimelineProjector {
     private fun applyPendingMetadata(
         serverRows: List<TimelineRow>,
         dropped: List<TimelineRow>,
-        baselineSignatures: Map<String, String>,
-    ): List<TimelineRow> {
-        if (dropped.isEmpty()) return serverRows
-        return serverRows.map { row ->
-            if (row.role != MessageRole.User) return@map row
-            if (baselineSignatures[row.id] == reconciliationSignature(row)) return@map row
-            val pending =
-                dropped.firstOrNull { candidate -> matchesOptimistic(row, candidate) } ?: return@map row
-            val metadata =
-                if (row.metadataLabel.isEmpty() && pending.metadataLabel.isNotEmpty()) {
-                    pending.metadataLabel
-                } else {
-                    row.metadataLabel
+        baselineIds: Set<String>,
+    ): PendingMerge {
+        if (dropped.isEmpty()) return PendingMerge(serverRows)
+        val echoes = mutableMapOf<String, String>()
+        val rows =
+            serverRows.map { row ->
+                val pending =
+                    dropped.firstOrNull { candidate -> isNewServerEchoOf(row, candidate, baselineIds) }
+                        ?: return@map row
+                if (!isHiddenPendingPrompt(row) && pending.id !in echoes.values) {
+                    echoes[row.id] = pending.id
                 }
-            val copyAttachments = row.attachments.isEmpty() && pending.attachments.isNotEmpty()
-            val attachments = if (copyAttachments) pending.attachments else row.attachments
-            val blocks =
-                if (copyAttachments) {
-                    row.blocks + pending.blocks.filterIsInstance<SessionChatTimelineBlock.Attachment>()
-                } else {
-                    row.blocks
+                val metadata =
+                    if (row.metadataLabel.isEmpty() && pending.metadataLabel.isNotEmpty()) {
+                        pending.metadataLabel
+                    } else {
+                        row.metadataLabel
+                    }
+                val copyAttachments = row.attachments.isEmpty() && pending.attachments.isNotEmpty()
+                val attachments = if (copyAttachments) pending.attachments else row.attachments
+                val blocks =
+                    if (copyAttachments) {
+                        row.blocks + pending.blocks.filterIsInstance<SessionChatTimelineBlock.Attachment>()
+                    } else {
+                        row.blocks
+                    }
+                if (metadata == row.metadataLabel && attachments === row.attachments && blocks === row.blocks) {
+                    return@map row
                 }
-            if (metadata == row.metadataLabel && attachments === row.attachments && blocks === row.blocks) {
-                return@map row
+                row.copy(
+                    metadataLabel = metadata,
+                    attachments = attachments,
+                    blocks = blocks,
+                    layoutRevision = row.layoutRevision + 1,
+                )
             }
-            row.copy(
-                metadataLabel = metadata,
-                attachments = attachments,
-                blocks = blocks,
-                layoutRevision = row.layoutRevision + 1,
-            )
-        }
-    }
-
-    /**
-     * Text-equal user rows match. Blank text is an attachment-only send: both
-     * sides must carry the same files. A blank server row with no attachments is
-     * not an echo of an attachment-only pending row — [MessageDomainAdapter]
-     * leaves [Message.text] empty for file-only parts and still projects those
-     * files onto the row.
-     */
-    fun matchesOptimistic(
-        server: TimelineRow,
-        pending: TimelineRow,
-    ): Boolean {
-        if (server.role != MessageRole.User || server.text != pending.text) {
-            return false
-        }
-        if (pending.text.isBlank()) {
-            return attachmentsCorrespond(server, pending)
-        }
-        if (server.attachments.isEmpty()) return true
-        return attachmentsCorrespond(server, pending)
-    }
-
-    private fun attachmentsCorrespond(
-        server: TimelineRow,
-        pending: TimelineRow,
-    ): Boolean {
-        if (server.attachments.size != pending.attachments.size) return false
-        if (server.attachments.isEmpty()) return false
-        return server.attachments.zip(pending.attachments).all { (left, right) ->
-            attachmentsMatch(left, right)
-        }
-    }
-
-    private fun attachmentsMatch(
-        left: SessionChatAttachmentItem,
-        right: SessionChatAttachmentItem,
-    ): Boolean {
-        if (left.variant != right.variant) return false
-        if (left.id == right.id) return true
-        val leftName = left.filename.trim()
-        val rightName = right.filename.trim()
-        if (leftName.isNotEmpty() && leftName == rightName) return true
-        return leftName.isEmpty() || rightName.isEmpty()
+        return PendingMerge(rows, echoes)
     }
 
     private fun diffFrame(
@@ -586,8 +594,11 @@ object TimelineProjector {
                 "n:${block.blockID}"
             is SessionChatTimelineBlock.StepParagraph ->
                 "s:${block.blockID}:${stepParagraphChipFingerprint(block)}"
+            is SessionChatTimelineBlock.StepRail -> "sr:${block.blockID}:${stepRailFingerprint(block)}"
+            is SessionChatTimelineBlock.ActivityCard -> "ac:${block.blockID}:${activityCardFingerprint(block)}"
             is SessionChatTimelineBlock.StopNote -> "x:${block.blockID}:${block.reason}"
             is SessionChatTimelineBlock.FailureLine -> "f:${block.blockID}:${block.providerBody != null}"
+            is SessionChatTimelineBlock.Notice -> "o:${block.blockID}:${block.notice.hashCode()}"
         }
 
     private fun markdownFingerprint(row: TimelineRow): String =

@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.event.SessionRevertUpdate
 import dev.opencode.mobile.domain.mcp.McpRepository
 import dev.opencode.mobile.domain.mcp.McpServerCatalog
 import dev.opencode.mobile.domain.message.Message
@@ -17,6 +18,7 @@ import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.session.CompactionStart
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionForkTitle
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.ChildSessionNavigationTarget
@@ -49,6 +51,8 @@ class SessionChatCommands(
     private val mcpRepository: McpRepository,
     private val composerDraftStore: ComposerDraftStore,
     private val scope: CoroutineScope,
+    /** The server answers `/btw`; shows the Btw tile. */
+    private val supportsSideQuestion: () -> Boolean = { false },
 ) {
     var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     var capabilities: SessionCapabilities = SessionCapabilities.OpenCode
@@ -129,7 +133,13 @@ class SessionChatCommands(
                     hasNonEmptyText = message.text.isNotBlank(),
                 )
             }
-        val input = ClientSlashActionCatalog.visibilityInput(refs, currentRevertMessageId, hasSelectedComposerModel)
+        val input =
+            ClientSlashActionCatalog.visibilityInput(
+                messages = refs,
+                revertMessageId = currentRevertMessageId,
+                hasSelectedComposerModel = hasSelectedComposerModel,
+                supportsSideQuestion = supportsSideQuestion(),
+            )
         _state.update { it.copy(visibleActions = ClientSlashActionCatalog.visibleActions(input, capabilities)) }
     }
 
@@ -247,6 +257,12 @@ class SessionChatCommands(
 
     fun reportActionError(message: String) {
         _state.update { it.copy(actionErrorMessage = message) }
+    }
+
+    /** The bound session moved to [worktree]; revert, fork and compaction state carry over. */
+    fun moveDirectory(worktree: String) {
+        if (boundSessionId == null) return
+        boundWorktree = worktree
     }
 
     fun consumePendingSessionReplace() {
@@ -490,6 +506,30 @@ class SessionChatCommands(
         )
     }
 
+    /**
+     * A revert staged, cleared or committed for the open session by any client, including the
+     * server's echo of this device's own revert.
+     */
+    fun applyRevertUpdate(update: SessionRevertUpdate) {
+        if (update.sessionId != boundSessionId || update.messageId == currentRevertMessageId) return
+        logI("revert boundary update session=${update.sessionId} message=${update.messageId ?: "none"}")
+        setRevertBoundary(update.messageId)
+    }
+
+    /**
+     * Commits a pending revert ahead of the next prompt, as the web app and TUI do. Throws when
+     * the commit fails so the prompt is not sent.
+     */
+    suspend fun commitPendingRevert(
+        sessionId: String,
+        worktree: String,
+    ) {
+        if (currentRevertMessageId == null) return
+        val committed = withContext(ioDispatcher) { sessionRepository.commitRevert(sessionId, worktree) }
+        if (!committed) throw SessionError.Http(statusCode = 0, message = "Couldn't commit revert.")
+        logI("revert committed before prompt session=$sessionId")
+    }
+
     fun consumePendingRevert() {
         if (currentRevertMessageId == null) return
         setRevertBoundary(null)
@@ -626,7 +666,7 @@ class SessionChatCommands(
 
     private fun setRevertBoundary(messageId: String?) {
         currentRevertMessageId = messageId
-        _state.update { it.copy(hasPendingRevert = messageId != null) }
+        _state.update { it.copy(hasPendingRevert = messageId != null, revertMessageId = messageId) }
         updateVisibility(lastMessages, lastHasSelectedComposerModel)
     }
 

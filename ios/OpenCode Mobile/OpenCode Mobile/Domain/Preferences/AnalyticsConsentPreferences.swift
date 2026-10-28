@@ -1,9 +1,9 @@
 import Foundation
 import Observation
 
-/// Persists in-app consent for **product / custom** Analytics events (OPE-129).
-/// Default is on for the tester phase. Does not gate Crashlytics or minimal
-/// automatic breadcrumbs.
+/// Persists in-app consent for Firebase collection: product / custom Analytics
+/// events (OPE-129) and, since #755, Crashlytics and automatic Analytics too.
+/// Default is on for the tester phase.
 @Observable
 final class AnalyticsConsentPreferences {
     static let shared = AnalyticsConsentPreferences()

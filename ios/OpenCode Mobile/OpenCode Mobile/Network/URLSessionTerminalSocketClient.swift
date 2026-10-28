@@ -31,7 +31,8 @@ final class URLSessionTerminalSocketClient: NSObject, TerminalSocketClient, URLS
         if let authorization, !authorization.isEmpty {
             request.setValue(authorization, forHTTPHeaderField: "Authorization")
         }
-        let session = URLSession(configuration: .default, delegate: self, delegateQueue: nil)
+        // Ephemeral: no shared cookie jar, cache or credential storage for the socket upgrade.
+        let session = URLSession(configuration: .ephemeral, delegate: self, delegateQueue: nil)
         let task = session.webSocketTask(with: request)
         lock.lock()
         if generation == id {

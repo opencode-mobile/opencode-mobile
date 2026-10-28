@@ -12,6 +12,8 @@ data class V2SessionMessageDto(
     val text: String? = null,
     val files: List<V2FileAttachmentDto> = emptyList(),
     val agents: List<V2AgentAttachmentDto> = emptyList(),
+    /** Skills admitted on a `user` prompt. The body is model-facing and not decoded. */
+    val skills: List<V2UserSkillDto> = emptyList(),
     val agent: String? = null,
     val model: V2ModelRefDto? = null,
     val content: List<V2AssistantContentDto> = emptyList(),
@@ -27,9 +29,16 @@ data class V2SessionMessageDto(
     val status: String? = null,
     val command: String? = null,
     val output: JsonElement? = null,
+    /** `shell` items: the command's exit code once it ended. */
+    val exit: Int? = null,
     @SerialName("callID") val callId: String? = null,
     val name: String? = null,
     val description: String? = null,
+    /** `location-switched`: the new location, `{directory}`. */
+    val location: JsonObject? = null,
+    /** Switch items: a previous agent id, model ref, or `{location}`, by item type. */
+    val previous: JsonElement? = null,
+    val metadata: JsonObject? = null,
 )
 
 @Serializable
@@ -51,6 +60,8 @@ data class V2UnknownErrorDto(
     val message: String? = null,
     val status: Int? = null,
     val response: V2ErrorResponseDto? = null,
+    /** How long the provider asked to wait, counted from when the failure was recorded. */
+    val retryAfterMs: Long? = null,
 )
 
 @Serializable
@@ -87,11 +98,20 @@ data class V2FileSourceDto(
 )
 
 @Serializable
+data class V2UserSkillDto(
+    val id: String? = null,
+    val name: String? = null,
+    val mention: V2PromptSourceDto? = null,
+)
+
+@Serializable
 data class V2AgentAttachmentDto(
     val name: String? = null,
     val source: V2PromptSourceDto? = null,
     val mention: V2PromptSourceDto? = null,
 )
+
+/** A skill admitted on a user message: `{id, name?, mention?}`. */
 
 @Serializable
 data class V2PromptSourceDto(

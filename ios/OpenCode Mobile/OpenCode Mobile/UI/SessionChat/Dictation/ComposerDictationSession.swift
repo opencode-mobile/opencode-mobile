@@ -4,7 +4,9 @@ enum DictationSupport: Equatable {
     case hidden
     case ready(languageLabel: String, onDevice: Bool)
     case permissionDenied
-    case modelNotInstalled
+    case modelNotInstalled(languageLabel: String)
+    /// iOS is already fetching the locale's model.
+    case modelDownloading(languageLabel: String)
 
     /// The mic stays available for permission-denied and model-not-installed so
     /// a tap can open the card in that state. Only an unsupported OS or locale hides it.
@@ -22,7 +24,8 @@ protocol ComposerDictationSession: AnyObject {
         onError: @escaping @MainActor (String) -> Void
     )
     func stop()
-    func downloadModel() async
+    /// Downloads the speech model, reporting 0...1 progress. Returns false when iOS fails it.
+    func downloadModel(onProgress: @escaping @MainActor @Sendable (Double) -> Void) async -> Bool
 }
 
 enum ComposerDictationSessions {
@@ -46,5 +49,5 @@ private final class HiddenComposerDictationSession: ComposerDictationSession {
 
     func stop() {}
 
-    func downloadModel() async {}
+    func downloadModel(onProgress: @escaping @MainActor @Sendable (Double) -> Void) async -> Bool { false }
 }

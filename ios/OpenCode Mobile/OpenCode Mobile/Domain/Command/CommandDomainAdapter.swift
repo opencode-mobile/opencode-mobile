@@ -72,23 +72,25 @@ struct CommandDomainAdapter: Sendable {
             agent: options.mode,
             model: options.model.map { "\($0.providerID)/\($0.modelID)" },
             variant: options.variant,
-            parts: options.attachments.map { attachment in
+            parts: options.attachments.inlineAttachments.map { attachment in
                 CommandFilePartDTO(
                     mime: attachment.mime,
                     url: attachment.dataURL,
                     filename: attachment.filename
                 )
-            }
+            },
+            messageID: options.messageID
         )
     }
 
     func toV2RunRequest(_ options: CommandRunOptions) -> V2RunCommandRequestDTO {
         V2RunCommandRequestDTO(
             name: options.command,
-            text: options.arguments,
-            files: options.attachments.isEmpty ? nil : options.attachments.map { attachment in
+            text: UploadedAttachmentMetadata.promptText(options.arguments, uploaded: options.attachments.uploadedAttachments),
+            files: options.attachments.inlineAttachments.isEmpty ? nil : options.attachments.inlineAttachments.map { attachment in
                 V2PromptFileDTO(uri: attachment.dataURL, name: attachment.filename, mime: attachment.mime)
             },
+            skills: options.skillIDs.isEmpty ? nil : options.skillIDs.map { V2PromptSkillDTO(id: $0) },
             delivery: options.delivery.wireValue
         )
     }

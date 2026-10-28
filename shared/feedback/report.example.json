@@ -1,0 +1,34 @@
+{
+  "$comment": "Example in-app feedback report (#721). The apps' payload tests check against this file. Keep it identical to tests/fixtures/report.example.json in opencode-mobile/backend, where the security rules tests use it. uid and createdAt are filled in at write time: uid is the anonymous Firebase uid, createdAt is serverTimestamp().",
+  "uid": "<anonymous-uid>",
+  "kind": "bug",
+  "message": "When I unlock the phone after a while the session list still shows Running for a few seconds and the approval card is missing until I pull to refresh.",
+  "createdAt": "<serverTimestamp>",
+  "app": {
+    "platform": "ios",
+    "version": "1.0.1",
+    "build": "214",
+    "osVersion": "iOS 26.1",
+    "device": "iPhone17,1",
+    "locale": "en-GB"
+  },
+  "context": {
+    "screen": "session-chat",
+    "serverProtocol": "v2",
+    "serverVersion": "1.3.2",
+    "engine": "opencode"
+  },
+  "attachments": [
+    {
+      "name": "screenshot.jpg",
+      "contentType": "image/jpeg",
+      "size": 312480
+    },
+    {
+      "name": "logs.jsonl.gz",
+      "contentType": "application/gzip",
+      "size": 41207
+    }
+  ],
+  "contactEmail": "someone@example.com"
+}

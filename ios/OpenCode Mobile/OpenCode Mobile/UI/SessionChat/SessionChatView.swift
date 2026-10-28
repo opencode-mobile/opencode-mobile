@@ -7,6 +7,12 @@ import UIKit
 import UniformTypeIdentifiers
 
 struct SessionChatView: View {
+    /// Server-supplied links (retry cards, failure sheets) open as web pages only.
+    static func openServerLink(_ url: URL) {
+        guard ExternalLinkPolicy.isOpenable(url) else { return }
+        UIApplication.shared.open(url)
+    }
+
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
     @State private var viewModelStorage: SessionChatViewModel?
@@ -20,6 +26,8 @@ struct SessionChatView: View {
     @State private var changesTarget: ChangesNavigationTarget?
     @State private var menuExpanded = false
     @State private var showDeleteConfirmation = false
+    /// Report-a-problem sheet (#721); set to open it.
+    @State private var feedbackModel: FeedbackViewModel?
     @State private var messageActionsTarget: SessionChatMessageActionsTarget?
     @State private var showPendingPromptsSheet = false
     @State private var toolDetailTarget: SessionChatToolDetailTarget?
@@ -32,6 +40,8 @@ struct SessionChatView: View {
     @State private var showAttachmentSources = false
     @State private var showFilesPicker = false
     @State private var showPhotosPicker = false
+    /// The drag-over card while images or files are dragged over the chat (#870).
+    @State private var attachmentDropSummary: AttachmentDropSummary?
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var showSessionTodosSheet = false
     @State private var holdingFinishedTodos = false
@@ -46,8 +56,15 @@ struct SessionChatView: View {
     @State private var composerFocusRequest = 0
     /// False while another screen is pushed over this chat.
     @State private var isOnScreen = false
+    /// This screen's lease on a view model it may share with the other Home layout.
+    @State private var hostID = UUID()
     @State private var dictationSession: any ComposerDictationSession = ComposerDictationSessions.make()
     @State private var dictationSupport = DictationSupport.hidden
+    /// Set once the server moved this session to another worktree; the chat rebinds there.
+    @State private var movedWorktree: String?
+    @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
+    @Environment(\.homeProjects) private var homeProjects
+    @Environment(\.refreshHomeWorktrees) private var refreshHomeWorktrees
 
     private let session: SessionListItem
     private let injectedViewModel: SessionChatViewModel?
@@ -115,30 +132,49 @@ struct SessionChatView: View {
                 // Back from a pushed screen: `.onDisappear` stopped observing. Resume on
                 // the same view model so the composer and timeline keep their state;
                 // the timeline's warm path refreshes quietly.
-                viewModel.startObserving()
+                viewModel.attachHost(hostID)
                 if !viewModel.hasCompletedInitialLoad {
                     await viewModel.loadMessages()
                 }
             case .rebuild:
                 dictationSession.stop()
-                viewModelStorage?.stopObserving()
-                viewModelStorage = injectedViewModel ?? Container.makeSessionChatViewModel(
-                    sessionID: session.id,
+                viewModelStorage?.detachHost(hostID)
+                // After a move every region binds to the new directory, so the handed-in
+                // view model (bound to the old one) is not reused.
+                viewModelStorage = (movedWorktree == nil ? injectedViewModel : nil) ?? Container.makeSessionChatViewModel(
+                    sessionID: boundSession.id,
                     sessionTitle: session.title,
-                    worktree: session.worktree
+                    worktree: boundSession.worktree
                 )
                 viewModelTaskID = taskID
-                viewModel.startObserving()
-                await viewModel.loadMessages()
+                // A view model handed over from the other Home layout may still be
+                // observing and loaded; it keeps its subscription and timeline.
+                viewModel.attachHost(hostID)
+                if !viewModel.hasCompletedInitialLoad {
+                    await viewModel.loadMessages()
+                }
             }
         }
     }
 
     private var sessionNavigationTaskID: String {
-        if let instanceID = session.optimisticNavigationInstanceID {
-            return "\(session.id)-\(instanceID.uuidString)"
-        }
-        return session.id
+        guard let movedWorktree else { return session.navigationID }
+        return session.navigationID + "@" + movedWorktree
+    }
+
+    /// The session as opened, or in the worktree the server moved it to.
+    private var boundSession: SessionListItem {
+        guard let movedWorktree else { return session }
+        return SessionListItem(
+            id: SessionChatMoveToWorktree.reboundSessionID(
+                routeID: session.id,
+                currentID: viewModelStorage?.uiState.sessionID
+            ),
+            title: session.title,
+            worktree: movedWorktree,
+            parentID: session.parentID,
+            directory: movedWorktree
+        )
     }
 
     // The modifier chain is split into small steps so each one type-checks quickly;
@@ -146,7 +182,35 @@ struct SessionChatView: View {
     private var sessionChatBody: some View {
         let sheets = sessionChatPickerSheets(sessionChatSheets(sessionChatLayout))
         let observed = sessionChatObservers(sessionChatDestinations(sheets))
-        return sessionChatRoutes(sessionChatDialogs(sessionChatLifecycle(observed)))
+        return sessionChatMoveToWorktree(sessionChatRoutes(sessionChatDialogs(sessionChatLifecycle(observed))))
+            .onDrop(
+                of: [.item],
+                delegate: SessionChatAttachmentDropDelegate(
+                    isEnabled: attachmentDropEnabled,
+                    context: { attachmentDropContext },
+                    summary: $attachmentDropSummary,
+                    onDrop: { attachItemProviders($0, source: .drop) }
+                )
+            )
+            .overlay {
+                if let summary = attachmentDropSummary {
+                    OpenCodeDropOverlay(
+                        variant: summary.rejected ? .reject : .accept,
+                        title: summary.title,
+                        subtitle: summary.subtitle,
+                        previews: summary.previews.map(\.attachmentVariant)
+                    )
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.12), value: attachmentDropSummary)
+            .onChange(of: attachmentDropEnabled) { _, enabled in
+                if !enabled { attachmentDropSummary = nil }
+            }
+            .feedbackSheet(model: $feedbackModel)
+            .environment(\.attachmentImageLoading, viewModel.attachmentImageLoader)
+            .environment(\.attachmentImageDirectory, boundSession.directory ?? boundSession.worktree)
     }
 
     private var sessionChatLayout: some View {
@@ -159,6 +223,9 @@ struct SessionChatView: View {
                     title: viewModel.uiState.sessionTitle.isEmpty ? session.title : viewModel.uiState.sessionTitle,
                     subtitle: viewModel.uiState.projectLabel,
                     subtitleLeading: {
+                        if viewModel.uiState.worktreeCheckout {
+                            return .worktree
+                        }
                         if let letter = viewModel.uiState.projectLetter,
                            let accent = viewModel.uiState.projectLetterAccent {
                             return .letter(letter, accent)
@@ -241,12 +308,16 @@ struct SessionChatView: View {
                     workingIndicatorLabel: viewModel.uiState.workingIndicatorLabel,
                     workingIndicatorCollapsed: viewModel.uiState.workingIndicatorCollapsed,
                     workingIndicatorFading: viewModel.uiState.workingIndicatorFading,
+                    isTurnActive: viewModel.uiState.sessionStatusLabel != nil,
+                    isAwaitingUser: viewModel.uiState.permissionRequest != nil
+                        || viewModel.uiState.questionRequest != nil,
                     sessionTodosVisible: sessionTodosPillVisible,
                     sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
                     sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
                     sessionTodoActivePreview: viewModel.uiState.sessionTodoActivePreview?.content,
                     hideFloatStack: showSessionTodosSheet,
                     hideLiveRetryFailures: viewModel.uiState.retryCard != nil,
+                    hideRetryCountdown: viewModel.uiState.isRetrying,
                     // Composer + 16 end-pin gap; Scroll to end uses this as-is
                     // (no extra scrollToEndPillBottomPadding).
                     bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight)
@@ -257,7 +328,7 @@ struct SessionChatView: View {
                     onLoadOlder: { Task { await viewModel.loadOlderMessages() } },
                     onSessionBranchTap: {
                         logChatAction(ProductAnalytics.Action.chatOpenChanges)
-                        changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
+                        changesTarget = viewModel.uiState.changesNavigationTarget(worktree: boundSession.worktree)
                     },
                     onSessionTodosTap: {
                         guard !blocksSessionTodosSheet else { return }
@@ -306,15 +377,14 @@ struct SessionChatView: View {
                         childSessionTarget = ChildSessionNavigationTarget(
                             sessionID: sessionID,
                             sessionTitle: title,
-                            worktree: session.worktree,
+                            worktree: boundSession.worktree,
                             optimisticNavigationInstanceID: nil,
                             parentID: session.id
                         )
                     },
                     onChangesReviewTap: { assistantMessageID, initialFilePath in
                         logChatAction(ProductAnalytics.Action.chatOpenChangesFromTool)
-                        changesTarget = viewModel.uiState.fileChangeNavigationTarget(
-                            worktree: session.worktree,
+                        openLastTurnChanges(
                             assistantMessageID: assistantMessageID,
                             initialFilePath: initialFilePath
                         )
@@ -334,7 +404,19 @@ struct SessionChatView: View {
                     expandedStepParagraphs: viewModel.uiState.expandedStepParagraphs,
                     onExpandStepParagraph: { paragraphID, chipCount in
                         viewModel.expandStepParagraph(paragraphID, chipCount: chipCount)
-                    }
+                    },
+                    unfoldedStepRails: viewModel.uiState.unfoldedStepRails,
+                    onToggleStepRailFold: { railID in viewModel.toggleStepRailFold(railID) },
+                    presentedActivityCard: viewModel.uiState.presentedActivityCard,
+                    activityCardDetailStepId: viewModel.uiState.activityCardDetailStepId,
+                    childActivities: viewModel.uiState.childActivities,
+                    activityCardFooters: viewModel.uiState.activityCardFooters,
+                    debouncedStepIDs: viewModel.uiState.debouncedStepIDs,
+                    onOpenActivityCard: { cardID in viewModel.openActivityCard(cardID) },
+                    onDismissActivityCard: { viewModel.dismissActivityCard() },
+                    onOpenActivityCardStep: { stepID in viewModel.openActivityCardStep(stepID) },
+                    onCloseActivityCardStep: { viewModel.closeActivityCardStep() },
+                    noticeModelNames: TimelineNoticeModelNames(options: viewModel.uiState.composer.modelOptions)
                 )
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -348,7 +430,16 @@ struct SessionChatView: View {
 
             OpenCodeSnackbarHost(
                 message: viewModel.uiState.snackbar.mapToOpenCodeSnackbarMessage(),
-                onDismissed: { viewModel.consumeSnackbar() }
+                onDismissed: { viewModel.consumeSnackbar() },
+                onAction: { message in
+                    guard message.id == viewModel.uiState.snackbar?.id else { return }
+                    switch viewModel.uiState.snackbar?.action {
+                    case let .retrySideQuestion(id):
+                        viewModel.retrySideQuestions(id: id)
+                    case nil:
+                        break
+                    }
+                }
             )
             // Sit just above the measured composer, like Android; 168 only
             // covers the first frame before the composer reports its height.
@@ -366,7 +457,8 @@ struct SessionChatView: View {
                                 OpenCodeComposerSuggestionItem(
                                     id: suggestion.id,
                                     title: suggestion.title,
-                                    subtitle: suggestion.subtitle
+                                    subtitle: suggestion.subtitle,
+                                    leadingIcon: suggestion.leadingIcon
                                 )
                             },
                             emptyMessage: "No matches",
@@ -404,6 +496,9 @@ struct SessionChatView: View {
                         }
                         .padding(.bottom, 6)
                     }
+                    sideQuestionRow
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 6)
                     if SessionChatComposerKind.resolve(
                         isChildSession: session.parentID != nil,
                         hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
@@ -444,8 +539,50 @@ struct SessionChatView: View {
         }
     }
 
+    /// `/btw` chips and the notice for a `/btw` this server cannot answer, above the composer.
+    @ViewBuilder
+    private var sideQuestionRow: some View {
+        let sideQuestions = viewModel.uiState.sideQuestions
+        if let notice = sideQuestions.unsupportedNotice {
+            OpenCodeInlineNotice(message: notice, variant: .banner)
+        }
+        if sideQuestions.pendingCount > 0 || sideQuestions.readyCount > 0 || sideQuestions.failedCount > 0 {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    if sideQuestions.pendingCount > 0 {
+                        OpenCodeSideQuestionPill(variant: .pending(count: sideQuestions.pendingCount))
+                    }
+                    if sideQuestions.readyCount > 0 {
+                        OpenCodeSideQuestionPill(variant: .answerReady(count: sideQuestions.readyCount)) {
+                            viewModel.openSideQuestionAnswer()
+                        }
+                    }
+                    if sideQuestions.failedCount > 0 {
+                        OpenCodeSideQuestionPill(
+                            variant: .failed(count: sideQuestions.failedCount),
+                            action: { viewModel.retrySideQuestions() },
+                            onDismiss: { viewModel.dismissFailedSideQuestions() }
+                        )
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            // The pills' floating shadow would otherwise be cut off at the row's bounds.
+            .scrollClipDisabled()
+            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        }
+    }
+
     private func sessionChatSheets(_ content: some View) -> some View {
         content
+            .sessionChatSideQuestionAnswerSheet(
+                answer: viewModel.uiState.sideQuestions.presentedAnswer,
+                onCopy: { viewModel.sideQuestionAnswerCopied() },
+                onClose: { viewModel.closeSideQuestionAnswer() }
+            )
+            .onChange(of: viewSheetOpen, initial: true) { _, open in
+                viewModel.setScreenSheetOpen(open)
+            }
             .sessionChatMessageActionsSheet(
                 target: $messageActionsTarget,
                 onRevertMessage: { viewModel.revertMessage($0) },
@@ -476,7 +613,7 @@ struct SessionChatView: View {
                         break
                     }
                 },
-                onOpenLink: { UIApplication.shared.open($0) }
+                onOpenLink: { SessionChatView.openServerLink($0) }
             )
             .sessionChatSkillsSheet(target: $skillsTarget)
             // Waits for any view-owned sheet to close so the intro never stacks on one.
@@ -485,6 +622,13 @@ struct SessionChatView: View {
                 onEnable: { viewModel.enableChipTimelineFromIntro() },
                 onLater: { viewModel.postponeChipTimelineIntro() },
                 onNever: { viewModel.dismissChipTimelineIntro() }
+            )
+            .sessionChatTimelineStylePicker(
+                isPresented: viewModel.uiState.timelineStylePickerVisible && !viewSheetOpen,
+                styles: SessionChatDisplayPreferences.shared.availableTimelineStyles,
+                currentStyle: SessionChatDisplayPreferences.shared.effectiveTimelineStyle,
+                onUse: { viewModel.chooseTimelineStyleFromPicker($0) },
+                onDismiss: { viewModel.dismissTimelineStylePicker() }
             )
             .sessionChatTodosSheet(
                 isPresented: $showSessionTodosSheet,
@@ -498,7 +642,7 @@ struct SessionChatView: View {
                         title: T3RuntimeModeLabel.displayName(mode) ?? mode,
                         enabled: !viewModel.uiState.isLifecycleActionInFlight,
                         endDecorator: mode == viewModel.uiState.runtimeMode
-                            ? .icon(.check, accessibilityLabel: "Selected")
+                            ? .icon(.check)
                             : .none,
                         action: {
                             showRuntimeModePicker = false
@@ -525,7 +669,7 @@ struct SessionChatView: View {
                 if sources.photos {
                     OpenCodeBottomSheetEntry(
                         title: "Photos",
-                        startDecorator: .icon(.description, accessibilityLabel: "Photos"),
+                        startDecorator: .icon(.description),
                         action: {
                             logAttachmentSourceAction(ProductAnalytics.Action.attachPickPhotos)
                             showAttachmentSources = false
@@ -536,7 +680,7 @@ struct SessionChatView: View {
                 if sources.files {
                     OpenCodeBottomSheetEntry(
                         title: "Files",
-                        startDecorator: .icon(.folder, accessibilityLabel: "Files"),
+                        startDecorator: .icon(.folder),
                         action: {
                             logAttachmentSourceAction(ProductAnalytics.Action.attachPickFiles)
                             showAttachmentSources = false
@@ -547,7 +691,7 @@ struct SessionChatView: View {
                 if sources.logFile {
                     OpenCodeBottomSheetEntry(
                         title: "Log file",
-                        startDecorator: .icon(.list, accessibilityLabel: "Log file"),
+                        startDecorator: .icon(.list),
                         action: {
                             logAttachmentSourceAction(ProductAnalytics.Action.attachPickLogFile)
                             showAttachmentSources = false
@@ -596,7 +740,7 @@ struct SessionChatView: View {
     private func sessionChatDestinations(_ content: some View) -> some View {
         content
             .navigationDestination(isPresented: $showSessionContext) {
-                SessionContextView(sessionID: viewModel.uiState.sessionID, worktree: session.worktree)
+                SessionContextView(sessionID: viewModel.uiState.sessionID, worktree: boundSession.worktree)
             }
             .navigationDestination(item: $changesTarget) { target in
                 ChangesView(
@@ -610,16 +754,17 @@ struct SessionChatView: View {
             .navigationDestination(item: $toolGroupTarget) { target in
                 SessionChatToolGroupView(
                     target: target,
-                    worktree: session.worktree,
+                    worktree: boundSession.worktree,
                     parentSessionID: session.id,
                     supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff,
                     makeChangesTarget: { assistantMessageID, initialFilePath in
                         viewModel.uiState.fileChangeNavigationTarget(
-                            worktree: session.worktree,
+                            worktree: boundSession.worktree,
                             assistantMessageID: assistantMessageID,
                             initialFilePath: initialFilePath
                         )
-                    }
+                    },
+                    lastTurnDiffUnavailable: lastTurnDiffUnavailable(assistantMessageID: target.messageID)
                 )
             }
             .navigationDestination(item: $childSessionTarget) { target in
@@ -714,7 +859,7 @@ struct SessionChatView: View {
             .onDisappear {
                 isOnScreen = false
                 dictationSession.stop()
-                viewModelStorage?.stopObserving()
+                viewModelStorage?.detachHost(hostID)
             }
             .onChange(of: scenePhase) { _, phase in
                 guard viewModelStorage != nil else { return }
@@ -736,7 +881,7 @@ struct SessionChatView: View {
                     dictationSession.stop()
                 }
             }
-            .task(id: viewModel.uiState.composerDictationEnabled) {
+            .task {
                 await refreshDictationSupport()
             }
             .openCodeKeyboardShortcut(
@@ -961,11 +1106,50 @@ struct SessionChatView: View {
     }
 
     private func leaveSession() {
-        viewModelStorage?.stopObserving()
+        // Release this screen's lease rather than stopping the shared model outright:
+        // during a fold/unfold hand-off another screen may still host it.
+        viewModelStorage?.detachHost(hostID)
         if detailControl != nil {
             onLeaveSession?()
         } else {
             dismiss()
+        }
+    }
+
+    /// Pasted or dropped items (#870): each is copied to a temporary file, then attached like a file
+    /// from the Files picker. Paste names an unnamed image `Pasted image N.png`.
+    private func attachItemProviders(_ providers: [NSItemProvider], source: SessionChatAttachmentSource) {
+        Task {
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("attachment-\(source.rawValue)-\(UUID().uuidString)", isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            var names = viewModel.uiState.composer.attachments.map(\.filename)
+            var files: [URL] = []
+            var folders = 0
+            var unreadable = 0
+            for provider in providers {
+                switch AttachmentItemProviders.kind(of: provider) {
+                case .folder:
+                    folders += 1
+                case nil:
+                    continue
+                case .some:
+                    let unnamedImageName: (() -> String)? = source == .paste ? {
+                        let name = AttachmentDropRouting.pastedImageName(draftFilenames: names)
+                        names.append(name)
+                        return name
+                    } : nil
+                    do {
+                        files.append(try await AttachmentItemProviders.copy(provider, into: directory, unnamedImageName: unnamedImageName))
+                    } catch {
+                        unreadable += 1
+                    }
+                }
+            }
+            let added = await viewModel.addPastedOrDroppedFiles(files, skippedFolders: folders, unreadable: unreadable)
+            if added {
+                logAttachmentSourceAction(source == .paste ? ProductAnalytics.Action.attachPaste : ProductAnalytics.Action.attachDrop)
+            }
         }
     }
 
@@ -984,6 +1168,127 @@ struct SessionChatView: View {
                 declaredMime: type?.preferredMIMEType
             )
         }
+    }
+
+    // MARK: Move to worktree
+
+    /// The Home project this session's directory belongs to.
+    private var moveProject: HomeProject? {
+        SessionChatMoveToWorktree.project(containing: boundSession.worktree, in: homeProjects)
+    }
+
+    /// The Move sheet's New worktree row.
+    private func newWorktreeAvailability(sessionCreated: Bool) -> NewWorktreeAvailability {
+        SessionChatMoveToWorktree.newWorktreeAvailability(
+            supportsMove: viewModel.uiState.supportsSessionMove,
+            worktreesEnabled: homeDisplayPreferences.showsWorktrees,
+            sessionCreated: sessionCreated,
+            project: moveProject,
+            serverCanCreate: viewModel.serverCanCreateWorktrees
+        )
+    }
+
+    private func moveToWorktreeMenuEntry(sessionCreated: Bool) -> OpenCodeOverflowMenuEntry {
+        let availability = SessionChatMoveToWorktree.availability(
+            supportsMove: viewModel.uiState.supportsSessionMove,
+            worktreesEnabled: homeDisplayPreferences.showsWorktrees,
+            sessionCreated: sessionCreated,
+            project: moveProject,
+            newWorktree: newWorktreeAvailability(sessionCreated: sessionCreated)
+        )
+        return OpenCodeOverflowMenuEntry(
+            title: SessionChatMoveToWorktree.menuTitle,
+            subtitle: availability.subtitle,
+            icon: .callSplit,
+            enabled: availability.enabled,
+            accessibilityIdentifier: "sessionMoveToWorktree",
+            action: {
+                logOverflowAction(ProductAnalytics.Action.chatOverflowMoveToWorktree)
+                menuExpanded = false
+                viewModel.openMoveToWorktree()
+            }
+        )
+    }
+
+    private var moveSheetBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.uiState.moveSheetVisible },
+            set: { presented in
+                if !presented { viewModel.dismissMoveToWorktree() }
+            }
+        )
+    }
+
+    private func sessionChatMoveToWorktree(_ content: some View) -> some View {
+        content
+            .openCodeBottomSheet(
+                isPresented: moveSheetBinding,
+                title: viewModel.worktreeCreate.state?.title ?? SessionChatMoveToWorktree.sheetTitle,
+                leadingAction: WorktreeCreateSheetChrome.backAction(viewModel.worktreeCreate),
+                keyboard: WorktreeCreateSheetChrome.keyboard(viewModel.worktreeCreate)
+            ) {
+                if viewModel.worktreeCreate.isPresented {
+                    WorktreeCreateForm(model: viewModel.worktreeCreate) {
+                        let refresh = refreshHomeWorktrees
+                        let source = viewModel.worktreeCreate.state?.sourceDirectory ?? boundSession.worktree
+                        Task {
+                            await viewModel.submitMoveToNewWorktree { _ in await refresh(source) }
+                        }
+                    }
+                } else if let project = moveProject {
+                    ForEach(
+                        SessionChatMoveToWorktree.options(project: project, currentDirectory: boundSession.worktree)
+                    ) { option in
+                        OpenCodeListItem(
+                            title: option.title,
+                            subtitle: option.subtitle,
+                            selected: option.isCurrent,
+                            enabled: option.isCurrent || !viewModel.uiState.moveInFlight,
+                            startDecorator: .icon(.callSplit),
+                            action: option.isCurrent ? nil : {
+                                Task { await viewModel.moveSession(to: option.directory, worktreeTitle: option.title) }
+                            }
+                        ) {
+                            if option.isCurrent {
+                                OpenCodeIconImage(icon: .check, size: 18)
+                                    .accessibilityHidden(true)
+                            }
+                        }
+                        .accessibilityAddTraits(option.isCurrent ? .isSelected : [])
+                        .accessibilityIdentifier(
+                            option.isCurrent ? "sessionMoveToWorktreeCurrent" : "sessionMoveToWorktreeRow"
+                        )
+                    }
+                    moveToNewWorktreeRow(project: project)
+                } else {
+                    moveToNewWorktreeRow(project: nil)
+                }
+            }
+            .onChange(of: viewModel.uiState.movedDirectory, initial: true) { _, directory in
+                // Also catches a view model handed over from the other Home layout after a move.
+                guard let directory, directory != boundSession.worktree else { return }
+                movedWorktree = directory
+            }
+    }
+
+    private func moveToNewWorktreeRow(project: HomeProject?) -> some View {
+        let sessionCreated = !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID)
+        let availability = newWorktreeAvailability(sessionCreated: sessionCreated)
+        return NewWorktreeRow(
+            availability: NewWorktreeAvailability(
+                enabled: availability.enabled && !viewModel.uiState.moveInFlight,
+                subtitle: availability.subtitle
+            ),
+            accessibilityIdentifier: "moveToNewWorktreeRow",
+            action: {
+                let source = boundSession.worktree
+                viewModel.openMoveToNewWorktree(
+                    projectID: project?.projectID,
+                    sourceDirectory: source,
+                    sourceBranch: project?.worktree(at: source)?.branch
+                )
+            }
+        )
     }
 
     private var sessionOverflowMenuEntries: [OpenCodeOverflowMenuEntry] {
@@ -1010,7 +1315,7 @@ struct SessionChatView: View {
                     action: {
                         logOverflowAction(ProductAnalytics.Action.chatOverflowReviewChanges)
                         menuExpanded = false
-                        changesTarget = viewModel.uiState.changesNavigationTarget(worktree: session.worktree)
+                        changesTarget = viewModel.uiState.changesNavigationTarget(worktree: boundSession.worktree)
                     }
                 )
             )
@@ -1029,6 +1334,7 @@ struct SessionChatView: View {
                 )
             )
         }
+        entries.append(moveToWorktreeMenuEntry(sessionCreated: sessionCreated))
         if viewModel.uiState.capabilities.showsFiles {
             entries.append(
                 OpenCodeOverflowMenuEntry(
@@ -1038,7 +1344,7 @@ struct SessionChatView: View {
                     action: {
                         logOverflowAction(ProductAnalytics.Action.chatOverflowBrowseFiles)
                         menuExpanded = false
-                        filesRoute = FilesRoute(worktree: session.worktree)
+                        filesRoute = FilesRoute(worktree: boundSession.worktree)
                     }
                 )
             )
@@ -1123,6 +1429,16 @@ struct SessionChatView: View {
         }
         entries.append(
             OpenCodeOverflowMenuEntry(
+                title: "Report a problem",
+                icon: .edit,
+                action: {
+                    menuExpanded = false
+                    reportProblem()
+                }
+            )
+        )
+        entries.append(
+            OpenCodeOverflowMenuEntry(
                 title: "Delete",
                 icon: .close,
                 enabled: lifecycleEnabled,
@@ -1142,11 +1458,49 @@ struct SessionChatView: View {
         return entries
     }
 
+    /// Captures this screen once the menu is gone, then opens the report sheet. The capture
+    /// is only attached when the user taps "+ Screenshot" (the sheet itself draws over the window).
+    private func reportProblem() {
+        resignComposerKeyboard()
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(250))
+            let screenshot = FeedbackScreenCapture.captureKeyWindow()
+            feedbackModel = Container.makeFeedbackViewModel(screen: .sessionChat, screenshot: screenshot)
+        }
+    }
+
     private var composerKind: SessionChatComposerKind {
         SessionChatComposerKind.resolve(
             isChildSession: session.parentID != nil,
             hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
             hasQuestion: viewModel.uiState.questionRequest != nil
+        )
+    }
+
+    /// The prompt takes attachments: the Attach button, paste of images and files, and drops.
+    private var promptAttachEnabled: Bool {
+        let composer = viewModel.uiState.composer
+        return composerAttachmentSources.isAttachEnabled &&
+            !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
+            composer.isModelSelectionReady &&
+            !composer.isShellMode &&
+            !viewModel.uiState.sideQuestions.composerMode
+    }
+
+    /// Drops attach only where the Attach button would: a prompt composer that takes attachments,
+    /// not mid-dictation. Otherwise drops fall through to the system default.
+    private var attachmentDropEnabled: Bool {
+        composerKind == .prompt && promptAttachEnabled && viewModel.uiState.dictation == nil
+    }
+
+    private var attachmentDropContext: AttachmentDropContext {
+        let composer = viewModel.uiState.composer
+        let option = composer.selectedModel?.option
+        return AttachmentDropContext(
+            imagesSupported: option?.supportsImageInput ?? true,
+            pdfSupported: option?.supportsPdfInput ?? true,
+            uploadAvailable: composer.streamedUploadAvailable,
+            draft: composer.attachments
         )
     }
 
@@ -1233,6 +1587,18 @@ struct SessionChatView: View {
             let modelReady = capabilities.requiresComposerModel
                 ? composer.selectedModel != nil && composer.isModelSelectionReady
                 : true
+            let sideQuestions = viewModel.uiState.sideQuestions
+            let sideQuestionMode = sideQuestions.composerMode
+            let blockedSideQuestion = !sideQuestions.supported && SideQuestion.question(inDraft: composer.text) != nil
+            let promptSendEnabled =
+                composer.hasSendableContent &&
+                !composer.hasPendingUploads &&
+                modelReady &&
+                !isSending &&
+                !blockedSideQuestion
+            // A side question answers with the session's own model, so it needs no model pick.
+            let sideQuestionSendEnabled =
+                !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             state = .prompt(
                 .init(
                     text: composer.text,
@@ -1255,21 +1621,20 @@ struct SessionChatView: View {
                     runtimeModeLabel: viewModel.uiState.runtimeModeLabel ?? "",
                     runtimeModeEnabled: viewModel.uiState.runtimeModeBadgeSelectable,
                     sendEnabled:
-                        composer.hasSendableContent &&
-                        modelReady &&
-                        !isSending &&
+                        !composer.hasPendingUploads &&
+                        (sideQuestionMode ? sideQuestionSendEnabled : promptSendEnabled) &&
                         !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
                         viewModel.uiState.timeline != .creating &&
                         viewModel.uiState.composerEnabled &&
                         viewModel.uiState.pendingSend == nil,
-                    attachEnabled: composerAttachmentSources.isAttachEnabled &&
-                        !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
-                        composer.isModelSelectionReady,
+                    attachEnabled: promptAttachEnabled,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting &&
                         viewModel.uiState.canMutate,
-                    followUpDelivery: composer.supportsFollowUpDelivery ? composer.followUpDelivery : nil,
-                    showDictationButton: viewModel.uiState.composerDictationEnabled && dictationSupport.showsMic
+                    followUpDelivery: composer.supportsFollowUpDelivery && !sideQuestionMode ? composer.followUpDelivery : nil,
+                    showDictationButton: dictationSupport.showsMic,
+                    shellMode: composer.isShellMode && !sideQuestionMode,
+                    sideQuestionMode: sideQuestionMode
                 )
             )
         }
@@ -1282,7 +1647,7 @@ struct SessionChatView: View {
             AnyView(
                 SessionRetryCountdownCard(
                     card: card,
-                    onOpenLink: { UIApplication.shared.open($0) },
+                    onOpenLink: { SessionChatView.openServerLink($0) },
                     onOpenBody: liveBody.map { body in
                         {
                             guard let target = SessionChatToolDetailTarget.failure(
@@ -1304,6 +1669,7 @@ struct SessionChatView: View {
             state: state,
             focusRequestToken: composerFocusRequest,
             dictation: kind == .prompt ? viewModel.uiState.dictation.map(composerDictation) : nil,
+            attachmentDragActive: attachmentDropSummary != nil,
             onAction: { action in
                 switch action {
                 case let .textChanged(text, selectionStart, _):
@@ -1354,8 +1720,14 @@ struct SessionChatView: View {
                     }
                 case let .removeAttachment(id):
                     viewModel.removeAttachment(id: id)
+                case let .pasteAttachments(providers):
+                    attachItemProviders(providers, source: .paste)
                 case .cancelRevert:
                     viewModel.cancelRevert()
+                case .exitShellMode:
+                    viewModel.exitShellMode()
+                case .exitSideQuestionMode:
+                    viewModel.exitSideQuestionMode()
                 case .openCommands:
                     viewModel.openCommands()
                 case .send:
@@ -1418,7 +1790,8 @@ struct SessionChatView: View {
             volatileText: state.volatile,
             level: state.level,
             status: dictationStatus(state),
-            startedAt: state.startedAt
+            startedAt: state.startedAt,
+            languageLabel: state.languageLabel
         )
     }
 
@@ -1432,6 +1805,10 @@ struct SessionChatView: View {
             .unavailable(.permissionDenied)
         case .modelNotInstalled:
             .unavailable(.modelNotInstalled)
+        case .modelDownloading:
+            .unavailable(.modelDownloading(progress: state.downloadProgress))
+        case .modelDownloadFailed:
+            .unavailable(.modelDownloadFailed)
         case .recognizerError:
             .unavailable(.recognizerError(state.errorMessage ?? ""))
         }
@@ -1445,10 +1822,6 @@ struct SessionChatView: View {
     }
 
     private func refreshDictationSupport() async {
-        guard viewModel.uiState.composerDictationEnabled else {
-            dictationSupport = .hidden
-            return
-        }
         dictationSupport = await dictationSession.probe()
     }
 
@@ -1463,11 +1836,11 @@ struct SessionChatView: View {
                 .permissionDenied,
                 message: "Microphone access is off"
             )
-        case .modelNotInstalled:
-            viewModel.beginDictationUnavailable(
-                .modelNotInstalled,
-                message: "The on-device speech model is not installed"
-            )
+        case let .modelNotInstalled(languageLabel):
+            viewModel.beginDictationUnavailable(.modelNotInstalled, languageLabel: languageLabel)
+        case let .modelDownloading(languageLabel):
+            viewModel.beginDictationUnavailable(.modelNotInstalled, languageLabel: languageLabel)
+            await downloadDictationModel()
         case let .ready(languageLabel, onDevice):
             let granted = await requestMicrophoneAccess()
             guard granted else {
@@ -1486,7 +1859,16 @@ struct SessionChatView: View {
     }
 
     private func downloadDictationModel() async {
-        await dictationSession.downloadModel()
+        viewModel.dictationModelDownload(.modelDownloading)
+        let installed = await dictationSession.downloadModel { progress in
+            viewModel.dictationModelDownload(.modelDownloading, progress: progress)
+        }
+        // Cancel closes the card; the system download carries on without it.
+        guard viewModel.uiState.dictation?.phase.isModelPhase == true else { return }
+        guard installed else {
+            viewModel.dictationModelDownload(.modelDownloadFailed)
+            return
+        }
         let support = await dictationSession.probe()
         dictationSupport = support
         switch support {
@@ -1500,11 +1882,8 @@ struct SessionChatView: View {
                 .permissionDenied,
                 message: "Microphone access is off"
             )
-        case .modelNotInstalled:
-            viewModel.beginDictationUnavailable(
-                .modelNotInstalled,
-                message: "The on-device speech model is not installed"
-            )
+        case .modelNotInstalled, .modelDownloading:
+            viewModel.dictationModelDownload(.modelDownloadFailed)
         case .hidden:
             viewModel.dictationCancel()
         }
@@ -1574,6 +1953,26 @@ struct SessionChatView: View {
         }
     }
 
+    private func openLastTurnChanges(assistantMessageID: String, initialFilePath: String?) {
+        guard let target = viewModel.uiState.fileChangeNavigationTarget(
+            worktree: boundSession.worktree,
+            assistantMessageID: assistantMessageID,
+            initialFilePath: initialFilePath
+        ) else { return }
+        if let messageID = target.messageID, viewModel.uiState.lastTurnSpansLocationChange(messageID: messageID) {
+            viewModel.presentTurnDiffUnavailable()
+            return
+        }
+        changesTarget = target
+    }
+
+    private func lastTurnDiffUnavailable(assistantMessageID: String) -> Bool {
+        guard let messageID = viewModel.uiState.owningTurnMessageID(assistantMessageID: assistantMessageID) else {
+            return false
+        }
+        return viewModel.uiState.lastTurnSpansLocationChange(messageID: messageID)
+    }
+
     private func logChatAction(_ actionId: String) {
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.sessionChat,
@@ -1629,6 +2028,7 @@ private extension SessionChatSnackbar {
         OpenCodeSnackbarMessage(
             text: message,
             variant: tone == .error ? .error : .default,
+            actionLabel: action?.label,
             id: id
         )
     }
@@ -1652,7 +2052,8 @@ private struct SessionRetryCountdownCard: View {
         let attempt = card.attempt.map { "attempt \($0), " } ?? ""
         let label = card.actionLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
         let link = card.actionLink?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let url = link.flatMap(URL.init(string:))
+        // Server-supplied links open as web pages only; other schemes get no button.
+        let url = ExternalLinkPolicy.openableURL(link)
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text(card.message)
@@ -1730,6 +2131,7 @@ private extension ClientSlashAction {
         case .redo: .redo
         case .compact: .verticalAlignCenter
         case .mcp: .plug
+        case .btw: .subdirectoryArrowRight
         }
     }
 }

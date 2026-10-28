@@ -38,7 +38,8 @@ class FilesystemApi private constructor(
 
     /**
      * v1 `GET /file` for the Add project browser: [location] is the listed folder's root (`/`,
-     * `C:\`) so listing never creates a server project; [path] is the absolute folder.
+     * `C:\`) so listing never creates a server project; [path] is the absolute folder. A non-2xx
+     * answer throws a `ResponseException` carrying the status.
      */
     suspend fun listFiles(
         location: String,
@@ -49,13 +50,14 @@ class FilesystemApi private constructor(
             .get("file") {
                 parameter("path", path)
                 applyDirectory(location)
-            }.body()
+            }.successBody()
 
     suspend fun getLocationV2(): V2LocationInfoDto = httpClient.get().get("api/location").body()
 
     /**
      * v2 `GET /api/fs/list` for the Add project browser, located at [location] (the folder's
-     * root). Entry paths are relative to the envelope's `location.directory`.
+     * root). Entry paths are relative to the envelope's `location.directory`. A missing folder
+     * or a file answers 404, which throws a `ResponseException` carrying the status.
      */
     suspend fun listFilesV2(
         location: String,
@@ -66,7 +68,7 @@ class FilesystemApi private constructor(
             .get("api/fs/list") {
                 parameter("path", path)
                 applyLocationDirectory(location)
-            }.body()
+            }.successBody()
 
     // File Browser: `directory`/location stays the worktree so the server keeps one instance;
     // only `path` varies.
@@ -182,6 +184,27 @@ class FilesystemApi private constructor(
                                 ?.takeIf { response.status == HttpStatusCode.OK },
                     contentType = response.headers[HttpHeaders.ContentType]?.substringBefore(';')?.trim(),
                 )
+            }
+
+    /**
+     * v2 `GET /api/fs/read/<path>`, [relativePath] under [location]. The route is confined to its
+     * location, so a file outside the project (an upload under the server's tmp directory) is
+     * read by locating at a directory that contains it. Null on any failure or past [maxBytes].
+     */
+    suspend fun readServerFileV2(
+        location: String,
+        relativePath: String,
+        maxBytes: Int,
+    ): ByteArray? =
+        httpClient
+            .get()
+            .prepareGet {
+                url { appendEncodedPathSegments(v2ReadPathSegments(relativePath)) }
+                applyLocationDirectory(location)
+            }.execute { response ->
+                response.requireSuccess()
+                val read = response.bodyAsChannel().readCapped(maxBytes)
+                read.bytes.takeUnless { read.exceeded }
             }
 
     private fun v2ReadPathSegments(relativePath: String): List<String> =

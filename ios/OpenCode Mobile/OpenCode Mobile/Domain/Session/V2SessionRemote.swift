@@ -18,11 +18,30 @@ struct V2SessionRemote: SessionRemote, Sendable {
     }
 
     func listSessions(directory: String?) async throws -> [Session] {
-        try await api.listSessionsV2(directory: directory).map { adapter.session(from: $0) }
+        let projectID = await listableProjectID(directory: directory)
+        return try await api.listSessionsV2(
+            directory: projectID == nil ? directory : nil,
+            projectID: projectID,
+            archived: false
+        ).map { adapter.session(from: $0) }
     }
 
-    func createSession(parentID _: String?, title: String?, directory: String?) async throws -> Session {
-        var created = adapter.session(from: try await api.createSessionV2(directory: directory, title: title))
+    private func listableProjectID(directory: String?) async -> String? {
+        guard let directory else { return nil }
+        guard let location = try? await api.locationForSessionList(directory: directory) else { return nil }
+        return Self.listableProjectID(location)
+    }
+
+    static func listableProjectID(_ location: V2LocationInfoDTO) -> String? {
+        guard let id = location.project?.id, !id.isEmpty else { return nil }
+        let root = location.project?.canonical ?? location.project?.directory
+        // Non-git directories resolve to the global "/" project, which is not this folder's sessions.
+        if root == nil || root?.isEmpty == true || root == "/" { return nil }
+        return id
+    }
+
+    func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
+        var created = adapter.session(from: try await api.createSessionV2(directory: directory, title: title, parentID: parentID))
         if let title, !title.isEmpty, created.title != title {
             created.title = title
         } else if created.title.isEmpty {
@@ -49,8 +68,14 @@ struct V2SessionRemote: SessionRemote, Sendable {
         return renamed
     }
 
-    func archiveSession(id _: String, directory _: String?) async throws -> Session {
-        throw SessionError.http(statusCode: 404, message: "session archive is not available")
+    /// Callers gate on `supportsSessionArchive`; servers before 2.1.0 would ignore the field.
+    func archiveSession(id: String, directory _: String?) async throws -> Session {
+        try await api.setSessionArchivedV2(id: id, archived: true)
+        var archived = adapter.session(from: try await api.getSessionV2(id: id))
+        if !archived.isArchived {
+            archived.archivedAtEpochMs = Int64(Date().timeIntervalSince1970 * 1000)
+        }
+        return archived
     }
 
     func deleteSession(id: String, directory _: String?) async throws -> Bool {
@@ -86,8 +111,8 @@ struct V2SessionRemote: SessionRemote, Sendable {
         throw SessionError.http(statusCode: 404, message: "session share is not available")
     }
 
-    func getSessionDiff(id _: String, messageID _: String?, directory _: String?) async throws -> [FileDiff] {
-        throw SessionError.http(statusCode: 404, message: "session message diff is not available")
+    func getSessionDiff(id: String, messageID: String?, directory _: String?) async throws -> [FileDiff] {
+        try await api.getSessionDiffV2(id: id, from: messageID).map(adapter.fileDiff)
     }
 
     func getVcsInfo(directory: String?) async throws -> VcsInfo {
@@ -117,6 +142,10 @@ struct V2SessionRemote: SessionRemote, Sendable {
 
     func unrevertSession(id: String) async throws -> Bool {
         try await api.clearRevertV2(id: id)
+    }
+
+    func commitRevert(id: String) async throws -> Bool {
+        try await api.commitRevertV2(id: id)
     }
 
     func respondToPermission(
@@ -181,5 +210,14 @@ struct V2SessionRemote: SessionRemote, Sendable {
 
     func markSessionViewed(sessionId: String, idleAtEpochMs: Int64) async throws {
         _ = try await api.markSessionViewedV2(id: sessionId, idle: idleAtEpochMs)
+    }
+
+    func moveSession(id: String, directory: String) async throws {
+        _ = try await api.moveSessionV2(id: id, directory: directory)
+    }
+
+    func askSideQuestion(sessionID: String, question: String) async throws -> String {
+        let text = try await api.generateSessionTextV2(id: sessionID, prompt: SideQuestion.prompt(question))
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

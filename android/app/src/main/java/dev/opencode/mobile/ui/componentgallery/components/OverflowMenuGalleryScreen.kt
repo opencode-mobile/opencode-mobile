@@ -14,6 +14,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.ui.components.OpenCodeAnchoredOverflowHost
+import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
+import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
@@ -25,6 +29,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 @Composable
 fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
+    var anchoredExpanded by rememberSaveable { mutableStateOf(false) }
     var entriesEnabled by rememberSaveable { mutableStateOf(true) }
     var selectionRowsEnabled by rememberSaveable { mutableStateOf(false) }
     var showDestructive by rememberSaveable { mutableStateOf(false) }
@@ -38,6 +43,15 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
                     icon = if (selectionRowsEnabled) OpenCodeIcons.Check else OpenCodeIcons.Architecture,
                     enabled = entriesEnabled,
                     accessibilityLabel = if (selectionRowsEnabled) "Session context, selected" else null,
+                    onClick = { menuExpanded = false },
+                ),
+            )
+            add(
+                OpenCodeOverflowMenuEntry(
+                    title = "Move to worktree\u2026",
+                    icon = OpenCodeIcons.CallSplit,
+                    enabled = false,
+                    subtitle = "Needs an opencode v2 server",
                     onClick = { menuExpanded = false },
                 ),
             )
@@ -126,8 +140,8 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
 
             Text(
                 text =
-                    "Use the overflow icon in the live top bar preview to open the menu. " +
-                        "Switch controls to review enabled, disabled, and aligned selection states.",
+                    "Use the overflow icon in the live top bar preview, or the + button for the anchored " +
+                        "menu. Switch controls to review enabled, disabled, and aligned selection states.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -150,6 +164,19 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
                         ),
                     ),
                 showDivider = true,
+            )
+        }
+
+        OpenCodeAnchoredOverflowHost(
+            expanded = anchoredExpanded,
+            onDismissRequest = { anchoredExpanded = false },
+            entries = entries.map { it.copy(onClick = { anchoredExpanded = false }) },
+            modifier = Modifier.padding(horizontal = 16.dp),
+        ) {
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, "Add attachment"),
+                contrast = OpenCodeButtonContrast.Low,
+                onClick = { anchoredExpanded = true },
             )
         }
     }

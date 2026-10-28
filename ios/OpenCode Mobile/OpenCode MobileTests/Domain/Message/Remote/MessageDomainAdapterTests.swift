@@ -37,6 +37,14 @@ struct MessageDomainAdapterTests {
         #expect(message.failure?.providerBody == nil)
     }
 
+    @Test func sendRequests_carryClientMessageID() {
+        let options = PromptSendOptions(text: "Hello", messageID: "msg_client")
+
+        #expect(adapter.sendRequest(options: options).messageID == "msg_client")
+        #expect(adapter.v2PromptRequest(options: options).id == "msg_client")
+        #expect(adapter.v2PromptRequest(options: PromptSendOptions(text: "Hello")).id == nil)
+    }
+
     @Test func sendRequest_includesModelAndNonDefaultVariant() throws {
         let body = adapter.sendRequest(
             options: PromptSendOptions(
@@ -208,15 +216,20 @@ struct MessageDomainAdapterTests {
         #expect(body.fileMentions?.first?.mention.end == 15)
     }
 
-    @Test func v2PromptRequest_mapsSkillIds() {
+    @Test func v2PromptRequest_mapsSkillMentionsWithOffsetsDeduped() {
         let body = adapter.v2PromptRequest(
             options: PromptSendOptions(
-                text: "check the error",
-                skillIDs: [" opencode ", "opencode", ""]
+                text: "/OpenCode check /OpenCode the error /stale",
+                skillMentions: [
+                    SkillMention(id: "s1", skillID: "opencode", name: "OpenCode", start: 0, end: 9),
+                    SkillMention(id: "s2", skillID: "opencode", name: "OpenCode", start: 16, end: 25),
+                    SkillMention(id: "s3", skillID: "stale", name: "moved", start: 36, end: 42),
+                ]
             )
         )
-        #expect(body.text == "check the error")
+        #expect(body.text == "/OpenCode check /OpenCode the error /stale")
         #expect(body.skills?.map(\.id) == ["opencode"])
+        #expect(body.skills?.first?.mention == V2PromptSourceDTO(start: 0, end: 9, text: "/OpenCode"))
     }
 
     @Test func v2SwitchModelRequest_mapsProviderModelAndVariant() {
@@ -728,7 +741,7 @@ struct MessageDomainAdapterTests {
         #expect(message.contextEstimate.userCharacters == "agent prompt text".count)
     }
 
-    @Test func projectV2MapsUserAssistantAndSkipsSwitches() throws {
+    @Test func projectV2MapsUserAssistantAndASwitchNotice() throws {
         let dtos = try decoder.decode(
             [V2SessionMessageDTO].self,
             from: Data(
@@ -764,7 +777,9 @@ struct MessageDomainAdapterTests {
             )
         )
 
-        let messages = adapter.messages(fromV2: dtos)
+        let all = adapter.messages(fromV2: dtos)
+        #expect(all.map(\.role) == [.notice, .user, .assistant])
+        let messages = all.filter { $0.role != .notice }
 
         #expect(messages.count == 2)
         #expect(messages[0].role == .user)
@@ -925,7 +940,7 @@ struct MessageDomainAdapterTests {
             )
         )
 
-        let messages = adapter.messages(fromV2: dtos)
+        let messages = adapter.messages(fromV2: dtos).filter { $0.role != .notice }
         let message = try #require(messages.first)
         #expect(messages.count == 1)
         #expect(message.mode == "build")
@@ -953,6 +968,35 @@ struct MessageDomainAdapterTests {
 
         let message = try #require(adapter.messages(fromV2: dtos).first)
         #expect(message.contextEstimate.userCharacters == "agent prompt text".count)
+    }
+
+    @Test func projectV2ReadsSkillMentionsOnUserMessage() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"fix /tdd now /sec",
+                    "skills":[
+                      {"id":"tdd","name":"tdd","mention":{"start":4,"end":8,"text":"/tdd"}},
+                      {"id":"security","mention":{"start":13,"end":17,"text":"/sec"}}
+                    ],
+                    "time":{"created":1}
+                  }
+                ]
+                """.utf8
+            )
+        )
+
+        let message = try #require(adapter.messages(fromV2: dtos).first)
+        #expect(message.promptSkills.map(\.id) == ["tdd", "security"])
+        #expect(message.promptSkills.map(\.name) == ["tdd", "security"])
+        #expect(message.promptSkills.map(\.mentionStart) == [4, 13])
+        #expect(message.promptSkills.map(\.mentionEnd) == [8, 17])
+        #expect(message.contextEstimate.userCharacters == "fix /tdd now /sec".count + "/tdd".count + "/sec".count)
     }
 
     @Test func projectV2ExpandsShellAndCompaction() throws {
@@ -1080,6 +1124,39 @@ struct MessageDomainAdapterTests {
         #expect(tool.timeStartEpochMs == 10)
     }
 
+    @Test func projectV2UserSkillAndFile_keepsArgumentsAndSkillRefWithoutSkillBody() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"prototype me a better list item",
+                    "files":[{"name":"16136.png","mime":"image/png","uri":"data:image/png;base64,YQ=="}],
+                    "skills":[{
+                      "id":"publish-prototype",
+                      "name":"publish-prototype",
+                      "text":"SKILL BODY should stay off the transcript"
+                    }]
+                  }
+                ]
+                """.utf8
+            )
+        )
+        let message = try #require(adapter.messages(fromV2: dtos).first)
+        #expect(message.text == "prototype me a better list item")
+        #expect(!message.text.contains("SKILL BODY"))
+        #expect(message.promptSkills == [PromptSkill(id: "publish-prototype", name: "publish-prototype")])
+        let files = message.parts.compactMap { part -> FilePart? in
+            if case let .file(file) = part { return file }
+            return nil
+        }
+        #expect(files.count == 1)
+        #expect(files.first?.filename == "16136.png")
+    }
+
     @Test func projectV2UserInlineFileDataBuildsDataURL() throws {
         let dtos = try decoder.decode(
             [V2SessionMessageDTO].self,
@@ -1164,6 +1241,37 @@ struct MessageDomainAdapterTests {
             return
         }
         #expect(shellTool.output == "/repo")
+    }
+
+    @Test func projectV2ShellCarriesCommandInputAndExitCode() throws {
+        let dtos = try decoder.decode(
+            [V2SessionMessageDTO].self,
+            from: Data(
+                """
+                [
+                  {
+                    "id":"msg_shell",
+                    "type":"shell",
+                    "shellID":"sh_1",
+                    "command":"false",
+                    "status":"exited",
+                    "exit":1,
+                    "output":{"output":"","truncated":false},
+                    "time":{"created":1,"completed":2}
+                  }
+                ]
+                """.utf8
+            )
+        )
+        let messages = adapter.messages(fromV2: dtos)
+        #expect(messages.map(\.id) == ["msg_shell", "msg_shell:assistant"])
+        guard case let .tool(shellTool) = messages[1].parts.first else {
+            Issue.record("expected shell tool")
+            return
+        }
+        #expect(shellTool.id == "msg_shell:tool")
+        #expect(shellTool.input?["command"] == .string("false"))
+        #expect(shellTool.metadata?["exit"] == .int(1))
     }
 
     @Test func mergeInbox_marksExistingUserMessageWaiting() {
@@ -1257,6 +1365,94 @@ struct MessageDomainAdapterTests {
         #expect(message.failure?.isNeutral == false)
     }
 
+    @Test func projectV2FreeLimitCarriesRetryAfterFromTheCompletedTime() throws {
+        let dtos = try decodeV2(
+            """
+            [{
+              "id":"a1","type":"assistant","finish":"error","content":[],
+              "time":{"created":1000,"completed":2000},
+              "error":{"type":"provider.free-limit",
+                "message":"Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.",
+                "status":429,"retryAfterMs":3600000}
+            }]
+            """
+        )
+        let adapter = MessageDomainAdapter(nowEpochMs: { 9_999 })
+        let failure = try #require(adapter.messages(fromV2: dtos).first?.failure)
+        #expect(failure.type == "provider.free-limit")
+        #expect(
+            failure.line()
+                == "HTTP 429 · Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models."
+        )
+        #expect(failure.action() == .pickModel)
+        #expect(failure.retryAfterMs == 3_600_000)
+        #expect(failure.recordedAtEpochMs == 2_000)
+        #expect(failure.retryAtEpochMs() == 3_602_000)
+    }
+
+    @Test func projectV2BudgetLimitsFromTheConsoleEnvelope() throws {
+        // Payloads as anomalyco/opencode#58694 builds them (dev only, no release sends them yet).
+        let dtos = try decodeV2(
+            """
+            [
+              {"id":"a1","type":"assistant","finish":"error","content":[],
+                "error":{"type":"provider.budget-limit",
+                  "message":"Workspace usage limit reached. Model use is paused until the limit resets.",
+                  "status":429,"retryAfterMs":120000,
+                  "response":{"body":"{\\"type\\":\\"error\\",\\"error\\":{\\"type\\":\\"BudgetLimitError\\"}}"}}},
+              {"id":"u2","type":"user","text":"again","time":{"created":3000}},
+              {"id":"a2","type":"assistant","finish":"error","content":[],"time":{"created":3001,"completed":3002},
+                "error":{"type":"provider.model-budget-limit",
+                  "message":"You've reached the spend limit for this model. Switch models to keep going.",
+                  "status":429,
+                  "response":{"body":"{\\"type\\":\\"error\\",\\"error\\":{\\"type\\":\\"BudgetLimitError\\",\\"metadata\\":{\\"coverage\\":\\"models\\"}}}"}}}
+            ]
+            """
+        )
+        let messages = MessageDomainAdapter(nowEpochMs: { 9_999 }).messages(fromV2: dtos)
+        let budget = try #require(messages.first?.failure)
+        #expect(budget.line() == "HTTP 429 · Workspace usage limit reached. Model use is paused until the limit resets.")
+        #expect(budget.action() == nil)
+        // No completed time on the failed message: the countdown runs from when the app received it.
+        #expect(budget.recordedAtEpochMs == 9_999)
+        #expect(budget.retryAtEpochMs() == 129_999)
+
+        let modelBudget = try #require(messages.last?.failure)
+        #expect(modelBudget.type == "provider.model-budget-limit")
+        #expect(modelBudget.action() == .pickModel)
+        #expect(modelBudget.retryAtEpochMs() == nil)
+        #expect(modelBudget.recordedAtEpochMs == nil)
+    }
+
+    @Test func v1FailureHasNoRetryTime() throws {
+        let data = Data(
+            """
+            {"info":{"id":"m1","role":"assistant","time":{"created":1,"completed":2},
+              "error":{"name":"APIError","data":{"message":"Rate limited","statusCode":429,"isRetryable":true}}},
+             "parts":[]}
+            """.utf8
+        )
+        let failure = try #require(adapter.message(from: try decoder.decode(MessageDTO.self, from: data)).failure)
+        #expect(failure.line() == "HTTP 429 · Rate limited")
+        #expect(failure.retryAfterMs == nil)
+        #expect(failure.recordedAtEpochMs == nil)
+        #expect(failure.retryAtEpochMs() == nil)
+    }
+
+    @Test func liveTranslatedInfoKeepsRetryAfter() throws {
+        // The shape EventDomainAdapter builds from a v2 `session.step.failed`.
+        let data = Data(
+            """
+            {"id":"a1","role":"assistant",
+             "error":{"name":"provider.free-limit","data":{"message":"Free usage limit reached.","statusCode":429,"retryAfterMs":3600000}}}
+            """.utf8
+        )
+        let info = try decoder.decode(MessageInfoDTO.self, from: data)
+        let failure = try #require(MessageDomainAdapter(nowEpochMs: { 5_000 }).message(info: info, domainParts: []).failure)
+        #expect(failure.retryAfterMs == 3_600_000)
+        #expect(failure.retryAtEpochMs() == 3_605_000)
+    }
+
     @Test func projectV2HidesAbortAndProjectsFailedIdleAndCompaction() throws {
         let dtos = try decodeV2(
             """
@@ -1329,6 +1525,7 @@ extension MessagePart {
         case .tool(let part): part.id
         case .compaction(let part): part.id
         case .reasoning(let part): part.id
+        case .notice(let notice): notice.id
         }
     }
 }

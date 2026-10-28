@@ -75,7 +75,7 @@ enum StoreScreenshotSeeder {
             var saved = await store.activeProfile() ?? profile
             saved.password = profile.password
             if !saved.id.isEmpty {
-                Container.shared.secureCredentialStore().writePassword(
+                try Container.shared.secureCredentialStore().writePassword(
                     serverBaseURL: saved.id,
                     password: saved.password
                 )
@@ -87,8 +87,8 @@ enum StoreScreenshotSeeder {
             let worktrees = projects.map(\.worktree)
             let seeded = worktrees.isEmpty
                 ? [
-                    "/Users/ivan/Projects/opencode-mobile",
-                    "/Users/ivan/Projects/artifact-publisher",
+                    "/Users/example/Projects/opencode-mobile",
+                    "/Users/example/Projects/artifact-publisher",
                 ]
                 : worktrees
             await store.setAddedWorktrees(serverBaseURL: saved.normalizedBaseURL, worktrees: seeded)
@@ -108,6 +108,7 @@ enum StoreScreenshotSeeder {
         AnalyticsConsentPreferences.shared.clear()
         AppOnboardingPreferences.shared.clear()
         DeveloperToolsPreferences.shared.clear()
+        PerformanceOverlayPreferences.shared.clear()
         SessionChatDisplayPreferences.shared.clear()
         SplitPanePreferences.shared.clear()
         FeatureFlags.shared.clearOverrides()

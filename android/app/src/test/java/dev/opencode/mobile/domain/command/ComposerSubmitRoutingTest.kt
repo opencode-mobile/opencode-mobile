@@ -33,10 +33,21 @@ class ComposerSubmitRoutingTest {
                     ),
                 ),
             )
-        assertEquals(
-            ComposerSubmitIntent.SkillPrompt(skillId = "opencode", text = "check the error"),
-            intent,
-        )
+        assertEquals(ComposerSubmitIntent.Prompt(text = "/OpenCode check the error"), intent)
+    }
+
+    @Test
+    fun leadingSkill_matchesOnlyV2SkillsAtOffsetZero() {
+        val commands =
+            listOf(
+                ServerCommand(name = "init", source = ServerCommandSource.Command),
+                ServerCommand(name = "OpenCode", source = ServerCommandSource.Skill, skillId = "opencode"),
+                ServerCommand(name = "deploy", source = ServerCommandSource.Skill),
+            )
+        assertEquals("opencode", ComposerSubmitRouting.leadingSkill("/OpenCode args", commands)?.skillId)
+        assertNull(ComposerSubmitRouting.leadingSkill("/init args", commands))
+        assertNull(ComposerSubmitRouting.leadingSkill("/deploy now", commands))
+        assertNull(ComposerSubmitRouting.leadingSkill("fix /OpenCode", commands))
     }
 
     @Test
@@ -105,10 +116,5 @@ class ComposerSubmitRoutingTest {
             )
         assertEquals(listOf("init"), ComposerSubmitRouting.filterCommands(commands, "ag").map { it.name })
         assertEquals(listOf("deploy"), ComposerSubmitRouting.filterCommands(commands, "dep").map { it.name })
-    }
-
-    @Test
-    fun insertSelection_appendsTrailingSpace() {
-        assertEquals("/init ", ComposerSubmitRouting.insertSelection("init"))
     }
 }

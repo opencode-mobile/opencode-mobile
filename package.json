@@ -6,6 +6,7 @@
     "app-icon:sync": "node scripts/sync-app-icon.mjs",
     "app-icon:sync-store": "node scripts/sync-store-icon.mjs",
     "icons:sync": "node scripts/sync-icons.mjs",
+    "file-icons:sync": "node scripts/sync-file-type-icons.mjs",
     "themes:sync": "node scripts/sync-theme-presets.mjs",
     "themes:check": "node scripts/check-theme-presets.mjs",
     "icons:check": "node scripts/check-icons.mjs",
@@ -17,6 +18,7 @@
     "sse:capture": "node scripts/capture-sse.mjs",
     "store:screenshots": "node scripts/store-screenshots.mjs",
     "store:push": "node scripts/store-screenshots/push-store-shots.mjs",
+    "store:upload-app-store": "node scripts/store-screenshots/upload-app-store.mjs",
     "store:fixture-server:test": "node --test scripts/store-screenshots/*.test.mjs",
     "store:screenshots:gallery": "node scripts/store-screenshots/write-gallery.mjs",
     "graphics:editor": "node scripts/launch-graphics/editor.mjs",
@@ -28,9 +30,10 @@
     "@fontsource/ibm-plex-sans": "5.3.0",
     "@openapitools/openapi-generator-cli": "^2.41.0",
     "html-to-image": "1.11.13",
-    "lucide-static": "^1.54.0",
+    "lucide-static": "^1.59.0",
     "puppeteer-core": "25.14.0",
     "shiki": "^4.5.0",
+    "svg2vectordrawable": "^2.9.1",
     "yaml": "^2.9.1"
   }
 }

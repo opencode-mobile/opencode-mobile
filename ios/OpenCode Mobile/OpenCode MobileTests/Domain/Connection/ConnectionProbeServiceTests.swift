@@ -103,7 +103,7 @@ struct ConnectionProbeServiceTests {
     @Test func probe_detectsV2FromOpenCode207ApiInfoWhenHealthPathsMiss() async throws {
         ProtocolHealthURLProtocol.reset(responsesByPath: [
             "/global/health": (200, "<!doctype html><html><head><title>OpenCode</title></head><body></body></html>"),
-            "/api/info": (200, #"{"version":"2.0.7","pid":1481731,"urls":["http://192.168.0.160:4096"]}"#),
+            "/api/info": (200, #"{"version":"2.0.7","pid":1481731,"urls":["http://192.168.1.60:4096"]}"#),
         ])
         let service = makeService()
 
@@ -245,6 +245,27 @@ struct ConnectionProbeServiceTests {
 
         manager.disconnect()
         #expect(manager.serverProtocol == nil)
+    }
+
+    @Test func probeServer_keepsTheV1GlobalHealthVersion() async throws {
+        ProtocolHealthURLProtocol.reset(responsesByPath: [
+            "/global/health": (200, #"{"healthy":true,"version":"1.18.4"}"#),
+        ])
+
+        let outcome = try await makeService().probeServer(connection: sampleConnection)
+
+        #expect(outcome == ServerProbeOutcome(serverProtocol: .v1, serverVersion: "1.18.4"))
+    }
+
+    @Test func probeServer_keepsTheV2ApiInfoVersion() async throws {
+        ProtocolHealthURLProtocol.reset(responsesByPath: [
+            "/global/health": (404, #"{}"#),
+            "/api/info": (200, #"{"healthy":true,"version":"2.0.0","pid":123}"#),
+        ])
+
+        let outcome = try await makeService().probeServer(connection: sampleConnection)
+
+        #expect(outcome == ServerProbeOutcome(serverProtocol: .v2, serverVersion: "2.0.0"))
     }
 
     private var sampleConnection: ServerConnection {

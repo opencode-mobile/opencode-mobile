@@ -7,9 +7,12 @@ import dev.opencode.mobile.data.remote.dto.SendMessagePartDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileMentionDto
 import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
+import dev.opencode.mobile.data.remote.dto.V2PromptSkillDto
 import dev.opencode.mobile.data.remote.dto.V2PromptSourceDto
+import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentKind
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -156,6 +159,73 @@ class PromptJsonBodyWriterTest {
     }
 
     @Test
+    fun writeV2Prompt_writesMetadataBeforeDelivery() {
+        val body =
+            V2PromptRequestDto(
+                text = "look\nAttached file: `/tmp/a`",
+                metadata =
+                    kotlinx.serialization.json.buildJsonObject {
+                        put(
+                            "attachments",
+                            kotlinx.serialization.json.buildJsonArray {
+                                add(
+                                    kotlinx.serialization.json.buildJsonObject {
+                                        put("name", "a.bin")
+                                        put("mime", "application/octet-stream")
+                                        put("path", "/tmp/a")
+                                    },
+                                )
+                            },
+                        )
+                    },
+                delivery = "steer",
+            )
+        val json =
+            PromptJsonBodyWriter
+                .writeV2Prompt(body, emptyList(), File(System.getProperty("java.io.tmpdir"), "prompt-writer-out"))
+                .readText()
+        assertTrue(
+            json,
+            json.contains(
+                "\"metadata\":{\"attachments\":[{\"name\":\"a.bin\",\"mime\":\"application/octet-stream\",\"path\":\"/tmp/a\"}]},\"delivery\":\"steer\"",
+            ),
+        )
+        kotlinx.serialization.json.Json
+            .parseToJsonElement(json)
+    }
+
+    @Test
+    fun writeV2Prompt_writesSkillWithMention() {
+        val body =
+            V2PromptRequestDto(
+                text = "fix /tdd now",
+                skills = listOf(V2PromptSkillDto(id = "tdd", mention = V2PromptSourceDto(start = 4, end = 8, text = "/tdd"))),
+                delivery = "steer",
+            )
+        val json =
+            PromptJsonBodyWriter
+                .writeV2Prompt(body, emptyList(), File(System.getProperty("java.io.tmpdir"), "prompt-writer-out"))
+                .readText()
+        assertTrue(json, json.contains("\"skills\":[{\"id\":\"tdd\",\"mention\":{\"start\":4,\"end\":8,\"text\":\"/tdd\"}}]"))
+    }
+
+    @Test
+    fun writeV2Command_writesSkillIdsWithoutMention() {
+        val body =
+            V2RunCommandRequestDto(
+                name = "init",
+                text = "fix /tdd",
+                delivery = "steer",
+                skills = listOf(V2PromptSkillDto(id = "tdd")),
+            )
+        val json =
+            PromptJsonBodyWriter
+                .writeV2Command(body, emptyList(), File(System.getProperty("java.io.tmpdir"), "prompt-writer-out"))
+                .readText()
+        assertTrue(json, json.contains("\"skills\":[{\"id\":\"tdd\"}]"))
+    }
+
+    @Test
     fun writeV1Command_includesFilePartType() {
         val source =
             File(System.getProperty("java.io.tmpdir"), "command-writer-source.bin").apply {
@@ -193,5 +263,32 @@ class PromptJsonBodyWriterTest {
         assertTrue(json.contains("\"type\":\"file\""))
         assertTrue(json.contains("\"filename\":\"shot.png\""))
         assertTrue(json.contains("data:image/png;base64,AQIDBA=="))
+    }
+
+    @Test
+    fun writers_sendClientMessageId() {
+        val directory = File(System.getProperty("java.io.tmpdir"), "prompt-writer-ids")
+        val v1Prompt =
+            PromptJsonBodyWriter.writeV1Prompt(
+                SendMessageRequestDto(parts = listOf(SendMessagePartDto(type = "text", text = "Hi")), messageId = "msg_v1"),
+                emptyList(),
+                directory,
+            )
+        val v2Prompt =
+            PromptJsonBodyWriter.writeV2Prompt(
+                V2PromptRequestDto(id = "msg_v2", text = "Hi", delivery = "steer"),
+                emptyList(),
+                directory,
+            )
+        val v1Command =
+            PromptJsonBodyWriter.writeV1Command(
+                RunCommandRequestDto(command = "review", arguments = "", messageId = "msg_cmd"),
+                emptyList(),
+                directory,
+            )
+
+        assertTrue(v1Prompt.readText().contains("\"messageID\":\"msg_v1\""))
+        assertTrue(v2Prompt.readText().contains("\"id\":\"msg_v2\""))
+        assertTrue(v1Command.readText().contains("\"messageID\":\"msg_cmd\""))
     }
 }

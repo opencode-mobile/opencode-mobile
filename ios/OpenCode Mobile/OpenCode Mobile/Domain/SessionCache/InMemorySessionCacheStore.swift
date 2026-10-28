@@ -55,6 +55,10 @@ actor InMemorySessionCacheStore: SessionCacheStore {
             rows = rows.filter { _, row in
                 !matchesWorktree(row.key, prefix: prefix, worktree: worktree, matchByUrlPrefix: matchByUrlPrefix)
             }
+        case let .connection(prefix, matchByUrlPrefix):
+            rows = rows.filter { _, row in
+                !matchesConnection(row.key, prefix: prefix, matchByUrlPrefix: matchByUrlPrefix)
+            }
         }
     }
 
@@ -67,9 +71,18 @@ actor InMemorySessionCacheStore: SessionCacheStore {
             selected = rows.values.filter {
                 matchesWorktree($0.key, prefix: prefix, worktree: worktree, matchByUrlPrefix: matchByUrlPrefix)
             }
+        case let .connection(prefix, matchByUrlPrefix):
+            selected = rows.values.filter { matchesConnection($0.key, prefix: prefix, matchByUrlPrefix: matchByUrlPrefix) }
         }
         let bytes = selected.reduce(Int64(0)) { $0 + Int64($1.value?.payloadJSON.utf8.count ?? 0) }
         return SessionCacheReport(totalBytes: bytes, entryCount: Int64(selected.count))
+    }
+
+    private func matchesConnection(_ key: SessionCacheKey, prefix: String, matchByUrlPrefix: Bool) -> Bool {
+        if matchByUrlPrefix {
+            return key.connectionId.lowercased().hasPrefix(prefix.lowercased())
+        }
+        return key.connectionId.caseInsensitiveCompare(prefix) == .orderedSame
     }
 
     private func matchesWorktree(

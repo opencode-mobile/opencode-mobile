@@ -42,8 +42,8 @@ class OpenCodeReorderableListTest {
     private fun setPicker() {
         composeTestRule.setContent {
             OpenCodeTheme {
-                // The bottom sheet wraps the rows in a no-op clickable that
-                // consumes the same pointer, so it belongs in the repro.
+                // A clickable parent consumes the same pointer, so it
+                // belongs in the repro.
                 Box(Modifier.clickable {}) {
                     SessionListProjectPickerRows(
                         tabs = tabs,

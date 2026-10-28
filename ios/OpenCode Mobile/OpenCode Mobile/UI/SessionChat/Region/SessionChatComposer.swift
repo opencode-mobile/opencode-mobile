@@ -26,6 +26,10 @@ final class SessionChatComposer {
     private let composerDraftStore: any ComposerDraftStore
     private let projectFilesRepository: (any ProjectFilesRepository)?
     private let activeConnectionManager: ActiveConnectionManager
+    private let attachmentUploadRepository: (any AttachmentUploadRepository)?
+    /// Uploads in flight by attachment id; cancelling the task aborts the request.
+    private var uploadTasks: [String: Task<Void, Never>] = [:]
+    private var uploadFractions: [String: Double] = [:]
     private let foregroundEventStream: (any ForegroundEventStream)?
     private let sentTimeFormatter: DateFormatter
     private var loadedCatalog: ModelSelectionCatalog?
@@ -73,6 +77,7 @@ final class SessionChatComposer {
         activeConnectionManager: ActiveConnectionManager,
         foregroundEventStream: (any ForegroundEventStream)? = nil,
         projectFilesRepository: (any ProjectFilesRepository)? = nil,
+        attachmentUploadRepository: (any AttachmentUploadRepository)? = nil,
         catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs
     ) {
         self.sessionID = sessionID
@@ -86,6 +91,7 @@ final class SessionChatComposer {
         self.composerDraftStore = composerDraftStore
         self.projectFilesRepository = projectFilesRepository
         self.activeConnectionManager = activeConnectionManager
+        self.attachmentUploadRepository = attachmentUploadRepository
         self.foregroundEventStream = foregroundEventStream
         self.catalogRetryDelaysMs = catalogRetryDelaysMs
         let formatter = DateFormatter()
@@ -114,6 +120,7 @@ final class SessionChatComposer {
             }
         persistDraftTask?.cancel()
         persistDraft(sessionID: previousSessionID, draft: currentDraft())
+        cancelAllUploads()
         discardStoredAttachments(state.composer.attachments)
         self.sessionID = sessionID
         loadedCatalog = nil
@@ -147,6 +154,7 @@ final class SessionChatComposer {
     }
 
     func startCatalogLoads() {
+        Task { await refreshUploadAvailability() }
         loadComposerCatalogs()
         if requiresComposerModel {
             startCatalogEventRefresh()
@@ -213,6 +221,7 @@ final class SessionChatComposer {
         draftRevision = 0
         attachmentRevision = 0
         attachmentRevisions = [:]
+        cancelAllUploads()
         discardStoredAttachments(state.composer.attachments)
         state = SessionChatComposerRegionState()
         state.composer.followUpDelivery = SessionChatDisplayPreferences.shared.followUpDelivery
@@ -430,12 +439,12 @@ final class SessionChatComposer {
         initialSelectionState = initialSelectionState == .waitingForFallback ? .failedWithFallback : .resolved
         let wasProvisional = isSelectionProvisional
         isSelectionProvisional = false
-        let droppedForModel = state.composer.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
+        let droppedForModel = state.composer.attachments.filter { !option.accepts($0) }
         for attachment in droppedForModel {
             attachmentRevisions[attachment.id] = nil
         }
         updateComposer {
-            $0.attachments.removeAll { !option.acceptsAttachmentKind($0.kind) }
+            $0.attachments.removeAll { !option.accepts($0) }
             $0.modelOptions = catalog.options
             $0.selectedModel = ModelSelection(option: option, selectedVariant: variant)
             $0.selectedVariant = variant
@@ -507,7 +516,8 @@ final class SessionChatComposer {
                     text: text,
                     cursor: cursor,
                     mentions: previous.agentMentions,
-                    fileMentions: previous.fileMentions
+                    fileMentions: previous.fileMentions,
+                    skillMentions: previous.skillMentions
                 )
             )
             let clampedCursor = max(0, min(cursor, text.count))
@@ -516,7 +526,8 @@ final class SessionChatComposer {
                 for: text,
                 cursor: clampedCursor,
                 mentions: previous.agentMentions,
-                fileMentions: previous.fileMentions
+                fileMentions: previous.fileMentions,
+                skillMentions: previous.skillMentions
             )
             notifyChange()
             scheduleFileSearch()
@@ -529,20 +540,23 @@ final class SessionChatComposer {
             previousMentions: previous.agentMentions,
             proposedText: text,
             proposedCursor: cursor,
-            previousFileMentions: previous.fileMentions
+            previousFileMentions: previous.fileMentions,
+            previousSkillMentions: previous.skillMentions
         )
         ensureSuggestionCatalogLoaded(
             for: suggestionMode(
                 text: reconciled.text,
                 cursor: reconciled.cursor,
                 mentions: reconciled.mentions,
-                fileMentions: reconciled.fileMentions
+                fileMentions: reconciled.fileMentions,
+                skillMentions: reconciled.skillMentions
             )
         )
         let selectionChanged = reconciled.text != text || reconciled.cursor != cursor
         state.composer.text = reconciled.text
         state.composer.agentMentions = reconciled.mentions
         state.composer.fileMentions = reconciled.fileMentions
+        state.composer.skillMentions = reconciled.skillMentions
         state.composer.cursor = reconciled.cursor
         if selectionChanged {
             state.composer.selectionRevision += 1
@@ -551,18 +565,85 @@ final class SessionChatComposer {
             for: reconciled.text,
             cursor: reconciled.cursor,
             mentions: reconciled.mentions,
-            fileMentions: reconciled.fileMentions
+            fileMentions: reconciled.fileMentions,
+            skillMentions: reconciled.skillMentions
         )
         notifyChange()
         scheduleFileSearch()
         schedulePersistDraft()
     }
 
+    /// Inserts the pick at the caret, keeping the rest of the draft: a v2 skill becomes a `/name`
+    /// span, a command becomes the leading `/name ` token. A draft without an open `/` query
+    /// (the Commands sheet) gets the pick at the caret too.
     func selectSlashSuggestion(commandName: String) {
-        let inserted =
-            state.slashSkills.first { $0.name == commandName }?.insertion
-            ?? ComposerSubmitRouting.insertSelection(commandName: commandName)
-        updateComposerText(inserted, cursor: inserted.count)
+        if !allowsSlashCommands, let skill = state.slashSkills.first(where: { $0.name == commandName }) {
+            let inserted = skill.insertion
+            updateComposerText(inserted, cursor: inserted.count)
+            return
+        }
+        let composer = state.composer
+        let command = state.serverCommands.first { $0.name == commandName }
+        var text = composer.text
+        var cursor = max(0, min(composer.cursor, text.count))
+        if ComposerMentionRouting.slashSuggestionQuery(
+            text,
+            cursor: cursor,
+            mentions: composer.agentMentions,
+            fileMentions: composer.fileMentions,
+            skillMentions: composer.skillMentions
+        ) == nil {
+            // No open query at the caret: open one so the insert replaces only itself.
+            let needsSpace = cursor > 0 && !text[text.index(text.startIndex, offsetBy: cursor - 1)].isWhitespace
+            let opener = needsSpace ? " /" : "/"
+            text.insert(contentsOf: opener, at: text.index(text.startIndex, offsetBy: cursor))
+            cursor += opener.count
+        }
+        let result: MentionInsertResult
+        if let command, ComposerSubmitRouting.isPromptSkill(command), let skillID = command.skillID {
+            result = ComposerMentionRouting.insertSkillMention(
+                text: text,
+                cursor: cursor,
+                skillID: skillID,
+                name: command.name,
+                mentionID: UUID().uuidString,
+                existingMentions: composer.agentMentions,
+                existingFileMentions: composer.fileMentions,
+                existingSkillMentions: composer.skillMentions
+            )
+        } else {
+            result = ComposerMentionRouting.insertCommandSelection(
+                text: text,
+                cursor: cursor,
+                commandName: commandName,
+                existingMentions: composer.agentMentions,
+                existingFileMentions: composer.fileMentions,
+                existingSkillMentions: composer.skillMentions
+            )
+        }
+        applyInsert(result)
+    }
+
+    private func applyInsert(_ result: MentionInsertResult) {
+        draftRevision += 1
+        fileSearchTask?.cancel()
+        fileSearchGeneration += 1
+        fileSearchTask = nil
+        state.composer.text = result.text
+        state.composer.agentMentions = result.mentions
+        state.composer.fileMentions = result.fileMentions
+        state.composer.skillMentions = result.skillMentions
+        state.composer.cursor = result.cursor
+        state.composer.selectionRevision += 1
+        // Close after select; the inserted token would otherwise still match the trigger.
+        state.atSuggestionsVisible = false
+        state.atSuggestions = []
+        state.slashSuggestionsVisible = false
+        state.slashSuggestions = []
+        state.fileSuggestions = []
+        state.fileSuggestionQuery = nil
+        notifyChange()
+        schedulePersistDraft()
     }
 
     func selectAtSuggestion(agentName: String) {
@@ -576,7 +657,8 @@ final class SessionChatComposer {
                 path: filePath,
                 mentionID: UUID().uuidString,
                 existingMentions: composer.agentMentions,
-                existingFileMentions: composer.fileMentions
+                existingFileMentions: composer.fileMentions,
+                existingSkillMentions: composer.skillMentions
             )
         } else {
             result = ComposerMentionRouting.insertMention(
@@ -585,27 +667,11 @@ final class SessionChatComposer {
                 agentName: suggestion?.agentName ?? agentName,
                 mentionID: UUID().uuidString,
                 existingMentions: composer.agentMentions,
-                existingFileMentions: composer.fileMentions
+                existingFileMentions: composer.fileMentions,
+                existingSkillMentions: composer.skillMentions
             )
         }
-        draftRevision += 1
-        fileSearchTask?.cancel()
-        fileSearchGeneration += 1
-        fileSearchTask = nil
-        state.composer.text = result.text
-        state.composer.agentMentions = result.mentions
-        state.composer.fileMentions = result.fileMentions
-        state.composer.cursor = result.cursor
-        state.composer.selectionRevision += 1
-        // Close after select; the inserted token would otherwise still match the at-trigger.
-        state.atSuggestionsVisible = false
-        state.atSuggestions = []
-        state.slashSuggestionsVisible = false
-        state.slashSuggestions = []
-        state.fileSuggestions = []
-        state.fileSuggestionQuery = nil
-        notifyChange()
-        schedulePersistDraft()
+        applyInsert(result)
     }
 
     func dismissSuggestions() {
@@ -630,8 +696,19 @@ final class SessionChatComposer {
     func addAttachments(_ attachments: [Attachment]) {
         guard !attachments.isEmpty else { return }
         let option = state.composer.selectedModel?.option
-        let accepted = attachments.filter { option?.acceptsAttachmentKind($0.kind) != false }
-        let rejected = attachments.filter { option?.acceptsAttachmentKind($0.kind) == false }
+        var candidates: [Attachment] = []
+        var duplicates: [Attachment] = []
+        for attachment in attachments {
+            // Same name and size as a file already in the draft, pending or uploaded.
+            let draft = state.composer.attachments.filter { $0.id != attachment.id } + candidates
+            if AttachmentDuplicate.isDuplicate(filename: attachment.filename, byteCount: attachment.byteCount, in: draft) {
+                duplicates.append(attachment)
+            } else {
+                candidates.append(attachment)
+            }
+        }
+        let accepted = candidates.filter { option?.accepts($0) != false }
+        let rejected = candidates.filter { option?.accepts($0) == false }
         if !accepted.isEmpty {
             updateComposer { composer in
                 var ordered = composer.attachments
@@ -646,8 +723,12 @@ final class SessionChatComposer {
                 }
                 composer.attachments = ordered
             }
+            accepted.filter(\.isUploadPending).forEach(startUpload)
         }
-        if !rejected.isEmpty {
+        if !duplicates.isEmpty {
+            discardStoredAttachments(duplicates)
+            setAttachmentError(AttachmentDuplicate.message)
+        } else if !rejected.isEmpty {
             discardStoredAttachments(rejected)
             setAttachmentError(Self.unsupportedAttachmentMessage(for: rejected))
         } else if !accepted.isEmpty {
@@ -657,6 +738,7 @@ final class SessionChatComposer {
     }
 
     func removeAttachment(id: String) {
+        cancelUpload(id: id)
         let removed = state.composer.attachments.filter { $0.id == id }
         attachmentRevisions[id] = nil
         updateComposer { $0.attachments.removeAll { $0.id == id } }
@@ -665,7 +747,13 @@ final class SessionChatComposer {
 
     func addAttachmentData(_ data: Data, filename: String, declaredMime: String?) {
         do {
-            let attachment = try AttachmentLoader().load(data: data, filename: filename, declaredMime: declaredMime)
+            let destination = uploadDestination()
+            let attachment = try AttachmentLoader().prepare(
+                data: data,
+                filename: filename,
+                declaredMime: declaredMime,
+                destination: destination
+            )
             addAttachments([attachment])
             if state.composer.attachments.contains(where: { $0.id == attachment.id }) {
                 OpenCodeLog.sessionChat.info("attachment accepted mime=\(attachment.mime) bytes=\(data.count) count=1")
@@ -681,9 +769,11 @@ final class SessionChatComposer {
 
     func addAttachmentFiles(_ urls: [URL]) async {
         guard !urls.isEmpty else { return }
+        await refreshUploadAvailability()
+        let destination = uploadDestination()
         let result = await Task.detached(priority: .userInitiated) {
             urls.map { url -> Result<Attachment, Error> in
-                Result { try AttachmentLoader().load(fileURL: url) }
+                Result { try AttachmentLoader().prepare(fileURL: url, destination: destination) }
             }
         }.value
         let attachments = result.compactMap { try? $0.get() }
@@ -696,6 +786,168 @@ final class SessionChatComposer {
             setAttachmentError(failure.localizedDescription)
         }
         OpenCodeLog.sessionChat.info("attachments selected accepted=\(attachments.count) rejected=\(result.count - attachments.count)")
+    }
+
+    /// Pasted or dropped items (#870), already copied to readable files: attached like files from
+    /// the Files picker. Items that never became a file (a folder, an unreadable provider) show
+    /// their error only when ingestion left nothing else to say. Returns whether a chip was added.
+    func addPastedOrDroppedFiles(_ urls: [URL], skippedFolders: Int, unreadable: Int) async -> Bool {
+        let before = state.composer.attachments.count
+        let errorBefore = state.errorMessage
+        await addAttachmentFiles(urls)
+        let quiet = state.errorMessage == nil || state.errorMessage == errorBefore
+        if quiet, unreadable > 0 {
+            setAttachmentError(AttachmentLoadError.unreadableFile.localizedDescription)
+        } else if quiet, skippedFolders > 0 {
+            setAttachmentError(AttachmentDropRouting.folderMessage)
+        }
+        return state.composer.attachments.count > before
+    }
+
+    // MARK: Streamed uploads (#644)
+
+    /// Reads whether the server streams uploads. The first read probes the API contract.
+    func refreshUploadAvailability() async {
+        let available = await attachmentUploadRepository?.isAvailable() ?? false
+        guard state.composer.streamedUploadAvailable != available else { return }
+        state.composer.streamedUploadAvailable = available
+        notifyChange()
+    }
+
+    private func uploadDestination() -> @Sendable (String, Int64) -> AttachmentDestination {
+        let option = state.composer.selectedModel?.option
+        let available = state.composer.streamedUploadAvailable
+        return { mime, byteCount in
+            AttachmentUploadPolicy.destination(
+                mime: mime,
+                byteCount: byteCount,
+                model: option,
+                uploadAvailable: available
+            )
+        }
+    }
+
+    private func startUpload(_ attachment: Attachment) {
+        guard let repository = attachmentUploadRepository, let fileURL = attachment.fileURL else {
+            removeFailedUpload(id: attachment.id, message: AttachmentUploadError.failedMessage)
+            return
+        }
+        let id = attachment.id
+        let filename = attachment.filename
+        let directory = worktree
+        uploadTasks[id] = Task { [weak self] in
+            do {
+                let uploaded = try await repository.upload(
+                    fileURL: fileURL,
+                    filename: filename,
+                    directory: directory
+                ) { fraction in
+                    Task { @MainActor in self?.setUploadFraction(fraction, id: id) }
+                }
+                self?.finishUpload(id: id, serverPath: uploaded.serverPath)
+            } catch let error as AttachmentUploadError {
+                await self?.endUpload(id: id, error: error)
+            } catch {
+                await self?.endUpload(id: id, error: .failed)
+            }
+        }
+    }
+
+    private func setUploadFraction(_ fraction: Double, id: String) {
+        guard let index = state.composer.attachments.firstIndex(where: { $0.id == id }),
+              state.composer.attachments[index].isUploadPending
+        else { return }
+        // Coalesce: a chip repaint per percent is plenty.
+        guard fraction - (uploadFractions[id] ?? -1) >= 0.01 else { return }
+        uploadFractions[id] = fraction
+        state.composer.attachments[index] = state.composer.attachments[index].withUpload(.uploading(fraction: fraction))
+        notifyChange()
+    }
+
+    private func finishUpload(id: String, serverPath: String) {
+        uploadTasks[id] = nil
+        uploadFractions[id] = nil
+        guard let index = state.composer.attachments.firstIndex(where: { $0.id == id }) else { return }
+        state.composer.attachments[index] = state.composer.attachments[index].withUpload(.uploaded(serverPath: serverPath))
+        OpenCodeLog.sessionChat.info("attachment uploaded bytes=\(state.composer.attachments[index].byteCount)")
+        notifyChange()
+    }
+
+    private func endUpload(id: String, error: AttachmentUploadError) async {
+        uploadTasks[id] = nil
+        uploadFractions[id] = nil
+        guard let attachment = state.composer.attachments.first(where: { $0.id == id }) else { return }
+        switch error {
+        case .cancelled:
+            removeFailedUpload(id: id, message: nil)
+        case .failed:
+            removeFailedUpload(id: id, message: AttachmentUploadError.failedMessage)
+        case .contractMiss:
+            // The route no longer matches: send this file the old way, with its old errors.
+            state.composer.streamedUploadAvailable = false
+            await sendInline(replacing: attachment)
+        }
+    }
+
+    private func sendInline(replacing attachment: Attachment) async {
+        guard let fileURL = attachment.fileURL else {
+            removeFailedUpload(id: attachment.id, message: AttachmentLoadError.unreadableFile.localizedDescription)
+            return
+        }
+        let name = attachment.filename
+        // The same destination decision as the add path; the contract miss already cleared the
+        // availability flag, so it answers inline for every file.
+        let destination = uploadDestination()
+        let loaded = await Task.detached(priority: .userInitiated) {
+            Result { try AttachmentLoader().prepare(fileURL: fileURL, destination: destination) }
+        }.value
+        guard state.composer.attachments.contains(where: { $0.id == attachment.id }) else {
+            if case let .success(file) = loaded { AttachmentLimits.discard(file.fileURL) }
+            return
+        }
+        switch loaded {
+        case let .success(file):
+            let inline = Attachment(
+                id: attachment.id,
+                filename: name,
+                mime: file.mime,
+                kind: file.kind,
+                dataURL: file.dataURL,
+                fileURL: file.fileURL,
+                byteCount: file.byteCount,
+                previewData: file.previewData
+            )
+            addAttachments([inline])
+            if state.composer.attachments.contains(where: { $0.id == attachment.id && $0.upload == .inline }) {
+                AttachmentLimits.discard(attachment.fileURL)
+            } else {
+                // Refused (for example a model without image input; the error is already shown).
+                AttachmentLimits.discard(file.fileURL)
+                removeFailedUpload(id: attachment.id, message: nil)
+            }
+        case let .failure(failure):
+            removeFailedUpload(id: attachment.id, message: failure.localizedDescription)
+        }
+    }
+
+    private func removeFailedUpload(id: String, message: String?) {
+        let removed = state.composer.attachments.filter { $0.id == id }
+        attachmentRevisions[id] = nil
+        updateComposer { $0.attachments.removeAll { $0.id == id } }
+        discardStoredAttachments(removed)
+        if let message { setAttachmentError(message) }
+    }
+
+    private func cancelUpload(id: String) {
+        uploadTasks[id]?.cancel()
+        uploadTasks[id] = nil
+        uploadFractions[id] = nil
+    }
+
+    private func cancelAllUploads() {
+        uploadTasks.values.forEach { $0.cancel() }
+        uploadTasks = [:]
+        uploadFractions = [:]
     }
 
     private func setAttachmentError(_ message: String) {
@@ -717,13 +969,13 @@ final class SessionChatComposer {
 
     func selectModel(_ option: ModelSelectionOption) {
         settleProvisionalSelection()
-        let dropped = state.composer.attachments.filter { !option.acceptsAttachmentKind($0.kind) }
+        let dropped = state.composer.attachments.filter { !option.accepts($0) }
         for attachment in dropped {
             attachmentRevisions[attachment.id] = nil
         }
         updateComposer { composer in
             let previousVariant = composer.selectedVariant
-            composer.attachments.removeAll { !option.acceptsAttachmentKind($0.kind) }
+            composer.attachments.removeAll { !option.accepts($0) }
             composer.selectedModel = ModelSelection(
                 option: option,
                 selectedVariant: previousVariant.flatMap { option.variants.contains($0) ? $0 : nil }
@@ -765,6 +1017,7 @@ final class SessionChatComposer {
             $0.text = text
             $0.agentMentions = []
             $0.fileMentions = []
+            $0.skillMentions = []
             $0.cursor = text.count
             $0.selectionRevision += 1
         }
@@ -794,32 +1047,49 @@ final class SessionChatComposer {
         onSendFailed: (String, String) -> Void,
         isSessionBusy: Bool,
         supportsFollowUp: Bool,
+        commandKeepsClientMessageID: Bool = false,
         waitToSend: (() async -> Bool)? = nil,
-        serverAlreadyAccepted: () -> Bool = { false }
+        serverAlreadyAccepted: () -> Bool = { false },
+        beforePrompt: () async throws -> Void = {}
     ) async {
+        if ComposerShellCommand.isShellMode(state.composer.text) {
+            runShellCommand(sessionID: sessionID, isSessionBusy: isSessionBusy, supportsFollowUp: supportsFollowUp)
+            return
+        }
+        guard !state.composer.hasPendingUploads else { return }
         let submittedText = state.composer.text
         let submittedMentions = state.composer.agentMentions
         let submittedFileMentions = state.composer.fileMentions
+        let submittedSkillMentions = state.composer.skillMentions
         let mentionText: String
         let mentionList: [AgentMention]
         let fileList: [FileMention]
+        let skillList: [SkillMention]
         if allowsMentions {
             mentionText = submittedText
             mentionList = submittedMentions
             fileList = submittedFileMentions
+            skillList = submittedSkillMentions
         } else {
             mentionText = ComposerMentionRouting.withoutMentionTokens(text: submittedText, mentions: submittedMentions)
             mentionList = []
             fileList = []
+            skillList = []
         }
         let trimmedPrompt = ComposerMentionRouting.trimForSend(
             text: mentionText,
             mentions: mentionList,
-            fileMentions: fileList
+            fileMentions: fileList,
+            skillMentions: skillList
         )
         let trimmed = trimmedPrompt.text
         let mentionsForSend = trimmedPrompt.agentMentions
         let filesForSend = trimmedPrompt.fileMentions
+        let skillsForSend = Self.admitLeadingSkill(
+            text: trimmed,
+            skillMentions: trimmedPrompt.skillMentions,
+            commands: state.serverCommands
+        )
         let submittedAttachments = state.composer.attachments
         let submittedDraftRevision = draftRevision
         let submittedAttachmentRevisions = Dictionary(
@@ -852,13 +1122,26 @@ final class SessionChatComposer {
                     mime: attachment.mime,
                     kind: attachment.kind,
                     dataURL: "",
-                    previewData: attachment.previewData
+                    previewData: attachment.previewData,
+                    serverPath: attachment.uploadedServerPath
                 )
             )
         }
         let collapsedDisplay =
-            CommandInvocationCollapser.collapse(text: trimmed, commands: state.serverCommands)
+            CommandInvocationCollapser.collapseSkillMentions(text: trimmed, skillMentions: skillsForSend)
+                ?? CommandInvocationCollapser.collapse(text: trimmed, commands: state.serverCommands)
         let displayText = collapsedDisplay?.text ?? trimmed
+        let intent = ComposerSubmitRouting.resolve(
+            text: trimmed,
+            commands: state.serverCommands,
+            allowsSlashCommands: allowsSlashCommands
+        )
+        // The echo of a send that carries its id comes back under it. v2 commands take
+        // no id, so their row keeps a local id and retires on text instead.
+        let messageID: String? = {
+            if case .serverCommand = intent, !commandKeepsClientMessageID { return nil }
+            return ClientMessageID.next()
+        }()
         let optimisticBlocks =
             (displayText.isEmpty
                 ? []
@@ -871,7 +1154,7 @@ final class SessionChatComposer {
                 ]) + attachmentBlocks
 
         let optimistic = SessionChatRow(
-            id: "pending-\(UUID().uuidString)",
+            id: messageID ?? "pending-\(UUID().uuidString)",
             role: .user,
             text: displayText,
             metadataLabel: metadataLabel(
@@ -916,6 +1199,7 @@ final class SessionChatComposer {
                     submittedText: submittedText,
                     submittedMentions: submittedMentions,
                     submittedFileMentions: submittedFileMentions,
+                    submittedSkillMentions: submittedSkillMentions,
                     submittedAttachments: submittedAttachments,
                     submittedAttachmentRevisions: submittedAttachmentRevisions
                 )
@@ -927,11 +1211,6 @@ final class SessionChatComposer {
         }
 
         do {
-            let intent = ComposerSubmitRouting.resolve(
-                text: trimmed,
-                commands: state.serverCommands,
-                allowsSlashCommands: allowsSlashCommands
-            )
             let hasAttachments = !submittedAttachments.isEmpty
             try await PromptSendProgressReporting.$handler.withValue({ [weak self] sent, total in
                 Task { @MainActor in
@@ -941,7 +1220,7 @@ final class SessionChatComposer {
                 @MainActor
                 func sendPrompt(
                     text: String,
-                    skillIDs: [String],
+                    skillMentions: [SkillMention],
                     mentions: [AgentMention],
                     fileMentions: [FileMention],
                     sessionID: String,
@@ -949,6 +1228,7 @@ final class SessionChatComposer {
                     model: ModelSelection?,
                     worktree: String?
                 ) async throws {
+                    try await beforePrompt()
                     func send(delivery: FollowUpDelivery) async throws {
                         try await messageRepository.sendPromptAsync(
                             sessionID: sessionID,
@@ -966,8 +1246,9 @@ final class SessionChatComposer {
                                 agentMentions: mentions,
                                 fileMentions: fileMentions,
                                 worktree: worktree,
-                                skillIDs: skillIDs,
-                                delivery: delivery
+                                skillMentions: skillMentions,
+                                delivery: delivery,
+                                messageID: messageID
                             ),
                             directory: worktree
                         )
@@ -984,50 +1265,38 @@ final class SessionChatComposer {
                             throw error
                         }
                     }
-                    if !mentions.isEmpty || !fileMentions.isEmpty {
+                    if !mentions.isEmpty || !fileMentions.isEmpty || !skillMentions.isEmpty {
                         OpenCodeLog.sessionChat.info(
-                            "prompt send agentParts=\(mentions.count) fileParts=\(fileMentions.count)"
+                            "prompt send agentParts=\(mentions.count) fileParts=\(fileMentions.count) skills=\(skillMentions.count)"
                         )
                     }
                 }
                 switch intent {
                 case let .serverCommand(command, arguments):
-                    if let selectedModel {
-                        try await commandRepository.runCommand(
-                            sessionID: sessionID,
-                            options: CommandRunOptions(
-                                command: command,
-                                arguments: arguments,
-                                attachments: submittedAttachments,
-                                model: PromptModelSelection(
-                                    providerID: selectedModel.option.providerID,
-                                    modelID: selectedModel.option.modelID
-                                ),
-                                variant: composer.selectedVariant,
-                                mode: composer.selectedMode,
-                                delivery: composer.followUpDelivery
-                            ),
-                            directory: worktree
-                        )
-                    } else {
-                        try await messageRepository.sendPromptAsync(
-                            sessionID: sessionID,
-                            options: PromptSendOptions(
-                                text: trimmed,
-                                attachments: submittedAttachments,
-                                model: nil,
-                                variant: composer.selectedVariant,
-                                mode: composer.selectedMode,
-                                agentMentions: mentionsForSend,
-                                delivery: composer.followUpDelivery
-                            ),
-                            directory: worktree
-                        )
-                    }
+                    try await commandRepository.runCommand(
+                        sessionID: sessionID,
+                        options: CommandRunOptions(
+                            command: command,
+                            arguments: arguments,
+                            attachments: submittedAttachments,
+                            model: selectedModel.map {
+                                PromptModelSelection(
+                                    providerID: $0.option.providerID,
+                                    modelID: $0.option.modelID
+                                )
+                            },
+                            variant: composer.selectedVariant,
+                            mode: composer.selectedMode,
+                            delivery: composer.followUpDelivery,
+                            skillIDs: ComposerMentionRouting.skillParts(text: trimmed, mentions: skillsForSend).map(\.skillID),
+                            messageID: messageID
+                        ),
+                        directory: worktree
+                    )
                 case let .prompt(text):
                     try await sendPrompt(
                         text: text,
-                        skillIDs: [],
+                        skillMentions: skillsForSend,
                         mentions: mentionsForSend,
                         fileMentions: filesForSend,
                         sessionID: sessionID,
@@ -1035,10 +1304,10 @@ final class SessionChatComposer {
                         model: selectedModel,
                         worktree: worktree
                     )
-                case let .skillPrompt(skillID, text):
+                case let .skillPrompt(_, text):
                     try await sendPrompt(
                         text: text,
-                        skillIDs: [skillID],
+                        skillMentions: [],
                         mentions: [],
                         fileMentions: [],
                         sessionID: sessionID,
@@ -1072,6 +1341,7 @@ final class SessionChatComposer {
                 submittedText: submittedText,
                 submittedMentions: submittedMentions,
                 submittedFileMentions: submittedFileMentions,
+                submittedSkillMentions: submittedSkillMentions,
                 submittedAttachments: submittedAttachments,
                 submittedAttachmentRevisions: submittedAttachmentRevisions
             )
@@ -1080,6 +1350,71 @@ final class SessionChatComposer {
             setSendError(message)
             onSendFailed(optimistic.id, message)
         }
+    }
+
+    /// Runs a shell-mode draft (`!command`) instead of sending a prompt, like the TUI and web app.
+    /// The output arrives through the session's shell or message events, so there is no optimistic
+    /// row and no send progress: the server answers only when the command ends, so the request runs in its
+    /// own task and the composer stays free meanwhile. Attachments stay in the composer because a
+    /// command cannot carry them. A failure restores the draft (unless it was edited since) and
+    /// shows the error the way a failed prompt does.
+    private func runShellCommand(sessionID: String, isSessionBusy: Bool, supportsFollowUp: Bool) {
+        let composer = state.composer
+        guard let command = ComposerShellCommand.command(composer.text),
+              !OptimisticSessionCreate.isPlaceholder(sessionID),
+              composer.isModelSelectionReady,
+              !state.isSending
+        else { return }
+        // Like the TUI and web app, a command runs now or not at all; it cannot wait in the queue.
+        if supportsFollowUp, isSessionBusy, composer.followUpDelivery == .queue {
+            state.errorMessage = Self.shellCannotQueueError
+            notifyChange()
+            return
+        }
+        let submittedText = composer.text
+        let submittedMentions = composer.agentMentions
+        let submittedFileMentions = composer.fileMentions
+        let submittedSkillMentions = composer.skillMentions
+        let submittedDraftRevision = draftRevision
+        let options = ShellCommandOptions(
+            command: command,
+            agent: composer.selectedMode,
+            model: composer.selectedModel.map {
+                PromptModelSelection(providerID: $0.option.providerID, modelID: $0.option.modelID)
+            }
+        )
+        clearAcceptedSubmission(textRevision: submittedDraftRevision, attachmentRevisions: [:])
+        state.errorMessage = nil
+        notifyChange()
+        let messageRepository = messageRepository
+        let worktree = worktree
+        Task { [weak self] in
+            do {
+                try await messageRepository.runShellCommand(sessionID: sessionID, options: options, directory: worktree)
+                DiagnosticLog.info(.chat, "shell command accepted session=\(sessionID)")
+            } catch {
+                DiagnosticLog.warning(.chat, "runShellCommand failed", error: error)
+                guard let self else { return }
+                self.restoreFailedSubmission(
+                    textRevision: submittedDraftRevision,
+                    submittedText: submittedText,
+                    submittedMentions: submittedMentions,
+                    submittedFileMentions: submittedFileMentions,
+                    submittedSkillMentions: submittedSkillMentions,
+                    submittedAttachments: [],
+                    submittedAttachmentRevisions: [:]
+                )
+                self.state.errorMessage = self.errorMessage(error)
+                self.notifyChange()
+            }
+        }
+    }
+
+    /// Leaves shell mode by dropping the leading `!`; the rest of the draft stays.
+    func exitShellMode() {
+        let composer = state.composer
+        guard ComposerShellCommand.isShellMode(composer.text) else { return }
+        updateComposerText(ComposerShellCommand.exitShellMode(composer.text), cursor: max(0, composer.cursor - 1))
     }
 
     func clearSending() {
@@ -1151,7 +1486,8 @@ final class SessionChatComposer {
         ComposerDraft(
             text: state.composer.text,
             agentMentions: state.composer.agentMentions,
-            fileMentions: state.composer.fileMentions
+            fileMentions: state.composer.fileMentions,
+            skillMentions: state.composer.skillMentions
         )
     }
 
@@ -1159,13 +1495,15 @@ final class SessionChatComposer {
         state.composer.text = draft.text
         state.composer.agentMentions = draft.agentMentions
         state.composer.fileMentions = draft.fileMentions
+        state.composer.skillMentions = draft.skillMentions
         state.composer.cursor = draft.text.count
         state.composer.selectionRevision += 1
         refreshComposerSuggestions(
             for: draft.text,
             cursor: draft.text.count,
             mentions: draft.agentMentions,
-            fileMentions: draft.fileMentions
+            fileMentions: draft.fileMentions,
+            skillMentions: draft.skillMentions
         )
         notifyChange()
         scheduleFileSearch()
@@ -1403,12 +1741,12 @@ final class SessionChatComposer {
         }
         let fallback = catalog.serverDefault ?? catalog.options[0]
         OpenCodeLog.sessionChat.info("modelSelection refreshed catalog dropped selected model")
-        let dropped = state.composer.attachments.filter { !fallback.acceptsAttachmentKind($0.kind) }
+        let dropped = state.composer.attachments.filter { !fallback.accepts($0) }
         for attachment in dropped {
             attachmentRevisions[attachment.id] = nil
         }
         updateComposer {
-            $0.attachments.removeAll { !fallback.acceptsAttachmentKind($0.kind) }
+            $0.attachments.removeAll { !fallback.accepts($0) }
             $0.selectedModel = ModelSelection(option: fallback, selectedVariant: nil)
             $0.selectedVariant = nil
             $0.modelNotice = "Selected model is unavailable. Using \(fallback.modelLabel)."
@@ -1469,7 +1807,8 @@ final class SessionChatComposer {
             for: composer.text,
             cursor: composer.cursor,
             mentions: composer.agentMentions,
-            fileMentions: composer.fileMentions
+            fileMentions: composer.fileMentions,
+            skillMentions: composer.skillMentions
         )
         notifyChange()
         scheduleFileSearch()
@@ -1479,13 +1818,15 @@ final class SessionChatComposer {
         text: String,
         cursor: Int,
         mentions: [AgentMention],
-        fileMentions: [FileMention] = []
+        fileMentions: [FileMention] = [],
+        skillMentions: [SkillMention] = []
     ) -> ComposerSuggestionMode {
         ComposerMentionRouting.suggestionMode(
             text: text,
             cursor: cursor,
             mentions: mentions,
             fileMentions: fileMentions,
+            skillMentions: skillMentions,
             allowsMentions: allowsMentions,
             allowsSlashCommands: allowsSlashCommands || !state.slashSkills.isEmpty
         )
@@ -1495,11 +1836,19 @@ final class SessionChatComposer {
         for text: String,
         cursor: Int,
         mentions: [AgentMention]? = nil,
-        fileMentions: [FileMention]? = nil
+        fileMentions: [FileMention]? = nil,
+        skillMentions: [SkillMention]? = nil
     ) {
         let mentions = mentions ?? state.composer.agentMentions
         let fileMentions = fileMentions ?? state.composer.fileMentions
-        switch suggestionMode(text: text, cursor: cursor, mentions: mentions, fileMentions: fileMentions) {
+        let skillMentions = skillMentions ?? state.composer.skillMentions
+        switch suggestionMode(
+            text: text,
+            cursor: cursor,
+            mentions: mentions,
+            fileMentions: fileMentions,
+            skillMentions: skillMentions
+        ) {
         case let .at(query):
             let files = state.fileSuggestionQuery == query ? state.fileSuggestions : []
             state.atSuggestionsVisible = true
@@ -1512,7 +1861,12 @@ final class SessionChatComposer {
             state.slashSuggestionsVisible = true
             if allowsSlashCommands {
                 state.slashSuggestions = ComposerSubmitRouting
-                    .filterCommands(state.serverCommands, query: query)
+                    .slashSuggestions(
+                        state.serverCommands,
+                        query: query,
+                        isLeading: ComposerMentionRouting.slashQueryIsLeading(text, cursor: cursor),
+                        skillMentions: skillMentions
+                    )
                     .map { $0.toSlashSuggestion() }
             } else {
                 state.slashSuggestions = state.slashSkills
@@ -1535,7 +1889,8 @@ final class SessionChatComposer {
             text: composer.text,
             cursor: composer.cursor,
             mentions: composer.agentMentions,
-            fileMentions: composer.fileMentions
+            fileMentions: composer.fileMentions,
+            skillMentions: composer.skillMentions
         )
         let query: String?
         if case let .at(value) = mode {
@@ -1585,7 +1940,8 @@ final class SessionChatComposer {
                 text: current.text,
                 cursor: current.cursor,
                 mentions: current.agentMentions,
-                fileMentions: current.fileMentions
+                fileMentions: current.fileMentions,
+                skillMentions: current.skillMentions
             )
             guard case let .at(currentQuery) = currentMode, currentQuery == query else { return }
             self.state.fileSuggestions = results.map { $0.toFileSuggestion() }
@@ -1594,7 +1950,8 @@ final class SessionChatComposer {
                 for: current.text,
                 cursor: current.cursor,
                 mentions: current.agentMentions,
-                fileMentions: current.fileMentions
+                fileMentions: current.fileMentions,
+                skillMentions: current.skillMentions
             )
             self.notifyChange()
             if generation == self.fileSearchGeneration {
@@ -1612,6 +1969,7 @@ final class SessionChatComposer {
             composer.text = ""
             composer.agentMentions = []
             composer.fileMentions = []
+            composer.skillMentions = []
             composer.cursor = 0
             composer.selectionRevision += 1
         }
@@ -1627,7 +1985,8 @@ final class SessionChatComposer {
             for: composer.text,
             cursor: composer.cursor,
             mentions: composer.agentMentions,
-            fileMentions: composer.fileMentions
+            fileMentions: composer.fileMentions,
+            skillMentions: composer.skillMentions
         )
         notifyChange()
         scheduleFileSearch()
@@ -1640,6 +1999,7 @@ final class SessionChatComposer {
         submittedText: String,
         submittedMentions: [AgentMention],
         submittedFileMentions: [FileMention],
+        submittedSkillMentions: [SkillMention] = [],
         submittedAttachments: [Attachment],
         submittedAttachmentRevisions: [String: Int]
     ) {
@@ -1651,6 +2011,7 @@ final class SessionChatComposer {
             composer.text = submittedText
             composer.agentMentions = submittedMentions
             composer.fileMentions = submittedFileMentions
+            composer.skillMentions = submittedSkillMentions
             composer.cursor = submittedText.count
             composer.selectionRevision += 1
         }
@@ -1661,7 +2022,8 @@ final class SessionChatComposer {
             for: composer.text,
             cursor: composer.cursor,
             mentions: composer.agentMentions,
-            fileMentions: composer.fileMentions
+            fileMentions: composer.fileMentions,
+            skillMentions: composer.skillMentions
         )
         notifyChange()
         scheduleFileSearch()
@@ -1699,11 +2061,37 @@ final class SessionChatComposer {
                 return "Unable to read server response"
             }
         }
+        if let sessionError = error as? SessionError {
+            switch sessionError {
+            case let .http(_, message):
+                return message ?? "Request failed"
+            case .transport:
+                return "Unable to reach the server"
+            case .decoding:
+                return "Unable to read server response"
+            }
+        }
         return error.localizedDescription
     }
 
     private func notifyChange() {
         onChange?()
+    }
+
+    /// A hand-typed leading `/name` that names a v2 skill is admitted as a span when no span
+    /// already starts the draft, so the old single-token form still sends the skill.
+    static func admitLeadingSkill(
+        text: String,
+        skillMentions: [SkillMention],
+        commands: [ServerCommand]
+    ) -> [SkillMention] {
+        guard !skillMentions.contains(where: { $0.start == 0 }),
+              let skill = ComposerSubmitRouting.leadingSkill(text: text, commands: commands),
+              let skillID = skill.skillID
+        else { return skillMentions }
+        let token = "/\(skill.name)"
+        let leading = SkillMention(id: "leading-skill", skillID: skillID, name: skill.name, start: 0, end: token.count)
+        return ([leading] + skillMentions).sorted { $0.start < $1.start }
     }
 
     private func row(
@@ -1728,6 +2116,7 @@ final class SessionChatComposer {
     }
 
     private static let draftPersistDebounceMs = 300
+    static let shellCannotQueueError = "Shell commands can't be queued. Switch to Steer to run it now."
 
     private enum InitialSelection {
         case cached(SessionModelSelection)

@@ -38,6 +38,7 @@ data class V2SessionViewRequestDto(
 
 @Serializable
 data class V2CreateSessionRequestDto(
+    @SerialName("parentID") val parentId: String? = null,
     val title: String? = null,
     val location: V2LocationDto? = null,
 )
@@ -45,6 +46,12 @@ data class V2CreateSessionRequestDto(
 @Serializable
 data class V2RenameSessionRequestDto(
     val title: String,
+)
+
+/** `PATCH /api/session/{id}` body that archives (`true`) or restores (`false`) a session. */
+@Serializable
+data class V2ArchiveSessionRequestDto(
+    val archived: Boolean,
 )
 
 @Serializable
@@ -55,6 +62,23 @@ data class V2InboxDeliveryRequestDto(
 @Serializable
 data class V2ForkSessionRequestDto(
     val before: String? = null,
+)
+
+/** `POST /api/session/{id}/move`: the destination directory only; the server's default delivery (steer) applies. */
+@Serializable
+data class V2MoveSessionRequestDto(
+    val directory: String,
+)
+
+/** `POST /api/session/{id}/generate`: the prompt answered from the session's context. */
+@Serializable
+data class V2SessionGenerateRequestDto(
+    val prompt: String,
+)
+
+@Serializable
+data class V2SessionGenerateResponseDto(
+    val text: String,
 )
 
 @Serializable
@@ -94,6 +118,7 @@ data class V2RevertStageRequestDto(
 
 @Serializable
 data class V2VcsInfoDto(
+    val provider: String? = null,
     val branch: V2VcsBranchDto? = null,
 )
 
@@ -120,4 +145,5 @@ data class V2InboxItemDto(
 @Serializable
 data class V2InboxUserPayloadDto(
     val text: String = "",
+    val metadata: JsonObject? = null,
 )

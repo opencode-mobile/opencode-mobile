@@ -73,6 +73,20 @@ class SessionChatInbox(
         observe(sessionId, worktree)
     }
 
+    /**
+     * The bound session moved to [worktree]: watches the new directory's permissions, questions
+     * and todos. Requests on screen stay until the new directory's snapshot replaces them.
+     */
+    fun moveDirectory(worktree: String) {
+        val sessionId = boundSessionId ?: return
+        if (boundWorktree == worktree) return
+        stop()
+        boundWorktree = worktree
+        // The next publish marks the new directory's todos live again.
+        lastTodoLive = null
+        observe(sessionId, worktree)
+    }
+
     fun stop() {
         permissionObservationJob?.cancel()
         questionObservationJob?.cancel()

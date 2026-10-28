@@ -1,0 +1,112 @@
+{
+  "device": "iPhone Duo",
+  "model": "iPhone19,4",
+  "idiom": "phone",
+  "scale": 3,
+  "source": "Measured in the iOS 27.1 iPhone Duo simulator (Xcode 27.1) with a probe built on the iOS 27.1 SDK. Points, window space, origin top-left. See docs/devices/iphone-duo.md.",
+  "displays": {
+    "outer": {
+      "pixels": [1398, 2034],
+      "points": [466, 678],
+      "cornerRadii": { "topLeft": 8, "topRight": 59, "bottomRight": 59, "bottomLeft": 8 },
+      "simulatorDisplay": "primary"
+    },
+    "inner": {
+      "pixels": [2007, 2853],
+      "points": [669, 951],
+      "cornerRadii": { "topLeft": 55, "topRight": 55, "bottomRight": 55, "bottomLeft": 55 },
+      "simulatorDisplay": "primary-1",
+      "nativeRotation": 270
+    }
+  },
+  "poses": {
+    "closed": {
+      "display": "outer",
+      "window": [466, 678],
+      "sizeClass": { "horizontal": "compact", "vertical": "regular" },
+      "safeArea": { "top": 0, "right": 84, "bottom": 34, "left": 0 },
+      "deviceRotation": 0,
+      "statusRegion": { "x": 382, "y": 0, "width": 84, "height": 170 },
+      "cameraHole": { "x": 399, "y": 30, "width": 37, "height": 37 },
+      "fold": null,
+      "bars": "vertical",
+      "railFirstItemCenter": [417.5, 198]
+    },
+    "closedTurned": {
+      "display": "outer",
+      "window": [678, 466],
+      "sizeClass": { "horizontal": "compact", "vertical": "compact" },
+      "safeArea": { "top": 0, "right": 84, "bottom": 34, "left": 0 },
+      "deviceRotation": 90,
+      "statusRegion": null,
+      "cameraHole": { "x": 611, "y": 399, "width": 37, "height": 37 },
+      "fold": null,
+      "bars": "vertical",
+      "railFirstItemCenter": [629.5, 48]
+    },
+    "open": {
+      "display": "inner",
+      "window": [951, 669],
+      "sizeClass": { "horizontal": "regular", "vertical": "regular" },
+      "safeArea": { "top": 0, "right": 84, "bottom": 34, "left": 0 },
+      "deviceRotation": 90,
+      "statusRegion": { "x": 867, "y": 0, "width": 84, "height": 120 },
+      "underDisplayCamera": { "x": 677, "y": 21, "width": 58, "height": 37, "activeOnlyWhileCameraOn": true, "source": "published probe" },
+      "fold": { "x": 455, "y": 0, "width": 40, "height": 669, "active": false },
+      "bars": "vertical",
+      "railFirstItemCenter": [902, 147]
+    },
+    "book": {
+      "display": "inner",
+      "window": [951, 669],
+      "sizeClass": { "horizontal": "regular", "vertical": "regular" },
+      "safeArea": { "top": 0, "right": 84, "bottom": 34, "left": 0 },
+      "deviceRotation": 90,
+      "hingeAngleDegrees": 127,
+      "statusRegion": { "x": 867, "y": 0, "width": 84, "height": 120 },
+      "fold": { "x": 455, "y": 0, "width": 40, "height": 669, "active": true },
+      "bars": "vertical",
+      "railFirstItemCenter": [902, 147]
+    },
+    "openTurned": {
+      "display": "inner",
+      "window": [669, 951],
+      "sizeClass": { "horizontal": "regular", "vertical": "regular" },
+      "safeArea": { "top": 82, "right": 0, "bottom": 34, "left": 0 },
+      "deviceRotation": 0,
+      "statusRegion": { "x": 0, "y": 0, "width": 669, "height": 82 },
+      "fold": { "x": 0, "y": 455, "width": 669, "height": 40, "active": false },
+      "bars": "horizontal",
+      "railFirstItemCenter": null
+    }
+  },
+  "systemBars": {
+    "railItemSize": 48,
+    "railItemPitch": 60,
+    "railCenterLeadingOfMidline": 6.5,
+    "topBarButtonsY": [24, 72],
+    "leadingButtonX": [20, 68],
+    "inlineTitleX": 81,
+    "order": ["back/close", "trailing items", "spacer", "bottom-bar items"],
+    "onlyDetailColumnGoesVertical": true
+  },
+  "frames": {
+    "outer": {
+      "chrome": "/Library/Developer/DeviceKit/Chrome/phone15.devicechrome",
+      "size": [514, 706],
+      "screenInset": { "left": 26, "top": 14, "right": 22, "bottom": 14 },
+      "note": "Hinge spine on the left edge."
+    },
+    "inner": {
+      "chrome": "/Library/Developer/DeviceKit/Chrome/phone14.devicechrome",
+      "compositeSize": [660, 924],
+      "compositeScreenInset": 17,
+      "scaleToScreen": 1.0687,
+      "note": "Composite is drawn for a 626×890 screen; scale by 669/626. Fold marks at the middle of the long edges."
+    }
+  },
+  "sdk": {
+    "swiftUIVersionGate": "8.0.85",
+    "compileGate": "#if canImport(SwiftUI, _version: 8.0.85)"
+  }
+}

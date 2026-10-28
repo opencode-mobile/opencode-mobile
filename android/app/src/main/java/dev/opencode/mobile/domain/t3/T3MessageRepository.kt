@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.message.ShellCommandOptions
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -129,5 +130,13 @@ class T3MessageRepository
                     titleSeed = titleSeed,
                 ),
             )
+        }
+
+        override suspend fun runShellCommand(
+            sessionId: String,
+            options: ShellCommandOptions,
+            directory: String?,
+        ) {
+            throw MessageError.Http(400, "Shell commands are not available on this connection.")
         }
     }

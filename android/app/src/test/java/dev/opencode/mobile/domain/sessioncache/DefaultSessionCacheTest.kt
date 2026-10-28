@@ -3,6 +3,8 @@ package dev.opencode.mobile.domain.sessioncache
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.NoticeModelRef
+import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -101,6 +103,40 @@ class DefaultSessionCacheTest {
         }
 
     @Test
+    fun messageHandleRoundTripsTimelineNotices() =
+        runTest {
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { "http://localhost:4096/|opencode" },
+                    scope = backgroundScope,
+                    json = json,
+                    debounceMs = 60_000L,
+                )
+            val handle = cache.openMessages("s1", "/repo")
+            val messages =
+                listOf(
+                    TimelineNotice.Moved("/repo/b", previousDirectory = "/repo"),
+                    TimelineNotice.AgentChanged("plan", previous = "build"),
+                    TimelineNotice.ModelChanged(NoticeModelRef("openai", "gpt-5", "high"), NoticeModelRef("openai", "gpt-5")),
+                    TimelineNotice.InstructionsUpdated(listOf("AGENTS.md", "CLAUDE.md")),
+                    TimelineNotice.Restart,
+                ).mapIndexed { index, notice ->
+                    Message(
+                        id = "msg_$index",
+                        role = MessageRole.Notice,
+                        text = "",
+                        parts = listOf(MessagePart.Notice(id = "msg_$index", notice = notice)),
+                        sentAtEpochMs = index.toLong(),
+                    )
+                }
+            handle.note(messages)
+            testScheduler.runCurrent()
+            handle.flush()
+            assertEquals(messages, handle.seed())
+        }
+
+    @Test
     fun flushWritesImmediately() =
         runTest {
             val cache =
@@ -133,6 +169,34 @@ class DefaultSessionCacheTest {
             cache.purgeWorktree("http://localhost:4096", "/repo")
             assertNull(cache.seedSessions("/repo"))
             assertEquals(0L, cache.estimatedSizeBytes())
+        }
+
+    @Test
+    fun purgeConnectionKeepsServersThatOnlyShareAUrlPrefix() =
+        runTest {
+            val store = InMemorySessionCacheStore()
+
+            fun cacheFor(connectionId: String) =
+                DefaultSessionCache(
+                    store = store,
+                    connectionIdProvider = { connectionId },
+                    scope = backgroundScope,
+                    json = json,
+                )
+            val removed = cacheFor("http://localhost:4096/|opencode")
+            val removedNoSlash = cacheFor("http://localhost:4096|other")
+            val otherPort = cacheFor("http://localhost:40960/|opencode")
+            val otherHost = cacheFor("http://localhost:4096.example/|opencode")
+            listOf(removed, removedNoSlash, otherPort, otherHost).forEach {
+                it.rememberSessions("/repo", listOf(Session(id = "s1", title = "One")))
+            }
+
+            removed.purgeConnection(profileId = "", serverBaseUrl = "http://localhost:4096/")
+
+            assertNull(removed.seedSessions("/repo"))
+            assertNull(removedNoSlash.seedSessions("/repo"))
+            assertEquals(1, otherPort.seedSessions("/repo")?.size)
+            assertEquals(1, otherHost.seedSessions("/repo")?.size)
         }
 
     @Test
@@ -345,6 +409,28 @@ class DefaultSessionCacheTest {
             advanceTimeBy(1_000)
             testScheduler.runCurrent()
             assertEquals(1, store.commits)
+        }
+
+    @Test
+    fun purgeConnectionCancelsAPendingActivityFlush() =
+        runTest {
+            val store = CountingSessionCacheStore()
+            val cache =
+                DefaultSessionCache(
+                    store = store,
+                    connectionIdProvider = { "profile-1" },
+                    scope = backgroundScope,
+                    json = json,
+                    clock = { 1_000L },
+                    activityDebounceMs = 1_000L,
+                )
+            cache.rememberActivity("/repo", listOf(SessionActivityCacheEntry("s1", SessionActivity.Running, 1_000L)))
+            testScheduler.runCurrent()
+            cache.purgeConnection(profileId = "profile-1", serverBaseUrl = "http://localhost:4096/")
+            advanceTimeBy(2_000)
+            testScheduler.runCurrent()
+            assertEquals(0, store.commits)
+            assertNull(cache.seedActivity("/repo"))
         }
 
     private fun TestScope.activityCache(clock: () -> Long) =

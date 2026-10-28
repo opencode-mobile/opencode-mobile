@@ -17,7 +17,6 @@ import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.model.ModelSelectionProvider
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
-import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
@@ -25,6 +24,8 @@ import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
+import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
+import dev.opencode.mobile.ui.components.openCodeBottomSheetScrollTarget
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.SessionChatViewModel
 
@@ -104,6 +105,12 @@ internal fun SessionChatPickerSheet(
         } else {
             null
         }
+    // Center the selected model when its provider list opens, unless the filter hides it.
+    val modelPickerScrollTarget =
+        selectedModel?.takeIf { selected ->
+            activePicker == ComposerPickerKind.Model &&
+                activeModelProvider?.models?.any { it == selected && it.matchesFilter(modelFilterText) } == true
+        }
     // Filtering fires per keystroke and the query is user text: report engagement
     // once per provider list, never the query itself.
     var filterEditReported by remember(activePicker, activeModelProviderId) { mutableStateOf(false) }
@@ -137,6 +144,7 @@ internal fun SessionChatPickerSheet(
             onDismiss()
         },
         headerLeadingAction = modelHeaderLeadingAction,
+        scrollTargetKey = modelPickerScrollTarget,
         // The model filter is a long list typed into: fixed height with the keyboard kept.
         height = if (showsModelFilter) OpenCodeBottomSheetHeight.Half else OpenCodeBottomSheetHeight.FitContent,
         keyboard = if (showsModelFilter) OpenCodeBottomSheetKeyboard.Keep else OpenCodeBottomSheetKeyboard.Dismiss,
@@ -180,12 +188,7 @@ internal fun SessionChatPickerSheet(
                 selectableAgents.forEach { agent ->
                     OpenCodeBottomSheetEntry(
                         title = agent.displayName,
-                        endDecorator =
-                            if (agent.id.equals(selectedMode, ignoreCase = true)) {
-                                BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
-                            } else {
-                                BottomSheetEntryDecorator.None
-                            },
+                        selected = agent.id.equals(selectedMode, ignoreCase = true),
                         onClick = { onSelectMode(agent.id) },
                     )
                 }
@@ -193,16 +196,11 @@ internal fun SessionChatPickerSheet(
                 variantOptions.forEach { variant ->
                     OpenCodeBottomSheetEntry(
                         title = TitleCaseIdentifier.displayName(variant),
-                        endDecorator =
-                            if (variant.equals(
-                                    selectedVariant ?: ModelSelection.DefaultVariantLabel,
-                                    ignoreCase = true,
-                                )
-                            ) {
-                                BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
-                            } else {
-                                BottomSheetEntryDecorator.None
-                            },
+                        selected =
+                            variant.equals(
+                                selectedVariant ?: ModelSelection.DefaultVariantLabel,
+                                ignoreCase = true,
+                            ),
                         onClick = { onSelectVariant(variant) },
                     )
                 }
@@ -234,12 +232,7 @@ private fun ModelPickerSheetContent(
             OpenCodeBottomSheetEntry(
                 title = provider.label,
                 enabled = modelChangeLock == null || modelChangeLock.providerId == provider.id,
-                endDecorator =
-                    if (provider.id == selectedModel?.providerId) {
-                        BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
-                    } else {
-                        BottomSheetEntryDecorator.None
-                    },
+                selected = provider.id == selectedModel?.providerId,
                 onClick = { onSelectProvider(provider) },
             )
         }
@@ -256,13 +249,9 @@ private fun ModelPickerSheetContent(
                 OpenCodeBottomSheetEntry(
                     title = model.modelLabel,
                     enabled = modelChangeLock?.blockReason(model) == null,
-                    endDecorator =
-                        if (model == selectedModel) {
-                            BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
-                        } else {
-                            BottomSheetEntryDecorator.None
-                        },
+                    selected = model == selectedModel,
                     onClick = { onSelectModel(model) },
+                    modifier = Modifier.openCodeBottomSheetScrollTarget(model),
                 )
             }
         }
@@ -282,7 +271,7 @@ private fun ModelPickerFilterField(
         kind = OpenCodeTextInputKind.Filter,
         modifier =
             modifier
-                .padding(horizontal = 20.dp)
+                .openCodeBottomSheetContentInset()
                 .padding(bottom = 8.dp),
     )
 }

@@ -9,9 +9,10 @@
 /* Begin PBXBuildFile section */
 		638DA94C2FCB348E0055985D /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 63OC00022FA93400002BDFFC /* Factory */; };
 		638DA94D2FCB348E0055985D /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 63OC00022FA93400002BDFFC /* Factory */; };
-		63OCFIREBF00100002BDFFC /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD001002BDFFC /* FirebaseAnalytics */; };
+		63OCFIREBF00100002BDFFC /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD001002BDFFC /* FirebaseAnalyticsCore */; };
 		63OCFIREBF00200002BDFFC /* FirebaseCrashlytics in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD002002BDFFC /* FirebaseCrashlytics */; };
 		63OCFIREBF00300002BDFFC /* FirebaseRemoteConfig in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD003002BDFFC /* FirebaseRemoteConfig */; };
+		63OCFIREBF00400002BDFFC /* FirebaseAppCheck in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD004002BDFFC /* FirebaseAppCheck */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,9 +62,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				638DA94C2FCB348E0055985D /* Factory in Frameworks */,
-				63OCFIREBF00100002BDFFC /* FirebaseAnalytics in Frameworks */,
+				63OCFIREBF00100002BDFFC /* FirebaseAnalyticsCore in Frameworks */,
 				63OCFIREBF00200002BDFFC /* FirebaseCrashlytics in Frameworks */,
 				63OCFIREBF00300002BDFFC /* FirebaseRemoteConfig in Frameworks */,
+				63OCFIREBF00400002BDFFC /* FirebaseAppCheck in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -130,9 +132,10 @@
 			name = "OpenCode Mobile";
 			packageProductDependencies = (
 				63OC00022FA93400002BDFFC /* Factory */,
-				63OCFIREPROD001002BDFFC /* FirebaseAnalytics */,
+				63OCFIREPROD001002BDFFC /* FirebaseAnalyticsCore */,
 				63OCFIREPROD002002BDFFC /* FirebaseCrashlytics */,
 				63OCFIREPROD003002BDFFC /* FirebaseRemoteConfig */,
+				63OCFIREPROD004002BDFFC /* FirebaseAppCheck */,
 			);
 			productName = "OpenCode Mobile";
 			productReference = 63369C0F2FA933AE002BDFFC /* OpenCode Mobile.app */;
@@ -506,6 +509,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "OpenCode Mobile/OpenCode Mobile.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 677MTXPXZZ;
@@ -550,6 +554,7 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "OpenCode Mobile/OpenCode Mobile.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 677MTXPXZZ;
@@ -718,7 +723,7 @@
 			repositoryURL = "https://github.com/hmlongco/Factory";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 3.4.0;
+				minimumVersion = 3.5.0;
 			};
 		};
 		63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
@@ -726,7 +731,7 @@
 			repositoryURL = "https://github.com/firebase/firebase-ios-sdk.git";
 			requirement = {
 				kind = upToNextMajorVersion;
-				minimumVersion = 12.19.2;
+				minimumVersion = 13.1.1;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
@@ -737,10 +742,10 @@
 			package = 63OC00012FA93400002BDFFC /* XCRemoteSwiftPackageReference "Factory" */;
 			productName = FactoryKit;
 		};
-		63OCFIREPROD001002BDFFC /* FirebaseAnalytics */ = {
+		63OCFIREPROD001002BDFFC /* FirebaseAnalyticsCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
-			productName = FirebaseAnalytics;
+			productName = FirebaseAnalyticsCore;
 		};
 		63OCFIREPROD002002BDFFC /* FirebaseCrashlytics */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -751,6 +756,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseRemoteConfig;
+		};
+		63OCFIREPROD004002BDFFC /* FirebaseAppCheck */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAppCheck;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

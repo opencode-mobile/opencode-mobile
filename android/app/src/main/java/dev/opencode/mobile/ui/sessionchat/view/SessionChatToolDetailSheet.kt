@@ -24,6 +24,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
+import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -39,6 +40,8 @@ internal data class SessionChatToolDetailTarget(
     val body: String,
     /** Render [body] as markdown (a compaction summary) instead of plain tool output. */
     val bodyIsMarkdown: Boolean = false,
+    /** Typed inspector body. Failure sheets and compaction summaries leave this null. */
+    val presentation: dev.opencode.mobile.ui.sessionchat.ToolResultPresentation? = null,
     /** Provider error bodies are monospace and copyable. */
     val monospace: Boolean = false,
     val sheetAction: SessionFailureSheetAction? = null,
@@ -98,9 +101,19 @@ internal fun SessionChatToolDetailSheet(
         visible = target != null,
     )
 
+    val clipboard = LocalClipboardManager.current
+    val action = target?.sheetAction
+    val actionLabel = target?.sheetActionLabel?.takeIf { it.isNotBlank() }
+    val linkLabel = target?.sheetLinkLabel?.takeIf { it.isNotBlank() }
+    val link = target?.sheetLink?.takeIf { it.isNotBlank() }
+    val hasAction = action != null && actionLabel != null
+    val hasLink = linkLabel != null && link != null
+    val presentation = target?.presentation?.takeIf { target.bodyIsMarkdown.not() }
+    val copies = presentation?.copiesOriginal == true && !hasAction && !hasLink
+
     OpenCodeBottomSheet(
         visible = target != null,
-        title = target?.title.orEmpty(),
+        title = presentation?.title ?: target?.title ?: "Tool",
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.SESSION_TOOL_DETAIL,
@@ -108,77 +121,130 @@ internal fun SessionChatToolDetailSheet(
             )
             onDismiss()
         },
+        pinnedTop = {
+            if (presentation != null) {
+                ToolResultPinnedHeader(presentation)
+            }
+        },
+        pinnedBottom =
+            if (copies) {
+                {
+                    OpenCodeButton(
+                        variant = OpenCodeButtonVariant.FullWidthText("Copy output"),
+                        onClick = { clipboard.setText(AnnotatedString(presentation.raw)) },
+                    )
+                }
+            } else if (hasAction || hasLink) {
+                {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (action != null && actionLabel != null) {
+                            OpenCodeButton(
+                                variant = OpenCodeButtonVariant.FullWidthText(actionLabel),
+                                onClick = {
+                                    when (action) {
+                                        SessionFailureSheetAction.CopyCaption ->
+                                            clipboard.setText(AnnotatedString(target?.title.orEmpty()))
+                                        SessionFailureSheetAction.PickModel -> {
+                                            onDismiss()
+                                            onFailureAction(FailureAction.PickModel)
+                                        }
+                                        SessionFailureSheetAction.Compact -> {
+                                            onDismiss()
+                                            onFailureAction(FailureAction.Compact)
+                                        }
+                                    }
+                                },
+                            )
+                        }
+                        if (linkLabel != null && link != null) {
+                            OpenCodeButton(
+                                variant = OpenCodeButtonVariant.FullWidthText(linkLabel),
+                                onClick = { onOpenLink(link) },
+                            )
+                        }
+                    }
+                }
+            } else {
+                null
+            },
     ) {
-        val body = target?.body.orEmpty()
-        val bodyModifier =
+        when {
+            presentation != null ->
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .openCodeBottomSheetContentInset()
+                            .padding(bottom = 12.dp),
+                ) {
+                    ToolResultBody(presentation)
+                }
+            target != null -> SessionChatToolDetailBody(target)
+        }
+    }
+}
+
+/**
+ * The detail body: [SessionChatToolDetailTarget.body] as markdown, a
+ * monospace provider body, or plain text. Shared by the tool detail sheet
+ * and the activity sheet's in-place step detail (#779).
+ */
+@Composable
+internal fun SessionChatToolDetailBody(target: SessionChatToolDetailTarget) {
+    val presentation = target.presentation?.takeUnless { target.bodyIsMarkdown }
+    if (presentation != null) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .openCodeBottomSheetContentInset()
+                    .padding(vertical = 12.dp),
+        ) {
+            ToolResultPinnedHeader(presentation)
+            ToolResultBody(presentation)
+        }
+        return
+    }
+    val clipboard = LocalClipboardManager.current
+    val body = target.body
+    val document by produceState<MarkdownDocument?>(initialValue = null, body, target.bodyIsMarkdown) {
+        value =
+            if (target.bodyIsMarkdown && body.isNotBlank()) {
+                withContext(Dispatchers.Default) {
+                    runCatching {
+                        OpenCodeMarkdownParser.parse(body, codeHighlighter = OpenCodeSemanticFallbackHighlighter)
+                    }.getOrNull()
+                }
+            } else {
+                null
+            }
+    }
+    val rendered = document
+    if (rendered == null && body.isBlank()) return
+    Column(
+        modifier =
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp, vertical = 12.dp)
-        val document by produceState<MarkdownDocument?>(initialValue = null, body, target?.bodyIsMarkdown) {
-            value =
-                if (target?.bodyIsMarkdown == true && body.isNotBlank()) {
-                    withContext(Dispatchers.Default) {
-                        runCatching {
-                            OpenCodeMarkdownParser.parse(body, codeHighlighter = OpenCodeSemanticFallbackHighlighter)
-                        }.getOrNull()
-                    }
-                } else {
-                    null
-                }
-        }
-        val rendered = document
-        val clipboard = LocalClipboardManager.current
-        val action = target?.sheetAction
-        val actionLabel = target?.sheetActionLabel?.takeIf { it.isNotBlank() }
-        val linkLabel = target?.sheetLinkLabel?.takeIf { it.isNotBlank() }
-        val link = target?.sheetLink?.takeIf { it.isNotBlank() }
-        Column(
-            modifier = bodyModifier,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            when {
-                rendered != null ->
-                    OpenCodeRenderedMarkdown(
-                        document = rendered,
-                        variant = OpenCodeRenderedMarkdownVariant.Standalone,
-                    )
-                target?.monospace == true && body.isNotBlank() ->
-                    SessionProviderResponseBody(
-                        body = body,
-                        onCopy = { clipboard.setText(AnnotatedString(body)) },
-                    )
-                body.isNotBlank() ->
-                    Text(
-                        text = body,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                    )
-            }
-            if (action != null && actionLabel != null) {
-                OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText(actionLabel),
-                    onClick = {
-                        when (action) {
-                            SessionFailureSheetAction.CopyCaption ->
-                                clipboard.setText(AnnotatedString(target?.title.orEmpty()))
-                            SessionFailureSheetAction.PickModel -> {
-                                onDismiss()
-                                onFailureAction(FailureAction.PickModel)
-                            }
-                            SessionFailureSheetAction.Compact -> {
-                                onDismiss()
-                                onFailureAction(FailureAction.Compact)
-                            }
-                        }
-                    },
+                .openCodeBottomSheetContentInset()
+                .padding(vertical = 12.dp),
+    ) {
+        when {
+            rendered != null ->
+                OpenCodeRenderedMarkdown(
+                    document = rendered,
+                    variant = OpenCodeRenderedMarkdownVariant.Standalone,
                 )
-            }
-            if (linkLabel != null && link != null) {
-                OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText(linkLabel),
-                    onClick = { onOpenLink(link) },
+            target.monospace && body.isNotBlank() ->
+                SessionProviderResponseBody(
+                    body = body,
+                    onCopy = { clipboard.setText(AnnotatedString(body)) },
                 )
-            }
+            body.isNotBlank() ->
+                Text(
+                    text = body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
         }
     }
 }

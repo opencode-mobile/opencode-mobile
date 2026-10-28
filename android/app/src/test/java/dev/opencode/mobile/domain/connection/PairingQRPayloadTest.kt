@@ -10,12 +10,12 @@ class PairingQRPayloadTest {
     @Test
     fun parse_selectsFirstNonLoopbackUrl() {
         val raw =
-            """{"urls":["http://127.0.0.1:4096","http://192.168.0.160:4096"],"username":"opencode","password":"secret"}"""
+            """{"urls":["http://127.0.0.1:4096","http://192.168.1.60:4096"],"username":"opencode","password":"secret"}"""
         val result = PairingQRPayload.parse(raw)
         assertTrue(result is PairingQRParseResult.Ready)
         val credentials = (result as PairingQRParseResult.Ready).credentials
-        assertEquals("http://192.168.0.160:4096/", credentials.baseUrl)
-        assertEquals(listOf("http://192.168.0.160:4096/"), credentials.urls)
+        assertEquals("http://192.168.1.60:4096/", credentials.baseUrl)
+        assertEquals(listOf("http://192.168.1.60:4096/"), credentials.urls)
         assertEquals("opencode", credentials.username)
         assertEquals("secret", credentials.password)
         assertNull(credentials.code)
@@ -24,12 +24,12 @@ class PairingQRPayloadTest {
     @Test
     fun parse_keepsLanAndPrefersTailscaleForDisplay() {
         val raw =
-            """{"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}"""
+            """{"urls":["http://192.168.1.60:4096","http://100.64.0.15:4096"],"username":"opencode","password":"secret"}"""
         val result = PairingQRPayload.parse(raw)
         val credentials = (result as PairingQRParseResult.Ready).credentials
-        assertEquals("http://100.84.57.15:4096/", credentials.baseUrl)
+        assertEquals("http://100.64.0.15:4096/", credentials.baseUrl)
         assertEquals(
-            listOf("http://192.168.0.160:4096/", "http://100.84.57.15:4096/"),
+            listOf("http://192.168.1.60:4096/", "http://100.64.0.15:4096/"),
             credentials.urls,
         )
     }
@@ -37,7 +37,7 @@ class PairingQRPayloadTest {
     @Test
     fun parse_prefersMagicDnsTailscaleHost() {
         val raw =
-            """{"urls":["http://192.168.0.160:4096","http://mybox.tailxyz.ts.net:4096"],"username":"opencode","password":"secret"}"""
+            """{"urls":["http://192.168.1.60:4096","http://mybox.tailxyz.ts.net:4096"],"username":"opencode","password":"secret"}"""
         val result = PairingQRPayload.parse(raw)
         val credentials = (result as PairingQRParseResult.Ready).credentials
         assertEquals("http://mybox.tailxyz.ts.net:4096/", credentials.baseUrl)
@@ -48,11 +48,11 @@ class PairingQRPayloadTest {
         val picked =
             PairingQRPayload.pickReachableUrl(
                 listOf(
-                    "http://192.168.0.160:4096/",
-                    "http://100.84.57.15:4096/",
+                    "http://192.168.1.60:4096/",
+                    "http://100.64.0.15:4096/",
                 ),
             )
-        assertEquals("http://100.84.57.15:4096/", picked)
+        assertEquals("http://100.64.0.15:4096/", picked)
     }
 
     @Test
@@ -60,9 +60,9 @@ class PairingQRPayloadTest {
         assertTrue(PairingQRPayload.isRemoteTunnelUrl("https://Box.OpenTunnel.XYZ/"))
         assertTrue(PairingQRPayload.isRemoteTunnelUrl("http://box.opentunnel.xyz:443"))
         assertFalse(PairingQRPayload.isRemoteTunnelUrl("https://opentunnel.xyz/"))
-        assertFalse(PairingQRPayload.isRemoteTunnelUrl("http://192.168.0.160:4096/"))
+        assertFalse(PairingQRPayload.isRemoteTunnelUrl("http://192.168.1.60:4096/"))
         assertFalse(PairingQRPayload.isRemoteTunnelUrl("http://mybox.tailxyz.ts.net:4096/"))
-        assertFalse(PairingQRPayload.isRemoteTunnelUrl("http://100.84.57.15:4096/"))
+        assertFalse(PairingQRPayload.isRemoteTunnelUrl("http://100.64.0.15:4096/"))
     }
 
     @Test
@@ -71,28 +71,58 @@ class PairingQRPayloadTest {
             PairingQRPayload.pickReachableUrl(
                 listOf(
                     "https://box.opentunnel.xyz/",
-                    "http://100.84.57.15:4096/",
+                    "http://100.64.0.15:4096/",
                 ),
             )
-        assertEquals("http://100.84.57.15:4096/", picked)
+        assertEquals("http://100.64.0.15:4096/", picked)
+    }
+
+    @Test
+    fun pickReachableUrl_neverReplacesHttpsWithHttp() {
+        val picked =
+            PairingQRPayload.pickReachableUrl(
+                listOf("http://192.168.1.60:4096/", "http://100.64.0.15:4096/"),
+                currentBaseUrl = "https://box.opentunnel.xyz/",
+            )
+        assertNull(picked)
+    }
+
+    @Test
+    fun pickReachableUrl_httpsCurrentStillPicksAnsweringHttps() {
+        val picked =
+            PairingQRPayload.pickReachableUrl(
+                listOf("https://box.opentunnel.xyz/", "http://100.64.0.15:4096/"),
+                currentBaseUrl = "https://box.opentunnel.xyz/",
+            )
+        assertEquals("https://box.opentunnel.xyz/", picked)
+    }
+
+    @Test
+    fun pickReachableUrl_httpCurrentMayMoveToHttps() {
+        val picked =
+            PairingQRPayload.pickReachableUrl(
+                listOf("https://box.opentunnel.xyz/"),
+                currentBaseUrl = "http://192.168.1.60:4096/",
+            )
+        assertEquals("https://box.opentunnel.xyz/", picked)
     }
 
     @Test
     fun pickReachableUrl_usesAnotherAddressWhenTailscaleDidNotAnswer() {
         val picked =
             PairingQRPayload.pickReachableUrl(
-                listOf("http://192.168.0.160:4096/"),
+                listOf("http://192.168.1.60:4096/"),
             )
-        assertEquals("http://192.168.0.160:4096/", picked)
+        assertEquals("http://192.168.1.60:4096/", picked)
     }
 
     @Test
     fun parse_stripsPathFromPairingUrl() {
         val raw =
-            """{"urls":["http://192.168.0.160:4096/session"],"username":"opencode","password":"secret"}"""
+            """{"urls":["http://192.168.1.60:4096/session"],"username":"opencode","password":"secret"}"""
         val result = PairingQRPayload.parse(raw)
         val credentials = (result as PairingQRParseResult.Ready).credentials
-        assertEquals("http://192.168.0.160:4096/", credentials.baseUrl)
+        assertEquals("http://192.168.1.60:4096/", credentials.baseUrl)
     }
 
     @Test

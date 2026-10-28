@@ -325,8 +325,8 @@ class StoreScreenshotTest {
         const val PROFILE_NAME = "Fixture server"
         val FIXTURE_WORKTREES =
             listOf(
-                "/Users/ivan/Projects/opencode-mobile",
-                "/Users/ivan/Projects/artifact-publisher",
+                "/Users/example/Projects/opencode-mobile",
+                "/Users/example/Projects/artifact-publisher",
             )
         const val SESSION_CODE = "Code samples request"
         const val SESSION_PERMISSION = "Showing app permission dialog"

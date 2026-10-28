@@ -217,4 +217,101 @@ struct ComposerMentionRoutingTests {
         #expect(ProjectPaths.fileURL(worktree: "/repo", relativePath: "src/App.kt") == "file:///repo/src/App.kt")
         #expect(ProjectPaths.fileURL(worktree: "/repo", relativePath: "my file.kt") == "file:///repo/my%20file.kt")
     }
+
+    // MARK: - Skill spans
+
+    @Test func insertSkillMention_replacesQueryAtCaretAndKeepsDraft() {
+        let result = ComposerMentionRouting.insertSkillMention(
+            text: "fix the login /td then ship",
+            cursor: 17,
+            skillID: "tdd",
+            name: "tdd",
+            mentionID: "s1"
+        )
+        #expect(result.text == "fix the login /tdd  then ship")
+        #expect(result.cursor == 19)
+        #expect(result.skillMentions == [SkillMention(id: "s1", skillID: "tdd", name: "tdd", start: 14, end: 18)])
+    }
+
+    @Test func insertSkillMention_shiftsLaterSpansAndKeepsAgentMention() {
+        let agent = AgentMention(id: "a1", name: "reviewer", start: 4, end: 13)
+        let later = SkillMention(id: "s0", skillID: "security", name: "security", start: 17, end: 26)
+        let result = ComposerMentionRouting.insertSkillMention(
+            text: "fix @reviewer /t /security",
+            cursor: 16,
+            skillID: "tdd",
+            name: "tdd",
+            mentionID: "s1",
+            existingMentions: [agent],
+            existingSkillMentions: [later]
+        )
+        #expect(result.text == "fix @reviewer /tdd  /security")
+        #expect(result.mentions == [agent])
+        #expect(result.skillMentions.map(\.name) == ["tdd", "security"])
+        #expect(result.skillMentions[1].start == 20)
+        #expect(result.skillMentions[1].end == 29)
+    }
+
+    @Test func insertCommandSelection_keepsRestOfDraftWithoutSpan() {
+        let result = ComposerMentionRouting.insertCommandSelection(text: "/in later", cursor: 3, commandName: "init")
+        #expect(result.text == "/init  later")
+        #expect(result.cursor == 6)
+        #expect(result.skillMentions.isEmpty)
+    }
+
+    @Test func reconcile_deletingIntoSkillSpanRemovesItWhole() {
+        let skill = SkillMention(id: "s1", skillID: "tdd", name: "tdd", start: 4, end: 8)
+        let result = ComposerMentionRouting.reconcileAfterEdit(
+            previousText: "fix /tdd now",
+            previousMentions: [],
+            proposedText: "fix /td now",
+            proposedCursor: 7,
+            previousSkillMentions: [skill]
+        )
+        #expect(result.text == "fix  now")
+        #expect(result.skillMentions.isEmpty)
+        #expect(result.cursor == 4)
+    }
+
+    @Test func reconcile_editBeforeSkillSpanShiftsIt() {
+        let skill = SkillMention(id: "s1", skillID: "tdd", name: "tdd", start: 4, end: 8)
+        let result = ComposerMentionRouting.reconcileAfterEdit(
+            previousText: "fix /tdd now",
+            previousMentions: [],
+            proposedText: "fix it /tdd now",
+            proposedCursor: 7,
+            previousSkillMentions: [skill]
+        )
+        #expect(result.skillMentions == [SkillMention(id: "s1", skillID: "tdd", name: "tdd", start: 7, end: 11)])
+    }
+
+    @Test func skillParts_validatesTokenAndDedupesBySkillID() {
+        let text = "/tdd and /tdd and /sec"
+        let parts = ComposerMentionRouting.skillParts(
+            text: text,
+            mentions: [
+                SkillMention(id: "s1", skillID: "tdd", name: "tdd", start: 0, end: 4),
+                SkillMention(id: "s2", skillID: "tdd", name: "tdd", start: 9, end: 13),
+                SkillMention(id: "s3", skillID: "security", name: "security", start: 18, end: 22),
+            ]
+        )
+        #expect(parts.map(\.skillID) == ["tdd"])
+        #expect(parts.first?.sourceValue == "/tdd")
+    }
+
+    @Test func trimForSend_rebasesSkillOffsets() {
+        let trimmed = ComposerMentionRouting.trimForSend(
+            text: "  /tdd go ",
+            mentions: [],
+            skillMentions: [SkillMention(id: "s1", skillID: "tdd", name: "tdd", start: 2, end: 6)]
+        )
+        #expect(trimmed.text == "/tdd go")
+        #expect(trimmed.skillMentions == [SkillMention(id: "s1", skillID: "tdd", name: "tdd", start: 0, end: 4)])
+    }
+
+    @Test func slashQuery_completedSkillSpanAtCaret_isClosed() {
+        let skill = SkillMention(id: "s1", skillID: "tdd", name: "tdd", start: 0, end: 4)
+        #expect(ComposerMentionRouting.slashSuggestionQuery("/tdd", cursor: 4, skillMentions: [skill]) == nil)
+        #expect(ComposerMentionRouting.suggestionMode(text: "go /t", cursor: 5) == .slash(query: "t"))
+    }
 }

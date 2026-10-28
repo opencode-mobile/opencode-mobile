@@ -113,7 +113,21 @@ struct ModelSelectionOption: Equatable, Sendable, Identifiable {
         switch kind {
         case .image: supportsImageInput
         case .pdf: supportsPdfInput
-        case .text: true
+        case .text, .file: true
+        }
+    }
+
+    /// An uploaded file never reaches the model's input, so any model takes it.
+    func accepts(_ attachment: Attachment) -> Bool {
+        attachment.upload != .inline || acceptsAttachmentKind(attachment.kind)
+    }
+
+    /// Whether the model reads this mime itself, as an image or PDF.
+    func readsNatively(mime: String) -> Bool {
+        switch mime.lowercased() {
+        case "image/png", "image/jpeg", "image/gif", "image/webp": supportsImageInput
+        case "application/pdf": supportsPdfInput
+        default: false
         }
     }
 

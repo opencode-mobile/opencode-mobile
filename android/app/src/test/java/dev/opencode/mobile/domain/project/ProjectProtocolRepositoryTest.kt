@@ -34,13 +34,17 @@ class ProjectProtocolRepositoryTest {
 
             val projects = repository(client, ServerProtocol.V1).listProjects()
 
-            assertEquals(listOf(Project(id = "p1", worktree = "/Users/me/repo", displayName = "repo")), projects)
+            assertEquals(
+                listOf(Project(id = "p1", worktree = "/Users/me/repo", displayName = "repo", isRepository = true)),
+                projects,
+            )
             assertTrue(
                 requests
                     .single()
                     .url.encodedPath
                     .endsWith("/project"),
             )
+            assertEquals(null, requests.single().url.parameters["archived"])
         }
 
     @Test
@@ -59,7 +63,15 @@ class ProjectProtocolRepositoryTest {
             val projects = repository(client, ServerProtocol.V2).listProjects()
 
             assertEquals(
-                listOf(Project(id = "p2", worktree = "/Users/me/app", displayName = "app", activityAtEpochMs = 1)),
+                listOf(
+                    Project(
+                        id = "p2",
+                        worktree = "/Users/me/app",
+                        displayName = "app",
+                        activityAtEpochMs = 1,
+                        isRepository = true,
+                    ),
+                ),
                 projects,
             )
             assertTrue(
@@ -68,6 +80,26 @@ class ProjectProtocolRepositoryTest {
                     .url.encodedPath
                     .endsWith("/api/project"),
             )
+            assertEquals("false", requests.single().url.parameters["archived"])
+        }
+
+    @Test
+    fun v2ListProjects_marksArchivedProjects() =
+        runTest {
+            // Servers before v2.0.27 ignore `archived=false` and may still list archived projects.
+            val client =
+                testClient {
+                    respondJson(
+                        """[{"id":"gone","canonical":"/gone","vcs":"git",""" +
+                            """"time":{"created":1,"updated":2,"active":3,"archived":4}},""" +
+                            """{"id":"live","canonical":"/live","vcs":"git","time":{"created":1,"updated":2,"active":3}},""" +
+                            """{"id":"bare","canonical":"/bare","vcs":"git"}]""",
+                    )
+                }
+
+            val projects = repository(client, ServerProtocol.V2).listProjects()
+
+            assertEquals(listOf(true, false, false), projects.map { it.isArchived })
         }
 
     @Test
@@ -85,6 +117,7 @@ class ProjectProtocolRepositoryTest {
             val projects = repository(client, ServerProtocol.V1).listProjects()
 
             assertEquals(listOf(20L, null), projects.map { it.activityAtEpochMs })
+            assertEquals(listOf(true, false), projects.map { it.isRepository })
         }
 
     @Test
@@ -125,6 +158,7 @@ class ProjectProtocolRepositoryTest {
                 projects,
             )
             assertEquals(listOf("/api/project", "/project"), requests.map { it.url.encodedPath })
+            assertEquals(null, requests.last().url.parameters["archived"])
         }
 
     @Test

@@ -9,23 +9,35 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +51,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -47,47 +60,65 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
-import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.domain.command.ClientSlashAction
+import dev.opencode.mobile.domain.connection.ExternalLinkPolicy
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
+import dev.opencode.mobile.domain.feedback.FeedbackScreen
+import dev.opencode.mobile.domain.message.AttachmentDropContext
+import dev.opencode.mobile.domain.message.AttachmentDropRouting
+import dev.opencode.mobile.domain.message.AttachmentDropSummary
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
+import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
+import dev.opencode.mobile.domain.session.SideQuestion
+import dev.opencode.mobile.domain.worktree.WorktreeCreateCopy
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.domain.t3.T3RuntimeModeLabels
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
+import dev.opencode.mobile.ui.components.ComposerDictationCardModel
+import dev.opencode.mobile.ui.components.LocalOpenCodeAttachmentImageLoader
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeActionTile
 import dev.opencode.mobile.ui.components.OpenCodeActionTileBadge
 import dev.opencode.mobile.ui.components.OpenCodeActionTileGrid
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
 import dev.opencode.mobile.ui.components.OpenCodeBottomFade
 import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
+import dev.opencode.mobile.ui.components.OpenCodeComposerPastedContent
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionItem
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionOverlay
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
+import dev.opencode.mobile.ui.components.OpenCodeDictationCardVariant
+import dev.opencode.mobile.ui.components.OpenCodeDictationUnavailableReason
+import dev.opencode.mobile.ui.components.OpenCodeDropOverlay
+import dev.opencode.mobile.ui.components.OpenCodeDropOverlayVariant
 import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
+import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeVariant
 import dev.opencode.mobile.ui.components.OpenCodeLayout
+import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodePendingPromptsStrip
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
-import dev.opencode.mobile.ui.components.ComposerDictationCardModel
-import dev.opencode.mobile.ui.components.OpenCodeDictationCardVariant
-import dev.opencode.mobile.ui.components.OpenCodeDictationUnavailableReason
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
+import dev.opencode.mobile.ui.components.OpenCodeSideQuestionPill
+import dev.opencode.mobile.ui.components.OpenCodeSideQuestionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
@@ -97,42 +128,59 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleLeading
+import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.components.copySessionIdToClipboard
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.components.rememberOpenCodeSessionComposerFocus
+import dev.opencode.mobile.ui.feedback.FeedbackSheet
+import dev.opencode.mobile.ui.feedback.rememberFeedbackSheetState
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutAction
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
+import dev.opencode.mobile.ui.sessionchat.dictation.ComposerDictationSession
+import dev.opencode.mobile.ui.sessionchat.dictation.DictationModelDownloader
+import dev.opencode.mobile.ui.sessionchat.dictation.DictationSupport
+import dev.opencode.mobile.ui.sessionchat.dictation.SystemComposerDictationSession
+import dev.opencode.mobile.ui.sessionchat.dictation.cardPhase
+import dev.opencode.mobile.ui.sessionchat.dictation.dictationLanguageLabel
+import dev.opencode.mobile.ui.sessionchat.dictation.formatDictationElapsed
+import dev.opencode.mobile.ui.sessionchat.dictation.probeDictationSupport
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveCopy
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveTags
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
-import dev.opencode.mobile.ui.sessionchat.view.SessionRetryCountdown
-import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroModal
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingPromptsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatSideQuestionSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineStylePickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroModal
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsSheet
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
-import dev.opencode.mobile.ui.sessionchat.dictation.ComposerDictationSession
-import dev.opencode.mobile.ui.sessionchat.dictation.DictationModelDownloader
-import dev.opencode.mobile.ui.sessionchat.dictation.DictationSupport
-import dev.opencode.mobile.ui.sessionchat.dictation.SystemComposerDictationSession
-import dev.opencode.mobile.ui.sessionchat.dictation.formatDictationElapsed
-import dev.opencode.mobile.ui.sessionchat.dictation.probeDictationSupport
+import dev.opencode.mobile.ui.sessionchat.view.SessionRetryCountdown
+import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
 import dev.opencode.mobile.ui.sessionchat.view.toRoute
+import dev.opencode.mobile.ui.worktree.NewWorktreeRow
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormActions
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormBody
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormCallbacks
+import dev.opencode.mobile.ui.worktree.WorktreeCreateTags
+import dev.opencode.mobile.ui.worktree.worktreeCreateBackAction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Session Chat; gives the timeline the loader for images that live on the server. */
 @Composable
 fun SessionChatScreen(
     sessionId: String,
@@ -155,6 +203,54 @@ fun SessionChatScreen(
             key = sessionChatViewModelKey(sessionId, worktree, optimisticNavigationInstanceId),
         ),
 ) {
+    val attachmentImageLoader =
+        remember(viewModel) {
+            val loader: suspend (OpenCodeAttachmentImageSource.ServerPath) -> ByteArray? =
+                { source -> viewModel.loadAttachmentPreview(source.path) }
+            loader
+        }
+    CompositionLocalProvider(LocalOpenCodeAttachmentImageLoader provides attachmentImageLoader) {
+        SessionChatScreenBody(
+            sessionId = sessionId,
+            sessionTitle = sessionTitle,
+            worktree = worktree,
+            modifier = modifier,
+            optimisticNavigationInstanceId = optimisticNavigationInstanceId,
+            parentId = parentId,
+            onNavigateBack = onNavigateBack,
+            onSessionContextClick = onSessionContextClick,
+            onReviewChangesClick = onReviewChangesClick,
+            onChildSessionClick = onChildSessionClick,
+            onToolGroupClick = onToolGroupClick,
+            onSessionReplaceRequested = onSessionReplaceRequested,
+            onTerminalRequested = onTerminalRequested,
+            onFilesRequested = onFilesRequested,
+            detailControl = detailControl,
+            viewModel = viewModel,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SessionChatScreenBody(
+    sessionId: String,
+    sessionTitle: String,
+    worktree: String,
+    modifier: Modifier,
+    optimisticNavigationInstanceId: String?,
+    parentId: String?,
+    onNavigateBack: () -> Unit,
+    onSessionContextClick: () -> Unit,
+    onReviewChangesClick: (ChangesNavigationTarget) -> Unit,
+    onChildSessionClick: (ChildSessionNavigationTarget) -> Unit,
+    onToolGroupClick: (SessionToolGroup) -> Unit,
+    onSessionReplaceRequested: (ChildSessionNavigationTarget) -> Unit,
+    onTerminalRequested: (worktree: String, projectTitle: String) -> Unit,
+    onFilesRequested: (worktree: String) -> Unit,
+    detailControl: OpenCodeSplitPaneDetailControl?,
+    viewModel: SessionChatViewModel,
+) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val attachmentIngestion = remember(context) { AttachmentIngestionService(context.contentResolver) }
@@ -169,10 +265,13 @@ fun SessionChatScreen(
         onDispose {
             viewModel.cancelDictationForDismiss()
             viewModel.clearSessionReadyFocus()
+            viewModel.leaveSideQuestions()
         }
     }
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    // After `session.moved` the route still names the old directory; actions follow the session.
+    val currentWorktree = uiState.worktree.ifEmpty { worktree }
     val attachmentSources =
         uiState.composer.attachmentSources(
             DeveloperToolsPreferences.unlocked,
@@ -182,6 +281,7 @@ fun SessionChatScreen(
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
     var showRuntimeModePicker by rememberSaveable { mutableStateOf(false) }
+    val feedbackSheet = rememberFeedbackSheetState()
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
     var activeModelProviderId by remember { mutableStateOf<String?>(null) }
     var modelFilterText by remember { mutableStateOf("") }
@@ -246,11 +346,74 @@ fun SessionChatScreen(
 
     fun ingestAttachments(uris: List<android.net.Uri>) {
         if (uris.isEmpty()) return
+        val uploadAvailable = viewModel.attachmentUploadAvailable()
         coroutineScope.launch {
-            val result = withContext(Dispatchers.IO) { attachmentIngestion.ingest(uris) }
+            val result = withContext(Dispatchers.IO) { attachmentIngestion.ingest(uris, uploadAvailable) }
             viewModel.addAttachments(result.attachments)
             result.errors.firstOrNull()?.let(viewModel::reportAttachmentError)
         }
+    }
+
+    fun attachPasted(content: OpenCodeComposerPastedContent) {
+        val uploadAvailable = viewModel.attachmentUploadAvailable()
+        val names =
+            viewModel.uiState.value.composer.attachments
+                .map { it.filename }
+                .toMutableList()
+        coroutineScope.launch {
+            val (folders, result) =
+                try {
+                    withContext(Dispatchers.IO) {
+                        val (folders, uris) = content.uris.partition { context.contentResolver.isFolder(it) }
+                        folders to
+                            attachmentIngestion.ingest(uris, uploadAvailable) { mime ->
+                                // An unnamed pasted image is `Pasted image N.png`; other content keeps its URI name.
+                                if (mime?.startsWith("image/") != true) return@ingest null
+                                AttachmentDropRouting.pastedImageName(names).also { names += it }
+                            }
+                    }
+                } finally {
+                    content.release()
+                }
+            if (viewModel.addPastedOrDroppedAttachments(result, skippedFolders = folders.size)) {
+                logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_PASTE)
+            }
+        }
+    }
+
+    fun attachDropped(files: SessionChatDroppedFiles) {
+        val uploadAvailable = viewModel.attachmentUploadAvailable()
+        coroutineScope.launch {
+            val (folders, result) =
+                try {
+                    withContext(Dispatchers.IO) {
+                        val (folders, uris) = files.uris.partition { context.contentResolver.isFolder(it) }
+                        folders to attachmentIngestion.ingest(uris, uploadAvailable)
+                    }
+                } finally {
+                    files.release()
+                }
+            if (viewModel.addPastedOrDroppedAttachments(result, skippedFolders = folders.size)) {
+                logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_DROP)
+            }
+        }
+    }
+
+    var attachDropEnabled by remember { mutableStateOf(false) }
+    var attachDropSummary by remember { mutableStateOf<AttachmentDropSummary?>(null) }
+    LaunchedEffect(attachDropEnabled) {
+        if (!attachDropEnabled) attachDropSummary = null
+    }
+
+    fun attachmentDropContext(): AttachmentDropContext {
+        val composer = viewModel.uiState.value.composer
+        val option = composer.selectedModel?.option
+        return AttachmentDropContext(
+            imagesSupported = option?.supportsImageInput != false,
+            pdfSupported = option?.supportsPdfInput != false,
+            uploadAvailable = viewModel.attachmentUploadAvailable(),
+            draft = composer.attachments,
+        )
     }
 
     fun attachDiagnosticLog() {
@@ -277,7 +440,8 @@ fun SessionChatScreen(
             ingestAttachments(uris)
         }
     val dictationSession = remember(context) { SystemComposerDictationSession(context) }
-    val dictationModelDownloader = remember(context) { DictationModelDownloader(context) }
+    val dictationModelDownloader =
+        remember(context, coroutineScope) { DictationModelDownloader.system(context, coroutineScope) }
     var dictationSupport by remember { mutableStateOf<DictationSupport>(DictationSupport.Hidden) }
     var dictationNowMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val dictationPhase = uiState.dictation?.phase
@@ -311,8 +475,19 @@ fun SessionChatScreen(
                     viewModel.beginDictationUnavailable(phase, message)
                 }
             },
+            languageTag = support.languageTag,
         )
     }
+
+    fun showDictationModelCard(downloading: Boolean) {
+        viewModel.beginDictationUnavailable(
+            if (downloading) ComposerDictationPhase.ModelDownloading else ComposerDictationPhase.ModelNotInstalled,
+            languageLabel = dictationLanguageLabel(),
+        )
+    }
+
+    // Assigned below: an installed model re-enters applyProbedDictation, which can start a watch.
+    lateinit var startDictationModelDownload: (Boolean) -> Unit
 
     fun applyProbedDictation(
         support: DictationSupport,
@@ -322,11 +497,30 @@ fun SessionChatScreen(
         if (!startIfReady) return
         when (support) {
             is DictationSupport.Ready -> startReadyDictation(support)
-            DictationSupport.ModelNotInstalled ->
-                viewModel.beginDictationUnavailable(ComposerDictationPhase.ModelNotInstalled)
+            is DictationSupport.ModelNotInstalled -> showDictationModelCard(downloading = false)
+            is DictationSupport.ModelDownloading -> {
+                showDictationModelCard(downloading = true)
+                startDictationModelDownload(true)
+            }
             DictationSupport.PermissionDenied ->
                 viewModel.beginDictationUnavailable(ComposerDictationPhase.PermissionDenied)
             DictationSupport.Hidden -> viewModel.dictationCancel()
+        }
+    }
+
+    startDictationModelDownload = { alreadyPending ->
+        dictationModelDownloader.start(dictationSupport.languageTag, alreadyPending) { update ->
+            val card = update.cardPhase()
+            if (card != null) {
+                viewModel.dictationModelDownload(card.first, card.second)
+            } else if (viewModel.uiState.value.dictation
+                    ?.phase
+                    ?.isModelPhase == true
+            ) {
+                coroutineScope.launch {
+                    applyProbedDictation(probeDictationSupport(context), startIfReady = true)
+                }
+            }
         }
     }
 
@@ -344,8 +538,11 @@ fun SessionChatScreen(
     fun requestDictationOrStart() {
         when (val support = dictationSupport) {
             DictationSupport.Hidden -> Unit
-            DictationSupport.ModelNotInstalled ->
-                viewModel.beginDictationUnavailable(ComposerDictationPhase.ModelNotInstalled)
+            is DictationSupport.ModelNotInstalled -> showDictationModelCard(downloading = false)
+            is DictationSupport.ModelDownloading -> {
+                showDictationModelCard(downloading = true)
+                startDictationModelDownload(true)
+            }
             DictationSupport.PermissionDenied,
             is DictationSupport.Ready,
             -> {
@@ -367,6 +564,8 @@ fun SessionChatScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         viewModel.cancelDictationForBackground()
     }
+    LifecycleEventEffect(Lifecycle.Event.ON_PAUSE) { dictationModelDownloader.setHostPaused(true) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { dictationModelDownloader.setHostPaused(false) }
     LaunchedEffect(Unit) {
         dictationSupport = probeDictationSupport(context)
     }
@@ -383,9 +582,10 @@ fun SessionChatScreen(
             dictationNowMs = System.currentTimeMillis()
         }
     }
+    val isChildSession = parentId != null || uiState.sessionParentId != null
     val composerKindForDictation =
         SessionChatComposerKind.resolve(
-            isChildSession = parentId != null,
+            isChildSession = isChildSession,
             hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
             hasQuestion = uiState.questionRequest != null,
         )
@@ -471,6 +671,12 @@ fun SessionChatScreen(
         visible = showAttachmentSource,
     )
 
+    FeedbackSheet(
+        sheetState = feedbackSheet,
+        screen = FeedbackScreen.SessionChat,
+        captureScreen = true,
+    )
+
     OpenCodeDialog(
         visible = showDeleteConfirmation,
         title = "Delete session",
@@ -503,7 +709,33 @@ fun SessionChatScreen(
         },
     )
 
-    Box(modifier = modifier.fillMaxSize()) {
+    SessionChatMoveToWorktreeSheet(
+        state = uiState.moveToWorktree,
+        onDismiss = viewModel::dismissMoveToWorktree,
+        onMove = viewModel::moveToWorktree,
+        onNewWorktree = viewModel::openMoveToNewWorktree,
+        formCallbacks =
+            WorktreeCreateFormCallbacks(
+                onNameChange = viewModel::updateNewWorktreeName,
+                onShowBasePicker = viewModel::showNewWorktreeBasePicker,
+                onHideBasePicker = viewModel::hideNewWorktreeBasePicker,
+                onSelectBase = viewModel::selectNewWorktreeBase,
+                onSubmit = viewModel::submitNewWorktree,
+                onBack = viewModel::closeNewWorktreeForm,
+            ),
+    )
+
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .sessionChatAttachmentDropTarget(
+                    enabled = attachDropEnabled,
+                    dropContext = ::attachmentDropContext,
+                    onSummaryChange = { attachDropSummary = it },
+                    onDrop = ::attachDropped,
+                ),
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBarOverflowHost(
                 expanded = menuExpanded,
@@ -530,7 +762,7 @@ fun SessionChatScreen(
                                     onClick = {
                                         logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_REVIEW_CHANGES)
                                         menuExpanded = false
-                                        onReviewChangesClick(uiState.changesNavigationTarget(worktree))
+                                        onReviewChangesClick(uiState.changesNavigationTarget(currentWorktree))
                                     },
                                 ),
                             )
@@ -548,6 +780,19 @@ fun SessionChatScreen(
                                 ),
                             )
                         }
+                        add(
+                            OpenCodeOverflowMenuEntry(
+                                title = SessionChatWorktreeMoveCopy.MENU_TITLE,
+                                icon = OpenCodeIcons.CallSplit,
+                                enabled = uiState.moveToWorktree.availability.enabled,
+                                subtitle = uiState.moveToWorktree.availability.subtitle,
+                                testTag = SessionChatWorktreeMoveTags.MENU_ENTRY,
+                                onClick = {
+                                    menuExpanded = false
+                                    viewModel.openMoveToWorktree()
+                                },
+                            ),
+                        )
                         if (uiState.capabilities.showsFiles) {
                             add(
                                 OpenCodeOverflowMenuEntry(
@@ -557,7 +802,7 @@ fun SessionChatScreen(
                                     onClick = {
                                         logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_BROWSE_FILES)
                                         menuExpanded = false
-                                        onFilesRequested(worktree)
+                                        onFilesRequested(currentWorktree)
                                     },
                                 ),
                             )
@@ -645,6 +890,16 @@ fun SessionChatScreen(
                         }
                         add(
                             OpenCodeOverflowMenuEntry(
+                                title = "Report a problem",
+                                icon = OpenCodeIcons.Edit,
+                                onClick = {
+                                    menuExpanded = false
+                                    feedbackSheet.open()
+                                },
+                            ),
+                        )
+                        add(
+                            OpenCodeOverflowMenuEntry(
                                 title = "Delete",
                                 icon = OpenCodeIcons.Close,
                                 enabled = lifecycleActionsEnabled,
@@ -662,9 +917,13 @@ fun SessionChatScreen(
                     title = uiState.sessionTitle.ifBlank { sessionTitle },
                     subtitle = uiState.projectLabel,
                     subtitleLeading =
-                        uiState.projectLetter?.let { letter ->
-                            uiState.projectLetterAccent?.let { accent ->
-                                OpenCodeTopBarSubtitleLeading.Letter(letter, accent)
+                        if (uiState.worktreeCheckout) {
+                            OpenCodeTopBarSubtitleLeading.Worktree
+                        } else {
+                            uiState.projectLetter?.let { letter ->
+                                uiState.projectLetterAccent?.let { accent ->
+                                    OpenCodeTopBarSubtitleLeading.Letter(letter, accent)
+                                }
                             }
                         },
                     subtitleAccessory =
@@ -713,6 +972,8 @@ fun SessionChatScreen(
                 )
             }
 
+            val modelOptions = uiState.composer.modelOptions
+            val noticeModelNames = remember(modelOptions) { SessionChatNoticeModelNames.from(modelOptions) }
             OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
                 SessionChatTimelineView(
                     props =
@@ -735,6 +996,8 @@ fun SessionChatScreen(
                             sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
                             hideFloatStack = showSessionTodosSheet,
                             hideLiveRetryFailures = uiState.retryCard != null,
+                            hideRetryCountdown = uiState.isRetrying,
+                            noticeModelNames = noticeModelNames,
                             // Composer + 16 end-pin gap; Scroll to end uses this as-is
                             // (no extra scrollToEndPillBottomPadding).
                             bottomOverlayInset = timelineBottomInset,
@@ -743,7 +1006,7 @@ fun SessionChatScreen(
                             onLoadOlder = viewModel::loadOlderMessages,
                             onSessionBranchClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES)
-                                onReviewChangesClick(uiState.changesNavigationTarget(worktree))
+                                onReviewChangesClick(uiState.changesNavigationTarget(currentWorktree))
                             },
                             onSessionTodosClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TODOS)
@@ -768,10 +1031,13 @@ fun SessionChatScreen(
                                 onToolGroupClick(
                                     target.toRoute(
                                         sessionId = sessionId,
-                                        worktree = worktree,
-                                        parentId = parentId,
+                                        worktree = currentWorktree,
+                                        parentId = parentId ?: uiState.sessionParentId,
                                         owningTurnMessageId = uiState.owningTurnMessageId(target.messageId),
                                         supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
+                                        lastTurnDiffUnavailable =
+                                            uiState.owningTurnMessageId(target.messageId)
+                                                ?.let(uiState::lastTurnSpansLocationChange) == true,
                                     ),
                                 )
                             },
@@ -782,24 +1048,46 @@ fun SessionChatScreen(
                                         ChildSessionNavigationTarget(
                                             sessionId = childSessionId,
                                             sessionTitle = childTitle,
-                                            worktree = worktree,
+                                            worktree = currentWorktree,
                                         ),
                                     )
                                 }
                             },
-                            onChangesReviewTap = { assistantMessageId, initialFilePath ->
+                            onChangesReviewTap = changesReview@{ assistantMessageId, initialFilePath ->
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL)
-                                uiState
-                                    .fileChangeNavigationTarget(
-                                        worktree = worktree,
+                                val target =
+                                    uiState.fileChangeNavigationTarget(
+                                        worktree = currentWorktree,
                                         assistantMessageId = assistantMessageId,
                                         initialFilePath = initialFilePath,
-                                    )?.let(onReviewChangesClick)
+                                    ) ?: return@changesReview
+                                if (target.messageId?.let(uiState::lastTurnSpansLocationChange) == true) {
+                                    viewModel.presentTurnDiffUnavailable()
+                                    return@changesReview
+                                }
+                                onReviewChangesClick(target)
                             },
                             supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
                             supportsRevert = uiState.supportsRevert,
                             expandedStepParagraphs = uiState.expandedStepParagraphs,
                             onExpandStepParagraph = viewModel::expandStepParagraph,
+                            unfoldedStepRails = uiState.unfoldedStepRails,
+                            onToggleStepRailFold = viewModel::toggleStepRailFold,
+                            presentedActivityCard = uiState.presentedActivityCard,
+                            activityCardChildren = uiState.activityCardChildren,
+                            activityCardFooters = uiState.activityCardFooters,
+                            debouncedStepIds = uiState.debouncedStepIds,
+                            onOpenActivityCard = { blockId ->
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
+                                viewModel.openActivityCard(blockId)
+                            },
+                            onDismissActivityCard = viewModel::dismissActivityCard,
+                            activityCardDetailStepId = uiState.activityCardDetailStepId,
+                            onOpenActivityCardStep = { stepId ->
+                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_DETAIL)
+                                viewModel.openActivityCardStep(stepId)
+                            },
+                            onCloseActivityCardStep = viewModel::closeActivityCardStep,
                         ),
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -814,6 +1102,13 @@ fun SessionChatScreen(
                 OpenCodeSnackbarHost(
                     message = uiState.snackbar?.toOpenCodeSnackbarMessage(),
                     onDismissed = viewModel::consumeSnackbar,
+                    onAction = { message ->
+                        val snackbar = uiState.snackbar?.takeIf { it.id == message.id }
+                        when (val action = snackbar?.action) {
+                            is SessionChatSnackbarAction.RetrySideQuestion -> viewModel.retrySideQuestions(action.id)
+                            null -> Unit
+                        }
+                    },
                     modifier =
                         Modifier
                             .align(Alignment.BottomCenter)
@@ -828,7 +1123,7 @@ fun SessionChatScreen(
                 ) {
                     val overlayComposerKind =
                         SessionChatComposerKind.resolve(
-                            isChildSession = parentId != null,
+                            isChildSession = isChildSession,
                             hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
                             hasQuestion = uiState.questionRequest != null,
                         )
@@ -842,6 +1137,7 @@ fun SessionChatScreen(
                                                 id = suggestion.id,
                                                 title = suggestion.title,
                                                 subtitle = suggestion.subtitle,
+                                                leadingIcon = suggestion.leadingIcon,
                                             )
                                         },
                                     onSelect = { item ->
@@ -903,6 +1199,18 @@ fun SessionChatScreen(
                                         .padding(bottom = 6.dp),
                             )
                         }
+                        if (overlayComposerKind == SessionChatComposerKind.Prompt) {
+                            SessionChatSideQuestionRow(
+                                state = uiState.sideQuestions,
+                                onOpenAnswer = viewModel::openSideQuestionAnswer,
+                                onRetry = { viewModel.retrySideQuestions() },
+                                onDismissFailed = viewModel::dismissFailedSideQuestions,
+                                modifier =
+                                    Modifier
+                                        .padding(horizontal = 12.dp)
+                                        .padding(bottom = 6.dp),
+                            )
+                        }
                         if (overlayComposerKind == SessionChatComposerKind.Prompt &&
                             uiState.pendingPrompts.isNotEmpty()
                         ) {
@@ -916,9 +1224,13 @@ fun SessionChatScreen(
                             )
                         }
 
+                        val sideQuestionMode = uiState.sideQuestions.composerMode
+                        val blockedSideQuestion =
+                            !uiState.sideQuestions.supported &&
+                                SideQuestion.questionInDraft(uiState.composer.text) != null
                         val composerKind =
                             SessionChatComposerKind.resolve(
-                                isChildSession = parentId != null,
+                                isChildSession = isChildSession,
                                 hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
                                 hasQuestion = uiState.questionRequest != null,
                             )
@@ -1030,15 +1342,23 @@ fun SessionChatScreen(
                                             uiState.runtimeModeLabel.takeIf { uiState.capabilities.showsRuntimeMode },
                                         runtimeModeSelectable = uiState.runtimeModeSelectable,
                                         sendEnabled =
-                                            uiState.composer.canSend &&
-                                                (
-                                                    !uiState.capabilities.requiresComposerModel ||
+                                            (
+                                                if (sideQuestionMode) {
+                                                    // A side question answers with the session's own model.
+                                                    uiState.composer.text.isNotBlank()
+                                                } else {
+                                                    uiState.composer.canSend &&
                                                         (
-                                                            uiState.composer.selectedModel != null &&
-                                                                uiState.composer.isModelSelectionReady
-                                                        )
-                                                ) &&
-                                                !uiState.isSending &&
+                                                            !uiState.capabilities.requiresComposerModel ||
+                                                                (
+                                                                    uiState.composer.selectedModel != null &&
+                                                                        uiState.composer.isModelSelectionReady
+                                                                )
+                                                        ) &&
+                                                        !uiState.isSending &&
+                                                        !blockedSideQuestion
+                                                }
+                                            ) &&
                                                 sessionCreated &&
                                                 uiState.timeline != SessionChatTimelineState.Creating &&
                                                 uiState.composerEnabled,
@@ -1048,19 +1368,27 @@ fun SessionChatScreen(
                                                 (
                                                     !uiState.capabilities.requiresComposerModel ||
                                                         uiState.composer.isModelSelectionReady
-                                                ),
+                                                ) &&
+                                                !uiState.composer.isShellMode &&
+                                                !sideQuestionMode,
                                         showStop = uiState.sessionStatusLabel != null,
                                         stopEnabled =
                                             !uiState.isAborting &&
                                                 uiState.canMutate,
                                         followUpDelivery =
                                             uiState.composer.followUpDelivery.takeIf {
-                                                uiState.composer.supportsFollowUpDelivery
+                                                uiState.composer.supportsFollowUpDelivery && !sideQuestionMode
                                             },
-                                        showDictationButton =
-                                            uiState.composerDictationEnabled && dictationSupport.showsMic,
+                                        showDictationButton = dictationSupport.showsMic,
+                                        shellMode = uiState.composer.isShellMode && !sideQuestionMode,
+                                        sideQuestionMode = sideQuestionMode,
                                     )
                             }
+                        // Drops attach only where the Attach button would: a prompt composer that takes attachments.
+                        val promptAttachEnabled =
+                            (composerState as? OpenCodeSessionComposerState.Prompt)?.attachEnabled == true &&
+                                uiState.dictation == null
+                        SideEffect { attachDropEnabled = promptAttachEnabled }
                         val composerFocus = rememberOpenCodeSessionComposerFocus()
                         KeyboardShortcutHandler(
                             KeyboardShortcutAction.FocusComposer,
@@ -1120,7 +1448,10 @@ fun SessionChatScreen(
                                         }
                                     }
                                     is OpenCodeSessionComposerAction.RemoveAttachment -> viewModel.removeAttachment(action.id)
+                                    is OpenCodeSessionComposerAction.PasteContent -> attachPasted(action.content)
                                     OpenCodeSessionComposerAction.CancelRevert -> viewModel.cancelRevert()
+                                    OpenCodeSessionComposerAction.ExitShellMode -> viewModel.exitShellMode()
+                                    OpenCodeSessionComposerAction.ExitSideQuestionMode -> viewModel.exitSideQuestionMode()
                                     OpenCodeSessionComposerAction.Send -> viewModel.sendPrompt()
                                     OpenCodeSessionComposerAction.ToggleFollowUp -> viewModel.toggleFollowUp()
                                     OpenCodeSessionComposerAction.Stop -> viewModel.abort()
@@ -1161,17 +1492,19 @@ fun SessionChatScreen(
                                         )
                                     }
                                     OpenCodeSessionComposerAction.DictationDownload ->
-                                        dictationModelDownloader.trigger()
+                                        startDictationModelDownload(false)
                                     OpenCodeSessionComposerAction.DictationRetry -> {
                                         coroutineScope.launch {
                                             val support = probeDictationSupport(context)
                                             dictationSupport = support
                                             when (support) {
                                                 is DictationSupport.Ready -> requestDictationOrStart()
-                                                DictationSupport.ModelNotInstalled ->
-                                                    viewModel.beginDictationUnavailable(
-                                                        ComposerDictationPhase.ModelNotInstalled,
-                                                    )
+                                                is DictationSupport.ModelNotInstalled ->
+                                                    showDictationModelCard(downloading = false)
+                                                is DictationSupport.ModelDownloading -> {
+                                                    showDictationModelCard(downloading = true)
+                                                    startDictationModelDownload(true)
+                                                }
                                                 DictationSupport.PermissionDenied -> requestDictationOrStart()
                                                 DictationSupport.Hidden -> viewModel.dictationCancel()
                                             }
@@ -1227,6 +1560,12 @@ fun SessionChatScreen(
             onClearAll = viewModel::clearPendingPrompts,
         )
 
+        SessionChatSideQuestionSheet(
+            answer = uiState.sideQuestions.presentedAnswer,
+            onCopy = viewModel::sideQuestionAnswerCopied,
+            onClose = viewModel::closeSideQuestionAnswer,
+        )
+
         val sheetContext = LocalContext.current
         SessionChatToolDetailSheet(
             target = toolDetailTarget,
@@ -1247,7 +1586,8 @@ fun SessionChatScreen(
             onDismiss = { skillsTarget = null },
         )
 
-        // Waits for any screen-local sheet to close so the intro never stacks on one.
+        // Waits for any screen-local sheet to close so the intro and the Timeline Style
+        // picker never stack on one.
         val screenSheetOpen =
             messageActionsTarget != null ||
                 showPendingPromptsSheet ||
@@ -1257,11 +1597,18 @@ fun SessionChatScreen(
                 showAttachmentSource ||
                 activePicker != null ||
                 showDeleteConfirmation
+        LaunchedEffect(screenSheetOpen) { viewModel.setScreenSheetOpen(screenSheetOpen) }
         SessionChatChipTimelineIntroModal(
             visible = uiState.chipTimelineIntroVisible && !screenSheetOpen,
             onEnable = viewModel::enableChipTimelineFromIntro,
             onLater = viewModel::postponeChipTimelineIntro,
             onNever = viewModel::dismissChipTimelineIntro,
+        )
+        SessionChatTimelineStylePickerSheet(
+            visible = uiState.timelineStylePickerVisible && !screenSheetOpen,
+            options = uiState.timelineStylePickerOptions,
+            onUse = viewModel::chooseTimelineStyleFromPicker,
+            onDismiss = viewModel::dismissTimelineStylePicker,
         )
 
         SessionChatTodosSheet(
@@ -1360,7 +1707,7 @@ fun SessionChatScreen(
                     enabled = runtimeModePickerEnabled,
                     endDecorator =
                         if (mode == uiState.runtimeMode) {
-                            BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
+                            BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check)
                         } else {
                             BottomSheetEntryDecorator.None
                         },
@@ -1477,6 +1824,24 @@ fun SessionChatScreen(
             secondaryOption = OpenCodeDialogOption(title = "Stay here", onClick = viewModel::chooseForkStay),
             onDismissRequest = viewModel::chooseForkStay,
         )
+
+        AnimatedVisibility(
+            visible = attachDropSummary != null,
+            enter = fadeIn(tween(durationMillis = 120)),
+            exit = fadeOut(tween(durationMillis = 120)),
+        ) {
+            // Keeps the last summary while fading out.
+            val summary = remember { mutableStateOf<AttachmentDropSummary?>(null) }
+            attachDropSummary?.let { summary.value = it }
+            summary.value?.let { shown ->
+                OpenCodeDropOverlay(
+                    variant = if (shown.rejected) OpenCodeDropOverlayVariant.Reject else OpenCodeDropOverlayVariant.Accept,
+                    title = shown.title,
+                    subtitle = shown.subtitle,
+                    previews = shown.previews.map { it.toAttachmentVariant() },
+                )
+            }
+        }
     }
 }
 
@@ -1484,6 +1849,8 @@ private fun openSessionExternalLink(
     context: android.content.Context,
     link: String,
 ) {
+    // Server-supplied links open as web pages only (http/https), like markdown links.
+    if (!ExternalLinkPolicy.isOpenable(link)) return
     val uri = runCatching { Uri.parse(link) }.getOrNull() ?: return
     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri)) }
 }
@@ -1543,6 +1910,12 @@ private fun ComposerDictationUiState.toCardModel(elapsedLabel: String): Composer
                 OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.PermissionDenied
             ComposerDictationPhase.ModelNotInstalled ->
                 OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.ModelNotInstalled
+            ComposerDictationPhase.ModelDownloading ->
+                OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.ModelDownloading
+            ComposerDictationPhase.ModelDownloadQueued ->
+                OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.ModelDownloadQueued
+            ComposerDictationPhase.ModelDownloadFailed ->
+                OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.ModelDownloadFailed
             ComposerDictationPhase.RecognizerError ->
                 OpenCodeDictationCardVariant.Unavailable to OpenCodeDictationUnavailableReason.RecognizerError
         }
@@ -1556,6 +1929,7 @@ private fun ComposerDictationUiState.toCardModel(elapsedLabel: String): Composer
         elapsedLabel = elapsedLabel,
         unavailableReason = reason,
         errorMessage = errorMessage,
+        downloadProgress = downloadProgress,
     )
 }
 
@@ -1567,6 +1941,7 @@ private fun SessionChatSnackbar.toOpenCodeSnackbarMessage(): OpenCodeSnackbarMes
                 SessionChatSnackbarTone.Default -> OpenCodeSnackbarVariant.Default
                 SessionChatSnackbarTone.Error -> OpenCodeSnackbarVariant.Error
             },
+        actionLabel = action?.label,
         id = id,
     )
 
@@ -1609,6 +1984,7 @@ private fun ClientSlashAction.tileIcon(): ImageVector =
         ClientSlashAction.Redo -> OpenCodeIcons.Redo
         ClientSlashAction.Compact -> OpenCodeIcons.VerticalAlignCenter
         ClientSlashAction.Mcp -> OpenCodeIcons.Plug
+        ClientSlashAction.Btw -> OpenCodeIcons.SubdirectoryArrowRight
     }
 
 internal fun sessionChatViewModelKey(
@@ -1626,6 +2002,110 @@ private fun SessionChatScreenPreview() {
             sessionTitle = "Importing icons explanation",
             worktree = "/Users/demo/opencode-mobile",
         )
+    }
+}
+
+/**
+ * Session Chat ⋯ → "Move to worktree…": the project's worktrees, the current one checked, then
+ * "New worktree…", whose form replaces the list in the same sheet.
+ */
+@Composable
+private fun SessionChatMoveToWorktreeSheet(
+    state: SessionChatWorktreeMoveUiState,
+    onDismiss: () -> Unit,
+    onMove: (String) -> Unit,
+    onNewWorktree: () -> Unit,
+    formCallbacks: WorktreeCreateFormCallbacks,
+) {
+    val form = state.form
+    OpenCodeBottomSheet(
+        visible = state.sheetVisible,
+        title = if (form != null) WorktreeCreateCopy.FORM_TITLE else SessionChatWorktreeMoveCopy.SHEET_TITLE,
+        onDismissRequest = onDismiss,
+        headerTrailingAction = form?.let { worktreeCreateBackAction(it, formCallbacks) },
+        keyboard = if (form != null && !form.basePickerVisible) OpenCodeBottomSheetKeyboard.Keep else OpenCodeBottomSheetKeyboard.Dismiss,
+        pinnedBottom = if (form != null) ({ WorktreeCreateFormActions(form, formCallbacks) }) else null,
+    ) {
+        if (form != null) {
+            WorktreeCreateFormBody(form, formCallbacks)
+        } else {
+            SessionChatMoveToWorktreeRows(state, onMove, onNewWorktree)
+        }
+    }
+}
+
+@Composable
+private fun SessionChatMoveToWorktreeRows(
+    state: SessionChatWorktreeMoveUiState,
+    onMove: (String) -> Unit,
+    onNewWorktree: () -> Unit,
+) {
+    state.rows.forEach { row ->
+        OpenCodeListItem(
+            title = row.title,
+            subtitle = row.subtitle,
+            selected = row.isCurrent,
+            enabled = state.submittingDirectory == null || state.submittingDirectory == row.directory,
+            startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, null),
+            onClick = if (row.isCurrent || state.submittingDirectory != null) null else ({ onMove(row.directory) }),
+            modifier = Modifier.testTag(SessionChatWorktreeMoveTags.row(row.title)),
+            trailing =
+                if (row.isCurrent) {
+                    {
+                        Icon(
+                            imageVector = OpenCodeIcons.Check,
+                            contentDescription = "Current worktree",
+                            tint = openCodeColor("icon-strong-base"),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                } else {
+                    null
+                },
+        )
+    }
+    NewWorktreeRow(
+        // Inert like the other rows while a move is in flight.
+        availability = if (state.submittingDirectory != null) state.newWorktree.copy(enabled = false) else state.newWorktree,
+        testTag = WorktreeCreateTags.MOVE_ROW,
+        onClick = onNewWorktree,
+    )
+}
+
+/** `/btw` chips and the notice for a `/btw` this server cannot answer, above the composer. */
+@Composable
+private fun SessionChatSideQuestionRow(
+    state: SessionChatSideQuestionsUiState,
+    onOpenAnswer: () -> Unit,
+    onRetry: () -> Unit,
+    onDismissFailed: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (state.unsupportedNotice == null && !state.hasChips) return
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        state.unsupportedNotice?.let { notice ->
+            OpenCodeInlineNotice(message = notice, variant = OpenCodeInlineNoticeVariant.Banner)
+        }
+        if (state.hasChips) {
+            Row(
+                modifier = Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (state.pendingCount > 0) {
+                    OpenCodeSideQuestionPill(OpenCodeSideQuestionPillVariant.Pending(state.pendingCount))
+                }
+                if (state.readyCount > 0) {
+                    OpenCodeSideQuestionPill(OpenCodeSideQuestionPillVariant.AnswerReady(state.readyCount), onClick = onOpenAnswer)
+                }
+                if (state.failedCount > 0) {
+                    OpenCodeSideQuestionPill(
+                        OpenCodeSideQuestionPillVariant.Failed(state.failedCount),
+                        onClick = onRetry,
+                        onDismiss = onDismissFailed,
+                    )
+                }
+            }
+        }
     }
 }
 

@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.connection
 
 import com.google.zxing.BinaryBitmap
+import com.google.zxing.LuminanceSource
 import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.ReaderException
 import com.google.zxing.common.HybridBinarizer
@@ -36,18 +37,23 @@ class PairingQRDecoder {
                     packed to width
                 }
             }
-        return try {
-            val source =
-                PlanarYUVLuminanceSource(
-                    luminance,
-                    dataWidth,
-                    height,
-                    0,
-                    0,
-                    width,
-                    height,
-                    false,
-                )
+        val source =
+            PlanarYUVLuminanceSource(
+                luminance,
+                dataWidth,
+                height,
+                0,
+                0,
+                width,
+                height,
+                false,
+            )
+        // `opencode pair` draws light modules as blocks, so a light-theme terminal shows the code inverted.
+        return read(source) ?: read(source.invert())
+    }
+
+    private fun read(source: LuminanceSource): String? =
+        try {
             reader
                 .decode(BinaryBitmap(HybridBinarizer(source)))
                 .text
@@ -57,7 +63,6 @@ class PairingQRDecoder {
         } finally {
             reader.reset()
         }
-    }
 
     private fun pack(
         yPlane: ByteArray,

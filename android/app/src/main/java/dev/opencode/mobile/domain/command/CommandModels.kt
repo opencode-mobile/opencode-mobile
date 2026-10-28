@@ -21,7 +21,11 @@ data class ServerCommand(
      * including v1 entries whose source happens to be a skill.
      */
     val skillId: String? = null,
-)
+) {
+    /** A v2 skill: admitted on the prompt as an inline mention, never run as a command. */
+    val isV2Skill: Boolean
+        get() = source == ServerCommandSource.Skill && !skillId.isNullOrBlank()
+}
 
 data class CommandRunOptions(
     val command: String,
@@ -31,6 +35,10 @@ data class CommandRunOptions(
     val variant: String? = null,
     val mode: String? = null,
     val delivery: FollowUpDelivery = FollowUpDelivery.Steer,
+    /** v2 skills mentioned in the draft; the command route carries them as `skills: [{id}]`. */
+    val skillIds: List<String> = emptyList(),
+    /** [ClientMessageId] for the user message. v1 keeps it; v2 commands take no id. */
+    val messageId: String? = null,
 )
 
 sealed class ComposerSubmitIntent {
@@ -43,7 +51,10 @@ sealed class ComposerSubmitIntent {
         val arguments: String,
     ) : ComposerSubmitIntent()
 
-    /** A slash skill. Admitted on the prompt, not the command route. */
+    /**
+     * A slash skill admitted on the prompt, not the command route.
+     * v2 skills with an id resolve as [Prompt] so the draft can carry an inline mention.
+     */
     data class SkillPrompt(
         val skillId: String,
         val text: String,

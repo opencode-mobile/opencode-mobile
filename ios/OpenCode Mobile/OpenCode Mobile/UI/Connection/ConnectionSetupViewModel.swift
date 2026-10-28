@@ -143,6 +143,12 @@ final class ConnectionSetupViewModel {
     private var qrScanPending = false
     /// Paste applied an address list that this session has not saved yet.
     private var pastedConnectLinkUnconfirmed = false
+    /// The link text a pasted connect link replaced, so Cancel on the cleartext warning can put it back.
+    private var pastedConnectLinkText: String?
+    /// Untrusted `http` hosts waiting for the user's "Connect anyway". `nil` when no warning shows.
+    private(set) var cleartextWarningHosts: [String]?
+    private var acknowledgedCleartextHosts: Set<String> = []
+    private var pendingCleartextResume: (() async -> Bool)?
     private var pairedProtocol: ServerProtocol?
     private var addressProbeFinished = false
     private var unreachableAddresses = Set<String>()
@@ -203,6 +209,10 @@ final class ConnectionSetupViewModel {
         qrPairingReady = false
         qrScanPending = false
         pastedConnectLinkUnconfirmed = false
+        pastedConnectLinkText = nil
+        cleartextWarningHosts = nil
+        acknowledgedCleartextHosts = []
+        pendingCleartextResume = nil
         pairedProtocol = nil
         detectedProtocol = nil
         state = .idle
@@ -495,13 +505,24 @@ final class ConnectionSetupViewModel {
         if engine == .t3 {
             return await submitT3()
         }
-        if adoptPastedConnectLink() {
+        let adoptedLink = adoptPastedConnectLink()
+        return await connectAndSave(adoptedLink: adoptedLink)
+    }
+
+    /// Everything after the pasted-link adoption, so the cleartext warning can resume here.
+    private func connectAndSave(adoptedLink: Bool) async -> Bool {
+        let resume: () async -> Bool = { [weak self] in
+            await self?.connectAndSave(adoptedLink: adoptedLink) ?? false
+        }
+        if adoptedLink {
             if let code = pendingPairingCode, !code.isEmpty, password.isEmpty {
+                if requiresCleartextConfirmation(resume: resume) { return false }
                 return await redeemThenSave(code: code)
             }
             if canSubmitWithoutProbe {
                 return await persist()
             }
+            if requiresCleartextConfirmation(resume: resume) { return false }
             return await probeThenSave()
         }
         switch credentialSegment {
@@ -509,6 +530,7 @@ final class ConnectionSetupViewModel {
             if canSubmitWithoutProbe {
                 return await persist()
             }
+            if requiresCleartextConfirmation(resume: resume) { return false }
             return await probeThenSave()
         case .pairingCode:
             let code = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -518,6 +540,7 @@ final class ConnectionSetupViewModel {
             }
             // Typed codes redeem for user opencode. The username field is hidden here.
             username = ConnectionProfile.formDefaults.username
+            if requiresCleartextConfirmation(resume: resume) { return false }
             return await redeemThenSave(code: code)
         }
     }
@@ -604,31 +627,66 @@ final class ConnectionSetupViewModel {
         return error.localizedDescription
     }
 
+    /// Shows the "not encrypted" warning when any address about to be contacted is plain `http`
+    /// outside loopback, private, or Tailscale ranges. Nothing (password, pairing code, probe)
+    /// is sent until the user confirms; `resume` continues where the caller stopped.
+    private func requiresCleartextConfirmation(resume: @escaping () async -> Bool) -> Bool {
+        let hosts = CleartextPolicy.untrustedCleartextHosts(in: urlsToProbe())
+            .filter { !acknowledgedCleartextHosts.contains($0) }
+        guard !hosts.isEmpty else { return false }
+        cleartextWarningHosts = hosts
+        pendingCleartextResume = resume
+        state = .idle
+        snackbar = nil
+        return true
+    }
+
+    var cleartextWarningMessage: String {
+        CleartextPolicy.warningMessage(hosts: cleartextWarningHosts ?? [])
+    }
+
+    /// "Connect anyway": remembers the hosts for this screen and continues the interrupted action.
+    func confirmCleartextWarning() async -> Bool {
+        guard let hosts = cleartextWarningHosts, let resume = pendingCleartextResume else { return false }
+        acknowledgedCleartextHosts.formUnion(hosts)
+        cleartextWarningHosts = nil
+        pendingCleartextResume = nil
+        return await resume()
+    }
+
+    /// "Cancel": nothing was sent. A scan that was waiting goes back to the host form; a pasted
+    /// connect link goes back into the host field so Connect redeems its pairing code again.
+    func dismissCleartextWarning() {
+        cleartextWarningHosts = nil
+        pendingCleartextResume = nil
+        if pastedConnectLinkUnconfirmed, let pastedLink = pastedConnectLinkText {
+            discardUnconfirmedPastedLayout()
+            setBaseURLFromSystem(pastedLink)
+            onFieldChanged()
+            return
+        }
+        if qrScanPending {
+            qrScanPending = false
+            leaveQRMode()
+        }
+    }
+
     private func probeThenSave(
         persistOnSuccess: Bool = true,
         origin: ConnectFailureOrigin = .manual
     ) async -> Bool {
         state = .connecting
         snackbar = nil
-        let candidates = urlsToProbe()
-        let outcomes = await probeOrigins(candidates)
-        noteAddressProbe(outcomes)
-        let reachable = outcomes.compactMap { url, result -> (String, ServerProtocol)? in
-            guard case let .success(detected) = result else { return nil }
-            return (url, detected)
-        }
-        if let winnerURL = PairingQRPayload.chooseAnsweredURL(
-            candidates: candidates,
-            answered: reachable.map(\.0)
-        ), let winner = reachable.first(where: {
-            ConnectionProfileIdentity.normalizeBaseURL($0.0) == winnerURL
-        }) {
+        // Unauthenticated sweep first; the password then goes to the one chosen host.
+        let resolution = await resolveAddresses(urlsToProbe(), password: password)
+        noteAddressProbe(resolution)
+        if let winner = resolution.chosen, let detected = resolution.reachableProtocol {
             addressRecovery = nil
-            detectedProtocol = winner.1
-            if ConnectionProfileIdentity.normalizeBaseURL(winner.0) !=
+            detectedProtocol = detected
+            if ConnectionProfileIdentity.normalizeBaseURL(winner) !=
                 ConnectionProfileIdentity.normalizeBaseURL(baseURL)
             {
-                setBaseURLFromSystem(winner.0)
+                setBaseURLFromSystem(winner)
             }
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
@@ -637,20 +695,14 @@ final class ConnectionSetupViewModel {
             if persistOnSuccess {
                 return await persist()
             }
-            markQrPaired(winner.1)
+            markQrPaired(detected)
             return true
         }
         detectedProtocol = nil
-        let probeErrors = outcomes.compactMap { _, result -> ServerProbeError? in
-            guard case let .failure(error) = result else { return nil }
-            return error as? ServerProbeError
-        }
         handleProbeFailure(
-            probeErrors.first(where: { $0.probeStatus == .authFailed })
-                ?? probeErrors.last
-                ?? .transport("Unable to reach the server"),
+            resolution.failure ?? .transport("Unable to reach the server"),
             origin: origin,
-            outcomes: outcomes
+            resolution: resolution
         )
         logConnectionAction(
             ProductAnalytics.Action.connectionTest,
@@ -667,22 +719,15 @@ final class ConnectionSetupViewModel {
     ) async -> Bool {
         state = .connecting
         snackbar = nil
-        let candidates = urlsToProbe()
-        let outcomes = await probeOrigins(candidates)
-        noteAddressProbe(outcomes)
-        let answered = outcomes.compactMap { url, result -> String? in
-            ServerAddressProbe.hostAnswered(result) ? url : nil
-        }
-        guard let winner = PairingQRPayload.chooseAnsweredURL(candidates: candidates, answered: answered) else {
+        // No password yet: the sweep is unauthenticated and the code is redeemed on one host only.
+        let resolution = await resolveAddresses(urlsToProbe(), password: "")
+        noteAddressProbe(resolution)
+        guard let winner = resolution.chosen else {
             detectedProtocol = nil
-            let probeErrors = outcomes.compactMap { _, result -> ServerProbeError? in
-                guard case let .failure(error) = result else { return nil }
-                return error as? ServerProbeError
-            }
             handleProbeFailure(
-                probeErrors.last ?? .transport("Unable to reach the server"),
+                .transport("Unable to reach the server"),
                 origin: origin,
-                outcomes: outcomes
+                resolution: resolution
             )
             logConnectionAction(
                 ProductAnalytics.Action.connectionTest,
@@ -733,7 +778,10 @@ final class ConnectionSetupViewModel {
         }
         password = token
         do {
-            let detected = try await connectionProbeService.probe(connection: draftConnection(baseURL: winner))
+            guard let connection = draftConnection(baseURL: winner) else {
+                throw ServerProbeError.transport("Invalid server address")
+            }
+            let detected = try await connectionProbeService.probe(connection: connection)
             addressRecovery = nil
             detectedProtocol = detected
             logConnectionAction(
@@ -771,6 +819,7 @@ final class ConnectionSetupViewModel {
               let code = credentials.code,
               !code.isEmpty
         else { return false }
+        pastedConnectLinkText = baseURL
         apply(credentials)
         pastedConnectLinkUnconfirmed = true
         return true
@@ -796,23 +845,21 @@ final class ConnectionSetupViewModel {
         onFieldChanged()
     }
 
-    private func probeOrigins(
-        _ urls: [String]
-    ) async -> [(String, Result<ServerProtocol, Error>)] {
-        await ServerAddressProbe.probe(
+    private func resolveAddresses(
+        _ urls: [String],
+        password: String
+    ) async -> ServerAddressProbe.Resolution {
+        await ServerAddressProbe.resolve(
             urls: urls,
             username: username,
             password: password,
+            currentBaseURL: baseURL,
             probing: connectionProbeService
         )
     }
 
-    private func noteAddressProbe(_ outcomes: [(String, Result<ServerProtocol, Error>)]) {
-        unreachableAddresses = Set(outcomes.compactMap { url, result in
-            ServerAddressProbe.hostAnswered(result)
-                ? nil
-                : ConnectionProfileIdentity.normalizeBaseURL(url)
-        })
+    private func noteAddressProbe(_ resolution: ServerAddressProbe.Resolution) {
+        unreachableAddresses = resolution.unreachable
         addressProbeFinished = true
     }
 
@@ -854,6 +901,11 @@ final class ConnectionSetupViewModel {
 
     /// Probe every saved address and redeem a pairing code. Does not store the profile.
     private func completeScannedPairing() async {
+        let resume: () async -> Bool = { [weak self] in
+            await self?.completeScannedPairing()
+            return false
+        }
+        if requiresCleartextConfirmation(resume: resume) { return }
         if let code = pendingPairingCode, !code.isEmpty, password.isEmpty {
             _ = await redeemThenSave(code: code, persistOnSuccess: false, origin: .scannedQr)
             return
@@ -873,6 +925,7 @@ final class ConnectionSetupViewModel {
     private func discardUnconfirmedPastedLayout() {
         guard pastedConnectLinkUnconfirmed else { return }
         pastedConnectLinkUnconfirmed = false
+        pastedConnectLinkText = nil
         pendingPairingCode = nil
         serverURLs = []
         unreachableAddresses = []
@@ -886,15 +939,15 @@ final class ConnectionSetupViewModel {
     private func handleProbeFailure(
         _ error: ServerProbeError,
         origin: ConnectFailureOrigin = .manual,
-        outcomes: [(String, Result<ServerProtocol, Error>)]? = nil
+        resolution: ServerAddressProbe.Resolution? = nil
     ) {
         if origin == .scannedQr {
             presentScannedQrFailure()
             return
         }
         let recovery: ConnectionAddressRecovery?
-        if let outcomes {
-            recovery = savedAddressRecovery(from: outcomes)
+        if let resolution {
+            recovery = savedAddressRecovery(from: resolution)
         } else {
             recovery = authRecovery(for: error)
         }
@@ -917,29 +970,16 @@ final class ConnectionSetupViewModel {
 
     /// Pair again only for a saved address list. A pasted link is not saved yet.
     private func savedAddressRecovery(
-        from outcomes: [(String, Result<ServerProtocol, Error>)]
+        from resolution: ServerAddressProbe.Resolution
     ) -> ConnectionAddressRecovery? {
-        guard !serverURLs.isEmpty, !pastedConnectLinkUnconfirmed, !outcomes.isEmpty else { return nil }
-        if outcomes.contains(where: { if case .success = $0.1 { true } else { false } }) {
+        guard !serverURLs.isEmpty, !pastedConnectLinkUnconfirmed, !resolution.answers.isEmpty else { return nil }
+        if resolution.reachableProtocol != nil {
             return nil
         }
-        let errors: [ServerProbeError?] = outcomes.map { _, result in
-            guard case let .failure(error as ServerProbeError) = result else { return nil }
-            return error
+        if resolution.nothingAnswered {
+            return .unreachable
         }
-        if errors.contains(where: { isUnauthorized($0) }) {
-            return .unauthorized
-        }
-        let everyFailureIsUnreachable = errors.allSatisfy { error in
-            guard let error else { return false }
-            switch error {
-            case .transport, .unhealthy:
-                return true
-            case .http:
-                return false
-            }
-        }
-        return everyFailureIsUnreachable ? .unreachable : nil
+        return isUnauthorized(resolution.failure) ? .unauthorized : nil
     }
 
     private func authRecovery(for error: ServerProbeError) -> ConnectionAddressRecovery? {
@@ -1041,7 +1081,7 @@ final class ConnectionSetupViewModel {
         )
     }
 
-    private func draftConnection(baseURL: String? = nil) -> ServerConnection {
+    private func draftConnection(baseURL: String? = nil) -> ServerConnection? {
         var profile = draftProfile()
         if let baseURL {
             profile.baseURL = baseURL

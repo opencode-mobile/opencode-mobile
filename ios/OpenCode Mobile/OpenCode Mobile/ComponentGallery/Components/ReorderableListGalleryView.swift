@@ -12,6 +12,7 @@ private struct ReorderableGalleryProject: Identifiable, Equatable {
 struct ReorderableListGalleryView: View {
     @State private var reorderEnabled = true
     @State private var contextActionEnabled = true
+    @State private var dragHandles = false
     @State private var lastEvent = "Long-press a project row, then drag."
     @State private var items: [ReorderableGalleryProject] = [
         .init(id: "all", title: "All projects", path: "4 projects", accent: .violet, count: 12),
@@ -34,6 +35,7 @@ struct ReorderableListGalleryView: View {
                         selected: contextActionEnabled,
                         action: { contextActionEnabled.toggle() }
                     )
+                    OpenCodeChoiceBadge(label: "Drag handles", selected: dragHandles, action: { dragHandles.toggle() })
                 }
             }
 
@@ -50,6 +52,7 @@ struct ReorderableListGalleryView: View {
                         lastEvent = "Moved row \(from) to \(to)."
                     }
                     : nil,
+                activation: dragHandles ? .handle : .longPress,
                 onSelect: { item in lastEvent = "Selected \(item.title)." },
                 onContextAction: contextActionEnabled
                     ? { item in lastEvent = "Context action on \(item.title)." }

@@ -101,7 +101,8 @@ final class SessionChatCommands {
         let input = ClientSlashActionCatalog.visibilityInput(
             messages: refs,
             revertMessageID: currentRevertMessageID,
-            hasSelectedComposerModel: hasSelectedComposerModel
+            hasSelectedComposerModel: hasSelectedComposerModel,
+            supportsSideQuestion: activeConnectionManager.capabilities.supportsSideQuestion
         )
         state.visibleActions = ClientSlashActionCatalog.visibleActions(input)
             .filter { lastCapabilities.allowsClientSlashAction($0) }
@@ -438,6 +439,30 @@ final class SessionChatCommands {
             operation: "cancel-revert",
             failureMessage: "Couldn't cancel revert."
         )
+    }
+
+    /// First reverted message while a revert is pending; the timeline hides it and later turns.
+    var revertMessageID: String? { currentRevertMessageID }
+
+    /// A revert staged, cleared or committed for the open session by any client, including the
+    /// server's echo of this device's own revert.
+    func applyRevertUpdate(_ update: SessionRevertUpdate) {
+        guard update.sessionID == sessionID, update.messageID != currentRevertMessageID else { return }
+        OpenCodeLog.sessionChat.info(
+            "revert boundary update session=\(self.sessionID) message=\(update.messageID ?? "none")"
+        )
+        setRevertBoundary(update.messageID)
+    }
+
+    /// Commits a pending revert ahead of the next prompt, as the web app and TUI do. Throws when
+    /// the commit fails so the prompt is not sent.
+    func commitPendingRevert() async throws {
+        guard currentRevertMessageID != nil else { return }
+        let sessionID = sessionID
+        guard try await sessionRepository.commitRevert(id: sessionID) else {
+            throw SessionError.http(statusCode: 0, message: "Couldn't commit revert.")
+        }
+        OpenCodeLog.sessionChat.info("revert committed before prompt session=\(sessionID)")
     }
 
     func consumePendingRevert() {

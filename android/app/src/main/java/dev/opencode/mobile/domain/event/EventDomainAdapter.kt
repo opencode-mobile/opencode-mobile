@@ -2,9 +2,15 @@ package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.SessionFailure
+import dev.opencode.mobile.domain.message.TimelineNotice
+import dev.opencode.mobile.domain.message.TimelineNoticeCodec
+import dev.opencode.mobile.domain.message.UploadedAttachment
+import dev.opencode.mobile.domain.message.UploadedAttachments
+import dev.opencode.mobile.domain.message.ToolArgumentsPreview
 import dev.opencode.mobile.domain.message.ToolInterruption
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.V2ContentPartId
+import dev.opencode.mobile.domain.message.V2TimelineNotices
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.toSessionActivity
@@ -33,6 +39,12 @@ class EventDomainAdapter(
      * `ended` / `failed` carry no id, while the server updates the running item.
      */
     private val runningCompactionIds = ConcurrentHashMap<String, String>()
+
+    /**
+     * v2 shell item id per shell id, remembered from `shell.started`: `ended`
+     * carries only the shell, while the server updates the item it started.
+     */
+    private val runningShellMessageIds = ConcurrentHashMap<String, String>()
 
     fun parseEvent(dataLine: String): OpencodeEvent? = parseEvents(dataLine).firstOrNull()
 
@@ -179,7 +191,10 @@ class EventDomainAdapter(
             "session.next.prompt.admitted",
             "session.inbox.enqueued",
             "session.inbox.delivery.changed",
-            -> userPromptEvents(properties, waiting = true)
+            ->
+                // A `synthetic` item is server-injected context (a finished shell command's
+                // output, Plan mode's reminder), not a prompt the user queued: no pending chrome.
+                userPromptEvents(properties, waiting = !isSyntheticInboxItem(properties))
             "session.next.prompted",
             "session.inbox.delivered",
             -> userPromptEvents(properties, waiting = false)
@@ -220,13 +235,16 @@ class EventDomainAdapter(
             "session.next.shell.started",
             "session.shell.started",
             ->
-                listOf(
-                    statusEvent(properties, "busy"),
-                    shellPartUpdated(properties, status = "running"),
-                )
+                (properties["shell"] as? JsonObject)?.let { shellItemStarted(properties, it, envelopeId) }
+                    ?: listOf(
+                        statusEvent(properties, "busy"),
+                        shellPartUpdated(properties, status = "running"),
+                    )
             "session.next.shell.ended",
             "session.shell.ended",
-            -> listOf(shellPartUpdated(properties, status = "completed"))
+            ->
+                (properties["shell"] as? JsonObject)?.let { shellItemEnded(properties, it) }
+                    ?: listOf(shellPartUpdated(properties, status = "completed"))
             "session.next.compaction.started",
             "session.compaction.started",
             ->
@@ -263,12 +281,25 @@ class EventDomainAdapter(
             -> listOf(textPartUpdated(properties))
             "session.next.moved",
             "session.moved",
-            -> listOf(event("session.updated", properties))
+            ->
+                listOf(event("session.updated", properties), event(SESSION_MOVED_EVENT, properties)) +
+                    noticeEvents(V2TimelineNotices.moved(properties), properties, envelopeId)
             "session.next.agent.switched",
-            "session.next.model.switched",
             "session.agent.selected",
+            ->
+                listOfNotNull(event("session.updated", properties), messageContext(properties)) +
+                    noticeEvents(V2TimelineNotices.agentSelected(properties), properties, envelopeId)
+            "session.next.model.switched",
             "session.model.selected",
-            -> listOfNotNull(event("session.updated", properties), messageContext(properties))
+            ->
+                listOfNotNull(event("session.updated", properties), messageContext(properties)) +
+                    noticeEvents(V2TimelineNotices.modelSelected(properties), properties, envelopeId)
+            "session.instructions.updated" ->
+                noticeEvents(V2TimelineNotices.instructionsUpdated(properties), properties, envelopeId)
+                    .ifEmpty { listOf(event(type, properties)) }
+            "session.synthetic" ->
+                noticeEvents(V2TimelineNotices.synthetic(properties), properties, envelopeId)
+                    .ifEmpty { listOf(event(type, properties)) }
             "session.renamed" -> listOf(renamedToUpdated(properties))
             "session.forked" -> listOf(forkedToCreated(properties))
             "session.usage.updated",
@@ -363,7 +394,7 @@ class EventDomainAdapter(
                     put("mode", agent)
                 }
                 put("waiting", waiting)
-                deliveryValue(properties)?.let { put("delivery", it) }
+                if (!isSyntheticInboxItem(properties)) deliveryValue(properties)?.let { put("delivery", it) }
             }
         return event("message.updated", buildJsonObject { put("info", info) })
     }
@@ -373,18 +404,23 @@ class EventDomainAdapter(
         val sessionId = sessionIdFromProperties(properties)
         val messageId = userMessageId(properties)
         val parts = mutableListOf<OpencodeEvent>()
-        val text = prompt?.string("text") ?: properties.string("text")
+        val rawText = prompt?.string("text") ?: properties.string("text")
+        val uploads = UploadedAttachments.parse(prompt?.get("metadata") as? JsonObject ?: properties["metadata"] as? JsonObject)
+        val text = rawText?.let { UploadedAttachments.stripLines(it, uploads) }
         // v2 inbox `synthetic` items (e.g. Plan mode's system-reminder) are server-injected
         // context, not something the user typed: keep the part but mark it hidden.
         val synthetic = (properties["item"] as? JsonObject)?.string("type") == "synthetic"
         text?.takeIf { it.isNotBlank() }?.let {
             parts += userTextPartUpdated(sessionId, messageId, it, synthetic = synthetic)
         }
-        if (prompt == null) return parts
-        val files = prompt["files"] as? JsonArray ?: return parts
-        files.forEachIndexed { index, element ->
+        if (prompt == null && uploads.isEmpty()) return parts
+        val files = prompt?.get("files") as? JsonArray
+        files?.forEachIndexed { index, element ->
             val file = element as? JsonObject ?: return@forEachIndexed
             parts += userFilePartUpdated(sessionId, messageId, index, file)
+        }
+        uploads.forEachIndexed { index, upload ->
+            parts += uploadedFilePartUpdated(sessionId, messageId, index, upload)
         }
         return parts
     }
@@ -407,6 +443,25 @@ class EventDomainAdapter(
         return event("message.part.updated", buildJsonObject { put("part", part) })
     }
 
+    private fun uploadedFilePartUpdated(
+        sessionId: String?,
+        messageId: String?,
+        index: Int,
+        upload: UploadedAttachment,
+    ): OpencodeEvent {
+        val part =
+            buildJsonObject {
+                messageId?.let { put("id", "$it:upload:$index") }
+                sessionId?.let { put("sessionID", it) }
+                messageId?.let { put("messageID", it) }
+                put("type", "file")
+                put("mime", upload.mime)
+                put("filename", upload.name)
+                put("serverPath", upload.path)
+            }
+        return event("message.part.updated", buildJsonObject { put("part", part) })
+    }
+
     private fun userFilePartUpdated(
         sessionId: String?,
         messageId: String?,
@@ -419,11 +474,17 @@ class EventDomainAdapter(
                 sessionId?.let { put("sessionID", it) }
                 messageId?.let { put("messageID", it) }
                 put("type", "file")
-                file.string("uri")?.let { put("url", it) }
                 val mime =
                     file.string("mime")
                         ?: file.string("uri")?.let(AttachmentDataUrl::mimeFromDataUrl)
                         ?: file.string("name")?.let(AttachmentDataUrl::mimeFromFilename)
+                val uri = file.string("uri")
+                val data = file.string("data")
+                when {
+                    uri != null -> put("url", uri)
+                    // Inline attachment (a sent photo): same data URL the REST mapping builds.
+                    data != null && mime != null -> put("url", "data:${mime.lowercase()};base64,$data")
+                }
                 mime?.let { put("mime", it) }
                 file.string("name")?.let { put("filename", it) }
             }
@@ -539,6 +600,7 @@ class EventDomainAdapter(
                     if (message.isNotEmpty()) put("message", message)
                     error.int("status")?.let { put("statusCode", it) }
                     body?.takeIf { it.isNotBlank() }?.let { put("responseBody", it) }
+                    error.long("retryAfterMs")?.let { put("retryAfterMs", it) }
                 },
             )
         }
@@ -621,7 +683,14 @@ class EventDomainAdapter(
                             null
                         }
                     }?.takeIf { it.isNotEmpty() }
-        val input = jsonObjectInput(properties["input"])
+        val input =
+            jsonObjectInput(properties["input"])
+                ?: when {
+                    // Arguments start streaming: an empty preview until deltas or `ended` fill it.
+                    type.endsWith("tool.input.started") -> buildJsonObject { put(ToolArgumentsPreview.INPUT_KEY, "") }
+                    type.endsWith("tool.input.ended") -> endedToolInput(properties.string("text"))
+                    else -> null
+                }
         val metadata = toolMetadata(properties)
         return toolLikePartUpdated(
             properties = properties,
@@ -656,6 +725,16 @@ class EventDomainAdapter(
         }
     }
 
+    /**
+     * `tool.input.ended` carries the whole argument text. Parsed, it settles the
+     * arguments; otherwise it replaces the streamed preview with the final text.
+     */
+    private fun endedToolInput(text: String?): JsonObject? {
+        if (text == null) return null
+        return jsonObjectInput(JsonPrimitive(text))
+            ?: buildJsonObject { put(ToolArgumentsPreview.INPUT_KEY, text) }
+    }
+
     private fun toolInputDelta(properties: JsonObject): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
         val projected =
@@ -684,6 +763,96 @@ class EventDomainAdapter(
             title = "Shell",
         )
 
+    private fun isSyntheticInboxItem(properties: JsonObject): Boolean = (properties["item"] as? JsonObject)?.string("type") == "synthetic"
+
+    /**
+     * A v2 shell run (`{shell: Info}`) is its own transcript item whose id is the
+     * `started` envelope id with `evt_` swapped for `msg_`. It projects like the
+     * REST copy: the command as a user message, then a Shell row under
+     * `<id>:assistant`, so a history load replaces both in place. The shell runs
+     * beside the agent loop, so it leaves the session status alone.
+     */
+    private fun shellItemStarted(
+        properties: JsonObject,
+        shell: JsonObject,
+        envelopeId: String?,
+    ): List<OpencodeEvent> {
+        val messageId = messageIdFromEnvelope(envelopeId) ?: return emptyList()
+        shell.string("id")?.let { runningShellMessageIds[it] = messageId }
+        val created = (shell["time"] as? JsonObject)?.long("started") ?: properties.long("created")
+        return shellItemEvents(properties, shell, messageId, created = created, completed = null, output = null)
+    }
+
+    private fun shellItemEnded(
+        properties: JsonObject,
+        shell: JsonObject,
+    ): List<OpencodeEvent> {
+        val messageId = shell.string("id")?.let { runningShellMessageIds.remove(it) } ?: return emptyList()
+        val time = shell["time"] as? JsonObject
+        val output = (properties["output"] as? JsonObject)?.string("output") ?: properties.string("output")
+        return shellItemEvents(
+            properties,
+            shell,
+            messageId,
+            created = time?.long("started"),
+            completed = time?.long("completed") ?: properties.long("created"),
+            output = output,
+        )
+    }
+
+    private fun shellItemEvents(
+        properties: JsonObject,
+        shell: JsonObject,
+        messageId: String,
+        created: Long?,
+        completed: Long?,
+        output: String?,
+    ): List<OpencodeEvent> {
+        val sessionId = sessionIdFromProperties(properties)
+        val command = shell.string("command").orEmpty()
+        val time =
+            buildJsonObject {
+                created?.let { put("created", it) }
+                completed?.let { put("completed", it) }
+            }
+
+        fun info(
+            id: String,
+            role: String,
+        ) = buildJsonObject {
+            put("id", id)
+            sessionId?.let { put("sessionID", it) }
+            put("role", role)
+            if (time.isNotEmpty()) put("time", time)
+        }
+        val assistantId = "$messageId:assistant"
+        val tool =
+            buildJsonObject {
+                put("id", "$messageId:tool")
+                sessionId?.let { put("sessionID", it) }
+                put("messageID", assistantId)
+                put("type", "tool")
+                put("tool", "bash")
+                put(
+                    "state",
+                    buildJsonObject {
+                        put("status", if (completed == null) "running" else "completed")
+                        put("title", "Shell")
+                        if (command.isNotEmpty()) put("input", buildJsonObject { put("command", command) })
+                        output?.let { put("output", it) }
+                        shell.long("exit")?.let { exit -> put("metadata", buildJsonObject { put("exit", exit) }) }
+                        created?.let { put("time", buildJsonObject { put("start", it) }) }
+                    },
+                )
+            }
+        return buildList {
+            add(event("message.updated", buildJsonObject { put("info", info(messageId, "user")) }))
+            if (command.isNotEmpty()) add(userTextPartUpdated(sessionId, messageId, command))
+            add(event("message.updated", buildJsonObject { put("info", info(assistantId, "assistant")) }))
+            add(event("message.part.updated", buildJsonObject { put("part", tool) }))
+        }
+    }
+
     private enum class CompactionPhase { Started, Ended, Failed }
 
     /**
@@ -698,7 +867,7 @@ class EventDomainAdapter(
         phase: CompactionPhase,
     ): List<OpencodeEvent> {
         val sessionId = sessionIdFromProperties(properties)
-        val fromEnvelope = envelopeId?.let { id -> if (id.startsWith("evt_")) "msg_" + id.removePrefix("evt_") else id }
+        val fromEnvelope = messageIdFromEnvelope(envelopeId)
         val remembered = sessionId?.let { runningCompactionIds[it] }
         val messageId =
             when (phase) {
@@ -747,6 +916,45 @@ class EventDomainAdapter(
             event("message.part.updated", buildJsonObject { put("part", part) }),
         )
     }
+
+    /**
+     * A v2 timeline notice as a client-only `notice` message: the server records it
+     * as its own session item whose id is the event envelope id with `evt_` swapped
+     * for `msg_`, so the live row and the REST row share one id.
+     */
+    private fun noticeEvents(
+        notice: TimelineNotice?,
+        properties: JsonObject,
+        envelopeId: String?,
+    ): List<OpencodeEvent> {
+        if (notice == null) return emptyList()
+        val messageId = messageIdFromEnvelope(envelopeId) ?: return emptyList()
+        val sessionId = sessionIdFromProperties(properties)
+        val info =
+            buildJsonObject {
+                put("id", messageId)
+                sessionId?.let { put("sessionID", it) }
+                put("role", NOTICE_ROLE)
+                properties.long("created")?.let { created ->
+                    put("time", buildJsonObject { put("created", created) })
+                }
+            }
+        val part =
+            buildJsonObject {
+                put("id", messageId)
+                sessionId?.let { put("sessionID", it) }
+                put("messageID", messageId)
+                put("type", NOTICE_ROLE)
+                put("notice", TimelineNoticeCodec.encode(notice))
+            }
+        return listOf(
+            event("message.updated", buildJsonObject { put("info", info) }),
+            event("message.part.updated", buildJsonObject { put("part", part) }),
+        )
+    }
+
+    private fun messageIdFromEnvelope(envelopeId: String?): String? =
+        envelopeId?.takeIf { it.isNotBlank() }?.let { id -> if (id.startsWith("evt_")) "msg_" + id.removePrefix("evt_") else id }
 
     /**
      * v2 announces a committed revert only as `session.revert.committed {to}`:
@@ -1146,6 +1354,47 @@ class EventDomainAdapter(
     }
 
     /**
+     * Pending-revert change. v1 `session.updated` carries the whole session, so an absent
+     * `info.revert` means none; v2 stages, clears and commits with dedicated events. A partial
+     * `info` (the v2 `session.renamed` projection) says nothing about the revert and is ignored.
+     */
+    fun sessionRevertUpdate(event: OpencodeEvent): SessionRevertUpdate? {
+        fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
+        return when (event.type) {
+            "session.updated" -> {
+                val info = event.rawProperties?.get("info") as? JsonObject ?: return null
+                if (info["time"] == null) return null
+                val sessionId = event.sessionId ?: info.string("id") ?: return null
+                val messageId = (info["revert"] as? JsonObject)?.string("messageID")
+                SessionRevertUpdate(sessionId = sessionId, messageId = messageId)
+            }
+            "session.revert.staged" -> {
+                val sessionId = event.sessionId ?: return null
+                val messageId =
+                    (event.rawProperties?.get("revert") as? JsonObject)?.string("messageID") ?: return null
+                SessionRevertUpdate(sessionId = sessionId, messageId = messageId)
+            }
+            "session.revert.cleared", "session.revert.committed" -> {
+                val sessionId = event.sessionId ?: return null
+                SessionRevertUpdate(sessionId = sessionId, messageId = null)
+            }
+            else -> null
+        }
+    }
+
+    /** Session removed on the server. v1 carries the id only in `info.id`; v2 sends `sessionID`. */
+    fun sessionDeletedId(event: OpencodeEvent): String? {
+        if (event.type != "session.deleted") return null
+        val info = event.rawProperties?.get("info") as? JsonObject
+
+        fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
+        return event.sessionId
+            ?: info?.string("id")
+            ?: info?.string("sessionID")
+            ?: info?.string("sessionId")
+    }
+
+    /**
      * v2 `session.viewed` read acknowledgement: the session was seen up to the run
      * that ended at `idle`. Returns null for other events or a missing watermark.
      */
@@ -1168,8 +1417,14 @@ class EventDomainAdapter(
         /** v2 read acknowledgement broadcast after `POST /api/session/{id}/view`. */
         const val SESSION_VIEWED_EVENT = "session.viewed"
 
+        /** v2 `session.moved`: `location.directory` is where the session runs now. */
+        const val SESSION_MOVED_EVENT = "session.moved"
+
         /** Client-only projection of a v2 agent/model switch for the message store. */
         const val MESSAGE_CONTEXT_EVENT = "message.context"
+
+        /** Client-only message role and part type of a live v2 timeline notice. */
+        private const val NOTICE_ROLE = "notice"
 
         private val WRAPPER_KEYS =
             setOf(
@@ -1211,6 +1466,15 @@ data class ParsedSessionActivity(
 data class SessionTitleUpdate(
     val sessionId: String,
     val title: String,
+)
+
+/**
+ * Pending revert of a session after an event: [messageId] is the first reverted message, null
+ * when no revert is pending any more (cleared, or committed and already truncated).
+ */
+data class SessionRevertUpdate(
+    val sessionId: String,
+    val messageId: String?,
 )
 
 data class SessionViewedUpdate(

@@ -13,6 +13,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
@@ -21,6 +22,7 @@ import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListProjectPickerRows
+import dev.opencode.mobile.ui.components.SessionListScopeLoad
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
 
@@ -29,12 +31,19 @@ fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     var oneProject by rememberSaveable { mutableStateOf(false) }
     var showProjectPicker by rememberSaveable { mutableStateOf(false) }
+    var loadStep by rememberSaveable { mutableStateOf(GalleryScopeLoadStep.None) }
+    var classicRows by rememberSaveable { mutableStateOf(false) }
     val filterTabs =
-        if (oneProject) {
-            sessionListGalleryOneProjectFilterTabs
-        } else {
-            sessionListGalleryFilterTabs
-        }
+        galleryTabsWithNewProject(
+            base =
+                if (oneProject) {
+                    sessionListGalleryOneProjectFilterTabs
+                } else {
+                    sessionListGalleryFilterTabs
+                },
+            oneProject = oneProject,
+            load = loadStep.load,
+        )
     Box(modifier = modifier.fillMaxSize()) {
         SessionList(
             sessions = sessionListGallerySamples,
@@ -45,6 +54,8 @@ fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
             onSessionSelected = {},
             onAddProject = {},
             onNewSession = {},
+            onRetryScopeLoad = { loadStep = GalleryScopeLoadStep.Loading },
+            rowStyle = if (classicRows) HomeSessionRowStyle.Classic else HomeSessionRowStyle.Compact,
             modifier = Modifier.fillMaxSize(),
         )
         Row(
@@ -64,6 +75,25 @@ fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
                             sessionListGalleryOneProjectFilterTabs.first().id
                         } else {
                             SessionListFilterTab.ALL_ID
+                        }
+                    loadStep = GalleryScopeLoadStep.None
+                },
+            )
+            OpenCodeChoiceBadge(
+                label = if (classicRows) "Classic" else "Compact",
+                selected = classicRows,
+                onClick = { classicRows = !classicRows },
+            )
+            OpenCodeChoiceBadge(
+                label = loadStep.label,
+                selected = loadStep != GalleryScopeLoadStep.None,
+                onClick = {
+                    loadStep = loadStep.next()
+                    selectedFilterId =
+                        when {
+                            loadStep != GalleryScopeLoadStep.None -> GALLERY_NEW_PROJECT_WORKTREE
+                            oneProject -> sessionListGalleryOneProjectFilterTabs.first().id
+                            else -> SessionListFilterTab.ALL_ID
                         }
                 },
             )
@@ -113,6 +143,8 @@ private val sessionListGallerySamples: List<SessionListSession>
                 status = SessionListStatus.Running,
                 caption = "now",
                 updatedAtEpochMs = now,
+                projectName = "opencode-mobile",
+                compactWorktree = "794-readable-tool-results",
             ),
             SessionListSession(
                 id = "session-2",
@@ -135,6 +167,7 @@ private val sessionListGallerySamples: List<SessionListSession>
                 status = SessionListStatus.Ready,
                 caption = "3h ago",
                 updatedAtEpochMs = now - 3 * 3_600_000L,
+                projectName = "opencode-mobile",
             ),
             SessionListSession(
                 id = "session-done",
@@ -179,6 +212,9 @@ private val sessionListGallerySamples: List<SessionListSession>
                 status = SessionListStatus.Retrying,
                 caption = "now",
                 updatedAtEpochMs = now,
+                retryAttempt = 2,
+                projectName = "opencode-mobile",
+                compactWorktree = "ope-1042-show-worktree-and-project-on-home-rows",
             ),
             SessionListSession(
                 id = "session-stale",
@@ -226,3 +262,40 @@ private val sessionListGalleryOneProjectFilterTabs =
             count = 5,
         ),
     )
+
+internal const val GALLERY_NEW_PROJECT_WORKTREE = "/Users/demo/new-project"
+
+/** Gallery cycle through a new project's first-load states. */
+internal enum class GalleryScopeLoadStep(
+    val label: String,
+    val load: SessionListScopeLoad?,
+) {
+    None("Loading", null),
+    Loading("Loading", SessionListScopeLoad.Loading()),
+    Slow("Slow", SessionListScopeLoad.Loading(isSlow = true)),
+    Failed("Failed", SessionListScopeLoad.Failed),
+    ;
+
+    fun next(): GalleryScopeLoadStep = entries[(ordinal + 1) % entries.size]
+}
+
+/** Adds a just-added project with no sessions yet whose first load is [load]. */
+internal fun galleryTabsWithNewProject(
+    base: List<SessionListFilterTab>,
+    oneProject: Boolean,
+    load: SessionListScopeLoad?,
+): List<SessionListFilterTab> {
+    if (load == null) return base
+    val newProject =
+        SessionListFilterTab.project(
+            worktree = GALLERY_NEW_PROJECT_WORKTREE,
+            title = "new-project",
+            count = 0,
+            load = load,
+        )
+    if (oneProject) return listOf(newProject)
+    val projects = base.filterNot { it.isAll } + newProject
+    return listOf(
+        SessionListFilterTab.all(projectCount = projects.size, sessionCount = projects.sumOf { it.count }),
+    ) + projects
+}

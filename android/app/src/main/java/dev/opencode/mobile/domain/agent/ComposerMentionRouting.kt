@@ -1,6 +1,5 @@
 package dev.opencode.mobile.domain.agent
 
-import dev.opencode.mobile.domain.command.ComposerSubmitRouting
 import dev.opencode.mobile.domain.filesystem.ProjectFileReference
 
 object ComposerMentionRouting {
@@ -9,39 +8,50 @@ object ComposerMentionRouting {
         cursor: Int,
         mentions: List<AgentMention> = emptyList(),
         fileMentions: List<FileMention> = emptyList(),
-    ): String? {
-        val clamped = cursor.coerceIn(0, text.length)
-        val before = text.substring(0, clamped)
-        val atIndex = before.lastIndexOf('@')
-        if (atIndex < 0) return null
-        if (atIndex > 0) {
-            val previous = before[atIndex - 1]
-            if (!previous.isWhitespace()) return null
-        }
-        val token = before.substring(atIndex + 1)
-        if (token.any { it.isWhitespace() }) return null
-        // A completed mention at the caret is not an open @ query. A caret inside a
-        // file path (which may contain spaces) is still that mention.
-        if (mentions.any { it.start == atIndex && it.end == clamped }) return null
-        if (fileMentions.any { clamped > it.start && clamped <= it.end }) return null
-        return token
-    }
+        skillMentions: List<SkillMention> = emptyList(),
+    ): String? = openTriggerQuery(text, cursor, '@', mentions, fileMentions, skillMentions)?.query
+
+    /**
+     * The open `/` query at the caret, with the same trigger rules as [atSuggestionQuery]:
+     * the `/` starts the draft or follows whitespace, and no whitespace sits between it and
+     * the caret. A caret inside a file mention (paths contain `/`) or right after a completed
+     * skill span is not a query.
+     */
+    fun slashSuggestionQuery(
+        text: String,
+        cursor: Int,
+        mentions: List<AgentMention> = emptyList(),
+        fileMentions: List<FileMention> = emptyList(),
+        skillMentions: List<SkillMention> = emptyList(),
+    ): String? = openTriggerQuery(text, cursor, '/', mentions, fileMentions, skillMentions)?.query
+
+    /** True when the `/` of the open slash query sits at offset 0 of the draft. */
+    fun slashTokenIsLeading(
+        text: String,
+        cursor: Int,
+        mentions: List<AgentMention> = emptyList(),
+        fileMentions: List<FileMention> = emptyList(),
+        skillMentions: List<SkillMention> = emptyList(),
+    ): Boolean = openTriggerQuery(text, cursor, '/', mentions, fileMentions, skillMentions)?.triggerIndex == 0
 
     fun suggestionMode(
         text: String,
         cursor: Int,
         mentions: List<AgentMention> = emptyList(),
         fileMentions: List<FileMention> = emptyList(),
+        skillMentions: List<SkillMention> = emptyList(),
         allowsMentions: Boolean = true,
         allowsSlashCommands: Boolean = true,
     ): ComposerSuggestionMode {
         if (allowsMentions) {
-            val atQuery = atSuggestionQuery(text, cursor, mentions, fileMentions)
+            val atQuery = atSuggestionQuery(text, cursor, mentions, fileMentions, skillMentions)
             if (atQuery != null) return ComposerSuggestionMode.At(query = atQuery)
         }
         if (allowsSlashCommands) {
-            val slashQuery = ComposerSubmitRouting.slashSuggestionQuery(text)
-            if (slashQuery != null) return ComposerSuggestionMode.Slash(query = slashQuery)
+            val slash = openTriggerQuery(text, cursor, '/', mentions, fileMentions, skillMentions)
+            if (slash != null) {
+                return ComposerSuggestionMode.Slash(query = slash.query, isLeading = slash.triggerIndex == 0)
+            }
         }
         return ComposerSuggestionMode.None
     }
@@ -118,11 +128,13 @@ object ComposerMentionRouting {
         mentionId: String,
         existingMentions: List<AgentMention> = emptyList(),
         existingFileMentions: List<FileMention> = emptyList(),
+        existingSkillMentions: List<SkillMention> = emptyList(),
     ): MentionInsertResult {
         val inserted =
             insertToken(
                 text = text,
                 cursor = cursor,
+                trigger = '@',
                 token = "@$agentName",
             )
         return MentionInsertResult(
@@ -139,6 +151,7 @@ object ComposerMentionRouting {
                         )
                 ).sortedBy { it.start },
             fileMentions = shiftedFiles(existingFileMentions, inserted),
+            skillMentions = shiftedSkills(existingSkillMentions, inserted),
         )
     }
 
@@ -149,8 +162,9 @@ object ComposerMentionRouting {
         mentionId: String,
         existingMentions: List<AgentMention> = emptyList(),
         existingFileMentions: List<FileMention> = emptyList(),
+        existingSkillMentions: List<SkillMention> = emptyList(),
     ): MentionInsertResult {
-        val inserted = insertToken(text = text, cursor = cursor, token = "@$path")
+        val inserted = insertToken(text = text, cursor = cursor, trigger = '@', token = "@$path")
         return MentionInsertResult(
             text = inserted.text,
             cursor = inserted.cursor,
@@ -165,6 +179,57 @@ object ComposerMentionRouting {
                             end = inserted.atIndex + inserted.token.length,
                         )
                 ).sortedBy { it.start },
+            skillMentions = shiftedSkills(existingSkillMentions, inserted),
+        )
+    }
+
+    /** Replaces the open `/query` at the caret with a tracked `/name` skill span plus a trailing space. */
+    fun insertSkillMention(
+        text: String,
+        cursor: Int,
+        skillId: String,
+        name: String,
+        mentionId: String,
+        existingMentions: List<AgentMention> = emptyList(),
+        existingFileMentions: List<FileMention> = emptyList(),
+        existingSkillMentions: List<SkillMention> = emptyList(),
+    ): MentionInsertResult {
+        val inserted = insertToken(text = text, cursor = cursor, trigger = '/', token = "/$name")
+        return MentionInsertResult(
+            text = inserted.text,
+            cursor = inserted.cursor,
+            mentions = shiftedAgents(existingMentions, inserted),
+            fileMentions = shiftedFiles(existingFileMentions, inserted),
+            skillMentions =
+                (
+                    shiftedSkills(existingSkillMentions, inserted) +
+                        SkillMention(
+                            id = mentionId,
+                            skillId = skillId,
+                            name = name,
+                            start = inserted.atIndex,
+                            end = inserted.atIndex + inserted.token.length,
+                        )
+                ).sortedBy { it.start },
+        )
+    }
+
+    /** Replaces the open `/query` at the caret with `/name ` and records no span. */
+    fun insertCommandSelection(
+        text: String,
+        cursor: Int,
+        commandName: String,
+        existingMentions: List<AgentMention> = emptyList(),
+        existingFileMentions: List<FileMention> = emptyList(),
+        existingSkillMentions: List<SkillMention> = emptyList(),
+    ): MentionInsertResult {
+        val inserted = insertToken(text = text, cursor = cursor, trigger = '/', token = "/$commandName")
+        return MentionInsertResult(
+            text = inserted.text,
+            cursor = inserted.cursor,
+            mentions = shiftedAgents(existingMentions, inserted),
+            fileMentions = shiftedFiles(existingFileMentions, inserted),
+            skillMentions = shiftedSkills(existingSkillMentions, inserted),
         )
     }
 
@@ -174,11 +239,12 @@ object ComposerMentionRouting {
         proposedText: String,
         proposedCursor: Int,
         previousFileMentions: List<FileMention> = emptyList(),
+        previousSkillMentions: List<SkillMention> = emptyList(),
     ): MentionReconcileResult {
         val reconciled =
             reconcileSpans(
                 previousText = previousText,
-                previousSpans = spans(previousMentions, previousFileMentions),
+                previousSpans = spans(previousMentions, previousFileMentions, previousSkillMentions),
                 proposedText = proposedText,
                 proposedCursor = proposedCursor,
             )
@@ -187,6 +253,7 @@ object ComposerMentionRouting {
             cursor = reconciled.cursor,
             mentions = reconciled.spans.agents(),
             fileMentions = reconciled.spans.files(),
+            skillMentions = reconciled.spans.skills(),
         )
     }
 
@@ -197,11 +264,7 @@ object ComposerMentionRouting {
         mentions
             .sortedBy { it.start }
             .mapNotNull { mention ->
-                if (mention.start < 0 || mention.end > text.length || mention.start >= mention.end) {
-                    return@mapNotNull null
-                }
-                val value = text.substring(mention.start, mention.end)
-                if (value != mention.token) return@mapNotNull null
+                val value = tokenValue(text, mention.start, mention.end, mention.token) ?: return@mapNotNull null
                 AgentPartPayload(
                     name = mention.name,
                     sourceValue = value,
@@ -217,14 +280,28 @@ object ComposerMentionRouting {
         mentions
             .sortedBy { it.start }
             .mapNotNull { mention ->
-                if (mention.start < 0 || mention.end > text.length || mention.start >= mention.end) {
-                    return@mapNotNull null
-                }
-                val value = text.substring(mention.start, mention.end)
-                if (value != mention.token) return@mapNotNull null
+                val value = tokenValue(text, mention.start, mention.end, mention.token) ?: return@mapNotNull null
                 FilePartPayload(
                     path = mention.path,
                     filename = ProjectFileReference.filename(mention.path),
+                    sourceValue = value,
+                    start = mention.start,
+                    end = mention.end,
+                )
+            }
+
+    /** Skill spans whose text still equals their token, in draft order. */
+    fun skillParts(
+        text: String,
+        skillMentions: List<SkillMention>,
+    ): List<SkillPartPayload> =
+        skillMentions
+            .sortedBy { it.start }
+            .mapNotNull { mention ->
+                val value = tokenValue(text, mention.start, mention.end, mention.token) ?: return@mapNotNull null
+                SkillPartPayload(
+                    skillId = mention.skillId,
+                    name = mention.name,
                     sourceValue = value,
                     start = mention.start,
                     end = mention.end,
@@ -235,11 +312,13 @@ object ComposerMentionRouting {
         text: String,
         mentions: List<AgentMention>,
         fileMentions: List<FileMention> = emptyList(),
+        skillMentions: List<SkillMention> = emptyList(),
     ): TrimmedPrompt {
         val leading = text.indexOfFirst { !it.isWhitespace() }
-        if (leading < 0) return TrimmedPrompt("", emptyList(), emptyList())
+        if (leading < 0) return TrimmedPrompt("", emptyList(), emptyList(), emptyList())
         val trailing = text.indexOfLast { !it.isWhitespace() }
         val trimmed = text.substring(leading, trailing + 1)
+
         fun adjust(
             start: Int,
             end: Int,
@@ -247,6 +326,7 @@ object ComposerMentionRouting {
             if (end <= leading || start > trailing) return null
             return (start - leading) to (end - leading)
         }
+
         return TrimmedPrompt(
             text = trimmed,
             agentMentions =
@@ -259,7 +339,54 @@ object ComposerMentionRouting {
                     val range = adjust(mention.start, mention.end) ?: return@mapNotNull null
                     mention.copy(start = range.first, end = range.second)
                 },
+            skillMentions =
+                skillMentions.mapNotNull { mention ->
+                    val range = adjust(mention.start, mention.end) ?: return@mapNotNull null
+                    mention.copy(start = range.first, end = range.second)
+                },
         )
+    }
+
+    private fun tokenValue(
+        text: String,
+        start: Int,
+        end: Int,
+        token: String,
+    ): String? {
+        if (start < 0 || end > text.length || start >= end) return null
+        val value = text.substring(start, end)
+        return value.takeIf { it == token }
+    }
+
+    private data class OpenQuery(
+        val triggerIndex: Int,
+        val query: String,
+    )
+
+    private fun openTriggerQuery(
+        text: String,
+        cursor: Int,
+        trigger: Char,
+        mentions: List<AgentMention>,
+        fileMentions: List<FileMention>,
+        skillMentions: List<SkillMention>,
+    ): OpenQuery? {
+        val clamped = cursor.coerceIn(0, text.length)
+        val before = text.substring(0, clamped)
+        val triggerIndex = before.lastIndexOf(trigger)
+        if (triggerIndex < 0) return null
+        if (triggerIndex > 0) {
+            val previous = before[triggerIndex - 1]
+            if (!previous.isWhitespace()) return null
+        }
+        val token = before.substring(triggerIndex + 1)
+        if (token.any { it.isWhitespace() }) return null
+        // A completed mention at the caret is not an open query. A caret inside a
+        // file path (which may contain spaces or slashes) is still that mention.
+        if (mentions.any { it.start == triggerIndex && it.end == clamped }) return null
+        if (skillMentions.any { it.start == triggerIndex && it.end == clamped }) return null
+        if (fileMentions.any { clamped > it.start && clamped <= it.end }) return null
+        return OpenQuery(triggerIndex = triggerIndex, query = token)
     }
 
     private data class TokenInsertion(
@@ -274,12 +401,13 @@ object ComposerMentionRouting {
     private fun insertToken(
         text: String,
         cursor: Int,
+        trigger: Char,
         token: String,
     ): TokenInsertion {
         val clamped = cursor.coerceIn(0, text.length)
         val before = text.substring(0, clamped)
-        val atIndex = before.lastIndexOf('@')
-        require(atIndex >= 0) { "No @ token before cursor" }
+        val atIndex = before.lastIndexOf(trigger)
+        require(atIndex >= 0) { "No $trigger token before cursor" }
         val insertion = "$token "
         return TokenInsertion(
             text = text.substring(0, atIndex) + insertion + text.substring(clamped),
@@ -305,7 +433,8 @@ object ComposerMentionRouting {
                     )
                 else -> null
             }
-        }.sortedBy { it.start }
+        }
+            .sortedBy { it.start }
 
     private fun shiftedFiles(
         mentions: List<FileMention>,
@@ -321,7 +450,25 @@ object ComposerMentionRouting {
                     )
                 else -> null
             }
-        }.sortedBy { it.start }
+        }
+            .sortedBy { it.start }
+
+    private fun shiftedSkills(
+        mentions: List<SkillMention>,
+        inserted: TokenInsertion,
+    ): List<SkillMention> =
+        mentions.mapNotNull { mention ->
+            when {
+                mention.end <= inserted.atIndex -> mention
+                mention.start >= inserted.replacedUntil ->
+                    mention.copy(
+                        start = mention.start + inserted.delta,
+                        end = mention.end + inserted.delta,
+                    )
+                else -> null
+            }
+        }
+            .sortedBy { it.start }
 
     private data class MentionSpan(
         val id: String,
@@ -329,6 +476,8 @@ object ComposerMentionRouting {
         val label: String,
         val start: Int,
         val end: Int,
+        /** Skill spans: the wire skill id. */
+        val detail: String? = null,
     )
 
     private data class SpanReconcile(
@@ -340,9 +489,11 @@ object ComposerMentionRouting {
     private fun spans(
         agents: List<AgentMention>,
         files: List<FileMention>,
+        skills: List<SkillMention>,
     ): List<MentionSpan> =
         agents.map { MentionSpan(it.id, AGENT, it.name, it.start, it.end) } +
-            files.map { MentionSpan(it.id, FILE, it.path, it.start, it.end) }
+            files.map { MentionSpan(it.id, FILE, it.path, it.start, it.end) } +
+            skills.map { MentionSpan(it.id, SKILL, it.name, it.start, it.end, detail = it.skillId) }
 
     private fun List<MentionSpan>.agents(): List<AgentMention> =
         filter { it.kind == AGENT }
@@ -353,6 +504,19 @@ object ComposerMentionRouting {
         filter { it.kind == FILE }
             .sortedBy { it.start }
             .map { FileMention(id = it.id, path = it.label, start = it.start, end = it.end) }
+
+    private fun List<MentionSpan>.skills(): List<SkillMention> =
+        filter { it.kind == SKILL }
+            .sortedBy { it.start }
+            .map {
+                SkillMention(
+                    id = it.id,
+                    skillId = it.detail ?: it.label,
+                    name = it.label,
+                    start = it.start,
+                    end = it.end,
+                )
+            }
 
     private fun reconcileSpans(
         previousText: String,
@@ -433,9 +597,9 @@ object ComposerMentionRouting {
     private fun MentionSpan.shifted(
         oldEditEnd: Int,
         delta: Int,
-    ): MentionSpan =
-        if (start >= oldEditEnd) copy(start = start + delta, end = end + delta) else this
+    ): MentionSpan = if (start >= oldEditEnd) copy(start = start + delta, end = end + delta) else this
 
     private const val AGENT = "agent"
     private const val FILE = "file"
+    private const val SKILL = "skill"
 }

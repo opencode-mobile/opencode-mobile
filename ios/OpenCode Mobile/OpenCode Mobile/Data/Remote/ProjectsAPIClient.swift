@@ -8,30 +8,34 @@ nonisolated enum ProjectsAPIError: Error {
 
 nonisolated struct ProjectsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
-    private let urlSession: URLSession
+    private let resolveURLSession: @Sendable () -> URLSession
     private let decoder = JSONDecoder()
     private let adapter = ProjectDomainAdapter()
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = OpenCodeURLSessions.rest
+        urlSession: URLSession? = nil
     ) {
         self.connectionProvider = connectionProvider
-        self.urlSession = urlSession
+        self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
     }
 
-    init(fixedConnection: ServerConnection, urlSession: URLSession = OpenCodeURLSessions.rest) {
+    init(fixedConnection: ServerConnection, urlSession: URLSession? = nil) {
         self.connectionProvider = { fixedConnection }
-        self.urlSession = urlSession
+        self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
     }
 
     func listProjects() async throws -> [ProjectDTO] {
         try await get(path: "project")
     }
 
+    /// Asks for unarchived projects; servers before v2.0.27 ignore `archived` and list them all.
     func listProjectsV2() async throws -> [ProjectDTO] {
-        let projects: [V2ProjectDTO] = try await get(path: "api/project")
-        return projects.map { ProjectDTO(id: $0.id, directory: $0.canonical, time: $0.time) }
+        let projects: [V2ProjectDTO] = try await get(
+            path: "api/project",
+            query: [URLQueryItem(name: "archived", value: "false")]
+        )
+        return projects.map { ProjectDTO(id: $0.id, directory: $0.canonical, vcs: $0.vcs, time: $0.time, name: $0.name, canonical: $0.canonical) }
     }
 
     func getCurrentProject(directory: String? = nil) async throws -> ProjectDTO {
@@ -43,7 +47,7 @@ nonisolated struct ProjectsAPIClient: Sendable {
         guard let id = location.project?.id, let projectDirectory = location.project?.directory else {
             throw ProjectsAPIError.invalidResponse
         }
-        return ProjectDTO(id: id, directory: projectDirectory)
+        return ProjectDTO(id: id, directory: projectDirectory, canonical: location.project?.canonical)
     }
 
     func getGlobalHealth() async throws -> HealthDTO {
@@ -54,8 +58,26 @@ nonisolated struct ProjectsAPIClient: Sendable {
         try await get(path: "api/info")
     }
 
+    /// `paths.tmp` from `GET api/info`: the server's scratch directory, or nil when it declares none.
+    func getV2TmpDirectory() async throws -> String? {
+        struct Info: Decodable {
+            struct Paths: Decodable { let tmp: String? }
+            let paths: Paths?
+        }
+        let info: Info = try await get(path: "api/info")
+        return info.paths?.tmp
+    }
+
     func getApiHealth() async throws -> HealthDTO {
         try await get(path: "api/health")
+    }
+
+    /// The v2 server's OpenAPI document, read to learn what this server release supports.
+    func getV2OpenAPIDocument() async throws -> Data {
+        guard let connection = connectionProvider() else {
+            throw ProjectsAPIError.noActiveConnection
+        }
+        return try await data(for: connection.authorizedRequest(path: V2ServerContract.openAPIPath))
     }
 
     func getHealth() async throws -> HealthDTO {
@@ -64,6 +86,12 @@ nonisolated struct ProjectsAPIClient: Sendable {
 
     /// Probe health endpoints and return the detected protocol.
     func detectProtocol() async throws -> ServerProtocol {
+        try await detectServer().serverProtocol
+    }
+
+    /// Probe health endpoints and return the detected protocol with the
+    /// health `version` of the payload that decided it.
+    func detectServer() async throws -> ServerProbeOutcome {
         async let globalFetch = fetchHealth(path: "global/health") { try await getGlobalHealth() }
         async let infoFetch = fetchHealth(path: "api/info") { try await getApiInfo() }
         async let apiHealthFetch = fetchHealth(path: "api/health") { try await getApiHealth() }
@@ -94,21 +122,25 @@ nonisolated struct ProjectsAPIClient: Sendable {
             )
         }
 
+        let version: String?
         switch detected {
         case .v1:
             if let resolvedGlobal {
                 try adapter.requireHealthy(resolvedGlobal)
             }
+            version = resolvedGlobal?.version
         case .v2:
-            if let payload = ServerProtocolClassifier.v2Health(
+            let payload = ServerProtocolClassifier.v2Health(
                 apiInfo: resolvedInfo,
                 apiHealth: resolvedApiHealth
-            ), payload.pid != nil, payload.healthy == false {
+            )
+            if let payload, payload.pid != nil, payload.healthy == false {
                 throw ServerProbeError.unhealthy(version: payload.version)
             }
+            version = payload?.version
         }
 
-        return detected
+        return ServerProbeOutcome(serverProtocol: detected, serverVersion: version)
     }
 
     private struct HealthFetch: Sendable {
@@ -143,16 +175,22 @@ nonisolated struct ProjectsAPIClient: Sendable {
     private func get<T: Decodable>(
         path: String,
         directory: String? = nil,
-        locationDirectory: String? = nil
+        locationDirectory: String? = nil,
+        query: [URLQueryItem] = []
     ) async throws -> T {
         guard let connection = connectionProvider() else {
             throw ProjectsAPIError.noActiveConnection
         }
-        let request = connection.authorizedRequest(
+        var request = connection.authorizedRequest(
             path: path,
             directory: directory,
             locationDirectory: locationDirectory
         )
+        if !query.isEmpty, let url = request.url,
+           var components = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            components.queryItems = (components.queryItems ?? []) + query
+            request.url = components.url
+        }
         let data = try await data(for: request)
         return try decoder.decode(T.self, from: data)
     }
@@ -162,7 +200,7 @@ nonisolated struct ProjectsAPIClient: Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await urlSession.data(for: request)
+            (data, response) = try await resolveURLSession().data(for: request)
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error

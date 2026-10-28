@@ -184,6 +184,17 @@ struct EventDomainAdapterTests {
         #expect(file?["filename"]?.stringValue == "Photo 1.jpeg")
     }
 
+    @Test func parseEvents_projectsPromptedInlineFileDataAsDataURL() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.inbox.enqueued","data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"type":"user","payload":{"text":"What","files":[{"data":"AA==","mime":"image/jpeg","source":{"type":"inline"},"name":"Photo 1.png"}]},"delivery":"steer"}}}"#
+        )
+        let file = events[2].rawProperties?["part"]?.dictionaryValue
+        #expect(file?["url"]?.stringValue == "data:image/jpeg;base64,AA==")
+        #expect(file?["mime"]?.stringValue == "image/jpeg")
+        #expect(file?["filename"]?.stringValue == "Photo 1.png")
+    }
+
     @Test func parseEvents_projectsPromptedFilesWithoutURI() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(
@@ -413,6 +424,62 @@ struct EventDomainAdapterTests {
         #expect(events.map(\.type) == ["session.status", "message.part.updated"])
         #expect(events[0].rawProperties?["status"]?.dictionaryValue?["type"]?.stringValue == "busy")
         #expect(events[1].rawProperties?["part"]?.dictionaryValue?["tool"]?.stringValue == "bash")
+    }
+
+    @Test func parseEvents_v2ShellStartedProjectsTheRestShellItemWithoutTouchingStatus() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"id":"evt_sh1","type":"session.shell.started","data":{"sessionID":"ses-1","shell":{"id":"sh_1","status":"running","command":"git status","time":{"started":100}}}}"#
+        )
+        #expect(events.map(\.type) == ["message.updated", "message.part.updated", "message.updated", "message.part.updated"])
+        #expect(!events.contains(where: { $0.type == "session.status" }))
+        let user = events[0].rawProperties?["info"]?.dictionaryValue
+        #expect(user?["id"]?.stringValue == "msg_sh1")
+        #expect(user?["role"]?.stringValue == "user")
+        #expect(events[1].rawProperties?["part"]?.dictionaryValue?["text"]?.stringValue == "git status")
+        #expect(events[2].rawProperties?["info"]?.dictionaryValue?["id"]?.stringValue == "msg_sh1:assistant")
+        let tool = events[3].rawProperties?["part"]?.dictionaryValue
+        #expect(tool?["id"]?.stringValue == "msg_sh1:tool")
+        #expect(tool?["messageID"]?.stringValue == "msg_sh1:assistant")
+        #expect(tool?["tool"]?.stringValue == "bash")
+        let state = tool?["state"]?.dictionaryValue
+        #expect(state?["status"]?.stringValue == "running")
+        #expect(state?["input"]?.dictionaryValue?["command"]?.stringValue == "git status")
+    }
+
+    @Test func parseEvents_v2ShellEndedCompletesTheStartedItemWithOutputAndExit() {
+        let adapter = EventDomainAdapter()
+        _ = adapter.parseEvents(
+            dataLine: #"{"id":"evt_sh1","type":"session.shell.started","data":{"sessionID":"ses-1","shell":{"id":"sh_1","status":"running","command":"false","time":{"started":100}}}}"#
+        )
+        let events = adapter.parseEvents(
+            dataLine: #"{"id":"evt_sh2","type":"session.shell.ended","data":{"sessionID":"ses-1","shell":{"id":"sh_1","status":"exited","command":"false","exit":1,"time":{"started":100,"completed":150}},"output":{"output":"boom","truncated":false}}}"#
+        )
+        let tool = events.last?.rawProperties?["part"]?.dictionaryValue
+        #expect(tool?["id"]?.stringValue == "msg_sh1:tool")
+        let state = tool?["state"]?.dictionaryValue
+        #expect(state?["status"]?.stringValue == "completed")
+        #expect(state?["output"]?.stringValue == "boom")
+        #expect(state?["metadata"]?.dictionaryValue?["exit"]?.int64Value == 1)
+        #expect(!events.contains(where: { $0.type == "session.status" || $0.type == "session.idle" }))
+    }
+
+    @Test func parseEvents_v2ShellEndedWithoutAStartIsLeftToHistory() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"id":"evt_sh2","type":"session.shell.ended","data":{"sessionID":"ses-1","shell":{"id":"sh_unknown","status":"exited","exit":0}}}"#
+        )
+        #expect(events.isEmpty)
+    }
+
+    @Test func parseEvents_syntheticInboxItemIsNotAWaitingPrompt() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.inbox.enqueued","data":{"sessionID":"ses-1","inboxID":"msg_s","item":{"type":"synthetic","payload":{"text":"The following shell command was executed by the user"}},"delivery":"steer"}}"#
+        )
+        let info = events.first?.rawProperties?["info"]?.dictionaryValue
+        #expect(info?["waiting"]?.boolValue == false)
+        #expect(info?["delivery"] == nil)
     }
 
     @Test func parseEvents_projectsLiveCompactionEndedIntoPartNotIdle() {
@@ -740,6 +807,22 @@ struct EventDomainAdapterTests {
         #expect(event?.rawProperties?["forkedFromSessionID"]?.stringValue == "ses_src")
     }
 
+    @Test func parseEvent_sessionArchiveEventsRefreshHomeLists() {
+        let adapter = EventDomainAdapter()
+        let archived = adapter.parseEvent(
+            dataLine: #"{"id":"evt_1","type":"session.archived","data":{"sessionID":"ses-1"},"durable":{"aggregateID":"ses-1","seq":4,"version":1}}"#
+        )
+        let unarchived = adapter.parseEvent(
+            dataLine: #"{"payload":{"type":"sync","syncEvent":{"id":"evt_2","type":"session.unarchived.1","data":{"sessionID":"ses-2"}}}}"#
+        )
+        #expect(archived?.type == "session.archived")
+        #expect(archived?.sessionID == "ses-1")
+        #expect(archived?.triggersHomeRefresh == true)
+        #expect(unarchived?.type == "session.unarchived")
+        #expect(unarchived?.sessionID == "ses-2")
+        #expect(unarchived?.triggersHomeRefresh == true)
+    }
+
     @Test func parseEvent_remapsPermissionV2Asked() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
@@ -846,6 +929,15 @@ struct EventDomainAdapterTests {
         #expect(actionLink == "https://example.com")
     }
 
+    @Test func stepFailed_keepsRetryAfterOnTheTranslatedError() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.step.failed","data":{"sessionID":"ses-1","assistantMessageID":"a1","error":{"type":"provider.free-limit","message":"Free usage limit reached.","status":429,"retryAfterMs":3600000}}}"#
+        )
+        let data = events.first?.rawProperties?["info"]?.dictionaryValue?["error"]?.dictionaryValue?["data"]?.dictionaryValue
+        #expect(data?["retryAfterMs"]?.int64Value == 3_600_000)
+    }
+
     @Test func stepFailed_withAssistantId_putsTheErrorOnTheMessageAndSkipsTheSnackbarEvent() {
         let adapter = EventDomainAdapter()
         let events = adapter.parseEvents(
@@ -869,6 +961,51 @@ struct EventDomainAdapterTests {
         let update = adapter.sessionTitleUpdate(from: event!)
         #expect(update?.sessionID == "ses-1")
         #expect(update?.title == "Live title")
+    }
+
+    @Test func sessionDeletedID_readsV1InfoIDAndV2SessionID() {
+        let adapter = EventDomainAdapter()
+        let v1 = adapter.parseEvent(
+            dataLine: #"{"payload":{"type":"session.deleted","properties":{"info":{"id":"ses-1","title":"Gone"}}}}"#
+        )
+        #expect(adapter.sessionDeletedID(from: v1!) == "ses-1")
+        let v2 = adapter.parseEvent(
+            dataLine: #"{"id":"evt_1","type":"session.deleted","data":{"sessionID":"ses-2"},"durable":{"aggregateID":"ses-2","seq":18,"version":2}}"#
+        )
+        #expect(adapter.sessionDeletedID(from: v2!) == "ses-2")
+        let updated = adapter.parseEvent(
+            dataLine: #"{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1"}}}}"#
+        )
+        #expect(adapter.sessionDeletedID(from: updated!) == nil)
+    }
+
+    @Test func sessionRevertUpdate_readsV1SessionAndV2RevertEvents() {
+        let adapter = EventDomainAdapter()
+        func update(_ line: String) -> SessionRevertUpdate? {
+            adapter.sessionRevertUpdate(from: adapter.parseEvent(dataLine: line)!)
+        }
+        #expect(
+            update(#"{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","time":{"created":1},"revert":{"messageID":"msg-2"}}}}}"#)
+                == SessionRevertUpdate(sessionID: "ses-1", messageID: "msg-2")
+        )
+        #expect(
+            update(#"{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","title":"T","time":{"created":1}}}}}"#)
+                == SessionRevertUpdate(sessionID: "ses-1", messageID: nil)
+        )
+        #expect(
+            update(#"{"type":"session.revert.staged","data":{"sessionID":"ses-2","revert":{"messageID":"msg-5"}}}"#)
+                == SessionRevertUpdate(sessionID: "ses-2", messageID: "msg-5")
+        )
+        #expect(
+            update(#"{"type":"session.revert.cleared","data":{"sessionID":"ses-2"}}"#)
+                == SessionRevertUpdate(sessionID: "ses-2", messageID: nil)
+        )
+        #expect(
+            update(#"{"type":"session.revert.committed","data":{"sessionID":"ses-2","to":"msg-5"}}"#)
+                == SessionRevertUpdate(sessionID: "ses-2", messageID: nil)
+        )
+        // v2 rename is projected as a partial `session.updated`; it must not clear a staged revert.
+        #expect(update(#"{"type":"session.renamed","data":{"sessionID":"ses-2","title":"New"}}"#) == nil)
     }
 
     @Test func sessionTitleUpdate_ignoresNonUpdatedEvents() {

@@ -36,7 +36,7 @@ struct SettingsView: View {
     var build: String = AppVersion.current().build
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    var splitGate = OpenCodeSplitLayoutGate()
     /// Trailing-pane sub-screen in the regular-width split view. Unused on compact.
     @State private var selectedDetail: SettingsDetail = .servers
     @State private var showComponentGallery = false
@@ -50,18 +50,25 @@ struct SettingsView: View {
     @State private var showAppearance = false
     @State private var showRecentWindowPicker = false
     @State private var showFollowUpPicker = false
+    @State private var showTimelineStylePicker = false
+    @State private var showSessionRowsPicker = false
     @State private var themeManager = ThemeManager.shared
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
     @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
     @State private var analyticsConsentPreferences = AnalyticsConsentPreferences.shared
+    @State private var appLockPreferences = AppLockPreferences.shared
+    private let appLockAuthenticator: any AppLockAuthenticating = LocalAuthenticationAppLockAuthenticator()
     @State private var sessionChatDisplayPreferences = SessionChatDisplayPreferences.shared
     @State private var developerToolsPreferences = DeveloperToolsPreferences.shared
+    @State private var performanceOverlayPreferences = PerformanceOverlayPreferences.shared
     @State private var showServers = false
     @State private var serversSubtitleState = "No servers saved"
     @State private var serversLetter: Character = "S"
     @State private var serversLetterAccent: LetterAccent = .blue
     /// False while another screen is pushed over Settings.
     @State private var isOnScreen = false
+    /// Report-a-problem sheet (#721); set to open it.
+    @State private var feedbackModel: FeedbackViewModel?
 
     var body: some View {
         Group {
@@ -83,6 +90,7 @@ struct SettingsView: View {
         .navigationBarBackButtonHidden(true)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
+        .feedbackSheet(model: $feedbackModel)
         .onAppear { isOnScreen = true }
         .onDisappear { isOnScreen = false }
         .navigationDestination(isPresented: $showComponentGallery) {
@@ -112,15 +120,13 @@ struct SettingsView: View {
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 16)
+                .openCodeBottomSheetContentInset()
                 .padding(.bottom, 8)
 
             ForEach(HomeSessionLadder.allowedWindowHours, id: \.self) { hours in
                 OpenCodeBottomSheetEntry(
                     title: HomeSessionLadder.formatWindowHoursLabel(hours),
-                    endDecorator: hours == homeDisplayPreferences.recentWindowHours
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
+                    selected: hours == homeDisplayPreferences.recentWindowHours,
                     action: {
                         ProductAnalytics.logUserAction(
                             screenId: ProductAnalytics.Screen.settingsRecentWindowPicker,
@@ -134,14 +140,50 @@ struct SettingsView: View {
                 .id("hours-\(hours)")
             }
         }
+        .openCodeBottomSheet(isPresented: $showTimelineStylePicker, title: "Timeline Style") {
+            ForEach(sessionChatDisplayPreferences.availableTimelineStyles, id: \.self) { style in
+                OpenCodeBottomSheetEntry(
+                    title: style.title,
+                    subtitle: style.subtitle,
+                    selected: style == sessionChatDisplayPreferences.effectiveTimelineStyle,
+                    action: {
+                        ProductAnalytics.logUserAction(
+                            screenId: ProductAnalytics.Screen.settings,
+                            actionId: style == .chips
+                                ? ProductAnalytics.Action.settingsToggleChipTimeline
+                                : ProductAnalytics.Action.settingsTimelineStyle,
+                            parameters: [ProductAnalytics.Param.mode: style.wireValue]
+                        )
+                        sessionChatDisplayPreferences.setTimelineStyle(style)
+                        showTimelineStylePicker = false
+                    }
+                )
+            }
+        }
+        .openCodeBottomSheet(isPresented: $showSessionRowsPicker, title: "Session rows") {
+            ForEach(HomeSessionRowStyle.allCases, id: \.self) { style in
+                OpenCodeBottomSheetEntry(
+                    title: style.title,
+                    subtitle: style.subtitle,
+                    selected: style == homeDisplayPreferences.sessionRowStyle,
+                    action: {
+                        ProductAnalytics.logUserAction(
+                            screenId: ProductAnalytics.Screen.settings,
+                            actionId: ProductAnalytics.Action.settingsSessionRows,
+                            parameters: [ProductAnalytics.Param.mode: style.wireValue]
+                        )
+                        homeDisplayPreferences.setSessionRowStyle(style)
+                        showSessionRowsPicker = false
+                    }
+                )
+            }
+        }
         .openCodeBottomSheet(isPresented: $showFollowUpPicker, title: "Follow-up send") {
             ForEach(FollowUpDelivery.allCases, id: \.self) { mode in
                 OpenCodeBottomSheetEntry(
                     title: mode == .steer ? "Steer" : "Queue",
-                    startDecorator: .icon(mode == .steer ? .arrowWarmUp : .arrowUpward, accessibilityLabel: nil),
-                    endDecorator: mode == sessionChatDisplayPreferences.followUpDelivery
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
+                    startDecorator: .icon(mode == .steer ? .arrowWarmUp : .arrowUpward),
+                    selected: mode == sessionChatDisplayPreferences.followUpDelivery,
                     action: {
                         sessionChatDisplayPreferences.setFollowUpDelivery(mode)
                         showFollowUpPicker = false
@@ -264,6 +306,22 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
+                    OpenCodeSectionHeader(title: "Help & Feedback")
+
+                    OpenCodeListItem(
+                        title: "Send Feedback",
+                        subtitle: "Report a bug or share an idea",
+                        style: .card,
+                        startDecorator: .icon(.edit, accessibilityLabel: "Send Feedback"),
+                        action: {
+                            // No capture here: the screen behind is Settings.
+                            // "+ Screenshot" picks from Photos instead.
+                            feedbackModel = Container.makeFeedbackViewModel(screen: .settings, screenshot: nil)
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("settingsSendFeedback")
+
                     OpenCodeSectionHeader(title: "Appearance")
 
                     OpenCodeListItem(
@@ -339,27 +397,15 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    if sessionChatDisplayPreferences.chipTimelineAvailable {
-                        OpenCodeListItem(
-                            title: "Chip Timeline",
-                            subtitle: "Show the tools an agent used as chips under its narration",
-                            style: .card,
-                            startDecorator: .icon(.widgets, accessibilityLabel: "Chip Timeline"),
-                            accessory: .toggle(
-                                isOn: Binding(
-                                    get: { sessionChatDisplayPreferences.chipTimeline },
-                                    set: { newValue in
-                                        logSettingsAction(
-                                            ProductAnalytics.Action.settingsToggleChipTimeline
-                                        )
-                                        sessionChatDisplayPreferences.setChipTimeline(newValue)
-                                    }
-                                ),
-                                accessibilityLabel: "Chip Timeline"
-                            )
-                        )
-                        .padding(.horizontal, 16)
-                    }
+                    OpenCodeListItem(
+                        title: "Timeline Style",
+                        subtitle: sessionChatDisplayPreferences.effectiveTimelineStyle.title,
+                        style: .card,
+                        startDecorator: .icon(.widgets, accessibilityLabel: "Timeline Style"),
+                        accessory: .disclosure,
+                        action: { showTimelineStylePicker = true }
+                    )
+                    .padding(.horizontal, 16)
 
                     OpenCodeListItem(
                         title: "Follow-up send",
@@ -375,31 +421,46 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    OpenCodeListItem(
-                        title: "Composer Dictation",
-                        subtitle: "Speak into the composer. Off until you turn this on.",
-                        style: .card,
-                        startDecorator: .icon(.mic, accessibilityLabel: "Composer Dictation"),
-                        accessory: .toggle(
-                            isOn: Binding(
-                                get: { sessionChatDisplayPreferences.composerDictation },
-                                set: { newValue in
-                                    logSettingsAction(
-                                        ProductAnalytics.Action.settingsToggleComposerDictation
-                                    )
-                                    sessionChatDisplayPreferences.setComposerDictation(newValue)
-                                }
-                            ),
-                            accessibilityLabel: "Composer Dictation"
-                        )
-                    )
-                    .padding(.horizontal, 16)
-
                     if let loadError = themeManager.loadError {
                         OpenCodeInlineNotice(message: loadError, tone: .error)
                             .padding(.horizontal, 16)
                             .padding(.top, 4)
                     }
+
+                    OpenCodeSectionHeader(title: "Home")
+
+                    OpenCodeListItem(
+                        title: "Worktrees",
+                        subtitle: "Show each project\u{2019}s worktrees and branches on Home, and let New session pick a worktree when you hold it.",
+                        style: .card,
+                        startDecorator: .icon(.callSplit, accessibilityLabel: "Worktrees"),
+                        accessory: .toggle(
+                            isOn: Binding(
+                                get: { homeDisplayPreferences.showsWorktrees },
+                                set: { newValue in
+                                    logSettingsAction(ProductAnalytics.Action.settingsToggleWorktrees)
+                                    homeDisplayPreferences.setShowsWorktrees(newValue)
+                                }
+                            ),
+                            accessibilityLabel: "Worktrees"
+                        )
+                    )
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("settingsWorktreesToggle")
+
+                    OpenCodeListItem(
+                        title: "Session rows",
+                        subtitle: homeDisplayPreferences.sessionRowStyle.title,
+                        style: .card,
+                        startDecorator: .icon(.list, accessibilityLabel: "Session rows"),
+                        accessory: .disclosure,
+                        action: {
+                            logSettingsAction(ProductAnalytics.Action.settingsOpenSessionRowsPicker)
+                            showSessionRowsPicker = true
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("settingsSessionRows")
 
                     OpenCodeSectionHeader(title: "Session Cache")
 
@@ -431,6 +492,27 @@ struct SettingsView: View {
                     OpenCodeSectionHeader(title: "Privacy")
 
                     OpenCodeListItem(
+                        title: "App Lock",
+                        subtitle: appLockAuthenticator.canAuthenticate()
+                            ? "Require Face ID, Touch ID or your passcode when the app returns from the background"
+                            : "Set a device passcode to use App Lock",
+                        style: .card,
+                        startDecorator: .icon(.lock, accessibilityLabel: "App Lock"),
+                        accessory: .toggle(
+                            isOn: Binding(
+                                get: { appLockPreferences.enabled },
+                                set: { newValue in
+                                    guard !newValue || appLockAuthenticator.canAuthenticate() else { return }
+                                    appLockPreferences.setEnabled(newValue)
+                                    logSettingsAction(ProductAnalytics.Action.settingsToggleAppLock)
+                                }
+                            ),
+                            accessibilityLabel: "App Lock"
+                        )
+                    )
+                    .padding(.horizontal, 16)
+
+                    OpenCodeListItem(
                         title: "Privacy Policy",
                         subtitle: "How the apps handle data",
                         style: .card,
@@ -444,8 +526,8 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Product Analytics",
-                        subtitle: "Allow optional product usage events. Crash reporting is unchanged.",
+                        title: "Analytics & crash reports",
+                        subtitle: "Allow optional product usage events and crash reports. Off sends nothing to Firebase.",
                         style: .card,
                         startDecorator: .icon(.description, accessibilityLabel: "Product Analytics"),
                         accessory: .toggle(
@@ -453,8 +535,10 @@ struct SettingsView: View {
                                 get: { analyticsConsentPreferences.productAnalyticsConsented },
                                 set: { newValue in
                                     // Log after applying consent: opting out is
-                                    // dropped by the gate rather than reported.
-                                    analyticsConsentPreferences
+                                    // dropped by the gate rather than reported. Goes through
+                                    // the observability seam so Crashlytics and automatic
+                                    // Analytics follow the switch right away.
+                                    OpenCodeReleaseObservability
                                         .setProductAnalyticsConsented(newValue)
                                     logSettingsAction(
                                         ProductAnalytics.Action.settingsToggleProductAnalytics
@@ -584,6 +668,21 @@ struct SettingsView: View {
                             action: { open(.featureFlags) }
                         )
                         .padding(.horizontal, 16)
+
+                        OpenCodeListItem(
+                            title: "Performance Overlay",
+                            subtitle: "Live FPS and frame-time spikes",
+                            style: .card,
+                            startDecorator: .icon(.settings, accessibilityLabel: "Performance Overlay"),
+                            accessory: .toggle(
+                                isOn: Binding(
+                                    get: { performanceOverlayPreferences.enabled },
+                                    set: { performanceOverlayPreferences.setEnabled($0) }
+                                ),
+                                accessibilityLabel: "Performance Overlay"
+                            )
+                        )
+                        .padding(.horizontal, 16)
                     }
                 }
             }
@@ -595,7 +694,7 @@ struct SettingsView: View {
     }
 
     private var isSplitLayout: Bool {
-        OpenCodeSplitPaneLayout.usesSplitLayout(horizontalSizeClass: horizontalSizeClass)
+        splitGate.usesSplitLayout
     }
 
     /// Selected detail after the Developer Tools lock; what the trailing pane renders.
@@ -607,7 +706,7 @@ struct SettingsView: View {
         isSplitLayout && visibleDetail == detail
     }
 
-    /// Regular width swaps the trailing pane; compact pushes as before.
+    /// The split swaps the trailing pane; stacked pushes as before.
     private func open(_ detail: SettingsDetail) {
         if isSplitLayout {
             selectedDetail = detail

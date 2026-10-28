@@ -44,7 +44,26 @@ data class FileMention(
     val token: String get() = "@$path"
 }
 
+/** A v2 skill admitted from the composer as an inline `/name` span. */
+data class SkillMention(
+    val id: String,
+    val skillId: String,
+    val name: String,
+    val start: Int,
+    val end: Int,
+) {
+    val token: String get() = "/$name"
+}
+
 data class AgentPartPayload(
+    val name: String,
+    val sourceValue: String,
+    val start: Int,
+    val end: Int,
+)
+
+data class SkillPartPayload(
+    val skillId: String,
     val name: String,
     val sourceValue: String,
     val start: Int,
@@ -64,6 +83,7 @@ data class MentionInsertResult(
     val cursor: Int,
     val mentions: List<AgentMention>,
     val fileMentions: List<FileMention> = emptyList(),
+    val skillMentions: List<SkillMention> = emptyList(),
 )
 
 data class MentionReconcileResult(
@@ -71,19 +91,23 @@ data class MentionReconcileResult(
     val cursor: Int,
     val mentions: List<AgentMention>,
     val fileMentions: List<FileMention> = emptyList(),
+    val skillMentions: List<SkillMention> = emptyList(),
 )
 
 data class TrimmedPrompt(
     val text: String,
     val agentMentions: List<AgentMention>,
     val fileMentions: List<FileMention> = emptyList(),
+    val skillMentions: List<SkillMention> = emptyList(),
 )
 
 sealed class ComposerSuggestionMode {
     data object None : ComposerSuggestionMode()
 
+    /** [isLeading]: the open `/` sits at offset 0, so server commands are offered too. */
     data class Slash(
         val query: String,
+        val isLeading: Boolean = true,
     ) : ComposerSuggestionMode()
 
     data class At(

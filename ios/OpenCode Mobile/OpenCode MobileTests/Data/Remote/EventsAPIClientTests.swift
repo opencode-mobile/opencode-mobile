@@ -143,7 +143,12 @@ struct EventsAPIClientTests {
 
     @Test func streamEvents_connectBudgetFailsHungHandshakeAsTransport() async throws {
         let before = Set(DiagnosticLogBuffer.shared.snapshot().entries.map(\.id))
-        let client = makeClient(responseBody: "", hang: true)
+        let budgetHits = BudgetHitCounter()
+        let client = makeClient(
+            responseBody: "",
+            hang: true,
+            onConnectBudgetExceeded: { budgetHits.increment() }
+        )
         let started = ContinuousClock.now
         let outcome = try await client.streamEvents(
             path: "api/event",
@@ -158,6 +163,7 @@ struct EventsAPIClientTests {
         #expect(error is SseConnectBudgetExceeded)
         #expect(!(error is SseHandshakeError))
         #expect(elapsed < .seconds(2))
+        #expect(budgetHits.value == 1)
 
         let fresh = DiagnosticLogBuffer.shared.snapshot().entries.filter { !before.contains($0.id) }
         #expect(fresh.contains {
@@ -178,6 +184,7 @@ struct EventsAPIClientTests {
             return
         }
         #expect(lines.count == 1)
+        #expect(budgetHits.value == 1)
     }
 
     @Test func retireStreamingSessions_rejectsLaterOpenOfOlderToken() {
@@ -186,25 +193,122 @@ struct EventsAPIClientTests {
             password: "secret"
         )
         let client = EventsAPIClient(connectionProvider: { connection })
-        _ = client.openStreamingSession(token: 2)
+        #expect(client.openStreamingSession(token: 2) != nil)
         client.retireStreamingSessions(olderThan: 2)
         #expect(client.ownedStreamingDialCount == 1)
 
         client.retireStreamingSessions(olderThan: 3)
         #expect(client.ownedStreamingDialCount == 0)
 
-        _ = client.openStreamingSession(token: 2)
+        #expect(client.openStreamingSession(token: 2) == nil)
         #expect(client.ownedStreamingDialCount == 0)
 
-        _ = client.openStreamingSession(token: 3)
+        #expect(client.openStreamingSession(token: 3) != nil)
         #expect(client.ownedStreamingDialCount == 1)
+    }
+
+    @Test(arguments: ["global/event", "api/event"])
+    func streamEvents_retiredTokenDialEndsAsTransport(path: String) async throws {
+        let client = makeOwnedSessionClient()
+        client.retireStreamingSessions(olderThan: 2)
+
+        let outcome = try await client.streamEvents(path: path, directory: nil, sessionToken: 1) { _ in }
+
+        expectCancelledTransport(outcome)
+        #expect(client.ownedStreamingDialCount == 0)
+        #expect(HangingSSEURLProtocol.startCount(path: path, marker: nil) == 0)
+    }
+
+    /// #745: a retire between opening the session and creating its task used to
+    /// invalidate the session first, and `bytes(for:)` then raised NSGenericException.
+    @Test(arguments: ["global/event", "api/event"])
+    func streamEvents_retiredBetweenOpenAndDialEndsAsTransport(path: String) async throws {
+        let box = ClientBox()
+        let marker = UUID().uuidString
+        let client = makeOwnedSessionClient(beforeDial: {
+            box.client?.retireStreamingSessions(olderThan: 2)
+        })
+        box.client = client
+        client.installFreshStreamingSession(token: 1)
+
+        let started = ContinuousClock.now
+        let outcome = try await client.streamEvents(
+            path: path,
+            directory: marker,
+            connectBudget: .seconds(10),
+            sessionToken: 1
+        ) { _ in }
+
+        expectCancelledTransport(outcome)
+        #expect(ContinuousClock.now - started < .seconds(2))
+        #expect(client.ownedStreamingDialCount == 0)
+        #expect(HangingSSEURLProtocol.startCount(path: path, marker: marker) == 0)
+    }
+
+    @Test(arguments: ["global/event", "api/event"])
+    func streamEvents_tokenRotationWhileDialingEndsAsTransport(path: String) async throws {
+        let marker = UUID().uuidString
+        let client = makeOwnedSessionClient()
+        client.installFreshStreamingSession(token: 1)
+
+        let started = ContinuousClock.now
+        let dial = Task {
+            try await client.streamEvents(
+                path: path,
+                directory: marker,
+                connectBudget: .seconds(10),
+                sessionToken: 1
+            ) { _ in }
+        }
+        while HangingSSEURLProtocol.startCount(path: path, marker: marker) == 0 {
+            try await Task.sleep(for: .milliseconds(10))
+            if ContinuousClock.now - started > .seconds(5) {
+                Issue.record("Dial never reached the server")
+                dial.cancel()
+                return
+            }
+        }
+        client.installFreshStreamingSession(token: 2)
+
+        let outcome = try await dial.value
+        expectCancelledTransport(outcome)
+        #expect(ContinuousClock.now - started < .seconds(5))
+        #expect(client.ownedStreamingDialCount == 0)
+    }
+
+    private func expectCancelledTransport(
+        _ outcome: SseAttemptOutcome,
+        sourceLocation: SourceLocation = #_sourceLocation
+    ) {
+        guard case let .transport(error?) = outcome else {
+            Issue.record("Expected cancelled transport, got \(String(describing: outcome))", sourceLocation: sourceLocation)
+            return
+        }
+        #expect((error as? URLError)?.code == .cancelled, sourceLocation: sourceLocation)
+    }
+
+    private func makeOwnedSessionClient(beforeDial: @escaping @Sendable () -> Void = {}) -> EventsAPIClient {
+        let connection = ServerConnection(
+            baseURL: URL(string: "http://127.0.0.1:4096/")!,
+            password: "secret"
+        )
+        return EventsAPIClient(
+            connectionProvider: { connection },
+            streamingSessionFactory: {
+                let configuration = URLSessionConfiguration.ephemeral
+                configuration.protocolClasses = [HangingSSEURLProtocol.self]
+                return URLSession(configuration: configuration)
+            },
+            beforeDial: beforeDial
+        )
     }
 
     private func makeClient(
         responseBody: String,
         serverProtocol: ServerProtocol? = nil,
         statusCode: Int = 200,
-        hang: Bool = false
+        hang: Bool = false,
+        onConnectBudgetExceeded: @escaping @Sendable () -> Void = {}
     ) -> EventsAPIClient {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [MockSSEURLProtocol.self]
@@ -221,8 +325,67 @@ struct EventsAPIClientTests {
         )
         return EventsAPIClient(
             connectionProvider: { connection },
-            urlSession: session
+            urlSession: session,
+            onConnectBudgetExceeded: onConnectBudgetExceeded
         )
+    }
+}
+
+private final class ClientBox: @unchecked Sendable {
+    var client: EventsAPIClient?
+}
+
+/// Never answers, so a dial stays in its handshake until cancelled. Requests are
+/// keyed by path and `directory` marker so parallel tests do not see each other.
+private final class HangingSSEURLProtocol: URLProtocol {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var starts: [String: Int] = [:]
+
+    static func startCount(path: String, marker: String?) -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return starts[key(path: path, marker: marker)] ?? 0
+    }
+
+    private static func key(path: String, marker: String?) -> String {
+        "\(path)|\(marker ?? "")"
+    }
+
+    override class func canInit(with request: URLRequest) -> Bool {
+        true
+    }
+
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
+        request
+    }
+
+    override func startLoading() {
+        let path = String((request.url?.path ?? "").drop { $0 == "/" })
+        let marker = directoryQueryValue(request.url?.query)
+        Self.lock.lock()
+        Self.starts[Self.key(path: path, marker: marker), default: 0] += 1
+        Self.lock.unlock()
+    }
+
+    override func stopLoading() {
+        client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+    }
+}
+
+private final class BudgetHitCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var hits = 0
+
+    func increment() {
+        lock.lock()
+        hits += 1
+        lock.unlock()
+    }
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return hits
     }
 }
 

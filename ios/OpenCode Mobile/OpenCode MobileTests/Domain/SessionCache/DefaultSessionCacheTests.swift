@@ -179,6 +179,35 @@ import Testing
         #expect(encoded.contains("\"schemaVersion\":1"))
     }
 
+    @Test func codecRoundTripsTimelineNotices() throws {
+        let kinds: [TimelineNoticeKind] = [
+            .moved(directory: "/repo/wt"),
+            .agentChanged(agent: "plan", previous: "build"),
+            .agentChanged(agent: "plan", previous: nil),
+            .modelChanged(
+                model: TimelineNoticeModel(providerID: "openai", modelID: "gpt-5", variant: "high"),
+                previous: TimelineNoticeModel(providerID: "openai", modelID: "gpt-5")
+            ),
+            .modelChanged(model: TimelineNoticeModel(providerID: nil, modelID: "gpt-5"), previous: nil),
+            .instructionsUpdated(sources: ["AGENTS.md", "CLAUDE.md"]),
+            .systemNote("Skills reloaded"),
+            .restart,
+        ]
+        let messages = kinds.enumerated().map { index, kind in
+            Message(
+                id: "n\(index)",
+                role: .notice,
+                text: "",
+                parts: [.notice(TimelineNotice(id: "n\(index)", kind: kind))],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: Int64(index)
+            )
+        }
+        let decoded = SessionCacheCodec.decodeMessages(try SessionCacheCodec.encodeMessages(messages))
+        #expect(decoded == messages)
+    }
+
     @Test func activityRoundTripPerDirectory() async {
         let cache = DefaultSessionCache(
             store: InMemorySessionCacheStore(),
@@ -245,6 +274,23 @@ import Testing
         )
         await cache.clearAll()
         #expect(await cache.seedActivity(directory: "/repo") == nil)
+    }
+
+    @Test func purgeConnectionCancelsAPendingActivityFlush() async throws {
+        let store = InMemorySessionCacheStore()
+        var active = "http://203.0.113.5:4096/|opencode"
+        let cache = DefaultSessionCache(
+            store: store,
+            connectionIdProvider: { active },
+            activityDebounceMilliseconds: 40
+        )
+        let entries = [SessionActivityCacheEntry(sessionId: "ses-1", activity: .running, observedAtMs: 1)]
+        await cache.rememberActivity(directory: "/repo", entries: entries)
+        await cache.purgeConnection(profileID: "removed", serverBaseURL: "http://203.0.113.5:4096/")
+        active = "http://192.168.0.2:4096/|opencode"
+        try await Task.sleep(nanoseconds: 120_000_000)
+        let key = SessionCacheKey(connectionId: active, worktree: "/repo", kind: .sessionActivity)
+        #expect(await store.load(key: key) == nil)
     }
 
     @Test func activityRememberDebouncesAndSkipsUnchanged() async throws {

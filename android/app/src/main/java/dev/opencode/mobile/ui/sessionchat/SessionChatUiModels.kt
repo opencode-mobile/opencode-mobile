@@ -4,7 +4,9 @@ import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.agent.MentionableAgent
 import dev.opencode.mobile.domain.agent.SelectableAgent
+import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.command.ClientSlashAction
+import dev.opencode.mobile.domain.command.ComposerShellCommand
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
 import dev.opencode.mobile.domain.engine.SessionCapabilities
@@ -14,12 +16,14 @@ import dev.opencode.mobile.domain.mcp.McpServerSummary
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.model.ComposerSlashSkill
 import dev.opencode.mobile.domain.model.ModelChangeLock
 import dev.opencode.mobile.domain.model.ModelProviderTraits
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
@@ -29,7 +33,13 @@ import dev.opencode.mobile.domain.session.VcsFileStatus
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
+import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionLeadingIcon
+import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 
 data class SessionChatComposerState(
     val text: String = "",
@@ -45,11 +55,18 @@ data class SessionChatComposerState(
     val modelCatalogError: String? = null,
     val agentMentions: List<AgentMention> = emptyList(),
     val fileMentions: List<FileMention> = emptyList(),
+    val skillMentions: List<SkillMention> = emptyList(),
     val cursor: Int = 0,
     val selectionRevision: Int = 0,
     val followUpDelivery: FollowUpDelivery = FollowUpDelivery.Steer,
     val supportsFollowUpDelivery: Boolean = false,
+    /** The server takes streamed uploads, so any file type or size can be attached. */
+    val attachmentUploadAvailable: Boolean = false,
 ) {
+    /** An attachment is still streaming to the server; sending waits for it. */
+    val hasPendingUploads: Boolean
+        get() = attachments.any { it.isUploading }
+
     val selectedModeLabel: String
         get() =
             selectableAgents.firstOrNull { it.id.equals(selectedMode, ignoreCase = true) }?.displayName
@@ -75,22 +92,34 @@ data class SessionChatComposerState(
     val canSelectVariant: Boolean
         get() = selectedModel?.option?.supportsVariants == true
 
+    /** A leading `!` makes Send run the draft as a shell command; see [ComposerShellCommand]. */
+    val isShellMode: Boolean
+        get() = ComposerShellCommand.isShellMode(text)
+
     val canSend: Boolean
-        get() = text.isNotBlank() || attachments.isNotEmpty()
+        get() =
+            if (isShellMode) {
+                ComposerShellCommand.command(text) != null
+            } else {
+                (text.isNotBlank() || attachments.isNotEmpty()) && !hasPendingUploads
+            }
 
     val canAttach: Boolean
-        get() = selectedModel?.option?.canAttach == true
+        get() = selectedModel?.option?.canAttach == true || attachmentUploadAvailable
 
     val mentionRanges: List<IntRange>
         get() =
-            (agentMentions.map { it.start until it.end } + fileMentions.map { it.start until it.end })
-                .sortedBy { it.first }
+            (
+                agentMentions.map { it.start until it.end } +
+                    fileMentions.map { it.start until it.end } +
+                    skillMentions.map { it.start until it.end }
+            ).sortedBy { it.first }
 
     val canAttachPhotos: Boolean
-        get() = selectedModel?.option?.canAttachPhotos == true
+        get() = selectedModel?.option?.canAttachPhotos == true || (attachmentUploadAvailable && selectedModel != null)
 
     val canAttachFiles: Boolean
-        get() = selectedModel?.option?.canAttachFiles == true
+        get() = selectedModel?.option?.canAttachFiles == true || (attachmentUploadAvailable && selectedModel != null)
 
     /**
      * [modelOwnedByEngine]: the engine keeps the model on the session (T3), so the
@@ -132,10 +161,23 @@ enum class SessionChatSnackbarTone {
     Error,
 }
 
+/** A button on a Session Chat snackbar. */
+sealed interface SessionChatSnackbarAction {
+    val label: String
+
+    /** Ask a failed `/btw` question again. */
+    data class RetrySideQuestion(
+        val id: String,
+    ) : SessionChatSnackbarAction {
+        override val label: String get() = "Retry"
+    }
+}
+
 data class SessionChatSnackbar(
     val message: String,
     val tone: SessionChatSnackbarTone,
     val id: Long,
+    val action: SessionChatSnackbarAction? = null,
 )
 
 enum class ComposerDictationPhase {
@@ -146,7 +188,23 @@ enum class ComposerDictationPhase {
     Finishing,
     PermissionDenied,
     ModelNotInstalled,
+    ModelDownloading,
+    ModelDownloadQueued,
+    ModelDownloadFailed,
     RecognizerError,
+    ;
+
+    /** A card about the on-device speech model; download updates may replace it. */
+    val isModelPhase: Boolean
+        get() =
+            this == ModelNotInstalled ||
+                this == ModelDownloading ||
+                this == ModelDownloadQueued ||
+                this == ModelDownloadFailed
+
+    /** Phases that open the card without listening. */
+    val isUnavailable: Boolean
+        get() = this == PermissionDenied || this == RecognizerError || isModelPhase
 }
 
 data class ComposerDictationUiState(
@@ -158,6 +216,8 @@ data class ComposerDictationUiState(
     val onDevice: Boolean = true,
     val startedAtEpochMs: Long = 0L,
     val errorMessage: String? = null,
+    /** Model download progress, 0..1, while [phase] is ModelDownloading; null when unknown. */
+    val downloadProgress: Float? = null,
 )
 
 data class SessionChatUiState(
@@ -179,6 +239,8 @@ data class SessionChatUiState(
     val workingIndicatorLabel: String? = null,
     /** Live rate-limit countdown. Hidden for content-filter retries. */
     val retryCard: SessionRetryCard? = null,
+    /** The session is in `retry` status: the composer owns the countdown, failure marks show none. */
+    val isRetrying: Boolean = false,
     /** True after the Idle hold when the reserved footer has collapsed. */
     val workingIndicatorCollapsed: Boolean = false,
     /** True while the reserved Working lamp/label is fading through the idle hold. */
@@ -216,6 +278,8 @@ data class SessionChatUiState(
     val questionErrorMessage: String? = null,
     val reviewChangesMessageId: String? = null,
     val reviewChangesSummary: ReviewChangesSummary? = null,
+    /** Parent of the loaded session; a child opened without a navigation parent still locks the composer. */
+    val sessionParentId: String? = null,
     val sessionBranchPill: SessionBranchPillUiState? = null,
     val supportsSessionMessageDiff: Boolean = true,
     val supportsSessionArchive: Boolean = true,
@@ -241,6 +305,8 @@ data class SessionChatUiState(
     val forkResultVisible: Boolean = false,
     val forkedSessionTitle: String = "",
     val pendingSessionReplace: ChildSessionNavigationTarget? = null,
+    /** "Move to worktree…": entry availability, the sheet, and its rows. */
+    val moveToWorktree: SessionChatWorktreeMoveUiState = SessionChatWorktreeMoveUiState(),
     val pendingTerminalOpen: PendingTerminalOpen? = null,
     /** Worktree to open in the File Browser; consumed by the screen once it navigates. */
     val pendingFilesOpen: String? = null,
@@ -262,17 +328,37 @@ data class SessionChatUiState(
     val projectLabel: String? = null,
     val projectLetter: Char? = null,
     val projectLetterAccent: dev.opencode.mobile.theme.LetterAccent? = null,
+    /** True when the subtitle is a worktree checkout name instead of the project letter. */
+    val worktreeCheckout: Boolean = false,
     /**
      * Chip-timeline paragraphs expanded past `+N more`:
      * [SessionChatTimelineBlock.StepParagraph.expansionID] to the chip count at tap time.
      */
     val expandedStepParagraphs: Map<String, Int> = emptyMap(),
+    /** Step rails unfolded past their `N earlier steps` row, by rail id (#779). */
+    val unfoldedStepRails: Set<String> = emptySet(),
+    /** Activity card whose live sheet is open, by block id (#779). */
+    val presentedActivityCard: String? = null,
+    /** Step of [presentedActivityCard] whose detail the sheet shows in place of its list (#779). */
+    val activityCardDetailStepId: String? = null,
+    /** What running child sessions on activity cards are doing, by child session id (#779). */
+    val activityCardChildren: Map<String, SessionChatChildActivity> = emptyMap(),
+    /** What each live activity card's footer band shows after the footer hold, by block id (#779). */
+    val activityCardFooters: Map<String, SessionChatActivityFooter> = emptyMap(),
+    /** In-flight steps not rendered yet: seen running for less than the entry debounce (#779). */
+    val debouncedStepIds: Set<String> = emptySet(),
     /** One-time Chip timeline intro sheet (OPE-270). */
     val chipTimelineIntroVisible: Boolean = false,
-    /** Settings gate for the composer mic. Off until the user turns it on. */
-    val composerDictationEnabled: Boolean = false,
+    /** One-time Timeline Style picker sheet (#805). */
+    val timelineStylePickerVisible: Boolean = false,
+    /** Styles the Timeline Style picker offers, with their tags; empty until it first shows. */
+    val timelineStylePickerOptions: List<SessionChatTimelineStyleOption> = emptyList(),
     /** Null while idle. A value shows the dictation card in place of prompt entry. */
     val dictation: ComposerDictationUiState? = null,
+    /** Directory the session runs in now; differs from the route's after `session.moved`. Empty until bound. */
+    val worktree: String = "",
+    /** `/btw` side questions: composer mode, chips above the composer and the answer sheet. */
+    val sideQuestions: SessionChatSideQuestionsUiState = SessionChatSideQuestionsUiState(),
 ) {
     /** A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet. */
     fun blocksChipTimelineIntro(): Boolean =
@@ -291,12 +377,41 @@ data class SessionChatUiState(
             messages.forEach { message ->
                 if (message.role == MessageRole.User) {
                     candidate = message.takeUnless { it.isPending || it.isStreaming }
-                } else if (candidate != null && !message.isPending && !message.isStreaming) {
+                } else if (message.role != MessageRole.Notice &&
+                    candidate != null &&
+                    !message.isPending &&
+                    !message.isStreaming
+                ) {
                     latest = candidate?.id
                 }
             }
             return latest
         }
+
+    /**
+     * The server rejects a last-turn diff when a folder move sits between assistant steps of
+     * that turn. Snapshots from the two folders cannot be compared, so callers should not open
+     * Changes. The span ends at the next prompt: a steered follow-up in the same server turn
+     * is not visible here, and the Changes screen still explains that rejection.
+     */
+    fun lastTurnSpansLocationChange(messageId: String): Boolean {
+        val start = messages.indexOfFirst { it.id == messageId && it.role == MessageRole.User }
+        if (start < 0) return false
+        var sawAssistant = false
+        var sawMoveAfterAssistant = false
+        for (message in messages.drop(start + 1)) {
+            if (message.role == MessageRole.User) break
+            if (message.isLocationMove) {
+                if (sawAssistant) sawMoveAfterAssistant = true
+                continue
+            }
+            if (message.role == MessageRole.Assistant) {
+                if (sawMoveAfterAssistant) return true
+                sawAssistant = true
+            }
+        }
+        return false
+    }
 
     fun changesNavigationTarget(worktree: String) =
         ChangesNavigationTarget(
@@ -537,7 +652,21 @@ data class SessionChatAtSuggestion(
     val subtitle: String?,
     val agentName: String? = null,
     val filePath: String? = null,
-)
+    val isDirectory: Boolean = false,
+) {
+    /** File suggestions show their file-type icon; agent suggestions show the agent glyph. */
+    val leadingIcon: OpenCodeComposerSuggestionLeadingIcon?
+        get() =
+            when {
+                filePath != null ->
+                    OpenCodeComposerSuggestionLeadingIcon.File(
+                        path = filePath,
+                        kind = if (isDirectory) OpenCodeFileIconKind.Directory else OpenCodeFileIconKind.File,
+                    )
+                agentName != null -> OpenCodeComposerSuggestionLeadingIcon.Icon(OpenCodeIcons.Agent)
+                else -> null
+            }
+}
 
 data class SessionChatComposerRegionState(
     val composer: SessionChatComposerState = SessionChatComposerState(),
@@ -594,6 +723,7 @@ fun dev.opencode.mobile.domain.filesystem.ProjectEntry.toFileSuggestion(): Sessi
         title = relativePath,
         subtitle = "File",
         filePath = relativePath,
+        isDirectory = isDirectory,
     )
 
 data class PendingSend(
@@ -603,8 +733,11 @@ data class PendingSend(
 data class SessionInfoRegionState(
     val sessionId: String = "",
     val sessionTitle: String = "",
+    /** The loaded session's parent; set even when navigation did not say it is a child. */
+    val parentId: String? = null,
     val sessionStatusLabel: String? = null,
     val retryCard: SessionRetryCard? = null,
+    val isRetrying: Boolean = false,
     val hasResolvedSessionStatus: Boolean = false,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val canMutate: Boolean = false,
@@ -620,11 +753,13 @@ fun SessionInfoRegionState.withStatus(
     authoritative: String?,
     hasResolved: Boolean = true,
     retryCard: SessionRetryCard? = null,
+    isRetrying: Boolean = false,
 ): SessionInfoRegionState =
     copy(
         sessionStatusLabel = authoritative,
         hasResolvedSessionStatus = hasResolved,
         retryCard = retryCard,
+        isRetrying = isRetrying,
     )
 
 data class SessionChatReviewChangesRegionState(
@@ -692,6 +827,8 @@ data class SessionChatCommandsRegionState(
     val mcpErrorMessage: String? = null,
     val mcpSummary: McpServerSummary = McpServerSummary.Empty,
     val hasPendingRevert: Boolean = false,
+    /** First reverted message while a revert is pending; the timeline hides it and later turns. */
+    val revertMessageId: String? = null,
     val forkDialogVisible: Boolean = false,
     val forkDraftTitle: String = "",
     val forkSubmitting: Boolean = false,
@@ -749,6 +886,41 @@ fun LiveUpdatesLabel.toSessionConnectionStatus(): SessionConnectionStatus =
         LiveUpdatesLabel.AuthFailed -> SessionConnectionStatus.AuthFailed
     }
 
+/** One entry of the one-time Timeline Style picker (#805). */
+data class SessionChatTimelineStyleOption(
+    val style: SessionChatTimelineStyle,
+    /** [RECOMMENDED_TAG] on Activity Card; [CURRENT_TAG] on the current style when it is not Activity Card. */
+    val tag: String? = null,
+) {
+    companion object {
+        const val RECOMMENDED_TAG = "Recommended"
+        const val CURRENT_TAG = "Current"
+
+        /** The picker starts on, and recommends, Activity Card. */
+        val INITIAL_SELECTION = SessionChatTimelineStyle.ActivityCard
+
+        /**
+         * Picker entries: Activity Card first (preselected and recommended, so it stays above
+         * the fold), then the other offered styles in their usual order.
+         */
+        fun pickerOptions(
+            available: List<SessionChatTimelineStyle>,
+            current: SessionChatTimelineStyle,
+        ): List<SessionChatTimelineStyleOption> =
+            available.sortedBy { it != INITIAL_SELECTION }.map { style ->
+                SessionChatTimelineStyleOption(
+                    style = style,
+                    tag =
+                        when (style) {
+                            SessionChatTimelineStyle.ActivityCard -> RECOMMENDED_TAG
+                            current -> CURRENT_TAG
+                            else -> null
+                        },
+                )
+            }
+    }
+}
+
 enum class SessionChatTimelineState {
     Creating,
     Loading,
@@ -763,6 +935,11 @@ data class PendingPrompt(
     val delivery: FollowUpDelivery,
     val isSettling: Boolean = false,
 )
+
+private val SessionChatMessageItem.isLocationMove: Boolean
+    get() = blocks.any { block ->
+        block is SessionChatTimelineBlock.Notice && block.notice is TimelineNotice.Moved
+    }
 
 data class SessionChatMessageItem(
     val id: String,
@@ -786,6 +963,7 @@ data class SessionChatAttachmentItem(
     val variant: OpenCodeAttachmentVariant,
     val signature: String,
     val imageBytes: ByteArray? = null,
+    val imageSource: OpenCodeAttachmentImageSource? = null,
 ) {
     override fun equals(other: Any?): Boolean =
         other is SessionChatAttachmentItem &&
@@ -793,11 +971,14 @@ data class SessionChatAttachmentItem(
             filename == other.filename &&
             variant == other.variant &&
             signature == other.signature &&
-            imageBytes.contentEquals(other.imageBytes)
+            imageBytes.contentEquals(other.imageBytes) &&
+            imageSource == other.imageSource
 
     override fun hashCode(): Int =
-        31 * (31 * (31 * (31 * id.hashCode() + filename.hashCode()) + variant.hashCode()) + signature.hashCode()) +
-            imageBytes.contentHashCode()
+        31 * (
+            31 * (31 * (31 * (31 * id.hashCode() + filename.hashCode()) + variant.hashCode()) + signature.hashCode()) +
+                imageBytes.contentHashCode()
+        ) + imageSource.hashCode()
 }
 
 fun MessageRole.displayLabel(): String =
@@ -806,5 +987,6 @@ fun MessageRole.displayLabel(): String =
         MessageRole.Assistant -> "Assistant"
         MessageRole.Command -> "Command"
         MessageRole.Tool -> "Tool"
+        MessageRole.Notice -> "Notice"
         MessageRole.Unknown -> "Message"
     }

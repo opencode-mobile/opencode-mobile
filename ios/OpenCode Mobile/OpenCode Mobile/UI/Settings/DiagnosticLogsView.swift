@@ -1,3 +1,4 @@
+import FactoryKit
 import Observation
 import SwiftUI
 import UIKit
@@ -18,9 +19,17 @@ final class DiagnosticLogsViewModel {
     private(set) var shareFileURL: URL?
 
     private let buffer: DiagnosticLogBuffer
+    private let redactor: () -> FeedbackLogRedactor
 
-    init(buffer: DiagnosticLogBuffer = .shared) {
+    /// `redactor` is built at share time so it knows the profile that is active then.
+    init(
+        buffer: DiagnosticLogBuffer = .shared,
+        redactor: @escaping () -> FeedbackLogRedactor = {
+            FeedbackLogRedactor(profile: Container.shared.activeConnectionManager().currentProfile())
+        }
+    ) {
         self.buffer = buffer
+        self.redactor = redactor
     }
 
     var hasEntries: Bool { entryCount > 0 }
@@ -65,7 +74,8 @@ final class DiagnosticLogsViewModel {
     func prepareShare() {
         shareError = nil
         do {
-            let data = try buffer.exportJSONL(window: exportWindow)
+            // Shared logs get the same address and credential masking as a feedback upload.
+            let data = try buffer.exportJSONL(window: exportWindow, message: redactor().redact)
             let url = FileManager.default.temporaryDirectory
                 .appendingPathComponent(DiagnosticLogAttachment.filename)
             if FileManager.default.fileExists(atPath: url.path) {
@@ -215,9 +225,7 @@ struct DiagnosticLogsView: View {
             ForEach(DiagnosticLogExportWindow.allCases, id: \.self) { window in
                 OpenCodeBottomSheetEntry(
                     title: window.label,
-                    endDecorator: window == model.exportWindow
-                        ? .icon(.check, accessibilityLabel: "Selected")
-                        : .none,
+                    selected: window == model.exportWindow,
                     action: {
                         model.setExportWindow(window)
                         showExportWindowPicker = false
@@ -229,18 +237,8 @@ struct DiagnosticLogsView: View {
             model.dismissShare()
         }) {
             if let url = model.shareFileURL {
-                DiagnosticLogActivityView(items: [url])
+                ActivityShareView(items: [url])
             }
         }
     }
-}
-
-private struct DiagnosticLogActivityView: UIViewControllerRepresentable {
-    let items: [Any]
-
-    func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
-    }
-
-    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

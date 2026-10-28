@@ -92,5 +92,13 @@ class ServerProtocolClassifierTest {
             false,
             ServerCapabilities.forProtocol(ServerProtocol.V2).supportsSessionArchive,
         )
+        assertEquals(
+            true,
+            ServerCapabilities.forProtocol(ServerProtocol.V2, v2Features = V2ServerFeatures(sessionArchive = true)).supportsSessionArchive,
+        )
+        assertEquals(
+            true,
+            ServerCapabilities.forProtocol(ServerProtocol.V1, v2Features = V2ServerFeatures()).supportsSessionArchive,
+        )
     }
 }

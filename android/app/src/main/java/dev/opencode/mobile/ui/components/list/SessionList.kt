@@ -44,17 +44,19 @@ import dev.opencode.mobile.domain.home.HomeSettleGesture
 import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.home.HomeSessionLadderKind
 import dev.opencode.mobile.domain.home.HomeSessionLadderSection
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.domain.home.HomeSessionOrderStabilizer
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlinx.coroutines.delay
 
 private val SessionListFallbackBottomSpacer = 168.dp
+private const val SCOPE_LOAD_CROSSFADE_MS = 220
 
 enum class SessionListStatus {
     Idle,
@@ -103,7 +105,80 @@ data class SessionListSession(
     val settleGestures: List<HomeSettleGesture> = emptyList(),
     /** Settled-page rows keep the letter and caption and drop the status pill. */
     val showStatus: Boolean = true,
+    /**
+     * Directory the session runs in. [worktree] stays the project scope id so project
+     * filters and counts keep grouping worktree sessions with that project.
+     */
+    val directory: String = worktree,
+    /** Scope id of the session's worktree when its project lists more than one. */
+    val worktreeScopeId: String? = null,
+    /** Branch and worktree folder for a repository project; null keeps the [subtitle] path. */
+    val location: List<SessionListLocationPart>? = null,
+    /** Project name shown on the line above [location]. */
+    val projectName: String? = null,
+    /** Worktree part of the compact row's `project / worktree`; null on the main checkout. */
+    val compactWorktree: String? = null,
+) {
+    /** Line 2 of the compact row: the project name (else the folder), then [compactWorktree]. */
+    fun compactPath(): OpenCodeListItemPath {
+        val project =
+            projectName?.takeIf { it.isNotEmpty() }
+                ?: subtitle.trimEnd('/').substringAfterLast('/').ifEmpty { subtitle }
+        return OpenCodeListItemPath(project = project, worktree = compactWorktree?.takeIf { it.isNotEmpty() })
+    }
+
+    /**
+     * Git project rows: the project name (folder icon) on the subtitle line, and the worktree
+     * (branch icon, then folder) on the detail line under it, in every scope. Each line cuts on
+     * its own, so a long project name never hides the branch. Null keeps the path subtitle.
+     */
+    fun locationLines(): SessionListLocationLines? {
+        val parts = location ?: return null
+        val name =
+            projectName?.takeIf { it.isNotEmpty() }
+                ?: return SessionListLocationLines(parts.toSubtitleSegments(), detail = null)
+        val worktree = parts.toSubtitleSegments(OpenCodeListItemSubtitleTone.Tertiary)
+        return SessionListLocationLines(
+            subtitle = listOf(OpenCodeListItemSubtitleSegment(name, OpenCodeListItemSubtitleTone.Secondary, OpenCodeIcons.Folder)),
+            detail = worktree.ifEmpty { null },
+        )
+    }
+}
+
+/** Row lines of a session on Home. */
+data class SessionListLocationLines(
+    val subtitle: List<OpenCodeListItemSubtitleSegment>,
+    val detail: List<OpenCodeListItemSubtitleSegment>?,
 )
+
+/** One part of a row's location subtitle; parts read joined with " · ". */
+data class SessionListLocationPart(
+    val text: String,
+    /** Drawn with the branch mark. */
+    val isBranch: Boolean = false,
+)
+
+/** First load of a project scope's sessions that has not finished yet. */
+sealed interface SessionListScopeLoad {
+    /** Loading; [isSlow] once it has taken long enough to say so. */
+    data class Loading(
+        val isSlow: Boolean = false,
+    ) : SessionListScopeLoad
+
+    /** The server did not return the scope's sessions; the list offers Retry. */
+    data object Failed : SessionListScopeLoad
+
+    companion object {
+        const val LOADING_SUBTITLE = "Loading sessions…"
+        const val SLOW_SUBTITLE = "Still loading…"
+        const val FAILED_SUBTITLE = "Couldn't load sessions"
+        const val SLOW_CAPTION = "Still loading — large projects can take a moment"
+        const val FAILED_MESSAGE = "The server didn't return this project's sessions."
+        const val RETRY_TITLE = "Retry"
+
+        fun failedTitle(scopeTitle: String): String = "Couldn't load $scopeTitle"
+    }
+}
 
 data class SessionListFilterTab(
     val id: String,
@@ -112,8 +187,17 @@ data class SessionListFilterTab(
     val subtitle: String = "",
     val letter: Char? = null,
     val letterAccent: LetterAccent? = null,
+    /** Unfinished first load; the dock shows it instead of [count] and the list shows a placeholder. */
+    val load: SessionListScopeLoad? = null,
+    /** Set on a worktree row: the id of the project scope it narrows. */
+    val parentId: String? = null,
+    /** Dock title when it differs from the picker row (a worktree shows its project). */
+    val dockTitle: String? = null,
+    /** Dock subtitle when it differs from the picker row. */
+    val dockSubtitle: String? = null,
 ) {
     val isAll: Boolean get() = id == ALL_ID
+    val isWorktree: Boolean get() = parentId != null
     val pickerTitle: String get() = if (isAll) PICKER_ALL_TITLE else title
 
     companion object {
@@ -136,6 +220,7 @@ data class SessionListFilterTab(
             worktree: String,
             title: String,
             count: Int,
+            load: SessionListScopeLoad? = null,
         ): SessionListFilterTab =
             SessionListFilterTab(
                 id = worktree,
@@ -144,8 +229,53 @@ data class SessionListFilterTab(
                 subtitle = worktree,
                 letter = letterCharacterForProject(title),
                 letterAccent = letterAccentForWorktree(worktree),
+                load = load,
             )
     }
+
+    /**
+     * Broader scope to offer when this worktree filter has no sessions. Null while the
+     * project is still loading or failed, and for any scope that is not a worktree.
+     * Prefers the project when another worktree has sessions, otherwise All when another
+     * project does, otherwise the project so the empty worktree is not a dead end.
+     */
+    fun worktreeFilterClear(
+        broaderTabs: List<SessionListFilterTab>,
+        visibleIsEmpty: Boolean,
+    ): WorktreeFilterClear? {
+        if (!isWorktree || !visibleIsEmpty || load != null) return null
+        val parent = parentId?.let { id -> broaderTabs.firstOrNull { it.id == id } }
+        if (parent?.load != null) return null
+        val all = broaderTabs.firstOrNull { it.isAll }
+        return when {
+            parent != null && parent.count > 0 ->
+                WorktreeFilterClear(parent.id, SessionListWorktreeEmptyCopy.OTHER_WORKTREES)
+            all != null && all.count > 0 ->
+                WorktreeFilterClear(all.id, SessionListWorktreeEmptyCopy.OTHER_PROJECTS)
+            parent != null ->
+                WorktreeFilterClear(parent.id, SessionListWorktreeEmptyCopy.EVERY_WORKTREE)
+            parentId != null ->
+                WorktreeFilterClear(parentId, SessionListWorktreeEmptyCopy.EVERY_WORKTREE)
+            all != null ->
+                WorktreeFilterClear(all.id, SessionListWorktreeEmptyCopy.EVERY_PROJECT)
+            else -> null
+        }
+    }
+}
+
+/** Scope a "Clear filter" action selects, and the line that explains why. */
+data class WorktreeFilterClear(
+    val filterId: String,
+    val message: String,
+)
+
+object SessionListWorktreeEmptyCopy {
+    const val TITLE = "No sessions in this worktree"
+    const val ACTION = "Clear filter"
+    const val OTHER_WORKTREES = "Clear the filter to see sessions on other worktrees."
+    const val OTHER_PROJECTS = "Clear the filter to see sessions on other projects."
+    const val EVERY_WORKTREE = "Clear the filter to see every worktree."
+    const val EVERY_PROJECT = "Clear the filter to see every project."
 }
 
 @Composable
@@ -170,6 +300,11 @@ fun SessionList(
     settledSessions: List<SessionListSession> = emptyList(),
     onOpenSettled: (() -> Unit)? = null,
     onSettleGesture: ((SessionListSession, HomeSettleGesture) -> Unit)? = null,
+    /** Retry for a scope whose [SessionListFilterTab.load] failed; receives the tab id. */
+    onRetryScopeLoad: (String) -> Unit = {},
+    /** Selectable scopes outside [filterTabs] (worktrees); the dock shows them but never swipes to them. */
+    scopeTabs: List<SessionListFilterTab> = emptyList(),
+    rowStyle: HomeSessionRowStyle = HomeDisplayPreferences.sessionRowStyle,
 ) {
     val background = openCodeColor("background-base")
     val borderWeaker = openCodeColor("border-weaker-base")
@@ -203,6 +338,10 @@ fun SessionList(
                 SessionListFeedPage(
                     sessions = sessions,
                     filterId = filterId,
+                    scopeTab = filterTabs.firstOrNull { it.id == filterId } ?: scopeTabs.firstOrNull { it.id == filterId },
+                    broaderTabs = filterTabs,
+                    onFilterSelected = onFilterSelected,
+                    onRetryScopeLoad = onRetryScopeLoad,
                     listBottomFadeHeight = listBottomFadeHeight,
                     borderWeaker = borderWeaker,
                     background = background,
@@ -216,6 +355,7 @@ fun SessionList(
                     settledSessions = settledSessions,
                     onOpenSettled = onOpenSettled,
                     onSettleGesture = onSettleGesture,
+                    rowStyle = rowStyle,
                 )
             }
 
@@ -233,6 +373,7 @@ fun SessionList(
                 onAddProject = onAddProject,
                 onNewSession = onNewSession,
                 onNewSessionLongPress = onNewSessionLongPress,
+                scopeTabs = scopeTabs,
                 modifier =
                     Modifier
                         .align(Alignment.BottomCenter)
@@ -252,6 +393,10 @@ fun SessionList(
 private fun SessionListFeedPage(
     sessions: List<SessionListSession>,
     filterId: String,
+    scopeTab: SessionListFilterTab?,
+    broaderTabs: List<SessionListFilterTab>,
+    onFilterSelected: (String) -> Unit,
+    onRetryScopeLoad: (String) -> Unit,
     listBottomFadeHeight: Dp,
     borderWeaker: androidx.compose.ui.graphics.Color,
     background: androidx.compose.ui.graphics.Color,
@@ -264,6 +409,7 @@ private fun SessionListFeedPage(
     settledSessions: List<SessionListSession> = emptyList(),
     onOpenSettled: (() -> Unit)? = null,
     onSettleGesture: ((SessionListSession, HomeSettleGesture) -> Unit)? = null,
+    rowStyle: HomeSessionRowStyle,
 ) {
     val recentWindowHours = HomeDisplayPreferences.recentWindowHours
     val visibleSessions =
@@ -361,6 +507,10 @@ private fun SessionListFeedPage(
 
     SessionListFeed(
         visibleSessions = visibleSessions,
+        scopeTab = scopeTab,
+        broaderTabs = broaderTabs,
+        onFilterSelected = onFilterSelected,
+        onRetryScopeLoad = onRetryScopeLoad,
         ladderSections = ladderSections,
         listState = listState,
         listBottomFadeHeight = listBottomFadeHeight,
@@ -372,6 +522,7 @@ private fun SessionListFeedPage(
         settledCount = settledSessions.visibleForFilter(filterId).size,
         onOpenSettled = onOpenSettled,
         onSettleGesture = onSettleGesture,
+        rowStyle = rowStyle,
         modifier =
             Modifier
                 .fillMaxSize()
@@ -381,6 +532,111 @@ private fun SessionListFeedPage(
 
 @Composable
 private fun SessionListFeed(
+    visibleSessions: List<SessionListSession>,
+    scopeTab: SessionListFilterTab?,
+    broaderTabs: List<SessionListFilterTab>,
+    onFilterSelected: (String) -> Unit,
+    onRetryScopeLoad: (String) -> Unit,
+    ladderSections: List<HomeSessionLadderSection<SessionListSession>>,
+    listState: LazyListState,
+    listBottomFadeHeight: Dp,
+    borderWeaker: androidx.compose.ui.graphics.Color,
+    emptyContent: (@Composable () -> Unit)?,
+    selectedSessionId: String?,
+    onSessionSelected: (SessionListSession) -> Unit,
+    onSessionLongPress: ((SessionListSession) -> Unit)?,
+    settledCount: Int = 0,
+    onOpenSettled: (() -> Unit)? = null,
+    onSettleGesture: ((SessionListSession, HomeSettleGesture) -> Unit)? = null,
+    rowStyle: HomeSessionRowStyle,
+    modifier: Modifier = Modifier,
+) {
+    // A loading or failed scope shows its placeholder only while it has no rows to show.
+    val placeholder = scopeTab?.load?.takeIf { visibleSessions.isEmpty() }
+    Crossfade(
+        targetState = placeholder?.let { it::class },
+        animationSpec = tween(durationMillis = SCOPE_LOAD_CROSSFADE_MS, easing = EaseInOut),
+        modifier = modifier,
+        label = "sessionListScopeLoad",
+    ) { placeholderKind ->
+        when {
+            placeholderKind == SessionListScopeLoad.Failed::class && scopeTab != null ->
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .padding(bottom = listBottomFadeHeight),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    OpenCodeEmptyState(
+                        title = SessionListScopeLoad.failedTitle(scopeTab.title),
+                        message = SessionListScopeLoad.FAILED_MESSAGE,
+                        primaryAction =
+                            OpenCodeEmptyStateAction(
+                                title = SessionListScopeLoad.RETRY_TITLE,
+                                onClick = { onRetryScopeLoad(scopeTab.id) },
+                            ),
+                    )
+                }
+            placeholderKind != null ->
+                OpenCodeSessionListSkeleton(
+                    accent = scopeTab?.letterAccent,
+                    title = scopeTab?.title,
+                    caption =
+                        SessionListScopeLoad.SLOW_CAPTION.takeIf {
+                            (scopeTab?.load as? SessionListScopeLoad.Loading)?.isSlow == true
+                        },
+                    modifier = Modifier.fillMaxSize(),
+                )
+            else -> {
+                val clear =
+                    scopeTab?.worktreeFilterClear(
+                        broaderTabs = broaderTabs,
+                        visibleIsEmpty = visibleSessions.isEmpty(),
+                    )
+                if (clear != null) {
+                    Box(
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(bottom = listBottomFadeHeight),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        OpenCodeEmptyState(
+                            title = SessionListWorktreeEmptyCopy.TITLE,
+                            message = clear.message,
+                            icon = OpenCodeIcons.CallSplit,
+                            primaryAction =
+                                OpenCodeEmptyStateAction(
+                                    title = SessionListWorktreeEmptyCopy.ACTION,
+                                    onClick = { onFilterSelected(clear.filterId) },
+                                ),
+                        )
+                    }
+                } else {
+                    SessionListFeedRows(
+                        visibleSessions = visibleSessions,
+                        ladderSections = ladderSections,
+                        listState = listState,
+                        listBottomFadeHeight = listBottomFadeHeight,
+                        borderWeaker = borderWeaker,
+                        emptyContent = emptyContent,
+                        selectedSessionId = selectedSessionId,
+                        onSessionSelected = onSessionSelected,
+                        onSessionLongPress = onSessionLongPress,
+                        settledCount = settledCount,
+                        onOpenSettled = onOpenSettled,
+                        onSettleGesture = onSettleGesture,
+                        rowStyle = rowStyle,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SessionListFeedRows(
     visibleSessions: List<SessionListSession>,
     ladderSections: List<HomeSessionLadderSection<SessionListSession>>,
     listState: LazyListState,
@@ -393,6 +649,7 @@ private fun SessionListFeed(
     settledCount: Int = 0,
     onOpenSettled: (() -> Unit)? = null,
     onSettleGesture: ((SessionListSession, HomeSettleGesture) -> Unit)? = null,
+    rowStyle: HomeSessionRowStyle,
     modifier: Modifier = Modifier,
 ) {
     if (visibleSessions.isEmpty() && emptyContent != null) {
@@ -430,6 +687,7 @@ private fun SessionListFeed(
                                 onSessionSelected = onSessionSelected,
                                 onSessionLongPress = onSessionLongPress,
                                 onSettleGesture = onSettleGesture,
+                                rowStyle = rowStyle,
                             )
                         }
                     }
@@ -452,6 +710,7 @@ private fun SessionListFeed(
                                 onSessionSelected = onSessionSelected,
                                 onSessionLongPress = onSessionLongPress,
                                 onSettleGesture = onSettleGesture,
+                                rowStyle = rowStyle,
                             )
                         }
                     }
@@ -505,35 +764,99 @@ private fun SessionListRow(
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
     onSettleGesture: ((SessionListSession, HomeSettleGesture) -> Unit)? = null,
+    rowStyle: HomeSessionRowStyle,
 ) {
     val status = session.status.toListItemStatus(session.retryAttempt, stale = session.statusStale)
     SettleSwipeRow(
         gestures = session.settleGestures,
         onGesture = { gesture -> onSettleGesture?.invoke(session, gesture) },
     ) {
-        OpenCodeListItem(
-            title = session.title,
-            subtitle = compactHomePath(session.subtitle).takeIf { session.subtitle.isNotBlank() },
-            status = if (session.showStatus) status else null,
-            caption = session.caption.takeIf { it.isNotEmpty() },
-            startDecorator =
-                StartDecorator.Letter(
-                    character = session.letter,
-                    accent = session.letterAccent,
-                    statusDot = if (showStatusDot && session.showStatus) status.tone else null,
-                ),
-            selected = selected,
-            onClick = { onSessionSelected(session) },
-            onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
-        )
+        if (rowStyle == HomeSessionRowStyle.Compact) {
+            SessionListCompactRow(
+                session = session,
+                status = status,
+                showDivider = showDivider,
+                borderWeaker = borderWeaker,
+                selected = selected,
+                onSessionSelected = onSessionSelected,
+                onSessionLongPress = onSessionLongPress,
+            )
+        } else {
+            val lines = session.locationLines()
+            OpenCodeListItem(
+                title = session.title,
+                subtitle =
+                    if (lines == null) {
+                        compactHomePath(session.subtitle).takeIf { session.subtitle.isNotBlank() }
+                    } else {
+                        null
+                    },
+                subtitleSegments = lines?.subtitle,
+                detailSegments = lines?.detail,
+                status = if (session.showStatus) status else null,
+                caption = session.caption.takeIf { it.isNotEmpty() },
+                startDecorator =
+                    StartDecorator.Letter(
+                        character = session.letter,
+                        accent = session.letterAccent,
+                        statusDot = if (showStatusDot && session.showStatus) status.tone else null,
+                    ),
+                selected = selected,
+                onClick = { onSessionSelected(session) },
+                onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
+            )
+            if (showDivider) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 60.dp),
+                    color = borderWeaker,
+                )
+            }
+        }
     }
+}
+
+/** Two-line row (#803): the same in every scope; Idle shows no dot and no status. */
+@Composable
+private fun SessionListCompactRow(
+    session: SessionListSession,
+    status: OpenCodeListItemStatus,
+    showDivider: Boolean,
+    borderWeaker: androidx.compose.ui.graphics.Color,
+    selected: Boolean,
+    onSessionSelected: (SessionListSession) -> Unit,
+    onSessionLongPress: ((SessionListSession) -> Unit)?,
+) {
+    val active = if (session.showStatus) session.compactStatus(status) else null
+    OpenCodeListItem(
+        title = session.title,
+        variant = OpenCodeListItemVariant.Compact,
+        path = session.compactPath(),
+        titleEmphasized = session.status.isUnreadFinish,
+        status = active,
+        caption = session.caption.takeIf { it.isNotEmpty() },
+        startDecorator =
+            StartDecorator.Tile(
+                character = session.letter,
+                accent = session.letterAccent,
+                statusDot = active?.tone,
+                pulsing = session.status == SessionListStatus.Running && !session.statusStale,
+            ),
+        selected = selected,
+        onClick = { onSessionSelected(session) },
+        onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
+    )
     if (showDivider) {
         HorizontalDivider(
-            modifier = Modifier.padding(start = 60.dp),
+            modifier = Modifier.padding(start = 58.dp),
             color = borderWeaker,
         )
     }
 }
+
+/** Compact rows show a status only when the session is not Idle. */
+internal fun SessionListSession.compactStatus(
+    status: OpenCodeListItemStatus = this.status.toListItemStatus(retryAttempt, stale = statusStale),
+): OpenCodeListItemStatus? = status.takeIf { this.status != SessionListStatus.Idle }
 
 private class SelectionRevealHold(
     var sessionId: String?,
@@ -612,8 +935,25 @@ fun List<SessionListSession>.visibleForFilter(selectedFilterId: String): List<Se
     if (selectedFilterId == SessionListFilterTab.ALL_ID) {
         this
     } else {
-        filter { it.worktree == selectedFilterId }
+        filter { it.worktree == selectedFilterId || it.worktreeScopeId == selectedFilterId }
     }
+
+/** Location parts as list subtitle segments: the branch carries the branch mark, parts joined with " · ". */
+internal fun List<SessionListLocationPart>.toSubtitleSegments(
+    tone: OpenCodeListItemSubtitleTone = OpenCodeListItemSubtitleTone.Secondary,
+): List<OpenCodeListItemSubtitleSegment> =
+    flatMapIndexed { index, part ->
+        listOfNotNull(
+            OpenCodeListItemSubtitleSegment(LOCATION_SEPARATOR, tone).takeIf { index > 0 },
+            OpenCodeListItemSubtitleSegment(
+                text = part.text,
+                tone = tone,
+                icon = if (part.isBranch) OpenCodeIcons.CallSplit else null,
+            ),
+        )
+    }
+
+private const val LOCATION_SEPARATOR = " · "
 
 internal fun SessionListStatus.toListItemStatus(
     retryAttempt: Int? = null,

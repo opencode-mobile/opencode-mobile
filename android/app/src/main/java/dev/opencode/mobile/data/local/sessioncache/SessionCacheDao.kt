@@ -30,13 +30,58 @@ interface SessionCacheDao {
     @Query(
         """
         DELETE FROM session_cache_snapshot
-        WHERE worktree = :worktree AND connection_id LIKE :connectionIdPrefix || '%'
+        WHERE worktree = :worktree AND (
+            substr(connection_id, 1, length(:connectionIdPrefix) + 1) = :connectionIdPrefix || '|'
+            OR substr(connection_id, 1, length(:connectionIdPrefix) + 2) = :connectionIdPrefix || '/|'
+        )
         """,
     )
     suspend fun deleteForUrlPrefixWorktree(
         connectionIdPrefix: String,
         worktree: String,
     )
+
+    @Query("DELETE FROM session_cache_snapshot WHERE connection_id = :connectionId")
+    suspend fun deleteForConnection(connectionId: String)
+
+    @Query(
+        """
+        DELETE FROM session_cache_snapshot
+        WHERE (
+            substr(connection_id, 1, length(:connectionIdPrefix) + 1) = :connectionIdPrefix || '|'
+            OR substr(connection_id, 1, length(:connectionIdPrefix) + 2) = :connectionIdPrefix || '/|'
+        )
+        """,
+    )
+    suspend fun deleteForUrlPrefix(connectionIdPrefix: String)
+
+    @Query("SELECT COALESCE(SUM(LENGTH(payload_json)), 0) FROM session_cache_snapshot WHERE connection_id = :connectionId")
+    suspend fun payloadBytesForConnection(connectionId: String): Long
+
+    @Query("SELECT COUNT(*) FROM session_cache_snapshot WHERE connection_id = :connectionId")
+    suspend fun entryCountForConnection(connectionId: String): Long
+
+    @Query(
+        """
+        SELECT COALESCE(SUM(LENGTH(payload_json)), 0) FROM session_cache_snapshot
+        WHERE (
+            substr(connection_id, 1, length(:connectionIdPrefix) + 1) = :connectionIdPrefix || '|'
+            OR substr(connection_id, 1, length(:connectionIdPrefix) + 2) = :connectionIdPrefix || '/|'
+        )
+        """,
+    )
+    suspend fun payloadBytesForUrlPrefix(connectionIdPrefix: String): Long
+
+    @Query(
+        """
+        SELECT COUNT(*) FROM session_cache_snapshot
+        WHERE (
+            substr(connection_id, 1, length(:connectionIdPrefix) + 1) = :connectionIdPrefix || '|'
+            OR substr(connection_id, 1, length(:connectionIdPrefix) + 2) = :connectionIdPrefix || '/|'
+        )
+        """,
+    )
+    suspend fun entryCountForUrlPrefix(connectionIdPrefix: String): Long
 
     @Query("SELECT COALESCE(SUM(LENGTH(payload_json)), 0) FROM session_cache_snapshot")
     suspend fun totalPayloadBytes(): Long
@@ -69,7 +114,10 @@ interface SessionCacheDao {
     @Query(
         """
         SELECT COALESCE(SUM(LENGTH(payload_json)), 0) FROM session_cache_snapshot
-        WHERE worktree = :worktree AND connection_id LIKE :connectionIdPrefix || '%'
+        WHERE worktree = :worktree AND (
+            substr(connection_id, 1, length(:connectionIdPrefix) + 1) = :connectionIdPrefix || '|'
+            OR substr(connection_id, 1, length(:connectionIdPrefix) + 2) = :connectionIdPrefix || '/|'
+        )
         """,
     )
     suspend fun payloadBytesForUrlPrefixWorktree(
@@ -80,7 +128,10 @@ interface SessionCacheDao {
     @Query(
         """
         SELECT COUNT(*) FROM session_cache_snapshot
-        WHERE worktree = :worktree AND connection_id LIKE :connectionIdPrefix || '%'
+        WHERE worktree = :worktree AND (
+            substr(connection_id, 1, length(:connectionIdPrefix) + 1) = :connectionIdPrefix || '|'
+            OR substr(connection_id, 1, length(:connectionIdPrefix) + 2) = :connectionIdPrefix || '/|'
+        )
         """,
     )
     suspend fun entryCountForUrlPrefixWorktree(

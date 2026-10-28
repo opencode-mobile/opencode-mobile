@@ -1,65 +1,165 @@
 import SwiftUI
 
 struct SessionListProjectPickerRows: View {
-    let tabs: [SessionListFilterTab]
+    let rows: [HomeProjectPickerRow]
+    let isEditing: Bool
     let onSelect: (String) -> Void
+    let onToggleExpanded: (String) -> Void
+    let onToggleShowAll: (String) -> Void
     let onRemoveProject: ((String) -> Void)?
-    /// Receives the added-project worktrees in their new order after a
-    /// long-press drag. `nil` leaves the rows fixed.
+    /// Receives the project tab ids in their new order after a drag in Edit. Only project rows
+    /// move. `nil` leaves the rows fixed.
     let onReorderProjects: (([String]) -> Void)?
 
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
 
     init(
-        tabs: [SessionListFilterTab],
+        rows: [HomeProjectPickerRow],
+        isEditing: Bool = false,
         onSelect: @escaping (String) -> Void,
+        onToggleExpanded: @escaping (String) -> Void = { _ in },
+        onToggleShowAll: @escaping (String) -> Void = { _ in },
         onRemoveProject: ((String) -> Void)? = nil,
         onReorderProjects: (([String]) -> Void)? = nil
     ) {
-        self.tabs = tabs
+        self.rows = rows
+        self.isEditing = isEditing
         self.onSelect = onSelect
+        self.onToggleExpanded = onToggleExpanded
+        self.onToggleShowAll = onToggleShowAll
         self.onRemoveProject = onRemoveProject
         self.onReorderProjects = onReorderProjects
     }
 
-    var body: some View {
-        OpenCodeReorderableList(
-            items: tabs,
-            canMove: { !$0.isAll },
-            onMove: onReorderProjects.map { reorder in
-                { from, to in
-                    reorder(Self.reorderedWorktrees(tabs: tabs, from: from, to: to))
-                }
-            },
-            onSelect: { onSelect($0.id) },
-            onContextAction: onRemoveProject.map { remove in { remove($0.id) } },
-            supportsContextAction: { !$0.isAll }
-        ) { tab in
-            OpenCodeListItem(
-                title: tab.pickerTitle,
-                subtitle: displayedSubtitle(tab),
-                startDecorator: startDecorator(tab)
-            ) {
-                SessionListScopeCountBadge(count: tab.count)
-            }
-        }
-    }
-
-    static func reorderedWorktrees(tabs: [SessionListFilterTab], from: Int, to: Int) -> [String] {
-        OpenCodeReorderableListMath.move(tabs, from: from, to: to)
-            .filter { !$0.isAll }
-            .map(\.id)
-    }
-
-    private func displayedSubtitle(_ tab: SessionListFilterTab) -> String {
-        if tab.isAll { return tab.subtitle }
-        return compactHomePath(
-            tab.subtitle,
-            hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
+    /// Plain tabs (All and projects), as the picker listed them before worktrees.
+    init(
+        tabs: [SessionListFilterTab],
+        onSelect: @escaping (String) -> Void,
+        onRemoveProject: ((String) -> Void)? = nil
+    ) {
+        self.init(
+            rows: tabs.map { $0.isAll ? .all($0) : .project($0, pill: nil) },
+            onSelect: onSelect,
+            onRemoveProject: onRemoveProject
         )
     }
 
-    private func startDecorator(_ tab: SessionListFilterTab) -> StartDecorator {
+    var body: some View {
+        OpenCodeReorderableList(
+            items: rows,
+            canMove: \.isProject,
+            // Rows only move in Edit, so open worktrees never fight a long-press drag.
+            onMove: isEditing ? onReorderProjects.map { reorder in
+                { from, to in
+                    reorder(HomeProjectPickerRow.reorderedProjectKeys(rows, from: from, to: to))
+                }
+            } : nil,
+            activation: .handle,
+            onSelect: select,
+            onContextAction: onRemoveProject.map { remove in { remove($0.id) } },
+            supportsContextAction: \.isProject
+        ) { row in
+            rowContent(row)
+        } trailing: { row in
+            trailingContent(row)
+        }
+    }
+
+    /// Worktree rows sit under their project, indented past its avatar.
+    static let worktreeIndent: CGFloat = 28
+
+    private func select(_ row: HomeProjectPickerRow) {
+        switch row {
+        case let .all(tab), let .project(tab, _):
+            guard !isEditing else { return }
+            onSelect(tab.id)
+        case let .worktree(tab):
+            onSelect(tab.id)
+        case let .showAll(projectKey, _):
+            onToggleShowAll(projectKey)
+        case .note:
+            break
+        }
+    }
+
+    @ViewBuilder
+    private func rowContent(_ row: HomeProjectPickerRow) -> some View {
+        switch row {
+        case .note:
+            Text(HomeProjectCopy.reorderNote)
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textWeak)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .accessibilityIdentifier("projectPickerReorderNote")
+        case let .all(tab):
+            OpenCodeListItem(
+                title: tab.pickerTitle,
+                subtitle: tab.pickerSubtitle,
+                startDecorator: .iconCircle(.widgets, accessibilityLabel: nil)
+            )
+        case let .project(tab, _):
+            OpenCodeListItem(
+                title: tab.pickerTitle,
+                subtitle: compactHomePath(
+                    tab.pickerSubtitle,
+                    hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
+                ),
+                startDecorator: letterDecorator(tab)
+            )
+            .accessibilityIdentifier("projectPickerProject")
+        case let .worktree(tab):
+            OpenCodeListItem(
+                title: tab.pickerTitle,
+                subtitle: tab.pickerSubtitle,
+                startDecorator: .icon(.callSplit, accessibilityLabel: nil)
+            )
+            .padding(.leading, Self.worktreeIndent)
+            .accessibilityIdentifier("projectPickerWorktree")
+        case let .showAll(_, title):
+            Text(title)
+                .font(OpenCodeTypography.body.weight(.semibold))
+                .foregroundStyle(OpenCodeColors.textInteractiveBase)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .padding(.leading, Self.worktreeIndent)
+                .accessibilityIdentifier("projectPickerShowAll")
+        }
+    }
+
+    @ViewBuilder
+    private func trailingContent(_ row: HomeProjectPickerRow) -> some View {
+        switch row {
+        case let .all(tab), let .worktree(tab):
+            countBadge(tab)
+        case let .project(tab, pill):
+            HStack(spacing: 12) {
+                if let pill, let projectKey = row.tab?.id {
+                    OpenCodeExpandPill(
+                        title: pill.title,
+                        isExpanded: pill.isExpanded,
+                        enabled: pill.enabled,
+                        accessibilityLabel: pill.accessibilityLabel,
+                        action: { onToggleExpanded(projectKey) }
+                    )
+                    .accessibilityIdentifier("projectPickerWorktreesPill")
+                }
+                SessionListScopeCountBadge(count: tab.count, load: tab.load)
+            }
+            .padding(.trailing, 16)
+        case .note, .showAll:
+            EmptyView()
+        }
+    }
+
+    private func countBadge(_ tab: SessionListFilterTab) -> some View {
+        SessionListScopeCountBadge(count: tab.count, load: tab.load)
+            .padding(.trailing, 16)
+    }
+
+    private func letterDecorator(_ tab: SessionListFilterTab) -> StartDecorator {
         if let letter = tab.letter, let accent = tab.accent {
             return .letter(letter, accent)
         }

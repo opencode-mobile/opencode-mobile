@@ -1,0 +1,30 @@
+name: Bug report
+description: Something in the iOS or Android app does not work.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Remove passwords, hostnames and IP addresses before you post.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [iOS, Android, Both]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and how to reproduce it
+    validations:
+      required: true
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshots or logs

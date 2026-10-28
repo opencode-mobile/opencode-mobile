@@ -39,10 +39,12 @@ struct TopBarGalleryView: View {
     @State private var showTwoLine = false
     @State private var showStatusDot = false
     @State private var showProjectMeta = false
+    @State private var showWorktreeCheckout = false
     @State private var connectionStatus: OpenCodeSessionConnectionStatus = .live
     @State private var actionsEnabled = true
     @State private var titleSwitcher = false
     @State private var titleMenuExpanded = false
+    @State private var duoVerticalBar = false
 
     private var title: String {
         switch actions {
@@ -56,17 +58,19 @@ struct TopBarGalleryView: View {
     }
 
     private var subtitle: String? {
+        if showWorktreeCheckout { return "crisp-cactus" }
         if showProjectMeta { return "opencode-mobile" }
         guard showTwoLine else { return nil }
         return "Importing icons explanation"
     }
 
     private var subtitleAccessory: OpenCodeTopBarSubtitleAccessory? {
-        (showStatusDot || showProjectMeta) ? .statusDot(connectionStatus) : nil
+        (showStatusDot || showProjectMeta || showWorktreeCheckout) ? .statusDot(connectionStatus) : nil
     }
 
     private var subtitleLeading: OpenCodeTopBarSubtitleLeading? {
-        showProjectMeta ? .letter("O", .blue) : nil
+        if showWorktreeCheckout { return .worktree }
+        return showProjectMeta ? .letter("O", .blue) : nil
     }
 
     private var leadingVariant: OpenCodeTopBarLeading {
@@ -145,6 +149,11 @@ struct TopBarGalleryView: View {
                             action: { showProjectMeta.toggle() }
                         )
                         OpenCodeChoiceBadge(
+                            label: "Worktree checkout",
+                            selected: showWorktreeCheckout,
+                            action: { showWorktreeCheckout.toggle() }
+                        )
+                        OpenCodeChoiceBadge(
                             label: "Divider",
                             selected: showDivider,
                             action: { showDivider.toggle() }
@@ -159,10 +168,15 @@ struct TopBarGalleryView: View {
                             selected: titleSwitcher,
                             action: { titleSwitcher.toggle() }
                         )
+                        OpenCodeChoiceBadge(
+                            label: "Duo vertical bar",
+                            selected: duoVerticalBar,
+                            action: { duoVerticalBar.toggle() }
+                        )
                     }
                 }
 
-                if showStatusDot || showProjectMeta {
+                if showStatusDot || showProjectMeta || showWorktreeCheckout {
                     ControlGroup(title: "Connection") {
                         HStack(spacing: 8) {
                             ForEach(OpenCodeSessionConnectionStatus.allCases, id: \.self) { status in
@@ -176,25 +190,33 @@ struct TopBarGalleryView: View {
                     }
                 }
 
-                Text("Switch controls to review title-only, two-line, status-dot subtitle, project meta + status, back, close, icon-action, labeled-action, divider, and disabled-action states.")
+                Text("Switch controls to review title-only, two-line, status-dot subtitle, project meta + status, back, close, icon-action, labeled-action, divider, disabled-action, and iPhone Duo vertical-bar states.")
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
             }
             .padding(.horizontal, 16)
 
-            OpenCodeTopBar(
-                title: title,
-                subtitle: subtitle,
-                subtitleLeading: subtitleLeading,
-                subtitleAccessory: subtitleAccessory,
-                leading: leadingVariant,
-                actions: actionVariants,
-                showDivider: showDivider,
-                onTitleClick: titleSwitcher ? { titleMenuExpanded.toggle() } : nil,
-                titleMenuExpanded: titleMenuExpanded
-            )
+            if duoVerticalBar {
+                OpenCodeTopBarVerticalBarPreviewFrame { topBar }
+            } else {
+                topBar
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var topBar: some View {
+        OpenCodeTopBar(
+            title: title,
+            subtitle: subtitle,
+            subtitleLeading: subtitleLeading,
+            subtitleAccessory: subtitleAccessory,
+            leading: leadingVariant,
+            actions: actionVariants,
+            showDivider: showDivider,
+            onTitleClick: titleSwitcher ? { titleMenuExpanded.toggle() } : nil,
+            titleMenuExpanded: titleMenuExpanded
+        )
     }
 }
 

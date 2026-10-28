@@ -82,12 +82,16 @@ struct ComponentGalleryDetailView: View {
             TypographyGalleryView()
         case .icons:
             IconsGalleryView()
+        case .fileIcon:
+            FileIconGalleryView()
         case .skeletonIllustration:
             SkeletonIllustrationGalleryView()
         case .pageIndicator:
             PageIndicatorGalleryView()
         case .bottomFade:
             BottomFadeGalleryView()
+        case .actionBar:
+            ActionBarGalleryView()
         case .tag:
             TagGalleryView()
         case .keyValueRow:
@@ -108,8 +112,14 @@ struct ComponentGalleryDetailView: View {
             ToolChipGalleryView()
         case .messageNote:
             MessageNoteGalleryView()
+        case .timelineNotice:
+            TimelineNoticeGalleryView()
         case .childSessionRow:
             ChildSessionRowGalleryView()
+        case .stepRail:
+            StepRailGalleryView()
+        case .activityCard:
+            ActivityCardGalleryView()
         case .workingIndicator:
             WorkingIndicatorGalleryView()
         case .reasoningRow:
@@ -132,6 +142,8 @@ struct ComponentGalleryDetailView: View {
             ListItemGalleryView()
         case .selectableCard:
             SelectableCardGalleryView()
+        case .optionCard:
+            OptionCardGalleryView()
         case .listGroup:
             ListGroupGalleryView()
         case .sectionHeader:
@@ -148,6 +160,8 @@ struct ComponentGalleryDetailView: View {
             ActionTileGalleryView()
         case .syncingPill:
             SyncingPillGalleryView()
+        case .sideQuestionPill:
+            SideQuestionPillGalleryView()
         case .reviewChangesPill:
             ReviewChangesPillGalleryView()
         case .sessionTodosPill:
@@ -184,12 +198,16 @@ struct ComponentGalleryDetailView: View {
             SessionListGalleryView()
         case .sessionListDock:
             SessionListDockGalleryView()
+        case .sessionListSkeleton:
+            SessionListSkeletonGalleryView()
         case .sessionStatusBar:
             SessionStatusBarGalleryView()
         case .sessionComposer:
             SessionComposerGalleryView()
         case .dictationCard:
             DictationCardGalleryView()
+        case .dropOverlay:
+            DropOverlayGalleryView()
         case .composerSuggestionOverlay:
             ComposerSuggestionOverlayGalleryView()
         case .renderedMarkdown:

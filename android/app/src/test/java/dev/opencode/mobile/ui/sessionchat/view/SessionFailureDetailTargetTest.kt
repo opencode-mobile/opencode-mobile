@@ -1,7 +1,10 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
 import dev.opencode.mobile.domain.message.FailureAction
+import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.SessionFailure
+import dev.opencode.mobile.ui.sessionchat.DisplayMessageBody
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
@@ -108,10 +111,65 @@ class SessionFailureDetailTargetTest {
         )
     }
 
+    @Test
+    fun failureLineCarriesTheRetryTime() {
+        val failure =
+            SessionFailure(
+                type = "provider.free-limit",
+                message = "Free usage limit reached.",
+                status = 429,
+                retryAfterMs = 60_000L,
+                recordedAtEpochMs = 1_000L,
+            )
+        val body =
+            DisplayMessageBody(
+                message = Message(id = "a1", role = MessageRole.Assistant, text = "", failure = failure),
+                blocks = emptyList(),
+            )
+        val line =
+            SessionChatTimelineBlocks
+                .mergeConsecutiveToolOnlyAssistantBodies(listOf(body), collapseConsecutiveToolCalls = false)
+                .single()
+                .blocks
+                .filterIsInstance<SessionChatTimelineBlock.FailureLine>()
+                .single()
+        assertEquals("HTTP 429 · Free usage limit reached.", line.text)
+        assertEquals(61_000L, line.retryAtEpochMs)
+        assertEquals(FailureAction.PickModel, line.action)
+    }
+
+    @Test
+    fun retryCountdownOnlyOnTheLastTurn() {
+        val failed = failureMessage("a1", body = "limit", covered = false, retryAt = 9_000L)
+        assertEquals("a1:failure", SessionChatTimelineBlocks.retryCountdownBlockId(listOf(failed)))
+        assertEquals(
+            "a1:failure",
+            SessionChatTimelineBlocks.retryCountdownBlockId(listOf(failed, failureMessage("a2", body = "x", covered = false))),
+        )
+
+        val user = SessionChatMessageItem(id = "u2", role = MessageRole.User, text = "again", metadataLabel = "")
+        assertNull(SessionChatTimelineBlocks.retryCountdownBlockId(listOf(failed, user)))
+        assertNull(
+            SessionChatTimelineBlocks.retryCountdownBlockId(
+                listOf(failureMessage("a0", body = "x", covered = false), user),
+            ),
+        )
+    }
+
+    @Test
+    fun noRetryTimeMeansNoCountdown() {
+        assertNull(
+            SessionChatTimelineBlocks.retryCountdownBlockId(
+                listOf(failureMessage("a1", body = "limit", covered = true)),
+            ),
+        )
+    }
+
     private fun failureMessage(
         id: String,
         body: String,
         covered: Boolean,
+        retryAt: Long? = null,
     ) = SessionChatMessageItem(
         id = id,
         role = MessageRole.Assistant,
@@ -124,6 +182,7 @@ class SessionFailureDetailTargetTest {
                     text = "Slow down",
                     providerBody = body,
                     coveredByLiveRetry = covered,
+                    retryAtEpochMs = retryAt,
                 ),
             ),
     )

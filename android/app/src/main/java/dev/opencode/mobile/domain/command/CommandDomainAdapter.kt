@@ -6,9 +6,12 @@ import dev.opencode.mobile.data.remote.dto.RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CommandDto
 import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2PromptFileDto
+import dev.opencode.mobile.data.remote.dto.V2PromptSkillDto
 import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SkillDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
+import dev.opencode.mobile.domain.message.UploadedAttachments
+import dev.opencode.mobile.domain.message.inlineAttachments
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 
@@ -94,14 +97,20 @@ class CommandDomainAdapter {
                         filename = attachment.filename,
                     )
                 },
+            messageId = options.messageId,
         )
 
     fun toV2RunRequest(options: CommandRunOptions): V2RunCommandRequestDto =
         V2RunCommandRequestDto(
             name = options.command,
-            text = options.arguments,
+            text =
+                UploadedAttachments.promptText(
+                    options.arguments,
+                    options.attachments.mapNotNull { it.uploadedServerPath },
+                ),
             files =
                 options.attachments
+                    .inlineAttachments()
                     .map { attachment ->
                         V2PromptFileDto(
                             uri = attachment.dataUrl,
@@ -110,6 +119,13 @@ class CommandDomainAdapter {
                         )
                     }.takeIf { it.isNotEmpty() },
             delivery = options.delivery.wireValue,
+            skills =
+                options.skillIds
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .map { V2PromptSkillDto(id = it) }
+                    .takeIf { it.isNotEmpty() },
         )
 
     fun toV2SwitchModelRequest(options: CommandRunOptions): V2SwitchModelRequestDto? {

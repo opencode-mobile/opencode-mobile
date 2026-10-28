@@ -52,6 +52,7 @@ data class OlderDisplayLoadResult(
 )
 
 fun beginsMidTurn(messages: List<Message>): Boolean {
-    val oldest = messages.firstOrNull() ?: return false
+    // A notice sits between turns, so the first prompt or reply decides.
+    val oldest = messages.firstOrNull { it.role != MessageRole.Notice } ?: return false
     return oldest.role != MessageRole.User && oldest.role != MessageRole.Command
 }

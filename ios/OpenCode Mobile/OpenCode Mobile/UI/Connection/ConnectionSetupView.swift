@@ -36,7 +36,7 @@ struct ConnectionSetupView: View {
                             screenId: ProductAnalytics.Screen.connectionSetup,
                             actionId: ProductAnalytics.Action.connectionBackCancel
                         )
-                        onDismiss()
+                        close()
                     }),
                     actions: removeAction,
                     showDivider: true
@@ -143,11 +143,29 @@ struct ConnectionSetupView: View {
             primaryOption: OpenCodeDialogOption(title: "Remove", destructive: true) {
                 Task {
                     await viewModel.removeConnection()
-                    onDismiss()
+                    close()
                 }
             },
             secondaryOption: OpenCodeDialogOption(title: "Cancel") {
                 showRemoveConfirm = false
+            }
+        )
+        .openCodeDialog(
+            isPresented: Binding(
+                get: { viewModel.cleartextWarningHosts != nil },
+                set: { shown in if !shown { viewModel.dismissCleartextWarning() } }
+            ),
+            title: CleartextPolicy.warningTitle,
+            subtitle: viewModel.cleartextWarningMessage,
+            primaryOption: OpenCodeDialogOption(title: "Connect anyway") {
+                Task {
+                    if await viewModel.confirmCleartextWarning() {
+                        close()
+                    }
+                }
+            },
+            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+                viewModel.dismissCleartextWarning()
             }
         )
         .fullScreenCover(isPresented: $showPairingScanner) {
@@ -447,7 +465,7 @@ struct ConnectionSetupView: View {
                     ) {
                         Task {
                             if await viewModel.submit() {
-                                onDismiss()
+                                close()
                             }
                         }
                     }
@@ -538,6 +556,12 @@ struct ConnectionSetupView: View {
             from: nil,
             for: nil
         )
+    }
+
+    /// Ends editing before the cover goes, so the keyboard leaves with it.
+    private func close() {
+        dismissKeyboard()
+        onDismiss()
     }
 
     private func openPairingScanner() {

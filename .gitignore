@@ -75,6 +75,7 @@ research/
 
 # Throwaway on-demand UI snapshot evidence (OPE-161)
 .snapshot-evidence/
+/snapshot-evidence/
 ios/OpenCode Mobile/OpenCode MobileTests/GeneratedSnapshotEvidence/
 android/app/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapshotEvidence/
 android/app/src/test/snapshots/
@@ -91,3 +92,10 @@ shared/markdown-core/native/oniguruma-src/
 # Store screenshot capture output
 /store-screenshots/
 /launch-graphics/
+
+# Signing material and local agent configuration never belong in the repository (#755)
+*.p8
+*.p12
+*.mobileprovision
+.mcp.json
+.claude/launch.json

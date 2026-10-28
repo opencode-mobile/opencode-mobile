@@ -94,7 +94,8 @@ nonisolated struct SessionDomainAdapter: Sendable {
             snoozedUntilEpochMs: session.snoozedUntilEpochMs,
             snoozeBlockReason: session.snoozeBlockReason,
             settledAtEpochMs: session.settledAtEpochMs,
-            needsApproval: session.needsApproval
+            needsApproval: session.needsApproval,
+            directory: session.directory
         )
     }
 
@@ -170,7 +171,13 @@ nonisolated struct SessionDomainAdapter: Sendable {
     }
 
     func vcsInfo(from dto: V2VcsInfoDTO) -> VcsInfo {
-        VcsInfo(currentBranch: dto.branch?.current, defaultBranch: dto.branch?.default)
+        let provider = dto.provider?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return VcsInfo(
+            currentBranch: dto.branch?.current,
+            defaultBranch: dto.branch?.default,
+            // A current branch decides on its own; otherwise only a provider does.
+            isSettled: !provider.isEmpty || dto.branch?.current != nil
+        )
     }
 
     func permissionResponse(_ decision: PermissionDecision) -> String {

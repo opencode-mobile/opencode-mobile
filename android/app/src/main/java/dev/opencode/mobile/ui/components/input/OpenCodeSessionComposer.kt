@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
@@ -49,12 +50,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -66,6 +72,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
@@ -107,6 +114,18 @@ sealed interface OpenCodeSessionComposerState {
         val stopEnabled: Boolean,
         val followUpDelivery: FollowUpDelivery? = null,
         val showDictationButton: Boolean = false,
+        /**
+         * The draft starts with `!` and Send runs it as a shell command. The `!` is highlighted
+         * and a selected Shell badge replaces the model and agent chips; tapping it sends
+         * [OpenCodeSessionComposerAction.ExitShellMode].
+         */
+        val shellMode: Boolean = false,
+        /**
+         * Send asks a `/btw` side question instead of prompting. A selected `/btw` badge replaces
+         * the model and agent chips and the field shows its own placeholder; tapping the badge or
+         * deleting on an empty field sends [OpenCodeSessionComposerAction.ExitSideQuestionMode].
+         */
+        val sideQuestionMode: Boolean = false,
     ) : OpenCodeSessionComposerState
 
     /** A file an edit/write permission would change, with its diff size. */
@@ -190,7 +209,18 @@ sealed interface OpenCodeSessionComposerAction {
         val id: String,
     ) : OpenCodeSessionComposerAction
 
+    /** An image or file was pasted into the prompt; only sent while [OpenCodeSessionComposerState.Prompt.attachEnabled]. */
+    data class PasteContent(
+        val content: OpenCodeComposerPastedContent,
+    ) : OpenCodeSessionComposerAction
+
     data object CancelRevert : OpenCodeSessionComposerAction
+
+    /** Drop the leading `!` so the draft is a prompt again. */
+    data object ExitShellMode : OpenCodeSessionComposerAction
+
+    /** Leave `/btw` side-question mode; the draft stays. */
+    data object ExitSideQuestionMode : OpenCodeSessionComposerAction
 
     data object Send : OpenCodeSessionComposerAction
 
@@ -322,6 +352,10 @@ fun rememberOpenCodeSessionComposerFocus(): OpenCodeSessionComposerFocus = remem
 
 /** ~5 body lines — enough for a long prompt without swallowing the chat (OPE-127). */
 private const val PromptMaxVisibleLines = 5
+
+/** Custom question answer grows from 3 lines up to 5, then scrolls. */
+private const val QuestionCustomMinLines = 3
+private const val QuestionCustomMaxLines = 5
 
 @Composable
 fun OpenCodeSessionComposer(
@@ -466,6 +500,7 @@ private fun DictationTakeover(
         elapsedLabel = card.elapsedLabel,
         unavailableReason = card.unavailableReason,
         errorMessage = card.errorMessage,
+        downloadProgress = card.downloadProgress,
         onCancel = { onAction(OpenCodeSessionComposerAction.DictationCancel) },
         onInsert = { onAction(OpenCodeSessionComposerAction.DictationInsert) },
         onOpenSettings = { onAction(OpenCodeSessionComposerAction.DictationOpenSettings) },
@@ -510,9 +545,14 @@ private fun PromptEntryContent(
 
     val mentionColor = openCodeColor("syntax-type")
     val bodyColor = openCodeColor("text-strong")
+    // The shell prefix shares the mention highlight so the mode reads in the text itself.
+    val highlightRanges =
+        remember(state.mentionRanges, state.shellMode) {
+            if (state.shellMode) listOf(0..0) + state.mentionRanges else state.mentionRanges
+        }
     val mentionTransformation =
-        remember(state.mentionRanges, mentionColor) {
-            MentionVisualTransformation(mentionRanges = state.mentionRanges, mentionColor = mentionColor)
+        remember(highlightRanges, mentionColor) {
+            MentionVisualTransformation(mentionRanges = highlightRanges, mentionColor = mentionColor)
         }
 
     // Own TextFieldValue so typing keeps the caret, while programmatic text
@@ -523,6 +563,12 @@ private fun PromptEntryContent(
         mutableStateOf(TextFieldValue(text = state.text, selection = TextRange(state.text.length)))
     }
     var suppressImeEcho by remember { mutableStateOf(false) }
+    // The text the keyboard last typed, to rebase keystrokes that land on it after a programmatic change.
+    var lastImeText by remember { mutableStateOf(state.text) }
+    val attachmentPaste = rememberComposerAttachmentPaste()
+    val onPasteContent: (OpenCodeComposerPastedContent) -> Unit = { content ->
+        onAction(OpenCodeSessionComposerAction.PasteContent(content))
+    }
     LaunchedEffect(state.text, state.selectionRevision) {
         val selectionStart = (state.selectionStart ?: state.text.length).coerceIn(0, state.text.length)
         val selectionEnd = (state.selectionEnd ?: selectionStart).coerceIn(0, state.text.length)
@@ -540,51 +586,82 @@ private fun PromptEntryContent(
 
     // Cap growth so chips/send stay above the keyboard; further text scrolls
     // inside the field (OPE-127). Matches iOS OpenCodeMentionTextView (~5 body lines).
-    BasicTextField(
-        value = textFieldValue,
-        onValueChange = { newValue ->
-            if (newValue.text != state.text && textFieldValue.text != state.text) {
-                return@BasicTextField
-            }
-            if (suppressImeEcho) {
-                suppressImeEcho = false
-                if (newValue.text != state.text) return@BasicTextField
-            }
-            textFieldValue = newValue
-            onAction(
-                OpenCodeSessionComposerAction.TextChanged(
-                    text = newValue.text,
-                    selectionStart = newValue.selection.start,
-                    selectionEnd = newValue.selection.end,
-                ),
-            )
-        },
-        textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
-        cursorBrush = SolidColor(bodyColor),
-        visualTransformation = mentionTransformation,
-        maxLines = PromptMaxVisibleLines,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp)
-                .focusRequester(focus.requester)
-                .onFocusChanged {
-                    focus.updateFocused(it.isFocused)
-                    reportFocus(it.isFocused)
-                },
-        decorationBox = { innerTextField ->
-            Box {
-                if (state.text.isBlank()) {
-                    Text(
-                        text = "Ask anything...",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = openCodeColor("text-weak"),
-                    )
+    ComposerKeyboardContentInsertion(enabled = state.attachEnabled, onPaste = onPasteContent) {
+        BasicTextField(
+            value = textFieldValue,
+            onValueChange = { newValue ->
+                val rebased = rebaseAppendedComposerInput(shown = lastImeText, typed = newValue.text, current = state.text)
+                if (rebased != null) {
+                    suppressImeEcho = false
+                    lastImeText = rebased
+                    textFieldValue = TextFieldValue(text = rebased, selection = TextRange(rebased.length))
+                    onAction(OpenCodeSessionComposerAction.TextChanged(text = rebased, selectionStart = rebased.length))
+                    return@BasicTextField
                 }
-                innerTextField()
-            }
-        },
-    )
+                if (newValue.text != state.text && textFieldValue.text != state.text) {
+                    return@BasicTextField
+                }
+                if (suppressImeEcho) {
+                    suppressImeEcho = false
+                    val typedOntoDroppedPrefix =
+                        typedOntoDroppedComposerPrefix(shown = lastImeText, typed = newValue.text, current = state.text)
+                    if (newValue.text != state.text && !typedOntoDroppedPrefix) return@BasicTextField
+                }
+                textFieldValue = newValue
+                lastImeText = newValue.text
+                onAction(
+                    OpenCodeSessionComposerAction.TextChanged(
+                        text = newValue.text,
+                        selectionStart = newValue.selection.start,
+                        selectionEnd = newValue.selection.end,
+                    ),
+                )
+            },
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
+            cursorBrush = SolidColor(bodyColor),
+            visualTransformation = mentionTransformation,
+            // A shell command must reach the server as typed: no autocorrect or auto-capitalization.
+            keyboardOptions =
+                if (state.shellMode) {
+                    KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false)
+                } else {
+                    KeyboardOptions.Default
+                },
+            maxLines = PromptMaxVisibleLines,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .focusRequester(focus.requester)
+                    .onFocusChanged {
+                        focus.updateFocused(it.isFocused)
+                        reportFocus(it.isFocused)
+                    }.composerAttachmentPasteMenu(attachmentPaste, enabled = state.attachEnabled, onPaste = onPasteContent)
+                    .onPreviewKeyEvent { event ->
+                        if (state.attachEnabled && attachmentPaste.handleKey(event, onPasteContent)) return@onPreviewKeyEvent true
+                        // Delete on an empty field changes no text; in side-question mode it leaves the mode.
+                        val leavesMode =
+                            state.sideQuestionMode &&
+                                state.text.isEmpty() &&
+                                event.key == Key.Backspace &&
+                                event.type == KeyEventType.KeyDown
+                        if (leavesMode) onAction(OpenCodeSessionComposerAction.ExitSideQuestionMode)
+                        leavesMode
+                    },
+            decorationBox = { innerTextField ->
+                Box {
+                    if (state.text.isBlank()) {
+                        Text(
+                            text = if (state.sideQuestionMode) SESSION_COMPOSER_SIDE_QUESTION_PLACEHOLDER else "Ask anything...",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = openCodeColor("text-weak"),
+                        )
+                    }
+                    innerTextField()
+                }
+            },
+        )
+    }
 
     PickerChipsRow(state = state, onAction = onAction)
 
@@ -632,7 +709,7 @@ private fun PromptEntryContent(
                 variant =
                     OpenCodeButtonVariant.IconCircle(
                         imageVector =
-                            if (state.followUpDelivery == FollowUpDelivery.Steer) {
+                            if (state.followUpDelivery == FollowUpDelivery.Steer && !state.sideQuestionMode) {
                                 OpenCodeIcons.ArrowWarmUp
                             } else {
                                 OpenCodeIcons.ArrowUpward
@@ -641,10 +718,13 @@ private fun PromptEntryContent(
                             sessionComposerSendLabel(
                                 followUpDelivery = state.followUpDelivery,
                                 hasActiveWork = state.showStop,
+                                shellMode = state.shellMode,
+                                sideQuestionMode = state.sideQuestionMode,
                             ),
                     ),
                 enabled = state.sendEnabled,
-                contrast = OpenCodeButtonContrast.Accent,
+                // A side question is not a prompt, so its Send does not look like one.
+                contrast = if (state.sideQuestionMode) OpenCodeButtonContrast.High else OpenCodeButtonContrast.Accent,
                 onLongClick =
                     state.followUpDelivery?.let {
                         { onAction(OpenCodeSessionComposerAction.ToggleFollowUp) }
@@ -658,6 +738,37 @@ private fun PromptEntryContent(
         }
     }
 }
+
+/**
+ * Keystrokes typed onto [shown] after the state replaced it with [current] (the field had not caught
+ * up yet). When they only append and the state only dropped a leading part, such as the `/btw `
+ * that switches to side-question mode, the appended text lands on [current] instead of being lost.
+ * Null when that does not apply.
+ */
+internal fun rebaseAppendedComposerInput(
+    shown: String,
+    typed: String,
+    current: String,
+): String? {
+    if (shown == current || typed.length <= shown.length || !typed.startsWith(shown)) return null
+    if (!shown.endsWith(current)) return null
+    return current + typed.substring(shown.length)
+}
+
+/**
+ * The first keystroke after the state dropped a leading part of [shown] (the field shows [current]
+ * now) is real typing when it appends to [current], not a stale echo of [shown].
+ */
+internal fun typedOntoDroppedComposerPrefix(
+    shown: String,
+    typed: String,
+    current: String,
+): Boolean =
+    shown != current &&
+        shown.endsWith(current) &&
+        typed != shown &&
+        typed.length > current.length &&
+        typed.startsWith(current)
 
 /** Selection hint under a question; reflects a multiselect's `minItems` / `maxItems`. */
 internal fun questionSelectionHint(
@@ -678,16 +789,31 @@ internal fun questionSelectionHint(
 
 /**
  * Send button label. Steer/Queue only describe what Send does while work is running;
- * an idle session just sends.
+ * an idle session just sends. A shell command always runs now.
  */
+internal const val SESSION_COMPOSER_SIDE_QUESTION_PLACEHOLDER = "Side question, not added to chat"
+
 internal fun sessionComposerSendLabel(
     followUpDelivery: FollowUpDelivery?,
     hasActiveWork: Boolean,
+    shellMode: Boolean = false,
+    sideQuestionMode: Boolean = false,
 ): String =
-    when (followUpDelivery.takeIf { hasActiveWork }) {
+    if (sideQuestionMode) {
+        "Ask side question"
+    } else {
+        sessionComposerPromptSendLabel(followUpDelivery, hasActiveWork, shellMode)
+    }
+
+private fun sessionComposerPromptSendLabel(
+    followUpDelivery: FollowUpDelivery?,
+    hasActiveWork: Boolean,
+    shellMode: Boolean,
+): String =
+    when (followUpDelivery.takeIf { hasActiveWork && !shellMode }) {
         FollowUpDelivery.Steer -> "Send as Steer"
         FollowUpDelivery.Queue -> "Send as Queue"
-        null -> "Send"
+        null -> if (shellMode) "Run shell command" else "Send"
     }
 
 private class MentionVisualTransformation(
@@ -800,29 +926,48 @@ private fun PickerChipsRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (state.showModel) {
+                if (state.sideQuestionMode) {
                     OpenCodeChoiceBadge(
-                        label = state.selectedModelLabel,
-                        selected = false,
-                        onClick = { onAction(OpenCodeSessionComposerAction.SelectModel) },
+                        label = "/btw",
+                        selected = true,
+                        onClick = { onAction(OpenCodeSessionComposerAction.ExitSideQuestionMode) },
                         variant = OpenCodeChoiceBadgeVariant.Glass,
+                        modifier = Modifier.semantics { contentDescription = "Side question mode. Leave side question mode" },
                     )
-                }
-                if (state.showAgent) {
+                } else if (state.shellMode) {
+                    // Like the TUI, shell mode shows "Shell" in place of the agent and model.
                     OpenCodeChoiceBadge(
-                        label = state.selectedModeLabel,
-                        selected = false,
-                        onClick = { onAction(OpenCodeSessionComposerAction.SelectMode) },
+                        label = "Shell",
+                        selected = true,
+                        onClick = { onAction(OpenCodeSessionComposerAction.ExitShellMode) },
                         variant = OpenCodeChoiceBadgeVariant.Glass,
+                        modifier = Modifier.semantics { contentDescription = "Shell mode. Leave shell mode" },
                     )
-                }
-                if (state.showVariant) {
-                    OpenCodeChoiceBadge(
-                        label = state.selectedVariantLabel,
-                        selected = false,
-                        onClick = { onAction(OpenCodeSessionComposerAction.SelectVariant) },
-                        variant = OpenCodeChoiceBadgeVariant.Glass,
-                    )
+                } else {
+                    if (state.showModel) {
+                        OpenCodeChoiceBadge(
+                            label = state.selectedModelLabel,
+                            selected = false,
+                            onClick = { onAction(OpenCodeSessionComposerAction.SelectModel) },
+                            variant = OpenCodeChoiceBadgeVariant.Glass,
+                        )
+                    }
+                    if (state.showAgent) {
+                        OpenCodeChoiceBadge(
+                            label = state.selectedModeLabel,
+                            selected = false,
+                            onClick = { onAction(OpenCodeSessionComposerAction.SelectMode) },
+                            variant = OpenCodeChoiceBadgeVariant.Glass,
+                        )
+                    }
+                    if (state.showVariant) {
+                        OpenCodeChoiceBadge(
+                            label = state.selectedVariantLabel,
+                            selected = false,
+                            onClick = { onAction(OpenCodeSessionComposerAction.SelectVariant) },
+                            variant = OpenCodeChoiceBadgeVariant.Glass,
+                        )
+                    }
                 }
                 state.providerLabel?.takeIf { it.isNotBlank() }?.let { label ->
                     OpenCodeChoiceBadge(
@@ -1128,6 +1273,8 @@ private fun QuestionRequestContent(
                         },
                         hint = "Enter a custom answer",
                         enabled = !state.submitting,
+                        minLines = QuestionCustomMinLines,
+                        maxLines = QuestionCustomMaxLines,
                     )
                 }
             }
@@ -1261,6 +1408,40 @@ private fun PendingRevertComposerPreviewContent() {
                     sendEnabled = true,
                     showStop = false,
                     stopEnabled = false,
+                ),
+            onAction = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun ShellModeComposerPreview() {
+    ShellModeComposerPreviewContent()
+}
+
+@Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
+@Composable
+private fun ShellModeComposerDarkPreview() {
+    ShellModeComposerPreviewContent()
+}
+
+@Composable
+private fun ShellModeComposerPreviewContent() {
+    OpenCodeTheme {
+        OpenCodeSessionComposer(
+            state =
+                OpenCodeSessionComposerState.Prompt(
+                    text = "!git status",
+                    selectedModelLabel = "Claude Sonnet 4",
+                    selectedModeLabel = "Build",
+                    selectedVariantLabel = "Default",
+                    showVariant = true,
+                    sendEnabled = true,
+                    attachEnabled = false,
+                    showStop = false,
+                    stopEnabled = false,
+                    shellMode = true,
                 ),
             onAction = {},
         )

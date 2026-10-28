@@ -80,6 +80,7 @@ import kotlinx.serialization.Serializable
     val messageId: String,
     val owningTurnMessageId: String? = null,
     val supportsSessionMessageDiff: Boolean,
+    val lastTurnDiffUnavailable: Boolean = false,
     val members: List<SessionToolGroupMember>,
 ) : NavKey
 
@@ -93,6 +94,7 @@ import kotlinx.serialization.Serializable
     val additions: Int? = null,
     val deletions: Int? = null,
     val detailText: String? = null,
+    val presentation: dev.opencode.mobile.ui.sessionchat.ToolResultPresentation? = null,
     val childSessionId: String? = null,
     val opensChangesReview: Boolean = false,
     val changesInitialFilePath: String? = null,

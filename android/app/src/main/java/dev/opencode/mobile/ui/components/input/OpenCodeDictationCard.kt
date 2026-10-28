@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +47,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.roundToInt
 import kotlin.math.sin
 
 enum class OpenCodeDictationCardVariant {
@@ -60,6 +62,13 @@ enum class OpenCodeDictationCardVariant {
 enum class OpenCodeDictationUnavailableReason {
     PermissionDenied,
     ModelNotInstalled,
+
+    /** Android is fetching the speech model; [OpenCodeDictationCard] shows its progress. */
+    ModelDownloading,
+
+    /** Android accepted the download but runs it later, for example on Wi-Fi. */
+    ModelDownloadQueued,
+    ModelDownloadFailed,
     RecognizerError,
 }
 
@@ -73,6 +82,7 @@ data class ComposerDictationCardModel(
     val elapsedLabel: String,
     val unavailableReason: OpenCodeDictationUnavailableReason? = null,
     val errorMessage: String? = null,
+    val downloadProgress: Float? = null,
 )
 
 private const val DictationBarCount = 24
@@ -99,31 +109,27 @@ fun OpenCodeDictationCard(
     elapsedLabel: String,
     unavailableReason: OpenCodeDictationUnavailableReason? = null,
     errorMessage: String? = null,
+    downloadProgress: Float? = null,
     onCancel: () -> Unit,
     onInsert: () -> Unit,
     onOpenSettings: () -> Unit,
     onDownload: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
+    showsActions: Boolean = true,
 ) {
     val unavailable = variant == OpenCodeDictationCardVariant.Unavailable
-    val transcript = committed + volatileTail
-    val canInsert =
-        !unavailable &&
-            variant != OpenCodeDictationCardVariant.Finishing &&
-            transcript.trim().isNotEmpty()
     Column(
         modifier = modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (unavailable) {
-            Text(
-                text = unavailableMessage(unavailableReason, errorMessage),
-                style = MaterialTheme.typography.bodyLarge,
-                color = openCodeColor("text-strong"),
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+            DictationUnavailableBody(
+                reason = unavailableReason,
+                errorMessage = errorMessage,
+                languageLabel = languageLabel,
+                downloadProgress = downloadProgress,
             )
         } else {
             DictationOrb(
@@ -139,37 +145,77 @@ fun OpenCodeDictationCard(
                 elapsedLabel = elapsedLabel,
             )
         }
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            OpenCodeButton(
-                variant = OpenCodeButtonVariant.FullWidthText("Cancel"),
-                contrast = OpenCodeButtonContrast.Low,
-                onClick = onCancel,
-                modifier = Modifier.semantics { contentDescription = "Cancel dictation" },
+        if (showsActions) {
+            OpenCodeDictationCardActions(
+                variant = variant,
+                committed = committed,
+                volatileTail = volatileTail,
+                unavailableReason = unavailableReason,
+                onCancel = onCancel,
+                onInsert = onInsert,
+                onOpenSettings = onOpenSettings,
+                onDownload = onDownload,
+                onRetry = onRetry,
             )
-            if (unavailable) {
-                val recovery = recoveryAction(unavailableReason)
-                OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText(recovery.title),
-                    onClick = {
-                        when (recovery) {
-                            DictationRecovery.OpenSettings -> onOpenSettings()
-                            DictationRecovery.Download -> onDownload()
-                            DictationRecovery.Retry -> onRetry()
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            } else {
-                OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText("Insert"),
-                    enabled = canInsert,
-                    onClick = onInsert,
-                    modifier = Modifier.semantics { contentDescription = "Insert transcript" },
-                )
-            }
+        }
+    }
+}
+
+/**
+ * Cancel plus Insert or the recovery action. [OpenCodeDictationCard] shows these itself;
+ * a host with a pinned bottom bar passes `showsActions = false` and places them there,
+ * so a long transcript never pushes Insert out of reach.
+ */
+@Composable
+fun OpenCodeDictationCardActions(
+    variant: OpenCodeDictationCardVariant,
+    committed: String,
+    volatileTail: String,
+    unavailableReason: OpenCodeDictationUnavailableReason?,
+    onCancel: () -> Unit,
+    onInsert: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onDownload: () -> Unit,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val unavailable = variant == OpenCodeDictationCardVariant.Unavailable
+    val canInsert =
+        !unavailable &&
+            variant != OpenCodeDictationCardVariant.Finishing &&
+            (committed + volatileTail).trim().isNotEmpty()
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.FullWidthText("Cancel"),
+            contrast = OpenCodeButtonContrast.Low,
+            onClick = onCancel,
+            modifier = Modifier.semantics { contentDescription = "Cancel dictation" },
+        )
+        if (unavailable) {
+            val recovery = recoveryAction(unavailableReason)
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.FullWidthText(recovery.title),
+                enabled = recovery != DictationRecovery.Downloading,
+                onClick = {
+                    when (recovery) {
+                        DictationRecovery.OpenSettings -> onOpenSettings()
+                        DictationRecovery.Download, DictationRecovery.DownloadAgain -> onDownload()
+                        DictationRecovery.Retry, DictationRecovery.CheckAgain -> onRetry()
+                        DictationRecovery.Downloading -> Unit
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        } else {
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.FullWidthText("Insert"),
+                enabled = canInsert,
+                onClick = onInsert,
+                modifier = Modifier.semantics { contentDescription = "Insert transcript" },
+            )
         }
     }
 }
@@ -371,22 +417,125 @@ private fun DictationStatusRow(
     }
 }
 
-private fun unavailableMessage(
+@Composable
+private fun DictationUnavailableBody(
     reason: OpenCodeDictationUnavailableReason?,
     errorMessage: String?,
-): String =
-    when (reason) {
-        OpenCodeDictationUnavailableReason.PermissionDenied -> "Microphone access is off"
-        OpenCodeDictationUnavailableReason.ModelNotInstalled -> "The on-device speech model is not installed"
-        OpenCodeDictationUnavailableReason.RecognizerError, null ->
-            errorMessage?.takeIf { it.isNotBlank() } ?: "Dictation stopped"
+    languageLabel: String,
+    downloadProgress: Float?,
+) {
+    val copy = unavailableCopy(reason, errorMessage, languageLabel)
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = copy.title,
+            style = MaterialTheme.typography.bodyLarge,
+            color = openCodeColor("text-strong"),
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        if (reason == OpenCodeDictationUnavailableReason.ModelDownloading) {
+            DictationDownloadProgress(progress = downloadProgress)
+        }
+        copy.detail?.let { detail ->
+            Text(
+                text = detail,
+                style = MaterialTheme.typography.bodyMedium,
+                color = openCodeColor("text-weak"),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
+}
+
+@Composable
+private fun DictationDownloadProgress(progress: Float?) {
+    val track = openCodeColor("border-weak-base")
+    val indicator = openCodeColor("interactive")
+    val label = progress?.let { "${(it.coerceIn(0f, 1f) * 100).roundToInt()}%" } ?: "Starting…"
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (progress == null) {
+            LinearProgressIndicator(
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Downloading speech model" },
+                color = indicator,
+                trackColor = track,
+            )
+        } else {
+            LinearProgressIndicator(
+                progress = { progress.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth().semantics { contentDescription = "Downloading speech model, $label" },
+                color = indicator,
+                trackColor = track,
+            )
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = openCodeColor("text-weak"),
+        )
+    }
+}
+
+internal data class DictationUnavailableCopy(
+    val title: String,
+    val detail: String?,
+)
+
+/** Model copy names Android, so a slow or deferred system download is not read as an app fault. */
+internal fun unavailableCopy(
+    reason: OpenCodeDictationUnavailableReason?,
+    errorMessage: String?,
+    languageLabel: String,
+): DictationUnavailableCopy {
+    val model = if (languageLabel.isBlank()) "speech model" else "$languageLabel speech model"
+    return when (reason) {
+        OpenCodeDictationUnavailableReason.PermissionDenied ->
+            DictationUnavailableCopy("Microphone access is off", null)
+        OpenCodeDictationUnavailableReason.ModelNotInstalled ->
+            DictationUnavailableCopy(
+                title = "Android needs its $model",
+                detail =
+                    "Dictation runs on this phone, so your voice is never uploaded. " +
+                        "Android downloads the model once and keeps it for every app.",
+            )
+        OpenCodeDictationUnavailableReason.ModelDownloading ->
+            DictationUnavailableCopy(
+                title = "Android is downloading the $model",
+                detail = "This is a system download. It keeps going if you close this card.",
+            )
+        OpenCodeDictationUnavailableReason.ModelDownloadQueued ->
+            DictationUnavailableCopy(
+                title = "Android will download the $model later",
+                detail =
+                    "Android queued the download. It may wait for Wi-Fi, charging, or free storage. " +
+                        "Check again in a few minutes.",
+            )
+        OpenCodeDictationUnavailableReason.ModelDownloadFailed ->
+            DictationUnavailableCopy(
+                title = "Android couldn't download the $model",
+                detail = "Check the connection and free storage on this phone, then try again.",
+            )
+        OpenCodeDictationUnavailableReason.RecognizerError, null ->
+            DictationUnavailableCopy(errorMessage?.takeIf { it.isNotBlank() } ?: "Dictation stopped", null)
+    }
+}
 
 private enum class DictationRecovery(
     val title: String,
 ) {
     OpenSettings("Open Settings"),
     Download("Download"),
+    Downloading("Downloading…"),
+    CheckAgain("Check Again"),
+    DownloadAgain("Try Again"),
     Retry("Retry"),
 }
 
@@ -394,5 +543,8 @@ private fun recoveryAction(reason: OpenCodeDictationUnavailableReason?): Dictati
     when (reason) {
         OpenCodeDictationUnavailableReason.PermissionDenied -> DictationRecovery.OpenSettings
         OpenCodeDictationUnavailableReason.ModelNotInstalled -> DictationRecovery.Download
+        OpenCodeDictationUnavailableReason.ModelDownloading -> DictationRecovery.Downloading
+        OpenCodeDictationUnavailableReason.ModelDownloadQueued -> DictationRecovery.CheckAgain
+        OpenCodeDictationUnavailableReason.ModelDownloadFailed -> DictationRecovery.DownloadAgain
         OpenCodeDictationUnavailableReason.RecognizerError, null -> DictationRecovery.Retry
     }

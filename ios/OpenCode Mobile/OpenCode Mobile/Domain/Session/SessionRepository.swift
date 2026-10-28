@@ -37,6 +37,10 @@ protocol SessionRepository: Sendable {
     func compactSession(id: String, providerID: String, modelID: String) async throws -> CompactionStart
     func revertSession(id: String, messageID: String, partID: String?) async throws -> Bool
     func unrevertSession(id: String) async throws -> Bool
+    /// Settles a pending revert before the next prompt. v2 only stages a revert and needs an
+    /// explicit commit; v1 applies the revert itself when the next prompt arrives, so it has
+    /// nothing to commit.
+    func commitRevert(id: String) async throws -> Bool
     func respondToPermission(sessionID: String, permissionID: String, decision: PermissionDecision, directory: String?) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?) async throws -> Bool
     func replyToQuestion(questionID: String, answers: [[String]], directory: String?, sessionID: String?) async throws -> Bool
@@ -59,6 +63,12 @@ protocol SessionRepository: Sendable {
     func setModelSelection(id: String, providerInstanceID: String, modelID: String, directory: String?) async throws -> Session
     /// Acknowledges a finished run as viewed on the server (v2). No-op on v1.
     func markSessionViewed(sessionId: String, idleAtEpochMs: Int64) async throws
+    /// Moves a session to another worktree of its project (v2). The server applies it at the
+    /// next turn boundary and announces it with `session.moved`. v1 has no move endpoint and throws.
+    func moveSession(id: String, directory: String) async throws
+    /// Answers a `/btw` side question from the session's context and model without adding to the
+    /// conversation (v2). Returns the trimmed markdown answer. v1 has no equivalent and throws.
+    func askSideQuestion(sessionID: String, question: String) async throws -> String
 }
 
 /// Optional creation choices. Empty fields fall back to the engine's defaults.
@@ -116,6 +126,13 @@ extension SessionRepository {
     func steerPendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
     func queuePendingPrompt(sessionID _: String, inboxID _: String) async throws -> Bool { false }
     func markSessionViewed(sessionId _: String, idleAtEpochMs _: Int64) async throws {}
+    func moveSession(id _: String, directory _: String) async throws {
+        throw SessionError.http(statusCode: 404, message: "Needs an opencode v2 server")
+    }
+    func askSideQuestion(sessionID _: String, question _: String) async throws -> String {
+        throw SessionError.http(statusCode: 404, message: "Needs an opencode v2 server")
+    }
+    func commitRevert(id _: String) async throws -> Bool { true }
 
     func getSession(id: String) async throws -> Session {
         try await getSession(id: id, directory: nil)
@@ -319,6 +336,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
         try await run { try await remote.unrevertSession(id: id) }
     }
 
+    func commitRevert(id: String) async throws -> Bool {
+        try await run { try await remote.commitRevert(id: id) }
+    }
+
     func respondToPermission(
         sessionID: String,
         permissionID: String,
@@ -390,6 +411,14 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func markSessionViewed(sessionId: String, idleAtEpochMs: Int64) async throws {
         try await run { try await remote.markSessionViewed(sessionId: sessionId, idleAtEpochMs: idleAtEpochMs) }
+    }
+
+    func moveSession(id: String, directory: String) async throws {
+        try await run { try await remote.moveSession(id: id, directory: directory) }
+    }
+
+    func askSideQuestion(sessionID: String, question: String) async throws -> String {
+        try await run { try await remote.askSideQuestion(sessionID: sessionID, question: question) }
     }
 
     private func run<T>(_ work: () async throws -> T) async throws -> T {

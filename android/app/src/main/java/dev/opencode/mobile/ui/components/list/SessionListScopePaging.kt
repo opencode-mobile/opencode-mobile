@@ -27,6 +27,25 @@ object SessionListScopePaging {
             Direction.Next -> (selectedIndex + 1).takeIf { it < count }
         }
 
+    /**
+     * Index in [tabs] a swipe from [selected] lands on. A scope outside [tabs] (a worktree)
+     * sits inside its parent project: previous is that project, next is the one after it.
+     */
+    fun neighborIndex(
+        tabs: List<SessionListFilterTab>,
+        selected: SessionListFilterTab?,
+        direction: Direction,
+    ): Int? {
+        selected ?: return null
+        val index = tabs.indexOfFirst { it.id == selected.id }
+        if (index >= 0) return neighborIndex(index, tabs.size, direction)
+        val parentIndex = selected.parentId?.let { parent -> tabs.indexOfFirst { it.id == parent } }?.takeIf { it >= 0 } ?: return null
+        return when (direction) {
+            Direction.Previous -> parentIndex
+            Direction.Next -> (parentIndex + 1).takeIf { it < tabs.size }
+        }
+    }
+
     fun rubberBandOffset(
         translation: Float,
         rubberBandLimit: Float = RUBBER_BAND_LIMIT_DP,

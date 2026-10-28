@@ -51,7 +51,19 @@ internal class V2MessageRemote(
         adapter.toV2SwitchModelRequest(options)?.let { model ->
             api.switchSessionModel(sessionId, model, directory)
         }
-        api.sendPromptV2(sessionId, adapter.toV2PromptRequest(options), directory, options.attachments)
+        api.sendPromptV2(sessionId, adapter.toV2PromptRequest(options), directory, options.attachments.inlineAttachments())
+    }
+
+    /**
+     * Like the TUI, a shell command leaves the session's agent and model alone: v2 runs it
+     * outside the agent loop.
+     */
+    override suspend fun runShellCommand(
+        sessionId: String,
+        options: ShellCommandOptions,
+        directory: String?,
+    ) {
+        api.runShellV2(sessionId, adapter.toV2ShellRequest(options))
     }
 
     private suspend fun mergeInboxOrUnchanged(

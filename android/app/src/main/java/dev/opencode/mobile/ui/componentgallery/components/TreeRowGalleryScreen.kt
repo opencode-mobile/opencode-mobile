@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeTreeRow
 import dev.opencode.mobile.ui.components.OpenCodeTreeRowDisclosure
+import dev.opencode.mobile.ui.components.OpenCodeTreeRowIcon
 import dev.opencode.mobile.ui.components.OpenCodeTreeRowState
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -22,11 +23,11 @@ fun TreeRowGalleryScreen(modifier: Modifier = Modifier) {
     var expanded by rememberSaveable { mutableStateOf(true) }
     var selected by rememberSaveable { mutableStateOf("src/main.kt") }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Interactive", style = MaterialTheme.typography.titleMedium)
+        Text("Interactive, file-type icons", style = MaterialTheme.typography.titleMedium)
         Column {
             OpenCodeTreeRow(
                 title = "src",
-                icon = OpenCodeIcons.Folder,
+                icon = OpenCodeTreeRowIcon.FileType("src"),
                 disclosure = if (expanded) OpenCodeTreeRowDisclosure.Expanded else OpenCodeTreeRowDisclosure.Collapsed,
                 onClick = { expanded = !expanded },
             )
@@ -34,7 +35,7 @@ fun TreeRowGalleryScreen(modifier: Modifier = Modifier) {
                 listOf("src/main.kt", "src/Util.kt").forEach { path ->
                     OpenCodeTreeRow(
                         title = path.substringAfterLast('/'),
-                        icon = OpenCodeIcons.Description,
+                        icon = OpenCodeTreeRowIcon.FileType(path),
                         depth = 1,
                         state = if (selected == path) OpenCodeTreeRowState.Selected else OpenCodeTreeRowState.Normal,
                         onClick = { selected = path },
@@ -42,7 +43,7 @@ fun TreeRowGalleryScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
-        Text("States", style = MaterialTheme.typography.titleMedium)
+        Text("States, generic icons", style = MaterialTheme.typography.titleMedium)
         Column {
             OpenCodeTreeRow(title = "README.md", icon = OpenCodeIcons.Description)
             OpenCodeTreeRow(title = "Selected.kt", icon = OpenCodeIcons.Description, state = OpenCodeTreeRowState.Selected)

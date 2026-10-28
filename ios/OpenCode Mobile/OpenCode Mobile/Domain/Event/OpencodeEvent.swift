@@ -25,6 +25,13 @@ nonisolated struct OpencodeEvent: Sendable, Equatable {
         Self.statusRefreshTypes.contains(type)
     }
 
+    var namedProjectID: String? {
+        let properties = rawProperties
+        let named = properties?["projectID"]?.stringValue ?? properties?["projectId"]?.stringValue
+        let trimmed = named?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed?.isEmpty == false ? trimmed : nil
+    }
+
     /// v2: the server-wide viewed watermark moved (`{ sessionID, idle }`).
     static let sessionViewedType = "session.viewed"
 
@@ -84,6 +91,9 @@ nonisolated struct OpencodeEvent: Sendable, Equatable {
         "session.created",
         "session.updated",
         "session.deleted",
+        // v2 archive state changes; the list refetch drops or restores the session.
+        "session.archived",
+        "session.unarchived",
     ]
 
     private static let statusRefreshTypes: Set<String> = [

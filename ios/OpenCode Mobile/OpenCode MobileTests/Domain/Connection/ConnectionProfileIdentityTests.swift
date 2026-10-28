@@ -41,11 +41,11 @@ struct ConnectionProfileIdentityTests {
         )
     }
 
-    @Test func hasSameIdentity_matchesWhenBaseURLMovesWithinServerURLs() {
+    @Test func hasSameIdentity_matchesWhenBaseURLMovesWithinServerURLs() throws {
         let lan = "http://192.168.1.2:49374/"
         let tailscale = "http://100.64.0.3:49374/"
         let urls = [lan, tailscale]
-        let original = ServerConnection(
+        let original = try #require(ServerConnection(
             profile: ConnectionProfile(
                 baseURL: lan,
                 serverURLs: urls,
@@ -53,8 +53,8 @@ struct ConnectionProfileIdentityTests {
                 password: "token",
                 id: "profile-1"
             )
-        )
-        let moved = ServerConnection(
+        ))
+        let moved = try #require(ServerConnection(
             profile: ConnectionProfile(
                 baseURL: tailscale,
                 serverURLs: urls,
@@ -62,10 +62,10 @@ struct ConnectionProfileIdentityTests {
                 password: "token",
                 id: "profile-1"
             )
-        )
+        ))
         #expect(original.hasSameIdentity(as: moved))
 
-        let otherPassword = ServerConnection(
+        let otherPassword = try #require(ServerConnection(
             profile: ConnectionProfile(
                 baseURL: tailscale,
                 serverURLs: urls,
@@ -73,27 +73,27 @@ struct ConnectionProfileIdentityTests {
                 password: "other",
                 id: "profile-1"
             )
-        )
+        ))
         #expect(!original.hasSameIdentity(as: otherPassword))
     }
 
-    @Test func hasSameIdentity_manualProfileStillRequiresMatchingBaseURL() {
-        let left = ServerConnection(
+    @Test func hasSameIdentity_manualProfileStillRequiresMatchingBaseURL() throws {
+        let left = try #require(ServerConnection(
             profile: ConnectionProfile(
                 baseURL: "http://10.0.0.1:4096/",
                 username: "opencode",
                 password: "token",
                 id: "profile-1"
             )
-        )
-        let right = ServerConnection(
+        ))
+        let right = try #require(ServerConnection(
             profile: ConnectionProfile(
                 baseURL: "http://10.0.0.2:4096/",
                 username: "opencode",
                 password: "token",
                 id: "profile-1"
             )
-        )
+        ))
         #expect(!left.hasSameIdentity(as: right))
     }
 

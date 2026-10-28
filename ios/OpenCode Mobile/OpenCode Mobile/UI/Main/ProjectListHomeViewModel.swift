@@ -13,10 +13,12 @@ struct ProjectSectionItem: Identifiable, Equatable {
     var sessionsFromCache: Bool = false
     /// Archived and settled sessions listed after the active ones; T3 only.
     var archivedSessions: [SessionListItem] = []
+    var projectID: String? = nil
+    var worktreeInventory: WorktreeInventory = .unloaded
 }
 
 /// Where a home session row sits in its lifecycle; drives the long-press actions.
-enum HomeSessionLifecycle: Equatable {
+enum HomeSessionLifecycle: Hashable {
     case active
     case archived
     case settled
@@ -30,6 +32,31 @@ struct AddProjectFolderItem: Identifiable, Equatable {
     let path: String
     /// Already added to home on this server.
     let isAdded: Bool
+    /// Visible subfolders, once the row's own listing loaded.
+    var folderCount: Int? = nil
+    var isGitRepository = false
+
+    /// "On Home", the folder count, or both joined with " · ". Nil when neither is known.
+    var subtitle: String? {
+        let parts = [isAdded ? AddProjectSheetState.onHomeLabel : nil, folderCount.map(Self.countLabel)]
+            .compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " \u{00B7} ")
+    }
+
+    static func countLabel(_ count: Int) -> String {
+        switch count {
+        case 0: "Empty"
+        case 1: "1 folder"
+        default: "\(count) folders"
+        }
+    }
+}
+
+/// The folder the browser's action bar names: what Add would add, or the folder in view.
+struct AddProjectBarTarget: Equatable {
+    let name: String
+    let path: String
+    let isGitRepository: Bool
 }
 
 /// A chip that jumps the path field to a root the server cannot enumerate (Home, `/`, a
@@ -53,9 +80,15 @@ struct AddProjectSuggestion: Identifiable, Equatable {
 /// projects. Everything here is derived from the field text and the listings loaded so far.
 struct AddProjectSheetState: Equatable {
     static let pickFolderTitle = "Pick a folder"
-    static let alreadyAddedTitle = "Already on home"
+    static let addThisFolderTitle = "Add this folder"
+    static let alreadyAddedTitle = "Already on Home"
     static let homeFolderTitle = "Add home folder"
+    static let pathNotFoundTitle = "Path not found"
+    static let onHomeLabel = "On Home"
+    static let gitTag = "git"
     static let noSubfoldersMessage = "No subfolders"
+    /// Row listings loaded at once for folder counts and git tags.
+    static let folderSummaryConcurrency = 4
     static let truncatedListingHint = "Showing the first \(DirectoryListingPolicy.maxVisibleDirectories) folders. Type more of the name to narrow the list."
     /// Listing failures never show server text, which can carry paths or HTML.
     static let listErrorMessage = "Check the path and try again."
@@ -73,24 +106,40 @@ struct AddProjectSheetState: Equatable {
     var truncationHint: String?
     var isLoading = false
     var listError: String?
-    /// Shown when the listing loaded but no row matches.
+    /// The field's folder does not exist. The list shows `emptyMessage`; no Retry.
+    var pathNotFound = false
+    /// Shown when the listing loaded but no row matches, or the folder does not exist.
     var emptyMessage: String?
     var roots: [AddProjectRoot] = []
     var suggestions: [AddProjectSuggestion] = []
+    /// False until this presentation has heard back from the server project list.
+    var suggestionsResolved = false
     var showSuggestions = false
     /// Header over the folder rows while suggestions are shown above them.
     var folderSectionTitle: String?
     var upTarget: String?
     var addTarget: String?
-    var addTitle = pickFolderTitle
+    /// Target row of the browser's action bar; nil while the field names no folder.
+    var barTarget: AddProjectBarTarget?
+    /// Folder Return opens: the exact typed child, or the only match. Return never adds.
+    var goTarget: String?
+    var addTitle = addThisFolderTitle
     var addEnabled = false
     var isValidating = false
     var fieldError: String?
+    /// True while Browse folders has replaced the suggestion sheet with the full-screen browser.
+    var isBrowsing = false
+    static let browseFoldersTitle = "Browse folders"
+    static let noOtherProjectsMessage = "No other projects on this server."
 
     static let empty = AddProjectSheetState()
 
     static func emptyFilterMessage(directory: String, filter: String) -> String {
         "Nothing in \(ServerPathPolicy.name(directory)) starts with \u{201C}\(filter)\u{201D}"
+    }
+
+    static func noFolderNamedTitle(_ filter: String) -> String {
+        "No folder named \u{201C}\(filter)\u{201D}"
     }
 
     /// Builds the sheet from what the Screen Model has loaded for this presentation.
@@ -100,6 +149,8 @@ struct AddProjectSheetState: Equatable {
         sheet.homePath = inputs.home
         sheet.isValidating = inputs.isValidating
         sheet.fieldError = inputs.fieldError
+        sheet.isBrowsing = inputs.isBrowsing
+        sheet.suggestionsResolved = inputs.suggestionsResolved
         guard !inputs.home.isEmpty else {
             sheet.isLoading = inputs.pathsError == nil
             sheet.listError = inputs.pathsError
@@ -111,7 +162,10 @@ struct AddProjectSheetState: Equatable {
         sheet.filter = parts.filter
         sheet.roots = roots(inputs, directory: parts.directory, filter: parts.filter)
         sheet.suggestions = ServerProjectSuggestions
-            .suggestions(from: inputs.serverProjects, excluding: inputs.added)
+            .suggestions(
+                from: inputs.serverProjects.filter { !inputs.addedProjectIDs.contains($0.id) },
+                excluding: inputs.added
+            )
             .map { project in
                 AddProjectSuggestion(
                     name: project.displayName,
@@ -122,9 +176,20 @@ struct AddProjectSheetState: Equatable {
 
         guard let directory = parts.directory else { return sheet }
         let filter = parts.filter
+        let windows = ServerPathPolicy.isWindows(directory)
+        let repositories = Set(
+            inputs.serverProjects.filter(\.isRepository).map { ServerPathPolicy.canonical($0.worktree) }
+        )
+        func isGitRepository(_ path: String) -> Bool {
+            inputs.listings[path]?.isGitRepository == true
+                || repositories.contains(ServerPathPolicy.canonical(path))
+        }
         sheet.upTarget = filter.isEmpty ? ServerPathPolicy.parentPath(directory) : directory
         let listing = inputs.listings[directory]
-        if let error = inputs.listErrors[directory] {
+        if inputs.missingDirectories.contains(directory) {
+            sheet.pathNotFound = true
+            sheet.emptyMessage = pathNotFoundTitle
+        } else if let error = inputs.listErrors[directory] {
             sheet.listError = error
         } else if listing == nil {
             sheet.isLoading = true
@@ -134,14 +199,16 @@ struct AddProjectSheetState: Equatable {
             sheet.folderSectionTitle = "In \(ServerPathPolicy.name(directory))"
         }
 
-        if let listing {
-            let visible = DirectoryListingPolicy.visibleEntries(listing, filter: filter)
+        if let listing, !sheet.pathNotFound {
+            let visible = DirectoryListingPolicy.visibleEntries(listing.folders, filter: filter)
             sheet.entries = visible.rows
                 .map { node in
                     AddProjectFolderItem(
                         name: node.name,
                         path: node.absolutePath,
-                        isAdded: added.contains(ServerPathPolicy.canonical(node.absolutePath))
+                        isAdded: added.contains(ServerPathPolicy.canonical(node.absolutePath)),
+                        folderCount: inputs.listings[node.absolutePath]?.visibleFolderCount,
+                        isGitRepository: isGitRepository(node.absolutePath)
                     )
                 }
             if visible.truncated {
@@ -156,22 +223,34 @@ struct AddProjectSheetState: Equatable {
                 sheet.addTarget = directory
             } else {
                 // The full listing, hidden folders included, so a folder past the cap is addable.
-                let windows = ServerPathPolicy.isWindows(directory)
-                sheet.addTarget = listing.first { node in
+                sheet.addTarget = listing.folders.first { node in
                     windows ? node.name.caseInsensitiveCompare(filter) == .orderedSame : node.name == filter
                 }?.absolutePath
+                sheet.goTarget = sheet.addTarget ?? (visible.rows.count == 1 ? visible.rows[0].absolutePath : nil)
             }
         }
 
-        if let target = sheet.addTarget {
+        let barPath = sheet.addTarget ?? directory
+        sheet.barTarget = AddProjectBarTarget(
+            name: ServerPathPolicy.name(barPath),
+            path: barPath,
+            isGitRepository: isGitRepository(barPath)
+        )
+        if sheet.pathNotFound {
+            sheet.addTitle = pathNotFoundTitle
+        } else if listing == nil {
+            sheet.addTitle = addThisFolderTitle
+        } else if let target = sheet.addTarget {
             if added.contains(ServerPathPolicy.canonical(target)) {
                 sheet.addTitle = alreadyAddedTitle
             } else {
                 sheet.addTitle = ServerPathPolicy.canonical(target) == inputs.home
                     ? homeFolderTitle
-                    : "Add \(ServerPathPolicy.name(target))"
+                    : addThisFolderTitle
                 sheet.addEnabled = !inputs.isValidating
             }
+        } else {
+            sheet.addTitle = sheet.entries.isEmpty ? noFolderNamedTitle(filter) : pickFolderTitle
         }
         return sheet
     }
@@ -229,20 +308,30 @@ struct AddProjectSheetInputs: Equatable {
     var added: [String] = []
     /// Successful full listings (every child folder, hidden ones included, uncapped) by
     /// canonical folder, kept for the sheet's lifetime.
-    var listings: [String: [DirectoryNode]] = [:]
+    var listings: [String: DirectoryListing] = [:]
     var listErrors: [String: String] = [:]
+    /// Folders the server reported missing this session.
+    var missingDirectories: Set<String> = []
     var serverProjects: [Project] = []
+    /// Project ids already on Home. Their other worktrees count as added.
+    var addedProjectIDs: Set<String> = []
+    /// True once this presentation's project-list fetch has finished, including a failure.
+    var suggestionsResolved = false
     /// Folders in `/Volumes` on a POSIX server.
     var volumes: [DirectoryNode] = []
     /// Roots of folders the field listed this session (Windows drives and shares).
     var listedRoots: [String] = []
     var isValidating = false
     var fieldError: String?
+    var isBrowsing = false
 }
 
 struct ProjectRemovalItem: Equatable {
+    /// Primary path of the Home project.
     let worktree: String
     let displayName: String
+    /// Every added path of the project; all leave Home together.
+    var worktrees: [String] = []
 }
 
 struct HomeSessionActionTarget: Equatable {
@@ -257,6 +346,8 @@ struct HomeSessionTitleDialogState: Equatable {
     var draftTitle = ""
     var isSubmitting = false
     var errorMessage: String?
+    /// Set when the action cannot run at all (a fork with no user message); disables confirm.
+    var blockedMessage: String?
 }
 
 struct HomeSessionForkResultState: Equatable {
@@ -270,6 +361,31 @@ struct HomeServersChrome: Equatable {
     var active: ConnectionProfile?
     var others: [ConnectionProfile] = []
     var sheetVisible = false
+}
+
+/// First server load of a project added on home in this session, while it is outstanding.
+/// Absent once the load landed (including an empty project) or the project left home.
+enum ProjectLoadState: Equatable {
+    /// Still waiting on the server. `isSlow` after the slow threshold.
+    case loading(isSlow: Bool)
+    /// The server load failed or never answered; Retry asks again.
+    case failed(message: String)
+
+    static let failedMessage = "Couldn\u{2019}t load sessions"
+}
+
+/// Anti-flicker and safety timing for ``ProjectLoadState``. Tests inject short durations.
+struct ProjectLoadTiming: Equatable {
+    /// Loading is only exposed once the load has run this long.
+    var grace: Duration = .milliseconds(300)
+    /// Once exposed, loading stays at least this long before it clears.
+    var minimumVisible: Duration = .milliseconds(500)
+    /// After this long, loading reads as slow.
+    var slowThreshold: Duration = .seconds(4)
+    /// With no outcome by then, the load counts as failed.
+    var timeout: Duration = .seconds(30)
+
+    static let standard = ProjectLoadTiming()
 }
 
 enum ProjectListHomeState: Equatable {
@@ -305,14 +421,23 @@ final class ProjectListHomeViewModel {
     private var addProjectGeneration = 0
     private var addProjectListingTask: Task<Void, Never>?
     private var addProjectListingsInFlight: Set<String> = []
+    /// Row listings for folder counts and git tags: waiting (first in, first out), loading,
+    /// and failed this presentation (never retried, never shown as a list error).
+    private var addProjectSummaryQueue: [String] = []
+    private var addProjectSummariesInFlight: Set<String> = []
+    private var addProjectSummaryFailures: Set<String> = []
     private let addProjectListingDebounce: Duration
+    /// Projects added this session whose first server load is outstanding, keyed by worktree.
+    /// Loading appears only after the grace delay; failures appear at once.
+    private(set) var projectLoadStates: [String: ProjectLoadState] = [:]
+    @ObservationIgnored private var projectLoads: [String: ProjectLoadTracker] = [:]
+    @ObservationIgnored private var projectLoadAttempt = 0
+    private let projectLoadTiming: ProjectLoadTiming
     private(set) var pendingProjectRemoval: ProjectRemovalItem?
     /// Shared home snackbar: project removal plus archive / delete failures.
     private(set) var removalSnackbar: OpenCodeSnackbarMessage?
     var sessionActionsTarget: HomeSessionActionTarget? { sessionActionsRegion.target }
     var sessionActionsSheetVisible: Bool { sessionActionsRegion.sheetVisible }
-    /// Stays false until a message fetch confirms the session is forkable.
-    var sessionActionsCanFork: Bool { sessionActionsRegion.canFork }
     var sessionActionsCanArchive: Bool { sessionActionsRegion.canArchive }
     var sessionActionsLifecycle: HomeSessionLifecycle { sessionActionsRegion.lifecycle }
     var sessionActionsShowsSettle: Bool { sessionActionsRegion.showsSettle }
@@ -344,6 +469,13 @@ final class ProjectListHomeViewModel {
     private let sessionReadyStore: any SessionReadyStore
     private let permissionLiveStore: any PermissionLiveStore
     private let liveUpdates: any LiveUpdates
+    private let worktreeRepository: any WorktreeRepository
+    private let worktreeInventoryCache: WorktreeInventoryCache
+    /// New worktree form of the Run in sheet.
+    let worktreeCreate: WorktreeCreateModel
+    /// False once a v1 server answered 404 for its worktree routes.
+    private(set) var serverCanCreateWorktrees = true
+    private let foregroundEventStream: (any ForegroundEventStream)?
     private let sessionCache: any SessionCache
     private let sessionAdapter = SessionDomainAdapter()
     private var connectionStateObservationTask: Task<Void, Never>?
@@ -357,6 +489,22 @@ final class ProjectListHomeViewModel {
     private var archivedByWorktree: [String: [SessionListItem]] = [:]
     private var archivedReloadTask: Task<Void, Never>?
     private var archivedGeneration = 0
+    @ObservationIgnored private var worktreeMarks: HomeWorktreeMarks
+    private var worktreeInventories: [String: WorktreeInventory] = [:]
+    private var worktreeProjectIDs: [String: String] = [:]
+    /// Current project per added path, once resolved.
+    private var projectResolutions: [String: HomeProjectResolution] = [:]
+    /// Worktree directories the server listed, per added path.
+    private var worktreeDirectories: [String: [String]] = [:]
+    /// Current branch by canonical worktree directory.
+    private var worktreeBranches: [String: String] = [:]
+    /// Name and VCS from the server's project list, by project id.
+    private var serverProjectInfo: [String: (name: String?, isRepository: Bool)] = [:]
+    @ObservationIgnored private var branchLookups: HomeBranchLookups
+    @ObservationIgnored private var serverProjectsTask: Task<Void, Never>?
+    @ObservationIgnored private var worktreeExtrasRefreshTask: Task<Void, Never>?
+    private var worktreeMarkTask: Task<Void, Never>?
+    private var worktreeEventTask: Task<Void, Never>?
     private var liveSessionsByWorktree: [String: SessionListSnapshot] = [:]
     private var liveStatusesByWorktree: [String: SessionActivitySnapshot] = [:]
     private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
@@ -380,9 +528,15 @@ final class ProjectListHomeViewModel {
         connectionSessionCoordinator: ConnectionSessionCoordinator,
         sessionCache: any SessionCache = NoOpSessionCache.shared,
         liveUpdates: any LiveUpdates = FixedLiveUpdates(),
-        addProjectListingDebounce: Duration = .milliseconds(250)
+        addProjectListingDebounce: Duration = .milliseconds(250),
+        projectLoadTiming: ProjectLoadTiming = .standard,
+        worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
+        foregroundEventStream: (any ForegroundEventStream)? = nil,
+        branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)],
+        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache()
     ) {
         self.addProjectListingDebounce = addProjectListingDebounce
+        self.projectLoadTiming = projectLoadTiming
         self.projectRepository = projectRepository
         self.filesystemRepository = filesystemRepository
         self.sessionRepository = sessionRepository
@@ -394,6 +548,60 @@ final class ProjectListHomeViewModel {
         self.sessionReadyStore = sessionReadyStore
         self.permissionLiveStore = permissionLiveStore ?? HomeEmptyPermissionLiveStore()
         self.liveUpdates = liveUpdates
+        self.worktreeRepository = worktreeRepository
+        self.worktreeInventoryCache = worktreeInventoryCache
+        self.worktreeCreate = WorktreeCreateModel(repository: worktreeRepository)
+        self.serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
+        self.foregroundEventStream = foregroundEventStream
+        let projects = projectRepository
+        let sessions = sessionRepository
+        let adapter = sessionAdapter
+        self.worktreeMarks = HomeWorktreeMarks(
+            repository: worktreeRepository,
+            resolveProject: { directory in
+                guard let project = try? await projects.getCurrentProject(directory: directory) else { return nil }
+                let canonical = project.canonical?.isEmpty == false ? project.canonical! : project.worktree
+                return HomeProjectResolution(
+                    id: project.id,
+                    canonical: canonical,
+                    name: project.name,
+                    isRepository: project.isRepository
+                )
+            },
+            listSessions: { directory in
+                let listed = (try? await sessions.listSessions(directory: directory)) ?? []
+                return listed.activeSessions().rootSessions().map { session in
+                    let item = adapter.listItem(from: session, worktree: directory)
+                    if item.directory?.isEmpty == false { return item }
+                    return SessionListItem(
+                        id: item.id,
+                        title: item.title,
+                        worktree: item.worktree,
+                        statusLabel: item.statusLabel,
+                        updatedAtLabel: item.updatedAtLabel,
+                        updatedAtEpochMs: item.updatedAtEpochMs,
+                        isReady: item.isReady,
+                        unreadOutcome: item.unreadOutcome,
+                        statusIsStale: item.statusIsStale,
+                        parentID: item.parentID,
+                        directory: directory
+                    )
+                }
+            }
+        )
+        self.branchLookups = HomeBranchLookups(retryDelays: branchRetryDelays) { directory in
+            do {
+                let info = try await sessions.getVcsInfo(directory: directory)
+                // A cold v2 server answers without a provider first; ask again shortly.
+                guard info.isSettled else { return .unknown }
+                return .branch(HomeProjectGrouping.usableBranch(info.currentBranch))
+            } catch let SessionError.http(statusCode, _) where (400 ..< 500).contains(statusCode) {
+                // No VCS routes, or not a repository: there is no branch to show.
+                return .branch(nil)
+            } catch {
+                return .unknown
+            }
+        }
         self.connectionSessionCoordinator = connectionSessionCoordinator
         self.sessionCache = sessionCache
         self.sessionActionsRegion = HomeSessionActions(
@@ -410,18 +618,64 @@ final class ProjectListHomeViewModel {
         sessionReadyStore.bindProfile(profileID: activeConnectionManager.currentProfile()?.id)
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
+                self?.clearProjectLoads()
                 self?.stopLiveObservations()
                 await self?.refresh()
             }
         }
         connectionSessionCoordinator.onProfileCleared { [weak self] in
             Task { @MainActor in
+                self?.clearProjectLoads()
                 self?.stopLiveObservations()
+                self?.worktreeMarks.onDisconnected()
+                self?.worktreeInventoryCache.clear()
+                self?.worktreeCreate.dismiss()
+                self?.worktreeInventories.removeAll()
+                self?.worktreeProjectIDs.removeAll()
+                self?.clearHomeProjectInputs()
                 self?.state = .disconnected
                 self?.serversChrome = HomeServersChrome()
             }
         }
+        branchLookups.onChange = { [weak self] branches in
+            guard let self, self.worktreeBranches != branches else { return }
+            self.worktreeBranches = branches
+        }
         startObservingConnectionState()
+    }
+
+    /// Added paths grouped into Home projects: worktrees of one repository are one project.
+    var homeProjects: [HomeProject] {
+        guard case let .loaded(sections, _, _, _) = state else { return [] }
+        return homeProjects(addedPaths: sections.map(\.worktree))
+    }
+
+    private func homeProjects(addedPaths: [String]) -> [HomeProject] {
+        var resolutions: [String: HomeProjectResolution] = [:]
+        for path in addedPaths {
+            guard var resolution = projectResolutions[path] else { continue }
+            if let info = serverProjectInfo[resolution.id] {
+                if resolution.name?.isEmpty != false { resolution.name = info.name }
+                resolution.isRepository = resolution.isRepository || info.isRepository
+            }
+            resolutions[path] = resolution
+        }
+        return HomeProjectGrouping.group(
+            addedPaths: addedPaths,
+            resolutions: resolutions,
+            inventories: worktreeDirectories,
+            branches: worktreeBranches
+        )
+    }
+
+    private func clearHomeProjectInputs() {
+        projectResolutions.removeAll()
+        worktreeDirectories.removeAll()
+        worktreeBranches.removeAll()
+        serverProjectInfo.removeAll()
+        branchLookups.clear()
+        serverProjectsTask?.cancel()
+        serverProjectsTask = nil
     }
 
     private func publishRefreshing() {
@@ -502,6 +756,9 @@ final class ProjectListHomeViewModel {
                 userRefreshing = false
                 publishRefreshing()
             }
+            // A stream backing off (e.g. after a rejected credential) retries now.
+            foregroundEventStream?.onReconnectWake()
+            refreshBranches()
             await sessionLiveStore.invalidate(directory: nil)
             await sessionStatusLiveStore.invalidate(directory: nil)
             await refreshArchivedSessions()
@@ -530,7 +787,7 @@ final class ProjectListHomeViewModel {
         )
         addProjectGeneration += 1
         addProjectListingTask?.cancel()
-        addProjectListingsInFlight = []
+        resetAddProjectLoads()
         addProjectInputs = AddProjectSheetInputs()
         isAddProjectPresented = true
         publishAddProjectSheet()
@@ -542,7 +799,7 @@ final class ProjectListHomeViewModel {
         addProjectGeneration += 1
         addProjectListingTask?.cancel()
         addProjectListingTask = nil
-        addProjectListingsInFlight = []
+        resetAddProjectLoads()
         addProjectInputs = AddProjectSheetInputs()
         addProjectSheet = .empty
         switch state {
@@ -591,10 +848,59 @@ final class ProjectListHomeViewModel {
         await showAddProjectFolder(path)
     }
 
+    /// Return in the path field ("go"): opens the typed folder, or the only matching one.
+    /// It never adds; Add stays a deliberate tap.
+    func submitAddProjectField() async {
+        guard isAddProjectPresented, !addProjectInputs.isValidating,
+              let target = addProjectSheet.goTarget
+        else { return }
+        logAddProjectAction(ProductAnalytics.Action.addProjectEnterDirectory)
+        await showAddProjectFolder(target)
+    }
+
+    /// A browser row came on screen: load its own listing for the folder count and git tag.
+    func addProjectFolderRowAppeared(path: String) {
+        guard isAddProjectPresented,
+              addProjectInputs.listings[path] == nil,
+              !addProjectSummariesInFlight.contains(path),
+              !addProjectSummaryFailures.contains(path),
+              !addProjectSummaryQueue.contains(path)
+        else { return }
+        addProjectSummaryQueue.append(path)
+        startAddProjectSummaries()
+    }
+
+    /// A browser row left the screen before its listing started: drop it from the queue.
+    func addProjectFolderRowDisappeared(path: String) {
+        addProjectSummaryQueue.removeAll { $0 == path }
+    }
+
     func selectAddProjectSuggestion(path: String) async {
         guard isAddProjectPresented, !addProjectInputs.isValidating else { return }
         logAddProjectAction(ProductAnalytics.Action.addProjectSelectSuggestion)
         await addProject(worktree: path)
+    }
+
+    /// Replaces the suggestion sheet with the full-screen folder browser.
+    func browseAddProjectFolders() {
+        guard isAddProjectPresented, !addProjectInputs.isValidating else { return }
+        logAddProjectAction(ProductAnalytics.Action.addProjectBrowse)
+        addProjectInputs.isBrowsing = true
+        publishAddProjectSheet()
+    }
+
+    /// Back from the browser. Returns to the suggestion sheet at the server home, so
+    /// "On this server" is not lost because the field was left in a subfolder.
+    func closeAddProjectBrowser() {
+        guard isAddProjectPresented, addProjectInputs.isBrowsing else { return }
+        logAddProjectAction(ProductAnalytics.Action.addProjectBrowseBack)
+        addProjectListingTask?.cancel()
+        addProjectInputs.isBrowsing = false
+        if !addProjectInputs.home.isEmpty {
+            addProjectInputs.fieldText = ServerPathPolicy.fieldText(addProjectInputs.home)
+            addProjectInputs.fieldError = nil
+        }
+        publishAddProjectSheet()
     }
 
     func retryAddProjectListing() async {
@@ -643,16 +949,39 @@ final class ProjectListHomeViewModel {
         do {
             // Validate the path is usable, then persist the selected directory (web
             // open-project behavior). Non-git dirs resolve /project/current to "/".
-            _ = try await projectRepository.getCurrentProject(directory: worktree)
+            let project = try await projectRepository.getCurrentProject(directory: worktree)
+            let resolution = HomeProjectResolution(project)
+            // A worktree of a repository already on Home joins that project.
+            let joined = resolution.isMergeable
+                ? homeProjects.first { $0.key == resolution.id.trimmingCharacters(in: .whitespacesAndNewlines) }
+                : nil
+            projectResolutions[worktree] = resolution
             await connectionProfileStore.addWorktree(serverBaseURL: serverBaseURL, worktree: worktree)
+            beginProjectLoad(worktree, showImmediately: false)
             dismissAddProjectSheet()
             await runHomeLoad(skipProbe: true)
+            // A newly added project always takes the scope, even from All.
+            pendingSelectedFilterOverridesAll = true
             pendingSelectedFilterId = worktree
+            if let joined {
+                removalSnackbar = OpenCodeSnackbarMessage(text: HomeProjectCopy.joinedExisting(joined.displayName))
+            }
         } catch {
             addProjectInputs.isValidating = false
             addProjectInputs.fieldError = error.localizedDescription
             publishAddProjectSheet()
         }
+    }
+
+    /// Retry from a project's failed first load: shows loading again and refetches its sessions.
+    func retryProjectLoad(worktree: String) async {
+        guard projectLoads[worktree] != nil else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeRetryProjectLoad
+        )
+        beginProjectLoad(worktree, showImmediately: true)
+        await sessionLiveStore.invalidate(directory: worktree)
     }
 
     func createSession(in worktree: String) async {
@@ -672,6 +1001,68 @@ final class ProjectListHomeViewModel {
         )
     }
 
+    // MARK: New worktree (Run in)
+
+    /// The Run in sheet's New worktree row for `project`.
+    func newWorktreeAvailability(for project: HomeProject, worktreesEnabled: Bool) -> NewWorktreeAvailability {
+        NewWorktreeAvailability.runIn(
+            worktreesEnabled: worktreesEnabled,
+            isRepository: project.isRepository,
+            projectID: project.projectID,
+            serverCanCreate: serverCanCreateWorktrees
+        )
+    }
+
+    /// Switches the Run in sheet to the New worktree form, creating from the main checkout.
+    func openNewWorktree(projectKey: String) {
+        guard let project = homeProjects.first(where: { $0.key == projectKey }) else { return }
+        let source = project.mainCheckoutDirectory
+        worktreeCreate.open(
+            origin: .runIn(projectKey: projectKey),
+            serverProtocol: activeConnectionManager.serverProtocol ?? .v1,
+            projectID: project.projectID,
+            sourceDirectory: source,
+            sourceBranch: project.worktree(at: source)?.branch
+        )
+    }
+
+    /// Creates the worktree, refreshes the project's checkouts, then starts a session there.
+    /// True when the sheet should close.
+    func submitNewWorktree() async -> Bool {
+        guard case let .runIn(projectKey)? = worktreeCreate.state?.origin else { return false }
+        guard let created = await worktreeCreate.submit() else {
+            serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
+            return false
+        }
+        await refreshWorktreeInventory(projectKey: projectKey)
+        worktreeCreate.dismiss()
+        await createSession(in: created.directory)
+        return true
+    }
+
+    /// Reloads the checkouts of the project that owns `directory` (Session Chat after a create).
+    func refreshWorktreeInventory(containing directory: String) async {
+        let canonical = ServerPathPolicy.canonical(directory)
+        guard let project = homeProjects.first(where: { $0.worktree(at: canonical) != nil || $0.hasMember(canonical) })
+        else { return }
+        await refreshWorktreeInventory(projectKey: project.key)
+    }
+
+    /// v2 refetches the project's list; v1 reloads each added path, as a Home refresh does.
+    func refreshWorktreeInventory(projectKey: String) async {
+        guard let project = homeProjects.first(where: { $0.key == projectKey }) else { return }
+        if activeConnectionManager.serverProtocol == .v2, let projectID = project.projectID,
+           worktreeMarks.knows(projectID)
+        {
+            await refetchWorktreeMark(projectID)
+            return
+        }
+        for path in project.memberPaths {
+            let update = await worktreeMarks.load(addedPath: path)
+            applyWorktreeMark(update)
+        }
+    }
+
     private func logCreateSession(outcome: String) {
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.home,
@@ -682,6 +1073,8 @@ final class ProjectListHomeViewModel {
 
     private(set) var pendingSessionOpen: SessionListItem?
     private(set) var pendingSelectedFilterId: String?
+    /// True when `pendingSelectedFilterId` must replace the All scope too (a newly added project).
+    private(set) var pendingSelectedFilterOverridesAll = false
     private(set) var revealNewestToken = 0
     private var lastHomeHiddenAtEpochMs: Int64?
 
@@ -691,6 +1084,7 @@ final class ProjectListHomeViewModel {
 
     func consumePendingSelectedFilter() {
         pendingSelectedFilterId = nil
+        pendingSelectedFilterOverridesAll = false
     }
 
     func markHomeHidden(nowEpochMs: Int64 = Int64(Date().timeIntervalSince1970 * 1000)) {
@@ -724,7 +1118,7 @@ final class ProjectListHomeViewModel {
               current.count == worktrees.count,
               Set(current) == Set(worktrees)
         else { return }
-        let byWorktree = Dictionary(uniqueKeysWithValues: sections.map { ($0.worktree, $0) })
+        let byWorktree = Dictionary(sections.map { ($0.worktree, $0) }, uniquingKeysWith: { _, latest in latest })
         state = .loaded(
             sections: worktrees.compactMap { byWorktree[$0] },
             showAddProjectSheet: showAdd,
@@ -749,9 +1143,10 @@ final class ProjectListHomeViewModel {
     /// that need to observe the Connection Profile after a reorder.
     private(set) var projectOrderPersistence: Task<Void, Never>?
 
+    /// `worktree` is a Home project key or any of its added paths.
     func requestRemoveProject(worktree: String) {
-        guard case let .loaded(sections, _, _, _) = state,
-              let section = sections.first(where: { $0.worktree == worktree })
+        guard let project = homeProjects.first(where: { $0.key == worktree })
+            ?? homeProjects.first(where: { $0.hasMember(worktree) })
         else { return }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.home,
@@ -762,7 +1157,11 @@ final class ProjectListHomeViewModel {
             presentation: ProductAnalytics.Presentation.dialog,
             trigger: ProductAnalytics.Trigger.present
         )
-        pendingProjectRemoval = ProjectRemovalItem(worktree: worktree, displayName: section.displayName)
+        pendingProjectRemoval = ProjectRemovalItem(
+            worktree: project.primaryPath,
+            displayName: project.displayName,
+            worktrees: project.memberPaths
+        )
     }
 
     func dismissProjectRemoval() {
@@ -780,8 +1179,14 @@ final class ProjectListHomeViewModel {
             screenId: ProductAnalytics.Screen.homeRemoveProjectConfirm,
             actionId: ProductAnalytics.Action.homeRemoveProjectConfirm
         )
-        await connectionProfileStore.removeWorktree(serverBaseURL: serverBaseURL, worktree: pending.worktree)
-        await sessionCache.purgeWorktree(serverBaseURL: serverBaseURL, worktree: pending.worktree)
+        let paths = pending.worktrees.isEmpty ? [pending.worktree] : pending.worktrees
+        for path in paths {
+            await connectionProfileStore.removeWorktree(serverBaseURL: serverBaseURL, worktree: path)
+            await sessionCache.purgeWorktree(serverBaseURL: serverBaseURL, worktree: path)
+            clearProjectLoad(path)
+            projectResolutions[path] = nil
+            worktreeDirectories[path] = nil
+        }
         pendingProjectRemoval = nil
         await runHomeLoad(skipProbe: true)
         removalSnackbar = OpenCodeSnackbarMessage(text: "Removed \"\(pending.displayName)\" from home")
@@ -1031,17 +1436,22 @@ final class ProjectListHomeViewModel {
 
     private func runHomeLoad(skipProbe: Bool = false, preserveContent: Bool = false) async {
         guard activeConnectionManager.connection != nil else {
+            clearProjectLoads()
             stopLiveObservations()
             state = .disconnected
             return
         }
 
         let worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: serverBaseURL)
+        for worktree in projectLoads.keys where !worktrees.contains(worktree) {
+            clearProjectLoad(worktree)
+        }
 
         // Disk-first home: local worktrees + Session Cache paint .loaded
         // without .probing/.loading. Live store then SWR-refreshes.
         if !preserveContent, !worktrees.isEmpty {
             if case .loaded = state, liveObservationsRunning(for: worktrees) {
+                reloadWorktreeMarks(worktrees)
                 return
             }
             let sections = await loadSectionsFromCache(worktrees: worktrees)
@@ -1059,6 +1469,7 @@ final class ProjectListHomeViewModel {
                 }
             }
             startLiveObservations(worktrees: worktrees)
+            reloadWorktreeMarks(worktrees)
             return
         }
 
@@ -1149,6 +1560,7 @@ final class ProjectListHomeViewModel {
                 )
             }
             startLiveObservations(worktrees: worktrees)
+            reloadWorktreeMarks(worktrees)
         } catch {
             if preserveContent { return }
             stopLiveObservations()
@@ -1168,7 +1580,7 @@ final class ProjectListHomeViewModel {
     private func sectionFromCache(worktree: String) async -> ProjectSectionItem {
         let seeded = await sessionCache.seedSessions(worktree: worktree)
         let cachedActivity = await sessionCache.seedActivity(directory: worktree) ?? []
-        let activityByID = Dictionary(uniqueKeysWithValues: cachedActivity.map { ($0.sessionId, $0) })
+        let activityByID = Dictionary(cachedActivity.map { ($0.sessionId, $0) }, uniquingKeysWith: { _, latest in latest })
         let sessions =
             (seeded ?? [])
                 .activeSessions()
@@ -1235,9 +1647,19 @@ final class ProjectListHomeViewModel {
 
     /// Active rows can be snoozed; archived and settled rows come from the restore list.
     private func sessionActionDetails(sessionId: String, worktree: String) -> SessionActionDetails {
-        guard case let .loaded(sections, _, _, _) = state,
-              let section = sections.first(where: { $0.worktree == worktree })
-        else { return SessionActionDetails(lifecycle: .active, snoozeBlockReason: nil) }
+        guard case let .loaded(sections, _, _, _) = state else {
+            return SessionActionDetails(lifecycle: .active, snoozeBlockReason: nil)
+        }
+        // Long-press passes the session directory (main). That matches the added path for a
+        // single checkout, and the session id when the row runs in another worktree.
+        let section = sections.first(where: { $0.worktree == worktree })
+            ?? sections.first { candidate in
+                candidate.allSessions.contains { $0.id == sessionId }
+                    || candidate.archivedSessions.contains { $0.id == sessionId }
+            }
+        guard let section else {
+            return SessionActionDetails(lifecycle: .active, snoozeBlockReason: nil)
+        }
         if let active = section.allSessions.first(where: { $0.id == sessionId }) {
             let now = Int64(Date().timeIntervalSince1970 * 1000)
             let snoozed = HomeSettleFeed.isSnoozed(
@@ -1376,6 +1798,9 @@ final class ProjectListHomeViewModel {
         guard generation == addProjectGeneration else { return }
         let home = ServerPathPolicy.canonical(paths.home)
         addProjectInputs.added = added
+        addProjectInputs.addedProjectIDs = Set(homeProjects.compactMap { project in
+            project.key.hasPrefix(HomeProjectGrouping.pathKeyPrefix) ? nil : project.key
+        })
         addProjectInputs.home = home
         addProjectInputs.fieldText = ServerPathPolicy.fieldText(home)
         publishAddProjectSheet()
@@ -1385,7 +1810,7 @@ final class ProjectListHomeViewModel {
         // Suggestions and volumes are optional: failures hide them.
         async let projects = (try? await projectRepository.listProjects()) ?? []
         async let volumes: [DirectoryNode] = ServerPathPolicy.root(home) == "/" && !ServerPathPolicy.isWindows(home)
-            ? (try? await filesystemRepository.listDirectory(path: "/Volumes")) ?? []
+            ? (try? await filesystemRepository.listDirectory(path: "/Volumes"))?.folders ?? []
             : []
         if let directory = addProjectSheet.directory {
             await loadAddProjectListing(directory, generation: generation)
@@ -1394,6 +1819,7 @@ final class ProjectListHomeViewModel {
         let loadedVolumes = await volumes
         guard generation == addProjectGeneration else { return }
         addProjectInputs.serverProjects = loadedProjects
+        addProjectInputs.suggestionsResolved = true
         addProjectInputs.volumes = loadedVolumes.filter { !DirectoryListingPolicy.isHidden($0.name) }
         publishAddProjectSheet()
     }
@@ -1416,6 +1842,7 @@ final class ProjectListHomeViewModel {
         guard let directory = addProjectSheet.directory,
               addProjectInputs.listings[directory] == nil,
               addProjectInputs.listErrors[directory] == nil,
+              !addProjectInputs.missingDirectories.contains(directory),
               !addProjectListingsInFlight.contains(directory)
         else { return }
         let generation = addProjectGeneration
@@ -1433,12 +1860,13 @@ final class ProjectListHomeViewModel {
     private func loadAddProjectListing(_ directory: String, generation: Int) async {
         guard generation == addProjectGeneration,
               addProjectInputs.listings[directory] == nil,
+              !addProjectInputs.missingDirectories.contains(directory),
               !addProjectListingsInFlight.contains(directory)
         else { return }
         addProjectListingsInFlight.insert(directory)
         addProjectInputs.listErrors[directory] = nil
         publishAddProjectSheet()
-        let result: Result<[DirectoryNode], Error>
+        let result: Result<DirectoryListing, Error>
         do {
             result = .success(try await filesystemRepository.listDirectory(path: directory))
         } catch {
@@ -1447,19 +1875,59 @@ final class ProjectListHomeViewModel {
         guard generation == addProjectGeneration else { return }
         addProjectListingsInFlight.remove(directory)
         switch result {
-        case let .success(nodes):
-            addProjectInputs.listings[directory] = nodes
-            if ServerPathPolicy.isWindows(directory) {
-                let root = ServerPathPolicy.root(directory)
-                if !addProjectInputs.listedRoots.contains(root) {
-                    addProjectInputs.listedRoots.append(root)
-                }
-            }
+        case let .success(listing):
+            storeAddProjectListing(listing, for: directory)
+        case .failure(FilesystemError.directoryNotFound):
+            addProjectInputs.missingDirectories.insert(directory)
         case let .failure(error):
             DiagnosticLog.warning(.connection, "add project: folder listing failed", error: error)
             addProjectInputs.listErrors[directory] = AddProjectSheetState.listErrorMessage
         }
         publishAddProjectSheet()
+    }
+
+    private func storeAddProjectListing(_ listing: DirectoryListing, for directory: String) {
+        addProjectInputs.listings[directory] = listing
+        if ServerPathPolicy.isWindows(directory) {
+            let root = ServerPathPolicy.root(directory)
+            if !addProjectInputs.listedRoots.contains(root) {
+                addProjectInputs.listedRoots.append(root)
+            }
+        }
+    }
+
+    private func resetAddProjectLoads() {
+        addProjectListingsInFlight = []
+        addProjectSummaryQueue = []
+        addProjectSummariesInFlight = []
+        addProjectSummaryFailures = []
+    }
+
+    /// Starts queued row listings up to `folderSummaryConcurrency` at once. A listing that
+    /// lands fills the browser's cache, so entering that folder needs no new request.
+    private func startAddProjectSummaries() {
+        let generation = addProjectGeneration
+        while addProjectSummariesInFlight.count < AddProjectSheetState.folderSummaryConcurrency,
+              !addProjectSummaryQueue.isEmpty {
+            let path = addProjectSummaryQueue.removeFirst()
+            guard addProjectInputs.listings[path] == nil else { continue }
+            addProjectSummariesInFlight.insert(path)
+            let filesystemRepository = filesystemRepository
+            Task { [weak self] in
+                let listing = try? await filesystemRepository.listDirectory(path: path)
+                guard let self, generation == self.addProjectGeneration else { return }
+                self.addProjectSummariesInFlight.remove(path)
+                if let listing {
+                    if self.addProjectInputs.listings[path] == nil {
+                        self.storeAddProjectListing(listing, for: path)
+                        self.publishAddProjectSheet()
+                    }
+                } else {
+                    self.addProjectSummaryFailures.insert(path)
+                }
+                self.startAddProjectSummaries()
+            }
+        }
     }
 
     private func publishAddProjectSheet() {
@@ -1497,6 +1965,131 @@ final class ProjectListHomeViewModel {
                     await observeWorktree(worktree)
                 }
             }
+        worktreeEventTask?.cancel()
+        if let foregroundEventStream {
+            worktreeEventTask = Task { [weak self] in
+                for await event in foregroundEventStream.events() {
+                    if event.type == "worktree.updated", let projectID = event.namedProjectID {
+                        await self?.refetchWorktreeMark(projectID)
+                    } else if event.triggersHomeRefresh {
+                        self?.scheduleWorktreeExtrasRefresh()
+                    }
+                }
+            }
+        }
+    }
+
+    private func reloadWorktreeMarks(_ worktrees: [String]) {
+        worktreeMarkTask?.cancel()
+        worktreeMarks.onConnection(serverBaseURL)
+        worktreeMarks.setAddedPaths(worktrees)
+        worktreeInventoryCache.setAddedPaths(worktrees, server: serverBaseURL)
+        branchLookups.refresh()
+        loadServerProjectInfo()
+        worktreeMarkTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            for worktree in worktrees {
+                guard !Task.isCancelled else { return }
+                let update = await self.worktreeMarks.load(addedPath: worktree)
+                guard !Task.isCancelled else { return }
+                self.applyWorktreeMark(update)
+            }
+        }
+    }
+
+    private func refetchWorktreeMark(_ projectID: String) async {
+        guard worktreeMarks.knows(projectID) else { return }
+        for update in await worktreeMarks.refetch(projectID: projectID) {
+            applyWorktreeMark(update)
+        }
+    }
+
+    /// v1: sessions in worktrees nobody added refresh on the same session events (and debounce)
+    /// as the added paths' own lists.
+    private func scheduleWorktreeExtrasRefresh() {
+        worktreeExtrasRefreshTask?.cancel()
+        worktreeExtrasRefreshTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(LiveStoreRefreshPolicy.sessionDebounceMs))
+            guard !Task.isCancelled, let self else { return }
+            for update in await self.worktreeMarks.refreshExtras() {
+                guard !Task.isCancelled else { return }
+                self.applyWorktreeMark(update)
+            }
+        }
+    }
+
+    /// Server project names and VCS for display names; optional, a failure keeps folder names.
+    private func loadServerProjectInfo() {
+        serverProjectsTask?.cancel()
+        let projectRepository = projectRepository
+        serverProjectsTask = Task { @MainActor [weak self] in
+            guard let projects = try? await projectRepository.listProjects() else { return }
+            guard !Task.isCancelled, let self else { return }
+            var info: [String: (name: String?, isRepository: Bool)] = [:]
+            for project in projects where info[project.id] == nil {
+                info[project.id] = (project.name, project.isRepository)
+            }
+            self.serverProjectInfo = info
+        }
+    }
+
+    /// Pull to refresh asks every worktree for its branch again.
+    private func refreshBranches() {
+        branchLookups.refresh()
+        lookUpBranchesForResolvedProjects()
+    }
+
+    /// Branch names load behind the session list for every worktree of a resolved project.
+    private func lookUpBranchesForResolvedProjects() {
+        for project in homeProjects where project.memberPaths.contains(where: { projectResolutions[$0] != nil }) {
+            branchLookups.lookUp(project.worktrees.map(\.directory))
+        }
+    }
+
+    private func applyWorktreeMark(_ update: WorktreeMarkUpdate) {
+        if serverCanCreateWorktrees != worktreeRepository.canCreateWorktrees {
+            serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
+        }
+        worktreeInventories[update.addedPath] = update.inventory
+        worktreeInventoryCache.record(update.inventory, addedPath: update.addedPath, server: serverBaseURL)
+        if let projectID = update.projectID {
+            worktreeProjectIDs[update.addedPath] = projectID
+        }
+        if let resolution = update.resolution, projectResolutions[update.addedPath] != resolution {
+            projectResolutions[update.addedPath] = resolution
+        }
+        // A failed reload keeps the worktrees Home already knows.
+        if update.inventory != .failed, worktreeDirectories[update.addedPath] != update.directories {
+            worktreeDirectories[update.addedPath] = update.directories
+        }
+        // The inventory may have grown (v2 lists again after its refresh): ask for new worktrees.
+        lookUpBranchesForResolvedProjects()
+        guard case let .loaded(sections, showAdd, addProjectSheet, createError) = state else { return }
+        guard let section = sections.first(where: { $0.worktree == update.addedPath }) else { return }
+        let updated = ProjectSectionItem(
+            id: section.id,
+            worktree: section.worktree,
+            displayName: section.displayName,
+            pathSubtitle: section.pathSubtitle,
+            letter: section.letter,
+            letterAccent: section.letterAccent,
+            allSessions: worktreeMarks.applyExtras(
+                addedPath: update.addedPath,
+                current: section.allSessions,
+                extras: update.extras
+            ),
+            loadError: section.loadError,
+            sessionsFromCache: section.sessionsFromCache,
+            archivedSessions: section.archivedSessions,
+            projectID: worktreeProjectIDs[update.addedPath] ?? section.projectID,
+            worktreeInventory: update.inventory
+        )
+        state = .loaded(
+            sections: sections.map { $0.worktree == update.addedPath ? updated : $0 },
+            showAddProjectSheet: showAdd,
+            addProjectSheet: addProjectSheet,
+            projectSessionCreateError: createError
+        )
     }
 
     private func stopLiveObservations() {
@@ -1507,6 +2100,12 @@ final class ProjectListHomeViewModel {
         liveObservationTasks.forEach { $0.cancel() }
         liveObservationTasks = []
         observedWorktrees = []
+        worktreeMarkTask?.cancel()
+        worktreeMarkTask = nil
+        worktreeEventTask?.cancel()
+        worktreeEventTask = nil
+        worktreeExtrasRefreshTask?.cancel()
+        worktreeExtrasRefreshTask = nil
         liveSessionsByWorktree = [:]
         liveStatusesByWorktree = [:]
         liveReadyIdsByWorktree = [:]
@@ -1566,6 +2165,8 @@ final class ProjectListHomeViewModel {
                         )
                     }
                     self.applyLiveUpdate(worktree: worktree)
+                    // Straight from the session list: the combined update waits on all three streams.
+                    self.noteProjectLoad(worktree: worktree, snapshot: snapshot)
                 }
             }
             group.addTask { @MainActor in
@@ -1594,6 +2195,123 @@ final class ProjectListHomeViewModel {
     /// OpenCode pending approvals are GET /api/permission/request. T3 already flags them on the shell.
     private var observesHomePermissions: Bool {
         activeConnectionManager.currentProfile()?.engine != .t3
+    }
+
+    // MARK: - First project load
+
+    private func beginProjectLoad(_ worktree: String, showImmediately: Bool) {
+        projectLoads[worktree]?.timers.forEach { $0.cancel() }
+        projectLoadAttempt += 1
+        let attempt = projectLoadAttempt
+        var tracker = ProjectLoadTracker(attempt: attempt)
+        if showImmediately {
+            tracker.shownAt = .now
+            setProjectLoadState(worktree, .loading(isSlow: false))
+        } else {
+            setProjectLoadState(worktree, nil)
+        }
+        let timing = projectLoadTiming
+        tracker.timers = [
+            projectLoadTimer(worktree, attempt: attempt, after: timing.grace) { $0.exposeProjectLoad(worktree) },
+            projectLoadTimer(worktree, attempt: attempt, after: timing.slowThreshold) { $0.markProjectLoadSlow(worktree) },
+            projectLoadTimer(worktree, attempt: attempt, after: timing.timeout) { $0.failProjectLoad(worktree) },
+        ]
+        projectLoads[worktree] = tracker
+    }
+
+    private func projectLoadTimer(
+        _ worktree: String,
+        attempt: Int,
+        after delay: Duration,
+        fire: @escaping @MainActor (ProjectListHomeViewModel) -> Void
+    ) -> Task<Void, Never> {
+        Task { @MainActor [weak self] in
+            if delay > .zero {
+                try? await Task.sleep(for: delay)
+            } else {
+                await Task.yield()
+            }
+            guard !Task.isCancelled, let self, self.projectLoads[worktree]?.attempt == attempt else { return }
+            fire(self)
+        }
+    }
+
+    private func exposeProjectLoad(_ worktree: String) {
+        guard var tracker = projectLoads[worktree], tracker.isPending, tracker.shownAt == nil else { return }
+        tracker.shownAt = .now
+        projectLoads[worktree] = tracker
+        setProjectLoadState(worktree, .loading(isSlow: tracker.isSlow))
+    }
+
+    private func markProjectLoadSlow(_ worktree: String) {
+        guard var tracker = projectLoads[worktree], tracker.isPending else { return }
+        tracker.isSlow = true
+        projectLoads[worktree] = tracker
+        if tracker.shownAt != nil {
+            setProjectLoadState(worktree, .loading(isSlow: true))
+        }
+    }
+
+    private func failProjectLoad(_ worktree: String) {
+        guard var tracker = projectLoads[worktree], tracker.isPending else { return }
+        tracker.timers.forEach { $0.cancel() }
+        tracker.timers = []
+        tracker.failed = true
+        projectLoads[worktree] = tracker
+        setProjectLoadState(worktree, .failed(message: ProjectLoadState.failedMessage))
+    }
+
+    /// The first server list landed. Loading that was on screen stays for its minimum time.
+    private func completeProjectLoad(_ worktree: String) {
+        guard var tracker = projectLoads[worktree], !tracker.completing else { return }
+        tracker.timers.forEach { $0.cancel() }
+        tracker.timers = []
+        let remaining = tracker.failed ? nil : tracker.shownAt.map { projectLoadTiming.minimumVisible - $0.duration(to: .now) }
+        guard let remaining, remaining > .zero else {
+            clearProjectLoad(worktree)
+            return
+        }
+        tracker.completing = true
+        tracker.timers = [
+            projectLoadTimer(worktree, attempt: tracker.attempt, after: remaining) { $0.clearProjectLoad(worktree) },
+        ]
+        projectLoads[worktree] = tracker
+    }
+
+    private func noteProjectLoad(worktree: String, snapshot: SessionListSnapshot) {
+        guard let tracker = projectLoads[worktree], !tracker.completing else { return }
+        if snapshot.loadFailed {
+            failProjectLoad(worktree)
+        } else if !snapshot.isFromCache {
+            // Rows land with the load even when status or ready ids have not emitted yet.
+            if liveStatusesByWorktree[worktree] == nil || liveReadyIdsByWorktree[worktree] == nil {
+                updateSectionFromLiveData(
+                    worktree: worktree,
+                    sessions: snapshot.sessions,
+                    readyIds: liveReadyIdsByWorktree[worktree] ?? [],
+                    sessionsFromCache: false
+                )
+            }
+            completeProjectLoad(worktree)
+        }
+    }
+
+    private func clearProjectLoad(_ worktree: String) {
+        projectLoads.removeValue(forKey: worktree)?.timers.forEach { $0.cancel() }
+        setProjectLoadState(worktree, nil)
+    }
+
+    private func clearProjectLoads() {
+        projectLoads.values.forEach { $0.timers.forEach { $0.cancel() } }
+        projectLoads = [:]
+        if !projectLoadStates.isEmpty {
+            projectLoadStates = [:]
+        }
+    }
+
+    private func setProjectLoadState(_ worktree: String, _ loadState: ProjectLoadState?) {
+        guard projectLoadStates[worktree] != loadState else { return }
+        projectLoadStates[worktree] = loadState
     }
 
     private func applyLiveUpdate(worktree: String) {
@@ -1642,10 +2360,12 @@ final class ProjectListHomeViewModel {
             pathSubtitle: section.pathSubtitle,
             letter: section.letter,
             letterAccent: section.letterAccent,
-            allSessions: items,
+            allSessions: worktreeMarks.withLive(addedPath: worktree, primary: items),
             loadError: section.loadError,
             sessionsFromCache: sessionsFromCache,
-            archivedSessions: archivedByWorktree[worktree] ?? section.archivedSessions
+            archivedSessions: archivedByWorktree[worktree] ?? section.archivedSessions,
+            projectID: worktreeProjectIDs[worktree] ?? section.projectID,
+            worktreeInventory: worktreeInventories[worktree] ?? section.worktreeInventory
         )
         let updatedSections =
             sections.map { current in
@@ -1712,4 +2432,18 @@ private final class HomeEmptyPermissionLiveStore: PermissionLiveStore {
     }
 
     func clearCache() {}
+}
+
+/// Bookkeeping for one project's first load; ``ProjectLoadState`` is what the UI sees.
+private struct ProjectLoadTracker {
+    let attempt: Int
+    /// When loading became visible; nil while inside the grace delay.
+    var shownAt: ContinuousClock.Instant?
+    var isSlow = false
+    var failed = false
+    /// Loaded; only the minimum-visible hold is left.
+    var completing = false
+    var timers: [Task<Void, Never>] = []
+
+    var isPending: Bool { !failed && !completing }
 }

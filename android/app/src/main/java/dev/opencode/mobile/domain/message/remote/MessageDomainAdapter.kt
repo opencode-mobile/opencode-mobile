@@ -11,6 +11,7 @@ import dev.opencode.mobile.data.remote.dto.MessageToolStateDto
 import dev.opencode.mobile.data.remote.dto.SendMessagePartDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
 import dev.opencode.mobile.data.remote.dto.SendPromptModelDto
+import dev.opencode.mobile.data.remote.dto.V1ShellRequestDto
 import dev.opencode.mobile.data.remote.dto.V2AssistantContentDto
 import dev.opencode.mobile.data.remote.dto.V2FileAttachmentDto
 import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
@@ -22,25 +23,34 @@ import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PromptSkillDto
 import dev.opencode.mobile.data.remote.dto.V2PromptSourceDto
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
+import dev.opencode.mobile.data.remote.dto.V2ShellRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
 import dev.opencode.mobile.data.remote.HttpBodyResponseException
 import dev.opencode.mobile.data.remote.dto.V2ToolStateDto
 import dev.opencode.mobile.data.remote.dto.V2UnknownErrorDto
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
+import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.filesystem.ProjectFileReference
 import dev.opencode.mobile.domain.session.ServerErrorMessage
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
 
-class MessageDomainAdapter {
+class MessageDomainAdapter(
+    /** Receive time for a failure whose message has no completed time yet. */
+    private val nowEpochMs: () -> Long = System::currentTimeMillis,
+) {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun toMessage(dto: MessageDto): Message {
@@ -67,7 +77,7 @@ class MessageDomainAdapter {
             followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup = info.waiting == true,
             stopReason = stopReason,
-            failure = sessionFailure(info.error, stopReason),
+            failure = sessionFailure(info.error, stopReason, completedAtEpochMs = info.time?.completed),
         )
     }
 
@@ -96,7 +106,7 @@ class MessageDomainAdapter {
             followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup = info.waiting == true,
             stopReason = stopReason,
-            failure = sessionFailure(info.error, stopReason),
+            failure = sessionFailure(info.error, stopReason, completedAtEpochMs = info.time?.completed),
         )
     }
 
@@ -133,6 +143,11 @@ class MessageDomainAdapter {
                     timeStartEpochMs = dto.time?.start,
                     timeEndEpochMs = dto.time?.end,
                 )
+            // Client-only part of the v2 live notice projection; no v1 server sends it.
+            "notice" -> {
+                val id = dto.id ?: dto.messageId ?: return null
+                TimelineNoticeCodec.decode(dto.notice)?.let { MessagePart.Notice(id = id, notice = it) }
+            }
             else -> null
         }
     }
@@ -231,11 +246,23 @@ class MessageDomainAdapter {
             model = options.model?.let { SendPromptModelDto(providerId = it.providerId, modelId = it.modelId) },
             variant = options.variant,
             agent = options.mode,
+            messageId = options.messageId,
         )
 
+    fun toV1ShellRequest(options: ShellCommandOptions): V1ShellRequestDto =
+        V1ShellRequestDto(
+            agent = options.agent,
+            command = options.command,
+            model = options.model?.let { SendPromptModelDto(providerId = it.providerId, modelId = it.modelId) },
+        )
+
+    fun toV2ShellRequest(options: ShellCommandOptions): V2ShellRequestDto = V2ShellRequestDto(command = options.command)
+
     fun toV2PromptRequest(options: PromptSendOptions): V2PromptRequestDto {
+        val uploaded = options.attachments.mapNotNull { attachment -> attachment.uploadedServerPath?.let { attachment to it } }
         val files =
             options.attachments
+                .inlineAttachments()
                 .map { attachment ->
                     V2PromptFileDto(
                         uri = attachment.dataUrl,
@@ -258,21 +285,52 @@ class MessageDomainAdapter {
                     )
                 }.takeIf { it.isNotEmpty() }
         val skills =
-            options.skillIds
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .distinct()
-                .map { V2PromptSkillDto(id = it) }
-                .takeIf { it.isNotEmpty() }
+            ComposerMentionRouting
+                .skillParts(options.text, options.skillMentions)
+                .distinctBy { it.skillId }
+                .map { part ->
+                    V2PromptSkillDto(
+                        id = part.skillId,
+                        mention =
+                            V2PromptSourceDto(
+                                start = part.start,
+                                end = part.end,
+                                text = part.sourceValue,
+                            ),
+                    )
+                }.takeIf { it.isNotEmpty() }
         val fileMentions = v2FileMentions(options)
         return V2PromptRequestDto(
-            text = options.text,
+            id = options.messageId,
+            text = UploadedAttachments.promptText(options.text, uploaded.map { it.second }),
             files = files,
+            metadata = uploadedAttachmentsMetadata(uploaded),
             agents = agents,
             skills = skills,
             delivery = options.delivery.wireValue,
             fileMentions = fileMentions,
         )
+    }
+
+    /** `metadata.attachments` lets the timeline draw a chip for each uploaded file. */
+    private fun uploadedAttachmentsMetadata(uploaded: List<Pair<Attachment, String>>): JsonObject? {
+        if (uploaded.isEmpty()) return null
+        return buildJsonObject {
+            put(
+                "attachments",
+                buildJsonArray {
+                    uploaded.forEach { (attachment, path) ->
+                        add(
+                            buildJsonObject {
+                                put("name", attachment.filename)
+                                put("mime", attachment.mime)
+                                put("path", path)
+                            },
+                        )
+                    }
+                },
+            )
+        }
     }
 
     private fun fileReferenceParts(options: PromptSendOptions): List<SendMessagePartDto> {
@@ -353,14 +411,22 @@ class MessageDomainAdapter {
             when (dto.type) {
                 "agent-switched",
                 "location-switched",
-                -> agent = dto.agent ?: agent
-                "model-switched" -> model = dto.model
+                -> {
+                    agent = dto.agent ?: agent
+                    projectV2Notice(dto)?.let { messages += it }
+                }
+                "model-switched" -> {
+                    model = dto.model
+                    projectV2Notice(dto)?.let { messages += it }
+                }
+                "system" -> projectV2Notice(dto)?.let { messages += it }
                 "user" -> {
                     messages += projectV2User(dto, agent, model)
                     agent = dto.agent ?: agent
                     model = dto.model ?: model
                 }
-                "synthetic" -> projectV2Synthetic(dto, agent, model)?.let { messages += it }
+                "synthetic" ->
+                    (projectV2Notice(dto) ?: projectV2Synthetic(dto, agent, model))?.let { messages += it }
                 "skill" -> messages += projectV2Skill(dto, agent, model)
                 "shell" -> messages += projectV2Shell(dto, agent, model)
                 "assistant" -> {
@@ -403,12 +469,13 @@ class MessageDomainAdapter {
             userItems
                 .filter { it.id !in existingIds }
                 .map { item ->
-                    val text = item.payload?.text.orEmpty()
+                    val uploads = uploadedFileParts(item.id, item.payload?.metadata)
+                    val text = withoutUploadLines(item.payload?.text.orEmpty(), uploads)
                     Message(
                         id = item.id,
                         role = MessageRole.User,
                         text = text,
-                        parts = listOf(MessagePart.Text(text = text, id = "${item.id}:text:0")),
+                        parts = listOf(MessagePart.Text(text = text, id = "${item.id}:text:0")) + uploads,
                         model = context?.model,
                         modelProviderId = context?.modelProviderId,
                         modelId = context?.modelId,
@@ -430,7 +497,9 @@ class MessageDomainAdapter {
         model: V2ModelRefDto?,
     ): Message {
         val parts = mutableListOf<MessagePart>()
-        val text = dto.text.orEmpty()
+        val uploads = uploadedFileParts(dto)
+        // The prompt text names each uploaded file; the chips say it, so the bubble drops the lines.
+        val text = withoutUploadLines(dto.text.orEmpty(), uploads)
         if (text.isNotEmpty()) {
             parts +=
                 MessagePart.Text(
@@ -441,10 +510,12 @@ class MessageDomainAdapter {
         dto.files.forEachIndexed { index, file ->
             toV2FilePart(file, fallbackId = "${dto.id}:file:$index")?.let { parts += it }
         }
+        parts += uploads
         return messageFromV2(
             id = dto.id,
             role = MessageRole.User,
             parts = parts,
+            promptSkills = promptSkills(dto),
             mode = dto.agent ?: agent.ifBlank { null },
             model = dto.model ?: model,
             sentAtEpochMs = dto.time?.created,
@@ -454,8 +525,24 @@ class MessageDomainAdapter {
                     userCharacters =
                         text.length +
                             dto.files.sumOf { it.mention?.text?.length ?: it.source?.text?.length ?: 0 } +
-                            dto.agents.sumOf { it.mention?.text?.length ?: it.source?.text?.length ?: 0 },
+                            dto.agents.sumOf { it.mention?.text?.length ?: it.source?.text?.length ?: 0 } +
+                            dto.skills.sumOf { it.mention?.text?.length ?: 0 },
                 ),
+        )
+    }
+
+    /**
+     * A v2 timeline notice is its own row: no agent, model, text or context
+     * estimate, so it never changes a turn, the running context, or the read state.
+     */
+    private fun projectV2Notice(dto: V2SessionMessageDto): Message? {
+        val notice = V2TimelineNotices.fromMessage(dto) ?: return null
+        return messageFromV2(
+            id = dto.id,
+            role = MessageRole.Notice,
+            parts = listOf(MessagePart.Notice(id = dto.id, notice = notice)),
+            sentAtEpochMs = dto.time?.created,
+            completedAtEpochMs = dto.time?.completed,
         )
     }
 
@@ -544,7 +631,9 @@ class MessageDomainAdapter {
                             status = if (completed) ToolStatus.Completed else ToolStatus.Running,
                             title = "Shell",
                             callId = dto.callId,
+                            input = command.takeIf { it.isNotEmpty() }?.let { buildJsonObject { put("command", it) } },
                             output = v2ShellOutput(dto.output),
+                            metadata = dto.exit?.let { exit -> buildJsonObject { put("exit", exit) } },
                             id = "${dto.id}:tool",
                         ),
                     ),
@@ -571,13 +660,14 @@ class MessageDomainAdapter {
                         V2ContentPartId.of(dto.id, kind, ordinal.toString())
                     } ?: "${dto.id}:${content.type}:$index"
                 toV2AssistantPart(content, fallbackId = fallbackId)
-            }
+            } + uploadedFileParts(dto)
         val stopReason = MessageStopReason.from(finish = dto.finish, errorKind = dto.error?.type)
         val failure =
-            structuredFailure(dto.error, outcome = null)
-                ?: dto.retry?.error?.let { structuredFailure(it, outcome = null) }?.takeIf {
-                    dto.finish.equals("error", ignoreCase = true)
-                }
+            structuredFailure(dto.error, outcome = null, completedAtEpochMs = dto.time?.completed)
+                ?: dto.retry
+                    ?.error
+                    ?.let { structuredFailure(it, outcome = null, completedAtEpochMs = dto.time?.completed) }
+                    ?.takeIf { dto.finish.equals("error", ignoreCase = true) }
         return messageFromV2(
             id = dto.id,
             role = MessageRole.Assistant,
@@ -616,7 +706,13 @@ class MessageDomainAdapter {
             sentAtEpochMs = dto.time?.created,
             completedAtEpochMs = dto.time?.completed,
             contextEstimate = MessageContextEstimate(assistantCharacters = summary.length),
-            failure = structuredFailure(dto.error, outcome = null, source = FailureSource.Compaction),
+            failure =
+                structuredFailure(
+                    dto.error,
+                    outcome = null,
+                    source = FailureSource.Compaction,
+                    completedAtEpochMs = dto.time?.completed,
+                ),
         )
     }
 
@@ -625,7 +721,13 @@ class MessageDomainAdapter {
         dto: V2SessionMessageDto,
         messages: MutableList<Message>,
     ) {
-        val failure = structuredFailure(dto.error, outcome = dto.outcome, source = FailureSource.Execution) ?: return
+        val failure =
+            structuredFailure(
+                dto.error,
+                outcome = dto.outcome,
+                source = FailureSource.Execution,
+                completedAtEpochMs = dto.time?.completed,
+            ) ?: return
         if (messages.lastOrNull()?.failure?.line() == failure.line()) return
         messages +=
             messageFromV2(
@@ -643,6 +745,7 @@ class MessageDomainAdapter {
         role: MessageRole,
         parts: List<MessagePart>,
         fallbackText: String = "",
+        promptSkills: List<PromptSkill> = emptyList(),
         cost: Double? = null,
         tokens: MessageTokenUsage? = null,
         mode: String? = null,
@@ -662,6 +765,7 @@ class MessageDomainAdapter {
             failure = failure,
             text = flatText.ifBlank { fallbackText },
             parts = parts,
+            promptSkills = promptSkills,
             cost = cost,
             tokens = tokens,
             model = model?.id,
@@ -675,6 +779,24 @@ class MessageDomainAdapter {
             contextEstimate = contextEstimate,
         )
     }
+
+    /**
+     * Skills ride on the user message. Keep id and name only — `text` is the
+     * model-facing skill body and must not become a second chat bubble.
+     */
+    private fun promptSkills(dto: V2SessionMessageDto): List<PromptSkill> =
+        dto.skills.mapNotNull { skill ->
+            val id = skill.id?.trim().orEmpty().ifEmpty { skill.name?.trim().orEmpty() }
+            val name = skill.name?.trim().orEmpty().ifEmpty { id }
+            if (name.isEmpty()) return@mapNotNull null
+            PromptSkill(
+                id = id.ifEmpty { name },
+                name = name,
+                mentionText = skill.mention?.text?.trim()?.takeIf { it.isNotEmpty() },
+                mentionStart = skill.mention?.start,
+                mentionEnd = skill.mention?.end,
+            )
+        }
 
     private fun toV2AssistantPart(
         content: V2AssistantContentDto,
@@ -706,7 +828,7 @@ class MessageDomainAdapter {
                     title = (metadata?.get("title") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotEmpty() },
                     error = state?.error?.message?.let(SessionFailure::unwrap)?.takeIf { it.isNotEmpty() },
                     callId = content.id,
-                    input = jsonObjectFromInput(state?.input),
+                    input = jsonObjectFromInput(state?.input) ?: streamingInputPreview(state),
                     output = toolOutput(state),
                     metadata = metadata,
                     id = content.id ?: fallbackId,
@@ -721,6 +843,33 @@ class MessageDomainAdapter {
             }
             else -> null
         }
+
+    /** `metadata.attachments` of a v2 prompt: files the client uploaded and named in the text. */
+    private fun uploadedFileParts(dto: V2SessionMessageDto): List<MessagePart.File> = uploadedFileParts(dto.id, dto.metadata)
+
+    private fun uploadedFileParts(
+        messageId: String,
+        metadata: JsonObject?,
+    ): List<MessagePart.File> =
+        UploadedAttachments.parse(metadata).mapIndexed { index, upload ->
+            MessagePart.File(
+                id = "$messageId:upload:$index",
+                filename = upload.name,
+                mime = upload.mime,
+                kind = upload.kind,
+                dataUrl = "",
+                serverPath = upload.path,
+            )
+        }
+
+    private fun withoutUploadLines(
+        text: String,
+        uploads: List<MessagePart.File>,
+    ): String =
+        UploadedAttachments.stripLines(
+            text,
+            uploads.mapNotNull { file -> file.serverPath?.let { UploadedAttachment(file.filename, file.mime, it) } },
+        )
 
     private fun toV2FilePart(
         file: V2FileAttachmentDto,
@@ -776,6 +925,14 @@ class MessageDomainAdapter {
             else -> null
         }
 
+    /** A tool whose arguments are still streaming keeps the partial text as its preview. */
+    private fun streamingInputPreview(state: V2ToolStateDto?): JsonObject? {
+        if (state?.status != "streaming" && state?.status != "pending") return null
+        val raw = state.input as? JsonPrimitive ?: return null
+        if (!raw.isString) return null
+        return buildJsonObject { put(ToolArgumentsPreview.INPUT_KEY, raw.content) }
+    }
+
     private fun toolOutput(state: V2ToolStateDto?): String? {
         val texts =
             state
@@ -816,6 +973,8 @@ class MessageDomainAdapter {
             "assistant" -> MessageRole.Assistant
             "command" -> MessageRole.Command
             "tool" -> MessageRole.Tool
+            // Client-only role of the v2 live notice projection; no v1 server sends it.
+            "notice" -> MessageRole.Notice
             else -> MessageRole.Unknown
         }
 
@@ -829,6 +988,7 @@ class MessageDomainAdapter {
     private fun sessionFailure(
         error: MessageErrorInfoDto?,
         stopReason: MessageStopReason?,
+        completedAtEpochMs: Long?,
     ): SessionFailure? {
         if (stopReason == MessageStopReason.Interrupted) return null
         return SessionFailure.fromV1(
@@ -839,6 +999,8 @@ class MessageDomainAdapter {
             isRetryable = error?.data?.isRetryable,
             providerId = error?.data?.providerID,
             retries = error?.data?.retries,
+            retryAfterMs = error?.data?.retryAfterMs,
+            recordedAtEpochMs = recordedAt(error?.data?.retryAfterMs, completedAtEpochMs),
         )
     }
 
@@ -846,6 +1008,7 @@ class MessageDomainAdapter {
         error: V2UnknownErrorDto?,
         outcome: String?,
         source: FailureSource = FailureSource.Step,
+        completedAtEpochMs: Long?,
     ): SessionFailure? =
         SessionFailure.fromV2(
             type = error?.type,
@@ -854,7 +1017,15 @@ class MessageDomainAdapter {
             providerBody = error?.response?.body,
             outcome = outcome,
             source = source,
+            retryAfterMs = error?.retryAfterMs,
+            recordedAtEpochMs = recordedAt(error?.retryAfterMs, completedAtEpochMs),
         )
+
+    /** The failed message's completion time, else when the app received it. Only a retry hint needs it. */
+    private fun recordedAt(
+        retryAfterMs: Long?,
+        completedAtEpochMs: Long?,
+    ): Long? = if (retryAfterMs == null) null else completedAtEpochMs ?: nowEpochMs()
 
     private fun httpMessage(body: String?): String {
         val friendly = ServerErrorMessage.userFacing(body)
@@ -874,6 +1045,7 @@ class MessageDomainAdapter {
                     is MessagePart.File,
                     is MessagePart.Compaction,
                     is MessagePart.Reasoning,
+                    is MessagePart.Notice,
                     -> null
                 }
             }
@@ -942,6 +1114,17 @@ class MessageDomainAdapter {
     private fun Int?.orZero(): Int = this ?: 0
 
     private fun toFilePart(dto: MessagePartDto): MessagePart.File? {
+        dto.serverPath?.takeIf { it.isNotBlank() }?.let { path ->
+            val mime = dto.mime?.lowercase() ?: AttachmentMime.BINARY
+            return MessagePart.File(
+                id = dto.id ?: path,
+                filename = dto.filename?.takeIf { it.isNotBlank() } ?: "Attachment",
+                mime = mime,
+                kind = AttachmentDataUrl.kindOrFile(mime),
+                dataUrl = "",
+                serverPath = path,
+            )
+        }
         val dataUrl = dto.url?.takeIf { it.isNotBlank() }.orEmpty()
         val mime =
             (

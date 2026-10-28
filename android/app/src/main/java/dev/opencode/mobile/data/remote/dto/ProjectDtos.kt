@@ -17,6 +17,7 @@ data class ProjectDto(
     val directory: String? = null,
     val vcs: String? = null,
     val time: ProjectTimeDto? = null,
+    val name: String? = null,
 ) {
     val resolvedWorktree: String
         get() =
@@ -25,7 +26,10 @@ data class ProjectDto(
                 ?: error("Project requires worktree or directory")
 }
 
-/** Project timestamps in epoch ms; v1 sends `updated`, v2 also `active`. */
+/**
+ * Project timestamps in epoch ms; v1 sends `updated`, v2 also `active`, and `archived` once the
+ * server archived a project whose directories are gone (v2.0.27+).
+ */
 @Serializable
 data class ProjectTimeDto(
     val created: Long? = null,

@@ -1,11 +1,9 @@
 import FactoryKit
 import SwiftUI
 
-struct TerminalsCatalogRoute: Hashable {}
-
 struct TerminalsCatalogView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    var splitGate = OpenCodeSplitLayoutGate()
     @State private var viewModel: TerminalsCatalogViewModel
     @State private var selected: TerminalRoute?
     var onOpen: (String, String, String) -> Void
@@ -18,9 +16,9 @@ struct TerminalsCatalogView: View {
         self.onOpen = onOpen
     }
 
-    /// Same breakpoint as Home: iPad at regular width keeps the list beside the shell.
+    /// Same breakpoint as Home: a wide window keeps the list beside the shell.
     private var isSplitLayout: Bool {
-        OpenCodeSplitPaneLayout.usesSplitLayout(horizontalSizeClass: horizontalSizeClass)
+        splitGate.usesSplitLayout
     }
 
     var body: some View {
@@ -191,7 +189,7 @@ struct TerminalsCatalogView: View {
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textWeak)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 16)
+                    .openCodeBottomSheetContentInset()
                     .padding(.bottom, 8)
             }
             if viewModel.projects.isEmpty {

@@ -69,6 +69,16 @@ internal class ProtocolSelectedSessionRemote(
         directory: String?,
     ): Session = selected().forkSession(id, atMessageId, directory)
 
+    override suspend fun moveSession(
+        id: String,
+        directory: String,
+    ) = selected().moveSession(id, directory)
+
+    override suspend fun askSideQuestion(
+        sessionId: String,
+        question: String,
+    ): String = selected().askSideQuestion(sessionId, question)
+
     override suspend fun abortSession(
         id: String,
         directory: String?,
@@ -125,6 +135,11 @@ internal class ProtocolSelectedSessionRemote(
         id: String,
         directory: String?,
     ): Boolean = selected().unrevertSession(id, directory)
+
+    override suspend fun commitRevert(
+        id: String,
+        directory: String?,
+    ): Boolean = selected().commitRevert(id, directory)
 
     override suspend fun respondToPermission(
         sessionId: String,

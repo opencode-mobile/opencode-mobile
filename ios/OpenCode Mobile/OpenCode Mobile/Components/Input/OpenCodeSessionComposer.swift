@@ -27,6 +27,14 @@ enum OpenCodeSessionComposerState {
         let stopEnabled: Bool
         let followUpDelivery: FollowUpDelivery?
         let showDictationButton: Bool
+        /// The draft starts with `!` and Send runs it as a shell command. The `!` is highlighted
+        /// and a selected Shell badge replaces the model and agent chips; tapping it sends
+        /// `.exitShellMode`.
+        let shellMode: Bool
+        /// Send asks a `/btw` side question instead of prompting. A selected `/btw` badge replaces
+        /// the model and agent chips and the field shows its own placeholder; tapping the badge or
+        /// deleting on an empty field sends `.exitSideQuestionMode`.
+        let sideQuestionMode: Bool
 
         init(
             text: String,
@@ -52,7 +60,9 @@ enum OpenCodeSessionComposerState {
             showStop: Bool,
             stopEnabled: Bool,
             followUpDelivery: FollowUpDelivery? = nil,
-            showDictationButton: Bool = false
+            showDictationButton: Bool = false,
+            shellMode: Bool = false,
+            sideQuestionMode: Bool = false
         ) {
             self.text = text
             self.mentionRanges = mentionRanges
@@ -78,6 +88,8 @@ enum OpenCodeSessionComposerState {
             self.stopEnabled = stopEnabled
             self.followUpDelivery = followUpDelivery
             self.showDictationButton = showDictationButton
+            self.shellMode = shellMode
+            self.sideQuestionMode = sideQuestionMode
         }
     }
 
@@ -231,7 +243,13 @@ enum OpenCodeSessionComposerAction {
     case attach
     case openCommands
     case removeAttachment(String)
+    /// An image or file was pasted into the prompt; only sent while the prompt's `attachEnabled`.
+    case pasteAttachments([NSItemProvider])
     case cancelRevert
+    /// Drop the leading `!` so the draft is a prompt again.
+    case exitShellMode
+    /// Leave `/btw` side-question mode; the draft stays.
+    case exitSideQuestionMode
     case send
     case toggleFollowUp
     case stop
@@ -263,6 +281,7 @@ struct OpenCodeSessionComposerDictation: Equatable {
     var level: Double
     var status: String
     var startedAt: Date
+    var languageLabel: String = ""
 }
 
 /// UIKit text input owned by the composer prompt. Lets keyboard-shortcut focus
@@ -279,6 +298,9 @@ struct OpenCodeSessionComposer: View {
     /// Called with true when the prompt input gains keyboard focus, false when it loses it.
     let onInputFocusChange: ((Bool) -> Void)?
     let dictation: OpenCodeSessionComposerDictation?
+    /// True while an image or file is dragged over the screen that hosts the composer: the prompt
+    /// leaves the drop to that screen instead of taking it as text.
+    let attachmentDragActive: Bool
     let onAction: (OpenCodeSessionComposerAction) -> Void
     private let status: AnyView?
 
@@ -287,6 +309,7 @@ struct OpenCodeSessionComposer: View {
         focusRequestToken: Int = 0,
         onInputFocusChange: ((Bool) -> Void)? = nil,
         dictation: OpenCodeSessionComposerDictation? = nil,
+        attachmentDragActive: Bool = false,
         onAction: @escaping (OpenCodeSessionComposerAction) -> Void,
         status: AnyView? = nil
     ) {
@@ -294,6 +317,7 @@ struct OpenCodeSessionComposer: View {
         self.focusRequestToken = focusRequestToken
         self.onInputFocusChange = onInputFocusChange
         self.dictation = dictation
+        self.attachmentDragActive = attachmentDragActive
         self.onAction = onAction
         self.status = status
     }
@@ -371,13 +395,18 @@ struct OpenCodeSessionComposer: View {
 
             OpenCodeMentionTextView(
                 text: prompt.text,
-                mentionRanges: prompt.mentionRanges,
+                // The shell prefix shares the mention highlight so the mode reads in the text itself.
+                mentionRanges: prompt.shellMode ? [0 ..< 1] + prompt.mentionRanges : prompt.mentionRanges,
                 selectionStart: prompt.selectionStart,
                 selectionEnd: prompt.selectionEnd,
                 selectionRevision: prompt.selectionRevision,
-                placeholder: "Ask anything...",
+                placeholder: prompt.sideQuestionMode ? Self.sideQuestionPlaceholder : "Ask anything...",
                 focusRequestToken: focusRequestToken,
                 onFocusChange: onInputFocusChange,
+                literalInput: prompt.shellMode,
+                onDeleteBackwardWhenEmpty: prompt.sideQuestionMode ? { onAction(.exitSideQuestionMode) } : nil,
+                onPasteAttachments: prompt.attachEnabled ? { onAction(.pasteAttachments($0)) } : nil,
+                acceptsTextDrops: !attachmentDragActive,
                 onChange: { text, selectionStart, selectionEnd in
                     onAction(.textChanged(text: text, selectionStart: selectionStart, selectionEnd: selectionEnd))
                 }
@@ -425,14 +454,17 @@ struct OpenCodeSessionComposer: View {
 
                     OpenCodeButton(
                         variant: .iconCircle(
-                            prompt.followUpDelivery == .steer ? .arrowWarmUp : .arrowUpward,
+                            prompt.followUpDelivery == .steer && !prompt.sideQuestionMode ? .arrowWarmUp : .arrowUpward,
                             accessibilityLabel: Self.sendLabel(
                                 followUpDelivery: prompt.followUpDelivery,
-                                hasActiveWork: prompt.showStop
+                                hasActiveWork: prompt.showStop,
+                                shellMode: prompt.shellMode,
+                                sideQuestionMode: prompt.sideQuestionMode
                             )
                         ),
                         enabled: prompt.sendEnabled,
-                        contrast: .accent,
+                        // A side question is not a prompt, so its Send does not look like one.
+                        contrast: prompt.sideQuestionMode ? .high : .accent,
                         longPress: prompt.followUpDelivery == nil ? nil : { onAction(.toggleFollowUp) },
                         action: {
                             // OPE-138: send leaves editing intent. Mention UITextView is
@@ -473,6 +505,7 @@ struct OpenCodeSessionComposer: View {
             level: dictation.level,
             status: dictation.status,
             elapsed: elapsed,
+            languageLabel: dictation.languageLabel,
             onCancel: { onAction(.dictationCancel) },
             onInsert: { onAction(.dictationInsert) },
             onUnavailableAction: { onAction(dictationUnavailableAction(dictation.variant)) }
@@ -485,7 +518,7 @@ struct OpenCodeSessionComposer: View {
         switch variant {
         case .unavailable(.permissionDenied):
             .dictationOpenSettings
-        case .unavailable(.modelNotInstalled):
+        case .unavailable(.modelNotInstalled), .unavailable(.modelDownloading), .unavailable(.modelDownloadFailed):
             .dictationDownload
         case .unavailable(.recognizerError):
             .dictationRetry
@@ -548,29 +581,50 @@ struct OpenCodeSessionComposer: View {
     private func pickerChipsRow(_ prompt: OpenCodeSessionComposerState.Prompt) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             let chips = HStack(spacing: 8) {
-                if prompt.showModel {
+                if prompt.sideQuestionMode {
                     OpenCodeChoiceBadge(
-                        label: prompt.selectedModelLabel,
-                        selected: false,
+                        label: "/btw",
+                        selected: true,
                         variant: .glass,
-                        action: { onAction(.selectModel) }
+                        action: { onAction(.exitSideQuestionMode) }
                     )
-                }
-                if prompt.showAgent {
+                    .accessibilityLabel("Side question mode")
+                    .accessibilityHint("Leave side question mode")
+                } else if prompt.shellMode {
+                    // Like the TUI, shell mode shows "Shell" in place of the agent and model.
                     OpenCodeChoiceBadge(
-                        label: prompt.selectedModeLabel,
-                        selected: false,
+                        label: "Shell",
+                        selected: true,
                         variant: .glass,
-                        action: { onAction(.selectMode) }
+                        action: { onAction(.exitShellMode) }
                     )
-                }
-                if prompt.showVariant {
-                    OpenCodeChoiceBadge(
-                        label: prompt.selectedVariantLabel,
-                        selected: false,
-                        variant: .glass,
-                        action: { onAction(.selectVariant) }
-                    )
+                    .accessibilityLabel("Shell mode")
+                    .accessibilityHint("Leave shell mode")
+                } else {
+                    if prompt.showModel {
+                        OpenCodeChoiceBadge(
+                            label: prompt.selectedModelLabel,
+                            selected: false,
+                            variant: .glass,
+                            action: { onAction(.selectModel) }
+                        )
+                    }
+                    if prompt.showAgent {
+                        OpenCodeChoiceBadge(
+                            label: prompt.selectedModeLabel,
+                            selected: false,
+                            variant: .glass,
+                            action: { onAction(.selectMode) }
+                        )
+                    }
+                    if prompt.showVariant {
+                        OpenCodeChoiceBadge(
+                            label: prompt.selectedVariantLabel,
+                            selected: false,
+                            variant: .glass,
+                            action: { onAction(.selectVariant) }
+                        )
+                    }
                 }
                 if prompt.showProvider, !prompt.providerLabel.isEmpty {
                     OpenCodeChoiceBadge(
@@ -922,8 +976,17 @@ struct OpenCodeSessionComposer: View {
     private static let permissionDetailMaxHeight: CGFloat = 160
 
     /// Send button label. Steer/Queue only describe what Send does while work is running;
-    /// an idle session just sends.
-    nonisolated static func sendLabel(followUpDelivery: FollowUpDelivery?, hasActiveWork: Bool) -> String {
+    /// an idle session just sends. A shell command always runs now.
+    static let sideQuestionPlaceholder = "Side question, not added to chat"
+
+    nonisolated static func sendLabel(
+        followUpDelivery: FollowUpDelivery?,
+        hasActiveWork: Bool,
+        shellMode: Bool = false,
+        sideQuestionMode: Bool = false
+    ) -> String {
+        if sideQuestionMode { return "Ask side question" }
+        if shellMode { return "Run shell command" }
         guard hasActiveWork, let followUpDelivery else { return "Send" }
         switch followUpDelivery {
         case .steer: return "Send as Steer"
@@ -961,6 +1024,10 @@ private struct QuestionCustomTextField: View {
     let enabled: Bool
     let onChange: (String) -> Void
 
+    /// Custom answer grows from 3 lines up to 5, then scrolls.
+    private static let minLines = 3
+    private static let maxLines = 5
+
     @State private var draft: String = ""
 
     var body: some View {
@@ -973,7 +1040,9 @@ private struct QuestionCustomTextField: View {
                 }
             ),
             hint: "Enter a custom answer",
-            enabled: enabled
+            enabled: enabled,
+            minLines: Self.minLines,
+            maxLines: Self.maxLines
         )
         .onAppear { draft = text }
         .onChange(of: text) { _, newValue in
@@ -1007,7 +1076,7 @@ private struct QuestionCustomTextField: View {
                 requestID: "permission-preview",
                 sessionID: "session-preview",
                 permission: "external_directory",
-                patterns: ["/Users/ivan/Projects/opencode-web/**"]
+                patterns: ["/Users/example/Projects/opencode-web/**"]
             )
         ),
         onAction: { _ in }
@@ -1049,6 +1118,49 @@ private struct QuestionCustomTextField: View {
                 sendEnabled: true,
                 showStop: false,
                 stopEnabled: false
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+    .environment(\.colorScheme, .dark)
+}
+
+#Preview("Shell mode composer") {
+    OpenCodeSessionComposer(
+        state: .prompt(
+            .init(
+                text: "!git status",
+                selectedModelLabel: "Claude Sonnet 4",
+                selectedModeLabel: "Build",
+                selectedVariantLabel: "Default",
+                showVariant: true,
+                sendEnabled: true,
+                attachEnabled: false,
+                showStop: false,
+                stopEnabled: false,
+                shellMode: true
+            )
+        ),
+        onAction: { _ in }
+    )
+    .openCodeTheme()
+}
+
+#Preview("Shell mode composer dark") {
+    OpenCodeSessionComposer(
+        state: .prompt(
+            .init(
+                text: "!git status",
+                selectedModelLabel: "Claude Sonnet 4",
+                selectedModeLabel: "Build",
+                selectedVariantLabel: "Default",
+                showVariant: true,
+                sendEnabled: true,
+                attachEnabled: false,
+                showStop: false,
+                stopEnabled: false,
+                shellMode: true
             )
         ),
         onAction: { _ in }

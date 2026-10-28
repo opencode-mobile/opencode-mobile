@@ -221,6 +221,10 @@ final class T3MessageRepository: MessageRepository {
         )
     }
 
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {
+        throw MessageError.http(statusCode: 400, message: "Shell commands are not available on this connection.")
+    }
+
     private func resolvedThread(id: String) async throws -> T3Thread {
         if let cached = client.cachedThread(id: id) { return cached }
         let snapshot = try await client.fetchShell(force: true)

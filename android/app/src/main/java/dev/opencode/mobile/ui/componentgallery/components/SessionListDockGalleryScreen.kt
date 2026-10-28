@@ -37,7 +37,8 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
     // until someone drags one. Lets the gallery exercise reorder and swipe-to-
     // remove on the same rows.
     var worktreeOrder by rememberSaveable { mutableStateOf<List<String>?>(null) }
-    val filterTabs =
+    var loadStep by rememberSaveable { mutableStateOf(GalleryScopeLoadStep.None) }
+    val baseTabs =
         run {
             val base =
                 if (oneProject) {
@@ -49,6 +50,7 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
             val byId = base.associateBy { it.id }
             base.filter { it.isAll } + order.mapNotNull { byId[it] }
         }
+    val filterTabs = galleryTabsWithNewProject(base = baseTabs, oneProject = oneProject, load = loadStep.load)
 
     Box(modifier = modifier.fillMaxSize()) {
         Row(
@@ -68,6 +70,20 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
                             sessionListDockGalleryOneProjectFilterTabs.first().id
                         } else {
                             SessionListFilterTab.ALL_ID
+                        }
+                    loadStep = GalleryScopeLoadStep.None
+                },
+            )
+            OpenCodeChoiceBadge(
+                label = loadStep.label,
+                selected = loadStep != GalleryScopeLoadStep.None,
+                onClick = {
+                    loadStep = loadStep.next()
+                    selectedFilterId =
+                        when {
+                            loadStep != GalleryScopeLoadStep.None -> GALLERY_NEW_PROJECT_WORKTREE
+                            oneProject -> sessionListDockGalleryOneProjectFilterTabs.first().id
+                            else -> SessionListFilterTab.ALL_ID
                         }
                 },
             )
@@ -133,10 +149,7 @@ fun SessionListDockGalleryScreen(modifier: Modifier = Modifier) {
             OpenCodeBottomSheetEntry(
                 title = tab.title,
                 startDecorator =
-                    BottomSheetEntryDecorator.Icon(
-                        imageVector = OpenCodeIcons.Folder,
-                        contentDescription = null,
-                    ),
+                    BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
                 onClick = { showNewSessionPicker = false },
             )
         }

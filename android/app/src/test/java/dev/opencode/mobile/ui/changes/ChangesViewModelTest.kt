@@ -2,7 +2,12 @@ package dev.opencode.mobile.ui.changes
 
 import dev.opencode.mobile.domain.connection.ServerCapabilities
 import dev.opencode.mobile.domain.connection.ServerProtocol
+import dev.opencode.mobile.domain.connection.V2ServerFeatures
+import dev.opencode.mobile.domain.event.EventStreamConnectionState
+import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.PermissionDecision
@@ -18,10 +23,13 @@ import dev.opencode.mobile.ui.sessionchat.LastTurnReviewChangesStore
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesPillVisibility
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.SessionChatUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -321,6 +329,57 @@ class ChangesViewModelTest {
             assertEquals(ReviewChangesSummary(1, 2, 1, "user-1"), snapshot?.summary)
         }
 
+    @Test fun lastTurnRefetchesWhenItsSessionGoesIdle() =
+        runTest(dispatcher) {
+            val events = TestEventStream()
+            val repository =
+                FakeRepository(
+                    results =
+                        ArrayDeque(
+                            listOf(
+                                Result.success(listOf(file("A.kt"))),
+                                Result.success(listOf(file("A.kt"), file("B.kt"))),
+                            ),
+                        ),
+                )
+            val viewModel =
+                ChangesViewModel(
+                    repository,
+                    capabilitiesProvider = { ServerCapabilities.forProtocol(ServerProtocol.V2, V2ServerFeatures(sessionTurnDiff = true)) },
+                    foregroundEventStream = events,
+                )
+            viewModel.bind("s", "/repo", "user-1")
+            advanceUntilIdle()
+
+            events.events.emit(OpencodeEvent("session.idle", sessionId = "other"))
+            events.events.emit(OpencodeEvent("session.status", sessionId = "s"))
+            advanceUntilIdle()
+            assertEquals(1, repository.requests.size)
+
+            events.events.emit(OpencodeEvent("session.idle", sessionId = "s"))
+            advanceUntilIdle()
+
+            assertEquals(listOf(Request("s", "user-1", "/repo"), Request("s", "user-1", "/repo")), repository.requests)
+            val content = viewModel.uiState.value.phase as ChangesPhase.Content
+            assertEquals(listOf("A.kt", "B.kt"), content.changeSet.files.map(FileDiff::path))
+        }
+
+    @Test fun v2WithTurnDiffShowsLastTurn() =
+        runTest(dispatcher) {
+            val repository = FakeRepository(results = ArrayDeque(listOf(Result.success(listOf(file("A.kt"))))))
+            val viewModel =
+                ChangesViewModel(
+                    repository,
+                    ServerCapabilities.forProtocol(ServerProtocol.V2, V2ServerFeatures(sessionTurnDiff = true)),
+                )
+            viewModel.bind("s", "/repo", "user-1")
+            advanceUntilIdle()
+
+            assertEquals(ChangeSource.LastTurn, viewModel.uiState.value.selectedSource)
+            assertEquals(listOf(ChangeSource.LastTurn), viewModel.uiState.value.availableSources)
+            assertEquals(listOf(Request("s", "user-1", "/repo")), repository.requests)
+        }
+
     @Test fun emptyOrFailedLastTurnKeepsSummaryHidden() =
         runTest(dispatcher) {
             val emptyStore = LastTurnReviewChangesStore()
@@ -443,10 +502,88 @@ class ChangesViewModelTest {
         assertNull(multi?.initialFilePath)
     }
 
+    @Test fun lastTurnSpansLocationChangeWhenAMoveSitsBetweenAssistantSteps() {
+        val state =
+            SessionChatUiState(
+                "s",
+                "Session",
+                SessionChatTimelineState.Ready,
+                messages =
+                    listOf(
+                        row("user", MessageRole.User),
+                        row("before", MessageRole.Assistant),
+                        moved("moved", "/repo/wt"),
+                        row("after", MessageRole.Assistant),
+                        row("later-user", MessageRole.User),
+                        row("later", MessageRole.Assistant),
+                    ),
+            )
+        assertTrue(state.lastTurnSpansLocationChange("user"))
+        assertFalse(state.lastTurnSpansLocationChange("later-user"))
+    }
+
+    @Test fun moveBeforeAnyAssistantDoesNotBlockTheTurn() {
+        val state =
+            SessionChatUiState(
+                "s",
+                "Session",
+                SessionChatTimelineState.Ready,
+                messages =
+                    listOf(
+                        row("user", MessageRole.User),
+                        moved("moved", "/repo/wt"),
+                        row("after", MessageRole.Assistant),
+                    ),
+            )
+        assertFalse(state.lastTurnSpansLocationChange("user"))
+    }
+
+    @Test fun locationChangeRejectionUsesAPlainSentence() =
+        runTest(dispatcher) {
+            val repository =
+                FakeRepository(
+                    results =
+                        ArrayDeque(
+                            listOf(
+                                Result.failure(
+                                    SessionError.Http(
+                                        statusCode = 400,
+                                        message = "Bad response",
+                                        body =
+                                            """{"_tag":"InvalidRequestError","message":"Turn range spans a location change","field":"to"}""",
+                                    ),
+                                ),
+                            ),
+                        ),
+                    vcsInfoResults = ArrayDeque(listOf(Result.success(VcsInfo("feature", "main")))),
+                )
+            val viewModel = ChangesViewModel(repository)
+            viewModel.bind("s", "/w", "user", ChangeSource.LastTurn)
+            advanceUntilIdle()
+            assertEquals(ChangesPhase.Error(TurnDiffUnavailable.MESSAGE), viewModel.uiState.value.phase)
+        }
+
     private fun row(
         id: String,
         role: MessageRole,
     ) = SessionChatMessageItem(id, role, "", "", isPending = false)
+
+    private fun moved(
+        id: String,
+        directory: String,
+    ) = SessionChatMessageItem(
+        id = id,
+        role = MessageRole.Notice,
+        text = "",
+        metadataLabel = "",
+        blocks =
+            listOf(
+                SessionChatTimelineBlock.Notice(
+                    blockID = id,
+                    notice = TimelineNotice.Moved(directory),
+                ),
+            ),
+    )
 
     private fun file(
         path: String,
@@ -454,6 +591,15 @@ class ChangesViewModelTest {
         deletions: Int = 1,
         status: FileDiffStatus = FileDiffStatus.Modified,
     ) = FileDiff(path, "@@ -1 +1 @@\n-old\n+new", additions, deletions, status)
+}
+
+private class TestEventStream : ForegroundEventStream {
+    override val connectionState = MutableStateFlow(EventStreamConnectionState.Idle)
+    override val events = MutableSharedFlow<OpencodeEvent>()
+
+    override fun start() = Unit
+
+    override suspend fun stop() = Unit
 }
 
 private data class Request(

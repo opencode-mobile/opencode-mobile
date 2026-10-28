@@ -53,6 +53,8 @@ extension Container {
                 secureCredentialStore: self.secureCredentialStore(),
                 sessionModelSelectionStore: self.sessionModelSelectionStore(),
                 composerDraftStore: self.composerDraftStore(),
+                sessionCache: { Container.shared.sessionCache() },
+                feedbackRefreshTokenStore: KeychainFeedbackRefreshTokenStore(),
                 eventStream: { Container.shared.foregroundEventStream() },
                 syncCoordinator: { Container.shared.syncCoordinator() },
                 projectionCaches: { Container.shared.projectionCaches() },
@@ -108,6 +110,24 @@ extension Container {
 
     var projectDomainAdapter: Factory<ProjectDomainAdapter> {
         onMainActor { ProjectDomainAdapter() }.singleton
+    }
+
+    var worktreesAPIClient: Factory<WorktreesAPIClient> {
+        onMainActor { WorktreesAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+    }
+
+    var worktreeRepository: Factory<any WorktreeRepository> {
+        onMainActor {
+            DefaultWorktreeRepository(
+                api: self.worktreesAPIClient(),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
+    }
+
+    /// Home's worktree inventories, read by Session Chat for its first frame.
+    var worktreeInventoryCache: Factory<WorktreeInventoryCache> {
+        onMainActor { WorktreeInventoryCache() }.singleton
     }
 
     var projectRepository: Factory<any ProjectRepository> {
@@ -188,6 +208,19 @@ extension Container {
                 bodyUploader: DurableJSONUploader.shared
             )
         }.singleton
+    }
+
+    var attachmentUploadRepository: Factory<any AttachmentUploadRepository> {
+        onMainActor {
+            DefaultAttachmentUploadRepository(
+                api: AttachmentUploadAPIClient(connectionProvider: self.connectionProvider()),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
+    }
+
+    var attachmentImageLoader: Factory<any AttachmentImageLoading> {
+        onMainActor { AttachmentImageLoader(filesystem: self.filesystemAPIClient()) }.singleton
     }
 
     var messageDomainAdapter: Factory<MessageDomainAdapter> {
@@ -456,7 +489,8 @@ extension Container {
     var eventsAPIClient: Factory<EventsAPIClient> {
         onMainActor {
             EventsAPIClient(
-                connectionProvider: self.connectionProvider()
+                connectionProvider: self.connectionProvider(),
+                onConnectBudgetExceeded: { OpenCodeURLSessions.replaceRest() }
             )
         }.singleton
     }
@@ -503,7 +537,8 @@ extension Container {
                 protocolHint: { manager.protocolHint() },
                 cachedProtocol: { manager.serverProtocol },
                 protocolProbe: { await manager.currentProtocolOrProbe() },
-                engineProvider: { manager.currentProfile()?.engine ?? .opencode }
+                engineProvider: { manager.currentProfile()?.engine ?? .opencode },
+                protocolRedetect: { await manager.redetectProtocol() }
             )
         }.singleton
     }
@@ -629,9 +664,14 @@ extension Container {
                 sessionReadyStore: self.sessionReadyStore(),
                 messageRepository: self.messageRepository(),
                 modelCatalogStore: self.modelCatalogStore(),
-                sessionViewReporter: self.sessionViewReporter()
+                sessionViewReporter: self.sessionViewReporter(),
+                sideQuestionStore: self.sideQuestionStore()
             )
         }.singleton
+    }
+
+    var sideQuestionStore: Factory<SideQuestionStore> {
+        onMainActor { SideQuestionStore(sessionRepository: self.sessionRepository()) }.singleton
     }
 
     var sessionContextRepository: Factory<any SessionContextRepository> {
@@ -672,7 +712,10 @@ extension Container {
                 permissionLiveStore: self.permissionLiveStore(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
                 sessionCache: self.sessionCache(),
-                liveUpdates: self.liveUpdates()
+                liveUpdates: self.liveUpdates(),
+                worktreeRepository: self.worktreeRepository(),
+                foregroundEventStream: self.foregroundEventStream(),
+                worktreeInventoryCache: self.worktreeInventoryCache()
             )
         }
     }
@@ -709,10 +752,16 @@ extension Container {
                 ),
                 liveUpdates: self.liveUpdates(),
                 lastTurnReviewChangesStore: self.lastTurnReviewChangesStore(),
+                sideQuestionStore: self.sideQuestionStore(),
                 syncCoordinator: self.syncCoordinator(),
                 mcpRepository: self.mcpRepository(),
                 harnessRepository: DefaultT3HarnessRepository(client: self.t3EnvironmentClient()),
-                projectFilesRepository: self.projectFilesRepository()
+                projectFilesRepository: self.projectFilesRepository(),
+                attachmentUploadRepository: self.attachmentUploadRepository(),
+                attachmentImageLoader: self.attachmentImageLoader(),
+                worktreeRepository: self.worktreeRepository(),
+                projectRepository: self.projectRepository(),
+                worktreeInventoryCache: self.worktreeInventoryCache()
             )
         }
     }
@@ -723,6 +772,27 @@ extension Container {
                 sessionID: $0.sessionID,
                 worktree: $0.worktree,
                 repository: self.sessionContextRepository()
+            )
+        }
+    }
+
+    var feedbackSubmitter: Factory<any FeedbackSubmitter> {
+        onMainActor { OpenCodeReleaseObservability.makeFeedbackSubmitter() }.singleton
+    }
+
+    var feedbackViewModel: ParameterFactory<(screen: FeedbackScreen, screenshot: Data?), FeedbackViewModel> {
+        onMainActor {
+            FeedbackViewModel(
+                screen: $0.screen,
+                capturedScreenshot: $0.screenshot,
+                submitter: self.feedbackSubmitter(),
+                metadataProvider: DefaultFeedbackMetadataProvider(
+                    activeConnectionManager: self.activeConnectionManager()
+                ),
+                cooldownStore: UserDefaultsFeedbackCooldownStore(),
+                logRedactor: { [manager = self.activeConnectionManager()] in
+                    FeedbackLogRedactor(profile: manager.currentProfile())
+                }
             )
         }
     }
@@ -787,6 +857,11 @@ extension Container {
     }
 
     @MainActor
+    static func makeFeedbackViewModel(screen: FeedbackScreen, screenshot: Data?) -> FeedbackViewModel {
+        shared.feedbackViewModel((screen: screen, screenshot: screenshot))
+    }
+
+    @MainActor
     static func makeTerminalViewModel(worktree: String, ptyId: String? = nil) -> TerminalViewModel {
         shared.terminalViewModel((worktree: worktree, ptyId: ptyId))
     }
@@ -810,9 +885,17 @@ extension Container {
             HomeDisplayPreferences.shared.clear()
             MarkdownHighlightPreferences.shared.clear()
             AnalyticsConsentPreferences.shared.clear()
+            // Apply the reset default to Crashlytics and Analytics collection now, not at next launch.
+            OpenCodeReleaseObservability.setProductAnalyticsConsented(
+                AnalyticsConsentPreferences.shared.productAnalyticsConsented
+            )
+            AppLockPreferences.shared.clear()
             AppOnboardingPreferences.shared.clear()
             DeveloperToolsPreferences.shared.clear()
+            PerformanceOverlayPreferences.shared.clear()
             SessionChatDisplayPreferences.shared.clear()
+            // A wipe is a fresh install: settle the timeline now so the update-only picker never shows.
+            SessionChatDisplayPreferences.shared.resolveTimelineForInstall(existingInstall: false)
             SplitPanePreferences.shared.clear()
             FeatureFlags.shared.clearOverrides()
             MessageContentPreparer.shared.clearDocumentCache()

@@ -150,7 +150,7 @@ data class ModelSelectionOption(
         when (kind) {
             AttachmentKind.Image -> supportsImageInput
             AttachmentKind.Pdf -> supportsPdfInput
-            AttachmentKind.Text -> true
+            AttachmentKind.Text, AttachmentKind.File -> true
         }
 
     fun matchesFilter(query: String): Boolean {

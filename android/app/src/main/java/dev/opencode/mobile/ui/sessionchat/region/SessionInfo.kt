@@ -23,6 +23,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionRenameUiState
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.withStatus
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
@@ -97,6 +98,16 @@ class SessionInfo(
                 composerEnabled = liveUpdates.chrome.value.composerEnabled,
             )
         logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
+        startObserving(sessionId, worktree)
+    }
+
+    /** The bound session moved to [worktree]: keeps title and status, observes the new directory. */
+    fun moveDirectory(worktree: String) {
+        val sessionId = boundSessionId ?: return
+        if (boundWorktree == worktree) return
+        stopObserving()
+        boundWorktree = worktree
+        logI("move session=$sessionId worktree=$worktree")
         startObserving(sessionId, worktree)
     }
 
@@ -423,6 +434,7 @@ class SessionInfo(
         observationJob =
             scope.launch {
                 coroutineScope {
+                    launch { loadParent(sessionId, worktree) }
                     launch {
                         sessionStatusLiveStore.observeActivity(worktree).collect { snapshot ->
                             if (!isCurrentBinding(sessionId, worktree)) return@collect
@@ -442,6 +454,7 @@ class SessionInfo(
                                     authoritative = label,
                                     hasResolved = snapshot.seeded,
                                     retryCard = retryCard,
+                                    isRetrying = activity is SessionActivity.Retrying,
                                 )
                             }
                         }
@@ -487,10 +500,33 @@ class SessionInfo(
                                 _state.update { it.copy(errorMessage = sessionErrorMessage(event.rawProperties)) }
                             }
                             applySessionUpdatedTitle(event, sessionId)
+                            // Another client deleted the open session: leave instead of showing a dead chat.
+                            if (eventDomainAdapter.sessionDeletedId(event) == sessionId) {
+                                logI("session deleted elsewhere session=$sessionId; leaving")
+                                requestLeaveSession()
+                            }
                         }
                     }
                 }
             }
+    }
+
+    /** Child lockout follows the session itself, so a child opened from a deep link or Home still locks. */
+    private suspend fun loadParent(
+        sessionId: String,
+        worktree: String,
+    ) {
+        val parentId =
+            try {
+                sessionRepository.getSession(sessionId, worktree).parentId
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                logD("session parent unavailable session=$sessionId error=${error.message}")
+                return
+            } ?: return
+        if (!isCurrentBinding(sessionId, worktree)) return
+        _state.update { it.copy(parentId = parentId) }
     }
 
     private fun applySessionUpdatedTitle(

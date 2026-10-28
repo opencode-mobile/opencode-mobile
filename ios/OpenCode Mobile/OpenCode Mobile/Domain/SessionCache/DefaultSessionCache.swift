@@ -135,6 +135,7 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
     }
 
     func purgeWorktree(serverBaseURL: String, worktree: String) async {
+        dropActivityMemory(directory: worktree)
         if let connectionId = connectionIdProvider() {
             await store.evict(
                 .worktree(
@@ -153,8 +154,38 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
         )
     }
 
+    func purgeConnection(profileID: String, serverBaseURL: String) async {
+        // A pending activity flush would otherwise commit the removed server's activity
+        // under whichever profile is active when the debounce fires.
+        dropActivityMemory(directory: nil)
+        if !profileID.isEmpty {
+            await store.evict(.connection(connectionIdOrUrlPrefix: profileID, matchByUrlPrefix: false))
+        }
+        await store.evict(
+            .connection(
+                connectionIdOrUrlPrefix: CacheUrlNormalizer.connectionIdPrefix(baseURL: serverBaseURL),
+                matchByUrlPrefix: true
+            )
+        )
+    }
+
     func clearAll() async {
+        dropActivityMemory(directory: nil)
         await store.evict(.all)
+    }
+
+    /// Cancels pending activity flushes and forgets committed activity for `directory`, or for
+    /// every directory when `nil`.
+    private func dropActivityMemory(directory: String?) {
+        activityLock.lock()
+        let directories = directory.map { [$0] }
+            ?? Array(Set(lastActivity.keys).union(pendingActivity.keys).union(activityDebounceTasks.keys))
+        for directory in directories {
+            activityDebounceTasks.removeValue(forKey: directory)?.cancel()
+            pendingActivity.removeValue(forKey: directory)
+            lastActivity.removeValue(forKey: directory)
+        }
+        activityLock.unlock()
     }
 
     func estimatedSizeBytes() async -> Int64 {

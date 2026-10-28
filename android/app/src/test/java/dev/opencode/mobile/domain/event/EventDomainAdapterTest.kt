@@ -1,17 +1,22 @@
 package dev.opencode.mobile.domain.event
 
+import dev.opencode.mobile.data.remote.dto.MessageInfoDto
+import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -286,6 +291,22 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_projectsUploadedAttachmentsIntoServerPathFilePartsAndDropsTheTextLines() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"unpack\nAttached file: `/srv/tmp/uploads/u1/data.zip`","metadata":{"attachments":[{"name":"data.zip","mime":"application/zip","path":"/srv/tmp/uploads/u1/data.zip"}]}},"delivery":"steer"}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated", "message.part.updated"), events.map { it.type })
+        assertEquals("unpack", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+        val file = events[2].rawProperties?.get("part")?.jsonObject
+        assertEquals("file", file?.get("type")?.jsonPrimitive?.content)
+        assertEquals("/srv/tmp/uploads/u1/data.zip", file?.get("serverPath")?.jsonPrimitive?.content)
+        assertEquals("application/zip", file?.get("mime")?.jsonPrimitive?.content)
+        assertEquals("data.zip", file?.get("filename")?.jsonPrimitive?.content)
+    }
+
+    @Test
     fun parseEvents_projectsPromptedFilesWithoutMimeFromDataUrl() {
         val events =
             adapter.parseEvents(
@@ -301,6 +322,20 @@ class EventDomainAdapterTest {
         assertEquals("data:image/jpeg;base64,AA==", file?.get("url")?.jsonPrimitive?.content)
         assertEquals("image/jpeg", file?.get("mime")?.jsonPrimitive?.content)
         assertEquals("Photo 1.jpeg", file?.get("filename")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_projectsInlinePromptedFileDataIntoDataUrl() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.inbox.enqueued","data":{"inboxID":"msg-2","sessionID":"ses-1","item":{"type":"user","payload":{"text":"What","files":[{"data":"AA==","mime":"image/JPEG","source":{"type":"inline"},"name":"Photo 1.png"}]},"delivery":"steer"}}}""",
+            )
+
+        val file = events[2].rawProperties?.get("part")?.jsonObject
+        assertEquals("file", file?.get("type")?.jsonPrimitive?.content)
+        assertEquals("data:image/jpeg;base64,AA==", file?.get("url")?.jsonPrimitive?.content)
+        assertEquals("image/JPEG", file?.get("mime")?.jsonPrimitive?.content)
+        assertEquals("Photo 1.png", file?.get("filename")?.jsonPrimitive?.content)
     }
 
     @Test
@@ -879,6 +914,110 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_v2ShellStartedProjectsTheRestShellItemWithoutTouchingStatus() {
+        val events =
+            adapter.parseEvents(
+                """{"id":"evt_sh1","type":"session.shell.started","data":{"sessionID":"ses-1","shell":{"id":"sh_1","status":"running","command":"git status","time":{"started":100}}}}""",
+            )
+
+        assertEquals(
+            listOf("message.updated", "message.part.updated", "message.updated", "message.part.updated"),
+            events.map { it.type },
+        )
+        assertTrue(events.none { it.type == "session.status" })
+        val user = events[0].rawProperties?.get("info")?.jsonObject
+        assertEquals("msg_sh1", user?.get("id")?.jsonPrimitive?.content)
+        assertEquals("user", user?.get("role")?.jsonPrimitive?.content)
+        val text = events[1].rawProperties?.get("part")?.jsonObject
+        assertEquals("git status", text?.get("text")?.jsonPrimitive?.content)
+        assertEquals(
+            "msg_sh1:assistant",
+            events[2]
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+                ?.get("id")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        val tool = events[3].rawProperties?.get("part")?.jsonObject
+        assertEquals("msg_sh1:tool", tool?.get("id")?.jsonPrimitive?.content)
+        assertEquals("msg_sh1:assistant", tool?.get("messageID")?.jsonPrimitive?.content)
+        assertEquals("bash", tool?.get("tool")?.jsonPrimitive?.content)
+        val state = tool?.get("state")?.jsonObject
+        assertEquals("running", state?.get("status")?.jsonPrimitive?.content)
+        assertEquals(
+            "git status",
+            state
+                ?.get("input")
+                ?.jsonObject
+                ?.get("command")
+                ?.jsonPrimitive
+                ?.content,
+        )
+    }
+
+    @Test
+    fun parseEvents_v2ShellEndedCompletesTheStartedItemWithOutputAndExit() {
+        adapter.parseEvents(
+            """{"id":"evt_sh1","type":"session.shell.started","data":{"sessionID":"ses-1","shell":{"id":"sh_1","status":"running","command":"false","time":{"started":100}}}}""",
+        )
+
+        val events =
+            adapter.parseEvents(
+                """{"id":"evt_sh2","type":"session.shell.ended","data":{"sessionID":"ses-1","shell":{"id":"sh_1","status":"exited","command":"false","exit":1,"time":{"started":100,"completed":150}},"output":{"output":"boom\n","truncated":false}}}""",
+            )
+
+        val tool =
+            events
+                .last()
+                .rawProperties
+                ?.get("part")
+                ?.jsonObject
+        assertEquals("msg_sh1:tool", tool?.get("id")?.jsonPrimitive?.content)
+        val state = tool?.get("state")?.jsonObject
+        assertEquals("completed", state?.get("status")?.jsonPrimitive?.content)
+        assertEquals("boom\n", state?.get("output")?.jsonPrimitive?.content)
+        assertEquals(
+            1L,
+            state
+                ?.get("metadata")
+                ?.jsonObject
+                ?.get("exit")
+                ?.jsonPrimitive
+                ?.longOrNull,
+        )
+        assertTrue(events.none { it.type == "session.status" || it.type == "session.idle" })
+    }
+
+    @Test
+    fun parseEvents_v2ShellEndedWithoutAStartIsLeftToHistory() {
+        val events =
+            adapter.parseEvents(
+                """{"id":"evt_sh2","type":"session.shell.ended","data":{"sessionID":"ses-1","shell":{"id":"sh_unknown","status":"exited","exit":0}}}""",
+            )
+
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun parseEvents_syntheticInboxItemIsNotAWaitingPrompt() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.inbox.enqueued","data":{"sessionID":"ses-1","inboxID":"msg_s","item":{"type":"synthetic","payload":{"text":"The following shell command was executed by the user"}},"delivery":"steer"}}""",
+            )
+
+        val info =
+            events
+                .first()
+                .rawProperties
+                ?.get("info")
+                ?.jsonObject
+        assertEquals("false", info?.get("waiting")?.jsonPrimitive?.content)
+        assertNull(info?.get("delivery"))
+    }
+
+    @Test
     fun parseEvents_projectsLiveCompactionEndedIntoPartNotIdle() {
         val events =
             adapter.parseEvents(
@@ -1317,6 +1456,26 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun stepFailed_keepsRetryAfterOnTheTranslatedError() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.step.failed","data":{"sessionID":"ses-1","assistantMessageID":"a1","error":{"type":"provider.free-limit","message":"Free usage limit reached.","status":429,"retryAfterMs":3600000}}}""",
+            )
+        val info = events.single().rawProperties?.get("info") as kotlinx.serialization.json.JsonObject
+        val payload = (info["error"] as kotlinx.serialization.json.JsonObject)["data"] as kotlinx.serialization.json.JsonObject
+        assertEquals("3600000", (payload["retryAfterMs"] as kotlinx.serialization.json.JsonPrimitive).content)
+
+        val failure =
+            MessageDomainAdapter(nowEpochMs = { 5_000L })
+                .toMessage(
+                    Json { ignoreUnknownKeys = true }.decodeFromJsonElement(MessageInfoDto.serializer(), info),
+                    emptyList(),
+                ).failure
+        assertEquals(3_600_000L, failure?.retryAfterMs)
+        assertEquals(3_605_000L, failure?.retryAtEpochMs())
+    }
+
+    @Test
     fun stepFailed_withAssistantId_putsTheErrorOnTheMessageAndSkipsTheSnackbarEvent() {
         val events =
             adapter.parseEvents(
@@ -1342,6 +1501,75 @@ class EventDomainAdapterTest {
         val update = adapter.sessionTitleUpdate(event!!)
         assertEquals("ses-1", update?.sessionId)
         assertEquals("Live title", update?.title)
+    }
+
+    @Test
+    fun sessionDeletedId_readsV1InfoIdAndV2SessionId() {
+        val v1 =
+            adapter.parseEvent(
+                """{"payload":{"type":"session.deleted","properties":{"info":{"id":"ses-1","title":"Gone"}}}}""",
+            )!!
+        assertEquals("ses-1", adapter.sessionDeletedId(v1))
+        val v2 =
+            adapter.parseEvent(
+                """{"id":"evt_1","type":"session.deleted","data":{"sessionID":"ses-2"},"durable":{"aggregateID":"ses-2","seq":18,"version":2}}""",
+            )!!
+        assertEquals("ses-2", adapter.sessionDeletedId(v2))
+        val updated =
+            adapter.parseEvent(
+                """{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1"}}}}""",
+            )!!
+        assertEquals(null, adapter.sessionDeletedId(updated))
+    }
+
+    @Test
+    fun sessionRevertUpdate_readsV1SessionAndV2RevertEvents() {
+        fun update(line: String) = adapter.sessionRevertUpdate(adapter.parseEvent(line)!!)
+        assertEquals(
+            SessionRevertUpdate("ses-1", "msg-2"),
+            update(
+                """{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","time":{"created":1},"revert":{"messageID":"msg-2"}}}}}""",
+            ),
+        )
+        assertEquals(
+            SessionRevertUpdate("ses-1", null),
+            update("""{"payload":{"type":"session.updated","properties":{"info":{"id":"ses-1","title":"T","time":{"created":1}}}}}"""),
+        )
+        assertEquals(
+            SessionRevertUpdate("ses-2", "msg-5"),
+            update("""{"type":"session.revert.staged","data":{"sessionID":"ses-2","revert":{"messageID":"msg-5"}}}"""),
+        )
+        assertEquals(
+            SessionRevertUpdate("ses-2", null),
+            update("""{"type":"session.revert.cleared","data":{"sessionID":"ses-2"}}"""),
+        )
+        assertEquals(
+            SessionRevertUpdate("ses-2", null),
+            update("""{"type":"session.revert.committed","data":{"sessionID":"ses-2","to":"msg-5"}}"""),
+        )
+        // v2 rename is projected as a partial `session.updated`; it must not clear a staged revert.
+        assertEquals(null, update("""{"type":"session.renamed","data":{"sessionID":"ses-2","title":"New"}}"""))
+    }
+
+    @Test
+    fun sessionArchiveEvents_refreshHomeLists() {
+        val archived =
+            adapter.parseEvent(
+                """{"id":"evt_1","type":"session.archived","data":{"sessionID":"ses-1"},"durable":{"aggregateID":"ses-1","seq":4,"version":1}}""",
+            )!!
+        val unarchived =
+            adapter.parseEvent(
+                """{"payload":{"type":"sync","syncEvent":{"id":"evt_2","type":"session.unarchived.1","data":{"sessionID":"ses-2"}}}}""",
+            )!!
+
+        assertEquals("session.archived", archived.type)
+        assertEquals("ses-1", archived.sessionId)
+        assertTrue(archived.triggersHomeRefresh)
+        assertEquals("session.unarchived", unarchived.type)
+        assertEquals("ses-2", unarchived.sessionId)
+        assertTrue(unarchived.triggersHomeRefresh)
+        assertNull(adapter.sessionRevertUpdate(archived))
+        assertNull(adapter.sessionTitleUpdate(archived))
     }
 
     @Test
@@ -1576,5 +1804,133 @@ class EventDomainAdapterTest {
                 """{"type":"message.updated","properties":{"info":{"role":"user","time":{"completed":123}}}}""",
             )
         assertFalse(adapter.assistantMessageCompleted(event!!))
+    }
+
+    // MARK: v2 timeline notices
+
+    private fun JsonObject.obj(key: String): JsonObject = getValue(key).jsonObject
+
+    private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.content
+
+    private fun List<OpencodeEvent>.part(): JsonObject = single { it.type == "message.part.updated" }.rawProperties!!.obj("part")
+
+    private fun noticeEvents(line: String): Pair<JsonObject, JsonObject>? {
+        val events = adapter.parseEvents(line)
+        val updated = events.firstOrNull { it.type == "message.updated" } ?: return null
+        return updated.rawProperties!!.obj("info") to events.part()
+    }
+
+    @Test
+    fun parseEvents_v2MoveEmitsANoticeKeyedByTheEnvelopeId() {
+        val line =
+            """{"id":"evt_0fa1","created":1790000000000,"type":"session.moved",""" +
+                """"data":{"sessionID":"ses-1","location":{"directory":"/repo/.worktrees/feature"},"projectID":"prj_1"}}"""
+        val events = adapter.parseEvents(line)
+        val (info, part) = noticeEvents(line)!!
+
+        // The session refresh stays; the notice rides alongside it.
+        assertEquals("session.updated", events.first().type)
+        assertEquals("msg_0fa1", info.str("id"))
+        assertEquals("notice", info.str("role"))
+        assertEquals("1790000000000", info.obj("time").str("created"))
+        assertEquals("msg_0fa1", part.str("id"))
+        assertEquals("msg_0fa1", part.str("messageID"))
+        assertEquals("notice", part.str("type"))
+        val notice = part.obj("notice")
+        assertEquals("moved", notice.str("kind"))
+        assertEquals("/repo/.worktrees/feature", notice.str("directory"))
+    }
+
+    @Test
+    fun parseEvents_v2MoveReportsTheNewDirectoryNotTheEnvelopeLocation() {
+        val line =
+            """{"id":"evt_0fa2","created":1790000000000,"type":"session.moved","location":{"directory":"/repo"},""" +
+                """"data":{"sessionID":"ses-1","location":{"directory":"/repo/.worktrees/feature"},"projectID":"prj_1","subpath":""}}"""
+
+        val moves = adapter.parseEvents(line).mapNotNull { it.sessionMoved() }
+
+        assertEquals(listOf(SessionMovedUpdate("ses-1", "/repo/.worktrees/feature")), moves)
+        assertEquals(null, OpencodeEvent(type = "session.updated", sessionId = "ses-1").sessionMoved())
+    }
+
+    @Test
+    fun parseEvents_v2AgentAndModelSwitchesKeepContextAndAddNotices() {
+        val agent =
+            adapter.parseEvents(
+                """{"id":"evt_a1","created":10,"type":"session.agent.selected",""" +
+                    """"data":{"sessionID":"ses-1","agent":"plan","previous":"build"}}""",
+            )
+        val model =
+            adapter.parseEvents(
+                """{"id":"evt_m1","created":11,"type":"session.next.model.switched",""" +
+                    """"data":{"sessionID":"ses-1","model":{"id":"gpt-5","providerID":"openai","variant":"high"}}}""",
+            )
+
+        assertEquals(
+            listOf("session.updated", EventDomainAdapter.MESSAGE_CONTEXT_EVENT, "message.updated", "message.part.updated"),
+            agent.map { it.type },
+        )
+        assertEquals(
+            listOf("session.updated", EventDomainAdapter.MESSAGE_CONTEXT_EVENT, "message.updated", "message.part.updated"),
+            model.map { it.type },
+        )
+        val agentNotice = agent.part().obj("notice")
+        assertEquals("agent", agentNotice.str("kind"))
+        assertEquals("plan", agentNotice.str("agent"))
+        assertEquals("build", agentNotice.str("previous"))
+        assertEquals("msg_a1", agent.part().str("messageID"))
+        val modelNotice = model.part().obj("notice")
+        assertEquals("model", modelNotice.str("kind"))
+        assertEquals("gpt-5", modelNotice.obj("model").str("id"))
+        assertEquals("high", modelNotice.obj("model").str("variant"))
+        assertNull(modelNotice["previous"])
+    }
+
+    @Test
+    fun parseEvents_v2InstructionsUpdateIsANoticeOnlyWithModelText() {
+        val (info, part) =
+            noticeEvents(
+                """{"id":"evt_i1","created":20,"type":"session.instructions.updated",""" +
+                    """"data":{"sessionID":"ses-1","delta":{"AGENTS.md":{},"CLAUDE.md":{}},"text":"<system>…</system>"}}""",
+            )!!
+        assertEquals("msg_i1", info.str("id"))
+        val notice = part.obj("notice")
+        assertEquals("instructions", notice.str("kind"))
+        assertEquals(
+            listOf("AGENTS.md", "CLAUDE.md"),
+            notice.getValue("sources").jsonArray.map { it.jsonPrimitive.content },
+        )
+
+        // The baseline observation has no text: the server records no item, so no row.
+        val baseline =
+            adapter.parseEvents(
+                """{"id":"evt_i0","created":19,"type":"session.instructions.updated",""" +
+                    """"data":{"sessionID":"ses-1","delta":{"AGENTS.md":{}}}}""",
+            )
+        assertTrue(baseline.none { it.type == "message.updated" || it.type == "message.part.updated" })
+    }
+
+    @Test
+    fun parseEvents_v2SyntheticIsANoticeOnlyForARestart() {
+        val (info, part) =
+            noticeEvents(
+                """{"id":"evt_r1","created":30,"type":"session.synthetic",""" +
+                    """"data":{"sessionID":"ses-1","text":"Continue.","metadata":{"notice":"restart"}}}""",
+            )!!
+        assertEquals("msg_r1", info.str("id"))
+        assertEquals("restart", part.obj("notice").str("kind"))
+        assertNotNull(
+            noticeEvents(
+                """{"id":"evt_r2","created":31,"type":"session.synthetic",""" +
+                    """"data":{"sessionID":"ses-1","text":"Continue.","description":"Continuing after restart"}}""",
+            ),
+        )
+
+        val other =
+            adapter.parseEvents(
+                """{"id":"evt_s1","created":32,"type":"session.synthetic",""" +
+                    """"data":{"sessionID":"ses-1","text":"Subagent done.","metadata":{"source":"subagent"}}}""",
+            )
+        assertTrue(other.none { it.type == "message.updated" || it.type == "message.part.updated" })
     }
 }

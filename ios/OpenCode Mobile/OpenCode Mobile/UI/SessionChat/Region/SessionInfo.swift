@@ -77,9 +77,16 @@ final class SessionInfo {
                         ? event.sessionErrorMessage
                         : nil
                 let hasTitleUpdate = eventAdapter.sessionTitleUpdate(from: event) != nil
-                guard boundError != nil || hasTitleUpdate else { continue }
+                // Another client deleted the open session: leave instead of showing a dead chat.
+                let boundDeleted = eventAdapter.sessionDeletedID(from: event) == boundSessionID
+                guard boundError != nil || hasTitleUpdate || boundDeleted else { continue }
                 await MainActor.run {
                     guard !Task.isCancelled, let sessionInfo = info else { return }
+                    if boundDeleted {
+                        OpenCodeLog.sessionChat.info("session deleted elsewhere session=\(boundSessionID); leaving")
+                        sessionInfo.requestLeaveSession()
+                        return
+                    }
                     if let boundError {
                         sessionInfo.state.errorMessage = boundError
                         sessionInfo.notifyChange()
@@ -368,10 +375,13 @@ final class SessionInfo {
                     "live status session=\(state.sessionID) seeded=\(snapshot.seeded)"
                 )
                 let card = snapshot.seeded ? activity?.retryCard : nil
+                var isRetrying = false
+                if snapshot.seeded, case .retrying = activity { isRetrying = true }
                 state.applyStatus(
                     authoritative: snapshot.chatStatusLabel(for: state.sessionID),
                     hasResolved: snapshot.seeded,
-                    retryCard: card
+                    retryCard: card,
+                    isRetrying: isRetrying
                 )
                 notifyChange()
             }

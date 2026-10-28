@@ -5,18 +5,17 @@ import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
-import dev.opencode.mobile.domain.connection.PairingQRPayload
 import dev.opencode.mobile.domain.connection.ProbeStatus
+import dev.opencode.mobile.domain.connection.ProtocolRedetection
+import dev.opencode.mobile.domain.connection.ServerAddressProbe
 import dev.opencode.mobile.domain.connection.ServerCapabilities
 import dev.opencode.mobile.domain.connection.ServerProtocol
-import dev.opencode.mobile.domain.t3.T3FileAttachmentLimit
+import dev.opencode.mobile.domain.connection.V2ServerFeatures
 import dev.opencode.mobile.domain.connection.toProbeStatus
 import dev.opencode.mobile.domain.project.ServerProbeError
+import dev.opencode.mobile.domain.t3.T3FileAttachmentLimit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Singleton
@@ -32,6 +31,17 @@ class ActiveConnectionManager(
     private var profile: ConnectionProfile? = null
     private var inFlightProbe: CompletableDeferred<Result<ServerProtocol>>? = null
     private var probeFailed = false
+
+    /** Health `version` from the last probe of the active connection; null until one succeeds. */
+    @Volatile
+    private var serverVersion: String? = null
+
+    /** Release-dependent v2 features from the server's API contract; all off until a probe reads it. */
+    @Volatile
+    private var v2Features = V2ServerFeatures()
+
+    /** Server version [v2Features] was read for, so a re-probe of the same release skips the fetch. */
+    private var v2FeaturesVersion: String? = null
 
     suspend fun ensureLoaded() {
         val loaded =
@@ -60,14 +70,32 @@ class ActiveConnectionManager(
 
     fun currentProtocol(): ServerProtocol? = connection?.serverProtocol
 
+    fun currentServerVersion(): String? = serverVersion?.takeIf { connection != null }
+
     fun protocolHint(): ServerProtocol = currentProtocol() ?: ServerProtocol.V1
 
-    fun currentCapabilities(): ServerCapabilities =
-        when {
-            connection?.engine == ConnectionEngine.T3 || profile?.engine == ConnectionEngine.T3 ->
-                ServerCapabilities.t3(supportsDocumentAttachments = fileAttachmentLimit?.maxBytes != null)
-            else -> connection?.capabilities ?: ServerCapabilities.forProtocol(ServerProtocol.V1)
+    fun currentCapabilities(): ServerCapabilities {
+        val engine = connection?.engine ?: profile?.engine
+        if (engine == ConnectionEngine.T3) {
+            return ServerCapabilities.t3(supportsDocumentAttachments = fileAttachmentLimit?.maxBytes != null)
         }
+        val active = connection ?: return ServerCapabilities.forProtocol(ServerProtocol.V1)
+        return ServerCapabilities.forProtocol(
+            active.serverProtocol ?: ServerProtocol.V1,
+            v2Features = v2Features,
+        )
+    }
+
+    /** `paths.tmp` for streamed uploads, or null while the server has not declared the route. */
+    fun attachmentUploadTmpDirectory(): String? = if (connection != null) v2Features.attachmentUploadTmp else null
+
+    /**
+     * A live upload showed the route is not what the contract promised. Streamed uploads stay
+     * off until the connection changes, so every file goes the data-URL way.
+     */
+    fun disableAttachmentUpload() {
+        v2Features = v2Features.copy(attachmentUploadTmp = null)
+    }
 
     fun currentProfile(): ConnectionProfile? =
         profile?.copy(
@@ -80,6 +108,8 @@ class ActiveConnectionManager(
             connection = null
             profile = null
             probeFailed = false
+            serverVersion = null
+            forgetV2Features()
             completeInFlight(Result.success(ServerProtocol.V1))
         }
     }
@@ -109,6 +139,24 @@ class ActiveConnectionManager(
 
     /** Home / Test Connection: join the in-flight detect and throw on failure. */
     suspend fun probeActive(): ServerProtocol = sharedProbe(force = true).getOrThrow()
+
+    /**
+     * Re-runs detection on the active connection, so a server replaced at the same address by
+     * the other protocol moves the profile to it. A rejected credential is not an answer.
+     */
+    suspend fun redetectProtocol(): ProtocolRedetection {
+        if (connection == null || connectionProbing == null) return ProtocolRedetection.Skipped
+        return sharedProbe(force = true).fold(
+            onSuccess = { ProtocolRedetection.Detected(it) },
+            onFailure = { error ->
+                when {
+                    error is CancellationException -> ProtocolRedetection.Skipped
+                    (error as? ServerProbeError)?.toProbeStatus() == ProbeStatus.AuthFailed -> ProtocolRedetection.Skipped
+                    else -> ProtocolRedetection.Unreachable
+                }
+            },
+        )
+    }
 
     private suspend fun sharedProbe(force: Boolean): Result<ServerProtocol> {
         var existing: CompletableDeferred<Result<ServerProtocol>>? = null
@@ -144,10 +192,15 @@ class ActiveConnectionManager(
         }
         val result =
             try {
-                val detected = probing.probe(current)
+                val server = probing.probeServer(current)
+                val detected = server.protocol
+                val features = if (detected == ServerProtocol.V2) probeV2Features(probing, current, server.version) else null
                 mutex.withLock {
                     val active = connection
                     if (active != null && sameProfileDuringProbe(probedProfile, profile, active, current)) {
+                        serverVersion = server.version
+                        v2Features = features?.getOrNull() ?: V2ServerFeatures()
+                        v2FeaturesVersion = features?.getOrNull()?.takeUnless { it.tmpDirectoryUnread }?.let { server.version }
                         connection = active.withProtocol(detected)
                         persistLocked()
                         Result.success(detected)
@@ -164,6 +217,32 @@ class ActiveConnectionManager(
             }
         completeInFlight(result)
         return result
+    }
+
+    /**
+     * Reads v2 features once per server release. A failed read is not remembered,
+     * so the next probe tries again; until then archive and Last turn stay hidden.
+     * Neither is a read whose `/api/info` failed, so streamed uploads can turn on later.
+     */
+    private suspend fun probeV2Features(
+        probing: ConnectionProbing,
+        connection: ServerConnection,
+        version: String?,
+    ): Result<V2ServerFeatures> {
+        val cached = mutex.withLock { v2FeaturesVersion?.takeIf { it == version }?.let { v2Features } }
+        if (cached != null) return Result.success(cached)
+        return try {
+            Result.success(probing.probeV2Features(connection))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Throwable) {
+            Result.failure(error)
+        }
+    }
+
+    private fun forgetV2Features() {
+        v2Features = V2ServerFeatures()
+        v2FeaturesVersion = null
     }
 
     private fun completeInFlight(result: Result<ServerProtocol>) {
@@ -190,46 +269,30 @@ class ActiveConnectionManager(
     }
 
     /**
-     * Probe every saved address and keep the winner on the same profile id.
+     * Resolve the saved address list and keep the winner on the same profile id.
      * Empty [ConnectionProfile.serverUrls] skips this and uses the stored baseUrl.
-     * If none answer, the stored baseUrl stays and the later single-URL probe fails as usual.
+     * Candidates are swept without credentials; the password goes to the one chosen host,
+     * and only a host that accepted it wins. A rejected password or no answer at all leaves
+     * the stored baseUrl alone, and the later single-URL probe fails as usual.
      */
     private suspend fun selectReachableAddress(profile: ConnectionProfile): ConnectionProfile {
-        if (profile.serverUrls.isEmpty() || connectionProbing == null) return profile
+        val probing = connectionProbing ?: return profile
+        if (profile.serverUrls.isEmpty()) return profile
         val urls = ConnectionProfileIdentity.normalizeServerUrls(profile.serverUrls)
         if (urls.isEmpty()) return profile
-        val answered =
-            coroutineScope {
-                urls
-                    .map { url ->
-                        async {
-                            url to addressAnswered(profile, url)
-                        }
-                    }.awaitAll()
-                    .mapNotNull { (url, ok) -> url.takeIf { ok } }
-            }
-        val winner = PairingQRPayload.pickReachableUrl(answered) ?: return profile
+        val resolution =
+            ServerAddressProbe.resolve(
+                urls = urls,
+                username = profile.username,
+                password = profile.password,
+                currentBaseUrl = profile.baseUrl,
+                probing = probing,
+            )
+        val winner = resolution.chosen ?: return profile
+        val detected = resolution.reachableProtocol ?: return profile
         val normalizedWinner = ConnectionProfileIdentity.normalizeBaseUrl(winner)
         if (normalizedWinner == ConnectionProfileIdentity.normalizeBaseUrl(profile.baseUrl)) return profile
-        return profile.copy(baseUrl = normalizedWinner)
-    }
-
-    private suspend fun addressAnswered(
-        profile: ConnectionProfile,
-        url: String,
-    ): Boolean {
-        val probing = connectionProbing ?: return false
-        val connection = ServerConnection.fromProfile(profile.copy(baseUrl = url))
-        return try {
-            probing.probe(connection)
-            true
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: ServerProbeError) {
-            error.toProbeStatus() == ProbeStatus.AuthFailed
-        } catch (_: Throwable) {
-            false
-        }
+        return profile.copy(baseUrl = normalizedWinner, serverProtocol = detected)
     }
 
     private suspend fun persistAddressChange(
@@ -259,6 +322,10 @@ class ActiveConnectionManager(
     }
 
     private fun bindLocked(loaded: ConnectionProfile?) {
+        if (loaded == null || profile?.hasSameIdentity(loaded) != true) {
+            serverVersion = null
+            forgetV2Features()
+        }
         profile = loaded
         connection = loaded?.let(ServerConnection::fromProfile)
         probeFailed = false

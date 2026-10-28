@@ -1,6 +1,7 @@
 package dev.opencode.mobile.data.remote
 
 import dev.opencode.mobile.data.remote.dto.ApiActiveSessionsEnvelope
+import dev.opencode.mobile.data.remote.dto.ApiDataEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiListEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiLocatedEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiSessionActiveDto
@@ -17,6 +18,7 @@ import dev.opencode.mobile.data.remote.dto.SessionDto
 import dev.opencode.mobile.data.remote.dto.SummarizeSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.TodoDto
 import dev.opencode.mobile.data.remote.dto.UpdateSessionRequestDto
+import dev.opencode.mobile.data.remote.dto.V2ArchiveSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CompactSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2CreateSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2ForkSessionRequestDto
@@ -25,11 +27,15 @@ import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2InboxDeliveryRequestDto
 import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2LocationDto
+import dev.opencode.mobile.data.remote.dto.V2LocationInfoDto
+import dev.opencode.mobile.data.remote.dto.V2MoveSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RenameSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RevertStageRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
+import dev.opencode.mobile.data.remote.dto.V2SessionGenerateRequestDto
+import dev.opencode.mobile.data.remote.dto.V2SessionGenerateResponseDto
 import dev.opencode.mobile.data.remote.dto.V2SessionViewRequestDto
 import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
 import dev.opencode.mobile.data.remote.dto.VcsFileStatusDto
@@ -427,9 +433,22 @@ class SessionsApi private constructor(
 
     // --- V2 home / session CRUD ---
 
+    suspend fun locationForSessionList(directory: String): V2LocationInfoDto =
+        httpClient
+            .get()
+            .get("api/location") {
+                applyLocationDirectory(directory)
+            }.body()
+
+    /**
+     * [projectId] lists every worktree of that project. Passing [directory] as well would
+     * hide those worktree sessions, so a project list omits the directory query.
+     */
     suspend fun listSessionsV2(
         directory: String? = null,
         parentId: String? = null,
+        projectId: String? = null,
+        archived: Boolean? = null,
     ): List<V2SessionDto> {
         val sessions = mutableListOf<V2SessionDto>()
         var cursor: String? = null
@@ -439,8 +458,13 @@ class SessionsApi private constructor(
                 httpClient
                     .get()
                     .get("api/session") {
-                        applyDirectory(directory)
+                        if (projectId != null) {
+                            parameter("project", projectId)
+                        } else {
+                            applyDirectory(directory)
+                        }
                         parentId?.let { parameter("parentID", it) }
+                        archived?.let { parameter("archived", it.toString()) }
                         cursor?.let { parameter("cursor", it) }
                     }.body<ApiListEnvelope<V2SessionDto>>()
             sessions += envelope.data
@@ -452,9 +476,11 @@ class SessionsApi private constructor(
         return sessions
     }
 
+    /** A [parentId] creates a linked child at the parent's location, so no location is sent with it. */
     suspend fun createSessionV2(
         directory: String? = null,
         title: String? = null,
+        parentId: String? = null,
     ): V2SessionDto =
         httpClient
             .get()
@@ -462,8 +488,9 @@ class SessionsApi private constructor(
                 setJsonBody(
                     json,
                     V2CreateSessionRequestDto(
+                        parentId = parentId,
                         title = title?.takeIf { it.isNotBlank() },
-                        location = directory?.let { V2LocationDto(directory = it) },
+                        location = if (parentId == null) directory?.let { V2LocationDto(directory = it) } else null,
                     ),
                 )
             }.decodeV2Session()
@@ -492,6 +519,18 @@ class SessionsApi private constructor(
             }.ensureSuccess()
     }
 
+    /** Archives or restores a session (opencode 2.1.0+). Repeating the current state is a no-op. */
+    suspend fun setSessionArchivedV2(
+        id: String,
+        archived: Boolean,
+    ) {
+        httpClient
+            .get()
+            .patch("api/session/$id") {
+                setJsonBody(json, V2ArchiveSessionRequestDto(archived = archived))
+            }.ensureSuccess()
+    }
+
     suspend fun deleteSessionV2(id: String): Boolean =
         httpClient
             .get()
@@ -512,6 +551,41 @@ class SessionsApi private constructor(
                     setJsonBody(json, V2ForkSessionRequestDto(before = before))
                 }
             }.decodeV2Session()
+
+    /**
+     * `POST /api/session/{id}/move`: moves the session to [directory] at the next delivery
+     * boundary. 204 with no body; 400 / 404 carry the server's message.
+     */
+    suspend fun moveSessionV2(
+        id: String,
+        directory: String,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$id/move") {
+                setJsonBody(json, V2MoveSessionRequestDto(directory = directory))
+            }.ensureSuccess()
+
+    /**
+     * `POST /api/session/{id}/generate` → `{ data: { text } }`: answers [prompt] from the session's
+     * context and model without adding a message; nothing streams. One model call can outlast the
+     * default request timeout, so this waits up to [SIDE_QUESTION_TIMEOUT_MS].
+     */
+    suspend fun generateSessionTextV2(
+        id: String,
+        prompt: String,
+    ): String =
+        httpClient
+            .get()
+            .post("api/session/$id/generate") {
+                timeout {
+                    requestTimeoutMillis = SIDE_QUESTION_TIMEOUT_MS
+                    socketTimeoutMillis = SIDE_QUESTION_TIMEOUT_MS
+                }
+                setJsonBody(json, V2SessionGenerateRequestDto(prompt = prompt))
+            }.bodyOnSuccess<ApiDataEnvelope<V2SessionGenerateResponseDto>>()
+            .data
+            .text
 
     suspend fun compactSessionV2(id: String): Boolean =
         httpClient
@@ -539,6 +613,12 @@ class SessionsApi private constructor(
         httpClient
             .get()
             .delete("api/session/$id/revert")
+            .ensureSuccess()
+
+    suspend fun commitRevertV2(id: String): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$id/revert/commit")
             .ensureSuccess()
 
     suspend fun getVcsInfoV2(directory: String? = null): V2VcsInfoDto =
@@ -571,6 +651,23 @@ class SessionsApi private constructor(
             }.body<ApiLocatedEnvelope<List<FileDiffDto>>>()
             .data
 
+    /**
+     * `GET /api/session/{id}/diff`: the files the turn opened by user message [from] changed.
+     * Servers before opencode 2.1.0 have no route and answer 404.
+     */
+    suspend fun getSessionDiffV2(
+        id: String,
+        from: String?,
+        context: Int = 12,
+    ): List<FileDiffDto> =
+        httpClient
+            .get()
+            .get("api/session/$id/diff") {
+                from?.let { parameter("from", it) }
+                parameter("context", context)
+            }.bodyOnSuccess<ApiListEnvelope<FileDiffDto>>()
+            .data
+
     private suspend fun HttpResponse.decodeV2Session(): V2SessionDto = json.decodeDataEnvelope(body<JsonElement>())
 
     /**
@@ -600,5 +697,8 @@ class SessionsApi private constructor(
 
     private companion object {
         const val MAX_V2_SESSION_LIST_PAGES = 500
+
+        /** One `/btw` model call; longer than the default request timeout. */
+        const val SIDE_QUESTION_TIMEOUT_MS = 300_000L
     }
 }

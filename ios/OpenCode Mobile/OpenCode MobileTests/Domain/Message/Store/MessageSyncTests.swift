@@ -385,7 +385,10 @@ struct MessageSyncTests {
         }
         let painted = await waitUntil { collector.latest()?.first?.text == "Hello" }
         #expect(painted)
-        #expect(repo.isListBlocked)
+        // The cache can paint before the REST call starts; resuming before it is
+        // held would leave that call held and the confirm never comes.
+        let held = await waitUntil { repo.isListBlocked }
+        #expect(held)
         repo.resumeListMessages()
         let confirmed = await waitUntil { collector.sawCacheSyncConfirmed }
         task.cancel()
@@ -2391,6 +2394,8 @@ private final class FakeLiveMessageRepository: MessageRepository, @unchecked Sen
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message { fatalError() }
     func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message { fatalError() }
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
+
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {}
 }
 
 private final class SeedingSessionCache: SessionCache, @unchecked Sendable {

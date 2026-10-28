@@ -3,7 +3,7 @@ import SwiftUI
 
 struct ChangesView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    var splitGate = OpenCodeSplitLayoutGate()
     @State private var viewModel: ChangesViewModel
     @State private var sourceMenuPresented = false
     @State private var splitSelection: String?
@@ -29,13 +29,14 @@ struct ChangesView: View {
             initialSource: initialSource,
             repository: Container.shared.sessionRepository(),
             capabilitiesProvider: { Container.shared.activeConnectionManager().capabilities },
-            lastTurnReviewChangesStore: Container.shared.lastTurnReviewChangesStore()
+            lastTurnReviewChangesStore: Container.shared.lastTurnReviewChangesStore(),
+            foregroundEventStream: Container.shared.foregroundEventStream()
         ))
     }
 
-    /// Same breakpoint as Home: iPad at regular width keeps the file list beside the diff.
+    /// Same breakpoint as Home: a wide window keeps the file list beside the diff.
     private var isSplitLayout: Bool {
-        OpenCodeSplitPaneLayout.usesSplitLayout(horizontalSizeClass: horizontalSizeClass)
+        splitGate.usesSplitLayout
     }
 
     var body: some View {
@@ -63,6 +64,9 @@ struct ChangesView: View {
             )
             await viewModel.load()
             attemptDeepLinkIfNeeded()
+        }
+        .task {
+            await viewModel.observeSessionIdle()
         }
         .onChange(of: viewModel.state.phase) { _, _ in
             attemptDeepLinkIfNeeded()

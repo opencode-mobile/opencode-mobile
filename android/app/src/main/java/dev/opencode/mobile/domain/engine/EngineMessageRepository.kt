@@ -11,6 +11,7 @@ import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.OlderDisplayLoadResult
 import dev.opencode.mobile.domain.message.OlderLoadResult
 import dev.opencode.mobile.domain.message.PromptSendOptions
+import dev.opencode.mobile.domain.message.ShellCommandOptions
 import dev.opencode.mobile.domain.t3.T3MessageRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.flow.Flow
@@ -94,4 +95,10 @@ class EngineMessageRepository
             options: PromptSendOptions,
             directory: String?,
         ) = delegate().sendPromptAsync(sessionId, options, directory)
+
+        override suspend fun runShellCommand(
+            sessionId: String,
+            options: ShellCommandOptions,
+            directory: String?,
+        ) = delegate().runShellCommand(sessionId, options, directory)
     }

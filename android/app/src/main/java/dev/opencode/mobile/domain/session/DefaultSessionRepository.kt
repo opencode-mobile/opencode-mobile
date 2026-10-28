@@ -123,6 +123,19 @@ class DefaultSessionRepository
             runCatching { remote.forkSession(id, atMessageId, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
+        override suspend fun moveSession(
+            id: String,
+            directory: String,
+        ) = runCatching { remote.moveSession(id, directory) }
+            .getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun askSideQuestion(
+            sessionId: String,
+            question: String,
+        ): String =
+            runCatching { remote.askSideQuestion(sessionId, question) }
+                .getOrElse { throw adapter.mapError(it) }
+
         override suspend fun abortSession(
             id: String,
             directory: String?,
@@ -200,6 +213,13 @@ class DefaultSessionRepository
             directory: String?,
         ): Boolean =
             runCatching { remote.unrevertSession(id, directory) }
+                .getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun commitRevert(
+            id: String,
+            directory: String?,
+        ): Boolean =
+            runCatching { remote.commitRevert(id, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
         override suspend fun respondToPermission(

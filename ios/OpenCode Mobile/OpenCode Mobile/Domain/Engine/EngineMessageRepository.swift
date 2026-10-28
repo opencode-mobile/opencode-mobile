@@ -98,4 +98,8 @@ final class EngineMessageRepository: MessageRepository {
     func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws {
         try await selected().sendPromptAsync(sessionID: sessionID, text: text, directory: directory)
     }
+
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {
+        try await selected().runShellCommand(sessionID: sessionID, options: options, directory: directory)
+    }
 }

@@ -192,6 +192,8 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
     let failureMessage: String?
     let failureStatus: Int?
     let failureBody: String?
+    let failureRetryAfterMs: Int64?
+    let failureRecordedAtEpochMs: Int64?
 
     init(
         id: String,
@@ -213,7 +215,9 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         failureType: String? = nil,
         failureMessage: String? = nil,
         failureStatus: Int? = nil,
-        failureBody: String? = nil
+        failureBody: String? = nil,
+        failureRetryAfterMs: Int64? = nil,
+        failureRecordedAtEpochMs: Int64? = nil
     ) {
         self.id = id
         self.role = role
@@ -235,6 +239,8 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         self.failureMessage = failureMessage
         self.failureStatus = failureStatus
         self.failureBody = failureBody
+        self.failureRetryAfterMs = failureRetryAfterMs
+        self.failureRecordedAtEpochMs = failureRecordedAtEpochMs
     }
 
     init(from decoder: Decoder) throws {
@@ -262,6 +268,8 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         failureMessage = try container.decodeIfPresent(String.self, forKey: .failureMessage)
         failureStatus = try container.decodeIfPresent(Int.self, forKey: .failureStatus)
         failureBody = try container.decodeIfPresent(String.self, forKey: .failureBody)
+        failureRetryAfterMs = try container.decodeIfPresent(Int64.self, forKey: .failureRetryAfterMs)
+        failureRecordedAtEpochMs = try container.decodeIfPresent(Int64.self, forKey: .failureRecordedAtEpochMs)
     }
 }
 
@@ -284,6 +292,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
     let mime: String?
     let attachmentKind: String?
     let dataUrl: String?
+    let serverPath: String?
     let timeStartEpochMs: Int64?
     let timeEndEpochMs: Int64?
     let auto: Bool?
@@ -309,6 +318,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         mime: String? = nil,
         attachmentKind: String? = nil,
         dataUrl: String? = nil,
+        serverPath: String? = nil,
         timeStartEpochMs: Int64? = nil,
         timeEndEpochMs: Int64? = nil,
         auto: Bool? = nil,
@@ -333,6 +343,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         self.mime = mime
         self.attachmentKind = attachmentKind
         self.dataUrl = dataUrl
+        self.serverPath = serverPath
         self.timeStartEpochMs = timeStartEpochMs
         self.timeEndEpochMs = timeEndEpochMs
         self.auto = auto
@@ -360,6 +371,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         mime = try container.decodeIfPresent(String.self, forKey: .mime)
         attachmentKind = try container.decodeIfPresent(String.self, forKey: .attachmentKind)
         dataUrl = try container.decodeIfPresent(String.self, forKey: .dataUrl)
+        serverPath = try container.decodeIfPresent(String.self, forKey: .serverPath)
         timeStartEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeStartEpochMs)
         timeEndEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeEndEpochMs)
         auto = try container.decodeIfPresent(Bool.self, forKey: .auto)
@@ -543,7 +555,9 @@ private extension Message {
             failureType: failure?.type,
             failureMessage: failure?.message,
             failureStatus: failure?.status,
-            failureBody: failure?.providerBody
+            failureBody: failure?.providerBody,
+            failureRetryAfterMs: failure?.retryAfterMs,
+            failureRecordedAtEpochMs: failure?.recordedAtEpochMs
         )
     }
 }
@@ -572,7 +586,9 @@ private extension CachedMessagePayload {
                     type: failureType,
                     message: failureMessage ?? "",
                     status: failureStatus,
-                    providerBody: failureBody
+                    providerBody: failureBody,
+                    retryAfterMs: failureRetryAfterMs,
+                    recordedAtEpochMs: failureRecordedAtEpochMs
                 )
                 : nil
         )
@@ -660,7 +676,8 @@ private extension MessagePart {
                 filename: part.filename,
                 mime: part.mime,
                 attachmentKind: part.kind.rawValue,
-                dataUrl: AttachmentLimits.persistedDataURL(part.dataURL)
+                dataUrl: AttachmentLimits.persistedDataURL(part.dataURL),
+                serverPath: part.serverPath
             )
         case let .compaction(part):
             return CachedMessagePartPayload(
@@ -679,7 +696,85 @@ private extension MessagePart {
                 timeStartEpochMs: part.timeStartEpochMs,
                 timeEndEpochMs: part.timeEndEpochMs
             )
+        case let .notice(notice):
+            return CachedMessagePartPayload(kind: "notice", id: notice.id, metadata: notice.kind.cacheFields)
         }
+    }
+}
+
+private extension TimelineNoticeKind {
+    var cacheFields: [String: AnyCodable] {
+        func optional(_ value: String?) -> AnyCodable { value.map(AnyCodable.string) ?? .null }
+        switch self {
+        case let .moved(directory):
+            return ["notice": .string("moved"), "directory": .string(directory)]
+        case let .agentChanged(agent, previous):
+            return ["notice": .string("agent"), "agent": .string(agent), "previous": optional(previous)]
+        case let .modelChanged(model, previous):
+            return [
+                "notice": .string("model"),
+                "model": model.cacheFields,
+                "previous": previous?.cacheFields ?? .null,
+            ]
+        case let .instructionsUpdated(sources):
+            return ["notice": .string("instructions"), "sources": .array(sources.map(AnyCodable.string))]
+        case let .systemNote(description):
+            return ["notice": .string("system"), "description": .string(description)]
+        case .restart:
+            return ["notice": .string("restart")]
+        }
+    }
+
+    init?(cacheFields fields: [String: AnyCodable]) {
+        func string(_ key: String) -> String? {
+            if case .string(let value)? = fields[key] { return value }
+            return nil
+        }
+        switch string("notice") {
+        case "moved":
+            guard let directory = string("directory") else { return nil }
+            self = .moved(directory: directory)
+        case "agent":
+            guard let agent = string("agent") else { return nil }
+            self = .agentChanged(agent: agent, previous: string("previous"))
+        case "model":
+            guard let model = fields["model"].flatMap(TimelineNoticeModel.init(cacheField:)) else { return nil }
+            self = .modelChanged(model: model, previous: fields["previous"].flatMap(TimelineNoticeModel.init(cacheField:)))
+        case "instructions":
+            guard case .array(let values)? = fields["sources"] else { return nil }
+            self = .instructionsUpdated(sources: values.compactMap { value in
+                if case .string(let source) = value { return source }
+                return nil
+            })
+        case "system":
+            guard let description = string("description") else { return nil }
+            self = .systemNote(description)
+        case "restart":
+            self = .restart
+        default:
+            return nil
+        }
+    }
+}
+
+private extension TimelineNoticeModel {
+    var cacheFields: AnyCodable {
+        .dictionary([
+            "providerID": providerID.map(AnyCodable.string) ?? .null,
+            "modelID": .string(modelID),
+            "variant": variant.map(AnyCodable.string) ?? .null,
+        ])
+    }
+
+    init?(cacheField: AnyCodable) {
+        guard case .dictionary(let fields) = cacheField, case .string(let modelID)? = fields["modelID"] else {
+            return nil
+        }
+        func string(_ key: String) -> String? {
+            if case .string(let value)? = fields[key] { return value }
+            return nil
+        }
+        self.init(providerID: string("providerID"), modelID: modelID, variant: string("variant"))
     }
 }
 
@@ -721,7 +816,8 @@ private extension CachedMessagePartPayload {
                     filename: filename ?? "",
                     mime: mime ?? "",
                     kind: AttachmentKind(rawValue: (attachmentKind ?? "").lowercased()) ?? .text,
-                    dataURL: dataUrl ?? ""
+                    dataURL: dataUrl ?? "",
+                    serverPath: serverPath
                 )
             )
         case "reasoning":
@@ -743,6 +839,9 @@ private extension CachedMessagePartPayload {
                     summary: text.flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
                 )
             )
+        case "notice":
+            guard let id, let kind = metadata.flatMap(TimelineNoticeKind.init(cacheFields:)) else { return nil }
+            return .notice(TimelineNotice(id: id, kind: kind))
         default:
             return nil
         }

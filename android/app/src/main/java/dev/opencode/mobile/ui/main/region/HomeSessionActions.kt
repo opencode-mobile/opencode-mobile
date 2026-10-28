@@ -41,7 +41,7 @@ class HomeSessionActions(
     private val _state = MutableStateFlow(HomeSessionActionsUiState())
     val state: StateFlow<HomeSessionActionsUiState> = _state.asStateFlow()
 
-    private var forkGateJob: Job? = null
+    private var forkCheckJob: Job? = null
     private var forkedOpenTarget: SessionOpenTarget? = null
 
     fun begin(
@@ -54,7 +54,8 @@ class HomeSessionActions(
         snoozeBlockReason: String? = null,
         presentSheet: Boolean = true,
     ) {
-        forkGateJob?.cancel()
+        forkCheckJob?.cancel()
+        forkCheckJob = null
         forkedOpenTarget = null
         _state.value =
             HomeSessionActionsUiState(
@@ -70,10 +71,6 @@ class HomeSessionActions(
                 showsSettle = showsSettle,
                 snoozeBlockReason = snoozeBlockReason,
             )
-        // Archived, settled, and snoozed rows do not fork. Swipes skip the lookup.
-        if (presentSheet && lifecycle == HomeSessionLifecycle.Active) {
-            forkGateJob = scope.launch { resolveForkAvailability(sessionId, worktree) }
-        }
     }
 
     fun chooseUnarchive() {
@@ -307,9 +304,7 @@ class HomeSessionActions(
     }
 
     fun chooseFork() {
-        val snapshot = _state.value
-        val target = snapshot.target ?: return
-        if (!snapshot.canFork) return
+        val target = _state.value.target ?: return
         _state.update {
             it.copy(
                 sheetVisible = false,
@@ -317,8 +312,11 @@ class HomeSessionActions(
                 forkDraft = suggestedHomeForkTitle(target.title),
                 forkSubmitting = false,
                 forkError = null,
+                forkBlockedMessage = null,
             )
         }
+        forkCheckJob?.cancel()
+        forkCheckJob = scope.launch { resolveForkCheck(target.sessionId, target.worktree) }
     }
 
     fun updateForkDraft(text: String) {
@@ -334,6 +332,10 @@ class HomeSessionActions(
         val snapshot = _state.value
         val target = snapshot.target ?: return
         if (snapshot.forkSubmitting) return
+        if (snapshot.forkBlockedMessage != null) {
+            onOutcome(OUTCOME_BLOCKED)
+            return
+        }
         val title = snapshot.forkDraft.trim()
         if (title.isEmpty()) {
             onOutcome(OUTCOME_BLOCKED)
@@ -342,7 +344,17 @@ class HomeSessionActions(
         }
         _state.update { it.copy(forkSubmitting = true, forkError = null) }
         logI("fork submit session=${target.sessionId}")
+        val check = forkCheckJob
         scope.launch {
+            // A quick confirm can beat the check started when the dialog opened.
+            check?.join()
+            val checked = _state.value
+            if (checked.target?.sessionId != target.sessionId) return@launch
+            if (checked.forkBlockedMessage != null) {
+                onOutcome(OUTCOME_BLOCKED)
+                _state.update { it.copy(forkSubmitting = false) }
+                return@launch
+            }
             runCatching {
                 val forked =
                     sessionRepository.forkSession(
@@ -457,11 +469,12 @@ class HomeSessionActions(
     }
 
     /**
-     * Fork is hidden until a message fetch proves the session has at least one visible user
-     * message, matching the Commands sheet rule. A failed fetch leaves Fork hidden. Home keeps
-     * this to one request per long-press and so passes no revert boundary (see parity gaps).
+     * Fork needs at least one visible user message, matching the Commands sheet rule. The sheet
+     * always lists Fork so it never reflows; this runs once the fork dialog opens and blocks the
+     * dialog when there is nothing to fork. A failed fetch leaves the server to decide. Home
+     * keeps this to one request per fork and so passes no revert boundary (see parity gaps).
      */
-    private suspend fun resolveForkAvailability(
+    private suspend fun resolveForkCheck(
         sessionId: String,
         worktree: String,
     ) {
@@ -484,24 +497,24 @@ class HomeSessionActions(
                 revertMessageId = null,
                 hasSelectedComposerModel = false,
             )
+        val canFork =
+            ClientSlashActionCatalog
+                .visibleActions(visibility, capabilities())
+                .contains(ClientSlashAction.Fork)
+        if (canFork) return
         _state.update { current ->
-            if (current.target?.sessionId != sessionId) {
+            if (current.target?.sessionId != sessionId || !current.forkVisible) {
                 current
             } else {
-                current.copy(
-                    canFork =
-                        ClientSlashActionCatalog
-                            .visibleActions(visibility, capabilities())
-                            .contains(ClientSlashAction.Fork),
-                )
+                current.copy(forkBlockedMessage = NOTHING_TO_FORK_ERROR)
             }
         }
     }
 
     /** Resets the whole action surface; [sessionId] guards against a stale in-flight action. */
     private fun clear(sessionId: String? = null) {
-        forkGateJob?.cancel()
-        forkGateJob = null
+        forkCheckJob?.cancel()
+        forkCheckJob = null
         _state.update { current ->
             if (sessionId != null && current.target?.sessionId != sessionId) {
                 current
@@ -529,6 +542,7 @@ class HomeSessionActions(
 
     private companion object {
         const val EMPTY_TITLE_ERROR = "Enter a session title"
+        const val NOTHING_TO_FORK_ERROR = "Nothing to fork yet"
         const val ARCHIVE_ERROR = "Couldn't archive session."
         const val UNARCHIVE_ERROR = "Couldn't unarchive session."
         const val UNSETTLE_ERROR = "Couldn't unsettle session."

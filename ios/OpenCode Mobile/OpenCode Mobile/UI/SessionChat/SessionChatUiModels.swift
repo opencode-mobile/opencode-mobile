@@ -69,6 +69,14 @@ struct SessionChatRow: Identifiable, Equatable {
 }
 
 extension SessionChatRow: MessageListTimelineHeightEstimating {
+    /// A folder move recorded as its own timeline row.
+    var isLocationMove: Bool {
+        blocks.contains { block in
+            if case let .notice(_, notice) = block, case .moved = notice.kind { return true }
+            return false
+        }
+    }
+
     var timelineRowHeightEstimate: CGFloat {
         if id == SessionChatStatusChrome.workingRowID {
             if isLayoutCollapsed { return 0 }
@@ -80,6 +88,8 @@ extension SessionChatRow: MessageListTimelineHeightEstimating {
                 .outgoing
             case .assistant, .system:
                 .assistant
+            case .notice:
+                .line
             case .tool, .command, .unknown:
                 .compact
             }
@@ -103,10 +113,16 @@ struct SessionChatComposerState: Equatable {
     var modelCatalogError: String?
     var agentMentions: [AgentMention] = []
     var fileMentions: [FileMention] = []
+    var skillMentions: [SkillMention] = []
     var cursor: Int = 0
     var selectionRevision: Int = 0
     var followUpDelivery: FollowUpDelivery = .steer
     var supportsFollowUpDelivery = false
+    /// The server streams uploads (`POST /api/experimental/fs/write`), so any file can attach.
+    var streamedUploadAvailable = false
+
+    /// Send waits for every upload in flight (#644).
+    var hasPendingUploads: Bool { attachments.contains(where: \.isUploadPending) }
 
     var selectedModeLabel: String {
         selectableAgents.first { $0.id.compare(selectedMode, options: .caseInsensitive) == .orderedSame }?.displayName
@@ -130,24 +146,34 @@ struct SessionChatComposerState: Equatable {
     }
 
     var mentionRanges: [Range<Int>] {
-        (agentMentions.map { $0.start ..< $0.end } + fileMentions.map { $0.start ..< $0.end })
+        (agentMentions.map { $0.start ..< $0.end }
+            + fileMentions.map { $0.start ..< $0.end }
+            + skillMentions.map { $0.start ..< $0.end })
             .sorted { $0.lowerBound < $1.lowerBound }
     }
 
+    /// A leading `!` makes Send run the draft as a shell command; see `ComposerShellCommand`.
+    var isShellMode: Bool {
+        ComposerShellCommand.isShellMode(text)
+    }
+
     var hasSendableContent: Bool {
-        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty
+        if isShellMode {
+            return ComposerShellCommand.command(text) != nil
+        }
+        return !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !attachments.isEmpty
     }
 
     var canAttach: Bool {
-        selectedModel?.option.canAttach == true
+        selectedModel?.option.canAttach == true || (selectedModel != nil && streamedUploadAvailable)
     }
 
     var canAttachPhotos: Bool {
-        selectedModel?.option.canAttachPhotos == true
+        selectedModel?.option.canAttachPhotos == true || (selectedModel != nil && streamedUploadAvailable)
     }
 
     var canAttachFiles: Bool {
-        selectedModel?.option.canAttachFiles == true
+        selectedModel?.option.canAttachFiles == true || (selectedModel != nil && streamedUploadAvailable)
     }
 
     /// `modelOwnedByEngine`: the engine keeps the model outside the composer (T3), so
@@ -194,10 +220,23 @@ enum SessionChatSnackbarTone: Equatable {
     case error
 }
 
+/// A button on a Session Chat snackbar.
+enum SessionChatSnackbarAction: Equatable {
+    /// Ask a failed `/btw` question again.
+    case retrySideQuestion(UUID)
+
+    var label: String {
+        switch self {
+        case .retrySideQuestion: "Retry"
+        }
+    }
+}
+
 struct SessionChatSnackbar: Equatable, Identifiable {
     let id: UInt64
     let message: String
     let tone: SessionChatSnackbarTone
+    var action: SessionChatSnackbarAction? = nil
 }
 
 enum ComposerDictationPhase: Equatable {
@@ -205,7 +244,17 @@ enum ComposerDictationPhase: Equatable {
     case finishing
     case permissionDenied
     case modelNotInstalled
+    case modelDownloading
+    case modelDownloadFailed
     case recognizerError
+
+    /// A card about the on-device speech model; download updates may replace it.
+    var isModelPhase: Bool {
+        switch self {
+        case .modelNotInstalled, .modelDownloading, .modelDownloadFailed: true
+        case .listening, .finishing, .permissionDenied, .recognizerError: false
+        }
+    }
 }
 
 struct ComposerDictationUiState: Equatable {
@@ -217,6 +266,8 @@ struct ComposerDictationUiState: Equatable {
     var onDevice: Bool = true
     var startedAt: Date = .init()
     var errorMessage: String? = nil
+    /// Model download progress, 0...1, while `phase` is `.modelDownloading`; nil when unknown.
+    var downloadProgress: Double? = nil
 }
 
 struct SessionChatUiState: Equatable {
@@ -233,6 +284,8 @@ struct SessionChatUiState: Equatable {
     var projectLabel: String? = nil
     var projectLetter: Character? = nil
     var projectLetterAccent: LetterAccent? = nil
+    /// True when the subtitle is a worktree checkout name instead of the project letter.
+    var worktreeCheckout: Bool = false
     var sessionBranchPill: SessionChatBranchPillUiState? = nil
     var timeline: SessionChatTimelineState
     var messages: [SessionChatRow]
@@ -251,6 +304,8 @@ struct SessionChatUiState: Equatable {
     var workingIndicatorLabel: String? = nil
     /// Live rate-limit countdown. Hidden for content-filter retries.
     var retryCard: SessionRetryCard? = nil
+    /// The session is in `retry` status: the composer owns the countdown, failure marks show none.
+    var isRetrying: Bool = false
     /// True after the Idle hold when the reserved footer has collapsed.
     var workingIndicatorCollapsed: Bool = false
     /// True while the reserved Working lamp/label is fading through the idle hold.
@@ -292,6 +347,12 @@ struct SessionChatUiState: Equatable {
     var supportsSessionArchive: Bool = true
     var supportsRevert: Bool = true
     var supportsDocumentAttachments: Bool = true
+    /// Move to worktree is a v2 server feature.
+    var supportsSessionMove: Bool = false
+    var moveSheetVisible = false
+    var moveInFlight = false
+    /// Where the server moved this session (`session.moved`); the screen rebinds to it.
+    var movedDirectory: String?
     var rename = SessionRenameUiState()
     var slashSuggestionsVisible = false
     var slashSuggestions: [SessionChatSlashSuggestion] = []
@@ -317,15 +378,29 @@ struct SessionChatUiState: Equatable {
     /// Chip-timeline step paragraphs expanded past `+N more`:
     /// `SessionChatStepParagraphBlock.id` to the chip count at tap time.
     var expandedStepParagraphs: [String: Int] = [:]
+    /// Step rails (`SessionChatStepRailBlock.id`) the user unfolded (#779).
+    var unfoldedStepRails: Set<String> = []
+    /// The activity card (`SessionChatActivityCardBlock.id`) whose live sheet is open (#779).
+    var presentedActivityCard: String?
+    /// The step (`SessionChatStep.id`) of the presented card whose detail the sheet shows; nil shows the list.
+    var activityCardDetailStepId: String?
+    /// What each running child session on a live activity card is doing, by child session id.
+    var childActivities: [String: SessionChatChildActivity] = [:]
+    /// What the trailing activity card's footer band shows after the footer hold, by card id (#779).
+    var activityCardFooters: [String: SessionChatActivityFooter] = [:]
+    /// In-flight steps not rendered yet: seen running for less than the entry debounce (#779).
+    var debouncedStepIDs: Set<String> = []
     /// One-time Chip timeline intro sheet (OPE-270).
     var chipTimelineIntroVisible = false
-    /// Settings gate for the composer mic. The OS availability gate is applied in the view.
-    var composerDictationEnabled: Bool = false
+    /// One-time Timeline Style picker for updated installs (#805).
+    var timelineStylePickerVisible = false
     var dictation: ComposerDictationUiState? = nil
     /// T3 harness + model chip and picker; nil on engines that use the composer catalogue.
     var harnessPicker: SessionChatHarnessPickerUiState? = nil
     /// Runtime modes the session menu offers (the harness's supported ones when known).
     var runtimeModeOptions: [String] = T3RuntimeModeLabel.allModes
+    /// `/btw` side questions: composer mode, chips above the composer and the answer sheet.
+    var sideQuestions = SessionChatSideQuestionsUiState()
 
     /// The composer's runtime-mode badge opens the runtime-mode sheet; display-only otherwise.
     var runtimeModeBadgeSelectable: Bool {
@@ -337,6 +412,7 @@ struct SessionChatUiState: Equatable {
         permissionRequest != nil
             || questionRequest != nil
             || commandsSheetVisible
+            || presentedActivityCard != nil
             || mcpPageVisible
             || forkDialogVisible
             || forkResultVisible
@@ -349,11 +425,35 @@ struct SessionChatUiState: Equatable {
         for message in messages {
             if message.role == .user {
                 candidate = message.isPending || message.isStreaming ? nil : message
-            } else if let candidate, !message.isPending, !message.isStreaming {
+            } else if message.role != .notice, let candidate, !message.isPending, !message.isStreaming {
                 latest = candidate.id
             }
         }
         return latest
+    }
+
+    /// The server rejects a last-turn diff when a folder move sits between assistant steps of
+    /// that turn. Snapshots from the two folders cannot be compared, so callers should not open
+    /// Changes. The span ends at the next prompt: a steered follow-up in the same server turn
+    /// is not visible here, and the Changes screen still explains that rejection.
+    func lastTurnSpansLocationChange(messageID: String) -> Bool {
+        guard let start = messages.firstIndex(where: { $0.id == messageID && $0.role == .user }) else { return false }
+        let rest = messages.index(after: start)
+        guard rest < messages.endIndex else { return false }
+        var sawAssistant = false
+        var sawMoveAfterAssistant = false
+        for message in messages[rest...] {
+            if message.role == .user { break }
+            if message.isLocationMove {
+                if sawAssistant { sawMoveAfterAssistant = true }
+                continue
+            }
+            if message.role == .assistant {
+                if sawMoveAfterAssistant { return true }
+                sawAssistant = true
+            }
+        }
+        return false
     }
 
     func changesNavigationTarget(worktree: String) -> ChangesNavigationTarget {
@@ -522,6 +622,23 @@ struct ReviewChangesSummary: Equatable {
     }
 }
 
+/// Copy for a last-turn diff the server will not build because the turn moved folders.
+enum TurnDiffUnavailable {
+    static let message = "This turn moved folders, so its changes can't be shown together."
+    private static let serverMarker = "Turn range spans a location change"
+
+    static func userFacing(_ error: Error) -> String? {
+        let text: String?
+        if case let .http(_, message) = error as? SessionError {
+            text = message
+        } else {
+            text = error.localizedDescription
+        }
+        guard let text, text.contains(serverMarker) else { return nil }
+        return message
+    }
+}
+
 struct ChangesNavigationTarget: Hashable {
     let sessionID: String
     let worktree: String
@@ -587,6 +704,18 @@ struct SessionChatTimelineRegionState: Equatable {
     var hasOlder: Bool = false
     var isLoadingOlder: Bool = false
     var errorMessage: String?
+    /// Step rails whose earlier settled steps are shown instead of folded (#779).
+    var unfoldedStepRails: Set<String> = []
+    /// The activity card whose live sheet is open; resolved from `messages` by id (#779).
+    var presentedActivityCard: String?
+    /// The presented card's step whose detail the sheet shows instead of the list.
+    var activityCardDetailStepId: String?
+    /// Observed activity of running child sessions on activity cards, by child session id.
+    var childActivities: [String: SessionChatChildActivity] = [:]
+    /// What the trailing activity card's footer band shows after the footer hold, by card id (#779).
+    var activityCardFooters: [String: SessionChatActivityFooter] = [:]
+    /// In-flight steps not rendered yet: seen running for less than the entry debounce (#779).
+    var debouncedStepIDs: Set<String> = []
 
     var knownChildSessionIDs: Set<String> {
         Set(
@@ -604,6 +733,15 @@ struct SessionChatTimelineRegionState: Equatable {
                     case .stepParagraph(_, let paragraph):
                         paragraph.chips.compactMap { chip in
                             chip.status == .pending || chip.status == .running ? chip.card.childSessionId : nil
+                        }
+                    case .stepRail(_, let rail):
+                        // Same set as the standard timeline: child sessions that did not fail.
+                        rail.steps.compactMap { step in
+                            step.status == .failed ? nil : step.childSession?.childSessionId
+                        }
+                    case .activityCard(_, let card):
+                        card.steps.compactMap { step in
+                            step.status == .failed ? nil : step.childSession?.childSessionId
                         }
                     default:
                         []
@@ -628,19 +766,32 @@ struct SessionChatAtSuggestion: Equatable, Identifiable {
     let subtitle: String?
     let agentName: String?
     let filePath: String?
+    let isDirectory: Bool
 
     init(
         id: String,
         title: String,
         subtitle: String?,
         agentName: String? = nil,
-        filePath: String? = nil
+        filePath: String? = nil,
+        isDirectory: Bool = false
     ) {
         self.id = id
         self.title = title
         self.subtitle = subtitle
         self.agentName = agentName
         self.filePath = filePath
+        self.isDirectory = isDirectory
+    }
+}
+
+extension SessionChatAtSuggestion {
+    /// File suggestions show their file-type icon; agent suggestions show the agent glyph.
+    var leadingIcon: OpenCodeComposerSuggestionItem.LeadingIcon? {
+        if let filePath {
+            return .file(path: filePath, kind: isDirectory ? .directory : .file)
+        }
+        return agentName == nil ? nil : .icon(.agent)
     }
 }
 
@@ -718,7 +869,8 @@ extension ProjectEntry {
             id: "file:\(relativePath)",
             title: relativePath,
             subtitle: "File",
-            filePath: relativePath
+            filePath: relativePath,
+            isDirectory: isDirectory
         )
     }
 }
@@ -728,6 +880,7 @@ struct SessionInfoRegionState: Equatable {
     var sessionTitle: String = ""
     var sessionStatusLabel: String?
     var retryCard: SessionRetryCard?
+    var isRetrying = false
     var hasResolvedSessionStatus = false
     var connectionStatus: SessionConnectionStatus = .offline
     var canMutate = false
@@ -744,11 +897,13 @@ struct SessionInfoRegionState: Equatable {
     mutating func applyStatus(
         authoritative: String?,
         hasResolved: Bool = true,
-        retryCard: SessionRetryCard? = nil
+        retryCard: SessionRetryCard? = nil,
+        isRetrying: Bool = false
     ) {
         sessionStatusLabel = authoritative
         hasResolvedSessionStatus = hasResolved
         self.retryCard = retryCard
+        self.isRetrying = isRetrying
     }
 }
 

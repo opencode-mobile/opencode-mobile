@@ -91,6 +91,54 @@ struct ChangesViewModelTests {
         #expect(viewModel.content?.additions == 0 && viewModel.content?.deletions == 0)
     }
 
+    @Test func lastTurnRefetchesWhenItsSessionGoesIdle() async throws {
+        let repository = ChangesSessionRepository(results: [
+            .success([Self.file("A.swift", additions: 1, deletions: 0)]),
+            .success([Self.file("A.swift", additions: 1, deletions: 0), Self.file("B.swift", additions: 1, deletions: 0)]),
+        ])
+        let events = FakeForegroundEventStream()
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/repo",
+            messageID: "m",
+            repository: repository,
+            capabilities: .forProtocol(.v2, v2Features: V2ServerFeatures(sessionTurnDiff: true)),
+            foregroundEventStream: events
+        )
+        await viewModel.load()
+        events.emit(OpencodeEvent(type: "session.idle", sessionID: "other"))
+        events.emit(OpencodeEvent(type: "session.status", sessionID: "s"))
+        events.emit(OpencodeEvent(type: "session.idle", sessionID: "s"))
+
+        let observer = Task { await viewModel.observeSessionIdle() }
+        defer { observer.cancel() }
+        for _ in 0..<200 where viewModel.content?.files.count != 2 {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(viewModel.content?.files.map(\.path) == ["A.swift", "B.swift"])
+        #expect(repository.requests == [
+            .init(sessionID: "s", messageID: "m", directory: "/repo"),
+            .init(sessionID: "s", messageID: "m", directory: "/repo"),
+        ])
+    }
+
+    @Test func v2WithTurnDiffShowsLastTurn() async {
+        let repository = ChangesSessionRepository(results: [.success([Self.file("A.swift", additions: 1, deletions: 0)])])
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/repo",
+            messageID: "m",
+            repository: repository,
+            capabilities: .forProtocol(.v2, v2Features: V2ServerFeatures(sessionTurnDiff: true))
+        )
+        await viewModel.load()
+
+        #expect(viewModel.state.selectedSource == .lastTurn)
+        #expect(viewModel.state.availableSources == [.lastTurn])
+        #expect(repository.requests == [.init(sessionID: "s", messageID: "m", directory: "/repo")])
+    }
+
     @Test func refreshPreservesFilterUntilReplacementSnapshotArrives() async {
         let repository = ChangesSessionRepository(results: [
             .success([Self.file("keep.swift"), Self.file("other.swift")]),
@@ -422,6 +470,51 @@ struct ChangesViewModelTests {
         #expect(multi?.initialFilePath == nil)
     }
 
+    @Test func lastTurnSpansLocationChangeWhenAMoveSitsBetweenAssistantSteps() {
+        var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
+        state.timeline = .ready
+        state.messages = [
+            row("user", .user),
+            row("before", .assistant),
+            moved("moved", "/repo/wt"),
+            row("after", .assistant),
+            row("later-user", .user),
+            row("later", .assistant),
+        ]
+        #expect(state.lastTurnSpansLocationChange(messageID: "user"))
+        #expect(!state.lastTurnSpansLocationChange(messageID: "later-user"))
+    }
+
+    @Test func moveBeforeAnyAssistantDoesNotBlockTheTurn() {
+        var state = SessionChatUiState.initial(sessionID: "s", sessionTitle: "Session")
+        state.timeline = .ready
+        state.messages = [
+            row("user", .user),
+            moved("moved", "/repo/wt"),
+            row("after", .assistant),
+        ]
+        #expect(!state.lastTurnSpansLocationChange(messageID: "user"))
+    }
+
+    @Test func locationChangeRejectionUsesAPlainSentence() async {
+        let repository = ChangesSessionRepository(
+            results: [.failure(SessionError.http(
+                statusCode: 400,
+                message: #"{"_tag":"InvalidRequestError","message":"Turn range spans a location change","field":"to"}"#
+            ))],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "feature", defaultBranch: "main"))]
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s",
+            worktree: "/w",
+            messageID: "user",
+            initialSource: .lastTurn,
+            repository: repository
+        )
+        await viewModel.load()
+        #expect(viewModel.state.phase == .error(TurnDiffUnavailable.message))
+    }
+
     private static func file(
         _ path: String,
         additions: Int = 1,
@@ -443,6 +536,21 @@ struct ChangesViewModelTests {
             modelProviderID: nil,
             modelID: nil,
             contextInputTokens: nil
+        )
+    }
+
+    private func moved(_ id: String, _ directory: String) -> SessionChatRow {
+        SessionChatRow(
+            id: id,
+            role: .notice,
+            text: "",
+            metadataLabel: "",
+            blocks: [
+                .notice(
+                    blockID: id,
+                    notice: TimelineNotice(id: id, kind: .moved(directory: directory))
+                ),
+            ]
         )
     }
 }

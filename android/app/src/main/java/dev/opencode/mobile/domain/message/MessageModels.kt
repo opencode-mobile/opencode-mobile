@@ -2,10 +2,25 @@ package dev.opencode.mobile.domain.message
 
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
+import dev.opencode.mobile.domain.agent.SkillMention
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+
+/**
+ * A skill admitted on a v2 user prompt. The skill body stays on the server;
+ * chat only needs the id and slash name so the prompt can show as `[/name]`.
+ */
+data class PromptSkill(
+    val id: String,
+    val name: String,
+    /** Mention text already present in the prompt, when another client recorded one. */
+    val mentionText: String? = null,
+    /** Offsets of that mention into the prompt text, when the sender recorded them. */
+    val mentionStart: Int? = null,
+    val mentionEnd: Int? = null,
+)
 
 data class Message(
     val id: String,
@@ -29,6 +44,8 @@ data class Message(
     val stopReason: MessageStopReason? = null,
     /** A run failure to show under the reply. Null when the run did not fail, or the user stopped it. */
     val failure: SessionFailure? = null,
+    /** Skills admitted with this prompt. Empty for v1 and for messages that did not load a skill. */
+    val promptSkills: List<PromptSkill> = emptyList(),
 )
 
 /** An assistant reply that ended before the model finished its answer. */
@@ -86,6 +103,25 @@ enum class AttachmentKind {
     Image,
     Pdf,
     Text,
+
+    /** Any other file. Only streamed uploads carry it; the data-URL path never sends one. */
+    File,
+}
+
+/** Where an attachment's bytes go: inline in the prompt, or streamed to the server first. */
+sealed interface AttachmentUpload {
+    /** Sent inline as a `data:` URL, as before uploads existed. */
+    data object Inline : AttachmentUpload
+
+    /** Streaming to the server; [percent] is null until the first progress report. */
+    data class Uploading(
+        val percent: Int? = null,
+    ) : AttachmentUpload
+
+    /** On the server at [serverPath]; the prompt names the path instead of carrying the bytes. */
+    data class Uploaded(
+        val serverPath: String,
+    ) : AttachmentUpload
 }
 
 data class Attachment(
@@ -97,10 +133,28 @@ data class Attachment(
     val byteCount: Long,
     val previewBytes: ByteArray? = null,
     val localPath: String? = null,
+    val upload: AttachmentUpload = AttachmentUpload.Inline,
 ) {
     val usesFileBackedBody: Boolean
-        get() = localPath != null
+        get() = localPath != null && upload is AttachmentUpload.Inline
+
+    val isUploading: Boolean
+        get() = upload is AttachmentUpload.Uploading
+
+    val isUploaded: Boolean
+        get() = upload is AttachmentUpload.Uploaded
+
+    /** The attachment travels in the prompt body (not already on the server, not still uploading). */
+    val isInline: Boolean
+        get() = upload is AttachmentUpload.Inline
+
+    /** Where the file lives on the server once it is uploaded; null while inline or uploading. */
+    val uploadedServerPath: String?
+        get() = (upload as? AttachmentUpload.Uploaded)?.serverPath
 }
+
+/** The attachments that travel in the prompt body; uploaded ones are named in the text instead. */
+fun List<Attachment>.inlineAttachments(): List<Attachment> = filter { it.isInline }
 
 sealed class MessagePart {
     data class Text(
@@ -139,6 +193,8 @@ sealed class MessagePart {
         val mime: String,
         val kind: AttachmentKind,
         val dataUrl: String,
+        /** Absolute server path of an uploaded file (`metadata.attachments`); [dataUrl] is empty then. */
+        val serverPath: String? = null,
     ) : MessagePart()
 
     /**
@@ -160,6 +216,15 @@ sealed class MessagePart {
         val timeStartEpochMs: Long? = null,
         val timeEndEpochMs: Long? = null,
     ) : MessagePart()
+
+    /**
+     * A v2 timeline notice ([TimelineNotice]); the only part of a
+     * [MessageRole.Notice] message. [id] is the notice message id.
+     */
+    data class Notice(
+        val id: String,
+        val notice: TimelineNotice,
+    ) : MessagePart()
 }
 
 data class PromptSendOptions(
@@ -172,8 +237,11 @@ data class PromptSendOptions(
     val fileMentions: List<FileMention> = emptyList(),
     /** Server worktree used to build `file://` URLs for [fileMentions]. */
     val worktree: String? = null,
-    val skillIds: List<String> = emptyList(),
+    /** v2 only: inline skill spans, sent as `skills: [{id, mention}]`. */
+    val skillMentions: List<SkillMention> = emptyList(),
     val delivery: FollowUpDelivery = FollowUpDelivery.Steer,
+    /** [ClientMessageId] the server gives the user message it creates. */
+    val messageId: String? = null,
 )
 
 data class PromptModelSelection(
@@ -181,11 +249,24 @@ data class PromptModelSelection(
     val modelId: String,
 )
 
+/**
+ * A shell command typed as `!command` in the composer. v1 records the run under [agent] and
+ * [model]; v2 runs it in the session as it is and ignores both.
+ */
+data class ShellCommandOptions(
+    val command: String,
+    val agent: String,
+    val model: PromptModelSelection? = null,
+)
+
 enum class MessageRole {
     User,
     Assistant,
     Command,
     Tool,
+
+    /** A v2 timeline notice: neither a prompt nor a reply, never part of a turn. */
+    Notice,
     Unknown,
 }
 
@@ -216,6 +297,10 @@ data class SessionFailure(
     val providerId: String? = null,
     val retries: Int? = null,
     val source: FailureSource = FailureSource.Step,
+    /** v2 `retryAfterMs`: how long the provider asked to wait. */
+    val retryAfterMs: Long? = null,
+    /** When the failure was recorded; set only with [retryAfterMs]. */
+    val recordedAtEpochMs: Long? = null,
 ) {
     val isNeutral: Boolean
         get() = type.equals("permission.rejected", ignoreCase = true)
@@ -224,6 +309,13 @@ data class SessionFailure(
     fun coversLiveRetry(): Boolean {
         val kind = type?.trim()?.lowercase().orEmpty()
         return kind == "provider.rate-limit" || kind == "provider.quota"
+    }
+
+    /** When the provider said to try again; null when the server sent no `retryAfterMs`. */
+    fun retryAtEpochMs(): Long? {
+        val wait = retryAfterMs ?: return null
+        val recorded = recordedAtEpochMs ?: return null
+        return recorded + wait
     }
 
     /** Caption under the reply. The provider body stays behind the existing detail sheet. */
@@ -237,6 +329,7 @@ data class SessionFailure(
         val kind = type?.trim()?.lowercase().orEmpty()
         return when {
             kind == "provider.no-route" -> FailureAction.PickModel
+            kind == "provider.free-limit" || kind == "provider.model-budget-limit" -> FailureAction.PickModel
             kind == "provider.content-filter" -> null
             isContextOverflow() -> FailureAction.Compact
             kind == "unknown" || kind == "provider.unknown" -> FailureAction.Copy
@@ -263,7 +356,20 @@ data class SessionFailure(
 
     companion object {
         private const val MAX_BODY = 4_000
+        private const val SECONDS_LIMIT_MS = 90_000L
         private val json = Json { ignoreUnknownKeys = true }
+
+        /** "Try again in N s", minutes above 90 s; null once the wait is over. */
+        fun retryAfterLabel(remainingMs: Long): String? {
+            if (remainingMs <= 0) return null
+            if (remainingMs <= SECONDS_LIMIT_MS) return "Try again in ${ceilDiv(remainingMs, 1_000L)} s"
+            return "Try again in ${ceilDiv(remainingMs, 60_000L)} min"
+        }
+
+        private fun ceilDiv(
+            value: Long,
+            unit: Long,
+        ): Long = (value + unit - 1) / unit
 
         fun isSilent(type: String?): Boolean {
             val value = type?.trim().orEmpty()
@@ -297,6 +403,8 @@ data class SessionFailure(
             providerId: String? = null,
             retries: Int? = null,
             source: FailureSource = FailureSource.Step,
+            retryAfterMs: Long? = null,
+            recordedAtEpochMs: Long? = null,
         ): SessionFailure? {
             if (isSilent(name)) return null
             return build(
@@ -309,6 +417,8 @@ data class SessionFailure(
                 providerId = providerId,
                 retries = retries,
                 source = source,
+                retryAfterMs = retryAfterMs,
+                recordedAtEpochMs = recordedAtEpochMs,
             )
         }
 
@@ -319,6 +429,8 @@ data class SessionFailure(
             providerBody: String?,
             outcome: String? = null,
             source: FailureSource = FailureSource.Step,
+            retryAfterMs: Long? = null,
+            recordedAtEpochMs: Long? = null,
         ): SessionFailure? {
             if (outcome.equals("succeeded", ignoreCase = true) || outcome.equals("interrupted", ignoreCase = true)) {
                 return null
@@ -331,6 +443,8 @@ data class SessionFailure(
                 providerBody = providerBody,
                 emptyFallback = "",
                 source = source,
+                retryAfterMs = retryAfterMs,
+                recordedAtEpochMs = recordedAtEpochMs,
             )
         }
 
@@ -344,6 +458,8 @@ data class SessionFailure(
             providerId: String? = null,
             retries: Int? = null,
             source: FailureSource = FailureSource.Step,
+            retryAfterMs: Long? = null,
+            recordedAtEpochMs: Long? = null,
         ): SessionFailure? {
             val body = providerBody?.trim()?.takeIf { it.isNotEmpty() }?.take(MAX_BODY)
             val text =
@@ -353,6 +469,7 @@ data class SessionFailure(
             val shown = text.ifBlank { type?.trim().orEmpty() }
             val http = status?.takeIf { it in 100..599 }
             if (shown.isBlank() && body == null && http == null) return null
+            val wait = retryAfterMs?.takeIf { it >= 0 }
             return SessionFailure(
                 type = type?.trim()?.takeIf { it.isNotEmpty() },
                 message = shown,
@@ -362,6 +479,8 @@ data class SessionFailure(
                 providerId = providerId?.trim()?.takeIf { it.isNotEmpty() },
                 retries = retries,
                 source = source,
+                retryAfterMs = wait,
+                recordedAtEpochMs = recordedAtEpochMs.takeIf { wait != null },
             )
         }
     }

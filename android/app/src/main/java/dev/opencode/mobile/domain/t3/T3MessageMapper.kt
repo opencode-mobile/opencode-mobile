@@ -448,6 +448,7 @@ object T3MessageMapper {
             is MessagePart.File -> part.id
             is MessagePart.Compaction -> part.id
             is MessagePart.Reasoning -> part.id
+            is MessagePart.Notice -> part.id
         }
 
     fun roleOf(raw: String): MessageRole =

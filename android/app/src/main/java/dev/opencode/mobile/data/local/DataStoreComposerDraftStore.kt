@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
+import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
@@ -74,6 +75,20 @@ class DataStoreComposerDraftStore
                     .filter { key ->
                         key.name.startsWith(sessionPrefix(connectionIdentity)) && key.name.endsWith(sessionSuffix)
                     }.forEach { key ->
+                        @Suppress("UNCHECKED_CAST")
+                        prefs.remove(key as Preferences.Key<String>)
+                    }
+            }
+        }
+
+        override suspend fun clearConnection(connectionIdentity: ModelSelectionConnectionIdentity) {
+            val identityMarker = "|${identityKey(connectionIdentity)}|"
+            dataStore.edit { prefs ->
+                prefs
+                    .asMap()
+                    .keys
+                    .filter { key -> key.name.startsWith(VERSION_PREFIX) && key.name.contains(identityMarker) }
+                    .forEach { key ->
                         @Suppress("UNCHECKED_CAST")
                         prefs.remove(key as Preferences.Key<String>)
                     }
@@ -165,10 +180,20 @@ class DataStoreComposerDraftStore
         )
 
         @Serializable
+        private data class StoredSkillMention(
+            val id: String,
+            val skillId: String,
+            val name: String,
+            val start: Int,
+            val end: Int,
+        )
+
+        @Serializable
         private data class StoredComposerDraft(
             val text: String,
             val agentMentions: List<StoredAgentMention> = emptyList(),
             val fileMentions: List<StoredFileMention> = emptyList(),
+            val skillMentions: List<StoredSkillMention> = emptyList(),
             val savedAtEpochMs: Long? = null,
         ) {
             fun toDraft() =
@@ -181,6 +206,10 @@ class DataStoreComposerDraftStore
                     fileMentions =
                         fileMentions.map {
                             FileMention(id = it.id, path = it.path, start = it.start, end = it.end)
+                        },
+                    skillMentions =
+                        skillMentions.map {
+                            SkillMention(id = it.id, skillId = it.skillId, name = it.name, start = it.start, end = it.end)
                         },
                     savedAtEpochMs = savedAtEpochMs,
                 )
@@ -196,6 +225,16 @@ class DataStoreComposerDraftStore
                         fileMentions =
                             draft.fileMentions.map {
                                 StoredFileMention(id = it.id, path = it.path, start = it.start, end = it.end)
+                            },
+                        skillMentions =
+                            draft.skillMentions.map {
+                                StoredSkillMention(
+                                    id = it.id,
+                                    skillId = it.skillId,
+                                    name = it.name,
+                                    start = it.start,
+                                    end = it.end,
+                                )
                             },
                         savedAtEpochMs = draft.savedAtEpochMs,
                     )

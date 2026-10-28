@@ -5,22 +5,66 @@ enum ComposerMentionRouting {
         _ text: String,
         cursor: Int,
         mentions: [AgentMention] = [],
-        fileMentions: [FileMention] = []
+        fileMentions: [FileMention] = [],
+        skillMentions: [SkillMention] = []
+    ) -> String? {
+        triggerQuery(
+            text,
+            cursor: cursor,
+            trigger: "@",
+            completedSpans: mentions.map { ($0.start, $0.end) } + skillMentions.map { ($0.start, $0.end) },
+            fileMentions: fileMentions
+        )
+    }
+
+    /// An open `/` query at the caret: the `/` starts the draft or follows whitespace, and no
+    /// whitespace sits between it and the caret. A `/` inside a word or a file path is not one.
+    static func slashSuggestionQuery(
+        _ text: String,
+        cursor: Int,
+        mentions: [AgentMention] = [],
+        fileMentions: [FileMention] = [],
+        skillMentions: [SkillMention] = []
+    ) -> String? {
+        triggerQuery(
+            text,
+            cursor: cursor,
+            trigger: "/",
+            completedSpans: mentions.map { ($0.start, $0.end) } + skillMentions.map { ($0.start, $0.end) },
+            fileMentions: fileMentions
+        )
+    }
+
+    /// True when the open `/` query at the caret starts the draft. Server commands are only
+    /// offered there; skills anywhere.
+    static func slashQueryIsLeading(_ text: String, cursor: Int) -> Bool {
+        let clamped = max(0, min(cursor, text.count))
+        let before = substring(text, start: 0, end: clamped)
+        guard let slashIndex = before.lastIndex(of: "/") else { return false }
+        return before.distance(from: before.startIndex, to: slashIndex) == 0
+    }
+
+    private static func triggerQuery(
+        _ text: String,
+        cursor: Int,
+        trigger: Character,
+        completedSpans: [(Int, Int)],
+        fileMentions: [FileMention]
     ) -> String? {
         let clamped = max(0, min(cursor, text.count))
         let before = substring(text, start: 0, end: clamped)
-        guard let atIndex = before.lastIndex(of: "@") else { return nil }
-        let atOffset = before.distance(from: before.startIndex, to: atIndex)
-        if atOffset > 0 {
-            let previousIndex = before.index(before.startIndex, offsetBy: atOffset - 1)
+        guard let triggerIndex = before.lastIndex(of: trigger) else { return nil }
+        let triggerOffset = before.distance(from: before.startIndex, to: triggerIndex)
+        if triggerOffset > 0 {
+            let previousIndex = before.index(before.startIndex, offsetBy: triggerOffset - 1)
             if !before[previousIndex].isWhitespace { return nil }
         }
-        let tokenStart = before.index(after: atIndex)
+        let tokenStart = before.index(after: triggerIndex)
         let token = String(before[tokenStart...])
         if token.contains(where: \.isWhitespace) { return nil }
-        // A completed mention at the caret is not an open @ query. A caret inside a
-        // file path (which may contain spaces) is still that mention.
-        if mentions.contains(where: { $0.start == atOffset && $0.end == clamped }) {
+        // A completed mention at the caret is not an open query. A caret inside a
+        // file path (which may contain spaces or slashes) is still that mention.
+        if completedSpans.contains(where: { $0.0 == triggerOffset && $0.1 == clamped }) {
             return nil
         }
         if fileMentions.contains(where: { clamped > $0.start && clamped <= $0.end }) {
@@ -34,13 +78,26 @@ enum ComposerMentionRouting {
         cursor: Int,
         mentions: [AgentMention] = [],
         fileMentions: [FileMention] = [],
+        skillMentions: [SkillMention] = [],
         allowsMentions: Bool = true,
         allowsSlashCommands: Bool = true
     ) -> ComposerSuggestionMode {
-        if allowsMentions, let atQuery = atSuggestionQuery(text, cursor: cursor, mentions: mentions, fileMentions: fileMentions) {
+        if allowsMentions, let atQuery = atSuggestionQuery(
+            text,
+            cursor: cursor,
+            mentions: mentions,
+            fileMentions: fileMentions,
+            skillMentions: skillMentions
+        ) {
             return .at(query: atQuery)
         }
-        if allowsSlashCommands, let slashQuery = ComposerSubmitRouting.slashSuggestionQuery(text) {
+        if allowsSlashCommands, let slashQuery = slashSuggestionQuery(
+            text,
+            cursor: cursor,
+            mentions: mentions,
+            fileMentions: fileMentions,
+            skillMentions: skillMentions
+        ) {
             return .slash(query: slashQuery)
         }
         return .none
@@ -119,9 +176,10 @@ enum ComposerMentionRouting {
         agentName: String,
         mentionID: String,
         existingMentions: [AgentMention] = [],
-        existingFileMentions: [FileMention] = []
+        existingFileMentions: [FileMention] = [],
+        existingSkillMentions: [SkillMention] = []
     ) -> MentionInsertResult {
-        let inserted = insertToken(text: text, cursor: cursor, token: "@\(agentName)")
+        let inserted = insertToken(text: text, cursor: cursor, trigger: "@", token: "@\(agentName)")
         let mention = AgentMention(
             id: mentionID,
             name: agentName,
@@ -132,7 +190,8 @@ enum ComposerMentionRouting {
             text: inserted.text,
             cursor: inserted.cursor,
             mentions: (shiftedAgents(existingMentions, inserted: inserted) + [mention]).sorted { $0.start < $1.start },
-            fileMentions: shiftedFiles(existingFileMentions, inserted: inserted)
+            fileMentions: shiftedFiles(existingFileMentions, inserted: inserted),
+            skillMentions: shiftedSkills(existingSkillMentions, inserted: inserted)
         )
     }
 
@@ -142,9 +201,10 @@ enum ComposerMentionRouting {
         path: String,
         mentionID: String,
         existingMentions: [AgentMention] = [],
-        existingFileMentions: [FileMention] = []
+        existingFileMentions: [FileMention] = [],
+        existingSkillMentions: [SkillMention] = []
     ) -> MentionInsertResult {
-        let inserted = insertToken(text: text, cursor: cursor, token: "@\(path)")
+        let inserted = insertToken(text: text, cursor: cursor, trigger: "@", token: "@\(path)")
         let mention = FileMention(
             id: mentionID,
             path: path,
@@ -155,7 +215,56 @@ enum ComposerMentionRouting {
             text: inserted.text,
             cursor: inserted.cursor,
             mentions: shiftedAgents(existingMentions, inserted: inserted),
-            fileMentions: (shiftedFiles(existingFileMentions, inserted: inserted) + [mention]).sorted { $0.start < $1.start }
+            fileMentions: (shiftedFiles(existingFileMentions, inserted: inserted) + [mention]).sorted { $0.start < $1.start },
+            skillMentions: shiftedSkills(existingSkillMentions, inserted: inserted)
+        )
+    }
+
+    /// Replaces the open `/query` at the caret with a `/name` skill span plus a space.
+    static func insertSkillMention(
+        text: String,
+        cursor: Int,
+        skillID: String,
+        name: String,
+        mentionID: String,
+        existingMentions: [AgentMention] = [],
+        existingFileMentions: [FileMention] = [],
+        existingSkillMentions: [SkillMention] = []
+    ) -> MentionInsertResult {
+        let inserted = insertToken(text: text, cursor: cursor, trigger: "/", token: "/\(name)")
+        let mention = SkillMention(
+            id: mentionID,
+            skillID: skillID,
+            name: name,
+            start: inserted.atIndex,
+            end: inserted.atIndex + inserted.token.count
+        )
+        return MentionInsertResult(
+            text: inserted.text,
+            cursor: inserted.cursor,
+            mentions: shiftedAgents(existingMentions, inserted: inserted),
+            fileMentions: shiftedFiles(existingFileMentions, inserted: inserted),
+            skillMentions: (shiftedSkills(existingSkillMentions, inserted: inserted) + [mention]).sorted { $0.start < $1.start }
+        )
+    }
+
+    /// Replaces the open `/query` at the caret with `/name ` for a server command. No span: the
+    /// command is resolved from the leading token on send.
+    static func insertCommandSelection(
+        text: String,
+        cursor: Int,
+        commandName: String,
+        existingMentions: [AgentMention] = [],
+        existingFileMentions: [FileMention] = [],
+        existingSkillMentions: [SkillMention] = []
+    ) -> MentionInsertResult {
+        let inserted = insertToken(text: text, cursor: cursor, trigger: "/", token: "/\(commandName)")
+        return MentionInsertResult(
+            text: inserted.text,
+            cursor: inserted.cursor,
+            mentions: shiftedAgents(existingMentions, inserted: inserted),
+            fileMentions: shiftedFiles(existingFileMentions, inserted: inserted),
+            skillMentions: shiftedSkills(existingSkillMentions, inserted: inserted)
         )
     }
 
@@ -164,11 +273,12 @@ enum ComposerMentionRouting {
         previousMentions: [AgentMention],
         proposedText: String,
         proposedCursor: Int,
-        previousFileMentions: [FileMention] = []
+        previousFileMentions: [FileMention] = [],
+        previousSkillMentions: [SkillMention] = []
     ) -> MentionReconcileResult {
         let reconciled = reconcileSpans(
             previousText: previousText,
-            previousSpans: spans(agents: previousMentions, files: previousFileMentions),
+            previousSpans: spans(agents: previousMentions, files: previousFileMentions, skills: previousSkillMentions),
             proposedText: proposedText,
             proposedCursor: proposedCursor
         )
@@ -176,7 +286,8 @@ enum ComposerMentionRouting {
             text: reconciled.text,
             cursor: reconciled.cursor,
             mentions: agents(from: reconciled.spans),
-            fileMentions: files(from: reconciled.spans)
+            fileMentions: files(from: reconciled.spans),
+            skillMentions: skills(from: reconciled.spans)
         )
     }
 
@@ -184,11 +295,9 @@ enum ComposerMentionRouting {
         mentions
             .sorted { $0.start < $1.start }
             .compactMap { mention in
-                guard mention.start >= 0, mention.end <= text.count, mention.start < mention.end else {
-                    return nil
-                }
-                let value = substring(text, start: mention.start, end: mention.end)
-                guard value == mention.token else { return nil }
+                guard let value = spanValue(text: text, start: mention.start, end: mention.end),
+                      value == mention.token
+                else { return nil }
                 return AgentPartPayload(
                     name: mention.name,
                     sourceValue: value,
@@ -202,11 +311,9 @@ enum ComposerMentionRouting {
         mentions
             .sorted { $0.start < $1.start }
             .compactMap { mention in
-                guard mention.start >= 0, mention.end <= text.count, mention.start < mention.end else {
-                    return nil
-                }
-                let value = substring(text, start: mention.start, end: mention.end)
-                guard value == mention.token else { return nil }
+                guard let value = spanValue(text: text, start: mention.start, end: mention.end),
+                      value == mention.token
+                else { return nil }
                 return FilePartPayload(
                     path: mention.path,
                     filename: ProjectPaths.filename(of: mention.path),
@@ -217,10 +324,31 @@ enum ComposerMentionRouting {
             }
     }
 
+    /// Skill spans whose text still reads `/name`, deduplicated by skill id (first span wins).
+    static func skillParts(text: String, mentions: [SkillMention]) -> [SkillPartPayload] {
+        var seen = Set<String>()
+        return mentions
+            .sorted { $0.start < $1.start }
+            .compactMap { mention in
+                guard let value = spanValue(text: text, start: mention.start, end: mention.end),
+                      value == mention.token,
+                      seen.insert(mention.skillID).inserted
+                else { return nil }
+                return SkillPartPayload(
+                    skillID: mention.skillID,
+                    name: mention.name,
+                    sourceValue: value,
+                    start: mention.start,
+                    end: mention.end
+                )
+            }
+    }
+
     static func trimForSend(
         text: String,
         mentions: [AgentMention],
-        fileMentions: [FileMention] = []
+        fileMentions: [FileMention] = [],
+        skillMentions: [SkillMention] = []
     ) -> TrimmedPrompt {
         guard let leadingIndex = text.firstIndex(where: { !$0.isWhitespace }) else {
             return TrimmedPrompt(text: "", agentMentions: [], fileMentions: [])
@@ -244,8 +372,23 @@ enum ComposerMentionRouting {
             fileMentions: fileMentions.compactMap { mention in
                 guard let range = adjust(start: mention.start, end: mention.end) else { return nil }
                 return FileMention(id: mention.id, path: mention.path, start: range.0, end: range.1)
+            },
+            skillMentions: skillMentions.compactMap { mention in
+                guard let range = adjust(start: mention.start, end: mention.end) else { return nil }
+                return SkillMention(
+                    id: mention.id,
+                    skillID: mention.skillID,
+                    name: mention.name,
+                    start: range.0,
+                    end: range.1
+                )
             }
         )
+    }
+
+    private static func spanValue(text: String, start: Int, end: Int) -> String? {
+        guard start >= 0, end <= text.count, start < end else { return nil }
+        return substring(text, start: start, end: end)
     }
 
     private struct TokenInsertion {
@@ -257,11 +400,11 @@ enum ComposerMentionRouting {
         let replacedUntil: Int
     }
 
-    private static func insertToken(text: String, cursor: Int, token: String) -> TokenInsertion {
+    private static func insertToken(text: String, cursor: Int, trigger: Character, token: String) -> TokenInsertion {
         let clamped = max(0, min(cursor, text.count))
         let before = substring(text, start: 0, end: clamped)
-        guard let atIndexChar = before.lastIndex(of: "@") else {
-            preconditionFailure("No @ token before cursor")
+        guard let atIndexChar = before.lastIndex(of: trigger) else {
+            preconditionFailure("No \(trigger) token before cursor")
         }
         let atIndex = before.distance(from: before.startIndex, to: atIndexChar)
         let insertion = "\(token) "
@@ -305,16 +448,38 @@ enum ComposerMentionRouting {
         }.sorted { $0.start < $1.start }
     }
 
+    private static func shiftedSkills(_ mentions: [SkillMention], inserted: TokenInsertion) -> [SkillMention] {
+        mentions.compactMap { mention in
+            if mention.end <= inserted.atIndex { return mention }
+            if mention.start >= inserted.replacedUntil {
+                return SkillMention(
+                    id: mention.id,
+                    skillID: mention.skillID,
+                    name: mention.name,
+                    start: mention.start + inserted.delta,
+                    end: mention.end + inserted.delta
+                )
+            }
+            return nil
+        }.sorted { $0.start < $1.start }
+    }
+
     private struct MentionSpan {
         let id: String
         let kind: String
         let label: String
+        /// Skill spans: the wire skill id.
+        let detail: String?
         let start: Int
         let end: Int
 
+        func moved(start: Int, end: Int) -> MentionSpan {
+            MentionSpan(id: id, kind: kind, label: label, detail: detail, start: start, end: end)
+        }
+
         func shifted(oldEditEnd: Int, delta: Int) -> MentionSpan {
             guard start >= oldEditEnd else { return self }
-            return MentionSpan(id: id, kind: kind, label: label, start: start + delta, end: end + delta)
+            return moved(start: start + delta, end: end + delta)
         }
     }
 
@@ -326,10 +491,14 @@ enum ComposerMentionRouting {
 
     private static let agentKind = "agent"
     private static let fileKind = "file"
+    private static let skillKind = "skill"
 
-    private static func spans(agents: [AgentMention], files: [FileMention]) -> [MentionSpan] {
-        agents.map { MentionSpan(id: $0.id, kind: agentKind, label: $0.name, start: $0.start, end: $0.end) }
-            + files.map { MentionSpan(id: $0.id, kind: fileKind, label: $0.path, start: $0.start, end: $0.end) }
+    private static func spans(agents: [AgentMention], files: [FileMention], skills: [SkillMention]) -> [MentionSpan] {
+        agents.map { MentionSpan(id: $0.id, kind: agentKind, label: $0.name, detail: nil, start: $0.start, end: $0.end) }
+            + files.map { MentionSpan(id: $0.id, kind: fileKind, label: $0.path, detail: nil, start: $0.start, end: $0.end) }
+            + skills.map {
+                MentionSpan(id: $0.id, kind: skillKind, label: $0.name, detail: $0.skillID, start: $0.start, end: $0.end)
+            }
     }
 
     private static func agents(from spans: [MentionSpan]) -> [AgentMention] {
@@ -344,6 +513,13 @@ enum ComposerMentionRouting {
             .filter { $0.kind == fileKind }
             .sorted { $0.start < $1.start }
             .map { FileMention(id: $0.id, path: $0.label, start: $0.start, end: $0.end) }
+    }
+
+    private static func skills(from spans: [MentionSpan]) -> [SkillMention] {
+        spans
+            .filter { $0.kind == skillKind }
+            .sorted { $0.start < $1.start }
+            .map { SkillMention(id: $0.id, skillID: $0.detail ?? $0.label, name: $0.label, start: $0.start, end: $0.end) }
     }
 
     private static func reconcileSpans(
@@ -399,13 +575,7 @@ enum ComposerMentionRouting {
                     .filter { !($0.id == span.id && $0.kind == span.kind) }
                     .map { current in
                         if current.start >= span.end {
-                            return MentionSpan(
-                                id: current.id,
-                                kind: current.kind,
-                                label: current.label,
-                                start: current.start - removed,
-                                end: current.end - removed
-                            )
+                            return current.moved(start: current.start - removed, end: current.end - removed)
                         }
                         return current
                     }

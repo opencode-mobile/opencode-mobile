@@ -26,6 +26,9 @@ enum class ServerProtocol(
  * that fallback must not turn OpenCode-only controls back on.
  *
  * Screen Models read these flags instead of branching on protocol themselves.
+ *
+ * v2 session archive, per-turn diff and side questions depend on the server release, not the protocol:
+ * pass [forProtocol]'s `v2Features` from the server's API contract probe.
  */
 data class ServerCapabilities(
     val supportsSessionMessageDiff: Boolean,
@@ -45,6 +48,17 @@ data class ServerCapabilities(
     val supportsDocumentAttachments: Boolean = true,
     /** Server tracks per-session read state (`time.idle`/`time.viewed`, `session.viewed`). */
     val supportsSessionViewed: Boolean = false,
+    /** Server moves a session to another worktree (`POST /api/session/{id}/move`, v2). */
+    val supportsSessionMove: Boolean = false,
+    /** The command route keeps a client message id (v1 `messageID`); v2 `…/command` takes none. */
+    val commandKeepsClientMessageId: Boolean = false,
+    /**
+     * `/btw` side questions: `POST /api/session/{id}/generate` answers from the session's context
+     * without adding to it (v2 releases that declare it). v1 has no equivalent.
+     */
+    val supportsSideQuestion: Boolean = false,
+    /** Attachments stream to the server (`POST /api/experimental/fs/write` plus `paths.tmp`, v2). */
+    val supportsAttachmentUpload: Boolean = false,
 ) {
     companion object {
         val t3: ServerCapabilities =
@@ -64,7 +78,10 @@ data class ServerCapabilities(
         fun t3(supportsDocumentAttachments: Boolean): ServerCapabilities =
             if (supportsDocumentAttachments) t3.copy(supportsDocumentAttachments = true) else t3
 
-        fun forProtocol(protocol: ServerProtocol): ServerCapabilities =
+        fun forProtocol(
+            protocol: ServerProtocol,
+            v2Features: V2ServerFeatures = V2ServerFeatures(),
+        ): ServerCapabilities =
             when (protocol) {
                 ServerProtocol.V1 ->
                     ServerCapabilities(
@@ -72,14 +89,18 @@ data class ServerCapabilities(
                         supportsSessionArchive = true,
                         supportsFollowUpDelivery = false,
                         supportsSessionViewed = false,
+                        commandKeepsClientMessageId = true,
                     )
                 ServerProtocol.V2 ->
                     ServerCapabilities(
-                        supportsSessionMessageDiff = false,
-                        supportsSessionArchive = false,
+                        supportsSessionMessageDiff = v2Features.sessionTurnDiff,
+                        supportsSessionArchive = v2Features.sessionArchive,
                         supportsFollowUpDelivery = true,
                         supportsPendingPrompts = true,
                         supportsSessionViewed = true,
+                        supportsSessionMove = true,
+                        supportsSideQuestion = v2Features.sessionGenerate,
+                        supportsAttachmentUpload = v2Features.attachmentUpload,
                     )
             }
 

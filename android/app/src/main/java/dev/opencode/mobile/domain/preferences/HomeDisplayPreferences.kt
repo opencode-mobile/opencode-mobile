@@ -1,11 +1,27 @@
 package dev.opencode.mobile.domain.preferences
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.opencode.mobile.domain.home.HomeSessionLadder
+
+/** How Home draws a session row (#803): two compact lines, or the three-line row from #798. */
+enum class HomeSessionRowStyle(
+    val wireValue: String,
+) {
+    Compact("compact"),
+    Classic("classic"),
+    ;
+
+    companion object {
+        val DEFAULT = Compact
+
+        fun fromWire(value: String?): HomeSessionRowStyle? = entries.firstOrNull { it.wireValue == value }
+    }
+}
 
 object HomeDisplayPreferences {
     private const val PREFS_NAME = "opencode_home_display"
@@ -14,6 +30,8 @@ object HomeDisplayPreferences {
     private const val KEY_RECENT_WINDOW_HOURS = "recent_window_hours"
     private const val KEY_LAST_HOME_HIDDEN_AT_EPOCH_MS = "last_home_hidden_at_epoch_ms"
     private const val KEY_SESSION_LIST_PROJECT_PICKER_ENABLED = "session_list_project_picker_enabled"
+    private const val KEY_SHOWS_WORKTREES = "shows_worktrees"
+    private const val KEY_SESSION_ROW_STYLE = "session_row_style"
 
     /** When true, replace remote `/Users/…` or `/home/…` with `~` in path labels. */
     var hideUserDirectoryPrefix: Boolean by mutableStateOf(true)
@@ -22,11 +40,24 @@ object HomeDisplayPreferences {
     var recentWindowHours: Int by mutableIntStateOf(HomeSessionLadder.DEFAULT_WINDOW_HOURS)
         private set
 
-    private var appContext: Context? = null
+    /**
+     * When true, Home shows each project's worktrees and branches, and holding New session can
+     * pick a worktree. Off changes presentation only: sessions of every worktree stay listed.
+     */
+    var showsWorktrees: Boolean by mutableStateOf(true)
+        private set
+
+    var sessionRowStyle: HomeSessionRowStyle by mutableStateOf(HomeSessionRowStyle.DEFAULT)
+        private set
+
+    private var preferences: SharedPreferences? = null
 
     fun initialize(context: Context) {
-        appContext = context.applicationContext
-        val prefs = prefs() ?: return
+        initialize(context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE))
+    }
+
+    internal fun initialize(prefs: SharedPreferences) {
+        preferences = prefs
         hideUserDirectoryPrefix =
             if (prefs.contains(KEY_HIDE_USER_DIRECTORY_PREFIX)) {
                 prefs.getBoolean(KEY_HIDE_USER_DIRECTORY_PREFIX, true)
@@ -37,6 +68,18 @@ object HomeDisplayPreferences {
             HomeSessionLadder.sanitizeWindowHours(
                 prefs.getInt(KEY_RECENT_WINDOW_HOURS, HomeSessionLadder.DEFAULT_WINDOW_HOURS),
             )
+        showsWorktrees = prefs.getBoolean(KEY_SHOWS_WORKTREES, true)
+        sessionRowStyle = HomeSessionRowStyle.fromWire(prefs.getString(KEY_SESSION_ROW_STYLE, null)) ?: HomeSessionRowStyle.DEFAULT
+    }
+
+    fun updateSessionRowStyle(value: HomeSessionRowStyle) {
+        sessionRowStyle = value
+        prefs()?.edit()?.putString(KEY_SESSION_ROW_STYLE, value.wireValue)?.apply()
+    }
+
+    fun updateShowsWorktrees(value: Boolean) {
+        showsWorktrees = value
+        prefs()?.edit()?.putBoolean(KEY_SHOWS_WORKTREES, value)?.apply()
     }
 
     fun updateHideUserDirectoryPrefix(value: Boolean) {
@@ -74,10 +117,14 @@ object HomeDisplayPreferences {
             ?.remove(KEY_RECENT_WINDOW_HOURS)
             ?.remove(KEY_LAST_HOME_HIDDEN_AT_EPOCH_MS)
             ?.remove(KEY_SESSION_LIST_PROJECT_PICKER_ENABLED)
+            ?.remove(KEY_SHOWS_WORKTREES)
+            ?.remove(KEY_SESSION_ROW_STYLE)
             ?.apply()
         hideUserDirectoryPrefix = true
+        showsWorktrees = true
+        sessionRowStyle = HomeSessionRowStyle.DEFAULT
         recentWindowHours = HomeSessionLadder.DEFAULT_WINDOW_HOURS
     }
 
-    private fun prefs() = appContext?.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    private fun prefs() = preferences
 }

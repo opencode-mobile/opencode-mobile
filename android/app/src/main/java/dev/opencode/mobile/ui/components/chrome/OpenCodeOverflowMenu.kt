@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,6 +57,7 @@ private val OverflowMenuEntryIconSize = 20.dp
 private val OverflowMenuEntryIconSpacing = 12.dp
 private val OverflowMenuAnchorEndInset = 4.dp
 private val OverflowMenuAnchorTopOffset = 8.dp
+private val OverflowMenuEntryTextMaxWidth = 240.dp
 
 data class OpenCodeOverflowMenuEntry(
     val title: String,
@@ -65,6 +67,9 @@ data class OpenCodeOverflowMenuEntry(
     val destructive: Boolean = false,
     val contentDescription: String? = null,
     val accessibilityLabel: String? = null,
+    /** Secondary line under the title, such as why the entry is disabled. */
+    val subtitle: String? = null,
+    val testTag: String? = null,
 )
 
 @Composable
@@ -116,6 +121,64 @@ fun OpenCodeTopBarOverflowHost(
                 )
             }
         }
+    }
+}
+
+/**
+ * The overflow menu opened from a control inside the content, such as a + button: the panel
+ * sits above [anchor], start-aligned, or below it when there is no room above.
+ */
+@Composable
+fun OpenCodeAnchoredOverflowHost(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    entries: List<OpenCodeOverflowMenuEntry>,
+    modifier: Modifier = Modifier,
+    anchor: @Composable () -> Unit,
+) {
+    val gapPx = with(LocalDensity.current) { OverflowMenuAnchorTopOffset.roundToPx() }
+    Box(modifier = modifier) {
+        anchor()
+        if (expanded) {
+            Popup(
+                popupPositionProvider = remember(gapPx) { AnchoredOverflowMenuPositionProvider(gapPx) },
+                onDismissRequest = onDismissRequest,
+                properties =
+                    PopupProperties(
+                        focusable = true,
+                        dismissOnBackPress = true,
+                        dismissOnClickOutside = true,
+                        usePlatformDefaultWidth = false,
+                    ),
+            ) {
+                OpenCodeOverflowMenuPanel(
+                    entries = entries,
+                    onDismissRequest = onDismissRequest,
+                )
+            }
+        }
+    }
+}
+
+private class AnchoredOverflowMenuPositionProvider(
+    private val gapPx: Int,
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize,
+    ): androidx.compose.ui.unit.IntOffset {
+        val start =
+            if (layoutDirection == LayoutDirection.Ltr) {
+                anchorBounds.left
+            } else {
+                anchorBounds.right - popupContentSize.width
+            }
+        val x = start.coerceIn(0, (windowSize.width - popupContentSize.width).coerceAtLeast(0))
+        val above = anchorBounds.top - gapPx - popupContentSize.height
+        val y = if (above >= 0) above else anchorBounds.bottom + gapPx
+        return androidx.compose.ui.unit.IntOffset(x, y)
     }
 }
 
@@ -212,7 +275,8 @@ private fun OverflowMenuEntryRow(
                     entry.accessibilityLabel?.let { label ->
                         Modifier.semantics(mergeDescendants = true) { contentDescription = label }
                     } ?: Modifier,
-                ).then(if (entry.enabled) Modifier else Modifier.alpha(0.7f)),
+                ).then(if (entry.enabled) Modifier else Modifier.alpha(0.7f))
+                .then(entry.testTag?.let { Modifier.testTag(it) } ?: Modifier),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement =
             Arrangement.spacedBy(
@@ -234,13 +298,24 @@ private fun OverflowMenuEntryRow(
                 }
             }
         }
-        Text(
-            text = entry.title,
-            style = MaterialTheme.typography.bodyLarge,
-            color = contentColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Column(modifier = Modifier.widthIn(max = OverflowMenuEntryTextMaxWidth)) {
+            Text(
+                text = entry.title,
+                style = MaterialTheme.typography.bodyLarge,
+                color = contentColor,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            entry.subtitle?.let { subtitle ->
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = openCodeColor("text-weak"),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 
@@ -305,6 +380,7 @@ private fun previewOverflowMenuEntries(): List<OpenCodeOverflowMenuEntry> =
             title = "Disabled action",
             icon = OpenCodeIcons.Settings,
             enabled = false,
+            subtitle = "Needs an opencode v2 server",
             onClick = {},
         ),
         OpenCodeOverflowMenuEntry(

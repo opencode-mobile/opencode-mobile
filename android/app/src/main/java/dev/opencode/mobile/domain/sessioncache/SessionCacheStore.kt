@@ -72,6 +72,12 @@ sealed interface SessionCacheEvictSelector {
         val worktree: String,
         val matchByUrlPrefix: Boolean = false,
     ) : SessionCacheEvictSelector
+
+    /** Every worktree of one connection: by profile id, or by `normalizedBaseUrl|` prefix. */
+    data class Connection(
+        val connectionIdOrUrlPrefix: String,
+        val matchByUrlPrefix: Boolean = false,
+    ) : SessionCacheEvictSelector
 }
 
 data class SessionCacheReport(

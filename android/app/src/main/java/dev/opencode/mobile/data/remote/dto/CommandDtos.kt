@@ -2,6 +2,7 @@ package dev.opencode.mobile.data.remote.dto
 
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -64,6 +65,7 @@ data class RunCommandRequestDto(
     val model: String? = null,
     val variant: String? = null,
     val parts: List<CommandFilePartDto> = emptyList(),
+    @SerialName("messageID") val messageId: String? = null,
 )
 
 @Serializable
@@ -81,4 +83,6 @@ data class V2RunCommandRequestDto(
     val text: String,
     val files: List<V2PromptFileDto>? = null,
     val delivery: String,
+    /** v2 skills mentioned in the draft, `[{id}]`; mention offsets are meaningless after the token is cut. */
+    val skills: List<V2PromptSkillDto>? = null,
 )

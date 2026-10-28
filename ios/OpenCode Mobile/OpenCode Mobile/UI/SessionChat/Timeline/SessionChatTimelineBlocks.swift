@@ -12,10 +12,15 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case reasoning(blockID: String, text: String, isStreaming: Bool, durationMs: Int64?)
     /// Chip timeline (OPE-260): narration plus the tools that followed it.
     case stepParagraph(blockID: String, paragraph: SessionChatStepParagraphBlock)
+    /// Step rail timeline (#779): a run of tools and settled thoughts, one line each.
+    case stepRail(blockID: String, rail: SessionChatStepRailBlock)
+    /// Activity card timeline (#779): a run of tools and settled thoughts on one card.
+    case activityCard(blockID: String, card: SessionChatActivityCardBlock)
     /// Persistent note that the reply ended early (cut off or interrupted).
     case stopNote(blockID: String, reason: MessageStopReason)
     /// A failed run under the reply. A provider body or an action opens the detail sheet.
     /// `coveredByLiveRetry` is a rate-limit or quota the composer status already shows.
+    /// `retryAtEpochMs` is when the provider said to try again.
     case failureLine(
         blockID: String,
         text: String,
@@ -23,8 +28,11 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         isNeutral: Bool,
         action: FailureAction?,
         actionLabel: String?,
-        coveredByLiveRetry: Bool
+        coveredByLiveRetry: Bool,
+        retryAtEpochMs: Int64? = nil
     )
+    /// A session-level change (moved, agent, model, instructions, restart) on its own row.
+    case notice(blockID: String, notice: TimelineNotice)
 
     var blockID: String {
         switch self {
@@ -42,9 +50,15 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             blockID
         case .stepParagraph(let blockID, _):
             blockID
+        case .stepRail(let blockID, _):
+            blockID
+        case .activityCard(let blockID, _):
+            blockID
         case .stopNote(let blockID, _):
             blockID
-        case .failureLine(let blockID, _, _, _, _, _, _):
+        case .failureLine(let blockID, _, _, _, _, _, _, _):
+            blockID
+        case .notice(let blockID, _):
             blockID
         }
     }
@@ -65,7 +79,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .stepParagraph(_, let paragraph):
             guard let textBlockID = paragraph.textBlockID, let text = paragraph.text else { return nil }
             return (textBlockID, text, paragraph.renderedMarkdown)
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote, .failureLine:
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard, .stopNote,
+             .failureLine, .notice:
             return nil
         }
     }
@@ -77,7 +92,8 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             return .text(blockID: blockID, text: text, renderedMarkdown: document)
         case .stepParagraph(let blockID, let paragraph):
             return .stepParagraph(blockID: blockID, paragraph: paragraph.withRenderedMarkdown(document))
-        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stopNote, .failureLine:
+        case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard, .stopNote,
+             .failureLine, .notice:
             return self
         }
     }
@@ -108,14 +124,20 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             lID == rID && lText == rText && lStreaming == rStreaming && lDuration == rDuration
         case let (.stepParagraph(lID, lParagraph), .stepParagraph(rID, rParagraph)):
             lID == rID && lParagraph == rParagraph
+        case let (.stepRail(lID, lRail), .stepRail(rID, rRail)):
+            lID == rID && lRail == rRail
+        case let (.activityCard(lID, lCard), .activityCard(rID, rCard)):
+            lID == rID && lCard == rCard
         case let (.stopNote(lID, lReason), .stopNote(rID, rReason)):
             lID == rID && lReason == rReason
         case let (
-            .failureLine(lID, lText, lBody, lNeutral, lAction, lLabel, lCovered),
-            .failureLine(rID, rText, rBody, rNeutral, rAction, rLabel, rCovered)
+            .failureLine(lID, lText, lBody, lNeutral, lAction, lLabel, lCovered, lRetryAt),
+            .failureLine(rID, rText, rBody, rNeutral, rAction, rLabel, rCovered, rRetryAt)
         ):
             lID == rID && lText == rText && lBody == rBody && lNeutral == rNeutral
-                && lAction == rAction && lLabel == rLabel && lCovered == rCovered
+                && lAction == rAction && lLabel == rLabel && lCovered == rCovered && lRetryAt == rRetryAt
+        case let (.notice(lID, lNotice), .notice(rID, rNotice)):
+            lID == rID && lNotice == rNotice
         default:
             false
         }
@@ -143,6 +165,11 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     let isInterrupted: Bool
     /// The server closed the call without running it.
     let isMalformed: Bool
+    /// v2 is still streaming this tool's arguments: `subtitle` is the value
+    /// read so far from the partial input, or a placeholder until one appears.
+    let isReceivingArguments: Bool
+    /// Inspector body for the tool-result sheet. Nil when there is nothing to classify.
+    let presentation: ToolResultPresentation?
 
     init(
         toolName: String,
@@ -158,7 +185,9 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         opensChangesReview: Bool = false,
         changesInitialFilePath: String? = nil,
         isInterrupted: Bool = false,
-        isMalformed: Bool = false
+        isMalformed: Bool = false,
+        isReceivingArguments: Bool = false,
+        presentation: ToolResultPresentation? = nil
     ) {
         self.toolName = toolName
         self.status = status
@@ -174,6 +203,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.changesInitialFilePath = changesInitialFilePath
         self.isInterrupted = isInterrupted
         self.isMalformed = isMalformed
+        self.isReceivingArguments = isReceivingArguments
+        self.presentation = presentation
     }
 
     func markingFailed(_ errorText: String) -> SessionChatToolCardBlock {
@@ -191,7 +222,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
             opensChangesReview: opensChangesReview,
             changesInitialFilePath: changesInitialFilePath,
             isInterrupted: isInterrupted,
-            isMalformed: isMalformed
+            isMalformed: isMalformed,
+            presentation: presentation
         )
     }
 }
@@ -452,6 +484,344 @@ nonisolated struct SessionChatStepParagraphBlock: Equatable, Sendable {
     }
 }
 
+nonisolated enum SessionChatStepKind: String, Sendable {
+    case tool
+    case childSession
+    case thought
+}
+
+nonisolated enum SessionChatStepStatus: String, Sendable {
+    case pending
+    case running
+    case completed
+    case failed
+
+    var isInFlight: Bool {
+        self == .pending || self == .running
+    }
+}
+
+nonisolated struct SessionChatStepChildSession: Equatable, Sendable {
+    let agent: String
+    let description: String?
+    let childSessionId: String?
+    /// Tools the child has run so far, when the server reports them.
+    let toolsSoFar: Int?
+    /// First line of a finished child's result, when the server returned one.
+    var result: String? = nil
+}
+
+/// What a step did, for the activity card's family counts (#779).
+nonisolated enum SessionChatStepFamily: String, Sendable {
+    case read
+    case search
+    case fetch
+    case edit
+    case command
+    case thought
+    case agent
+
+    /// "1 read", "2 searches".
+    func counted(_ count: Int) -> String {
+        guard count != 1 else { return "1 \(rawValue)" }
+        switch self {
+        case .search, .fetch: return "\(count) \(rawValue)es"
+        default: return "\(count) \(rawValue)s"
+        }
+    }
+}
+
+/// One step of a run of tools (#779): a line on a step rail or an activity card.
+nonisolated struct SessionChatStep: Equatable, Sendable, Identifiable {
+    /// Part id behind the step.
+    let id: String
+    let kind: SessionChatStepKind
+    let status: SessionChatStepStatus
+    /// `runningTitle` while in flight, else `settledTitle`.
+    let title: String
+    /// With a verb: "Reading X", "Running cmd".
+    let runningTitle: String
+    /// Without the verb; a shell command keeps "Ran cmd".
+    let settledTitle: String
+    /// Nil for tools outside the counted families (skills, questions, other tools).
+    let family: SessionChatStepFamily?
+    /// One short line under or beside the title; nil when there is nothing to add.
+    let detail: String?
+    let additions: Int?
+    let deletions: Int?
+    let startedAtMs: Int64?
+    let endedAtMs: Int64?
+    /// A running step right after another running step (parallel tools).
+    let isBranch: Bool
+    /// `status` is `.failed` because the user stopped or declined it; render neutral.
+    let isInterrupted: Bool
+    let childSession: SessionChatStepChildSession?
+    /// Tool steps: the standard card, so a tap does what the card's tap does.
+    let card: SessionChatToolCardBlock?
+    /// Thought steps: the thought text a tap opens.
+    let thoughtText: String?
+
+    init(
+        id: String,
+        kind: SessionChatStepKind,
+        status: SessionChatStepStatus,
+        title: String,
+        runningTitle: String? = nil,
+        settledTitle: String? = nil,
+        family: SessionChatStepFamily? = nil,
+        detail: String? = nil,
+        additions: Int? = nil,
+        deletions: Int? = nil,
+        startedAtMs: Int64? = nil,
+        endedAtMs: Int64? = nil,
+        isBranch: Bool = false,
+        isInterrupted: Bool = false,
+        childSession: SessionChatStepChildSession? = nil,
+        card: SessionChatToolCardBlock? = nil,
+        thoughtText: String? = nil
+    ) {
+        self.id = id
+        self.kind = kind
+        self.status = status
+        self.title = title
+        self.runningTitle = runningTitle ?? title
+        self.settledTitle = settledTitle ?? title
+        self.family = family
+        self.detail = detail
+        self.additions = additions
+        self.deletions = deletions
+        self.startedAtMs = startedAtMs
+        self.endedAtMs = endedAtMs
+        self.isBranch = isBranch
+        self.isInterrupted = isInterrupted
+        self.childSession = childSession
+        self.card = card
+        self.thoughtText = thoughtText
+    }
+
+    func withBranch(_ isBranch: Bool) -> SessionChatStep {
+        SessionChatStep(
+            id: id,
+            kind: kind,
+            status: status,
+            title: title,
+            runningTitle: runningTitle,
+            settledTitle: settledTitle,
+            family: family,
+            detail: detail,
+            additions: additions,
+            deletions: deletions,
+            startedAtMs: startedAtMs,
+            endedAtMs: endedAtMs,
+            isBranch: isBranch,
+            isInterrupted: isInterrupted,
+            childSession: childSession,
+            card: card,
+            thoughtText: thoughtText
+        )
+    }
+
+    /// The title in a list of steps (activity sheet): without the verb, except
+    /// a command still running, whose settled title would read "Ran cmd".
+    var listTitle: String {
+        status.isInFlight && family == .command ? runningTitle : settledTitle
+    }
+
+    /// Settled tool and thought steps fold; running steps and child sessions never do.
+    var isFoldable: Bool {
+        kind != .childSession && !status.isInFlight
+    }
+}
+
+/// Step rail timeline (#779): a maximal run of consecutive tools, child
+/// sessions and settled thoughts. `id` is "sr:" + the first member's part id,
+/// so the block keeps its identity while later steps stream in.
+nonisolated struct SessionChatStepRailBlock: Equatable, Sendable {
+    let id: String
+    let steps: [SessionChatStep]
+    /// The last rail of a turn that is still working. Set at render time from
+    /// session status (`withLive`); blocks built from parts are never live.
+    let isLive: Bool
+    /// Live and nothing in flight: the rail ends with a "Thinking…" step.
+    let thinking: Bool
+
+    init(id: String, steps: [SessionChatStep], isLive: Bool = false) {
+        self.id = id
+        self.steps = steps
+        self.isLive = isLive
+        self.thinking = isLive && !steps.contains { $0.status.isInFlight }
+    }
+
+    func withLive(_ isLive: Bool) -> SessionChatStepRailBlock {
+        guard isLive != self.isLive else { return self }
+        return SessionChatStepRailBlock(id: id, steps: steps, isLive: isLive)
+    }
+
+    /// Failed if any step failed for real, else completed.
+    var worstStatus: SessionChatStepStatus {
+        SessionChatStepRailBlock.worstStatus(of: steps)
+    }
+
+    static func worstStatus(of steps: [SessionChatStep]) -> SessionChatStepStatus {
+        steps.contains { $0.status == .failed && !$0.isInterrupted } ? .failed : .completed
+    }
+
+    /// More than this many settled steps fold all but the last `foldKeepCount`.
+    static let foldThreshold = 4
+    static let foldKeepCount = 3
+}
+
+/// What a step rail paints after folding, top to bottom.
+nonisolated enum SessionChatStepRailRow: Equatable, Sendable, Identifiable {
+    /// "N earlier steps"; `status` is the worst status of the folded steps.
+    case fold(count: Int, status: SessionChatStepStatus)
+    case step(SessionChatStep)
+    case thinking
+
+    var id: String {
+        switch self {
+        case .fold: "fold"
+        case .step(let step): step.id
+        case .thinking: "thinking"
+        }
+    }
+}
+
+/// Activity card timeline (#779): the same run of steps as a step rail, shown
+/// as one card. `id` is "ac:" + the first member's part id, so the card keeps
+/// its identity while later steps stream in.
+nonisolated struct SessionChatActivityCardBlock: Equatable, Sendable {
+    let id: String
+    let steps: [SessionChatStep]
+    /// The last card of a turn that is still working. Set at render time from
+    /// session status (`withLive`); blocks built from parts are never live.
+    let isLive: Bool
+
+    init(id: String, steps: [SessionChatStep], isLive: Bool = false) {
+        self.id = id
+        self.steps = steps
+        self.isLive = isLive
+    }
+
+    func withLive(_ isLive: Bool) -> SessionChatActivityCardBlock {
+        guard isLive != self.isLive else { return self }
+        return SessionChatActivityCardBlock(id: id, steps: steps, isLive: isLive)
+    }
+
+    /// Child-session steps, running or finished, in order: the sheet's Agent section.
+    var childSteps: [SessionChatStep] { steps.filter { $0.kind == .childSession } }
+
+    /// Every other step, in order: the sheet's Steps section.
+    var toolSteps: [SessionChatStep] { steps.filter { $0.kind != .childSession } }
+
+    /// Child sessions still in flight: the live card's Agent section.
+    var runningChildren: [SessionChatStep] { childSteps.filter(\.status.isInFlight) }
+
+    /// Tools still in flight, child sessions excluded.
+    var runningTools: [SessionChatStep] { toolSteps.filter(\.status.isInFlight) }
+
+    /// The live footer's tool: the most recently started running tool. A step
+    /// without a start time counts as oldest; ties go to the later step.
+    var latestRunningTool: SessionChatStep? {
+        runningTools.enumerated().max { lhs, rhs in
+            (lhs.element.startedAtMs ?? .min, lhs.offset) < (rhs.element.startedAtMs ?? .min, rhs.offset)
+        }?.element
+    }
+
+    /// Failed if any step failed for real (not interrupted), else completed.
+    var worstStatus: SessionChatStepStatus {
+        SessionChatStepRailBlock.worstStatus(of: steps)
+    }
+
+    /// Earliest known start, for the live header's elapsed time.
+    var startedAtMs: Int64? {
+        steps.compactMap(\.startedAtMs).min()
+    }
+
+    /// Live card's second line: "6 steps · 3 reads · 1 search · 1 agent".
+    /// Counts every step, running or settled.
+    static func summary(_ steps: [SessionChatStep]) -> String {
+        joined(steps.count == 1 ? "1 step" : "\(steps.count) steps", families(steps))
+    }
+
+    /// Family counts in first-seen order: "3 reads · 1 search".
+    static func families(_ steps: [SessionChatStep]) -> String {
+        var order: [SessionChatStepFamily] = []
+        var counts: [SessionChatStepFamily: Int] = [:]
+        for family in steps.compactMap(\.family) {
+            if counts[family] == nil { order.append(family) }
+            counts[family, default: 0] += 1
+        }
+        return order.map { $0.counted(counts[$0] ?? 0) }.joined(separator: " \u{00B7} ")
+    }
+
+    /// Settled line's tool names, deduplicated in first-seen order: "Read, Edit, Agent".
+    static func usedToolNames(_ steps: [SessionChatStep]) -> [String] {
+        var seen: Set<String> = []
+        return steps.compactMap { step in
+            let name = usedToolName(step)
+            return seen.insert(name).inserted ? name : nil
+        }
+    }
+
+    /// Live footer with no running tool: waiting on child sessions, on the
+    /// user (a permission or question), or on the model.
+    static func idleText(hasRunningChildren: Bool, awaitingUser: Bool) -> String {
+        if hasRunningChildren { return "Waiting for agents" }
+        if awaitingUser { return "Waiting for you" }
+        return "Thinking\u{2026}"
+    }
+
+    private static func usedToolName(_ step: SessionChatStep) -> String {
+        switch step.kind {
+        case .thought: return "Thought"
+        case .childSession: return "Agent"
+        case .tool: break
+        }
+        let tool = step.card?.toolName.lowercased() ?? ""
+        switch tool {
+        case "read": return "Read"
+        case "glob": return "Glob"
+        case "grep": return "Grep"
+        case "websearch", "codesearch": return "Search"
+        case "webfetch": return "Fetch"
+        case "edit", "apply_patch", "patch": return "Edit"
+        case "write": return "Write"
+        case "bash", "shell": return "Shell"
+        case "task", "subagent": return "Agent"
+        case "skill": return "Skill"
+        case "question": return "Question"
+        // An unavailable tool keeps the name the model asked for.
+        case "invalid", "": return step.title
+        default: return tool.prefix(1).uppercased() + tool.dropFirst()
+        }
+    }
+
+    private static func joined(_ head: String, _ tail: String) -> String {
+        tail.isEmpty ? head : "\(head) \u{00B7} \(tail)"
+    }
+}
+
+/// What a running child session is doing, observed from its own messages
+/// while an activity card shows it live (#779).
+nonisolated struct SessionChatChildActivity: Equatable, Sendable {
+    /// `runningTitle` of the child's most recently started running tool.
+    let currentAction: String?
+    /// Up to `recentLimit` of the child's latest steps, oldest first.
+    let recentSteps: [SessionChatChildActivityStep]
+    /// Visible tools the child has run or is running.
+    let toolCount: Int
+
+    static let recentLimit = 3
+    static let empty = SessionChatChildActivity(currentAction: nil, recentSteps: [], toolCount: 0)
+}
+
+nonisolated struct SessionChatChildActivityStep: Equatable, Sendable, Identifiable {
+    let id: String
+    let title: String
+    let isRunning: Bool
+}
+
 nonisolated enum SessionChatTimelineBlocks {
     private static let contextToolNames: Set<String> = ["read", "glob", "grep", "websearch"]
 
@@ -459,11 +829,22 @@ nonisolated enum SessionChatTimelineBlocks {
         role: MessageRole,
         parts: [MessagePart],
         collapseConsecutiveToolCalls: Bool = false,
-        chipTimeline: Bool = false
+        chipTimeline: Bool = false,
+        stepRail: Bool = false,
+        activityCard: Bool = false
     ) -> SessionChatTimelineBlocksResult {
         guard !parts.isEmpty else { return .ok([]) }
+        if role == .notice {
+            return .ok(noticeBlocks(parts))
+        }
         if chipTimeline, role == .assistant {
             return buildStepParagraphs(parts: parts)
+        }
+        if stepRail, role == .assistant {
+            return buildStepRails(parts: parts)
+        }
+        if activityCard, role == .assistant {
+            return buildActivityCards(parts: parts)
         }
 
         let allowToolCards = role == .assistant
@@ -503,9 +884,13 @@ nonisolated enum SessionChatTimelineBlocks {
                 blocks.append(
                     .attachment(
                         blockID: PresentationBlockId.direct(file.id),
-                        file: file
+                        file: AttachmentPreviewCache.shared.resolved(file)
                     )
                 )
+                index += 1
+            case .notice(let notice):
+                flushText()
+                blocks.append(noticeBlock(notice))
                 index += 1
             case .compaction(let compaction):
                 // v1 marks compaction on the user message that asked for it;
@@ -585,7 +970,9 @@ nonisolated enum SessionChatTimelineBlocks {
         messageId: String,
         fallbackText: String,
         collapseConsecutiveToolCalls: Bool = false,
-        chipTimeline: Bool = false
+        chipTimeline: Bool = false,
+        stepRail: Bool = false,
+        activityCard: Bool = false
     ) -> [SessionChatTimelineBlock] {
         func fallbackBlocks() -> [SessionChatTimelineBlock] {
             let trimmed = fallbackText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -603,7 +990,9 @@ nonisolated enum SessionChatTimelineBlocks {
             role: role,
             parts: parts,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline
+            chipTimeline: chipTimeline,
+            stepRail: stepRail,
+            activityCard: activityCard
         ) {
         case .ok(let blocks):
             return blocks.isEmpty ? fallbackBlocks() : blocks
@@ -631,11 +1020,23 @@ nonisolated enum SessionChatTimelineBlocks {
         ]
     }
 
+    /// The failure mark that may count down to its retry time: only on the last
+    /// turn, so a user message after it means the countdown no longer applies.
+    static func retryCountdownBlockID(in rows: [SessionChatRow]) -> String? {
+        for row in rows.reversed() {
+            if row.role == .user { return nil }
+            for block in row.blocks.reversed() {
+                if case .failureLine(let id, _, _, _, _, _, _, let retryAt) = block, retryAt != nil { return id }
+            }
+        }
+        return nil
+    }
+
     /// Newest rate-limit or quota body, for the composer status to open.
     static func newestLiveRetryProviderBody(in rows: [SessionChatRow]) -> String? {
         for row in rows.reversed() {
             for block in row.blocks {
-                if case .failureLine(_, _, let body, _, _, _, let covered) = block,
+                if case .failureLine(_, _, let body, _, _, _, let covered, _) = block,
                    covered,
                    let body = body?.trimmingCharacters(in: .whitespacesAndNewlines),
                    !body.isEmpty
@@ -671,13 +1072,23 @@ nonisolated enum SessionChatTimelineBlocks {
     ///
     /// With `chipTimeline` every run of consecutive assistant bodies (text
     /// included) merges so a paragraph joins the tools of the next model step.
+    /// `stepRail` merges the same way, so one turn is one row and the tools of
+    /// consecutive model steps join one rail. `activityCard` merges like `stepRail`.
     static func mergeConsecutiveToolOnlyAssistantBodies(
         _ bodies: [DisplayMessageBody],
         collapseConsecutiveToolCalls: Bool,
-        chipTimeline: Bool = false
+        chipTimeline: Bool = false,
+        stepRail: Bool = false,
+        activityCard: Bool = false
     ) -> [DisplayMessageBody] {
-        mergeBodies(bodies, collapseConsecutiveToolCalls: collapseConsecutiveToolCalls, chipTimeline: chipTimeline)
-            .map(withStopNote)
+        mergeBodies(
+            bodies,
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+            chipTimeline: chipTimeline,
+            stepRail: stepRail && !chipTimeline,
+            activityCard: activityCard && !chipTimeline && !stepRail
+        )
+        .map(withStopNote)
     }
 
     /// An assistant reply that ended early keeps a note under its last block, then any failure caption.
@@ -715,7 +1126,8 @@ nonisolated enum SessionChatTimelineBlocks {
                     isNeutral: failure.isNeutral,
                     action: failure.action(),
                     actionLabel: failure.actionLabel(),
-                    coveredByLiveRetry: failure.coversLiveRetry()
+                    coveredByLiveRetry: failure.coversLiveRetry(),
+                    retryAtEpochMs: failure.retryAtEpochMs()
                 )
             )
         }
@@ -731,13 +1143,16 @@ nonisolated enum SessionChatTimelineBlocks {
     private static func mergeBodies(
         _ bodies: [DisplayMessageBody],
         collapseConsecutiveToolCalls: Bool,
-        chipTimeline: Bool
+        chipTimeline: Bool,
+        stepRail: Bool,
+        activityCard: Bool
     ) -> [DisplayMessageBody] {
-        guard collapseConsecutiveToolCalls || chipTimeline, bodies.count >= 2 else { return bodies }
+        let mergesTurns = chipTimeline || stepRail || activityCard
+        guard collapseConsecutiveToolCalls || mergesTurns, bodies.count >= 2 else { return bodies }
         func isMergeable(_ body: DisplayMessageBody) -> Bool {
             // A message that carries a compaction marker stays its own row.
             if isCompactionBody(body) { return false }
-            if chipTimeline {
+            if mergesTurns {
                 return body.message.role == .assistant && !body.blocks.isEmpty
             }
             return isMergeableToolOnlyAssistant(body)
@@ -768,11 +1183,13 @@ nonisolated enum SessionChatTimelineBlocks {
                 messageId: first.message.id,
                 fallbackText: "",
                 collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-                chipTimeline: chipTimeline
+                chipTimeline: chipTimeline,
+                stepRail: stepRail,
+                activityCard: activityCard
             )
             if blocks.isEmpty {
                 blocks = run.flatMap(\.blocks)
-            } else if chipTimeline {
+            } else if mergesTurns {
                 blocks = attachMemberRootMarkdown(blocks, members: Array(run))
             }
             var message = first.message
@@ -791,8 +1208,9 @@ nonisolated enum SessionChatTimelineBlocks {
         return merged
     }
 
-    /// History markdown rides on each member's message root; after a chip
-    /// merge, hand it to the paragraph whose text id is that member's sole text run.
+    /// History markdown rides on each member's message root; after a chip or
+    /// step rail merge, hand it to the paragraph or text block whose text id is
+    /// that member's sole text run.
     private static func attachMemberRootMarkdown(
         _ blocks: [SessionChatTimelineBlock],
         members: [DisplayMessageBody]
@@ -807,13 +1225,33 @@ nonisolated enum SessionChatTimelineBlocks {
         }
         guard !rootByTextBlockID.isEmpty else { return blocks }
         return blocks.map { block in
-            guard case .stepParagraph(_, let paragraph) = block,
-                  paragraph.renderedMarkdown == nil,
-                  let textBlockID = paragraph.textBlockID,
-                  let root = rootByTextBlockID[textBlockID]
-            else { return block }
-            return block.withRenderedMarkdown(root)
+            switch block {
+            case .stepParagraph(_, let paragraph):
+                guard paragraph.renderedMarkdown == nil,
+                      let textBlockID = paragraph.textBlockID,
+                      let root = rootByTextBlockID[textBlockID]
+                else { return block }
+                return block.withRenderedMarkdown(root)
+            case .text(let blockID, _, nil):
+                // Step rail merges keep plain text blocks.
+                guard let root = rootByTextBlockID[blockID] else { return block }
+                return block.withRenderedMarkdown(root)
+            default:
+                return block
+            }
         }
+    }
+
+    /// Notices never merge with replies: each stays the line it was recorded as.
+    private static func noticeBlocks(_ parts: [MessagePart]) -> [SessionChatTimelineBlock] {
+        parts.compactMap { part in
+            guard case .notice(let notice) = part else { return nil }
+            return noticeBlock(notice)
+        }
+    }
+
+    private static func noticeBlock(_ notice: TimelineNotice) -> SessionChatTimelineBlock {
+        .notice(blockID: PresentationBlockId.direct(notice.id), notice: notice)
     }
 
     private static func isCompactionBody(_ body: DisplayMessageBody) -> Bool {
@@ -849,7 +1287,8 @@ nonisolated enum SessionChatTimelineBlocks {
             true
         case .toolCard(_, let card):
             !Self.isChildSessionTool(card.toolName)
-        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine:
+        case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stepRail, .activityCard, .stopNote,
+             .failureLine, .notice:
             false
         }
     }
@@ -864,6 +1303,452 @@ nonisolated enum SessionChatTimelineBlocks {
         for block in blocks.reversed() {
             if case .stepParagraph(_, let paragraph) = block, paragraph.text != nil {
                 return block.blockID
+            }
+        }
+        return nil
+    }
+
+    // MARK: - Step rail (#779)
+
+    /// Text, attachments, notices and compaction markers render as in the
+    /// standard timeline. Every maximal run of visible tools, child sessions and
+    /// settled thoughts between them becomes one step rail. Hidden tools, empty
+    /// text and a streaming thought are see-through: they neither show nor
+    /// break a run.
+    private static func buildStepRails(parts: [MessagePart]) -> SessionChatTimelineBlocksResult {
+        buildStepRuns(parts: parts) { first, steps in
+            let id = PresentationBlockId.stepRail(first)
+            return .stepRail(blockID: id, rail: SessionChatStepRailBlock(id: id, steps: markBranches(steps)))
+        }
+    }
+
+    /// What an activity card paints (#779): a settled card whose only step is a
+    /// tool or a thought shows that step as the standard timeline does (its tool
+    /// card or reasoning row); every other card stays a card. Liveness is known
+    /// only at render time, so the card block stays in the row and this decides.
+    static func activityCardDisplayBlock(_ card: SessionChatActivityCardBlock) -> SessionChatTimelineBlock {
+        let cardBlock = SessionChatTimelineBlock.activityCard(blockID: card.id, card: card)
+        guard !card.isLive, card.steps.count == 1, let step = card.steps.first, !step.status.isInFlight else {
+            return cardBlock
+        }
+        switch step.kind {
+        case .tool:
+            guard let toolCard = step.card else { return cardBlock }
+            return .toolCard(blockID: PresentationBlockId.direct(step.id), card: toolCard)
+        case .thought:
+            return .reasoning(
+                blockID: PresentationBlockId.direct(step.id),
+                text: step.thoughtText ?? "",
+                isStreaming: false,
+                durationMs: thoughtDurationMs(start: step.startedAtMs, end: step.endedAtMs)
+            )
+        case .childSession:
+            return cardBlock
+        }
+    }
+
+    /// The same runs as `buildStepRails`, each as one activity card.
+    private static func buildActivityCards(parts: [MessagePart]) -> SessionChatTimelineBlocksResult {
+        buildStepRuns(parts: parts) { first, steps in
+            let id = PresentationBlockId.activityCard(first)
+            return .activityCard(blockID: id, card: SessionChatActivityCardBlock(id: id, steps: steps))
+        }
+    }
+
+    /// A child session's activity from its messages, with the same step rules
+    /// as the parent's card: the latest started running tool names the current
+    /// action; the last few steps feed the sheet's sub-rows.
+    static func childActivity(from messages: [Message]) -> SessionChatChildActivity {
+        var steps: [SessionChatStep] = []
+        for message in messages where message.role == .assistant {
+            for case .tool(let tool) in message.parts where isVisibleTool(tool) {
+                if let step = toolStep(tool) { steps.append(step) }
+            }
+        }
+        let card = SessionChatActivityCardBlock(id: "", steps: steps)
+        let current = card.latestRunningTool ?? card.runningChildren.last
+        return SessionChatChildActivity(
+            currentAction: current.map { $0.kind == .childSession ? $0.title : $0.runningTitle },
+            recentSteps: steps.suffix(SessionChatChildActivity.recentLimit).map { step in
+                SessionChatChildActivityStep(
+                    id: step.id,
+                    title: step.kind == .childSession ? step.title : step.listTitle,
+                    isRunning: step.status.isInFlight
+                )
+            },
+            toolCount: steps.count
+        )
+    }
+
+    /// Shared by the step rail and the activity card: text and the rest render
+    /// as in the standard timeline; each maximal run of steps becomes one block
+    /// from `makeRun(firstStepId, steps)`.
+    private static func buildStepRuns(
+        parts: [MessagePart],
+        makeRun: (String, [SessionChatStep]) -> SessionChatTimelineBlock
+    ) -> SessionChatTimelineBlocksResult {
+        var blocks: [SessionChatTimelineBlock] = []
+        var pendingText: [(id: String, text: String)] = []
+        var pendingSteps: [SessionChatStep] = []
+
+        func flushText() {
+            guard !pendingText.isEmpty else { return }
+            let merged = pendingText.map(\.text).joined(separator: "\n")
+            let ids = pendingText.map(\.id)
+            pendingText.removeAll()
+            guard !merged.isEmpty else { return }
+            blocks.append(.text(blockID: PresentationBlockId.mergedText(ids), text: merged, renderedMarkdown: nil))
+        }
+
+        func flushRail() {
+            guard let first = pendingSteps.first else { return }
+            blocks.append(makeRun(first.id, pendingSteps))
+            pendingSteps.removeAll()
+        }
+
+        for part in parts {
+            switch part {
+            case .text(let textPart):
+                guard textPart.isDisplayable else { continue }
+                let trimmed = textPart.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { continue }
+                guard let partId = textPart.id else { return .missingPartIds }
+                flushRail()
+                pendingText.append((id: partId, text: trimmed))
+            case .file(let file):
+                flushText()
+                flushRail()
+                blocks.append(
+                    .attachment(
+                        blockID: PresentationBlockId.direct(file.id),
+                        file: AttachmentPreviewCache.shared.resolved(file)
+                    )
+                )
+            case .notice(let notice):
+                flushText()
+                flushRail()
+                blocks.append(noticeBlock(notice))
+            case .compaction(let compaction):
+                flushText()
+                flushRail()
+                guard let card = compactionCard(compaction) else { return .missingPartIds }
+                blocks.append(card)
+            case .reasoning(let reasoning):
+                // A live thought is the rail's trailing Thinking step, not a step of its own.
+                guard ThoughtPartChrome.isVisible(reasoning), !reasoning.isStreaming else { continue }
+                guard let partId = reasoning.id else { return .missingPartIds }
+                flushText()
+                pendingSteps.append(thoughtStep(partId: partId, reasoning: reasoning))
+            case .tool(let tool):
+                guard isVisibleTool(tool) else { continue }
+                guard let step = toolStep(tool) else { return .missingPartIds }
+                flushText()
+                pendingSteps.append(step)
+            }
+        }
+        flushText()
+        flushRail()
+        return .ok(blocks)
+    }
+
+    /// A running step right after another running step is a parallel branch.
+    /// A child session between them ends the branch run.
+    static func markBranches(_ steps: [SessionChatStep]) -> [SessionChatStep] {
+        var previousInFlight = false
+        return steps.map { step in
+            if step.kind == .childSession {
+                previousInFlight = false
+                return step
+            }
+            let inFlight = step.status.isInFlight
+            defer { previousInFlight = inFlight }
+            return step.withBranch(inFlight && previousInFlight)
+        }
+    }
+
+    private static func thoughtStep(partId: String, reasoning: ReasoningPart) -> SessionChatStep {
+        let duration = thoughtDurationLabel(
+            thoughtDurationMs(start: reasoning.timeStartEpochMs, end: reasoning.timeEndEpochMs)
+        )
+        let text = ThoughtPartChrome.displayText(reasoning)
+        return SessionChatStep(
+            id: partId,
+            kind: .thought,
+            status: .completed,
+            title: duration.map { "Thought \u{00B7} \($0)" } ?? "Thought",
+            family: .thought,
+            startedAtMs: reasoning.timeStartEpochMs,
+            endedAtMs: reasoning.timeEndEpochMs,
+            thoughtText: text.isEmpty ? nil : text
+        )
+    }
+
+    private static func toolStep(_ tool: ToolPart) -> SessionChatStep? {
+        guard let partId = tool.id, case .toolCard(_, let card)? = toToolCard(tool) else { return nil }
+        let status = stepStatus(card.status)
+        let inFlight = status.isInFlight
+        // Kept after the step settles so an activity card can time the whole run.
+        let startedAtMs = tool.timeStartEpochMs
+        if isChildSessionTool(tool.toolName) {
+            let agent = taskAgentName(tool)
+            let description = (inputString(tool.input, keys: "description", "prompt") ?? childSessionTitle(tool))
+                .flatMap(firstLine)
+            let toolsSoFar = childToolCount(tool)
+            let detail: String? =
+                if inFlight, let toolsSoFar {
+                    [description, toolsSoFar == 1 ? "1 tool so far" : "\(toolsSoFar) tools so far"]
+                        .compactMap { $0 }
+                        .joined(separator: " \u{00B7} ")
+                } else if status == .failed, !card.isInterrupted {
+                    card.errorText.flatMap(firstLine) ?? description
+                } else {
+                    description
+                }
+            return SessionChatStep(
+                id: partId,
+                kind: .childSession,
+                status: status,
+                title: agent,
+                family: .agent,
+                detail: nonEmpty(detail),
+                startedAtMs: startedAtMs,
+                isInterrupted: card.isInterrupted,
+                childSession: SessionChatStepChildSession(
+                    agent: agent,
+                    description: description,
+                    childSessionId: card.childSessionId,
+                    toolsSoFar: toolsSoFar,
+                    result: status == .completed ? childResult(tool) : nil
+                ),
+                card: card
+            )
+        }
+        if tool.toolName.lowercased() == "invalid" {
+            // The server records a call to a tool it does not offer as `invalid`
+            // and completes it; on the rail it is a step that did not run.
+            let requested = inputString(tool.input, keys: "tool").map(capitalizedToolName)
+            return SessionChatStep(
+                id: partId,
+                kind: .tool,
+                status: .failed,
+                title: requested ?? "Unknown tool",
+                detail: "Tool not available",
+                card: card
+            )
+        }
+        let isChange = ["edit", "write", "apply_patch", "patch"].contains(tool.toolName.lowercased())
+        return SessionChatStep(
+            id: partId,
+            kind: .tool,
+            status: status,
+            title: stepTitle(tool, card: card, running: inFlight),
+            runningTitle: stepTitle(tool, card: card, running: true),
+            settledTitle: stepTitle(tool, card: card, running: false),
+            family: stepFamily(tool),
+            detail: stepDetail(tool, card: card, status: status),
+            additions: isChange ? card.additions : nil,
+            deletions: isChange ? card.deletions : nil,
+            startedAtMs: startedAtMs,
+            isInterrupted: card.isInterrupted,
+            card: card
+        )
+    }
+
+    private static func stepFamily(_ tool: ToolPart) -> SessionChatStepFamily? {
+        if isQuestionTool(tool) { return nil }
+        switch tool.toolName.lowercased() {
+        case "read", "list", "ls": return .read
+        case "grep", "glob", "websearch", "codesearch": return .search
+        case "webfetch": return .fetch
+        case "edit", "write", "apply_patch", "patch": return .edit
+        case "bash", "shell": return .command
+        default: return nil
+        }
+    }
+
+    private static func stepStatus(_ status: ToolStatus) -> SessionChatStepStatus {
+        switch status {
+        case .pending: .pending
+        case .running: .running
+        case .completed: .completed
+        case .error: .failed
+        }
+    }
+
+    /// First result line of a finished child session, without the `task_id`
+    /// header, the result tags or wrapper tags such as `<subagent sessionID="…">`.
+    private static func childResult(_ tool: ToolPart) -> String? {
+        guard let output = tool.output, !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        var body = Substring(output)
+        if let open = body.range(of: "<task_result>") { body = body[open.upperBound...] }
+        if let close = body.range(of: "</task_result>") { body = body[..<close.lowerBound] }
+        return body
+            .split(whereSeparator: \.isNewline)
+            .lazy
+            .map { line -> String in
+                var trimmed = line.trimmingCharacters(in: .whitespaces)
+                while let first = trimmed.first, "#*- ".contains(first) { trimmed.removeFirst() }
+                while trimmed.last == "*" { trimmed.removeLast() }
+                return trimmed
+            }
+            .first { !$0.isEmpty && !$0.hasPrefix("task_id:") && !$0.hasPrefix("<") }
+    }
+
+    /// Tools a child session reported in its task metadata (`summary`), if any.
+    private static func childToolCount(_ tool: ToolPart) -> Int? {
+        guard case let .array(summary)? = tool.metadata?["summary"] else { return nil }
+        return summary.count
+    }
+
+    static let stepCommandMaxLength = 40
+
+    /// Product words, no raw tool names. A running step leads with a verb
+    /// ("Reading", "Searching", …); a settled one drops it, except a shell
+    /// command ("Ran …") so it still reads as a command.
+    private static func stepTitle(_ tool: ToolPart, card: SessionChatToolCardBlock, running: Bool) -> String {
+        func titled(_ verb: String, _ target: String?) -> String {
+            guard let target = nonEmpty(target) else { return running ? "\(verb)\u{2026}" : card.title }
+            return running ? "\(verb) \(target)" : target
+        }
+        if isQuestionTool(tool) { return card.title }
+        switch tool.toolName.lowercased() {
+        case "read":
+            return titled("Reading", readPath(tool).map(lastPathComponent))
+        case "grep", "glob":
+            return titled("Searching", inputString(tool.input, keys: "pattern") ?? patternPathSubtitle(tool.input))
+        case "list", "ls":
+            return titled("Listing", pathSubtitle(tool.input).map(lastPathComponent) ?? inputString(tool.input, keys: "directory"))
+        case "websearch":
+            return titled("Searching", inputString(tool.input, keys: "query"))
+        case "webfetch":
+            return titled("Fetching", inputString(tool.input, keys: "url").map(hostLabel))
+        case "edit", "apply_patch", "patch":
+            return titled("Editing", card.subtitle.map(lastPathComponent))
+        case "write":
+            return titled("Writing", card.subtitle.map(lastPathComponent))
+        case "bash", "shell":
+            let command = (inputString(tool.input, keys: "command") ?? card.subtitle).map(stepCommandLabel)
+            guard let command = nonEmpty(command) else { return running ? "Running\u{2026}" : card.title }
+            return running ? "Running \(command)" : "Ran \(command)"
+        case "skill":
+            let name = skillName(tool) ?? card.subtitle
+            guard let name = nonEmpty(name) else { return running ? "Loading skill\u{2026}" : "Skill" }
+            return running ? "Loading skill \(name)" : "Skill \(name)"
+        case "lsp", "plan_exit", "execute":
+            return card.subtitle.map { "\(card.title) \($0)" } ?? card.title
+        default:
+            if let title = nonEmpty(tool.title), title.compare(tool.toolName, options: .caseInsensitive) != .orderedSame {
+                return title
+            }
+            return capitalizedToolName(tool.toolName)
+        }
+    }
+
+    /// First line of a shell command, cut at `stepCommandMaxLength` characters.
+    private static func stepCommandLabel(_ command: String) -> String {
+        let line = command
+            .split(omittingEmptySubsequences: true, whereSeparator: \.isNewline)
+            .map { $0.split(whereSeparator: \.isWhitespace).joined(separator: " ") }
+            .first(where: { !$0.isEmpty }) ?? ""
+        guard line.count > stepCommandMaxLength else { return line }
+        return String(line.prefix(stepCommandMaxLength)).trimmingCharacters(in: .whitespaces) + "\u{2026}"
+    }
+
+    private static func capitalizedToolName(_ name: String) -> String {
+        let spaced = name.replacingOccurrences(of: "_", with: " ")
+        guard let first = spaced.first else { return name }
+        return first.uppercased() + spaced.dropFirst()
+    }
+
+    /// One short line: why it failed, or a match count the server reported.
+    private static func stepDetail(
+        _ tool: ToolPart,
+        card: SessionChatToolCardBlock,
+        status: SessionChatStepStatus
+    ) -> String? {
+        if status == .failed {
+            if card.isInterrupted { return card.errorText }
+            if card.isMalformed { return "Not run: malformed tool call" }
+            return card.errorText.flatMap(firstLine)
+        }
+        guard status == .completed else { return nil }
+        // A settled question reads like its card: the answer under "Asked N questions".
+        if isQuestionTool(tool) { return card.subtitle }
+        switch tool.toolName.lowercased() {
+        case "grep", "glob":
+            guard let raw = tool.metadata?["matches"] ?? tool.metadata?["count"], let count = intValue(raw) else {
+                return nil
+            }
+            return count == 1 ? "1 match" : "\(count) matches"
+        default:
+            return nil
+        }
+    }
+
+    /// The rows a rail paints: with more than `foldThreshold` settled tool and
+    /// thought steps, all but the last `foldKeepCount` of them fold into one
+    /// leading "N earlier steps" row unless the rail is unfolded. Running steps
+    /// and child sessions never fold. A live rail with nothing in flight ends
+    /// with a Thinking row.
+    static func stepRailRows(_ rail: SessionChatStepRailBlock, unfolded: Bool) -> [SessionChatStepRailRow] {
+        let foldable = rail.steps.filter(\.isFoldable)
+        let foldCount =
+            !unfolded && foldable.count > SessionChatStepRailBlock.foldThreshold
+                ? foldable.count - SessionChatStepRailBlock.foldKeepCount
+                : 0
+        var rows: [SessionChatStepRailRow] = []
+        if foldCount > 0 {
+            let folded = Array(foldable.prefix(foldCount))
+            rows.append(.fold(count: foldCount, status: SessionChatStepRailBlock.worstStatus(of: folded)))
+        }
+        var skipped = 0
+        for step in rail.steps {
+            if step.isFoldable, skipped < foldCount {
+                skipped += 1
+                continue
+            }
+            rows.append(.step(step))
+        }
+        if rail.thinking {
+            rows.append(.thinking)
+        }
+        return rows
+    }
+
+    /// The step rail that shows live status: the last painted block of the
+    /// last row, while the session is working. Text after a rail means the turn
+    /// moved on, so the Working footer speaks for it instead.
+    static func liveStepRailID(in rows: [SessionChatRow], sessionWorking: Bool) -> String? {
+        liveStepRunID(in: rows, sessionWorking: sessionWorking)
+    }
+
+    /// The activity card shown live: the footer's live run, or, while the
+    /// server still reports the turn active (a permission or question hides
+    /// the Working footer), the last run of the last row.
+    static func liveActivityCardID(in rows: [SessionChatRow], footerLiveID: String?, isTurnActive: Bool) -> String? {
+        if let footerLiveID { return footerLiveID }
+        guard isTurnActive else { return nil }
+        return liveStepRunID(in: rows, sessionWorking: true)
+    }
+
+    /// `liveStepRailID` for either step-run style: the id of the live step
+    /// rail or activity card.
+    static func liveStepRunID(in rows: [SessionChatRow], sessionWorking: Bool) -> String? {
+        guard sessionWorking, let last = rows.last, last.role == .assistant else { return nil }
+        for block in last.blocks.reversed() {
+            switch block {
+            case .stepRail(_, let rail):
+                return rail.id
+            case .activityCard(_, let card):
+                return card.id
+            case .stopNote, .failureLine:
+                return nil
+            case .reasoning(_, _, true, _):
+                continue
+            default:
+                return nil
             }
         }
         return nil
@@ -937,10 +1822,18 @@ nonisolated enum SessionChatTimelineBlocks {
                 }
                 pendingText.append((id: partId, text: trimmed))
             case .file(let file):
-                blocks.append(.attachment(blockID: PresentationBlockId.direct(file.id), file: file))
+                blocks.append(
+                    .attachment(
+                        blockID: PresentationBlockId.direct(file.id),
+                        file: AttachmentPreviewCache.shared.resolved(file)
+                    )
+                )
             case .compaction(let compaction):
                 guard flushParagraph(), let card = compactionCard(compaction) else { return .missingPartIds }
                 blocks.append(card)
+            case .notice(let notice):
+                guard flushParagraph() else { return .missingPartIds }
+                blocks.append(noticeBlock(notice))
             case .reasoning(let reasoning):
                 guard ThoughtPartChrome.isVisible(reasoning), !reasoning.isStreaming else { continue }
                 guard let partId = reasoning.id else { return .missingPartIds }
@@ -1183,7 +2076,7 @@ nonisolated enum SessionChatTimelineBlocks {
             case "read":
                 kind = .file
                 family = .explore
-                label = readPathSubtitle(tool.input).map(lastPathComponent)
+                label = readPath(tool).map(lastPathComponent) ?? (card.isReceivingArguments ? card.subtitle : nil)
             case "glob":
                 kind = .file
                 family = .explore
@@ -1200,7 +2093,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 kind = .file
                 family = .explore
                 label = inputString(tool.input, keys: "url").map(hostLabel)
-            case "edit", "write", "apply_patch":
+            case "edit", "write", "apply_patch", "patch":
                 kind = .file
                 family = .change
                 label = card.subtitle.map(lastPathComponent)
@@ -1376,18 +2269,162 @@ nonisolated enum SessionChatTimelineBlocks {
         return stripped.split(separator: "/").first.map(String.init) ?? url
     }
 
+    /// Builds the blocks Session Chat shows for one message: part blocks, then
+    /// the slash token for a skill admitted beside the user's text, then
+    /// template collapse. Skill admission has to happen before collapse so a
+    /// skill-plus-image send displays as one `[/name] args` row and matches the
+    /// optimistic send instead of leaving a second copy of the image.
+    static func present(
+        message: Message,
+        commands: [ServerCommand],
+        collapseConsecutiveToolCalls: Bool = false,
+        chipTimeline: Bool = false,
+        stepRail: Bool = false,
+        activityCard: Bool = false
+    ) -> [SessionChatTimelineBlock] {
+        let built = buildOrFallback(
+            role: message.role,
+            parts: message.parts,
+            messageId: message.id,
+            fallbackText: message.text,
+            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+            chipTimeline: chipTimeline,
+            stepRail: stepRail,
+            activityCard: activityCard
+        )
+        return collapseCommandInvocations(
+            role: message.role,
+            blocks: admitPromptSkills(
+                role: message.role,
+                blocks: built,
+                skills: message.promptSkills,
+                commands: commands
+            ),
+            commands: commands,
+            skillMentions: skillMentions(message.promptSkills, commands: commands)
+        )
+    }
+
+    /// The `/name` spans a user prompt carries, for `[/name]` collapse. A skill sent without
+    /// offsets (an older client, or one `admitPromptSkills` just prefixed) is placed by token search.
+    static func skillMentions(_ skills: [PromptSkill], commands: [ServerCommand]) -> [SkillMention] {
+        skills.enumerated().compactMap { index, skill in
+            guard let name = slashName(skill, commands: commands) else { return nil }
+            return SkillMention(
+                id: "prompt-skill:\(index)",
+                skillID: skill.id,
+                name: name,
+                start: skill.mentionStart ?? -1,
+                end: skill.mentionEnd ?? -1
+            )
+        }
+    }
+
+    /// A v2 skill prompt stores the user's arguments as the message text and the
+    /// skill beside it. Restore `/name` so collapse can show `[/name] args` on
+    /// that same row. Skip when the text is already a slash invocation or an
+    /// expanded template — prefixing those would hide the command collapse.
+    static func admitPromptSkills(
+        role: MessageRole,
+        blocks: [SessionChatTimelineBlock],
+        skills: [PromptSkill],
+        commands: [ServerCommand]
+    ) -> [SessionChatTimelineBlock] {
+        guard role == .user, !skills.isEmpty else { return blocks }
+        var names: [String] = []
+        for skill in skills {
+            guard let name = Self.slashName(skill, commands: commands), !names.contains(name) else { continue }
+            names.append(name)
+        }
+        guard !names.isEmpty else { return blocks }
+        let textIndex = blocks.firstIndex { block in
+            if case .text = block { return true }
+            return false
+        }
+        let existing: String
+        if let textIndex, case let .text(_, text, _) = blocks[textIndex] {
+            existing = text
+        } else {
+            existing = ""
+        }
+        if !existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           CommandInvocationCollapser.collapse(text: existing, commands: commands) != nil
+        {
+            return blocks
+        }
+        let missing = names.filter { !alreadyAdmitted(existing, name: $0, skills: skills) }
+        guard !missing.isEmpty else { return blocks }
+        let prefix = missing.map { "/\($0)" }.joined(separator: " ")
+        let trimmedExisting = existing.trimmingCharacters(in: .whitespaces)
+        let nextText = trimmedExisting.isEmpty ? prefix : "\(prefix) \(trimmedExisting)"
+        if let textIndex {
+            var next = blocks
+            let blockID = blocks[textIndex].blockID
+            next[textIndex] = .text(blockID: blockID, text: nextText, renderedMarkdown: nil)
+            return next
+        }
+        let inserted = SessionChatTimelineBlock.text(
+            blockID: PresentationBlockId.direct("prompt-skill:\(names[0])"),
+            text: prefix,
+            renderedMarkdown: nil
+        )
+        return [inserted] + blocks
+    }
+
+    private static func slashName(_ skill: PromptSkill, commands: [ServerCommand]) -> String? {
+        let id = skill.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = skill.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fromCatalog = commands.first { command in
+            let skillID = command.skillID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return !skillID.isEmpty && (skillID == id || skillID == name)
+        }?.name ?? commands.first { $0.name == name || (!id.isEmpty && $0.name == id) }?.name
+        let catalog = fromCatalog?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !catalog.isEmpty { return catalog }
+        if !name.isEmpty { return name }
+        return id.isEmpty ? nil : id
+    }
+
+    private static func alreadyAdmitted(_ text: String, name: String, skills: [PromptSkill]) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("[/\(name)]") || startsWithSlashToken(trimmed, name: name) { return true }
+        return skills.contains { skill in
+            let mention = skill.mentionText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return !mention.isEmpty && text.contains(mention) && (skill.name == name || skill.id == name)
+        }
+    }
+
+    private static func startsWithSlashToken(_ text: String, name: String) -> Bool {
+        let token = "/\(name)"
+        guard text.hasPrefix(token) else { return false }
+        if text.count == token.count { return true }
+        let next = text[text.index(text.startIndex, offsetBy: token.count)]
+        return next.isWhitespace
+    }
+
     /// Rewrites user text blocks that are expanded slash-command / skill
     /// templates into `[/name] args` for Session Chat display.
+    /// `/name` skill spans (from the message) and server-command templates both collapse into
+    /// `[/name]` plain text so the bubble can highlight them. Skill spans apply to the first text
+    /// block, where the prompt text lives.
     static func collapseCommandInvocations(
         role: MessageRole,
         blocks: [SessionChatTimelineBlock],
-        commands: [ServerCommand]
+        commands: [ServerCommand],
+        skillMentions: [SkillMention] = []
     ) -> [SessionChatTimelineBlock] {
-        guard role == .user, !commands.isEmpty, !blocks.isEmpty else { return blocks }
+        guard role == .user, !blocks.isEmpty, !commands.isEmpty || !skillMentions.isEmpty else { return blocks }
+        var skillsPending = !skillMentions.isEmpty
         return blocks.map { block in
-            guard case .text(let blockID, let text, _) = block,
-                  let collapsed = CommandInvocationCollapser.collapse(text: text, commands: commands)
-            else { return block }
+            guard case .text(let blockID, let text, _) = block else { return block }
+            let collapsed: CommandInvocationCollapser.Display?
+            if skillsPending {
+                skillsPending = false
+                collapsed = CommandInvocationCollapser.collapseSkillMentions(text: text, skillMentions: skillMentions)
+                    ?? CommandInvocationCollapser.collapse(text: text, commands: commands)
+            } else {
+                collapsed = CommandInvocationCollapser.collapse(text: text, commands: commands)
+            }
+            guard let collapsed else { return block }
             return .text(
                 blockID: blockID,
                 text: collapsed.text,
@@ -1454,7 +2491,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 || textPart.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         case .tool(let tool):
             !isVisibleTool(tool)
-        case .file:
+        case .file, .notice:
             false
         case .reasoning(let reasoning):
             !isLiveReasoning(reasoning)
@@ -1561,7 +2598,7 @@ nonisolated enum SessionChatTimelineBlocks {
 
     private static func contextSubtitle(_ tool: ToolPart) -> String? {
         switch tool.toolName.lowercased() {
-        case "read": return readPathSubtitle(tool.input)
+        case "read": return readPath(tool)
         case "glob", "grep": return patternPathSubtitle(tool.input)
         case "websearch": return inputString(tool.input, keys: "query")
         default: return nil
@@ -1583,7 +2620,7 @@ nonisolated enum SessionChatTimelineBlocks {
         case "websearch": return count == 1 ? "Search" : "\(count) searches"
         case "question": return askedQuestionsTitle(count)
         case "skill": return count == 1 ? "Skill" : "\(count) skills"
-        case "apply_patch": return count == 1 ? "Patch" : "\(count) patches"
+        case "apply_patch", "patch": return count == 1 ? "Patch" : "\(count) patches"
         case "linear_get_issue": return count == 1 ? "Get issue" : "\(count) Get issues"
         case "linear_save_issue": return count == 1 ? "Save issue" : "\(count) Save issues"
         default:
@@ -1643,13 +2680,14 @@ nonisolated enum SessionChatTimelineBlocks {
             } else {
                 nil
             }
+        let receivingArguments = ToolArgumentsPreview.isReceiving(tool)
         return .toolCard(
             blockID: PresentationBlockId.direct(partId),
             card: SessionChatToolCardBlock(
                 toolName: tool.toolName,
                 status: failedExit != nil ? .error : tool.status,
                 title: chrome.title,
-                subtitle: chrome.subtitle,
+                subtitle: chrome.subtitle ?? (receivingArguments ? receivingArgumentsPlaceholder(name) : nil),
                 errorText: errorText,
                 additions: chrome.additions,
                 deletions: chrome.deletions,
@@ -1658,9 +2696,82 @@ nonisolated enum SessionChatTimelineBlocks {
                 opensChangesReview: chrome.opensChangesReview,
                 changesInitialFilePath: chrome.changesInitialFilePath,
                 isInterrupted: interrupted,
-                isMalformed: tool.isMalformed
+                isMalformed: tool.isMalformed,
+                isReceivingArguments: receivingArguments,
+                presentation: toolResultPresentation(tool, fallbackTitle: chrome.title)
             )
         )
+    }
+
+    /// Classifies the part for the inspector sheet. Duration is omitted: a tool
+    /// part has a start but no end, and an exit is taken only from metadata.
+    private static func toolResultPresentation(
+        _ tool: ToolPart,
+        fallbackTitle: String
+    ) -> ToolResultPresentation? {
+        ToolResultInspector.classify(
+            ToolResultRequest(
+                toolName: tool.toolName,
+                fallbackTitle: fallbackTitle,
+                command: inputString(tool.input, keys: "command"),
+                path: inputString(tool.input, keys: "filePath", "file", "path"),
+                pattern: inputString(tool.input, keys: "pattern"),
+                searchPath: inputString(tool.input, keys: "path", "directory"),
+                offset: inputInt(tool.input, key: "offset"),
+                limit: inputInt(tool.input, key: "limit"),
+                content: inputString(tool.input, keys: "content"),
+                output: nonBlank(tool.output),
+                error: nonBlank(tool.error),
+                exitCode: metadataInt(tool.metadata, key: "exit"),
+                patch: toolPatch(tool),
+                oldString: inputString(tool.input, keys: "oldString"),
+                newString: inputString(tool.input, keys: "newString")
+            )
+        )
+    }
+
+    private static func toolPatch(_ tool: ToolPart) -> String? {
+        if let patch = metadataFilediffString(tool.metadata, key: "patch") {
+            return patch
+        }
+        if case let .array(files)? = tool.metadata?["files"] {
+            for element in files {
+                guard case let .dictionary(object) = element else { continue }
+                if let patch = stringFromObject(object, keys: "patch") {
+                    return patch
+                }
+            }
+        }
+        if let output = tool.output, output.contains("@@") {
+            return output
+        }
+        return nil
+    }
+
+    private static func inputInt(_ input: [String: AnyCodable]?, key: String) -> Int? {
+        guard let value = input?[key] else { return nil }
+        return intValue(value)
+    }
+
+    private static func metadataInt(_ metadata: [String: AnyCodable]?, key: String) -> Int? {
+        guard let value = metadata?[key] else { return nil }
+        return intValue(value)
+    }
+
+    private static func nonBlank(_ value: String?) -> String? {
+        guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        return value
+    }
+
+    /// What a card says while its arguments stream in and none can be read yet (TUI v2 copy).
+    private static func receivingArgumentsPlaceholder(_ name: String) -> String? {
+        switch name {
+        case "bash", "shell": "Writing command…"
+        case "read": "Preparing read…"
+        case "edit": "Preparing edit…"
+        case "write": "Preparing write…"
+        default: nil
+        }
     }
 
     /// Neutral copy for a tool the user stopped or declined (never the raw abort text).
@@ -1740,7 +2851,7 @@ nonisolated enum SessionChatTimelineBlocks {
         if isQuestionTool(tool) { return questionChrome(tool) }
         switch name {
         case "read":
-            return contextChrome(tool: tool, subtitle: readPathSubtitle(tool.input))
+            return contextChrome(tool: tool, subtitle: readPath(tool))
         case "glob":
             return contextChrome(tool: tool, subtitle: patternPathSubtitle(tool.input))
         case "grep":
@@ -1768,7 +2879,7 @@ nonisolated enum SessionChatTimelineBlocks {
             return fileChangeChrome(tool: tool, displayTitle: "Edit")
         case "write":
             return fileChangeChrome(tool: tool, displayTitle: "Write")
-        case "apply_patch":
+        case "apply_patch", "patch":
             return fileChangeChrome(tool: tool, displayTitle: "Patch")
         default:
             return nil
@@ -1799,6 +2910,7 @@ nonisolated enum SessionChatTimelineBlocks {
             metadataFilediffString(tool.metadata, key: "file")
             ?? singlePatchFile?.path
             ?? pathSubtitle(tool.input)
+            ?? ToolArgumentsPreview.string(tool, keys: "filePath", "path", "file")
         let additions = positiveCount(
             metadataFilediffInt(tool.metadata, key: "additions") ?? singlePatchFile?.additions ?? newFileLineCount(tool)
         )
@@ -1952,7 +3064,9 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private static func shellChrome(_ tool: ToolPart) -> Chrome {
-        let command = inputString(tool.input, keys: "command") ?? runningTitleOverride(tool)
+        let command = inputString(tool.input, keys: "command")
+            ?? runningTitleOverride(tool)
+            ?? ToolArgumentsPreview.string(tool, keys: "command")
         return Chrome(title: "Shell", subtitle: command, detailText: settledDetail(tool))
     }
 
@@ -2040,7 +3154,7 @@ nonisolated enum SessionChatTimelineBlocks {
         }
         guard let input else { return nil }
         let parts = input.compactMap { key, value -> String? in
-            guard let text = scalarString(value), !text.isEmpty, text.count <= 80 else { return nil }
+            guard key != ToolArgumentsPreview.inputKey, let text = scalarString(value), !text.isEmpty, text.count <= 80 else { return nil }
             return "\(key)=\(text)"
         }
         return parts.isEmpty ? nil : "[\(parts.joined(separator: ", "))]"
@@ -2096,9 +3210,10 @@ nonisolated enum SessionChatTimelineBlocks {
         inputString(input, keys: "filePath", "path", "file")
     }
 
-    /// Read chrome is the file: v1 sends `filePath`, v2 sends `path`.
-    private static func readPathSubtitle(_ input: [String: AnyCodable]?) -> String? {
-        inputString(input, keys: "filePath", "file", "path")
+    /// Read chrome is the file, settled or still streaming in: v1 sends `filePath`, v2 sends `path`.
+    private static func readPath(_ tool: ToolPart) -> String? {
+        inputString(tool.input, keys: "filePath", "file", "path")
+            ?? ToolArgumentsPreview.string(tool, keys: "filePath", "file", "path")
     }
 
     private static func patternPathSubtitle(_ input: [String: AnyCodable]?) -> String? {

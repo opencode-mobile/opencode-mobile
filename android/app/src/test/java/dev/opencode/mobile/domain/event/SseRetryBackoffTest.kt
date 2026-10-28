@@ -22,4 +22,15 @@ class SseRetryBackoffTest {
         val first = SseRetryBackoff.delayMs(1, random)
         assertTrue(first in 750L..1_250L)
     }
+
+    @Test
+    fun authBackoffIsSlowerAndCappedAtThirtySeconds() {
+        repeat(20) { seed ->
+            val random = Random(seed)
+            assertTrue(SseRetryBackoff.authDelayMs(1, random) in 3_750L..6_250L)
+            assertTrue(SseRetryBackoff.authDelayMs(2, random) in 7_500L..12_500L)
+            assertTrue(SseRetryBackoff.authDelayMs(4, random) in 22_500L..37_500L)
+            assertTrue(SseRetryBackoff.authDelayMs(9, random) in 22_500L..37_500L)
+        }
+    }
 }

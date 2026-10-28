@@ -21,7 +21,9 @@ struct T3HttpClient: Sendable {
     static func normalizeBaseURL(_ raw: String) -> URL {
         let withScheme = withDefaultScheme(raw)
         let normalized = withScheme.hasSuffix("/") ? withScheme : withScheme + "/"
-        return URL(string: normalized) ?? AppConfig.serverBaseURL
+        // Unparseable input must not fall back to a real server. AppConfig's
+        // localhost default was removed in the security hardening.
+        return URL(string: normalized) ?? URL(string: "https://invalid.invalid/")!
     }
 
     func fetchDescriptor(baseURL: URL) async throws -> T3EnvironmentDescriptor {

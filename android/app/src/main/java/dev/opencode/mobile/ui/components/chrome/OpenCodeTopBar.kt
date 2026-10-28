@@ -73,6 +73,9 @@ sealed interface OpenCodeTopBarSubtitleLeading {
         val character: Char,
         val accent: LetterAccent,
     ) : OpenCodeTopBarSubtitleLeading
+
+    /** Worktree checkout. The icon is CallSplit; the subtitle is the checkout name. */
+    data object Worktree : OpenCodeTopBarSubtitleLeading
 }
 
 sealed interface OpenCodeTopBarLeading {
@@ -276,6 +279,7 @@ private fun TopBarSubtitleLine(
             null -> null
         }
     val letter = subtitleLeading as? OpenCodeTopBarSubtitleLeading.Letter
+    val worktree = subtitleLeading is OpenCodeTopBarSubtitleLeading.Worktree
 
     if (!hasSubtitle && status != null) {
         OpenCodeConnectionStatusLabel(status = status)
@@ -289,6 +293,14 @@ private fun TopBarSubtitleLine(
     ) {
         if (letter != null && hasSubtitle) {
             TopBarLetterBadge(character = letter.character, accent = letter.accent)
+        }
+        if (worktree && hasSubtitle) {
+            Icon(
+                imageVector = OpenCodeIcons.CallSplit,
+                contentDescription = "Worktree",
+                modifier = Modifier.size(12.dp),
+                tint = openCodeColor("icon-strong-base"),
+            )
         }
         if (subtitle != null) {
             Text(
@@ -369,7 +381,12 @@ private fun titleBlockAccessibilityLabel(
                 ?.character
                 ?.uppercaseChar()
                 ?.toString()
-        parts += if (letter != null) "Project $letter $subtitle" else subtitle
+        parts +=
+            when {
+                letter != null -> "Project $letter $subtitle"
+                subtitleLeading is OpenCodeTopBarSubtitleLeading.Worktree -> "Worktree $subtitle"
+                else -> subtitle
+            }
     }
     when (subtitleAccessory) {
         is OpenCodeTopBarSubtitleAccessory.StatusDot ->

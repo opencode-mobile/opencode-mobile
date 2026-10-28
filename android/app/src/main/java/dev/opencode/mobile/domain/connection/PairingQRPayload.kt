@@ -61,10 +61,24 @@ object PairingQRPayload {
 
     fun preferredDisplayUrl(urls: List<String>): String = urls.firstOrNull(::isTailscaleUrl) ?: urls.first()
 
-    /** Tailscale wins when it answered. Otherwise the first other address that answered. */
-    fun pickReachableUrl(reachable: List<String>): String? {
-        if (reachable.isEmpty()) return null
-        return reachable.firstOrNull(::isTailscaleUrl) ?: reachable.first()
+    /**
+     * Tailscale wins when it answered. Otherwise the first other address that answered.
+     * When [currentBaseUrl] is `https`, only `https` candidates are eligible: a saved encrypted
+     * address is never replaced with a cleartext one.
+     */
+    fun pickReachableUrl(
+        reachable: List<String>,
+        currentBaseUrl: String? = null,
+    ): String? {
+        val keepEncrypted = currentBaseUrl?.let(::isEncryptedUrl) ?: false
+        val eligible = reachable.filter { !keepEncrypted || isEncryptedUrl(it) }
+        if (eligible.isEmpty()) return null
+        return eligible.firstOrNull(::isTailscaleUrl) ?: eligible.first()
+    }
+
+    fun isEncryptedUrl(raw: String): Boolean {
+        val trimmed = raw.trim().lowercase()
+        return trimmed.startsWith("https://") || trimmed.startsWith("wss://")
     }
 
     fun isTailscaleUrl(raw: String): Boolean {

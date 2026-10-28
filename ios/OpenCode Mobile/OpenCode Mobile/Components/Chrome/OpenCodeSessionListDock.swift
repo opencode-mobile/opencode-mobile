@@ -3,6 +3,9 @@ import SwiftUI
 struct OpenCodeSessionListDock: View {
     let filterTabs: [SessionListFilterTab]
     let selectedFilterId: String
+    /// Dock tab of a selection that is not one of `filterTabs` (a worktree scope). Swiping
+    /// from it walks `filterTabs` as if it sat inside its `parentId` tab.
+    let selectedScopeTab: SessionListFilterTab?
     let createError: String?
     let onOpenProjectPicker: () -> Void
     let onFilterSelected: (String) -> Void
@@ -13,6 +16,7 @@ struct OpenCodeSessionListDock: View {
     init(
         filterTabs: [SessionListFilterTab],
         selectedFilterId: String,
+        selectedScopeTab: SessionListFilterTab? = nil,
         createError: String? = nil,
         onOpenProjectPicker: @escaping () -> Void = {},
         onFilterSelected: @escaping (String) -> Void = { _ in },
@@ -22,6 +26,7 @@ struct OpenCodeSessionListDock: View {
     ) {
         self.filterTabs = filterTabs
         self.selectedFilterId = selectedFilterId
+        self.selectedScopeTab = selectedScopeTab
         self.createError = createError
         self.onOpenProjectPicker = onOpenProjectPicker
         self.onFilterSelected = onFilterSelected
@@ -44,6 +49,7 @@ struct OpenCodeSessionListDock: View {
                     SessionListScopeControl(
                         tabs: filterTabs,
                         selectedId: selectedFilterId,
+                        selectedScopeTab: selectedScopeTab,
                         onOpen: onOpenProjectPicker,
                         onSelect: onFilterSelected
                     )
@@ -83,6 +89,7 @@ struct OpenCodeSessionListDock: View {
 struct SessionListScopeControl: View {
     let tabs: [SessionListFilterTab]
     let selectedId: String
+    var selectedScopeTab: SessionListFilterTab? = nil
     let onOpen: () -> Void
     let onSelect: (String) -> Void
 
@@ -200,7 +207,7 @@ struct SessionListScopeControl: View {
         HStack(spacing: 10) {
             SessionListScopeMark(tab: tab)
             VStack(alignment: .leading, spacing: 1) {
-                Text(tab.pickerTitle)
+                Text(tab.dockTitle)
                     .font(OpenCodeTypography.bodySecondary.weight(.semibold))
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .lineLimit(1)
@@ -214,7 +221,7 @@ struct SessionListScopeControl: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .geometryGroup()
-            SessionListScopeCountBadge(count: tab.count)
+            SessionListScopeCountBadge(count: tab.count, load: tab.load)
         }
         .padding(.trailing, 26)
     }
@@ -223,32 +230,27 @@ struct SessionListScopeControl: View {
         RoundedRectangle(cornerRadius: 20, style: .continuous)
     }
 
-    private var selectedIndex: Int {
-        tabs.firstIndex(where: { $0.id == (shownTabId ?? selectedId) }) ?? 0
+    /// `tabs` plus the selected worktree scope, which is not one of them.
+    private func tab(id: String) -> SessionListFilterTab? {
+        if let tab = tabs.first(where: { $0.id == id }) { return tab }
+        if let selectedScopeTab, selectedScopeTab.id == id { return selectedScopeTab }
+        return nil
     }
 
     private var selectedTab: SessionListFilterTab? {
-        tabs.first { $0.id == selectedId } ?? tabs.first
+        tab(id: selectedId) ?? tabs.first
     }
 
     private var visibleTab: SessionListFilterTab? {
-        tabs.first { $0.id == (shownTabId ?? selectedId) } ?? selectedTab
+        tab(id: shownTabId ?? selectedId) ?? selectedTab
     }
 
     private var canGoPrevious: Bool {
-        SessionListScopePaging.neighborIndex(
-            selectedIndex: selectedIndex,
-            count: tabs.count,
-            direction: .previous
-        ) != nil
+        neighborTab(.previous) != nil
     }
 
     private var canGoNext: Bool {
-        SessionListScopePaging.neighborIndex(
-            selectedIndex: selectedIndex,
-            count: tabs.count,
-            direction: .next
-        ) != nil
+        neighborTab(.next) != nil
     }
 
     private var drag: some Gesture {
@@ -346,12 +348,14 @@ struct SessionListScopeControl: View {
     }
 
     private func neighborTab(_ direction: SessionListScopePaging.Direction) -> SessionListFilterTab? {
-        guard let index = SessionListScopePaging.neighborIndex(
-            selectedIndex: selectedIndex,
-            count: tabs.count,
+        let shown = visibleTab
+        guard let id = SessionListScopePaging.neighborID(
+            selectedID: shown?.id ?? selectedId,
+            parentID: shown?.parentId,
+            tabIDs: tabs.map(\.id),
             direction: direction
         ) else { return nil }
-        return tabs[index]
+        return tabs.first { $0.id == id }
     }
 
     private func adjustProject(_ direction: AccessibilityAdjustmentDirection) {
@@ -367,6 +371,7 @@ struct SessionListScopeControl: View {
     }
 
     private func displayedSubtitle(_ tab: SessionListFilterTab) -> String {
+        if let load = tab.load { return load.subtitle }
         if tab.isAll { return tab.subtitle }
         return compactHomePath(
             tab.subtitle,
@@ -376,11 +381,15 @@ struct SessionListScopeControl: View {
 
     private var accessibilityLabel: String {
         guard let tab = visibleTab else { return "Project filter" }
+        if let load = tab.load {
+            // Loading or failed replaces the session count, which is not known yet.
+            return "\(tab.dockTitle), \(load.subtitle)"
+        }
         let subtitle = displayedSubtitle(tab)
         if subtitle.isEmpty {
-            return "\(tab.pickerTitle), \(tab.count) sessions"
+            return "\(tab.dockTitle), \(tab.count) sessions"
         }
-        return "\(tab.pickerTitle), \(subtitle), \(tab.count) sessions"
+        return "\(tab.dockTitle), \(subtitle), \(tab.count) sessions"
     }
 
     private var accessibilityHint: String {
@@ -412,18 +421,31 @@ struct SessionListScopeMark: View {
     }
 }
 
+/// Session count of a project scope. While the scope is loading a small spinner takes its
+/// place; a failed load hides it (the subtitle says what happened).
 struct SessionListScopeCountBadge: View {
     let count: Int
+    var load: SessionListScopeLoad? = nil
 
     var body: some View {
-        Text("\(count)")
-            .font(OpenCodeTypography.caption.weight(.semibold))
-            .monospacedDigit()
-            .foregroundStyle(OpenCodeColors.textStrong)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 2)
-            .background(OpenCodeColors.textStrong.opacity(0.10), in: Capsule())
-            .accessibilityHidden(true)
+        switch load {
+        case .loading:
+            ProgressView()
+                .controlSize(.small)
+                .accessibilityHidden(true)
+                .accessibilityIdentifier("sessionListScopeLoading")
+        case .failed:
+            EmptyView()
+        case nil:
+            Text("\(count)")
+                .font(OpenCodeTypography.caption.weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
+                .background(OpenCodeColors.textStrong.opacity(0.10), in: Capsule())
+                .accessibilityHidden(true)
+        }
     }
 }
 
@@ -482,9 +504,9 @@ private struct NewSessionDockButton: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityAddTraits(.isButton)
                 .accessibilityLabel("New session")
-                .accessibilityHint("Use Choose project to start in a different project.")
+                .accessibilityHint("Use Choose project or worktree to start somewhere else.")
                 .accessibilityAction(.default, onNewSession)
-                .accessibilityAction(named: "Choose project", onLongPress)
+                .accessibilityAction(named: "Choose project or worktree", onLongPress)
         } else {
             Button(action: onNewSession) {
                 label

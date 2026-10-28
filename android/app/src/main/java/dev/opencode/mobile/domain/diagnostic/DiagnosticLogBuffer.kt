@@ -51,14 +51,35 @@ data class DiagnosticLogSnapshot(
 object DiagnosticLogRedactor {
     const val MAX_MESSAGE_LENGTH = 500
 
+    private const val SECRET_KEYS =
+        "password|passwd|pwd|secret|client_secret|token|access_token|refresh_token|id_token|" +
+            "auth_token|api[_-]?key|apikey|authorization|cookie|set-cookie|private_key|ticket"
+
+    /**
+     * Secret shapes, most specific first. [dev.opencode.mobile.domain.feedback.FeedbackLogRedactor]
+     * runs these too before it masks addresses, so both exports share one definition of "credential".
+     */
     private val patterns =
         listOf(
+            // URL userinfo: scheme://user:password@host
+            Regex("""(?i)\b([a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@""") to "$1[REDACTED]@",
+            // Quoted JSON keys: "password":"x", "api_key": "x"
+            Regex("""(?i)("(?:$SECRET_KEYS)"\s*:\s*")[^"]*(")""") to "$1[REDACTED]$2",
+            // Query parameters: ?auth_token=x&ticket=y
+            Regex("""(?i)([?&](?:$SECRET_KEYS)=)[^&\s"']+""") to "$1[REDACTED]",
+            // Well-known key formats
+            Regex("""\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b""") to "[REDACTED-JWT]",
+            Regex("""\bsk-[A-Za-z0-9_-]{8,}\b""") to "[REDACTED-KEY]",
+            Regex("""\bgh[pousr]_[A-Za-z0-9]{20,}\b""") to "[REDACTED-KEY]",
+            Regex("""\bgithub_pat_[A-Za-z0-9_]{20,}\b""") to "[REDACTED-KEY]",
+            Regex("""\bAKIA[0-9A-Z]{16}\b""") to "[REDACTED-KEY]",
+            Regex("""\bxox[baprs]-[A-Za-z0-9-]{10,}\b""") to "[REDACTED-KEY]",
             Regex("""(?i)\bBasic\s+[A-Za-z0-9+/=_-]+""") to "Basic [REDACTED]",
             Regex("""(?i)\bBearer\s+\S+""") to "Bearer [REDACTED]",
-            Regex("""(?i)(password\s*[=:]\s*)\S+""") to "$1[REDACTED]",
-            Regex("""(?i)(token\s*[=:]\s*)\S+""") to "$1[REDACTED]",
             Regex("""(?i)(authorization\s*[=:]\s*).+""") to "$1[REDACTED]",
             Regex("""(?i)(OPENCODE_SERVER_PASSWORD\s*[=:]\s*)\S+""") to "$1[REDACTED]",
+            // key=value / key: value for every secret key name
+            Regex("""(?i)\b((?:$SECRET_KEYS)\s*[=:]\s*)\S+""") to "$1[REDACTED]",
         )
 
     fun redact(message: String): String {

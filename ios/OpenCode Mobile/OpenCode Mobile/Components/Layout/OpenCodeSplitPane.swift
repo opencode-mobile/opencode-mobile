@@ -62,36 +62,42 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         )
     }
 
-    private var displayedLeadingWidth: CGFloat {
-        if let liveWidth, !displayedCollapsed { return liveWidth }
-        if displayedCollapsed { return 0 }
-        return OpenCodeSplitPaneLayout.clamp(width: state.leadingWidth, bounds: bounds)
+    private func displayedGeometry(fold: OpenCodeSplitPaneFold?) -> OpenCodeSplitPaneGeometry {
+        let resolved = OpenCodeSplitPaneLayout.geometry(state: state, fold: fold, bounds: bounds)
+        if displayedCollapsed {
+            // A drag from closed shows only the 1pt line until release reopens the pane.
+            return OpenCodeSplitPaneGeometry(
+                leadingWidth: 0,
+                dividerWidth: liveWidth == nil ? 0 : OpenCodeSplitPaneLayout.dividerWidth,
+                isInFold: false,
+                isLocked: resolved.isLocked
+            )
+        }
+        // A drag follows the finger with the 1pt line, crossing the flat fold freely.
+        if let liveWidth, !resolved.isLocked {
+            return OpenCodeSplitPaneGeometry(
+                leadingWidth: liveWidth,
+                dividerWidth: OpenCodeSplitPaneLayout.dividerWidth,
+                isInFold: false,
+                isLocked: false
+            )
+        }
+        return resolved
     }
 
     var body: some View {
-        let collapsed = displayedCollapsed && liveWidth == nil
-        HStack(spacing: 0) {
-            leading()
-                // Content keeps at least the minimum width and is clipped rather than
-                // squeezed while the pane animates closed or is dragged narrow.
-                .frame(width: max(bounds.minLeading, displayedLeadingWidth))
-                .frame(width: displayedLeadingWidth, alignment: .leading)
-                .clipped()
-                .allowsHitTesting(!collapsed)
-                .accessibilityHidden(collapsed)
-
-            divider(collapsed: collapsed)
-                .zIndex(1)
-
-            trailing(
-                OpenCodeSplitPaneDetailControl(
-                    isCollapsed: displayedCollapsed,
-                    toggle: toggle
-                )
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        GeometryReader { proxy in
+            let fold = Self.fold(in: proxy, bounds: bounds)
+            content(geometry: displayedGeometry(fold: fold), fold: fold)
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .onChange(of: fold?.isActive == true) { _, locked in
+                    // Book pose removes the handle mid-drag; drop the drag without saving it.
+                    if locked {
+                        dragStart = nil
+                        liveWidth = nil
+                    }
+                }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(OpenCodeColors.backgroundBase)
         .environment(\.openCodeSplitNesting, screen.collapsesAncestorSidebar ? ancestorNesting : ownedNesting)
         .background {
@@ -101,20 +107,85 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         }
     }
 
-    @ViewBuilder
-    private func divider(collapsed: Bool) -> some View {
-        Rectangle()
-            .fill(OpenCodeColors.borderWeakBase)
-            .frame(width: collapsed ? 0 : OpenCodeSplitPaneLayout.dividerWidth)
-            .frame(maxHeight: .infinity)
-            .overlay {
-                if !collapsed {
-                    handle
-                }
+    private func content(geometry: OpenCodeSplitPaneGeometry, fold: OpenCodeSplitPaneFold?) -> some View {
+        let collapsed = displayedCollapsed && liveWidth == nil
+        // The toggle animates the widths through `OpenCodeSplitPaneFrames`, which lays
+        // the panes out afresh on every frame the way a divider drag does. Animating
+        // the frames themselves leaves a UIKit-backed trailing pane (NavigationStack)
+        // on its own faster curve, so its content drifts across the leading pane.
+        return OpenCodeSplitPaneFrames(
+            leadingWidth: geometry.leadingWidth,
+            dividerWidth: geometry.dividerWidth
+        ) { leadingWidth, dividerWidth in
+            let frame = OpenCodeSplitPaneGeometry(
+                leadingWidth: leadingWidth,
+                dividerWidth: dividerWidth,
+                isInFold: geometry.isInFold,
+                isLocked: geometry.isLocked
+            )
+            HStack(spacing: 0) {
+                leading()
+                    // Content keeps at least the minimum width and is clipped rather than
+                    // squeezed while the pane animates closed or is dragged narrow.
+                    .frame(width: max(bounds.minLeading, frame.leadingWidth))
+                    .frame(width: frame.leadingWidth, alignment: .leading)
+                    .clipped()
+                    .allowsHitTesting(!collapsed)
+                    .accessibilityHidden(collapsed)
+
+                divider(geometry: frame, collapsed: collapsed, fold: fold)
+                    .zIndex(1)
+
+                trailing(
+                    OpenCodeSplitPaneDetailControl(
+                        isCollapsed: displayedCollapsed,
+                        toggle: toggle
+                    )
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        }
     }
 
-    private var handle: some View {
+    /// The window's vertical fold inside this pane (iPhone Duo inner display). Regions
+    /// arrive after the first layout pass, so this is read on every evaluation.
+    private static func fold(in proxy: GeometryProxy, bounds: OpenCodeSplitPaneBounds) -> OpenCodeSplitPaneFold? {
+        // `reservedRegions` only exists in the iOS 27.1 SDK (SwiftUI 8.0.85).
+        #if canImport(SwiftUI, _version: 8.0.85)
+        guard #available(iOS 27.1, *) else { return nil }
+        let divisions = proxy.reservedRegions(kind: .division, options: .includeInactive)
+            .map { (frame: $0.frame, isActive: $0.isActive) }
+        return OpenCodeSplitPaneLayout.fold(
+            divisions: divisions,
+            containerWidth: proxy.size.width,
+            bounds: bounds
+        )
+        #else
+        return nil
+        #endif
+    }
+
+    private func divider(
+        geometry: OpenCodeSplitPaneGeometry,
+        collapsed: Bool,
+        fold: OpenCodeSplitPaneFold?
+    ) -> some View {
+        // In the fold the divider widens to the fold gap: pane background with a
+        // shorter centred line. Elsewhere it is the 1pt line.
+        Rectangle()
+            .fill(OpenCodeColors.borderWeakBase)
+            .frame(width: min(geometry.dividerWidth, OpenCodeSplitPaneLayout.dividerWidth))
+            .padding(.vertical, geometry.isInFold ? OpenCodeSplitPaneLayout.foldLineInset : 0)
+            .frame(width: geometry.dividerWidth)
+            .frame(maxHeight: .infinity)
+        .overlay {
+            if !collapsed && !geometry.isLocked {
+                handle(fold: fold)
+            }
+        }
+    }
+
+    private func handle(fold: OpenCodeSplitPaneFold?) -> some View {
         let isActive = isHandleHovered || dragStart != nil
         return ZStack {
             Color.clear
@@ -133,8 +204,8 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         .onHover { isHandleHovered = $0 }
         .gesture(
             DragGesture(minimumDistance: 0, coordinateSpace: .global)
-                .onChanged(handleDragChanged)
-                .onEnded(handleDragEnded)
+                .onChanged { handleDragChanged($0, fold: fold) }
+                .onEnded { handleDragEnded($0, fold: fold) }
         )
         .accessibilityElement()
         .accessibilityLabel("Resize sidebar")
@@ -143,24 +214,29 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
         .accessibilityAction { toggle() }
     }
 
-    private func handleDragChanged(_ value: DragGesture.Value) {
-        guard !forcedCollapsed else { return }
+    /// Open width a drag starts from: the fold when the divider sits in it.
+    private func dragOrigin(_ start: OpenCodeSplitPaneState, fold: OpenCodeSplitPaneFold?) -> CGFloat {
+        guard !start.isCollapsed else { return 0 }
+        return OpenCodeSplitPaneLayout.geometry(state: start, fold: fold, bounds: bounds).leadingWidth
+    }
+
+    private func handleDragChanged(_ value: DragGesture.Value, fold: OpenCodeSplitPaneFold?) {
+        guard !forcedCollapsed, fold?.isActive != true else { return }
         let start = dragStart ?? state
         if dragStart == nil { dragStart = start }
         guard abs(value.translation.width) >= OpenCodeSplitPaneLayout.tapSlop || liveWidth != nil else { return }
-        let origin = start.isCollapsed ? 0 : start.leadingWidth
         var transaction = Transaction()
         transaction.disablesAnimations = true
         withTransaction(transaction) {
             liveWidth = OpenCodeSplitPaneLayout.liveWidth(
-                proposedWidth: origin + leadingWidthDelta(value),
+                proposedWidth: dragOrigin(start, fold: fold) + leadingWidthDelta(value),
                 bounds: bounds
             )
         }
     }
 
-    private func handleDragEnded(_ value: DragGesture.Value) {
-        guard !forcedCollapsed else {
+    private func handleDragEnded(_ value: DragGesture.Value, fold: OpenCodeSplitPaneFold?) {
+        guard !forcedCollapsed, fold?.isActive != true else {
             dragStart = nil
             liveWidth = nil
             return
@@ -171,11 +247,11 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
             toggle()
             return
         }
-        let origin = start.isCollapsed ? 0 : start.leadingWidth
         let resolved = OpenCodeSplitPaneLayout.resolveDragEnd(
             previous: start,
-            proposedWidth: origin + leadingWidthDelta(value),
-            bounds: bounds
+            proposedWidth: dragOrigin(start, fold: fold) + leadingWidthDelta(value),
+            bounds: bounds,
+            fold: fold
         )
         withAnimation(splitPaneAnimation) {
             liveWidth = nil
@@ -202,6 +278,27 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
             preferences.setState(next, for: screen)
         }
         onCollapsedChange?(next.isCollapsed)
+    }
+}
+
+/// Interpolates the pane widths and rebuilds `content` with each frame's values, so
+/// every pane is laid out at plain widths on every frame instead of animating its
+/// own frame.
+private struct OpenCodeSplitPaneFrames<Content: View>: View, Animatable {
+    var leadingWidth: CGFloat
+    var dividerWidth: CGFloat
+    @ViewBuilder let content: (CGFloat, CGFloat) -> Content
+
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(leadingWidth, dividerWidth) }
+        set {
+            leadingWidth = newValue.first
+            dividerWidth = newValue.second
+        }
+    }
+
+    var body: some View {
+        content(leadingWidth, dividerWidth)
     }
 }
 

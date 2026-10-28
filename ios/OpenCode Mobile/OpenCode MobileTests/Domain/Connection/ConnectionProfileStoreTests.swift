@@ -20,6 +20,26 @@ struct ConnectionProfileStoreTests {
         #expect(loaded?.serverProtocol == nil)
     }
 
+    @Test func saveProfile_whenTheSecureStoreRefusesTheWrite_throwsAndKeepsTheCatalog() async throws {
+        let defaults = isolatedDefaults()
+        let secure = InMemorySecureCredentialStore()
+        let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: secure)
+        try await store.saveProfile(
+            ConnectionProfile(baseURL: server, username: "opencode", password: "first", name: "A")
+        )
+        secure.failWrites = true
+
+        await #expect(throws: SecureCredentialStoreError.writeFailed(status: -34018)) {
+            try await store.saveProfile(
+                ConnectionProfile(baseURL: "http://10.0.0.9:4096/", username: "opencode", password: "second", name: "B")
+            )
+        }
+
+        let profiles = await store.listProfiles()
+        #expect(profiles.map(\.name) == ["A"])
+        #expect(profiles.first?.password == "first")
+    }
+
     @Test func saveAndLoadPersistsProtocolHint() async throws {
         let defaults = isolatedDefaults()
         let store = UserDefaultsConnectionProfileStore(defaults: defaults, secureCredentialStore: InMemorySecureCredentialStore())
@@ -172,12 +192,16 @@ struct ConnectionProfileStoreTests {
 
 private final class InMemorySecureCredentialStore: SecureCredentialStore, @unchecked Sendable {
     private var passwords: [String: String] = [:]
+    var failWrites = false
 
     func readPassword(serverBaseURL: String) -> String? {
         passwords[serverBaseURL]
     }
 
-    func writePassword(serverBaseURL: String, password: String) {
+    func writePassword(serverBaseURL: String, password: String) throws {
+        if failWrites {
+            throw SecureCredentialStoreError.writeFailed(status: -34018)
+        }
         passwords[serverBaseURL] = password
     }
 

@@ -45,12 +45,32 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
 
     static func makePersistentContainer() throws -> ModelContainer {
         let schema = Schema([SessionCacheSnapshotRecord.self])
-        let configuration = ModelConfiguration(
-            "session_cache",
-            schema: schema,
-            isStoredInMemoryOnly: false
-        )
-        return try ModelContainer(for: schema, configurations: [configuration])
+        // Transcripts live in a backup-excluded, file-protected directory. The store used to sit
+        // at SwiftData's default location; move it once so nothing is lost.
+        let directory = try ProtectedStorage.directory("SessionCache")
+        let url = directory.appendingPathComponent("session_cache.store", isDirectory: false)
+        migrateLegacyStore(to: url)
+        let configuration = ModelConfiguration("session_cache", schema: schema, url: url)
+        let container = try ModelContainer(for: schema, configurations: [configuration])
+        for suffix in ["", "-wal", "-shm"] {
+            ProtectedStorage.protect(file: URL(fileURLWithPath: url.path + suffix))
+        }
+        return container
+    }
+
+    private static func migrateLegacyStore(to url: URL) {
+        let fileManager = FileManager.default
+        guard !fileManager.fileExists(atPath: url.path),
+              let applicationSupport = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        else { return }
+        let legacy = applicationSupport.appendingPathComponent("session_cache.store", isDirectory: false)
+        guard fileManager.fileExists(atPath: legacy.path) else { return }
+        for suffix in ["", "-wal", "-shm"] {
+            let from = URL(fileURLWithPath: legacy.path + suffix)
+            let to = URL(fileURLWithPath: url.path + suffix)
+            guard fileManager.fileExists(atPath: from.path) else { continue }
+            try? fileManager.moveItem(at: from, to: to)
+        }
     }
 
     static func makeInMemoryContainer() throws -> ModelContainer {
@@ -169,6 +189,15 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
                         context.delete(row)
                     }
                 }
+            case let .connection(connectionIdOrUrlPrefix, matchByUrlPrefix):
+                let rows = try context.fetch(FetchDescriptor<SessionCacheSnapshotRecord>())
+                for row in rows where Self.matchesConnection(
+                    row.connectionId,
+                    connectionIdOrUrlPrefix: connectionIdOrUrlPrefix,
+                    matchByUrlPrefix: matchByUrlPrefix
+                ) {
+                    context.delete(row)
+                }
             }
             try context.save()
         } catch {
@@ -195,6 +224,14 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
                         row.connectionId.caseInsensitiveCompare(connectionIdOrUrlPrefix) == .orderedSame
                     }
                 }
+            case let .connection(connectionIdOrUrlPrefix, matchByUrlPrefix):
+                rows = try context.fetch(FetchDescriptor<SessionCacheSnapshotRecord>()).filter { row in
+                    Self.matchesConnection(
+                        row.connectionId,
+                        connectionIdOrUrlPrefix: connectionIdOrUrlPrefix,
+                        matchByUrlPrefix: matchByUrlPrefix
+                    )
+                }
             }
             let totalBytes = rows.reduce(Int64(0)) { partial, row in
                 partial + Int64(row.payloadJSON.utf8.count)
@@ -204,6 +241,17 @@ nonisolated final class SwiftDataSessionCacheStore: SessionCacheStore, @unchecke
             DiagnosticLog.warning(.session, "SwiftData session cache report failed: \(error.localizedDescription)")
             return SessionCacheReport(totalBytes: 0, entryCount: 0)
         }
+    }
+
+    private static func matchesConnection(
+        _ connectionId: String,
+        connectionIdOrUrlPrefix: String,
+        matchByUrlPrefix: Bool
+    ) -> Bool {
+        if matchByUrlPrefix {
+            return connectionId.lowercased().hasPrefix(connectionIdOrUrlPrefix.lowercased())
+        }
+        return connectionId.caseInsensitiveCompare(connectionIdOrUrlPrefix) == .orderedSame
     }
 
     private func fetch(cacheKey: String, in context: ModelContext) throws -> SessionCacheSnapshotRecord? {

@@ -74,22 +74,38 @@ nonisolated struct V2ViewSessionRequestDTO: Encodable, Sendable {
     let idle: Int64
 }
 
+nonisolated struct V2MoveSessionRequestDTO: Encodable, Sendable {
+    let directory: String
+}
+
+nonisolated struct V2SessionGenerateRequestDTO: Encodable, Sendable {
+    let prompt: String
+}
+
+nonisolated struct V2SessionGenerateResponseDTO: Decodable, Sendable {
+    let text: String
+}
+
 nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {
+    let parentID: String?
     let title: String?
     let location: V2LocationDTO?
 
-    init(title: String? = nil, location: V2LocationDTO? = nil) {
+    init(parentID: String? = nil, title: String? = nil, location: V2LocationDTO? = nil) {
+        self.parentID = parentID
         self.title = title
         self.location = location
     }
 
     private enum CodingKeys: String, CodingKey {
+        case parentID
         case title
         case location
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encodeIfPresent(parentID, forKey: .parentID)
         try container.encodeIfPresent(title, forKey: .title)
         try container.encodeIfPresent(location, forKey: .location)
     }
@@ -97,6 +113,11 @@ nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {
 
 nonisolated struct V2RenameSessionRequestDTO: Encodable, Sendable {
     let title: String
+}
+
+/// `PATCH /api/session/{id}` body that archives (`true`) or restores (`false`) a session.
+nonisolated struct V2ArchiveSessionRequestDTO: Encodable, Sendable {
+    let archived: Bool
 }
 
 nonisolated struct V2InboxDeliveryRequestDTO: Encodable, Sendable {
@@ -192,6 +213,9 @@ nonisolated struct V2RevertStageRequestDTO: Encodable, Sendable {
 }
 
 nonisolated struct V2VcsInfoDTO: Decodable, Sendable {
+    /// `git` once the server has detected the repository. A cold server first answers
+    /// `{"branch":{}}` with no provider while detection warms up.
+    let provider: String?
     let branch: V2VcsBranchDTO?
 }
 

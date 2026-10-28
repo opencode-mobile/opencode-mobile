@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.message.MessageContextEstimate
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.SessionFailure
+import dev.opencode.mobile.domain.message.TimelineNoticeCodec
 import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.MessageTokenUsage
 import dev.opencode.mobile.domain.message.ToolStatus
@@ -192,6 +193,8 @@ internal data class CachedMessagePayload(
     val failureMessage: String? = null,
     val failureStatus: Int? = null,
     val failureBody: String? = null,
+    val failureRetryAfterMs: Long? = null,
+    val failureRecordedAtEpochMs: Long? = null,
 )
 
 @Serializable
@@ -214,6 +217,7 @@ internal data class CachedMessagePartPayload(
     val mime: String? = null,
     val attachmentKind: String? = null,
     val dataUrl: String? = null,
+    val serverPath: String? = null,
     val timeStartEpochMs: Long? = null,
     val timeEndEpochMs: Long? = null,
     val auto: Boolean = false,
@@ -344,6 +348,8 @@ private fun Message.toCachePayload(): CachedMessagePayload =
         failureMessage = failure?.message,
         failureStatus = failure?.status,
         failureBody = failure?.providerBody,
+        failureRetryAfterMs = failure?.retryAfterMs,
+        failureRecordedAtEpochMs = failure?.recordedAtEpochMs,
     )
 
 private fun CachedMessagePayload.toDomain(): Message =
@@ -371,6 +377,8 @@ private fun CachedMessagePayload.toDomain(): Message =
                     message = failureMessage.orEmpty(),
                     status = failureStatus,
                     providerBody = failureBody,
+                    retryAfterMs = failureRetryAfterMs,
+                    recordedAtEpochMs = failureRecordedAtEpochMs,
                 )
             } else {
                 null
@@ -446,6 +454,7 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 mime = mime,
                 attachmentKind = kind.name.lowercase(),
                 dataUrl = AttachmentLimits.persistedDataUrl(dataUrl),
+                serverPath = serverPath,
             )
         is MessagePart.Compaction ->
             CachedMessagePartPayload(
@@ -463,6 +472,12 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 isStreaming = isStreaming,
                 timeStartEpochMs = timeStartEpochMs,
                 timeEndEpochMs = timeEndEpochMs,
+            )
+        is MessagePart.Notice ->
+            CachedMessagePartPayload(
+                kind = "notice",
+                id = id,
+                metadata = TimelineNoticeCodec.encode(notice),
             )
     }
 
@@ -503,6 +518,7 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                     AttachmentKind.entries.firstOrNull { it.name.equals(attachmentKind, ignoreCase = true) }
                         ?: AttachmentKind.Text,
                 dataUrl = dataUrl.orEmpty(),
+                serverPath = serverPath,
             )
         }
         "reasoning" ->
@@ -520,5 +536,9 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 completed = status == "completed",
                 summary = text?.takeIf { it.isNotBlank() },
             )
+        "notice" -> {
+            val noticeId = id ?: return null
+            TimelineNoticeCodec.decode(metadata)?.let { MessagePart.Notice(id = noticeId, notice = it) }
+        }
         else -> null
     }

@@ -18,27 +18,35 @@ import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderTextAction
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeSkeletonIllustrationTopic
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private enum class GalleryBottomSheetDecoratorKind {
     None,
     Icon,
+    Illustration,
 }
 
 @Composable
 fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     var visible by rememberSaveable { mutableStateOf(false) }
     var enabled by rememberSaveable { mutableStateOf(true) }
+    var selected by rememberSaveable { mutableStateOf(false) }
+    var showsTag by rememberSaveable { mutableStateOf(false) }
     var showsHeaderBack by rememberSaveable { mutableStateOf(false) }
+    var showsHeaderTextAction by rememberSaveable { mutableStateOf(false) }
+    var headerEditing by rememberSaveable { mutableStateOf(false) }
     var itemCount by rememberSaveable { mutableStateOf(2) }
     var startDecoratorName by rememberSaveable { mutableStateOf(GalleryBottomSheetDecoratorKind.Icon.name) }
     var endDecoratorName by rememberSaveable { mutableStateOf(GalleryBottomSheetDecoratorKind.None.name) }
@@ -57,12 +65,16 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
     val startDecorator =
         when (startDecoratorKind) {
             GalleryBottomSheetDecoratorKind.None -> BottomSheetEntryDecorator.None
-            GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder, "Project")
+            GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder)
+            GalleryBottomSheetDecoratorKind.Illustration ->
+                BottomSheetEntryDecorator.Illustration(OpenCodeSkeletonIllustrationTopic.TimelineActivityCard)
         }
     val endDecorator =
         when (endDecoratorKind) {
             GalleryBottomSheetDecoratorKind.None -> BottomSheetEntryDecorator.None
-            GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null)
+            GalleryBottomSheetDecoratorKind.Icon -> BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight)
+            GalleryBottomSheetDecoratorKind.Illustration ->
+                BottomSheetEntryDecorator.Illustration(OpenCodeSkeletonIllustrationTopic.TimelineStepRail)
         }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -70,7 +82,14 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
             Text(text = "Bottom sheet", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OpenCodeChoiceBadge(label = "Entry enabled", selected = enabled, onClick = { enabled = !enabled })
+                OpenCodeChoiceBadge(label = "Entry selected", selected = selected, onClick = { selected = !selected })
+                OpenCodeChoiceBadge(label = "Entry tag", selected = showsTag, onClick = { showsTag = !showsTag })
                 OpenCodeChoiceBadge(label = "Header back", selected = showsHeaderBack, onClick = { showsHeaderBack = !showsHeaderBack })
+                OpenCodeChoiceBadge(
+                    label = "Header Edit",
+                    selected = showsHeaderTextAction,
+                    onClick = { showsHeaderTextAction = !showsHeaderTextAction },
+                )
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OpenCodeChoiceBadge(label = "Pinned top", selected = showsPinnedTop, onClick = { showsPinnedTop = !showsPinnedTop })
@@ -151,18 +170,27 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
             } else {
                 null
             },
+        headerTrailingAction =
+            if (showsHeaderTextAction) {
+                OpenCodeBottomSheetHeaderTextAction(
+                    title = if (headerEditing) "Done" else "Edit",
+                    onClick = { headerEditing = !headerEditing },
+                )
+            } else {
+                null
+            },
         height = height,
         keyboard = keyboard,
         pinnedTop = {
             if (showsPinnedTop) {
                 OpenCodeBottomSheetEntry(
                     title = "Go up",
-                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ArrowUpward, null),
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ArrowUpward),
                     onClick = {},
                 )
                 OpenCodeBottomSheetEntry(
                     title = "/Users/demo/Projects",
-                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.FolderCheck, null),
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.FolderCheck),
                     onClick = {},
                 )
             }
@@ -186,18 +214,20 @@ fun BottomSheetGalleryScreen(modifier: Modifier = Modifier) {
                 onValueChange = { formValue = it },
                 hint = "Server URL",
                 kind = OpenCodeTextInputKind.Url,
-                modifier = Modifier.padding(horizontal = 20.dp),
+                modifier = Modifier.openCodeBottomSheetContentInset(),
             )
             OpenCodeTextInput(
                 value = "gallery password",
                 onValueChange = {},
                 hint = "Password",
                 kind = OpenCodeTextInputKind.Password,
-                modifier = Modifier.padding(horizontal = 20.dp),
+                modifier = Modifier.openCodeBottomSheetContentInset(),
             )
         }
         ActionSheetEntries(
             enabled = enabled,
+            selected = selected,
+            tag = if (showsTag) "Recommended" else null,
             startDecorator = startDecorator,
             endDecorator = endDecorator,
             itemCount = itemCount,
@@ -226,7 +256,7 @@ private fun KeyboardExpandBottomSheet(
                 onValueChange = onFilterChange,
                 hint = "Folder path",
                 kind = OpenCodeTextInputKind.Filter,
-                modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 8.dp),
+                modifier = Modifier.openCodeBottomSheetContentInset().padding(bottom = 8.dp),
             )
         },
     ) {
@@ -243,6 +273,8 @@ private fun KeyboardExpandBottomSheet(
 @Composable
 private fun ActionSheetEntries(
     enabled: Boolean,
+    selected: Boolean,
+    tag: String?,
     startDecorator: BottomSheetEntryDecorator,
     endDecorator: BottomSheetEntryDecorator,
     itemCount: Int,
@@ -253,36 +285,44 @@ private fun ActionSheetEntries(
         enabled = enabled,
         startDecorator = startDecorator,
         endDecorator = endDecorator,
+        selected = selected,
+        tag = tag,
         onClick = onDismiss,
     )
     OpenCodeBottomSheetEntry(
         title = "Create new session",
-        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Add, "Create new session"),
+        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Add),
         onClick = onDismiss,
     )
     if (itemCount >= 4) {
         OpenCodeBottomSheetEntry(
             title = "Rename session",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, "Rename session"),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit),
             onClick = onDismiss,
         )
         OpenCodeBottomSheetEntry(
             title = "Fork session",
-            endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight, null),
+            endDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ChevronRight),
             onClick = onDismiss,
         )
     }
     if (itemCount >= 6) {
         OpenCodeBottomSheetEntry(
             title = "Review diff",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description, "Review diff"),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description),
             onClick = onDismiss,
         )
         OpenCodeBottomSheetEntry(
             title = "Abort active work",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.StopCircle, "Abort active work"),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.StopCircle),
             onClick = onDismiss,
         )
+    }
+    // Past the 420 compact limit: FitContent rests at half height, FitAllContent shows them all.
+    if (itemCount >= 12) {
+        repeat(6) { index ->
+            OpenCodeBottomSheetEntry(title = "Extra action ${index + 1}", onClick = onDismiss)
+        }
     }
 }
 
@@ -335,7 +375,7 @@ private fun ItemCountControls(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(text = "Items", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            listOf(2, 4, 6).forEach { count ->
+            listOf(2, 4, 6, 12).forEach { count ->
                 OpenCodeChoiceBadge(
                     label = count.toString(),
                     selected = selected == count,

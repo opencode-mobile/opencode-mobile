@@ -72,6 +72,13 @@ class JsonStreamWriter(
         markValueWritten()
     }
 
+    /** Writes an already-encoded JSON value, for small bodies built with kotlinx's JSON tree. */
+    fun writeRawJson(encoded: String) {
+        writeSeparator()
+        writeRaw(encoded)
+        markValueWritten()
+    }
+
     fun writeDataUrlString(value: String) {
         writeString(value)
     }

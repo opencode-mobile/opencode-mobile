@@ -19,6 +19,7 @@ enum class ComponentGalleryEntryId {
     Colors,
     Typography,
     Icons,
+    FileIcon,
     SkeletonIllustration,
     PageIndicator,
     BottomFade,
@@ -31,10 +32,14 @@ enum class ComponentGalleryEntryId {
     ToolCallCard,
     ToolChip,
     MessageNote,
+    TimelineNotice,
     ChildSessionRow,
+    StepRail,
+    ActivityCard,
     WorkingIndicator,
     ReasoningRow,
     TopBar,
+    ActionBar,
     SplitPane,
     OverflowMenu,
     BottomSheet,
@@ -43,6 +48,7 @@ enum class ComponentGalleryEntryId {
     Snackbar,
     ListItem,
     SelectableCard,
+    OptionCard,
     ListGroup,
     SectionHeader,
     ReorderableList,
@@ -51,6 +57,7 @@ enum class ComponentGalleryEntryId {
     ActionPill,
     ActionTile,
     SyncingPill,
+    SideQuestionPill,
     ComposerSuggestionOverlay,
     ReviewChangesPill,
     SessionTodosPill,
@@ -69,11 +76,13 @@ enum class ComponentGalleryEntryId {
     InlineNotice,
     CodeSnippet,
     SessionList,
+    SessionListSkeleton,
     SessionListDock,
     SessionStatusBar,
     SessionBranchPill,
     SessionComposer,
     DictationCard,
+    DropOverlay,
     RenderedMarkdown,
     MessageList,
 }
@@ -100,6 +109,12 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Foundations,
         ),
         ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.FileIcon,
+            title = "File Icon",
+            description = "Colour file-type and folder icons picked from a path, as in opencode.",
+            category = ComponentGalleryCategory.Foundations,
+        ),
+        ComponentGalleryEntry(
             id = ComponentGalleryEntryId.SkeletonIllustration,
             title = "Skeleton Illustration",
             description = "Wireframe hero with one spotlit element for onboarding, tutorials, and hints.",
@@ -120,7 +135,7 @@ val ComponentGalleryEntries =
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.Tag,
             title = "Tag",
-            description = "Static capsule label.",
+            description = "Static capsule label, regular or small inline.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(
@@ -151,6 +166,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.SyncingPill,
             title = "Syncing Pill",
             description = "Non-interactive floating status pill for quiet cache→network sync.",
+            category = ComponentGalleryCategory.Controls,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SideQuestionPill,
+            title = "Side Question Pill",
+            description = "Floating /btw status above the composer: running, answer ready, or failed with Retry.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(
@@ -250,6 +271,12 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Lists,
         ),
         ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.OptionCard,
+            title = "Option Card",
+            description = "Bordered single-choice card with radio, title and tag, subtitle, and illustration preview.",
+            category = ComponentGalleryCategory.Lists,
+        ),
+        ComponentGalleryEntry(
             id = ComponentGalleryEntryId.SectionHeader,
             title = "Section Header",
             description = "Caption title above a group of rows with optional count or action.",
@@ -295,6 +322,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.TopBar,
             title = "Top Bar",
             description = "Page-level navigation bar with leading affordance and actions.",
+            category = ComponentGalleryCategory.Navigation,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ActionBar,
+            title = "Action Bar",
+            description = "Pinned bottom bar naming its target over one full-width action.",
             category = ComponentGalleryCategory.Navigation,
         ),
         ComponentGalleryEntry(
@@ -358,9 +391,27 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.TimelineNotice,
+            title = "Timeline Notice",
+            description = "Quiet inline line for a move, agent or model switch, instructions, or restart.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
             id = ComponentGalleryEntryId.ChildSessionRow,
             title = "Child Session Row",
             description = "Quiet person/thread row for a child session in Session Chat.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.StepRail,
+            title = "Step Rail",
+            description = "One line per step on a vertical rail, live while the agent works.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ActivityCard,
+            title = "Activity Card",
+            description = "Running steps on one live card that folds into a summary.",
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(
@@ -382,6 +433,12 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.SessionListSkeleton,
+            title = "Session List Skeleton",
+            description = "Shimmering placeholder session rows while a project's sessions load.",
+            category = ComponentGalleryCategory.Session,
+        ),
+        ComponentGalleryEntry(
             id = ComponentGalleryEntryId.SessionListDock,
             title = "Session List Dock",
             description = "Scope control and Add project / New session actions.",
@@ -397,6 +454,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.DictationCard,
             title = "Dictation Card",
             description = "Listening takeover for composer dictation.",
+            category = ComponentGalleryCategory.Session,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.DropOverlay,
+            title = "Drop Overlay",
+            description = "Drag-over scrim card for images and files dropped on Session Chat.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(

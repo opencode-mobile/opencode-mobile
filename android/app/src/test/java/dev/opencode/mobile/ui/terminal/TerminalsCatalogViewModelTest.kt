@@ -61,14 +61,14 @@ class TerminalsCatalogViewModelTest {
                 FakeCatalogTerminalRepository(
                     running =
                         listOf(
-                            RunningTerminal("/Users/ivan/Projects/opencode-mobile", session("pty_1", "zsh")),
-                            RunningTerminal("/Users/ivan/Projects/playground", session("pty_2", "term")),
+                            RunningTerminal("/Users/example/Projects/opencode-mobile", session("pty_1", "zsh")),
+                            RunningTerminal("/Users/example/Projects/playground", session("pty_2", "term")),
                         ),
                 )
             val viewModel =
                 viewModel(
                     repository = repository,
-                    worktrees = listOf("/Users/ivan/Projects/opencode-mobile", "/Users/ivan/Projects/playground"),
+                    worktrees = listOf("/Users/example/Projects/opencode-mobile", "/Users/example/Projects/playground"),
                 )
 
             viewModel.appear()
@@ -80,19 +80,19 @@ class TerminalsCatalogViewModelTest {
                         id = "pty_1",
                         title = "zsh",
                         projectTitle = "opencode-mobile",
-                        worktree = "/Users/ivan/Projects/opencode-mobile",
+                        worktree = "/Users/example/Projects/opencode-mobile",
                     ),
                     TerminalCatalogRow(
                         id = "pty_2",
                         title = "term",
                         projectTitle = "playground",
-                        worktree = "/Users/ivan/Projects/playground",
+                        worktree = "/Users/example/Projects/playground",
                     ),
                 ),
                 viewModel.uiState.value.rows,
             )
             assertEquals(
-                listOf("/Users/ivan/Projects/opencode-mobile", "/Users/ivan/Projects/playground"),
+                listOf("/Users/example/Projects/opencode-mobile", "/Users/example/Projects/playground"),
                 repository.listedDirectories.single(),
             )
             assertEquals(false, viewModel.uiState.value.isLoading)
@@ -250,8 +250,8 @@ class TerminalsCatalogViewModelTest {
                     repository = FakeCatalogTerminalRepository(running = emptyList()),
                     worktrees =
                         listOf(
-                            "/Users/ivan/Projects/opencode-mobile",
-                            "/Users/ivan/Projects/playground",
+                            "/Users/example/Projects/opencode-mobile",
+                            "/Users/example/Projects/playground",
                         ),
                 )
 
@@ -261,11 +261,11 @@ class TerminalsCatalogViewModelTest {
             assertEquals(
                 listOf(
                     TerminalCatalogProject(
-                        worktree = "/Users/ivan/Projects/opencode-mobile",
+                        worktree = "/Users/example/Projects/opencode-mobile",
                         title = "opencode-mobile",
                     ),
                     TerminalCatalogProject(
-                        worktree = "/Users/ivan/Projects/playground",
+                        worktree = "/Users/example/Projects/playground",
                         title = "playground",
                     ),
                 ),

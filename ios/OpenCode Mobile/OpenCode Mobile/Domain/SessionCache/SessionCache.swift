@@ -9,6 +9,8 @@ nonisolated protocol SessionCache: AnyObject, Sendable {
     func rememberActivity(directory: String, entries: [SessionActivityCacheEntry]) async
     func openMessages(sessionID: String, worktree: String) -> SessionMessageCacheHandle
     func purgeWorktree(serverBaseURL: String, worktree: String) async
+    /// Everything cached for one removed Connection Profile, under its id and under its URL.
+    func purgeConnection(profileID: String, serverBaseURL: String) async
     func clearAll() async
     func estimatedSizeBytes() async -> Int64
 }
@@ -16,6 +18,7 @@ nonisolated protocol SessionCache: AnyObject, Sendable {
 extension SessionCache {
     func seedActivity(directory: String) async -> [SessionActivityCacheEntry]? { nil }
     func rememberActivity(directory: String, entries: [SessionActivityCacheEntry]) async {}
+    func purgeConnection(profileID: String, serverBaseURL: String) async {}
 }
 
 nonisolated protocol SessionMessageCacheHandle: AnyObject, Sendable {

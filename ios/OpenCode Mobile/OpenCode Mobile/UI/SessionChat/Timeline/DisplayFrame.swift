@@ -48,6 +48,8 @@ nonisolated enum DisplayFrameBuilder {
         serverCommands: [ServerCommand] = [],
         collapseConsecutiveToolCalls: Bool = false,
         chipTimeline: Bool = false,
+        stepRail: Bool = false,
+        activityCard: Bool = false,
         childSessions: [SessionChatChildSessionCandidate] = []
     ) -> DisplayFrame {
         // pthread_main_np avoids the async-context warning on Thread.isMainThread.
@@ -58,18 +60,13 @@ nonisolated enum DisplayFrameBuilder {
         bodies.reserveCapacity(ordered.count)
         for display in ordered {
             let message = display.message
-            var blocks = SessionChatTimelineBlocks.buildOrFallback(
-                role: message.role,
-                parts: message.parts,
-                messageId: message.id,
-                fallbackText: message.text,
+            var blocks = SessionChatTimelineBlocks.present(
+                message: message,
+                commands: serverCommands,
                 collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-                chipTimeline: chipTimeline
-            )
-            blocks = SessionChatTimelineBlocks.collapseCommandInvocations(
-                role: message.role,
-                blocks: blocks,
-                commands: serverCommands
+                chipTimeline: chipTimeline,
+                stepRail: stepRail,
+                activityCard: activityCard
             )
             blocks = SessionChatTimelineBlocks.ensureLiveRow(
                 message: message,
@@ -96,9 +93,11 @@ nonisolated enum DisplayFrameBuilder {
         bodies = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
             bodies,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline
+            chipTimeline: chipTimeline,
+            stepRail: stepRail,
+            activityCard: activityCard
         )
-        if chipTimeline {
+        if chipTimeline || stepRail || activityCard {
             // Merged runs rebuilt their paragraphs; pick up per-block cache hits again.
             bodies = bodies.map { body in
                 DisplayMessageBody(
@@ -201,7 +200,8 @@ nonisolated enum DisplayFrameBuilder {
 
     static func orderedDisplayMessages(_ displayMessages: [DisplayMessage]) -> [DisplayMessage] {
         let inputIndex = Dictionary(
-            uniqueKeysWithValues: displayMessages.enumerated().map { ($0.element.id, $0.offset) }
+            displayMessages.enumerated().map { ($0.element.id, $0.offset) },
+            uniquingKeysWith: { _, latest in latest }
         )
         var ordered =
             displayMessages

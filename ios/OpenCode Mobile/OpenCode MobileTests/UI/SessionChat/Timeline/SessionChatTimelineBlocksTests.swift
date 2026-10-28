@@ -1272,6 +1272,43 @@ struct SessionChatTimelineBlocksTests {
         #expect(tool.changesInitialFilePath == nil)
     }
 
+    @Test func build_v2PatchToolRendersAsPatchWithPerFileCounts() {
+        func file(_ path: String, _ additions: Int, _ deletions: Int) -> AnyCodable {
+            .dictionary([
+                "file": .string(path),
+                "additions": .int(additions),
+                "deletions": .int(deletions),
+            ])
+        }
+        let blocks = okBlocks(
+            parts: [
+                .tool(
+                    ToolPart(
+                        id: "patch-1",
+                        toolName: "patch",
+                        status: .completed,
+                        metadata: [
+                            "files": .array([
+                                file("src/currency.ts", 1, 0),
+                                file("src/format.ts", 2, 1),
+                                file("src/legacy-format.js", 0, 3),
+                            ]),
+                        ]
+                    )
+                ),
+            ]
+        )
+        guard case .toolCard(_, let tool) = blocks.first else {
+            Issue.record("Expected tool card")
+            return
+        }
+        #expect(tool.title == "Patch")
+        #expect(tool.subtitle == "3 files")
+        #expect(tool.additions == 3)
+        #expect(tool.deletions == 4)
+        #expect(tool.opensChangesReview)
+    }
+
     @Test func build_applyPatchSingleFileDeepLinksPath() {
         let blocks = okBlocks(
             parts: [
@@ -2006,7 +2043,7 @@ struct SessionChatTimelineBlocksTests {
     }
 
     @Test func chipTimeline_commandLabel_cutsAtLastWhitespaceBefore48() {
-        let command = "git log --oneline --decorate --graph --all --since=2.weeks --author=ivan"
+        let command = "git log --oneline --decorate --graph --all --since=2.weeks --author=example"
         #expect(command.count > 48)
         let label = SessionChatTimelineBlocks.commandChipLabel(command)
         #expect(label == "git log --oneline --decorate --graph --all\u{2026}")
@@ -2029,7 +2066,7 @@ struct SessionChatTimelineBlocksTests {
     }
 
     @Test func chipTimeline_commandLabel_stripsCdExportAndAssignmentPrefixes() {
-        #expect(SessionChatTimelineBlocks.commandChipLabel("cd /Users/ivan/repo && npm test") == "npm test")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("cd /Users/example/repo && npm test") == "npm test")
         #expect(SessionChatTimelineBlocks.commandChipLabel("cd ios; xcodebuild test") == "xcodebuild test")
         #expect(SessionChatTimelineBlocks.commandChipLabel("cd a && cd b; make check") == "make check")
         #expect(SessionChatTimelineBlocks.commandChipLabel("export JAVA_HOME=/opt/jdk && ./gradlew test") == "./gradlew test")
@@ -2053,7 +2090,7 @@ struct SessionChatTimelineBlocksTests {
     }
 
     @Test func chipTimeline_commandChip_cardKeepsFullCommand() {
-        let command = "cd /Users/ivan/repo && npm test"
+        let command = "cd /Users/example/repo && npm test"
         let blocks = okBlocks(
             parts: [
                 .tool(ToolPart(id: "b1", toolName: "bash", status: .completed, input: ["command": .string(command)])),
@@ -2713,7 +2750,7 @@ struct SessionChatTimelineBlocksTests {
     }
 
     @Test func chipTimeline_executeChipUsesShortenedLabel() {
-        let command = "cd /Users/ivan/repo && npm test"
+        let command = "cd /Users/example/repo && npm test"
         let blocks = okBlocks(
             parts: [
                 .tool(ToolPart(id: "x1", toolName: "execute", status: .completed, input: ["command": .string(command)])),
@@ -2916,6 +2953,43 @@ struct SessionChatTimelineBlocksTests {
         }
         #expect(card.detailText == "## Objective\nShip it")
         #expect(card.detailIsMarkdown)
+    }
+
+    @Test func build_noticeRoleBecomesOneNoticeBlockPerNotice() {
+        let notice = TimelineNotice(id: "msg_n", kind: .moved(directory: "/repo/wt"))
+        let blocks = okBlocks(role: .notice, parts: [.notice(notice)], chipTimeline: true)
+        #expect(blocks == [.notice(blockID: PresentationBlockId.direct("msg_n"), notice: notice)])
+    }
+
+    @Test func merge_noticeBreaksToolAndChipRuns() {
+        let notice = TimelineNotice(id: "msg_n", kind: .agentChanged(agent: "plan", previous: "build"))
+        let noticeBody = DisplayMessageBody(
+            message: Message(
+                id: "msg_n",
+                role: .notice,
+                text: "",
+                parts: [.notice(notice)],
+                model: nil,
+                mode: nil,
+                sentAtEpochMs: nil
+            ),
+            isStreaming: false,
+            blocks: okBlocks(role: .notice, parts: [.notice(notice)]),
+            renderedMarkdown: nil
+        )
+        let bodies = [toolOnlyBody(id: "a1", toolID: "bash-1"), noticeBody, toolOnlyBody(id: "a2", toolID: "bash-2")]
+        let collapsed = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            bodies,
+            collapseConsecutiveToolCalls: true
+        )
+        #expect(collapsed.map(\.id) == ["a1", "msg_n", "a2"])
+        let chips = SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+            bodies,
+            collapseConsecutiveToolCalls: false,
+            chipTimeline: true
+        )
+        #expect(chips.map(\.id) == ["a1", "msg_n", "a2"])
+        #expect(chips[1].blocks == noticeBody.blocks)
     }
 
     private func okBlocks(

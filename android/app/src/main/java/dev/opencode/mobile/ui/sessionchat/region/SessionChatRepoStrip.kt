@@ -68,6 +68,27 @@ class SessionChatRepoStrip(
             }
     }
 
+    /**
+     * The session moved to [worktree]. Shows [knownBranch] (what Home last saw there) until the
+     * server answers, so the pill switches at once instead of blanking.
+     */
+    fun moveTo(
+        worktree: String,
+        knownBranch: String?,
+    ) {
+        if (boundWorktree == worktree) return
+        boundWorktree = worktree
+        expandWhenDirty = false
+        userToggled = false
+        _state.value =
+            if (knownBranch.isNullOrBlank()) {
+                SessionChatRepoStripRegionState()
+            } else {
+                SessionChatRepoStripRegionState(isAvailable = true, branch = knownBranch)
+            }
+        refresh()
+    }
+
     fun toggle() {
         val current = _state.value
         if (current.files.isEmpty()) return
@@ -91,6 +112,8 @@ class SessionChatRepoStrip(
                     runCatching { withContext(ioDispatcher) { sessionRepository.getVcsInfo(worktree) } }
                         .getOrNull()
                 if (boundWorktree != worktree) return@launch
+                // A cold v2 directory answers without a provider first; keep the branch shown.
+                if (info != null && !info.isSettled && _state.value.isAvailable) return@launch
                 val branch = info?.currentBranch
                 if (info == null || branch == null) {
                     _state.value = SessionChatRepoStripRegionState()

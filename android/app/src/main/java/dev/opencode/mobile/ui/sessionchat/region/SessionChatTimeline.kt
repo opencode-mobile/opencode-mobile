@@ -4,6 +4,7 @@ import android.util.Log
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.message.AttachmentPreviewCache
 import dev.opencode.mobile.domain.message.BlockDecorationCache
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
@@ -76,6 +77,12 @@ class SessionChatTimeline(
     @Volatile
     var chipTimeline: Boolean = false
 
+    @Volatile
+    var stepRailTimeline: Boolean = false
+
+    @Volatile
+    var activityCardTimeline: Boolean = false
+
     fun updateServerCommands(commands: List<ServerCommand>) {
         if (commands == serverCommands) return
         val wasEmpty = serverCommands.isEmpty()
@@ -111,6 +118,29 @@ class SessionChatTimeline(
         }
     }
 
+    /**
+     * First message of a pending revert (v1 `session.revert`, v2 `session.revert.staged`): it and
+     * every later message stay hidden until the revert is cleared or committed (#619).
+     */
+    private var revertBoundaryMessageId: String? = null
+
+    fun updateRevertBoundary(messageId: String?) {
+        if (messageId == revertBoundaryMessageId) return
+        revertBoundaryMessageId = messageId
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (lastLoadedDisplayMessages.isNotEmpty()) {
+            applyLoadedDisplayMessages(
+                displayMessages = lastLoadedDisplayMessages,
+                sourceSessionId = sessionId,
+                sourceWorktree = worktree,
+                fromQuietRefresh = true,
+                source = "revert-boundary",
+                messagesFromCache = _state.value.messagesFromCache,
+            )
+        }
+    }
+
     fun updateChipTimeline(enabled: Boolean) {
         if (enabled == chipTimeline) return
         chipTimeline = enabled
@@ -128,6 +158,28 @@ class SessionChatTimeline(
         }
     }
 
+    /** Step rail and activity card styles (#779); one rebuild when switching between them. */
+    fun updateStepTimelines(
+        stepRail: Boolean,
+        activityCard: Boolean,
+    ) {
+        if (stepRail == stepRailTimeline && activityCard == activityCardTimeline) return
+        stepRailTimeline = stepRail
+        activityCardTimeline = activityCard
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (lastLoadedDisplayMessages.isNotEmpty()) {
+            applyLoadedDisplayMessages(
+                displayMessages = lastLoadedDisplayMessages,
+                sourceSessionId = sessionId,
+                sourceWorktree = worktree,
+                fromQuietRefresh = true,
+                source = "step-timeline-pref",
+                messagesFromCache = _state.value.messagesFromCache,
+            )
+        }
+    }
+
     private val _state = MutableStateFlow(SessionChatTimelineRegionState())
     val state: StateFlow<SessionChatTimelineRegionState> = _state.asStateFlow()
 
@@ -139,7 +191,7 @@ class SessionChatTimeline(
     private var pendingLiveDisplayApply: PendingDisplayApply? = null
     private var mergePendingWhileSending = false
     private var pendingOptimisticRows: List<SessionChatMessageItem> = emptyList()
-    private var pendingBaselineSignatures: Map<String, String> = emptyMap()
+    private var pendingBaselineIds: Set<String> = emptySet()
     private var lastLoadedMessages: List<Message> = emptyList()
     private var lastLoadedDisplayMessages: List<DisplayMessage> = emptyList()
     private val pendingPromptPatches = mutableMapOf<String, PendingPromptPatch>()
@@ -159,7 +211,7 @@ class SessionChatTimeline(
         boundWorktree = worktree
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
-        pendingBaselineSignatures = emptyMap()
+        pendingBaselineIds = emptySet()
         lastLoadedMessages = emptyList()
         lastLoadedDisplayMessages = emptyList()
         resetChildSessionLookup()
@@ -196,7 +248,7 @@ class SessionChatTimeline(
         boundWorktree = worktree
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
-        pendingBaselineSignatures = emptyMap()
+        pendingBaselineIds = emptySet()
         lastLoadedMessages = emptyList()
         lastLoadedDisplayMessages = emptyList()
         resetChildSessionLookup()
@@ -345,8 +397,7 @@ class SessionChatTimeline(
     fun beginOptimisticSend(enrichedRows: List<SessionChatMessageItem>) {
         mergePendingWhileSending = true
         pendingOptimisticRows = enrichedRows
-        pendingBaselineSignatures =
-            TimelineProjector.reconciliationSignaturesById(lastLoadedServerRows())
+        pendingBaselineIds = lastLoadedServerRows().mapTo(HashSet()) { it.id }
         val displayedItems = TimelineProjector.displayedOptimisticSendItems(enrichedRows)
         val displayedRows = displayedItems.map(TimelineProjector::rowFromMessageItem)
         val previous = lastTimelineFrame
@@ -396,6 +447,7 @@ class SessionChatTimeline(
                 changedRowIDs = emptySet(),
                 removedRowIDs = emptySet(),
                 layoutChangedRowIDs = emptySet(),
+                listIdAliases = previous?.listIdAliases.orEmpty(),
             )
         lastTimelineFrame = frame
         _state.update {
@@ -414,24 +466,26 @@ class SessionChatTimeline(
     ) {
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
-        pendingBaselineSignatures = emptyMap()
+        pendingBaselineIds = emptySet()
         val previous = lastTimelineFrame
         val frame =
             previous?.let { prior ->
-                val rows = prior.rows.filterNot { it.id == optimisticId }
+                // An echo already shown under the same client id stays: the server has it.
+                val rows = prior.rows.filterNot { it.id == optimisticId && it.isPending }
                 TimelineFrame(
                     frameRevision = nextFrameRevision++,
                     rows = rows,
                     insertedRowIDs = emptySet(),
                     changedRowIDs = emptySet(),
-                    removedRowIDs = setOf(optimisticId).intersect(prior.rows.map { it.id }.toSet()),
+                    removedRowIDs = (prior.rows.map { it.id }.toSet() - rows.map { it.id }.toSet()),
                     layoutChangedRowIDs = emptySet(),
+                    listIdAliases = prior.listIdAliases,
                 )
             }
         lastTimelineFrame = frame
         _state.update {
             it.copy(
-                messages = it.messages.filterNot { item -> item.id == optimisticId },
+                messages = it.messages.filterNot { item -> item.id == optimisticId && item.isPending },
                 timelineFrame = frame,
                 errorMessage = error,
             )
@@ -441,7 +495,7 @@ class SessionChatTimeline(
     fun clearSendingState() {
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
-        pendingBaselineSignatures = emptyMap()
+        pendingBaselineIds = emptySet()
     }
 
     fun clearReadyError() {
@@ -716,6 +770,7 @@ class SessionChatTimeline(
         lastLoadedMessages = displayMessages.map { it.message }
         scheduleChildSessionLookup(sourceSessionId, sourceWorktree)
         val children = childSessions
+        val revertBoundary = revertBoundaryMessageId
         val stateSnapshot = _state.value
         val previousById = stateSnapshot.messages.associateBy { it.id }
         val previousFrame = lastTimelineFrame
@@ -726,7 +781,7 @@ class SessionChatTimeline(
                     pendingOptimisticRows.ifEmpty { stateSnapshot.messages.filter { it.isPending } }
                 OptimisticInputs(
                     pendingRows = pendingItems.map(TimelineProjector::rowFromMessageItem),
-                    baselineSignatures = pendingBaselineSignatures,
+                    baselineIds = pendingBaselineIds,
                 )
             } else {
                 OptimisticInputs()
@@ -735,13 +790,19 @@ class SessionChatTimeline(
         val structuralStartedAt = System.nanoTime()
         val projected =
             withContext(ioDispatcher) {
+                val visible = hidingReverted(sortedDisplayMessages(displayMessages), revertBoundary)
+                AttachmentPreviewCache.shared.warm(
+                    visible.takeLast(AttachmentPreviewCache.WARM_MESSAGE_COUNT).map { it.message },
+                )
                 val bodies =
                     SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
-                        linkChildSessions(sortedDisplayMessages(displayMessages), children).mapNotNull { display ->
+                        linkChildSessions(visible, children).mapNotNull { display ->
                             displayMessageBody(display, previousById[display.id])
                         },
                         collapseConsecutiveToolCalls,
                         chipTimeline,
+                        stepRailTimeline,
+                        activityCardTimeline,
                     )
                 TimelineProjector.project(
                     frame =
@@ -843,7 +904,7 @@ class SessionChatTimeline(
     private fun applyLoadError(throwable: Throwable) {
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
-        pendingBaselineSignatures = emptyMap()
+        pendingBaselineIds = emptySet()
         // Retain the last good timeline when one exists; only clear on cold failure.
         _state.update { current ->
             val retainLastGood = current.messages.isNotEmpty()
@@ -864,7 +925,7 @@ class SessionChatTimeline(
      * reconciliation cannot use displayed ids. An optimistic send is done when
      * every pending item has a new server echo relative to the send-time
      * baseline — the same match [TimelineProjector] uses to drop the optimistic
-     * row, often under a different id.
+     * row.
      */
     private fun clearOptimisticIfReconciled() {
         if (!mergePendingWhileSending) return
@@ -872,7 +933,7 @@ class SessionChatTimeline(
         if (pendingItems.isEmpty()) {
             mergePendingWhileSending = false
             pendingOptimisticRows = emptyList()
-            pendingBaselineSignatures = emptyMap()
+            pendingBaselineIds = emptySet()
             return
         }
         val stillUnacked =
@@ -880,12 +941,12 @@ class SessionChatTimeline(
                 .unmatchedPending(
                     pendingRows = pendingItems.map(TimelineProjector::rowFromMessageItem),
                     serverRows = lastLoadedServerRows(),
-                    baselineSignatures = pendingBaselineSignatures,
+                    baselineIds = pendingBaselineIds,
                 ).isNotEmpty()
         if (stillUnacked) return
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()
-        pendingBaselineSignatures = emptyMap()
+        pendingBaselineIds = emptySet()
     }
 
     private fun lastLoadedServerRows(): List<TimelineRow> =
@@ -1059,18 +1120,13 @@ class SessionChatTimeline(
                 message = message,
                 isStreaming = display.isStreaming,
                 blocks =
-                    SessionChatTimelineBlocks.collapseCommandInvocations(
-                        role = message.role,
-                        blocks =
-                            SessionChatTimelineBlocks.buildOrFallback(
-                                role = message.role,
-                                parts = message.parts,
-                                messageId = message.id,
-                                fallbackText = message.text,
-                                collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
-                                chipTimeline = chipTimeline,
-                            ),
+                    SessionChatTimelineBlocks.present(
+                        message = message,
                         commands = serverCommands,
+                        collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
+                        chipTimeline = chipTimeline,
+                        stepRail = stepRailTimeline,
+                        activityCard = activityCardTimeline,
                     ),
             )
         if (resolvedBlocks.isEmpty() && message.failure == null) return null
@@ -1191,5 +1247,19 @@ class SessionChatTimeline(
         private const val SOURCE_PENDING_PROMPT = "pending-prompt"
         private const val SOURCE_CHILD_SESSIONS = "child-sessions"
         private const val CHILD_SESSION_LOOKUP_ATTEMPTS = 3
+
+        /**
+         * Drops the revert boundary message and everything after it. A boundary outside the
+         * loaded window falls back to id order, which opencode message ids follow.
+         */
+        internal fun hidingReverted(
+            messages: List<DisplayMessage>,
+            boundary: String?,
+        ): List<DisplayMessage> {
+            if (boundary == null) return messages
+            val index = messages.indexOfFirst { it.message.id == boundary }
+            if (index >= 0) return messages.take(index)
+            return messages.filter { it.message.id < boundary }
+        }
     }
 }

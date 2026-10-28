@@ -8,14 +8,14 @@ import kotlin.random.Random
 
 class SseAttemptPolicyTest {
     @Test
-    fun http401And403AreTerminalAuthFailed() {
+    fun http401And403AreAuthFailedWithSlowRetry() {
         assertEquals(
-            SseRetryDecision.AuthFailed,
-            SseAttemptPolicy.decide(SseAttemptOutcome.Http(401), protocolConfirmed = true, attempt = 1),
+            SseRetryDecision.AuthFailed(SseRetryBackoff.authDelayMs(1, Random(5))),
+            SseAttemptPolicy.decide(SseAttemptOutcome.Http(401), protocolConfirmed = true, attempt = 1, random = Random(5)),
         )
         assertEquals(
-            SseRetryDecision.AuthFailed,
-            SseAttemptPolicy.decide(SseAttemptOutcome.Http(403), protocolConfirmed = false, attempt = 4),
+            SseRetryDecision.AuthFailed(SseRetryBackoff.authDelayMs(4, Random(6))),
+            SseAttemptPolicy.decide(SseAttemptOutcome.Http(403), protocolConfirmed = false, attempt = 4, random = Random(6)),
         )
     }
 

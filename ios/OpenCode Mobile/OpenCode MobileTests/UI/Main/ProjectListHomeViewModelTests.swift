@@ -221,6 +221,9 @@ struct ProjectListHomeViewModelTests {
         #expect(sections.map(\.worktree).contains("/two"))
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/").contains("/two"))
         #expect(viewModel.pendingSelectedFilterId == "/two")
+        #expect(viewModel.pendingSelectedFilterOverridesAll)
+        viewModel.consumePendingSelectedFilter()
+        #expect(!viewModel.pendingSelectedFilterOverridesAll)
     }
 
     @Test func addProject_alreadyAdded_selectsWorktree() async {
@@ -232,6 +235,9 @@ struct ProjectListHomeViewModelTests {
         await viewModel.refresh()
         await viewModel.addProject(worktree: "/two")
         #expect(viewModel.pendingSelectedFilterId == "/two")
+        // Already on home: the scope only moves when a single project is shown, not from All.
+        #expect(!viewModel.pendingSelectedFilterOverridesAll)
+        #expect(viewModel.projectLoadStates["/two"] == nil)
         #expect(viewModel.removalSnackbar?.text == "\"two\" is already on home")
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one", "/two"])
     }
@@ -321,6 +327,272 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.removalSnackbar == nil)
     }
 
+    @Test func worktreesOfOneRepositoryShowAsOneProject() async {
+        let store = FakeConnectionProfileStore(initial: ["/repo", "/other", "/repo-wt"])
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(
+                projectsByDirectory: ["/repo": repo, "/repo-wt": repo]
+            ),
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+
+        let merged = await waitUntil { viewModel.homeProjects.count == 2 }
+        #expect(merged)
+        #expect(viewModel.homeProjects.map(\.key) == ["prj_repo", "prj:/other"])
+        #expect(viewModel.homeProjects.first?.memberPaths == ["/repo", "/repo-wt"])
+        #expect(viewModel.homeProjects.first?.worktrees.map(\.directory) == ["/repo", "/repo-wt"])
+    }
+
+    @Test func branchesOfWorktreesFoundAfterTheRefreshShowWithoutAPullToRefresh() async {
+        // v2: the first inventory knows only the main checkout; the next one (after
+        // POST /api/worktree/refresh) adds two worktrees while branch loads are still in flight.
+        let worktrees = ScriptedWorktreeRepository(loads: [
+            .loaded(directories: ["/repo"], listsSessions: false),
+            .loaded(directories: ["/repo", "/wt/tax", "/wt/export"], listsSessions: false),
+        ])
+        let vcs = GatedVcs(
+            branches: ["/repo": "main", "/wt/tax": "feature/tax-rounding", "/wt/export": "feature/export"],
+            // The first ask for the main checkout is cancelled when the REST pool is replaced.
+            failFirstCallFor: ["/repo"]
+        )
+        let sessionRepository = FakeSessionRepository(sessions: [
+            Session(id: "s-tax", title: "Tax", slug: nil, projectID: nil, directory: "/wt/tax", parentID: nil, updatedAtEpochMs: 2),
+            Session(id: "s-main", title: "Main", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ])
+        sessionRepository.vcsInfo = { directory in try await vcs.info(directory) }
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            worktreeRepository: worktrees,
+            branchRetryDelays: [.zero]
+        )
+
+        await viewModel.refresh()
+        #expect(await waitUntil { vcs.waitingDirectories == ["/repo"] })
+        // Home reloads (the inventory grows) while the first branch load is still waiting.
+        await viewModel.refresh()
+        #expect(await waitUntil { viewModel.homeProjects.first?.worktrees.count == 3 })
+        #expect(await waitUntil { Set(vcs.waitingDirectories) == ["/repo", "/wt/tax", "/wt/export"] })
+        vcs.open()
+
+        let shown = await waitUntil {
+            viewModel.homeProjects.first?.worktrees.map(\.branch) == ["main", "feature/export", "feature/tax-rounding"]
+        }
+        #expect(shown)
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        let rows = sections.crossProjectSessionListSessions(projects: viewModel.homeProjects)
+        #expect(rows.first { $0.id == "s-tax" }?.location?.parts == [.branch("feature/tax-rounding"), .text("tax")])
+        #expect(rows.first { $0.id == "s-main" }?.location?.parts == [.branch("main")])
+    }
+
+    @Test func loadedWorktreeInventoriesAreSharedForSessionChat() async {
+        let cache = WorktreeInventoryCache()
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            worktreeRepository: ScriptedWorktreeRepository(loads: [
+                .loaded(directories: ["/repo", "/wt/tax"], listsSessions: false),
+            ]),
+            worktreeInventoryCache: cache
+        )
+
+        await viewModel.refresh()
+
+        let shared = await waitUntil {
+            cache.snapshot(server: "http://127.0.0.1:4096/")?.inventory(for: "/repo") == .loaded(["/repo", "/wt/tax"])
+        }
+        #expect(shared)
+        #expect(cache.snapshot(server: "http://127.0.0.1:4096")?.addedPaths == ["/repo"])
+    }
+
+    @Test func coldV2BranchAnswerIsAskedAgainUntilTheServerKnowsTheRepository() async {
+        // A v2 server that just started answers {"branch":{}} (no provider) the first time.
+        let calls = VcsCallCounter()
+        let sessionRepository = FakeSessionRepository(sessions: [
+            Session(id: "s-tax", title: "Tax", slug: nil, projectID: nil, directory: "/wt/tax", parentID: nil, updatedAtEpochMs: 2),
+        ])
+        sessionRepository.vcsInfo = { directory in
+            let call = calls.next(directory)
+            if directory == "/notes" || call == 1 {
+                return VcsInfo(currentBranch: nil, defaultBranch: nil, isSettled: false)
+            }
+            return VcsInfo(currentBranch: directory == "/repo" ? "main" : "feature/tax-rounding", defaultBranch: "main")
+        }
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo", "/notes"]),
+            worktreeRepository: ScriptedWorktreeRepository(loads: [
+                .loaded(directories: ["/repo", "/wt/tax"], listsSessions: false),
+            ]),
+            branchRetryDelays: [.zero, .zero]
+        )
+
+        await viewModel.refresh()
+
+        let shown = await waitUntil {
+            viewModel.homeProjects.first?.worktrees.map(\.branch) == ["main", "feature/tax-rounding"]
+        }
+        #expect(shown)
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        let rows = sections.crossProjectSessionListSessions(projects: viewModel.homeProjects)
+        #expect(rows.first { $0.id == "s-tax" }?.location?.parts == [.branch("feature/tax-rounding"), .text("tax")])
+        // A folder the server never detects stops after the bounded retries.
+        #expect(await waitUntil { calls.count("/notes") == 3 })
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(calls.count("/notes") == 3)
+    }
+
+    // MARK: New worktree (#752)
+
+    @Test func newWorktreeFromRunInCreatesRefetchesAndStartsThere() async {
+        let worktrees = ScriptedWorktreeRepository(
+            loads: [.loaded(directories: ["/repo"], listsSessions: false)],
+            created: .success(CreatedWorktree(directory: "/data/worktree/abc/brave-otter", name: "brave-otter", branch: nil))
+        )
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            serverProtocol: .v2,
+            worktreeRepository: worktrees
+        )
+        await viewModel.refresh()
+        #expect(await waitUntil {
+            viewModel.homeProjects.first?.projectID == "prj_repo" && worktrees.loadedPaths.contains("/repo")
+        })
+        let project = viewModel.homeProjects[0]
+        #expect(project.worktrees.count == 1)
+        #expect(viewModel.newWorktreeAvailability(for: project, worktreesEnabled: true).enabled)
+
+        viewModel.openNewWorktree(projectKey: "prj_repo")
+        #expect(viewModel.worktreeCreate.state?.origin == .runIn(projectKey: "prj_repo"))
+        #expect(viewModel.worktreeCreate.state?.sourceDirectory == "/repo")
+        #expect(viewModel.worktreeCreate.state?.serverProtocol == .v2)
+
+        let closes = await viewModel.submitNewWorktree()
+
+        #expect(closes)
+        #expect(worktrees.createRequests.map(\.projectID) == ["prj_repo"])
+        #expect(worktrees.createRequests.map(\.sourceDirectory) == ["/repo"])
+        #expect(worktrees.refetchedProjectIDs == ["prj_repo"])
+        #expect(viewModel.worktreeCreate.state == nil)
+        #expect(viewModel.pendingSessionOpen?.worktree == "/data/worktree/abc/brave-otter")
+        #expect(viewModel.pendingSessionOpen?.id == OptimisticSessionCreate.placeholderSessionID)
+    }
+
+    @Test func newWorktreeOnV1ReloadsTheAddedPathsAfterCreating() async {
+        let worktrees = ScriptedWorktreeRepository(
+            loads: [.loaded(directories: [], listsSessions: true)],
+            created: .success(CreatedWorktree(directory: "/wt/fix", name: "fix", branch: "opencode/fix"))
+        )
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            serverProtocol: .v1,
+            worktreeRepository: worktrees
+        )
+        await viewModel.refresh()
+        #expect(await waitUntil { worktrees.loadedPaths.count >= 1 && viewModel.homeProjects.first?.projectID == "prj_repo" })
+        let loadsBefore = worktrees.loadedPaths.count
+
+        viewModel.openNewWorktree(projectKey: "prj_repo")
+        #expect(viewModel.worktreeCreate.state?.branchValue.hasPrefix("opencode/") == true)
+        #expect(await viewModel.submitNewWorktree())
+
+        #expect(worktrees.loadedPaths.count >= loadsBefore + 1)
+        #expect(worktrees.refetchedProjectIDs.isEmpty)
+        #expect(viewModel.pendingSessionOpen?.worktree == "/wt/fix")
+    }
+
+    @Test func failedNewWorktreeStartsNothingAndKeepsTheForm() async {
+        let worktrees = ScriptedWorktreeRepository(
+            loads: [.loaded(directories: ["/repo"], listsSessions: false)],
+            created: .failure(WorktreeCreateError(message: "fatal: invalid reference: nope"))
+        )
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            serverProtocol: .v2,
+            worktreeRepository: worktrees
+        )
+        await viewModel.refresh()
+        #expect(await waitUntil { viewModel.homeProjects.first?.projectID == "prj_repo" })
+
+        viewModel.openNewWorktree(projectKey: "prj_repo")
+        let closes = await viewModel.submitNewWorktree()
+
+        #expect(!closes)
+        #expect(viewModel.pendingSessionOpen == nil)
+        #expect(worktrees.refetchedProjectIDs.isEmpty)
+        #expect(viewModel.worktreeCreate.state?.errorMessage == "Couldn't create the worktree: fatal: invalid reference: nope")
+    }
+
+    @Test func removingAMergedProjectRemovesEveryMemberPath() async {
+        let store = FakeConnectionProfileStore(initial: ["/repo", "/other", "/repo-wt"])
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo, "/repo-wt": repo]),
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+        #expect(await waitUntil { viewModel.homeProjects.count == 2 })
+
+        viewModel.requestRemoveProject(worktree: "prj_repo")
+        #expect(viewModel.pendingProjectRemoval?.worktrees == ["/repo", "/repo-wt"])
+        await viewModel.confirmRemoveProject()
+
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/other"])
+        #expect(viewModel.removalSnackbar?.text == "Removed \"repo\" from home")
+    }
+
+    @Test func addingAWorktreeOfAnAddedRepositoryJoinsIt() async {
+        let store = FakeConnectionProfileStore(initial: ["/repo"])
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo, "/repo-wt": repo]),
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+        #expect(await waitUntil { viewModel.homeProjects.first?.key == "prj_repo" })
+
+        await viewModel.addProject(worktree: "/repo-wt")
+
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/repo", "/repo-wt"])
+        #expect(viewModel.removalSnackbar?.text == "Same repo as repo. Showing it as a worktree there.")
+        #expect(viewModel.homeProjects.map(\.key) == ["prj_repo"])
+        #expect(viewModel.homeProjects.first?.memberPaths == ["/repo", "/repo-wt"])
+    }
+
+    @Test func addingAnotherGlobalFolderStaysSeparate() async {
+        let store = FakeConnectionProfileStore(initial: ["/notes"])
+        let global = Project(id: "global", worktree: "/", displayName: "/")
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/notes": global, "/scratch": global]),
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/scratch")
+
+        #expect(viewModel.removalSnackbar == nil)
+        #expect(await waitUntil { viewModel.homeProjects.map(\.key) == ["path:/notes", "path:/scratch"] })
+    }
+
     @Test func confirmRemoveProject_lastProject_showsEmpty() async {
         let store = FakeConnectionProfileStore(initial: ["/one"])
         let viewModel = makeViewModel(
@@ -353,9 +625,9 @@ struct ProjectListHomeViewModelTests {
         )
         let projectRepository = FakeProjectRepository(projects: [
             Project(id: "global", worktree: "/", displayName: "/"),
-            Project(id: "old", worktree: "/Users/me/web", displayName: "web", activityAtEpochMs: 1),
-            Project(id: "app", worktree: "/Users/me/app", displayName: "app", activityAtEpochMs: 2),
-            Project(id: "one", worktree: "/one", displayName: "one", activityAtEpochMs: 3),
+            Project(id: "old", worktree: "/Users/me/web", displayName: "web", activityAtEpochMs: 1, isRepository: true),
+            Project(id: "app", worktree: "/Users/me/app", displayName: "app", activityAtEpochMs: 2, isRepository: true),
+            Project(id: "one", worktree: "/one", displayName: "one", activityAtEpochMs: 3, isRepository: true),
         ])
         let viewModel = makeViewModel(
             projectRepository: projectRepository,
@@ -380,6 +652,7 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.addTarget == "/Users/me")
         #expect(sheet.addTitle == AddProjectSheetState.homeFolderTitle)
         #expect(sheet.addEnabled)
+        #expect(!sheet.isBrowsing)
         #expect(sheet.showSuggestions)
         #expect(sheet.suggestions.map(\.path) == ["/Users/me/app", "/Users/me/web"])
         #expect(sheet.suggestions.first?.activityLabel != nil)
@@ -387,6 +660,60 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.roots.map(\.label) == ["Home", "/", "Backup"])
         #expect(sheet.roots.map(\.path) == ["/Users/me", "/", "/Volumes/Backup"])
         #expect(sheet.roots.map(\.selected) == [true, false, false])
+    }
+
+    @Test func browseAddProjectFolders_opensTheBrowserAndBackReturnsToSuggestions() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projects: []),
+            filesystemRepository: FakeFilesystemRepository(
+                paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+                listings: ["/home": [folder("/home/code")]]
+            )
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+
+        viewModel.browseAddProjectFolders()
+        #expect(viewModel.isAddProjectPresented)
+        #expect(viewModel.addProjectSheet.isBrowsing)
+        #expect(viewModel.addProjectSheet.fieldText == "/home/")
+
+        viewModel.closeAddProjectBrowser()
+        #expect(viewModel.isAddProjectPresented)
+        #expect(!viewModel.addProjectSheet.isBrowsing)
+        #expect(viewModel.addProjectSheet.fieldText == "/home/")
+    }
+
+    @Test func closeAddProjectBrowser_afterEnteringAFolder_restoresHomeSuggestions() async {
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projects: [
+                Project(id: "web", worktree: "/Users/me/web", displayName: "web", activityAtEpochMs: 5, isRepository: true),
+            ]),
+            filesystemRepository: FakeFilesystemRepository(
+                paths: ServerPaths(home: "/Users/me", directory: "/Users/me", worktree: "/"),
+                listings: [
+                    "/Users/me": [folder("/Users/me/code")],
+                    "/Users/me/code": [folder("/Users/me/code/app")],
+                ]
+            ),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        #expect(viewModel.addProjectSheet.showSuggestions)
+
+        viewModel.browseAddProjectFolders()
+        await viewModel.openAddProjectFolder(path: "/Users/me/code")
+        #expect(viewModel.addProjectSheet.directory == "/Users/me/code")
+        #expect(!viewModel.addProjectSheet.showSuggestions)
+
+        viewModel.closeAddProjectBrowser()
+        #expect(viewModel.isAddProjectPresented)
+        #expect(!viewModel.addProjectSheet.isBrowsing)
+        #expect(viewModel.addProjectSheet.fieldText == "/Users/me/")
+        #expect(viewModel.addProjectSheet.directory == "/Users/me")
+        #expect(viewModel.addProjectSheet.showSuggestions)
+        #expect(viewModel.addProjectSheet.suggestions.map(\.path) == ["/Users/me/web"])
     }
 
     @Test func addProjectField_filtersLocallyWithoutRefetching() async {
@@ -398,7 +725,7 @@ struct ProjectListHomeViewModelTests {
         )
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(projects: [
-                Project(id: "app", worktree: "/home/app", displayName: "app", activityAtEpochMs: 1),
+                Project(id: "app", worktree: "/home/app", displayName: "app", activityAtEpochMs: 1, isRepository: true),
             ]),
             filesystemRepository: filesystem,
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
@@ -429,7 +756,7 @@ struct ProjectListHomeViewModelTests {
         viewModel.updateAddProjectField("/home/code")
         sheet = viewModel.addProjectSheet
         #expect(sheet.addTarget == "/home/code")
-        #expect(sheet.addTitle == "Add code")
+        #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
         #expect(sheet.addEnabled)
         #expect(filesystem.requestedPaths.filter { $0 == "/home" }.count == 1)
     }
@@ -470,7 +797,7 @@ struct ProjectListHomeViewModelTests {
         sheet = viewModel.addProjectSheet
         #expect(sheet.entries.map(\.name) == ["f249"])
         #expect(sheet.addTarget == "/home/f249")
-        #expect(sheet.addTitle == "Add f249")
+        #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
         #expect(sheet.addEnabled)
 
         viewModel.updateAddProjectField("/home/.")
@@ -484,7 +811,7 @@ struct ProjectListHomeViewModelTests {
         sheet = viewModel.addProjectSheet
         #expect(sheet.entries.map(\.name) == [".config"])
         #expect(sheet.addTarget == "/home/.config")
-        #expect(sheet.addTitle == "Add .config")
+        #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
         #expect(sheet.addEnabled)
 
         viewModel.updateAddProjectField("/home/f3")
@@ -545,7 +872,7 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.entries.isEmpty)
         #expect(sheet.emptyMessage == AddProjectSheetState.noSubfoldersMessage)
         #expect(sheet.addTarget == "/home/code")
-        #expect(sheet.addTitle == "Add code")
+        #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
         #expect(sheet.upTarget == "/home")
     }
 
@@ -591,7 +918,7 @@ struct ProjectListHomeViewModelTests {
         )
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(projects: [
-                Project(id: "work", worktree: #"D:\work\app"#, displayName: "app", activityAtEpochMs: 1),
+                Project(id: "work", worktree: #"D:\work\app"#, displayName: "app", activityAtEpochMs: 1, isRepository: true),
                 Project(id: "here", worktree: #"C:\Users\me\here"#, displayName: "here"),
             ]),
             filesystemRepository: filesystem,
@@ -644,7 +971,7 @@ struct ProjectListHomeViewModelTests {
         viewModel.updateAddProjectField(#"D:\CODE"#)
         sheet = viewModel.addProjectSheet
         #expect(sheet.addTarget == #"D:\code"#)
-        #expect(sheet.addTitle == "Add code")
+        #expect(sheet.addTitle == AddProjectSheetState.addThisFolderTitle)
 
         await viewModel.selectAddProjectRoot(path: #"C:\Users\me"#)
         #expect(viewModel.addProjectSheet.fieldText == #"C:\Users\me\"#)
@@ -659,7 +986,7 @@ struct ProjectListHomeViewModelTests {
         )
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(projects: [
-                Project(id: "app", worktree: #"C:\Users\me\app"#, displayName: "app", activityAtEpochMs: 1),
+                Project(id: "app", worktree: #"C:\Users\me\app"#, displayName: "app", activityAtEpochMs: 1, isRepository: true),
             ]),
             filesystemRepository: filesystem,
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
@@ -687,7 +1014,7 @@ struct ProjectListHomeViewModelTests {
         )
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(projects: [
-                Project(id: "app", worktree: "/home/app", displayName: "app", activityAtEpochMs: 1),
+                Project(id: "app", worktree: "/home/app", displayName: "app", activityAtEpochMs: 1, isRepository: true),
             ]),
             filesystemRepository: filesystem,
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/home/app"])
@@ -706,6 +1033,239 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.addEnabled == false)
         await viewModel.confirmAddProject()
         #expect(viewModel.isAddProjectPresented)
+    }
+
+    @Test func addProjectRows_loadCountsAndGitTagsWhenTheyAppear() async {
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: [
+                "/home": [folder("/home/code"), folder("/home/empty"), folder("/home/web")],
+                "/home/code": [folder("/home/code/a"), folder("/home/code/b"), folder("/home/code/.git")],
+                "/home/web": [folder("/home/web/src")],
+            ],
+            gitPaths: ["/home/code"]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(projects: [
+                Project(id: "web", worktree: "/home/web", displayName: "web", activityAtEpochMs: 1, isRepository: true),
+            ]),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/home/code"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        viewModel.browseAddProjectFolders()
+
+        var rows = viewModel.addProjectSheet.entries
+        #expect(rows.map(\.subtitle) == ["On Home", nil, nil])
+        // A server project tracked by git shows its tag before its listing loads.
+        #expect(rows.map(\.isGitRepository) == [false, false, true])
+
+        for row in rows { viewModel.addProjectFolderRowAppeared(path: row.path) }
+        #expect(await waitUntil { viewModel.addProjectSheet.entries.allSatisfy { $0.folderCount != nil } })
+        rows = viewModel.addProjectSheet.entries
+        #expect(rows.map(\.folderCount) == [2, 0, 1])
+        #expect(rows.map(\.subtitle) == ["On Home \u{00B7} 2 folders", "Empty", "1 folder"])
+        #expect(rows.map(\.isGitRepository) == [true, false, true])
+
+        // Seen again, or entered, the folder comes from the cache.
+        viewModel.addProjectFolderRowAppeared(path: "/home/code")
+        await viewModel.openAddProjectFolder(path: "/home/code")
+        #expect(viewModel.addProjectSheet.entries.map(\.name) == ["a", "b"])
+        #expect(viewModel.addProjectSheet.barTarget == AddProjectBarTarget(name: "code", path: "/home/code", isGitRepository: true))
+        #expect(filesystem.requestedPaths.filter { $0 == "/home/code" }.count == 1)
+    }
+
+    @Test func addProjectRows_loadAtMostFourAtOnceAndSkipRowsThatLeft() async {
+        let names = (1 ... 6).map { "/home/f\($0)" }
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: ["/home": names.map(folder)]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        viewModel.browseAddProjectFolders()
+        filesystem.heldPaths = Set(names)
+
+        for path in names { viewModel.addProjectFolderRowAppeared(path: path) }
+        #expect(await waitUntil { filesystem.heldCount == 4 })
+        #expect(filesystem.requestedPaths.filter(names.contains) == Array(names.prefix(4)))
+
+        viewModel.addProjectFolderRowDisappeared(path: "/home/f5")
+        filesystem.release("/home/f1")
+        #expect(await waitUntil { filesystem.requestedPaths.contains("/home/f6") })
+        for path in names { filesystem.release(path) }
+        #expect(await waitUntil { viewModel.addProjectSheet.entries.filter { $0.folderCount != nil }.count == 5 })
+        #expect(!filesystem.requestedPaths.contains("/home/f5"))
+        #expect(filesystem.maxInFlight == AddProjectSheetState.folderSummaryConcurrency)
+    }
+
+    @Test func addProjectRows_failedListingIsNotRetriedOrShownAsAnError() async {
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: ["/home": [folder("/home/locked")]],
+            failingPaths: ["/home/locked"]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        viewModel.browseAddProjectFolders()
+
+        viewModel.addProjectFolderRowAppeared(path: "/home/locked")
+        #expect(await waitUntil { filesystem.requestedPaths.contains("/home/locked") })
+        try? await Task.sleep(for: .milliseconds(20))
+        viewModel.addProjectFolderRowAppeared(path: "/home/locked")
+        #expect(viewModel.addProjectSheet.entries.first?.subtitle == nil)
+        #expect(viewModel.addProjectSheet.listError == nil)
+        #expect(filesystem.requestedPaths.filter { $0 == "/home/locked" }.count == 1)
+
+        // Entering the folder still asks the server, and its failure shows with Retry.
+        await viewModel.openAddProjectFolder(path: "/home/locked")
+        #expect(filesystem.requestedPaths.filter { $0 == "/home/locked" }.count == 2)
+        #expect(viewModel.addProjectSheet.listError == AddProjectSheetState.listErrorMessage)
+        #expect(!viewModel.addProjectSheet.pathNotFound)
+    }
+
+    @Test func submitAddProjectField_opensTheTypedOrOnlyMatchingFolderAndNeverAdds() async {
+        let store = FakeConnectionProfileStore(initial: ["/one"])
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: [
+                "/home": [folder("/home/code"), folder("/home/Codex"), folder("/home/docs")],
+                "/home/code": [folder("/home/code/app")],
+                "/home/docs": [],
+            ]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: store
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        viewModel.browseAddProjectFolders()
+
+        // No filter: Return has nothing to open.
+        #expect(viewModel.addProjectSheet.goTarget == nil)
+        await viewModel.submitAddProjectField()
+        #expect(viewModel.addProjectSheet.fieldText == "/home/")
+
+        // Several matches: Return stays put.
+        viewModel.updateAddProjectField("/home/co")
+        #expect(viewModel.addProjectSheet.goTarget == nil)
+        await viewModel.submitAddProjectField()
+        #expect(viewModel.addProjectSheet.fieldText == "/home/co")
+
+        // The only match opens.
+        viewModel.updateAddProjectField("/home/d")
+        #expect(viewModel.addProjectSheet.goTarget == "/home/docs")
+        await viewModel.submitAddProjectField()
+        #expect(viewModel.addProjectSheet.fieldText == "/home/docs/")
+        #expect(viewModel.addProjectSheet.directory == "/home/docs")
+
+        // An exact name opens even when other names start with it.
+        viewModel.updateAddProjectField("/home/code")
+        #expect(viewModel.addProjectSheet.goTarget == "/home/code")
+        await viewModel.submitAddProjectField()
+        #expect(viewModel.addProjectSheet.directory == "/home/code")
+        #expect(viewModel.addProjectSheet.entries.map(\.name) == ["app"])
+
+        #expect(viewModel.isAddProjectPresented)
+        #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one"])
+    }
+
+    @Test func addProjectBar_namesTheTargetAndGivesTheDisabledReason() async {
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: [
+                "/home": [folder("/home/code"), folder("/home/Codex")],
+                "/home/code": [],
+            ]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        viewModel.browseAddProjectFolders()
+
+        var sheet = viewModel.addProjectSheet
+        #expect(sheet.barTarget == AddProjectBarTarget(name: "home", path: "/home", isGitRepository: false))
+        #expect(sheet.addTitle == AddProjectSheetState.homeFolderTitle)
+        #expect(sheet.addEnabled)
+
+        viewModel.updateAddProjectField("/home/co")
+        sheet = viewModel.addProjectSheet
+        #expect(sheet.barTarget?.path == "/home")
+        #expect(sheet.addTitle == "Pick a folder")
+        #expect(!sheet.addEnabled)
+
+        viewModel.updateAddProjectField("/home/zz")
+        sheet = viewModel.addProjectSheet
+        #expect(sheet.addTitle == "No folder named \u{201C}zz\u{201D}")
+        #expect(sheet.emptyMessage == "Nothing in home starts with \u{201C}zz\u{201D}")
+        #expect(!sheet.addEnabled)
+
+        viewModel.updateAddProjectField("/home/code")
+        sheet = viewModel.addProjectSheet
+        #expect(sheet.barTarget == AddProjectBarTarget(name: "code", path: "/home/code", isGitRepository: false))
+        #expect(sheet.addTitle == "Add this folder")
+        #expect(sheet.addEnabled)
+
+        // While a folder lists, the button keeps its title but waits.
+        filesystem.heldPaths = ["/home/Codex"]
+        viewModel.updateAddProjectField("/home/Codex/")
+        #expect(viewModel.addProjectSheet.isLoading)
+        #expect(viewModel.addProjectSheet.addTitle == "Add this folder")
+        #expect(!viewModel.addProjectSheet.addEnabled)
+        filesystem.release("/home/Codex")
+    }
+
+    @Test func pathNotFound_showsOneLineAndDisablesAdd() async {
+        let filesystem = FakeFilesystemRepository(
+            paths: ServerPaths(home: "/home", directory: "/home", worktree: "/"),
+            listings: ["/home": [folder("/home/code")]],
+            missingPaths: ["/srv/apps"]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            filesystemRepository: filesystem,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/one"])
+        )
+        await viewModel.refresh()
+        await viewModel.showAddProjectSheet()
+        viewModel.browseAddProjectFolders()
+
+        viewModel.updateAddProjectField("/srv/apps/")
+        #expect(await waitUntil { viewModel.addProjectSheet.pathNotFound })
+        var sheet = viewModel.addProjectSheet
+        #expect(sheet.emptyMessage == "Path not found")
+        #expect(sheet.listError == nil)
+        #expect(sheet.isLoading == false)
+        #expect(sheet.entries.isEmpty)
+        #expect(sheet.addTitle == AddProjectSheetState.pathNotFoundTitle)
+        #expect(!sheet.addEnabled)
+        #expect(sheet.goTarget == nil)
+        #expect(sheet.barTarget?.path == "/srv/apps")
+
+        // Typing on inside the missing folder asks the server nothing new.
+        viewModel.updateAddProjectField("/srv/apps/x")
+        try? await Task.sleep(for: .milliseconds(20))
+        sheet = viewModel.addProjectSheet
+        #expect(sheet.pathNotFound)
+        #expect(sheet.addTitle == AddProjectSheetState.pathNotFoundTitle)
+        #expect(filesystem.requestedPaths.filter { $0 == "/srv/apps" }.count == 1)
     }
 
     @Test func confirmAddProject_validatesAndFocuses() async {
@@ -822,7 +1382,7 @@ struct ProjectListHomeViewModelTests {
         )
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(projects: [
-                Project(id: "app", worktree: "/srv/app", displayName: "app", activityAtEpochMs: 1),
+                Project(id: "app", worktree: "/srv/app", displayName: "app", activityAtEpochMs: 1, isRepository: true),
             ]),
             filesystemRepository: filesystem,
             connectionProfileStore: store
@@ -956,9 +1516,11 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.revealNewestToken == 0)
     }
 
-    @Test func onSessionLongPress_opensSheetAndKeepsForkHiddenWithoutUserMessages() async {
+    @Test func onSessionLongPress_opensSheetWithoutFetchingMessages() async {
+        let messageRepository = FakeMessageRepository(messages: [userMessage(id: "m1", text: "Hello")])
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
+            messageRepository: messageRepository,
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
@@ -967,36 +1529,76 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.sessionActionsSheetVisible)
         #expect(viewModel.sessionActionsTarget?.sessionId == "s1")
         #expect(viewModel.sessionActionsTarget?.title == "Alpha")
-        let stayedHidden = await waitUntil(timeoutMs: 200) { viewModel.sessionActionsCanFork }
-        #expect(stayedHidden == false)
+        let fetched = await waitUntil(timeoutMs: 200) { messageRepository.listCallCount > 0 }
+        #expect(fetched == false)
     }
 
-    @Test func onSessionLongPress_showsForkWhenSessionHasVisibleUserMessage() async {
+    @Test func openSessionFork_allowsForkWhenSessionHasVisibleUserMessage() async {
+        let messageRepository = FakeMessageRepository(messages: [userMessage(id: "m1", text: "Hello")])
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
-            messageRepository: FakeMessageRepository(messages: [userMessage(id: "m1", text: "Hello")]),
+            messageRepository: messageRepository,
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
         viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionFork()
 
-        #expect(await waitUntil { viewModel.sessionActionsCanFork })
+        #expect(viewModel.sessionForkDialog.isVisible)
+        #expect(await waitUntil { messageRepository.listCallCount == 1 })
+        let blocked = await waitUntil(timeoutMs: 200) { viewModel.sessionForkDialog.blockedMessage != nil }
+        #expect(blocked == false)
     }
 
-    @Test func onSessionLongPress_hidesForkWhenMessageFetchFails() async {
+    @Test func openSessionFork_blocksDialogWithoutUserMessages() async {
+        let sessionRepository = FakeSessionRepository()
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
-            messageRepository: FakeMessageRepository(
-                messages: [userMessage(id: "m1", text: "Hello")],
-                listError: TestError.message("offline")
-            ),
+            sessionRepository: sessionRepository,
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
         viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionFork()
 
-        let becameForkable = await waitUntil(timeoutMs: 200) { viewModel.sessionActionsCanFork }
-        #expect(becameForkable == false)
+        #expect(await waitUntil { viewModel.sessionForkDialog.blockedMessage == "Nothing to fork yet" })
+        #expect(viewModel.sessionForkDialog.isVisible)
+        await viewModel.confirmSessionFork()
+        #expect(sessionRepository.forkedIDs.isEmpty)
+    }
+
+    @Test func confirmSessionFork_beforeCheckFinishesWaitsAndBlocksEmptySession() async {
+        let sessionRepository = FakeSessionRepository()
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionFork()
+        await viewModel.confirmSessionFork()
+
+        #expect(sessionRepository.forkedIDs.isEmpty)
+        #expect(viewModel.sessionForkDialog.isSubmitting == false)
+        #expect(viewModel.sessionForkDialog.blockedMessage == "Nothing to fork yet")
+    }
+
+    @Test func openSessionFork_checkFailureLeavesForkToServer() async {
+        let sessionRepository = FakeSessionRepository()
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: sessionRepository,
+            messageRepository: FakeMessageRepository(listError: TestError.message("offline")),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
+        )
+        await viewModel.refresh()
+        viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
+        viewModel.openSessionFork()
+        await viewModel.confirmSessionFork()
+
+        #expect(viewModel.sessionForkDialog.blockedMessage == nil)
+        #expect(sessionRepository.forkedIDs == ["s1"])
     }
 
     @Test func dismissSessionActions_clearsTarget() async {
@@ -1104,6 +1706,7 @@ struct ProjectListHomeViewModelTests {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
             sessionRepository: sessionRepository,
+            messageRepository: FakeMessageRepository(messages: [userMessage(id: "m1", text: "Hello")]),
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
@@ -1125,6 +1728,7 @@ struct ProjectListHomeViewModelTests {
     @Test func confirmSessionFork_stayChoiceKeepsHome() async {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
+            messageRepository: FakeMessageRepository(messages: [userMessage(id: "m1", text: "Hello")]),
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
@@ -1143,6 +1747,7 @@ struct ProjectListHomeViewModelTests {
         let viewModel = makeViewModel(
             projectRepository: FakeProjectRepository(),
             sessionRepository: sessionRepository,
+            messageRepository: FakeMessageRepository(messages: [userMessage(id: "m1", text: "Hello")]),
             connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"])
         )
         await viewModel.refresh()
@@ -1660,6 +2265,196 @@ struct ProjectListHomeViewModelTests {
 
         #expect(errors == [HomeSessionActions.settleError])
     }
+
+    // MARK: - First load of a newly added project (#741)
+
+    @Test func addProject_newProject_exposesLoadingAfterGraceThenLoadsRows() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(
+            initial: ["/one", "/three"],
+            timing: ProjectLoadTiming(grace: .milliseconds(400), minimumVisible: .zero, slowThreshold: .seconds(60), timeout: .seconds(60))
+        )
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        // Home is on All (three projects); the new project takes the scope anyway.
+        #expect(viewModel.pendingSelectedFilterId == "/two")
+        #expect(viewModel.pendingSelectedFilterOverridesAll)
+        // Inside the grace delay nothing reads as loading yet.
+        #expect(viewModel.projectLoadStates["/two"] == nil)
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+
+        // A cached publish is not the server answer.
+        stores.sessions.emit(directory: "/two", sessions: [], isFromCache: true)
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(viewModel.projectLoadStates["/two"] == .loading(isSlow: false))
+
+        stores.sessions.emit(directory: "/two", sessions: [projectLoadSession("two-1", directory: "/two")])
+        #expect(await waitUntil {
+            viewModel.projectLoadStates["/two"] == nil && homeSession(viewModel, id: "two-1") != nil
+        })
+    }
+
+    @Test func addProject_loadInsideGrace_neverExposesLoading() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(
+            initial: ["/one"],
+            timing: ProjectLoadTiming(grace: .milliseconds(300), minimumVisible: .milliseconds(500), slowThreshold: .seconds(60), timeout: .seconds(60))
+        )
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        stores.sessions.emit(directory: "/two", sessions: [projectLoadSession("two-1", directory: "/two")])
+
+        var exposed = false
+        let deadline = Date().addingTimeInterval(0.6)
+        while Date() < deadline {
+            if viewModel.projectLoadStates["/two"] != nil { exposed = true }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        #expect(!exposed)
+        #expect(homeSession(viewModel, id: "two-1") != nil)
+    }
+
+    @Test func addProject_zeroSessions_clearsLoadingToEmptyProject() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(initial: ["/one"], timing: .immediate)
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+
+        stores.sessions.emit(directory: "/two", sessions: [])
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == nil })
+        guard case let .loaded(sections, _, _, _) = viewModel.state else {
+            Issue.record("Expected loaded")
+            return
+        }
+        #expect(sections.first { $0.worktree == "/two" }?.allSessions.isEmpty == true)
+    }
+
+    @Test func addProject_exposedLoadingStaysForMinimumVisibleTime() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(
+            initial: ["/one"],
+            timing: ProjectLoadTiming(grace: .zero, minimumVisible: .milliseconds(300), slowThreshold: .seconds(60), timeout: .seconds(60))
+        )
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+        let shown = Date()
+
+        stores.sessions.emit(directory: "/two", sessions: [projectLoadSession("two-1", directory: "/two")])
+        // Rows land at once; the loading marker holds for the rest of its minimum time.
+        #expect(await waitUntil { homeSession(viewModel, id: "two-1") != nil })
+        #expect(viewModel.projectLoadStates["/two"] == .loading(isSlow: false))
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == nil })
+        #expect(Date().timeIntervalSince(shown) >= 0.25)
+    }
+
+    @Test func addProject_storeFailure_failsThenRetryLoads() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(initial: ["/one"], timing: .immediate)
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        stores.sessions.emit(directory: "/two", sessions: [], isFromCache: true, loadFailed: true)
+        #expect(await waitUntil {
+            viewModel.projectLoadStates["/two"] == .failed(message: ProjectLoadState.failedMessage)
+        })
+        #expect(ProjectLoadState.failedMessage == "Couldn\u{2019}t load sessions")
+
+        await viewModel.retryProjectLoad(worktree: "/two")
+        #expect(viewModel.projectLoadStates["/two"] == .loading(isSlow: false))
+        #expect(stores.sessions.invalidatedDirectories.contains("/two"))
+
+        stores.sessions.emit(directory: "/two", sessions: [projectLoadSession("two-1", directory: "/two")])
+        #expect(await waitUntil {
+            viewModel.projectLoadStates["/two"] == nil && homeSession(viewModel, id: "two-1") != nil
+        })
+    }
+
+    @Test func addProject_failedThenAutomaticSuccess_loads() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(initial: ["/one"], timing: .immediate)
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        stores.sessions.emit(directory: "/two", sessions: [], isFromCache: true, loadFailed: true)
+        #expect(await waitUntil {
+            viewModel.projectLoadStates["/two"] == .failed(message: ProjectLoadState.failedMessage)
+        })
+
+        // The coordinator's own retry succeeds later.
+        stores.sessions.emit(directory: "/two", sessions: [])
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == nil })
+    }
+
+    @Test func addProject_slowLoad_marksSlowAfterThreshold() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(
+            initial: ["/one"],
+            timing: ProjectLoadTiming(grace: .zero, minimumVisible: .zero, slowThreshold: .milliseconds(150), timeout: .seconds(60))
+        )
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: true) })
+    }
+
+    @Test func addProject_noOutcome_failsAfterSafetyTimeout() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(
+            initial: ["/one"],
+            timing: ProjectLoadTiming(grace: .zero, minimumVisible: .zero, slowThreshold: .seconds(60), timeout: .milliseconds(200))
+        )
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] == .loading(isSlow: false) })
+        #expect(await waitUntil {
+            viewModel.projectLoadStates["/two"] == .failed(message: ProjectLoadState.failedMessage)
+        })
+    }
+
+    @Test func removeProject_clearsItsLoadState() async {
+        let stores = ProjectLoadStores()
+        let viewModel = stores.viewModel(initial: ["/one"], timing: .immediate)
+        await viewModel.refresh()
+
+        await viewModel.addProject(worktree: "/two")
+        stores.sessions.emit(directory: "/two", sessions: [], isFromCache: true, loadFailed: true)
+        #expect(await waitUntil { viewModel.projectLoadStates["/two"] != nil })
+
+        viewModel.requestRemoveProject(worktree: "/two")
+        await viewModel.confirmRemoveProject()
+        #expect(viewModel.projectLoadStates.isEmpty)
+    }
+
+    @Test func homeChromeProjects_carryLoadIntoScopeTabs() {
+        let section = ProjectSectionItem(
+            id: "/two",
+            worktree: "/two",
+            displayName: "two",
+            pathSubtitle: "/two",
+            letter: "T",
+            letterAccent: .teal,
+            allSessions: [],
+            loadError: nil
+        )
+        let projects = HomeProjectGrouping.group(addedPaths: [section.worktree], resolutions: [:])
+        let load = SessionListHomeChrome.projectLoad(projects[0], loadStates: ["/two": .loading(isSlow: true)])
+        #expect(load == .loading(isSlow: true))
+        let tabs = SessionListHomeChrome.filterTabs(
+            projects: projects,
+            sessions: [section].crossProjectSessionListSessions(projects: projects),
+            loads: [projects[0].key: load].compactMapValues { $0 }
+        )
+        #expect(tabs.first?.load == .loading(isSlow: true))
+        #expect(tabs.first?.load?.subtitle == "Still loading\u{2026}")
+    }
 }
 
 @MainActor
@@ -1682,7 +2477,11 @@ private func makeViewModel(
     sessionStatusLiveStoreOverride: (any SessionStatusLiveStore)? = nil,
     sessionReadyStoreOverride: (any SessionReadyStore)? = nil,
     permissionLiveStore: (any PermissionLiveStore)? = nil,
-    engine: ConnectionEngine = .opencode
+    engine: ConnectionEngine = .opencode,
+    projectLoadTiming: ProjectLoadTiming = .standard,
+    worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
+    branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)],
+    worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache()
 ) -> ProjectListHomeViewModel {
     let eventStream = eventStream ?? FakeForegroundEventStream()
     // Mutations (createSession) require Connected; default fakes start Idle.
@@ -1728,7 +2527,11 @@ private func makeViewModel(
         sessionReadyStore: sessionReadyStore,
         permissionLiveStore: permissionLiveStore,
         connectionSessionCoordinator: coordinator,
-        addProjectListingDebounce: .zero
+        addProjectListingDebounce: .zero,
+        projectLoadTiming: projectLoadTiming,
+        worktreeRepository: worktreeRepository,
+        branchRetryDelays: branchRetryDelays,
+        worktreeInventoryCache: worktreeInventoryCache
     )
 }
 
@@ -1870,32 +2673,61 @@ private final class FakeProjectRepository: ProjectRepository, @unchecked Sendabl
         if let directory, let project = projectsByDirectory[directory] {
             return project
         }
-        return Project(id: "p1", worktree: directory ?? bootWorktree, displayName: "demo")
+        // Every folder is its own project unless a test maps it.
+        return Project(id: "prj:" + (directory ?? bootWorktree), worktree: directory ?? bootWorktree, displayName: "demo")
     }
 }
 
 private final class FakeFilesystemRepository: FilesystemRepository, @unchecked Sendable {
     let paths: ServerPaths
-    let listings: [String: [DirectoryNode]]
+    var listings: [String: [DirectoryNode]]
     var failingPaths: Set<String>
+    var missingPaths: Set<String>
+    var gitPaths: Set<String>
+    /// Listings of these paths wait until `release(_:)`.
+    var heldPaths: Set<String> = []
     private(set) var requestedPaths: [String] = []
+    private(set) var inFlight = 0
+    private(set) var maxInFlight = 0
+    private var held: [String: CheckedContinuation<Void, Never>] = [:]
 
     init(
         paths: ServerPaths = ServerPaths(home: "/home", directory: "/home", worktree: "/"),
         listings: [String: [DirectoryNode]] = [:],
-        failingPaths: Set<String> = []
+        failingPaths: Set<String> = [],
+        missingPaths: Set<String> = [],
+        gitPaths: Set<String> = []
     ) {
         self.paths = paths
         self.listings = listings
         self.failingPaths = failingPaths
+        self.missingPaths = missingPaths
+        self.gitPaths = gitPaths
     }
 
     func getPaths() async throws -> ServerPaths { paths }
 
-    func listDirectory(path: String) async throws -> [DirectoryNode] {
+    func listDirectory(path: String) async throws -> DirectoryListing {
         requestedPaths.append(path)
+        inFlight += 1
+        maxInFlight = max(maxInFlight, inFlight)
+        defer { inFlight -= 1 }
+        if heldPaths.contains(path) {
+            await withCheckedContinuation { held[path] = $0 }
+        }
+        if missingPaths.contains(path) { throw FilesystemError.directoryNotFound }
         if failingPaths.contains(path) { throw TestError.message("Listing failed") }
-        return DirectoryListingPolicy.directories(listings[path] ?? [])
+        return DirectoryListing(
+            folders: DirectoryListingPolicy.directories(listings[path] ?? []),
+            isGitRepository: gitPaths.contains(path)
+        )
+    }
+
+    var heldCount: Int { held.count }
+
+    func release(_ path: String) {
+        heldPaths.remove(path)
+        held.removeValue(forKey: path)?.resume()
     }
 }
 
@@ -2008,6 +2840,7 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
     private var blockedListContinuation: CheckedContinuation<Void, Never>?
     private let listLock = NSLock()
     private var listSessionsCallCount = 0
+    private var listSessionsFailing = false
 
     var listCallCount: Int {
         listLock.lock()
@@ -2025,6 +2858,13 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
         holdNextList = true
     }
 
+    /// While set, `listSessions` throws (a server that cannot list this project).
+    func setListSessionsFailing(_ failing: Bool) {
+        listLock.lock()
+        listSessionsFailing = failing
+        listLock.unlock()
+    }
+
     func resumeListSessions() {
         listLock.lock()
         let continuation = blockedListContinuation
@@ -2038,6 +2878,13 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
     private(set) var forkedIDs: [String] = []
     private(set) var settledIDs: [String] = []
     var settleError: Error?
+    /// Answers `getVcsInfo`; nil keeps the protocol default (404).
+    var vcsInfo: (@Sendable (String) async throws -> VcsInfo)?
+
+    func getVcsInfo(directory: String?) async throws -> VcsInfo {
+        guard let vcsInfo else { throw SessionError.http(statusCode: 404, message: nil) }
+        return try await vcsInfo(directory ?? "")
+    }
 
     init(
         sessions: [Session] = [Session(id: "1", title: "Alpha", slug: nil, projectID: nil, directory: nil, parentID: nil, updatedAtEpochMs: 1)],
@@ -2067,6 +2914,10 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
                 listLock.unlock()
             }
         }
+        listLock.lock()
+        let failing = listSessionsFailing
+        listLock.unlock()
+        if failing { throw TestError.message("List failed") }
         return sessions
     }
 
@@ -2156,6 +3007,7 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     let messages: [Message]
     let listError: Error?
     let catchUpChrome: Bool
+    private(set) var listCallCount = 0
 
     init(messages: [Message] = [], listError: Error? = nil, catchUpChrome: Bool = false) {
         self.messages = messages
@@ -2186,6 +3038,7 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     func clearMessageCache() {}
 
     func listMessages(sessionID: String, directory: String?) async throws -> [Message] {
+        listCallCount += 1
         if let listError { throw listError }
         return messages
     }
@@ -2193,6 +3046,8 @@ private final class FakeMessageRepository: MessageRepository, @unchecked Sendabl
     func getMessage(sessionID: String, messageID: String, directory: String?) async throws -> Message { fatalError() }
     func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message { fatalError() }
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws {}
+
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {}
 }
 
 private func userMessage(id: String, text: String) -> Message {
@@ -2227,11 +3082,16 @@ private func waitUntil(
 private final class ControllableSessionLiveStore: SessionLiveStore {
     private var latest: [String: SessionListSnapshot] = [:]
     private var continuations: [String: [UUID: AsyncStream<SessionListSnapshot>.Continuation]] = [:]
+    private(set) var invalidatedDirectories: [String?] = []
 
-    func emit(directory: String, sessions: [Session]) {
-        let snapshot = SessionListSnapshot(sessions: sessions)
+    func emit(directory: String, sessions: [Session], isFromCache: Bool = false, loadFailed: Bool = false) {
+        let snapshot = SessionListSnapshot(sessions: sessions, isFromCache: isFromCache, loadFailed: loadFailed)
         latest[directory] = snapshot
         continuations[directory]?.values.forEach { $0.yield(snapshot) }
+    }
+
+    func invalidate(directory: String?) async {
+        invalidatedDirectories.append(directory)
     }
 
     func observeSessions(directory: String) -> AsyncStream<SessionListSnapshot> {
@@ -2318,4 +3178,193 @@ private final class ControllableReadyStore: SessionReadyStore {
     func releaseFocusedSession(sessionID: String) {}
     func bindProfile(profileID: String?) {}
     func clearCache() {}
+}
+
+private extension ProjectLoadTiming {
+    /// Loading shows at once and clears at once; slow and timeout stay out of the way.
+    static let immediate = ProjectLoadTiming(grace: .zero, minimumVisible: .zero, slowThreshold: .seconds(60), timeout: .seconds(60))
+}
+
+private func projectLoadSession(_ id: String, directory: String) -> Session {
+    Session(id: id, title: id, slug: nil, projectID: nil, directory: directory, parentID: nil, updatedAtEpochMs: 1)
+}
+
+/// Controllable live stores for first-load tests, with `/one` already listed.
+@MainActor
+private final class ProjectLoadStores {
+    let sessions = ControllableSessionLiveStore()
+    let statuses = ControllableStatusLiveStore()
+    let ready = ControllableReadyStore()
+
+    init() {
+        sessions.emit(directory: "/one", sessions: [projectLoadSession("one-1", directory: "/one")])
+        statuses.emit(directory: "/one", statuses: [:])
+    }
+
+    func viewModel(initial: [String], timing: ProjectLoadTiming) -> ProjectListHomeViewModel {
+        makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: initial),
+            sessionLiveStoreOverride: sessions,
+            sessionStatusLiveStoreOverride: statuses,
+            sessionReadyStoreOverride: ready,
+            projectLoadTiming: timing
+        )
+    }
+}
+
+@MainActor
+struct SessionLiveStoreLoadOutcomeTests {
+    @Test func failedServerLoadPublishesFailureAndLaterSuccessClearsIt() async {
+        let repository = FakeSessionRepository(sessions: [projectLoadSession("1", directory: "/repo")])
+        repository.setListSessionsFailing(true)
+        let eventStream = FakeForegroundEventStream()
+        eventStream.setConnectionState(.connected)
+        let store = DefaultSessionLiveStore(
+            sessionRepository: repository,
+            eventStream: eventStream,
+            sessionCache: NoOpSessionCache.shared
+        )
+        let collector = SessionListSnapshotCollector(stream: store.observeSessions(directory: "/repo"))
+        defer { collector.cancel() }
+
+        #expect(await waitUntil(timeoutMs: 3_000) { collector.snapshots.contains { $0.loadFailed } })
+        let failed = collector.snapshots.first { $0.loadFailed }
+        #expect(failed?.isFromCache == true)
+        #expect(failed?.sessions.isEmpty == true)
+
+        // The coordinator's backoff retry now succeeds.
+        repository.setListSessionsFailing(false)
+        #expect(await waitUntil(timeoutMs: 5_000) {
+            collector.snapshots.last.map { !$0.loadFailed && !$0.isFromCache } == true
+        })
+        #expect(collector.snapshots.last?.sessions.map(\.id) == ["1"])
+    }
+}
+
+@MainActor
+private final class SessionListSnapshotCollector {
+    private(set) var snapshots: [SessionListSnapshot] = []
+    private var task: Task<Void, Never>?
+
+    init(stream: AsyncStream<SessionListSnapshot>) {
+        task = Task { @MainActor [weak self] in
+            for await snapshot in stream {
+                self?.snapshots.append(snapshot)
+            }
+        }
+    }
+
+    func cancel() {
+        task?.cancel()
+    }
+}
+
+/// Worktree inventories handed out in order; the last one repeats.
+private final class ScriptedWorktreeRepository: WorktreeRepository, @unchecked Sendable {
+    private let lock = NSLock()
+    private var loads: [WorktreeLoad]
+    private let created: Result<CreatedWorktree, WorktreeCreateError>
+    private var requests: [CreateWorktreeRequest] = []
+    private var loadCalls: [String] = []
+    private var refetchCalls: [String] = []
+
+    init(
+        loads: [WorktreeLoad],
+        created: Result<CreatedWorktree, WorktreeCreateError> = .failure(WorktreeCreateError(message: "unused"))
+    ) {
+        self.loads = loads
+        self.created = created
+    }
+
+    var createRequests: [CreateWorktreeRequest] { lock.withLock { requests } }
+    var loadedPaths: [String] { lock.withLock { loadCalls } }
+    var refetchedProjectIDs: [String] { lock.withLock { refetchCalls } }
+
+    private func next() -> WorktreeLoad {
+        lock.withLock {
+            loads.count > 1 ? loads.removeFirst() : (loads.first ?? .unloaded)
+        }
+    }
+
+    func load(addedPath: String, projectID: String?) async -> WorktreeLoad { next() }
+    func loadRefreshed(addedPath: String, projectID: String?) async -> WorktreeLoad {
+        lock.withLock { loadCalls.append(addedPath) }
+        return next()
+    }
+    func refresh(projectID: String) async -> Bool { false }
+    func refetch(projectID: String) async -> WorktreeLoad {
+        lock.withLock { refetchCalls.append(projectID) }
+        return next()
+    }
+    func onDisconnected() {}
+    func onConnection(key: String) {}
+    func create(_ request: CreateWorktreeRequest) async throws -> CreatedWorktree {
+        lock.withLock { requests.append(request) }
+        return try created.get()
+    }
+    func baseBranches(directory: String) async throws -> [String] { [] }
+    var canCreateWorktrees: Bool { true }
+}
+
+/// `getVcsInfo` that holds every call until `open()`, then answers newest first. Directories in
+/// `failFirstCallFor` fail their first call (a request cancelled mid-flight).
+private final class GatedVcs: @unchecked Sendable {
+    private let lock = NSLock()
+    private let branches: [String: String]
+    private var failFirst: Set<String>
+    private var isOpen = false
+    private var waiting: [(directory: String, continuation: CheckedContinuation<Void, Never>)] = []
+
+    init(branches: [String: String], failFirstCallFor: Set<String> = []) {
+        self.branches = branches
+        self.failFirst = failFirstCallFor
+    }
+
+    var waitingDirectories: [String] {
+        lock.withLock { waiting.map(\.directory) }
+    }
+
+    func open() {
+        let released = lock.withLock {
+            isOpen = true
+            defer { waiting.removeAll() }
+            return waiting.map(\.continuation)
+        }
+        // Newest first: a stale request answers last.
+        released.reversed().forEach { $0.resume() }
+    }
+
+    func info(_ directory: String) async throws -> VcsInfo {
+        let fails = lock.withLock { failFirst.remove(directory) != nil }
+        let mustWait = lock.withLock { !isOpen }
+        if mustWait {
+            await withCheckedContinuation { continuation in
+                let resumeNow = lock.withLock {
+                    if isOpen { return true }
+                    waiting.append((directory, continuation))
+                    return false
+                }
+                if resumeNow { continuation.resume() }
+            }
+        }
+        if fails { throw SessionError.transport("cancelled") }
+        return VcsInfo(currentBranch: branches[directory], defaultBranch: "main")
+    }
+}
+
+private final class VcsCallCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var counts: [String: Int] = [:]
+
+    func next(_ directory: String) -> Int {
+        lock.withLock {
+            counts[directory, default: 0] += 1
+            return counts[directory] ?? 0
+        }
+    }
+
+    func count(_ directory: String) -> Int {
+        lock.withLock { counts[directory] ?? 0 }
+    }
 }

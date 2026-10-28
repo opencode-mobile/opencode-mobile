@@ -11,6 +11,8 @@ import io.ktor.client.request.get
 import io.ktor.client.statement.HttpResponse
 import io.ktor.http.isSuccess
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.CancellationException
+import kotlinx.serialization.json.JsonObject
 
 class ConnectionProbeService(
     private val json: Json,
@@ -26,10 +28,12 @@ class ConnectionProbeService(
      *
      * Throws [ServerProbeError] when no health endpoint is usable.
      */
-    override suspend fun probe(connection: ServerConnection): ServerProtocol {
+    override suspend fun probe(connection: ServerConnection): ServerProtocol = probeServer(connection).protocol
+
+    override suspend fun probeServer(connection: ServerConnection): DetectedServer {
         val client = clientFactory(connection)
         try {
-            return detector.detect(
+            return detector.detectServer(
                 fetchGlobalHealth = { client.fetchHealth("global/health") },
                 fetchApiInfo = { client.fetchHealth("api/info") },
                 fetchApiHealth = { client.fetchHealth("api/health") },
@@ -39,6 +43,46 @@ class ConnectionProbeService(
         } finally {
             client.close()
         }
+    }
+
+    override suspend fun probeV2Features(connection: ServerConnection): V2ServerFeatures {
+        val client = clientFactory(connection)
+        try {
+            val response: HttpResponse = client.get(V2ServerContract.OPENAPI_PATH)
+            if (!response.status.isSuccess()) {
+                throw ServerProbeError.Http(
+                    statusCode = response.status.value,
+                    message = response.status.description,
+                )
+            }
+            val document = response.body<JsonObject>()
+            val features = V2ServerContract.features(document)
+            if (!V2ServerContract.declaresAttachmentUpload(document)) return features
+            // The route alone is not enough: the upload path is built under the server's tmp directory.
+            val tmp =
+                try {
+                    fetchTmpDirectory(client)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    return features.copy(tmpDirectoryUnread = true)
+                }
+            return features.copy(attachmentUploadTmp = tmp)
+        } finally {
+            client.close()
+        }
+    }
+
+    /** Null when `/api/info` answers without `paths.tmp`; throws when it cannot be read. */
+    private suspend fun fetchTmpDirectory(client: HttpClient): String? {
+        val response: HttpResponse = client.get(V2ServerContract.INFO_PATH)
+        if (!response.status.isSuccess()) {
+            throw ServerProbeError.Http(
+                statusCode = response.status.value,
+                message = response.status.description,
+            )
+        }
+        return V2ServerContract.tmpDirectory(response.body<JsonObject>())
     }
 
     private suspend fun HttpClient.fetchHealth(path: String): HealthDto {

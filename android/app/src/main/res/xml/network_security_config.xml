@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The opencode server normally runs on the user's own machine, reached over LAN, Tailscale,
+  a VPN or a tunnel. Those addresses are mostly IP literals, and a network security config
+  cannot scope cleartext to IP ranges (domain-config entries are host names only), so
+  cleartext stays permitted here and the scoping lives in CleartextPolicy: plain http to
+  loopback, private, link-local and Tailscale ranges connects silently; any other http host
+  shows an explicit "not encrypted" warning before credentials or a pairing code are sent.
+  User-added CAs are honoured so self-hosted https with a private CA works.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

@@ -30,6 +30,7 @@ import dev.opencode.mobile.domain.message.MessageSyncHealth
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.STREAMING_PREPARE_DEBOUNCE_MS
 import dev.opencode.mobile.domain.message.SessionMessageEngine
+import dev.opencode.mobile.domain.message.ShellCommandOptions
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionDecision
@@ -2754,6 +2755,36 @@ class SessionLiveStoreTest {
         }
 
     @Test
+    fun observeSessions_refreshesOnV2ArchiveAndUnarchive() =
+        runTest(testDispatcher) {
+            val first = testSession(id = "ses-1", title = "First")
+            val second = testSession(id = "ses-2", title = "Second")
+            val repository = FakeSessionRepository(sessions = listOf(first, second))
+            val eventStream = FakeForegroundEventStream()
+            eventStream.setConnectionState(EventStreamConnectionState.Connected)
+            val store = sessionStore(repository, eventStream, ServerProtocol.V2)
+            val emissions = mutableListOf<List<Session>>()
+            val collectJob = launch { store.observeSessions("/repo").collect { emissions.add(it.sessions) } }
+            advanceUntilIdle()
+
+            // The v2 Home list asks for `archived=false`, so an archived session drops out of the refetch.
+            repository.sessions = listOf(first)
+            eventStream.emit(OpencodeEvent(type = "session.archived", sessionId = "ses-2"))
+            advanceTimeBy(550)
+            advanceUntilIdle()
+            val afterArchive = emissions.last().map { it.id }
+
+            repository.sessions = listOf(first, second)
+            eventStream.emit(OpencodeEvent(type = "session.unarchived", sessionId = "ses-2"))
+            advanceTimeBy(550)
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            assertEquals(listOf("ses-1"), afterArchive)
+            assertEquals(listOf("ses-1", "ses-2"), emissions.last().map { it.id })
+        }
+
+    @Test
     fun observeSessions_keepsLastValueWhenRefreshFails() =
         runTest(testDispatcher) {
             val repository =
@@ -2791,6 +2822,36 @@ class SessionLiveStoreTest {
 
             assertEquals(1, emissions.size)
             assertEquals("First", emissions.single().single().title)
+        }
+
+    @Test
+    fun observeSessions_publishesLoadFailureUntilALaterLoadSucceeds() =
+        runTest(testDispatcher) {
+            val repository =
+                FakeSessionRepository(
+                    sessions = listOf(testSession(id = "ses-1", title = "First")),
+                    shouldFailList = true,
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = sessionStore(repository, eventStream, ServerProtocol.V1)
+            val emissions = mutableListOf<SessionListSnapshot>()
+            val collectJob = launch { store.observeSessions("/repo").collect { emissions.add(it) } }
+            advanceUntilIdle()
+
+            val failed = emissions.single()
+            assertTrue(failed.loadFailed)
+            assertTrue(failed.isFromCache)
+            assertTrue(failed.sessions.isEmpty())
+
+            repository.shouldFailList = false
+            store.invalidate("/repo")
+            advanceUntilIdle()
+            collectJob.cancel()
+
+            val loaded = emissions.last()
+            assertFalse(loaded.loadFailed)
+            assertFalse(loaded.isFromCache)
+            assertEquals(listOf("ses-1"), loaded.sessions.map { it.id })
         }
 
     @Test
@@ -3919,6 +3980,12 @@ private class FakeMessageRepository(
     override suspend fun sendPromptAsync(
         sessionId: String,
         options: PromptSendOptions,
+        directory: String?,
+    ) = Unit
+
+    override suspend fun runShellCommand(
+        sessionId: String,
+        options: ShellCommandOptions,
         directory: String?,
     ) = Unit
 }

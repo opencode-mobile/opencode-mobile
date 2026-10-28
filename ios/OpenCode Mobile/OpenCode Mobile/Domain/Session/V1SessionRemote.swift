@@ -154,4 +154,13 @@ struct V1SessionRemote: SessionRemote, Sendable {
 
     /// Classic servers have no viewed watermark; never touches the network.
     func markSessionViewed(sessionId _: String, idleAtEpochMs _: Int64) async throws {}
+
+    /// v1 has no move endpoint; Session Chat keeps the action disabled there.
+    func moveSession(id _: String, directory _: String) async throws {
+        throw SessionError.http(statusCode: 404, message: "Needs an opencode v2 server")
+    }
+
+    func askSideQuestion(sessionID _: String, question _: String) async throws -> String {
+        throw SessionError.http(statusCode: 404, message: "Needs an opencode v2 server")
+    }
 }

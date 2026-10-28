@@ -82,6 +82,10 @@ nonisolated enum PromptJSONBodyWriter {
                 try writer.key("agent")
                 try writer.writeString(agent)
             }
+            if let messageID = body.messageID {
+                try writer.key("messageID")
+                try writer.writeString(messageID)
+            }
             try writer.endObject()
         }
     }
@@ -89,6 +93,10 @@ nonisolated enum PromptJSONBodyWriter {
     static func writeV2Prompt(_ body: V2PromptRequestDTO, attachments: [Attachment]) throws -> URL {
         try writeBody(to: newFile()) { writer in
             try writer.beginObject()
+            if let id = body.id {
+                try writer.key("id")
+                try writer.writeString(id)
+            }
             try writer.key("text")
             try writer.writeString(body.text)
             let mentionFiles = body.fileMentions ?? []
@@ -166,9 +174,44 @@ nonisolated enum PromptJSONBodyWriter {
                     try writer.beginObject()
                     try writer.key("id")
                     try writer.writeString(skill.id)
+                    if let mention = skill.mention {
+                        try writer.key("mention")
+                        try writer.beginObject()
+                        if let start = mention.start {
+                            try writer.key("start")
+                            try writer.writeInt(start)
+                        }
+                        if let end = mention.end {
+                            try writer.key("end")
+                            try writer.writeInt(end)
+                        }
+                        if let text = mention.text {
+                            try writer.key("text")
+                            try writer.writeString(text)
+                        }
+                        try writer.endObject()
+                    }
                     try writer.endObject()
                 }
                 try writer.endArray()
+            }
+            if let metadata = body.metadata, !metadata.attachments.isEmpty {
+                try writer.key("metadata")
+                try writer.beginObject()
+                try writer.key("attachments")
+                try writer.beginArray()
+                for attachment in metadata.attachments {
+                    try writer.beginObject()
+                    try writer.key("name")
+                    try writer.writeString(attachment.name)
+                    try writer.key("mime")
+                    try writer.writeString(attachment.mime)
+                    try writer.key("path")
+                    try writer.writeString(attachment.path)
+                    try writer.endObject()
+                }
+                try writer.endArray()
+                try writer.endObject()
             }
             try writer.key("delivery")
             try writer.writeString(body.delivery)
@@ -212,6 +255,10 @@ nonisolated enum PromptJSONBodyWriter {
                 try writer.endObject()
             }
             try writer.endArray()
+            if let messageID = body.messageID {
+                try writer.key("messageID")
+                try writer.writeString(messageID)
+            }
             try writer.endObject()
         }
     }
@@ -234,6 +281,17 @@ nonisolated enum PromptJSONBodyWriter {
                         try writer.key("name")
                         try writer.writeString(name)
                     }
+                    try writer.endObject()
+                }
+                try writer.endArray()
+            }
+            if let skills = body.skills, !skills.isEmpty {
+                try writer.key("skills")
+                try writer.beginArray()
+                for skill in skills {
+                    try writer.beginObject()
+                    try writer.key("id")
+                    try writer.writeString(skill.id)
                     try writer.endObject()
                 }
                 try writer.endArray()

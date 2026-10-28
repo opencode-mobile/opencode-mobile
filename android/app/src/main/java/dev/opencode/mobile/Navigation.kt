@@ -36,7 +36,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavEntryDecorator
@@ -47,19 +49,24 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import dev.opencode.mobile.domain.app.AppVersion
 import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.feedback.FeedbackScreen
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
+import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.security.AppLockAvailability
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntries
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryEntryId
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.ComponentGalleryThemeMode
+import dev.opencode.mobile.ui.componentgallery.components.ActionBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ActionPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ActionTileGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ActivityCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AssistantMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AttachmentGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomFadeGalleryScreen
@@ -72,8 +79,10 @@ import dev.opencode.mobile.ui.componentgallery.components.CodeSnippetGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.ComposerSuggestionOverlayGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DialogGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DictationCardGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.DropOverlayGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DiffStatGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.FileIconGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FileTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FilterTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.HunkNavigationPillGalleryScreen
@@ -94,12 +103,14 @@ import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGaller
 import dev.opencode.mobile.ui.componentgallery.components.ReorderableListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SectionHeaderGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.OptionCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SelectableCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionBranchPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionComposerGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListDockGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SessionListSkeletonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodoItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodosPillGalleryScreen
@@ -107,9 +118,12 @@ import dev.opencode.mobile.ui.componentgallery.components.SkeletonIllustrationGa
 import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SplitPaneGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.StepRailGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.SideQuestionPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SyncingPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TagGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.TimelineNoticeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolCallCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ToolChipGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TopBarGalleryScreen
@@ -129,6 +143,8 @@ import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.connection.ConnectionSetupMode
 import dev.opencode.mobile.ui.connection.ConnectionSetupScreen
 import dev.opencode.mobile.ui.connection.ConnectionSetupViewModel
+import dev.opencode.mobile.ui.feedback.FeedbackSheet
+import dev.opencode.mobile.ui.feedback.rememberFeedbackSheetState
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutAction
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
@@ -455,6 +471,7 @@ fun MainNavigation() {
                                             }
                                             val context = LocalContext.current
                                             val appVersion = remember(context) { AppVersion.from(context) }
+                                            val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
                                             val useSplitLayout = currentOpenCodeUsesSplitLayout()
                                             var settingsDetail by rememberSaveable { mutableStateOf(SettingsDetail.Servers) }
                                             val visibleSettingsDetail =
@@ -481,8 +498,15 @@ fun MainNavigation() {
                                                     backStack.add(detail.route)
                                                 }
                                             }
+                                            val feedbackSheet = rememberFeedbackSheetState()
+                                            FeedbackSheet(
+                                                sheetState = feedbackSheet,
+                                                screen = FeedbackScreen.Settings,
+                                                captureScreen = false,
+                                            )
                                             val settings: @Composable () -> Unit = {
                                                 SettingsScreen(
+                                                    onSendFeedbackClick = feedbackSheet::open,
                                                     onComponentGalleryClick = {
                                                         openSettingsDetail(SettingsDetail.ComponentGallery)
                                                     },
@@ -518,6 +542,10 @@ fun MainNavigation() {
                                                         HomeDisplayPreferences.hideUserDirectoryPrefix,
                                                     onHideUserDirectoryPrefixChange =
                                                         settingsViewModel::setHideUserDirectoryPrefix,
+                                                    showsWorktrees = HomeDisplayPreferences.showsWorktrees,
+                                                    onShowsWorktreesChange = settingsViewModel::setShowsWorktrees,
+                                                    sessionRowStyle = HomeDisplayPreferences.sessionRowStyle,
+                                                    onSessionRowStyleChange = settingsViewModel::setSessionRowStyle,
                                                     recentWindowHours = HomeDisplayPreferences.recentWindowHours,
                                                     onRecentWindowHoursChange =
                                                         settingsViewModel::setRecentWindowHours,
@@ -525,8 +553,8 @@ fun MainNavigation() {
                                                         SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
                                                     onCollapseConsecutiveToolCallsChange =
                                                         settingsViewModel::setCollapseConsecutiveToolCalls,
-                                                    chipTimeline = SessionChatDisplayPreferences.chipTimeline,
-                                                    onChipTimelineChange = settingsViewModel::setChipTimeline,
+                                                    timelineStyle = SessionChatDisplayPreferences.timelineStyle,
+                                                    onTimelineStyleChange = settingsViewModel::setTimelineStyle,
                                                     chipTimelineAvailable =
                                                         SessionChatDisplayPreferences.chipTimelineAvailable,
                                                     followUpDelivery =
@@ -535,16 +563,19 @@ fun MainNavigation() {
                                                         settingsViewModel::setFollowUpDelivery,
                                                     supportsFollowUpDelivery =
                                                         settingsViewModel.supportsFollowUpDelivery(),
-                                                    composerDictation =
-                                                        SessionChatDisplayPreferences.composerDictation,
-                                                    onComposerDictationChange =
-                                                        settingsViewModel::setComposerDictation,
                                                     textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
                                                     onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
                                                     productAnalyticsConsented =
                                                         AnalyticsConsentPreferences.productAnalyticsConsented,
                                                     onProductAnalyticsConsentedChange =
                                                         settingsViewModel::setProductAnalyticsConsented,
+                                                    appLockEnabled = AppLockPreferences.enabled,
+                                                    // Re-checked on resume: the user may have just set a screen lock.
+                                                    appLockAvailable =
+                                                        remember(context, lifecycleState) {
+                                                            AppLockAvailability.canAuthenticate(context)
+                                                        },
+                                                    onAppLockEnabledChange = settingsViewModel::setAppLockEnabled,
                                                 )
                                             }
                                             if (useSplitLayout) {
@@ -634,6 +665,8 @@ fun MainNavigation() {
                                                 onShowPairingCodeForm = setupViewModel::showPairingCodeForm,
                                                 onShowHostPasswordForm = setupViewModel::showHostPasswordForm,
                                                 onShowScanInstructions = setupViewModel::showScanInstructions,
+                                                onConfirmCleartext = setupViewModel::confirmCleartextWarning,
+                                                onDismissCleartext = setupViewModel::dismissCleartextWarning,
                                                 onRemove = {
                                                     setupViewModel.removeConnection {
                                                         serversViewModel.refresh()
@@ -697,6 +730,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.Colors -> ColorGalleryScreen()
                                                         ComponentGalleryEntryId.Typography -> TypographyGalleryScreen()
                                                         ComponentGalleryEntryId.Icons -> IconsGalleryScreen()
+                                                        ComponentGalleryEntryId.FileIcon -> FileIconGalleryScreen()
                                                         ComponentGalleryEntryId.SkeletonIllustration ->
                                                             SkeletonIllustrationGalleryScreen()
                                                         ComponentGalleryEntryId.PageIndicator -> PageIndicatorGalleryScreen()
@@ -711,11 +745,15 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ToolCallCard -> ToolCallCardGalleryScreen()
                                                         ComponentGalleryEntryId.ToolChip -> ToolChipGalleryScreen()
                                                         ComponentGalleryEntryId.MessageNote -> MessageNoteGalleryScreen()
+                                                        ComponentGalleryEntryId.TimelineNotice -> TimelineNoticeGalleryScreen()
                                                         ComponentGalleryEntryId.ChildSessionRow -> ChildSessionRowGalleryScreen()
+                                                        ComponentGalleryEntryId.StepRail -> StepRailGalleryScreen()
+                                                        ComponentGalleryEntryId.ActivityCard -> ActivityCardGalleryScreen()
                                                         ComponentGalleryEntryId.WorkingIndicator ->
                                                             WorkingIndicatorGalleryScreen()
                                                         ComponentGalleryEntryId.ReasoningRow -> ReasoningRowGalleryScreen()
                                                         ComponentGalleryEntryId.TopBar -> TopBarGalleryScreen()
+                                                        ComponentGalleryEntryId.ActionBar -> ActionBarGalleryScreen()
                                                         ComponentGalleryEntryId.SplitPane -> SplitPaneGalleryScreen()
                                                         ComponentGalleryEntryId.OverflowMenu -> OverflowMenuGalleryScreen()
                                                         ComponentGalleryEntryId.BottomSheet -> BottomSheetGalleryScreen()
@@ -725,6 +763,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ListItem -> ListItemGalleryScreen()
                                                         ComponentGalleryEntryId.SelectableCard ->
                                                             SelectableCardGalleryScreen()
+                                                        ComponentGalleryEntryId.OptionCard -> OptionCardGalleryScreen()
                                                         ComponentGalleryEntryId.ListGroup -> ListGroupGalleryScreen()
                                                         ComponentGalleryEntryId.SectionHeader -> SectionHeaderGalleryScreen()
                                                         ComponentGalleryEntryId.ReorderableList -> ReorderableListGalleryScreen()
@@ -733,6 +772,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ActionPill -> ActionPillGalleryScreen()
                                                         ComponentGalleryEntryId.ActionTile -> ActionTileGalleryScreen()
                                                         ComponentGalleryEntryId.SyncingPill -> SyncingPillGalleryScreen()
+                                                        ComponentGalleryEntryId.SideQuestionPill -> SideQuestionPillGalleryScreen()
                                                         ComponentGalleryEntryId.ComposerSuggestionOverlay ->
                                                             ComposerSuggestionOverlayGalleryScreen()
                                                         ComponentGalleryEntryId.ReviewChangesPill -> ReviewChangesPillGalleryScreen()
@@ -760,6 +800,8 @@ fun MainNavigation() {
                                                             CodeSnippetGalleryScreen()
                                                         ComponentGalleryEntryId.SessionList ->
                                                             SessionListGalleryScreen()
+                                                        ComponentGalleryEntryId.SessionListSkeleton ->
+                                                            SessionListSkeletonGalleryScreen()
                                                         ComponentGalleryEntryId.SessionListDock ->
                                                             SessionListDockGalleryScreen()
                                                         ComponentGalleryEntryId.SessionStatusBar ->
@@ -768,6 +810,8 @@ fun MainNavigation() {
                                                             SessionComposerGalleryScreen()
                                                         ComponentGalleryEntryId.DictationCard ->
                                                             DictationCardGalleryScreen()
+                                                        ComponentGalleryEntryId.DropOverlay ->
+                                                            DropOverlayGalleryScreen()
                                                         ComponentGalleryEntryId.RenderedMarkdown ->
                                                             RenderedMarkdownGalleryScreen()
                                                         ComponentGalleryEntryId.MessageList -> Unit

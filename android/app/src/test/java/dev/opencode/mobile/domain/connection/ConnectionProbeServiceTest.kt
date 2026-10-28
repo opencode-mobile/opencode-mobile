@@ -16,9 +16,11 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
+import java.util.Collections
 
 class ConnectionProbeServiceTest {
     private val json = Json { ignoreUnknownKeys = true }
@@ -32,7 +34,7 @@ class ConnectionProbeServiceTest {
     @Test
     fun probe_detectsV1FromGlobalHealthAndSkipsApiHealth() =
         runTest {
-            val paths = mutableListOf<String>()
+            val paths = threadSafePaths()
             val service =
                 service { request ->
                     paths += request.url.encodedPath
@@ -52,7 +54,7 @@ class ConnectionProbeServiceTest {
     @Test
     fun probe_detectsV2FromApiInfoPidWhenGlobalMissing() =
         runTest {
-            val paths = mutableListOf<String>()
+            val paths = threadSafePaths()
             val service =
                 service { request ->
                     paths += request.url.encodedPath
@@ -82,7 +84,7 @@ class ConnectionProbeServiceTest {
     @Test
     fun probe_prefersV1WhenBothHealthEndpointsExist() =
         runTest {
-            val paths = mutableListOf<String>()
+            val paths = threadSafePaths()
             val service =
                 service { request ->
                     paths += request.url.encodedPath
@@ -200,7 +202,7 @@ class ConnectionProbeServiceTest {
     @Test
     fun probe_detectsV2FromOpenCode207ApiInfoWhenHealthPathsMiss() =
         runTest {
-            val paths = mutableListOf<String>()
+            val paths = threadSafePaths()
             val service =
                 service { request ->
                     paths += request.url.encodedPath
@@ -208,7 +210,7 @@ class ConnectionProbeServiceTest {
                         "/global/health" -> spaHtml()
                         "/api/info" ->
                             jsonOk(
-                                """{"version":"2.0.7","pid":1481731,"urls":["http://192.168.0.160:4096"]}""",
+                                """{"version":"2.0.7","pid":1481731,"urls":["http://192.168.1.60:4096"]}""",
                             )
                         else -> jsonNotFound()
                     }
@@ -221,7 +223,7 @@ class ConnectionProbeServiceTest {
     @Test
     fun probe_detectsV2FromApiHealthWhenInfoIsMissing() =
         runTest {
-            val paths = mutableListOf<String>()
+            val paths = threadSafePaths()
             val service =
                 service { request ->
                     paths += request.url.encodedPath
@@ -351,6 +353,78 @@ class ConnectionProbeServiceTest {
         )
     }
 
+    @Test
+    fun probeV2Features_readsOpenApiContract() =
+        runTest {
+            val paths = threadSafePaths()
+            val service =
+                service { request ->
+                    paths += request.url.encodedPath
+                    jsonOk(openApi(V2_1_PATCH_BODY))
+                }
+
+            assertTrue(service.probeV2Features(connection).sessionArchive)
+            assertEquals(listOf("/openapi.json"), paths)
+        }
+
+    @Test
+    fun probeV2Features_olderServerIsUnsupported() =
+        runTest {
+            val service = service { _ -> jsonOk(openApi(V2_0_PATCH_BODY)) }
+
+            assertEquals(V2ServerFeatures(), service.probeV2Features(connection))
+        }
+
+    @Test
+    fun probeV2Features_throwsWhenContractIsMissing() =
+        runTest {
+            val service = service { _ -> jsonNotFound() }
+
+            try {
+                service.probeV2Features(connection)
+                fail("expected a probe error")
+            } catch (error: ServerProbeError.Http) {
+                assertEquals(404, error.statusCode)
+            }
+        }
+
+    @Test
+    fun probeV2Features_unreadableInfoLeavesUploadUnresolved() =
+        runTest {
+            val service =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/openapi.json" -> jsonOk(UPLOAD_DOCUMENT)
+                        else -> respond("{}", HttpStatusCode.ServiceUnavailable)
+                    }
+                }
+
+            val features = service.probeV2Features(connection)
+
+            assertFalse(features.attachmentUpload)
+            assertTrue(features.tmpDirectoryUnread)
+        }
+
+    @Test
+    fun probeV2Features_infoWithoutTmpIsAFinalAnswer() =
+        runTest {
+            val service =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/openapi.json" -> jsonOk(UPLOAD_DOCUMENT)
+                        else -> jsonOk("{}")
+                    }
+                }
+
+            val features = service.probeV2Features(connection)
+
+            assertFalse(features.attachmentUpload)
+            assertFalse(features.tmpDirectoryUnread)
+        }
+
+    private fun openApi(patchBody: String): String =
+        """{"paths":{"/api/session/{sessionID}":{"patch":{"requestBody":{"content":{"application/json":{"schema":$patchBody}}}}}}}"""
+
     private fun MockRequestHandleScope.jsonOk(content: String) =
         respond(
             content = content,
@@ -371,6 +445,42 @@ class ConnectionProbeServiceTest {
             status = HttpStatusCode.OK,
             headers = headersOf(HttpHeaders.ContentType, "text/html"),
         )
+
+    @Test
+    fun probeServer_keepsHealthVersionForEachProtocol() =
+        runTest {
+            val v1 =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/global/health" ->
+                            respond(
+                                content = """{"healthy":true,"version":"1.18.4"}""",
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                            )
+                        else -> jsonNotFound()
+                    }
+                }
+            val v2 =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/api/info" ->
+                            respond(
+                                content = """{"healthy":true,"version":"2.0.0","pid":123}""",
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "application/json"),
+                            )
+                        else -> jsonNotFound()
+                    }
+                }
+
+            assertEquals(DetectedServer(ServerProtocol.V1, "1.18.4"), v1.probeServer(connection))
+            assertEquals(DetectedServer(ServerProtocol.V2, "2.0.0"), v2.probeServer(connection))
+        }
+
+    // The probe requests its health endpoints concurrently and MockEngine answers on IO threads,
+    // so the handler records paths from several threads at once.
+    private fun threadSafePaths(): MutableList<String> = Collections.synchronizedList(mutableListOf())
 
     private fun service(handler: MockRequestHandler) =
         ConnectionProbeService(

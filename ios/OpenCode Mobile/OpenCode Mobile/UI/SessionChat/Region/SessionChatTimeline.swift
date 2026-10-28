@@ -17,7 +17,7 @@ final class SessionChatTimeline {
     private var observationGeneration = 0
     private var mergePendingWhileSending = false
     private var pendingOptimisticRows: [SessionChatRow] = []
-    private var pendingBaselineSignatureCounts: [String: Int] = [:]
+    private var pendingBaselineIDs: Set<String> = []
     private var lastLoadedMessages: [Message] = []
     private var lastLoadedDisplayMessages: [DisplayMessage] = []
     private var pendingPromptPatches: [String: PendingPromptPatch] = [:]
@@ -33,12 +33,29 @@ final class SessionChatTimeline {
     private(set) var collapseConsecutiveToolCalls = false
     /// Chip-timeline preference (OPE-260); narration paragraphs with tool chips.
     private(set) var chipTimeline = false
+    /// Step rail timeline preference (#779); one line per step on a rail.
+    private(set) var stepRailTimeline = false
+    /// Activity card timeline preference (#779); one live card per run of steps.
+    private(set) var activityCardTimeline = false
+    /// First message of a pending revert (v1 `session.revert`, v2 `session.revert.staged`): it and
+    /// every later message stay hidden until the revert is cleared or committed (#619).
+    private(set) var revertBoundaryMessageID: String?
     /// Children of this session that subagent parts without a child id link to (#648).
     private(set) var childSessions: [SessionChatChildSessionCandidate] = []
     private let listChildSessions: (@MainActor (String) async throws -> [Session])?
     /// Unlinked subagent parts already covered by a child-session lookup.
     private var childSessionLookupPartIDs: Set<String> = []
     private var childSessionLookupTask: Task<Void, Never>?
+    /// Activity card: one observation per running child session the live card
+    /// shows, keyed by child session id (#779).
+    private var childActivityTasks: [String: Task<Void, Never>] = [:]
+    /// Footer hold of the trailing activity card, by card id, and the step
+    /// entry debounce of rails and cards (#779); `stepTimingTask` re-runs them when due.
+    private var footerHolds: [String: SessionChatActivityFooterHold] = [:]
+    private var stepEntryDebounce = SessionChatStepEntryDebounce()
+    private var stepTimingTask: Task<Void, Never>?
+    /// Wall clock in epoch ms for step timing; tests replace it.
+    static var stepTimingNowMs: @MainActor () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1_000) }
     /// Test-only: runs after a frame revision is taken, before off-main build.
     static var applyTestGate: (@MainActor () async -> Void)?
     /// Wait before looking up child sessions, so a live `tool.progress` can link
@@ -110,6 +127,122 @@ final class SessionChatTimeline {
         }
     }
 
+    func updateStepRailTimeline(_ enabled: Bool) {
+        guard enabled != stepRailTimeline else { return }
+        stepRailTimeline = enabled
+        guard !lastLoadedDisplayMessages.isEmpty else { return }
+        let snapshot = lastLoadedDisplayMessages
+        let fromCache = state.messagesFromCache
+        Task {
+            await applyLoadedDisplayMessagesTransform(
+                snapshot,
+                isRefreshing: false,
+                fromQuietRefresh: true,
+                messagesFromCache: fromCache,
+                expirePendingPromptPatches: false
+            )
+        }
+    }
+
+    func updateActivityCardTimeline(_ enabled: Bool) {
+        guard enabled != activityCardTimeline else { return }
+        activityCardTimeline = enabled
+        guard !lastLoadedDisplayMessages.isEmpty else { return }
+        let snapshot = lastLoadedDisplayMessages
+        let fromCache = state.messagesFromCache
+        Task {
+            await applyLoadedDisplayMessagesTransform(
+                snapshot,
+                isRefreshing: false,
+                fromQuietRefresh: true,
+                messagesFromCache: fromCache,
+                expirePendingPromptPatches: false
+            )
+        }
+    }
+
+    /// Activity card: open the live activity sheet for one card. The sheet
+    /// resolves the card from the current rows by id on every render.
+    func openActivityCard(_ cardID: String) {
+        guard state.presentedActivityCard != cardID else { return }
+        state.presentedActivityCard = cardID
+        state.activityCardDetailStepId = nil
+        notifyChange()
+    }
+
+    func dismissActivityCard() {
+        guard state.presentedActivityCard != nil || state.activityCardDetailStepId != nil else { return }
+        state.presentedActivityCard = nil
+        state.activityCardDetailStepId = nil
+        notifyChange()
+    }
+
+    /// Activity sheet: show one step's detail inside the open sheet. Ignored
+    /// unless the step belongs to the presented card.
+    func openActivityCardStep(_ stepID: String) {
+        guard state.activityCardDetailStepId != stepID,
+              let cardID = state.presentedActivityCard,
+              SessionChatActivityCardPresentation.card(id: cardID, in: state.messages)?
+                  .card.steps.contains(where: { $0.id == stepID }) == true
+        else { return }
+        state.activityCardDetailStepId = stepID
+        notifyChange()
+    }
+
+    /// Activity sheet: back from a step's detail to the list.
+    func closeActivityCardStep() {
+        guard state.activityCardDetailStepId != nil else { return }
+        state.activityCardDetailStepId = nil
+        notifyChange()
+    }
+
+    /// Step rail: show or fold the earlier settled steps of one rail. Fold
+    /// state is presentation, keyed by the rail's stable id; blocks never change.
+    func toggleStepRailFold(_ railID: String) {
+        if state.unfoldedStepRails.contains(railID) {
+            state.unfoldedStepRails.remove(railID)
+        } else {
+            state.unfoldedStepRails.insert(railID)
+        }
+        notifyChange()
+    }
+
+    func updateRevertBoundary(_ messageID: String?) {
+        guard messageID != revertBoundaryMessageID else { return }
+        revertBoundaryMessageID = messageID
+        guard !lastLoadedDisplayMessages.isEmpty else { return }
+        let snapshot = lastLoadedDisplayMessages
+        let fromCache = state.messagesFromCache
+        Task {
+            await applyLoadedDisplayMessagesTransform(
+                snapshot,
+                isRefreshing: false,
+                fromQuietRefresh: true,
+                messagesFromCache: fromCache,
+                expirePendingPromptPatches: false
+            )
+        }
+    }
+
+    /// Drops the revert boundary message and everything after it. A boundary outside the loaded
+    /// window falls back to id order, which opencode message ids follow.
+    nonisolated static func hidingReverted(
+        _ messages: [DisplayMessage],
+        from boundary: String?
+    ) -> [DisplayMessage] {
+        guard let boundary else { return messages }
+        if let index = messages.firstIndex(where: { $0.message.id == boundary }) {
+            return Array(messages[..<index])
+        }
+        return messages.filter { $0.message.id < boundary }
+    }
+
+    /// Newest messages the projection shows, so reverted rows hidden at the
+    /// tail never take the warm slots from on-screen images.
+    nonisolated static func previewWarmCandidates(_ visible: [DisplayMessage]) -> [Message] {
+        visible.suffix(AttachmentPreviewCache.warmMessageCount).map(\.message)
+    }
+
     /// Looks up this session's children when a subagent part has no child id
     /// (history reloads drop the one-shot `tool.progress` id), then re-projects
     /// so its row or chip can open the child. Each unlinked part is looked up
@@ -174,7 +307,7 @@ final class SessionChatTimeline {
         cancelObservationTasks()
         mergePendingWhileSending = false
         pendingOptimisticRows = []
-        pendingBaselineSignatureCounts = [:]
+        pendingBaselineIDs = []
         lastLoadedMessages = []
         lastLoadedDisplayMessages = []
         childSessionLookupTask?.cancel()
@@ -189,6 +322,10 @@ final class SessionChatTimeline {
         networkCacheSyncConfirmed = false
         catchUpSyncing = false
         state = SessionChatTimelineRegionState()
+        stepTimingTask?.cancel()
+        stepTimingTask = nil
+        footerHolds = [:]
+        stepEntryDebounce = SessionChatStepEntryDebounce()
         notifyChange()
     }
 
@@ -277,7 +414,7 @@ final class SessionChatTimeline {
                 : []
         let optimistic = OptimisticInputs(
             pendingRows: pendingRows,
-            baselineSignatureCounts: pendingBaselineSignatureCounts,
+            baselineIDs: pendingBaselineIDs,
             mergePending: mergePendingWhileSending
         )
         let previousFrame = timelineFrame.frameRevision == 0 && timelineFrame.rows.isEmpty
@@ -287,10 +424,12 @@ final class SessionChatTimeline {
             sessionKey: sessionID,
             frameRevision: frameRevision,
             sourceRevision: frameRevision,
-            displayMessages: displayMessages,
+            displayMessages: Self.hidingReverted(displayMessages, from: revertBoundaryMessageID),
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
             chipTimeline: chipTimeline,
+            stepRail: stepRailTimeline,
+            activityCard: activityCardTimeline,
             childSessions: childSessions
         )
         let stamped = SessionChatTimelineProjector.project(
@@ -300,7 +439,7 @@ final class SessionChatTimeline {
         ).withRequired(false)
         timelineFrame = stamped
 
-        let previousByID = Dictionary(uniqueKeysWithValues: state.messages.map { ($0.id, $0) })
+        let previousByID = Dictionary(state.messages.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         let rows = stamped.rows.map { timelineRow -> SessionChatRow in
             if let previous = previousByID[timelineRow.id],
                !stamped.changedRowIDs.contains(timelineRow.id),
@@ -401,6 +540,8 @@ final class SessionChatTimeline {
         displayApplyTask = nil
         pendingRequiredDisplayApplies = []
         pendingLiveDisplayUpdate = nil
+        for task in childActivityTasks.values { task.cancel() }
+        childActivityTasks = [:]
     }
 
     private func consumeCatchUpChrome(generation: Int) async {
@@ -476,13 +617,7 @@ final class SessionChatTimeline {
     func beginOptimisticSend(_ rows: [SessionChatRow]) {
         mergePendingWhileSending = true
         pendingOptimisticRows = rows
-        pendingBaselineSignatureCounts = SessionChatTimelineProjector.signatureCounts(
-            fromDisplayMessages: lastLoadedDisplayMessages,
-            sessionKey: sessionID,
-            serverCommands: serverCommands,
-            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline
-        )
+        pendingBaselineIDs = Set(lastLoadedDisplayMessages.map(\.message.id))
         let displayed = SessionChatTimelineProjector.displayedOptimisticSendRows(rows)
         let hadPriorRows = !state.messages.isEmpty || !timelineFrame.rows.isEmpty
         if displayed.isEmpty {
@@ -520,14 +655,17 @@ final class SessionChatTimeline {
     func failOptimisticSend(optimisticID: String, error: String) {
         mergePendingWhileSending = false
         pendingOptimisticRows = []
-        pendingBaselineSignatureCounts = [:]
-        state.messages.removeAll { $0.id == optimisticID }
+        pendingBaselineIDs = []
+        // An echo already shown under the same client id stays: the server has it.
+        let countBefore = state.messages.count
+        state.messages.removeAll { $0.id == optimisticID && $0.isPending }
+        let removed = state.messages.count != countBefore
         state.errorMessage = error
         publishSyntheticTimelineFrame(
             messages: state.messages,
             insertedRowIDs: [],
             changedRowIDs: [],
-            removedRowIDs: [optimisticID],
+            removedRowIDs: removed ? [optimisticID] : [],
             layoutChangedRowIDs: []
         )
         notifyChange()
@@ -536,7 +674,7 @@ final class SessionChatTimeline {
     func clearSendingState() {
         mergePendingWhileSending = false
         pendingOptimisticRows = []
-        pendingBaselineSignatureCounts = [:]
+        pendingBaselineIDs = []
     }
 
     func clearReadyError() {
@@ -618,6 +756,8 @@ final class SessionChatTimeline {
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
             chipTimeline: chipTimeline,
+            stepRail: stepRailTimeline,
+            activityCard: activityCardTimeline,
             childSessions: childSessions
         )
         guard !frame.messages.isEmpty else { return nil }
@@ -674,7 +814,7 @@ final class SessionChatTimeline {
 
         let stateSnapshot = state
         let previousErrorMessage = fromQuietRefresh ? stateSnapshot.errorMessage : nil
-        let previousByID = Dictionary(uniqueKeysWithValues: stateSnapshot.messages.map { ($0.id, $0) })
+        let previousByID = Dictionary(stateSnapshot.messages.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         let applyStartedAt = ContinuousClock.now
 
         displayFrameRevision &+= 1
@@ -686,7 +826,10 @@ final class SessionChatTimeline {
         let commands = serverCommands
         let collapse = collapseConsecutiveToolCalls
         let chips = chipTimeline
+        let stepRail = stepRailTimeline
+        let activityCard = activityCardTimeline
         let children = childSessions
+        let visibleDisplayMessages = Self.hidingReverted(displayMessages, from: revertBoundaryMessageID)
 
         let pendingRows: [TimelineRow]
         if mergePendingWhileSending {
@@ -696,7 +839,7 @@ final class SessionChatTimeline {
         }
         let optimistic = OptimisticInputs(
             pendingRows: pendingRows,
-            baselineSignatureCounts: pendingBaselineSignatureCounts,
+            baselineIDs: pendingBaselineIDs,
             mergePending: mergePendingWhileSending
         )
         let previousFrame = timelineFrame.frameRevision == 0 && timelineFrame.rows.isEmpty
@@ -704,15 +847,19 @@ final class SessionChatTimeline {
             : timelineFrame
 
         // Match Android: structural DisplayFrame + TimelineFrame conversion off main.
+        let previewCandidates = Self.previewWarmCandidates(visibleDisplayMessages)
         let projected = await Task.detached(priority: .userInitiated) {
+            AttachmentPreviewCache.shared.warm(previewCandidates)
             let frame = DisplayFrameBuilder.build(
                 sessionKey: sessionKey,
                 frameRevision: frameRevision,
                 sourceRevision: frameRevision,
-                displayMessages: displayMessages,
+                displayMessages: visibleDisplayMessages,
                 serverCommands: commands,
                 collapseConsecutiveToolCalls: collapse,
                 chipTimeline: chips,
+                stepRail: stepRail,
+                activityCard: activityCard,
                 childSessions: children
             )
             return SessionChatTimelineProjector.project(
@@ -810,16 +957,15 @@ final class SessionChatTimeline {
 
     /// Hidden pending-prompt rows leave the displayed frame before this runs, so
     /// reconciliation cannot use displayed ids. An optimistic send stays pending
-    /// until every leftover item has a new server echo of the same signature —
-    /// `serverExact[exact] > baseline` — the same match `mergeWithPending` uses
-    /// to drop the optimistic row, often under a different id.
+    /// until every leftover item has a new server echo — the same match
+    /// `mergeWithPending` uses to drop the optimistic row.
     private func clearOptimisticIfReconciled() {
         guard mergePendingWhileSending else { return }
         let pendingItems = pendingOptimisticItems()
         if pendingItems.isEmpty {
             mergePendingWhileSending = false
             pendingOptimisticRows = []
-            pendingBaselineSignatureCounts = [:]
+            pendingBaselineIDs = []
             return
         }
         let frame = DisplayFrameBuilder.build(
@@ -830,17 +976,19 @@ final class SessionChatTimeline {
             serverCommands: serverCommands,
             collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
             chipTimeline: chipTimeline,
+            stepRail: stepRailTimeline,
+            activityCard: activityCardTimeline,
             childSessions: childSessions
         )
         let stillUnacked = SessionChatTimelineProjector.unmatchedPending(
             pendingItems.map { TimelineRow.fromSessionChatRow($0) },
             serverRows: SessionChatTimelineProjector.serverRows(from: frame),
-            baselineSignatureCounts: pendingBaselineSignatureCounts
+            baselineIDs: pendingBaselineIDs
         )
         guard stillUnacked.isEmpty else { return }
         mergePendingWhileSending = false
         pendingOptimisticRows = []
-        pendingBaselineSignatureCounts = [:]
+        pendingBaselineIDs = []
     }
 
     private func confirmCacheSync() {
@@ -854,7 +1002,7 @@ final class SessionChatTimeline {
     private func applyError(_ error: Error) {
         mergePendingWhileSending = false
         pendingOptimisticRows = []
-        pendingBaselineSignatureCounts = [:]
+        pendingBaselineIDs = []
         // Retain the last good timeline when one exists; only clear on cold failure.
         let retainLastGood = !state.messages.isEmpty
         if !retainLastGood {
@@ -878,7 +1026,7 @@ final class SessionChatTimeline {
         decorateRowIDs: Set<String> = [],
         isRequired: Bool = false
     ) {
-        let previousByID = Dictionary(uniqueKeysWithValues: timelineFrame.rows.map { ($0.id, $0) })
+        let previousByID = Dictionary(timelineFrame.rows.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         let rows = messages.map { row -> TimelineRow in
             if let previous = previousByID[row.id],
                !insertedRowIDs.contains(row.id),
@@ -898,7 +1046,8 @@ final class SessionChatTimeline {
             layoutChangedRowIDs: layoutChangedRowIDs,
             grewBottomRowIDs: grewBottomRowIDs,
             decorateRowIDs: decorateRowIDs,
-            isRequired: isRequired
+            isRequired: isRequired,
+            listIDAliases: timelineFrame.listIDAliases
         )
     }
 
@@ -972,7 +1121,7 @@ final class SessionChatTimeline {
 
     private func expirePendingPromptPatches(against authoritative: [DisplayMessage]) {
         guard !pendingPromptPatches.isEmpty else { return }
-        let byID = Dictionary(uniqueKeysWithValues: authoritative.map { ($0.message.id, $0.message) })
+        let byID = Dictionary(authoritative.map { ($0.message.id, $0.message) }, uniquingKeysWith: { _, latest in latest })
         for (id, patch) in pendingPromptPatches {
             let incoming = byID[id]
             if patch.removed {
@@ -990,7 +1139,154 @@ final class SessionChatTimeline {
     }
 
     private func notifyChange() {
+        syncActivityCards()
+        syncStepTiming(nowMs: Self.stepTimingNowMs())
         onChange?()
+    }
+
+    /// Step timing (#779): the entry debounce hides steps seen in flight for
+    /// less than 300 ms (step rail and activity card), and the trailing
+    /// activity card's footer hold latches what its band shows. Re-runs itself
+    /// at the next due time; a card that is no longer trailing drops its hold.
+    private func syncStepTiming(nowMs: Int64) {
+        stepTimingTask?.cancel()
+        stepTimingTask = nil
+        guard stepRailTimeline || activityCardTimeline else {
+            footerHolds = [:]
+            if !state.debouncedStepIDs.isEmpty { state.debouncedStepIDs = [] }
+            if !state.activityCardFooters.isEmpty { state.activityCardFooters = [:] }
+            return
+        }
+        var steps: [SessionChatStep] = []
+        for row in state.messages where row.role == .assistant {
+            for block in row.blocks {
+                switch block {
+                case .stepRail(_, let rail): steps.append(contentsOf: rail.steps)
+                case .activityCard(_, let card): steps.append(contentsOf: card.steps)
+                default: break
+                }
+            }
+        }
+        let hidden = stepEntryDebounce.submit(steps, nowMs: nowMs)
+        var footers: [String: SessionChatActivityFooter] = [:]
+        var holds: [String: SessionChatActivityFooterHold] = [:]
+        // Liveness is decided at render time; the trailing card of the last row is the only one that can be live.
+        if activityCardTimeline,
+           let trailingID = SessionChatTimelineBlocks.liveStepRunID(in: state.messages, sessionWorking: true),
+           let trailing = SessionChatActivityCardPresentation.card(id: trailingID, in: state.messages)
+        {
+            var hold = footerHolds[trailingID] ?? SessionChatActivityFooterHold()
+            footers[trailingID] = hold.submit(trailing.card.steps.filter { !hidden.contains($0.id) }, nowMs: nowMs)
+            holds[trailingID] = hold
+        }
+        footerHolds = holds
+        if state.debouncedStepIDs != hidden { state.debouncedStepIDs = hidden }
+        if state.activityCardFooters != footers { state.activityCardFooters = footers }
+        let due = ([stepEntryDebounce.nextDueMs] + holds.values.map(\.expiresAtMs)).compactMap { $0 }.min()
+        guard let due else { return }
+        stepTimingTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(max(0, due - nowMs)))
+            guard let self, !Task.isCancelled else { return }
+            self.stepTimingTask = nil
+            let before = (self.state.debouncedStepIDs, self.state.activityCardFooters)
+            // Never earlier than due, so a coarse sleep still ends the hold.
+            self.syncStepTiming(nowMs: max(Self.stepTimingNowMs(), due))
+            if before != (self.state.debouncedStepIDs, self.state.activityCardFooters) { self.onChange?() }
+        }
+    }
+
+    /// Activity card (#779): observe each running child session a card shows,
+    /// through the same repository and live-event path its own Session Chat
+    /// uses, and stop once it finishes. Drops a presented card that is gone.
+    private func syncActivityCards() {
+        var running: Set<String> = []
+        var cardIDs: Set<String> = []
+        var presentedStepIDs: Set<String> = []
+        if activityCardTimeline {
+            for row in state.messages where row.role == .assistant {
+                for case .activityCard(_, let card) in row.blocks {
+                    cardIDs.insert(card.id)
+                    if card.id == state.presentedActivityCard {
+                        presentedStepIDs.formUnion(card.steps.map(\.id))
+                    }
+                    for step in card.runningChildren {
+                        if let id = step.childSession?.childSessionId { running.insert(id) }
+                    }
+                }
+            }
+        }
+        if let presented = state.presentedActivityCard, !cardIDs.contains(presented), state.timeline == .ready {
+            state.presentedActivityCard = nil
+        }
+        if let step = state.activityCardDetailStepId,
+           state.presentedActivityCard == nil || (!presentedStepIDs.contains(step) && state.timeline == .ready)
+        {
+            state.activityCardDetailStepId = nil
+        }
+        for (id, task) in childActivityTasks where !running.contains(id) {
+            task.cancel()
+            childActivityTasks[id] = nil
+            state.childActivities[id] = nil
+        }
+        for id in running where childActivityTasks[id] == nil {
+            childActivityTasks[id] = observeChildActivity(id)
+        }
+    }
+
+    private func observeChildActivity(_ childID: String) -> Task<Void, Never> {
+        let repository = messageRepository
+        let directory = worktree
+        let throttle = ChildActivityThrottle()
+        return Task { @MainActor [weak self] in
+            for await update in repository.observeMessages(sessionID: childID, directory: directory) {
+                guard !Task.isCancelled else { return }
+                guard case .messages(let messages, _) = update else { continue }
+                let activity = await Task.detached(priority: .userInitiated) {
+                    SessionChatTimelineBlocks.childActivity(from: messages)
+                }.value
+                guard let self, !Task.isCancelled, self.childActivityTasks[childID] != nil else { return }
+                guard self.state.childActivities[childID] != activity else { continue }
+                throttle.submit(activity) { [weak self] latest in
+                    guard let self, self.childActivityTasks[childID] != nil else { return }
+                    guard self.state.childActivities[childID] != latest else { return }
+                    self.state.childActivities[childID] = latest
+                    self.onChange?()
+                }
+            }
+        }
+    }
+}
+
+/// Holds a child session's current action on screen for a minimum time before
+/// the next one replaces it, always settling on the latest value, so fast tool
+/// bursts read as a smooth update instead of flicker.
+@MainActor
+private final class ChildActivityThrottle {
+    static let hold: Duration = .milliseconds(800)
+
+    private var lastApplied: ContinuousClock.Instant?
+    private var pending: SessionChatChildActivity?
+    private var flush: Task<Void, Never>?
+
+    func submit(_ activity: SessionChatChildActivity, apply: @escaping @MainActor (SessionChatChildActivity) -> Void) {
+        let now = ContinuousClock.now
+        if let lastApplied, now - lastApplied < Self.hold {
+            pending = activity
+            guard flush == nil else { return }
+            let wait = Self.hold - (now - lastApplied)
+            flush = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: wait)
+                guard let self, !Task.isCancelled, let latest = self.pending else { return }
+                self.pending = nil
+                self.flush = nil
+                self.lastApplied = ContinuousClock.now
+                apply(latest)
+            }
+            return
+        }
+        pending = nil
+        lastApplied = now
+        apply(activity)
     }
 }
 

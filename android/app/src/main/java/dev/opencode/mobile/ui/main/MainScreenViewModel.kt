@@ -16,12 +16,25 @@ import dev.opencode.mobile.domain.connection.userMessage
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.FixedLiveUpdates
+import dev.opencode.mobile.domain.event.ForegroundEventStream
+import dev.opencode.mobile.domain.event.IdleForegroundEventStream
 import dev.opencode.mobile.domain.event.LiveUpdates
+import dev.opencode.mobile.domain.event.OpencodeEvent
+import dev.opencode.mobile.domain.event.SessionMovedUpdate
+import dev.opencode.mobile.domain.event.namedProjectId
+import dev.opencode.mobile.domain.event.sessionMoved
+import dev.opencode.mobile.domain.filesystem.DirectoryNotFoundException
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
+import dev.opencode.mobile.domain.home.HomeProject
+import dev.opencode.mobile.domain.home.HomeProjectGrouping
+import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
+import dev.opencode.mobile.domain.home.HomeWorktreeCopy
+import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.NoOpPermissionLiveStore
 import dev.opencode.mobile.domain.live.PermissionLiveStore
+import dev.opencode.mobile.domain.live.SessionListSnapshot
 import dev.opencode.mobile.domain.live.SessionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
@@ -34,6 +47,7 @@ import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivitySnapshot
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionForkTitle
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionRepository
@@ -41,6 +55,10 @@ import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.session.activeSessions
 import dev.opencode.mobile.domain.session.rootSessions
 import dev.opencode.mobile.domain.sessioncache.SessionCache
+import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
+import dev.opencode.mobile.domain.worktree.WorktreeInventory
+import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
+import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -51,6 +69,9 @@ import dev.opencode.mobile.ui.components.SessionListScrollPin
 import dev.opencode.mobile.ui.main.region.HomeSessionActions
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
+import dev.opencode.mobile.ui.worktree.WorktreeCreateForm
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormState
+import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -62,6 +83,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -87,6 +109,11 @@ class MainScreenViewModel
         private val connectionSessionCoordinator: ConnectionSessionCoordinator,
         private val sessionCache: SessionCache,
         private val liveUpdates: LiveUpdates = FixedLiveUpdates(),
+        worktreeRepository: WorktreeRepository = UnavailableWorktreeRepository,
+        private val foregroundEventStream: ForegroundEventStream = IdleForegroundEventStream,
+        projectFirstLoadTiming: ProjectFirstLoadTiming = ProjectFirstLoadTiming(),
+        private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
+        private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
@@ -112,8 +139,8 @@ class MainScreenViewModel
         val sessionActions: StateFlow<HomeSessionActionsUiState> = sessionActionsRegion.state
         private val _revealNewestToken = MutableStateFlow(0)
         val revealNewestToken: StateFlow<Int> = _revealNewestToken.asStateFlow()
-        private val _pendingSelectedFilterId = MutableStateFlow<String?>(null)
-        val pendingSelectedFilterId: StateFlow<String?> = _pendingSelectedFilterId.asStateFlow()
+        private val _pendingScopeRequest = MutableStateFlow<HomeScopeRequest?>(null)
+        val pendingScopeRequest: StateFlow<HomeScopeRequest?> = _pendingScopeRequest.asStateFlow()
         private val _serversChrome = MutableStateFlow(HomeServersChrome())
         val serversChrome: StateFlow<HomeServersChrome> = _serversChrome.asStateFlow()
         private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
@@ -136,6 +163,61 @@ class MainScreenViewModel
         private var archivedReloadJob: Job? = null
         private var archivedGeneration = 0
 
+        /** Worktrees whose combined sessions + status + ready stream has painted since observations started. */
+        private val livePaintedWorktrees = mutableSetOf<String>()
+        private val pendingFirstServerSnapshots = mutableMapOf<String, SessionListSnapshot>()
+        private val worktreeLoader =
+            HomeWorktreeLoader(
+                repository = worktreeRepository,
+                currentProject = { directory -> projectRepository.getCurrentProject(directory) },
+            )
+
+        /** Run in → "New worktree…": create a checkout, then start a new session there. */
+        private val worktreeCreate =
+            WorktreeCreateForm(
+                repository = worktreeRepository,
+                scope = viewModelScope,
+                onCreated = { origin, created ->
+                    if (origin is WorktreeCreateOrigin.RunIn) createSession(created.directory)
+                },
+                onInventoryChanged = { _, request -> refreshProjectWorktrees(request.sourceDirectory) },
+            )
+        val worktreeCreateForm: StateFlow<WorktreeCreateFormState?> = worktreeCreate.state
+
+        /** False once a v1 server answered that it cannot create worktrees. */
+        val worktreeServerCanCreate: StateFlow<Boolean> = worktreeRepository.canCreate
+        private val projectFirstLoads =
+            HomeProjectFirstLoads(
+                scope = viewModelScope,
+                timing = projectFirstLoadTiming,
+                observeSessions = { worktree -> sessionLiveStore.observeSessions(worktree) },
+                refetchSessions = { worktree -> sessionLiveStore.invalidate(worktree) },
+                onServerSnapshot = { worktree, snapshot -> paintFirstServerSnapshot(worktree, snapshot) },
+                onChange = { loads ->
+                    _uiState.update { state ->
+                        if (state is MainScreenUiState.Loaded) state.copy(projectLoads = loads) else state
+                    }
+                },
+            )
+
+        /** Projects, worktrees, branches, and (v1) other-worktree sessions; published on Loaded. */
+        private var homeIndex = HomeWorktreeIndex()
+
+        /** V1 added paths whose listed worktrees each need a session list. */
+        private val listsSessionsPaths = mutableSetOf<String>()
+
+        /** V1 live lists of worktrees that are not added paths, by canonical directory. */
+        private var extraObservationJobs: Map<String, Job> = emptyMap()
+
+        /** Branch per worktree directory; only a settled server answer decides it. */
+        private val branchLookups =
+            HomeBranchLookups(
+                scope = viewModelScope,
+                fetch = ::lookUpBranch,
+                onChange = { branches -> updateHomeIndex { it.copy(branches = branches) } },
+            )
+        private var worktreeMarkJob: Job? = null
+
         // Title fields report one edit per dialog appearance instead of per keystroke.
         private var renameDraftEditReported = false
         private var forkDraftEditReported = false
@@ -145,17 +227,42 @@ class MainScreenViewModel
         private var addProjectGeneration = 0
         private var addProjectDebounceJob: Job? = null
 
+        // Row summaries (folder count, git) for visible browser rows: FIFO, a few at a time,
+        // each path tried once per sheet session.
+        private val addProjectSummaryQueue = ArrayDeque<String>()
+        private val addProjectSummariesInFlight = mutableSetOf<String>()
+        private val addProjectSummaryFailures = mutableSetOf<String>()
+
         init {
             refresh()
             viewModelScope.launch {
+                // Session Chat reads the session's project and worktrees from here.
+                _uiState
+                    .map { (it as? MainScreenUiState.Loaded)?.projects.orEmpty() }
+                    .distinctUntilChanged()
+                    .collect(homeProjectsSnapshot::publish)
+            }
+            viewModelScope.launch {
+                // A checkout created in Session Chat (Move to worktree) lists here at once.
+                homeProjectsSnapshot.worktreeRefreshRequests.collect(::refreshProjectWorktrees)
+            }
+            viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
+                    worktreeCreate.dismiss()
                     stopLiveObservations()
+                    projectFirstLoads.clearAll()
+                    pendingFirstServerSnapshots.clear()
+                    resetHomeIndex()
                     refresh()
                 }
             }
             viewModelScope.launch {
                 connectionSessionCoordinator.profileCleared.collect {
+                    worktreeCreate.dismiss()
                     stopLiveObservations()
+                    projectFirstLoads.clearAll()
+                    pendingFirstServerSnapshots.clear()
+                    resetHomeIndex()
                     _uiState.value = MainScreenUiState.Disconnected
                     _serversChrome.value = HomeServersChrome()
                 }
@@ -225,7 +332,10 @@ class MainScreenViewModel
                     viewModelScope.launch {
                         if (_isRefreshing.value) return@launch
                         _isRefreshing.value = true
+                        // A stream backing off (e.g. after a rejected credential) retries now.
+                        foregroundEventStream.onReconnectWake()
                         try {
+                            if (observedWorktrees.isNotEmpty()) reloadWorktreeMarks(observedWorktrees, refreshProjects = true)
                             sessionLiveStore.invalidate(null)
                             sessionStatusLiveStore.invalidate(null)
                             refreshArchivedSessions()
@@ -313,6 +423,36 @@ class MainScreenViewModel
             setAddProjectFolder(path)
         }
 
+        /**
+         * Return in the path field: opens [AddProjectSheetUi.goTarget] (the exact child match, or
+         * the only matching row). Does nothing otherwise; never adds.
+         */
+        fun submitAddProjectField() {
+            if (addProjectSession == null) return
+            val target = currentAddProjectSheet()?.goTarget ?: return
+            openAddProjectFolder(target)
+        }
+
+        /** A browser row came on screen: queue its folder count and git check. */
+        fun addProjectFolderRowAppeared(path: String) {
+            val session = addProjectSession ?: return
+            val key = ServerPathPolicy.canonical(path)
+            if (session.listings.containsKey(key) ||
+                key in addProjectSummariesInFlight ||
+                key in addProjectSummaryQueue ||
+                key in addProjectSummaryFailures
+            ) {
+                return
+            }
+            addProjectSummaryQueue.addLast(key)
+            startAddProjectSummaries()
+        }
+
+        /** A browser row left the screen: drop its summary if it has not started. */
+        fun addProjectFolderRowDisappeared(path: String) {
+            addProjectSummaryQueue.remove(ServerPathPolicy.canonical(path))
+        }
+
         fun selectAddProjectSuggestion(path: String) {
             if (addProjectSession?.isValidating != false) return
             logAction(
@@ -320,6 +460,43 @@ class MainScreenViewModel
                 ProductAnalytics.Action.ADD_PROJECT_SELECT_SUGGESTION,
             )
             addProject(path)
+        }
+
+        /** Replaces the suggestion sheet with the full-screen folder browser. */
+        fun browseAddProjectFolders() {
+            if (addProjectSession == null || addProjectSession?.isValidating == true) return
+            logAction(
+                ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                ProductAnalytics.Action.ADD_PROJECT_BROWSE,
+            )
+            updateAddProjectSession { it.copy(browsing = true) }
+        }
+
+        /**
+         * Back from the browser. Returns to the suggestion sheet at the server home, so
+         * "On this server" is not lost because the field was left in a subfolder.
+         */
+        fun closeAddProjectBrowser() {
+            val session = addProjectSession ?: return
+            if (!session.browsing) return
+            logAction(
+                ProductAnalytics.Screen.HOME_ADD_PROJECT,
+                ProductAnalytics.Action.ADD_PROJECT_BROWSE_BACK,
+            )
+            val home = session.home
+            if (home.isEmpty()) {
+                updateAddProjectSession { it.copy(browsing = false) }
+                return
+            }
+            addProjectDebounceJob?.cancel()
+            updateAddProjectSession {
+                it.copy(
+                    browsing = false,
+                    fieldText = ServerPathPolicy.fieldText(home),
+                    fieldError = null,
+                )
+            }
+            loadAddProjectListing(home)
         }
 
         fun retryAddProjectListing() {
@@ -354,7 +531,7 @@ class MainScreenViewModel
                 if (worktree in added) {
                     dismissAddProjectSheet()
                     runHomeLoad(skipProbe = true)
-                    _pendingSelectedFilterId.value = worktree
+                    _pendingScopeRequest.value = HomeScopeRequest(filterId = worktree, evenFromAll = false)
                     _removalSnackbar.value =
                         OpenCodeSnackbarMessage(
                             text =
@@ -365,13 +542,26 @@ class MainScreenViewModel
                 updateAddProjectSession { it.copy(isValidating = true, fieldError = null) }
                 val result = runCatching { projectRepository.getCurrentProject(directory = worktree) }
                 result
-                    .onSuccess {
+                    .onSuccess { project ->
+                        // A path of a repository already on Home joins that project as a worktree.
+                        val resolution = ResolvedHomePath.from(project)
+                        val joined =
+                            currentHomeProjects().firstOrNull { home ->
+                                resolution.isMergeable && home.projectId == resolution.projectId
+                            }
+                        worktreeLoader.remember(worktree, resolution)
+                        updateHomeIndex { it.copy(resolutions = it.resolutions + (worktree to resolution)) }
                         // Persist the selected directory (web open-project behavior), not the
                         // /project/current worktree — non-git dirs resolve to global "/".
                         connectionProfileStore.addWorktree(serverBaseUrl, worktree)
+                        projectFirstLoads.start(worktree)
                         dismissAddProjectSheet()
                         runHomeLoad(skipProbe = true)
-                        _pendingSelectedFilterId.value = worktree
+                        _pendingScopeRequest.value = HomeScopeRequest(filterId = worktree, evenFromAll = true)
+                        if (joined != null) {
+                            _removalSnackbar.value =
+                                OpenCodeSnackbarMessage(text = HomeWorktreeCopy.joinedProject(joined.displayName))
+                        }
                     }.onFailure { error ->
                         updateAddProjectSession {
                             it.copy(
@@ -411,14 +601,49 @@ class MainScreenViewModel
             }
         }
 
+        /** Run in → "New worktree…" of project [projectKey]: the form, made from its main checkout. */
+        fun openRunInNewWorktree(projectKey: String) {
+            val project = currentHomeProjects().firstOrNull { it.key == projectKey } ?: return
+            val main = project.worktrees.firstOrNull { it.isMain }
+            worktreeCreate.open(
+                origin = WorktreeCreateOrigin.RunIn(projectKey),
+                protocol = activeConnectionManager.protocolHint(),
+                projectId = project.projectId,
+                sourceDirectory = project.mainCheckoutDirectory,
+                sourceBranch = main?.branch,
+            )
+        }
+
+        fun updateNewWorktreeName(name: String) = worktreeCreate.updateName(name)
+
+        fun showNewWorktreeBasePicker() = worktreeCreate.showBasePicker()
+
+        fun hideNewWorktreeBasePicker() = worktreeCreate.hideBasePicker()
+
+        fun selectNewWorktreeBase(ref: String?) = worktreeCreate.selectBase(ref)
+
+        fun submitNewWorktree() = worktreeCreate.submit()
+
+        /** Form → Back, or the New session sheet closed. */
+        fun closeNewWorktreeForm() = worktreeCreate.dismiss()
+
         fun consumePendingOpenSession() {
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) state.copy(pendingOpenSession = null) else state
             }
         }
 
-        fun consumePendingSelectedFilter() {
-            _pendingSelectedFilterId.value = null
+        fun consumePendingScopeRequest() {
+            _pendingScopeRequest.value = null
+        }
+
+        /**
+         * Failed first load of a newly added project: show loading again and refetch its sessions.
+         * [scopeId] is an added path or a Home project key (every member path retries).
+         */
+        fun retryProjectLoad(scopeId: String) {
+            logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_RETRY_PROJECT_LOAD)
+            memberPathsOf(scopeId).forEach(projectFirstLoads::retry)
         }
 
         fun markHomeHidden(nowEpochMs: Long = System.currentTimeMillis()) {
@@ -448,8 +673,10 @@ class MainScreenViewModel
          * shows immediately and persists to the Connection Profile; the dock,
          * home sections, and new-session picker all derive from it.
          */
-        fun reorderProjects(worktrees: List<String>) {
+        fun reorderProjects(projectIds: List<String>) {
             val state = _uiState.value as? MainScreenUiState.Loaded ?: return
+            // Picker rows are projects; each moves with every added path it groups.
+            val worktrees = projectIds.flatMap { id -> memberPathsOf(id, state.projects) }.distinct()
             val current = state.sections.map { it.worktree }
             if (current == worktrees || current.size != worktrees.size || current.toSet() != worktrees.toSet()) return
             val byWorktree = state.sections.associateBy { it.worktree }
@@ -471,17 +698,19 @@ class MainScreenViewModel
             }
         }
 
-        fun requestRemoveProject(worktree: String) {
+        /** [projectId] is a Home project key or one of its added paths; removal takes every member path. */
+        fun requestRemoveProject(projectId: String) {
             logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_REMOVE_PROJECT)
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) {
-                    val section = state.sections.firstOrNull { it.worktree == worktree }
-                    if (section != null) {
+                    val project = state.projects.firstOrNull { it.key == projectId || projectId in it.memberPaths }
+                    if (project != null) {
                         state.copy(
                             pendingProjectRemoval =
                                 ProjectRemovalUi(
-                                    worktree = worktree,
-                                    displayName = section.displayName,
+                                    worktree = project.primaryPath,
+                                    displayName = project.displayName,
+                                    worktrees = project.memberPaths,
                                 ),
                         )
                     } else {
@@ -514,9 +743,15 @@ class MainScreenViewModel
                 ProductAnalytics.Action.HOME_REMOVE_PROJECT_CONFIRM,
             )
             viewModelScope.launch {
-                runCatching { connectionProfileStore.removeWorktree(serverBaseUrl, pending.worktree) }
-                runCatching { sessionCache.purgeWorktree(serverBaseUrl, pending.worktree) }
-                logI("remove project worktree=${pending.worktree}")
+                for (worktree in pending.worktrees) {
+                    runCatching { connectionProfileStore.removeWorktree(serverBaseUrl, worktree) }
+                    runCatching { sessionCache.purgeWorktree(serverBaseUrl, worktree) }
+                    projectFirstLoads.clear(worktree)
+                    pendingFirstServerSnapshots.remove(worktree)
+                    worktreeLoader.forget(worktree)
+                    listsSessionsPaths.remove(worktree)
+                    logI("remove project worktree=$worktree")
+                }
                 clearPendingProjectRemoval()
                 runHomeLoad(skipProbe = true)
                 _removalSnackbar.value =
@@ -598,22 +833,39 @@ class MainScreenViewModel
         ): SessionActionDetails {
             val state = _uiState.value as? MainScreenUiState.Loaded
                 ?: return SessionActionDetails(HomeSessionLifecycle.Active, null)
-            val section = state.sections.firstOrNull { it.worktree == worktree }
-                ?: return SessionActionDetails(HomeSessionLifecycle.Active, null)
-            val active = section.allSessions.firstOrNull { it.id == sessionId }
-            if (active != null) {
-                val snoozed = HomeSettleFeed.isSnoozed(active.snoozedUntilEpochMs, System.currentTimeMillis(), active.isSettled)
-                return SessionActionDetails(
-                    lifecycle = if (snoozed) HomeSessionLifecycle.Snoozed else HomeSessionLifecycle.Active,
-                    snoozeBlockReason = active.snoozeBlockReason,
-                )
+            // Rows pass the session directory. That matches an added path, or a worktree whose
+            // session lives on another section or in the extra lists.
+            val preferred = state.sections.filter { it.worktree == worktree }
+            val rest = state.sections.filter { it.worktree != worktree }
+            for (section in preferred + rest) {
+                section.allSessions.firstOrNull { it.id == sessionId }?.let { return activeDetails(it) }
+                section.archivedSessions.firstOrNull { it.id == sessionId }?.let { return archivedDetails(it) }
             }
-            val archived = section.archivedSessions.firstOrNull { it.id == sessionId }
-                ?: return SessionActionDetails(HomeSessionLifecycle.Active, null)
+            state.home.extraSessions.values
+                .flatten()
+                .firstOrNull { it.id == sessionId }
+                ?.let { return activeDetails(it) }
+            return SessionActionDetails(HomeSessionLifecycle.Active, null)
+        }
+
+        private fun activeDetails(session: SessionSummary): SessionActionDetails {
+            val snoozed =
+                HomeSettleFeed.isSnoozed(
+                    session.snoozedUntilEpochMs,
+                    System.currentTimeMillis(),
+                    session.isSettled,
+                )
+            return SessionActionDetails(
+                lifecycle = if (snoozed) HomeSessionLifecycle.Snoozed else HomeSessionLifecycle.Active,
+                snoozeBlockReason = session.snoozeBlockReason,
+            )
+        }
+
+        private fun archivedDetails(session: SessionSummary): SessionActionDetails {
             val lifecycle =
                 when {
-                    archived.isArchived -> HomeSessionLifecycle.Archived
-                    archived.isSettled -> HomeSessionLifecycle.Settled
+                    session.isArchived -> HomeSessionLifecycle.Archived
+                    session.isSettled -> HomeSessionLifecycle.Settled
                     else -> HomeSessionLifecycle.Active
                 }
             return SessionActionDetails(lifecycle, null)
@@ -721,7 +973,7 @@ class MainScreenViewModel
 
         fun chooseFork() {
             val state = sessionActions.value
-            if (state.target == null || !state.canFork) return
+            if (state.target == null) return
             logAction(
                 ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
                 ProductAnalytics.Action.SESSION_ACTIONS_FORK,
@@ -852,10 +1104,13 @@ class MainScreenViewModel
             // without Probing/Loading. Live store then SWR-refreshes.
             if (!preserveContent && worktrees.isNotEmpty()) {
                 if (_uiState.value is MainScreenUiState.Loaded && liveObservationsRunning(worktrees)) {
+                    reloadWorktreeMarks(worktrees)
                     return
                 }
                 val sections = loadSectionsFromCache(worktrees)
-                _uiState.value = MainScreenUiState.Loaded(sections = sections)
+                _uiState.value =
+                    MainScreenUiState.Loaded(sections = sections, projectLoads = projectFirstLoads.visible, home = homeIndex)
+                applyPendingFirstServerSnapshots()
                 if (!skipProbe) {
                     runCatching { projectRepository.probeServer() }
                         .onFailure {
@@ -863,6 +1118,7 @@ class MainScreenViewModel
                         }
                 }
                 startLiveObservations(worktrees)
+                reloadWorktreeMarks(worktrees)
                 return
             }
 
@@ -936,11 +1192,17 @@ class MainScreenViewModel
                 _uiState.value =
                     when {
                         preserveContent && previous is MainScreenUiState.Loaded ->
-                            previous.copy(sections = sections)
+                            previous.copy(sections = sections, home = homeIndex)
                         else ->
-                            MainScreenUiState.Loaded(sections = sections)
+                            MainScreenUiState.Loaded(
+                                sections = sections,
+                                projectLoads = projectFirstLoads.visible,
+                                home = homeIndex,
+                            )
                     }
+                applyPendingFirstServerSnapshots()
                 startLiveObservations(worktrees)
+                reloadWorktreeMarks(worktrees)
             } catch (error: Throwable) {
                 if (preserveContent) return
                 stopLiveObservations()
@@ -1067,6 +1329,10 @@ class MainScreenViewModel
                         openError = null,
                         fieldText = ServerPathPolicy.fieldText(home),
                         addedWorktrees = added,
+                        addedProjectIds =
+                            added
+                                .mapNotNull { path -> homeIndex.resolutions[path]?.takeIf { it.isMergeable }?.projectId }
+                                .toSet(),
                     )
                 }
                 loadAddProjectListing(home)
@@ -1080,6 +1346,9 @@ class MainScreenViewModel
             addProjectDebounceJob?.cancel()
             addProjectDebounceJob = null
             addProjectSession = null
+            addProjectSummaryQueue.clear()
+            addProjectSummariesInFlight.clear()
+            addProjectSummaryFailures.clear()
         }
 
         /** Chip, row, and Up taps list the folder right away. */
@@ -1114,6 +1383,8 @@ class MainScreenViewModel
                         AddProjectListing.Loaded(filesystemRepository.listDirectory(directory))
                     } catch (cancellation: CancellationException) {
                         throw cancellation
+                    } catch (_: DirectoryNotFoundException) {
+                        AddProjectListing.NotFound
                     } catch (error: Exception) {
                         DiagnosticLog.warning(DiagnosticLogArea.Connection, "add project listing failed", error)
                         AddProjectListing.Failed(AddProjectSheetUi.LIST_ERROR_MESSAGE)
@@ -1126,6 +1397,51 @@ class MainScreenViewModel
             }
         }
 
+        /** Starts queued row summaries, oldest first, up to [AddProjectSheetModel.FOLDER_SUMMARY_CONCURRENCY]. */
+        private fun startAddProjectSummaries() {
+            while (addProjectSummariesInFlight.size < AddProjectSheetModel.FOLDER_SUMMARY_CONCURRENCY) {
+                val path = addProjectSummaryQueue.removeFirstOrNull() ?: return
+                // The browser may have listed it while it waited.
+                if (addProjectSession?.listings?.containsKey(path) != false) continue
+                loadAddProjectSummary(path)
+            }
+        }
+
+        /**
+         * Lists one row's folder into the browser's listing cache, so opening it is instant. A
+         * failure only hides the row's count: no error, no retry this session.
+         */
+        private fun loadAddProjectSummary(path: String) {
+            val generation = addProjectGeneration
+            addProjectSummariesInFlight += path
+            viewModelScope.launch {
+                val listing =
+                    try {
+                        filesystemRepository.listDirectory(path)
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
+                    } catch (_: Exception) {
+                        null
+                    }
+                if (generation != addProjectGeneration) return@launch
+                addProjectSummariesInFlight -= path
+                if (listing == null) {
+                    addProjectSummaryFailures += path
+                } else {
+                    updateAddProjectSession { session ->
+                        when (session.listings[path]) {
+                            null, AddProjectListing.Loading ->
+                                session
+                                    .copy(listings = session.listings + (path to AddProjectListing.Loaded(listing)))
+                                    .withListedRoot(path)
+                            else -> session
+                        }
+                    }
+                }
+                startAddProjectSummaries()
+            }
+        }
+
         private fun loadAddProjectServerProjects(generation: Int) {
             viewModelScope.launch {
                 val projects =
@@ -1135,10 +1451,12 @@ class MainScreenViewModel
                         throw cancellation
                     } catch (_: Exception) {
                         // The section stays hidden.
+                        if (generation != addProjectGeneration) return@launch
+                        updateAddProjectSession { it.copy(suggestionsResolved = true) }
                         return@launch
                     }
                 if (generation != addProjectGeneration) return@launch
-                updateAddProjectSession { it.copy(serverProjects = projects) }
+                updateAddProjectSession { it.copy(serverProjects = projects, suggestionsResolved = true) }
             }
         }
 
@@ -1146,7 +1464,7 @@ class MainScreenViewModel
             viewModelScope.launch {
                 val volumes =
                     try {
-                        filesystemRepository.listDirectory(AddProjectSheetModel.VOLUMES_PATH)
+                        filesystemRepository.listDirectory(AddProjectSheetModel.VOLUMES_PATH).folders
                     } catch (cancellation: CancellationException) {
                         throw cancellation
                     } catch (_: Exception) {
@@ -1192,6 +1510,7 @@ class MainScreenViewModel
             observedWorktrees = worktrees
             archivedReloadJob?.cancel()
             archivedReloadJob = viewModelScope.launch { refreshArchivedSessions() }
+            livePaintedWorktrees.clear()
             liveObservationJobs =
                 worktrees.map { worktree ->
                     viewModelScope.launch {
@@ -1217,6 +1536,7 @@ class MainScreenViewModel
                                     frame.sessions.mapTo(mutableSetOf()) { it.id },
                                 )
                             }
+                            livePaintedWorktrees += worktree
                             updateSectionFromLiveData(
                                 worktree,
                                 frame.sessions,
@@ -1227,12 +1547,188 @@ class MainScreenViewModel
                             )
                         }
                     }
+                } +
+                    viewModelScope.launch {
+                        foregroundEventStream.events.collect { event ->
+                            event.sessionMoved()?.let { moved ->
+                                applySessionMoved(moved)
+                                return@collect
+                            }
+                            val projectId = event.namedProjectId() ?: return@collect
+                            if (event.type != "worktree.updated") return@collect
+                            if (!worktreeLoader.knows(projectId)) return@collect
+                            worktreeLoader.refetch(projectId).forEach(::applyPathLoad)
+                        }
+                    }
+            syncExtraObservations()
+        }
+
+        /**
+         * Resolves every added path's project (so Home groups as soon as possible), then loads
+         * each project's worktrees and their branches. Sessions never wait for this.
+         */
+        private fun reloadWorktreeMarks(
+            worktrees: List<String>,
+            refreshProjects: Boolean = false,
+        ) {
+            worktreeMarkJob?.cancel()
+            worktreeLoader.onConnection(serverBaseUrl)
+            worktreeInventoryCache.setAddedPaths(worktrees, serverBaseUrl)
+            branchLookups.refresh()
+            worktreeMarkJob =
+                viewModelScope.launch {
+                    val resolved =
+                        coroutineScope {
+                            worktrees
+                                .map { worktree ->
+                                    async { worktree to worktreeLoader.resolve(worktree, refresh = refreshProjects) }
+                                }.awaitAll()
+                        }
+                    updateHomeIndex { index ->
+                        index.copy(resolutions = index.resolutions + resolved.mapNotNull { (path, it) -> it?.let { path to it } })
+                    }
+                    requestBranches()
+                    for ((worktree, resolution) in resolved) {
+                        applyPathLoad(worktreeLoader.load(worktree, resolution))
+                    }
                 }
         }
 
         /** OpenCode pending approvals are GET /api/permission/request. T3 already flags them on the shell. */
         private val observesHomePermissions: Boolean
             get() = activeConnectionManager.currentProfile()?.engine != ConnectionEngine.T3
+
+        /**
+         * Lists the worktrees of [directory]'s project again (v2 list + refresh, v1
+         * `GET /experimental/worktree`), so a checkout made in the app shows without a refresh.
+         */
+        private fun refreshProjectWorktrees(directory: String) {
+            val canonical = ServerPathPolicy.canonical(directory.trim())
+            val projects = currentHomeProjects()
+            val project =
+                projects.firstOrNull { it.worktree(canonical) != null }
+                    ?: projects.firstOrNull { it.contains(canonical) }
+                    ?: return
+            viewModelScope.launch {
+                for (path in project.memberPaths) {
+                    applyPathLoad(worktreeLoader.load(path, homeIndex.resolutions[path]))
+                }
+            }
+        }
+
+        private fun applyPathLoad(load: HomePathLoad) {
+            if (load.listsSessions) listsSessionsPaths += load.addedPath else listsSessionsPaths -= load.addedPath
+            worktreeInventoryCache.record(load.inventory, load.addedPath, serverBaseUrl)
+            updateHomeIndex { index ->
+                val resolutions = load.resolution?.let { index.resolutions + (load.addedPath to it) } ?: index.resolutions
+                val inventories =
+                    when (val inventory = load.inventory) {
+                        is WorktreeInventory.Loaded -> index.inventories + (load.addedPath to inventory.directories)
+                        WorktreeInventory.Unloaded -> index.inventories - load.addedPath
+                        // A failed reload keeps the last list.
+                        WorktreeInventory.Failed -> index.inventories
+                    }
+                index.copy(resolutions = resolutions, inventories = inventories)
+            }
+            syncExtraObservations()
+            requestBranches()
+        }
+
+        /** Regroups a moved session's row at once; the list refetch on the same event confirms it. */
+        private fun applySessionMoved(moved: SessionMovedUpdate) {
+            updateHomeIndex { it.copy(extraSessions = it.extraSessions.withSessionMoved(moved)) }
+            _uiState.update { state ->
+                if (state is MainScreenUiState.Loaded) state.withSessionMoved(moved) else state
+            }
+        }
+
+        private fun updateHomeIndex(transform: (HomeWorktreeIndex) -> HomeWorktreeIndex) {
+            val next = transform(homeIndex)
+            if (next == homeIndex) return
+            homeIndex = next
+            _uiState.update { state ->
+                if (state is MainScreenUiState.Loaded) state.copy(home = next) else state
+            }
+        }
+
+        private fun resetHomeIndex() {
+            worktreeLoader.onDisconnected()
+            worktreeInventoryCache.clear()
+            listsSessionsPaths.clear()
+            branchLookups.clear()
+            homeIndex = HomeWorktreeIndex()
+        }
+
+        private fun currentHomeProjects(): List<HomeProject> = (_uiState.value as? MainScreenUiState.Loaded)?.projects.orEmpty()
+
+        /** Added paths for a project key, or the path itself. */
+        private fun memberPathsOf(
+            id: String,
+            projects: List<HomeProject> = currentHomeProjects(),
+        ): List<String> =
+            projects.firstOrNull { it.key == id }?.memberPaths
+                ?: projects.firstOrNull { id in it.memberPaths }?.memberPaths
+                ?: listOf(id)
+
+        /** Branch names for every project worktree not answered since the last reload. */
+        private fun requestBranches() {
+            branchLookups.lookUp(
+                currentHomeProjects()
+                    .filter { it.projectId != null }
+                    .flatMap { project -> project.worktrees.map { it.directory } },
+            )
+        }
+
+        /**
+         * One branch lookup. A v2 answer before VCS detection settles, or a failed request, is
+         * unknown (asked again); a 4xx means the server has no branch for it.
+         */
+        private suspend fun lookUpBranch(directory: String): HomeBranchLookups.Outcome =
+            try {
+                val info = sessionRepository.getVcsInfo(directory)
+                if (info.isSettled) {
+                    HomeBranchLookups.Outcome.Branch(HomeProjectGrouping.normalizedBranch(info.currentBranch))
+                } else {
+                    HomeBranchLookups.Outcome.Unknown
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (error: SessionError.Http) {
+                if (error.statusCode in 400..499) HomeBranchLookups.Outcome.Branch(null) else HomeBranchLookups.Outcome.Unknown
+            } catch (error: Exception) {
+                logI("home branch failed directory=$directory: ${error.message}")
+                HomeBranchLookups.Outcome.Unknown
+            }
+
+        /**
+         * V1 lists sessions per directory, so each listed worktree that is not an added path gets
+         * its own live list. It refetches on the same session events as the added paths.
+         */
+        private fun syncExtraObservations() {
+            if (liveObservationJobs.isEmpty()) return
+            val wanted = homeExtraDirectories(observedWorktrees, homeIndex.inventories, listsSessionsPaths).toSet()
+            if (wanted == extraObservationJobs.keys) return
+            val kept = extraObservationJobs.filterKeys { it in wanted }
+            extraObservationJobs.filterKeys { it !in wanted }.values.forEach { it.cancel() }
+            val started =
+                (wanted - kept.keys).associateWith { directory ->
+                    viewModelScope.launch {
+                        combine(
+                            sessionLiveStore.observeSessions(directory),
+                            sessionStatusLiveStore.observeActivity(directory),
+                            sessionReadyStore.observeReadyIds(directory),
+                        ) { snapshot, statuses, readyIds ->
+                            homeSummaries(snapshot.sessions, statuses, readyIds).map { summary ->
+                                if (summary.directory.isNullOrBlank()) summary.copy(directory = directory) else summary
+                            }
+                        }.collect { summaries ->
+                            updateHomeIndex { it.copy(extraSessions = it.extraSessions + (directory to summaries)) }
+                        }
+                    }
+                }
+            extraObservationJobs = kept + started
+            updateHomeIndex { it.copy(extraSessions = it.extraSessions.filterKeys { directory -> directory in wanted }) }
+        }
 
         private fun stopLiveObservations() {
             archivedGeneration += 1
@@ -1241,8 +1737,13 @@ class MainScreenViewModel
             archivedByWorktree.clear()
             liveObservationJobs.forEach { it.cancel() }
             liveObservationJobs = emptyList()
+            extraObservationJobs.values.forEach { it.cancel() }
+            extraObservationJobs = emptyMap()
             observedWorktrees = emptyList()
             permissionLiveStore.clearSessionIndex()
+            livePaintedWorktrees.clear()
+            worktreeMarkJob?.cancel()
+            worktreeMarkJob = null
         }
 
         /** Settled and archived rows are not in the live session list. Keep the latest fetch. */
@@ -1282,15 +1783,70 @@ class MainScreenViewModel
         ) {
             val state = _uiState.value as? MainScreenUiState.Loaded ?: return
             val section = state.sections.firstOrNull { it.worktree == worktree } ?: return
+            val updatedSection =
+                section.copy(
+                    allSessions = homeSummaries(sessions, snapshot, readyIds, pendingApprovalIds),
+                    sessionsFromCache = sessionsFromCache,
+                    archivedSessions = archivedByWorktree[worktree] ?: section.archivedSessions,
+                )
+            val updatedSections =
+                state.sections.map { current ->
+                    if (current.worktree == worktree) updatedSection else current
+                }
+            _uiState.value = state.copy(sections = updatedSections)
+        }
+
+        /**
+         * A newly added project's first server list paints right away, even while its status or
+         * ready-id stream has not emitted (the combined stream waits for all three). Statuses stay
+         * unknown until that stream overwrites the section.
+         */
+        private fun paintFirstServerSnapshot(
+            worktree: String,
+            snapshot: SessionListSnapshot,
+        ) {
+            if (worktree in livePaintedWorktrees) {
+                pendingFirstServerSnapshots.remove(worktree)
+                return
+            }
+            val loaded = _uiState.value as? MainScreenUiState.Loaded
+            if (loaded?.sections?.any { it.worktree == worktree } != true) {
+                // Home has not painted the project's section yet; runHomeLoad applies this after it does.
+                pendingFirstServerSnapshots[worktree] = snapshot
+                return
+            }
+            pendingFirstServerSnapshots.remove(worktree)
+            updateSectionFromLiveData(
+                worktree,
+                snapshot.sessions,
+                SessionActivitySnapshot(),
+                emptySet(),
+                sessionsFromCache = false,
+            )
+        }
+
+        private fun applyPendingFirstServerSnapshots() {
+            pendingFirstServerSnapshots.toMap().forEach { (worktree, snapshot) ->
+                paintFirstServerSnapshot(worktree, snapshot)
+            }
+        }
+
+        /** Home rows of one session list: active roots, newest first, with status and unread outcome. */
+        private fun homeSummaries(
+            sessions: List<Session>,
+            snapshot: SessionActivitySnapshot,
+            readyIds: Set<String>,
+            pendingApprovalIds: Set<String> = emptySet(),
+        ): List<SessionSummary> {
             // v2 servers own read state; the local per-device Ready ids stay a v1 fallback.
             val serverReadState = supportsSessionViewed()
-            val summaries =
-                sessions
-                    .activeSessions()
-                    .rootSessions()
-                    .sortedByDescending { it.updatedAtEpochMs ?: 0L }
-                    .map { session ->
-                        sessionDomainAdapter.toSessionSummary(
+            return sessions
+                .activeSessions()
+                .rootSessions()
+                .sortedByDescending { it.updatedAtEpochMs ?: 0L }
+                .map { session ->
+                    sessionDomainAdapter
+                        .toSessionSummary(
                             session,
                             statusLabel =
                                 if (snapshot.seeded || snapshot.fromCache) {
@@ -1306,18 +1862,7 @@ class MainScreenViewModel
                         ).let { summary ->
                             if (session.id in pendingApprovalIds) summary.copy(needsApproval = true) else summary
                         }
-                    }
-            val updatedSection =
-                section.copy(
-                    allSessions = summaries,
-                    sessionsFromCache = sessionsFromCache,
-                    archivedSessions = archivedByWorktree[worktree] ?: section.archivedSessions,
-                )
-            val updatedSections =
-                state.sections.map { current ->
-                    if (current.worktree == worktree) updatedSection else current
                 }
-            _uiState.value = state.copy(sections = updatedSections)
         }
 
         private fun supportsSessionViewed(): Boolean = activeConnectionManager.currentCapabilities().supportsSessionViewed
@@ -1379,12 +1924,30 @@ sealed interface MainScreenUiState {
         val pendingOpenSession: SessionOpenTarget? = null,
         val projectSessionCreateError: String? = null,
         val pendingProjectRemoval: ProjectRemovalUi? = null,
-    ) : MainScreenUiState
+        /** Unfinished first loads of projects added this session, keyed by worktree. */
+        val projectLoads: Map<String, ProjectFirstLoad> = emptyMap(),
+        /** Projects, worktrees, and branches behind [sections]. */
+        val home: HomeWorktreeIndex = HomeWorktreeIndex(),
+    ) : MainScreenUiState {
+        /** Home projects: added paths of one repository grouped, in added order. */
+        val projects: List<HomeProject> = home.projects(sections.map { it.worktree })
+    }
 }
+
+/**
+ * One-shot request for Home to switch its project scope. [evenFromAll] also switches away from
+ * "All" (a newly added project); otherwise "All" stays selected.
+ */
+data class HomeScopeRequest(
+    val filterId: String,
+    val evenFromAll: Boolean,
+)
 
 data class ProjectRemovalUi(
     val worktree: String,
     val displayName: String,
+    /** Every added path of the project; all leave Home together. */
+    val worktrees: List<String> = listOf(worktree),
 )
 
 data class HomeSessionActionTarget(
@@ -1396,7 +1959,6 @@ data class HomeSessionActionTarget(
 data class HomeSessionActionsUiState(
     val target: HomeSessionActionTarget? = null,
     val sheetVisible: Boolean = false,
-    val canFork: Boolean = false,
     val canArchive: Boolean = true,
     val renameVisible: Boolean = false,
     val renameDraft: String = "",
@@ -1406,6 +1968,8 @@ data class HomeSessionActionsUiState(
     val forkDraft: String = "",
     val forkSubmitting: Boolean = false,
     val forkError: String? = null,
+    /** Set when there is nothing to fork (no user message); disables confirm. */
+    val forkBlockedMessage: String? = null,
     val forkResultVisible: Boolean = false,
     val forkedTitle: String = "",
     val deleteConfirmVisible: Boolean = false,
@@ -1449,6 +2013,27 @@ data class SessionOpenTarget(
     val worktree: String,
     val optimisticNavigationInstanceId: String? = null,
 )
+
+/** Home with [moved]'s session row in its new directory, so it regroups under that worktree. */
+internal fun MainScreenUiState.Loaded.withSessionMoved(moved: SessionMovedUpdate): MainScreenUiState.Loaded {
+    val patched =
+        sections.map { section ->
+            if (section.allSessions.none { it.id == moved.sessionId }) {
+                section
+            } else {
+                section.copy(allSessions = section.allSessions.map { it.movedTo(moved) })
+            }
+        }
+    return copy(sections = patched, home = home.copy(extraSessions = home.extraSessions.withSessionMoved(moved)))
+}
+
+internal fun Map<String, List<SessionSummary>>.withSessionMoved(moved: SessionMovedUpdate): Map<String, List<SessionSummary>> =
+    mapValues { (_, sessions) ->
+        if (sessions.none { it.id == moved.sessionId }) sessions else sessions.map { it.movedTo(moved) }
+    }
+
+private fun SessionSummary.movedTo(moved: SessionMovedUpdate): SessionSummary =
+    if (id == moved.sessionId) copy(directory = moved.directory) else this
 
 /** Unread finished-run outcome for Home; null when read or when the server has no read state. */
 internal fun Session.homeUnreadOutcome(serverReadState: Boolean): SessionIdleOutcome? =

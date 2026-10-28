@@ -37,8 +37,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
-
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Write Firebase client config
         # Untracked so public clones build without Firebase; release CI injects it.
         working-directory: .
@@ -88,14 +87,13 @@ jobs:
           esac
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
         with:
           distribution: temurin
           java-version: 17
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
       - name: Install Android compile SDK 37
         working-directory: .
         run: ./scripts/ensure-android-platform.sh 37
@@ -282,7 +280,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rm -f "${ASC_API_KEY_PATH:-}"
+          rm -f "${ASC_API_KEY_PATH:-}" "$GITHUB_WORKSPACE/ios/OpenCode Mobile/OpenCode Mobile/GoogleService-Info.plist"
           # Keep the persistent signing keychain and its password on the runner.
           # Only restore the login keychain as the interactive default.
           if [[ -f "$HOME/Library/Keychains/login.keychain-db" ]]; then

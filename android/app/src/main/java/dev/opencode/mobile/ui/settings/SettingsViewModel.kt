@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.OpenCodeReleaseObservability
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.featureflags.FeatureFlags
@@ -11,11 +12,15 @@ import dev.opencode.mobile.domain.message.BlockDecorationCache
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
+import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
 import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.preferences.SplitPanePreferences
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.textmate.TextMateLogbook
@@ -84,9 +89,17 @@ class SettingsViewModel
                 HomeDisplayPreferences.clear()
                 MarkdownHighlightPreferences.clear()
                 AnalyticsConsentPreferences.clear()
+                // Apply the reset default to Crashlytics and Analytics collection now, not at next launch.
+                OpenCodeReleaseObservability.setProductAnalyticsConsented(
+                    AnalyticsConsentPreferences.productAnalyticsConsented,
+                )
+                AppLockPreferences.clear()
                 AppOnboardingPreferences.clear()
                 DeveloperToolsPreferences.clear()
+                PerformanceOverlayPreferences.clear()
                 SessionChatDisplayPreferences.clear()
+                // A wipe is a fresh install: settle the timeline now so the update-only picker never shows.
+                SessionChatDisplayPreferences.resolveTimelineForInstall(existingInstall = false)
                 SplitPanePreferences.clear()
                 FeatureFlags.clearOverrides()
                 messageContentPreparer.clearDocumentCache()
@@ -109,6 +122,14 @@ class SettingsViewModel
             HomeDisplayPreferences.updateHideUserDirectoryPrefix(enabled)
         }
 
+        fun setShowsWorktrees(enabled: Boolean) {
+            HomeDisplayPreferences.updateShowsWorktrees(enabled)
+        }
+
+        fun setSessionRowStyle(style: HomeSessionRowStyle) {
+            HomeDisplayPreferences.updateSessionRowStyle(style)
+        }
+
         fun setRecentWindowHours(hours: Int) {
             HomeDisplayPreferences.updateRecentWindowHours(hours)
         }
@@ -117,16 +138,12 @@ class SettingsViewModel
             SessionChatDisplayPreferences.updateCollapseConsecutiveToolCalls(enabled)
         }
 
-        fun setChipTimeline(enabled: Boolean) {
-            SessionChatDisplayPreferences.updateChipTimeline(enabled)
+        fun setTimelineStyle(style: SessionChatTimelineStyle) {
+            SessionChatDisplayPreferences.updateTimelineStyle(style)
         }
 
         fun setFollowUpDelivery(value: FollowUpDelivery) {
             SessionChatDisplayPreferences.updateFollowUpDelivery(value)
-        }
-
-        fun setComposerDictation(enabled: Boolean) {
-            SessionChatDisplayPreferences.updateComposerDictation(enabled)
         }
 
         fun supportsFollowUpDelivery(): Boolean = activeConnectionManager.currentCapabilities().supportsFollowUpDelivery
@@ -137,8 +154,13 @@ class SettingsViewModel
             BlockDecorationCache.clear()
         }
 
+        /** Through the observability seam so Crashlytics and automatic Analytics follow at once. */
         fun setProductAnalyticsConsented(enabled: Boolean) {
-            AnalyticsConsentPreferences.updateProductAnalyticsConsented(enabled)
+            OpenCodeReleaseObservability.setProductAnalyticsConsented(enabled)
+        }
+
+        fun setAppLockEnabled(enabled: Boolean) {
+            AppLockPreferences.updateEnabled(enabled)
         }
     }
 

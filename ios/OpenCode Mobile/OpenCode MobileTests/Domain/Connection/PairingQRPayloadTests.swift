@@ -5,38 +5,38 @@ import Testing
 struct PairingQRPayloadTests {
     @Test func parse_selectsFirstNonLoopbackURL() {
         let raw = """
-        {"urls":["http://127.0.0.1:4096","http://192.168.0.160:4096"],"username":"opencode","password":"secret"}
+        {"urls":["http://127.0.0.1:4096","http://192.168.1.60:4096"],"username":"opencode","password":"secret"}
         """
         let result = PairingQRPayload.parse(raw)
         guard case let .success(credentials) = result else {
             Issue.record("expected success")
             return
         }
-        #expect(credentials.baseURL == "http://192.168.0.160:4096/")
-        #expect(credentials.urls == ["http://192.168.0.160:4096/"])
+        #expect(credentials.baseURL == "http://192.168.1.60:4096/")
+        #expect(credentials.urls == ["http://192.168.1.60:4096/"])
         #expect(credentials.username == "opencode")
         #expect(credentials.password == "secret")
     }
 
     @Test func parse_keepsLanAndPrefersTailscaleForDisplay() {
         let raw = """
-        {"urls":["http://192.168.0.160:4096","http://100.84.57.15:4096"],"username":"opencode","password":"secret"}
+        {"urls":["http://192.168.1.60:4096","http://100.64.0.15:4096"],"username":"opencode","password":"secret"}
         """
         let result = PairingQRPayload.parse(raw)
         guard case let .success(credentials) = result else {
             Issue.record("expected success")
             return
         }
-        #expect(credentials.baseURL == "http://100.84.57.15:4096/")
+        #expect(credentials.baseURL == "http://100.64.0.15:4096/")
         #expect(credentials.urls == [
-            "http://192.168.0.160:4096/",
-            "http://100.84.57.15:4096/",
+            "http://192.168.1.60:4096/",
+            "http://100.64.0.15:4096/",
         ])
     }
 
     @Test func parse_prefersMagicDNSTailscaleHost() {
         let raw = """
-        {"urls":["http://192.168.0.160:4096","http://mybox.tailxyz.ts.net:4096"],"username":"opencode","password":"secret"}
+        {"urls":["http://192.168.1.60:4096","http://mybox.tailxyz.ts.net:4096"],"username":"opencode","password":"secret"}
         """
         let result = PairingQRPayload.parse(raw)
         guard case let .success(credentials) = result else {
@@ -49,38 +49,78 @@ struct PairingQRPayloadTests {
     @Test func chooseAnsweredURL_prefersTailscaleWhenBothAnswered() {
         let picked = PairingQRPayload.chooseAnsweredURL(
             candidates: [
-                "http://192.168.0.160:4096/",
-                "http://100.84.57.15:4096/",
+                "http://192.168.1.60:4096/",
+                "http://100.64.0.15:4096/",
             ],
             answered: [
-                "http://192.168.0.160:4096/",
-                "http://100.84.57.15:4096/",
+                "http://192.168.1.60:4096/",
+                "http://100.64.0.15:4096/",
             ]
         )
-        #expect(picked == "http://100.84.57.15:4096/")
+        #expect(picked == "http://100.64.0.15:4096/")
+    }
+
+    @Test func chooseAnsweredURL_neverReplacesHttpsWithHttp() {
+        let picked = PairingQRPayload.chooseAnsweredURL(
+            candidates: [
+                "https://box.opentunnel.xyz/",
+                "http://192.168.1.60:4096/",
+                "http://100.64.0.15:4096/",
+            ],
+            answered: [
+                "http://192.168.1.60:4096/",
+                "http://100.64.0.15:4096/",
+            ],
+            currentBaseURL: "https://box.opentunnel.xyz/"
+        )
+        #expect(picked == nil)
+    }
+
+    @Test func chooseAnsweredURL_httpsCurrentStillPicksAnsweringHttps() {
+        let picked = PairingQRPayload.chooseAnsweredURL(
+            candidates: [
+                "https://box.opentunnel.xyz/",
+                "http://100.64.0.15:4096/",
+            ],
+            answered: [
+                "https://box.opentunnel.xyz/",
+                "http://100.64.0.15:4096/",
+            ],
+            currentBaseURL: "https://box.opentunnel.xyz/"
+        )
+        #expect(picked == "https://box.opentunnel.xyz/")
+    }
+
+    @Test func chooseAnsweredURL_httpCurrentMayMoveToHttps() {
+        let picked = PairingQRPayload.chooseAnsweredURL(
+            candidates: ["http://192.168.1.60:4096/", "https://box.opentunnel.xyz/"],
+            answered: ["https://box.opentunnel.xyz/"],
+            currentBaseURL: "http://192.168.1.60:4096/"
+        )
+        #expect(picked == "https://box.opentunnel.xyz/")
     }
 
     @Test func chooseAnsweredURL_usesLanWhenTailscaleDidNotAnswer() {
         let picked = PairingQRPayload.chooseAnsweredURL(
             candidates: [
-                "http://192.168.0.160:4096/",
-                "http://100.84.57.15:4096/",
+                "http://192.168.1.60:4096/",
+                "http://100.64.0.15:4096/",
             ],
-            answered: ["http://192.168.0.160:4096/"]
+            answered: ["http://192.168.1.60:4096/"]
         )
-        #expect(picked == "http://192.168.0.160:4096/")
+        #expect(picked == "http://192.168.1.60:4096/")
     }
 
     @Test func parse_stripsPathFromPairingURL() {
         let raw = """
-        {"urls":["http://192.168.0.160:4096/session"],"username":"opencode","password":"secret"}
+        {"urls":["http://192.168.1.60:4096/session"],"username":"opencode","password":"secret"}
         """
         let result = PairingQRPayload.parse(raw)
         guard case let .success(credentials) = result else {
             Issue.record("expected success")
             return
         }
-        #expect(credentials.baseURL == "http://192.168.0.160:4096/")
+        #expect(credentials.baseURL == "http://192.168.1.60:4096/")
     }
 
     @Test func parse_onlyLoopback_isUnreachable() {
@@ -204,7 +244,7 @@ struct PairingQRPayloadTests {
         #expect(PairingQRPayload.isOpenTunnelURL("https://ab12.cd34.opentunnel.xyz/"))
         #expect(PairingQRPayload.isOpenTunnelURL("https://Ab.Cd.OPENTUNNEL.XYZ"))
         #expect(PairingQRPayload.isOpenTunnelURL("http://route.tunnel.opentunnel.xyz:443"))
-        #expect(PairingQRPayload.isOpenTunnelURL("http://192.168.0.160:4096/") == false)
+        #expect(PairingQRPayload.isOpenTunnelURL("http://192.168.1.60:4096/") == false)
         #expect(PairingQRPayload.isOpenTunnelURL("http://mybox.tailxyz.ts.net:4096/") == false)
         #expect(PairingQRPayload.isOpenTunnelURL("https://opentunnel.xyz/") == false)
         #expect(PairingQRPayload.isTailscaleURL("https://ab12.cd34.opentunnel.xyz/") == false)
@@ -212,7 +252,7 @@ struct PairingQRPayloadTests {
 
     @Test func parse_legacyPasswordQR_keepsPasswordAndOmitsCode() {
         let raw = """
-        {"urls":["http://127.0.0.1:4096","http://192.168.0.160:4096"],"username":"opencode","password":"secret"}
+        {"urls":["http://127.0.0.1:4096","http://192.168.1.60:4096"],"username":"opencode","password":"secret"}
         """
         let result = PairingQRPayload.parse(raw)
         guard case let .success(credentials) = result else {
@@ -221,6 +261,6 @@ struct PairingQRPayloadTests {
         }
         #expect(credentials.password == "secret")
         #expect(credentials.code == nil)
-        #expect(credentials.baseURL == "http://192.168.0.160:4096/")
+        #expect(credentials.baseURL == "http://192.168.1.60:4096/")
     }
 }

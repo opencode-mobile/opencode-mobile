@@ -71,6 +71,25 @@ interface SessionRepository {
         directory: String? = null,
     ): Session
 
+    /**
+     * Moves session [id] to the worktree [directory]. v2 only: callers gate on
+     * `supportsSessionMove`; other servers throw.
+     */
+    suspend fun moveSession(
+        id: String,
+        directory: String,
+    ): Unit = throw SessionError.Http(404, SESSION_MOVE_UNAVAILABLE)
+
+    /**
+     * Answers a `/btw` side question from the session's context and model without adding to the
+     * conversation, and returns the trimmed markdown answer. v2 only: callers gate on
+     * `supportsSideQuestion`; other servers throw.
+     */
+    suspend fun askSideQuestion(
+        sessionId: String,
+        question: String,
+    ): String = throw SessionError.Http(404, SIDE_QUESTION_UNAVAILABLE)
+
     suspend fun abortSession(
         id: String,
         directory: String? = null,
@@ -136,6 +155,16 @@ interface SessionRepository {
         id: String,
         directory: String? = null,
     ): Boolean
+
+    /**
+     * Settles a pending revert before the next prompt. v2 only stages a revert and needs an
+     * explicit commit; v1 applies the revert itself when the next prompt arrives, so it has
+     * nothing to commit.
+     */
+    suspend fun commitRevert(
+        id: String,
+        directory: String? = null,
+    ): Boolean = true
 
     suspend fun respondToPermission(
         sessionId: String,
@@ -263,3 +292,6 @@ enum class CompactionStart {
     /** The server only enqueued compaction; it completes later, live. */
     Enqueued,
 }
+
+internal const val SESSION_MOVE_UNAVAILABLE = "session move is not available"
+internal const val SIDE_QUESTION_UNAVAILABLE = "side questions need an opencode v2 server"

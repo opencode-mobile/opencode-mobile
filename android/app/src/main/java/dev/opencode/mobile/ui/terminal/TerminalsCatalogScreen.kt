@@ -26,6 +26,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
@@ -34,16 +35,16 @@ import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeListItem
-import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSplitPane
 import dev.opencode.mobile.ui.components.OpenCodeSplitPaneScreen
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
-import dev.opencode.mobile.ui.components.currentOpenCodeUsesSplitLayout
-import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.components.currentOpenCodeUsesSplitLayout
+import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
+import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -246,9 +247,9 @@ private fun CatalogColumn(
         uiState.createError?.let { error ->
             Text(
                 text = error,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                color = openCodeColor("text-weak"),
                 style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
+                modifier = Modifier.openCodeBottomSheetContentInset().padding(bottom = 8.dp),
             )
         }
         if (uiState.projects.isEmpty()) {

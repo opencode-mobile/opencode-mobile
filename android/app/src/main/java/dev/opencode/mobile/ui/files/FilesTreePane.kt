@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductRouteScreenViewEffect
-import dev.opencode.mobile.domain.filesystem.ProjectEntry
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
@@ -41,6 +40,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
 import dev.opencode.mobile.ui.components.OpenCodeTreeRow
 import dev.opencode.mobile.ui.components.OpenCodeTreeRowDisclosure
+import dev.opencode.mobile.ui.components.OpenCodeTreeRowIcon
 import dev.opencode.mobile.ui.components.OpenCodeTreeRowIndent
 import dev.opencode.mobile.ui.components.OpenCodeTreeRowState
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -203,7 +203,7 @@ private fun EntryRow(
     val entry = row.entry
     OpenCodeTreeRow(
         title = entry.name,
-        icon = entry.icon(),
+        icon = OpenCodeTreeRowIcon.FileType(entry.relativePath),
         depth = row.depth,
         disclosure =
             when {
@@ -260,7 +260,7 @@ private fun FindResults(
                     items(find.entries, key = { it.relativePath }) { entry ->
                         OpenCodeTreeRow(
                             title = entry.name,
-                            icon = entry.icon(),
+                            icon = OpenCodeTreeRowIcon.FileType(entry.relativePath),
                             subtitle = entry.parentPath.ifEmpty { "/" },
                             state = if (entry.relativePath == selectedPath) OpenCodeTreeRowState.Selected else OpenCodeTreeRowState.Normal,
                             onClick = { onOpenFile(entry.relativePath) },
@@ -270,8 +270,6 @@ private fun FindResults(
             }
     }
 }
-
-private fun ProjectEntry.icon() = if (isDirectory) OpenCodeIcons.Folder else OpenCodeIcons.Description
 
 /** Aligns inline child rows with the titles of entries one level deeper than their folder. */
 private fun childContentInset(depth: Int): Dp = 8.dp + OpenCodeTreeRowIndent * depth + 20.dp + 6.dp

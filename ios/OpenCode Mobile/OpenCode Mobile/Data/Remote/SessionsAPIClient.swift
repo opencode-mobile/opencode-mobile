@@ -8,16 +8,16 @@ nonisolated enum SessionsAPIError: Error {
 
 nonisolated struct SessionsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
-    private let urlSession: URLSession
+    private let resolveURLSession: @Sendable () -> URLSession
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = OpenCodeURLSessions.rest
+        urlSession: URLSession? = nil
     ) {
         self.connectionProvider = connectionProvider
-        self.urlSession = urlSession
+        self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
     }
 
     private func requireConnection() throws -> ServerConnection {
@@ -134,6 +134,12 @@ nonisolated struct SessionsAPIClient: Sendable {
     /// `POST /api/session/{id}/view` → 204. Moves the server-wide viewed watermark to `idle`.
     func markSessionViewedV2(id: String, idle: Int64) async throws -> Bool {
         try await postEmpty(path: "api/session/\(id)/view", body: V2ViewSessionRequestDTO(idle: idle))
+    }
+
+    /// `POST /api/session/{id}/move` → 204. Moves the session to `directory` at the server's
+    /// default delivery boundary (steer); the body carries nothing else.
+    func moveSessionV2(id: String, directory: String) async throws -> Bool {
+        try await postEmpty(path: "api/session/\(id)/move", body: V2MoveSessionRequestDTO(directory: directory))
     }
 
     func cancelInboxV2(sessionID: String, inboxID: String) async throws -> Bool {
@@ -258,7 +264,17 @@ nonisolated struct SessionsAPIClient: Sendable {
 
     // MARK: - V2 home / session CRUD
 
-    func listSessionsV2(directory: String? = nil, parentID: String? = nil) async throws -> [V2SessionDTO] {
+    func locationForSessionList(directory: String) async throws -> V2LocationInfoDTO {
+        try await get(path: "api/location", locationDirectory: directory)
+    }
+
+    /// `projectID` lists every worktree of that project. Passing `directory` as well would hide those sessions.
+    func listSessionsV2(
+        directory: String? = nil,
+        parentID: String? = nil,
+        projectID: String? = nil,
+        archived: Bool? = nil
+    ) async throws -> [V2SessionDTO] {
         var sessions: [V2SessionDTO] = []
         var cursor: String?
         var pages = 0
@@ -267,12 +283,18 @@ nonisolated struct SessionsAPIClient: Sendable {
             if let parentID {
                 query["parentID"] = parentID
             }
+            if let projectID {
+                query["project"] = projectID
+            }
+            if let archived {
+                query["archived"] = archived ? "true" : "false"
+            }
             if let cursor {
                 query["cursor"] = cursor
             }
             let envelope: APIListEnvelope<V2SessionDTO> = try await get(
                 path: "api/session",
-                directory: directory,
+                directory: projectID == nil ? directory : nil,
                 query: query
             )
             sessions.append(contentsOf: envelope.data)
@@ -284,12 +306,14 @@ nonisolated struct SessionsAPIClient: Sendable {
         return sessions
     }
 
-    func createSessionV2(directory: String? = nil, title: String? = nil) async throws -> V2SessionDTO {
+    /// A `parentID` creates a linked child at the parent's location, so no location is sent with it.
+    func createSessionV2(directory: String? = nil, title: String? = nil, parentID: String? = nil) async throws -> V2SessionDTO {
         let envelope: APIDataEnvelope<V2SessionDTO> = try await post(
             path: "api/session",
             body: V2CreateSessionRequestDTO(
+                parentID: parentID,
                 title: title.flatMap { $0.isEmpty ? nil : $0 },
-                location: directory.map { V2LocationDTO(directory: $0) }
+                location: parentID == nil ? directory.map { V2LocationDTO(directory: $0) } : nil
             )
         )
         return envelope.data
@@ -309,6 +333,11 @@ nonisolated struct SessionsAPIClient: Sendable {
         _ = try await patchEmpty(path: "api/session/\(id)", body: V2RenameSessionRequestDTO(title: title))
     }
 
+    /// Archives or restores a session (opencode 2.1.0+). Repeating the current state is a no-op.
+    func setSessionArchivedV2(id: String, archived: Bool) async throws {
+        _ = try await patchEmpty(path: "api/session/\(id)", body: V2ArchiveSessionRequestDTO(archived: archived))
+    }
+
     func deleteSessionV2(id: String) async throws -> Bool {
         try await delete(path: "api/session/\(id)")
     }
@@ -323,6 +352,20 @@ nonisolated struct SessionsAPIClient: Sendable {
         )
         return envelope.data
     }
+
+    /// `POST /api/session/{id}/generate` → `{ data: { text } }`. Answers `prompt` from the session's
+    /// context and model without adding a message; nothing streams. One model call can outlast the
+    /// default REST timeout, so this waits up to `sideQuestionTimeout`.
+    func generateSessionTextV2(id: String, prompt: String) async throws -> String {
+        var request = try requireConnection().authorizedRequest(path: "api/session/\(id)/generate", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(V2SessionGenerateRequestDTO(prompt: prompt))
+        request.timeoutInterval = Self.sideQuestionTimeout
+        let data = try await data(for: request)
+        return try decoder.decode(APIDataEnvelope<V2SessionGenerateResponseDTO>.self, from: data).data.text
+    }
+
+    static let sideQuestionTimeout: TimeInterval = 300
 
     func compactSessionV2(id: String) async throws -> Bool {
         var request = try requireConnection().authorizedRequest(path: "api/session/\(id)/compact", method: "POST")
@@ -347,6 +390,10 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await delete(path: "api/session/\(id)/revert")
     }
 
+    func commitRevertV2(id: String) async throws -> Bool {
+        try await postWithoutBody(path: "api/session/\(id)/revert/commit")
+    }
+
     func getVcsInfoV2(directory: String? = nil) async throws -> V2VcsInfoDTO {
         let envelope: APILocatedEnvelope<V2VcsInfoDTO> = try await get(
             path: "api/vcs",
@@ -369,6 +416,15 @@ nonisolated struct SessionsAPIClient: Sendable {
             locationDirectory: directory,
             query: ["mode": mode, "context": String(context)]
         )
+        return envelope.data
+    }
+
+    /// `GET /api/session/{id}/diff`: the files the turn opened by user message `from` changed.
+    /// Servers before opencode 2.1.0 have no route and answer 404.
+    func getSessionDiffV2(id: String, from: String?, context: Int = 12) async throws -> [FileDiffDTO] {
+        var query = ["context": String(context)]
+        if let from { query["from"] = from }
+        let envelope: APIListEnvelope<FileDiffDTO> = try await get(path: "api/session/\(id)/diff", query: query)
         return envelope.data
     }
 
@@ -463,7 +519,7 @@ nonisolated struct SessionsAPIClient: Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await urlSession.data(for: request)
+            (data, response) = try await resolveURLSession().data(for: request)
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error

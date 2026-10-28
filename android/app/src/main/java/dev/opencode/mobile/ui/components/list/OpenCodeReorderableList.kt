@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -35,14 +37,18 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationException
+import androidx.compose.ui.input.pointer.PointerId
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.isOutOfBounds
@@ -53,6 +59,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
@@ -97,6 +104,9 @@ private enum class RowGesturePhase {
  * Rows that fail [canMove] never lift or get crossed; rows that fail
  * [supportsContextAction] never reveal. Reordering is inactive until at least
  * two rows can move or [onMove] is null.
+ *
+ * A row may place [OpenCodeReorderableRowScope.DragHandle]: touching it lifts the
+ * row straight away, without the long-press, for an explicit reorder mode.
  */
 @Composable
 fun <T> OpenCodeReorderableList(
@@ -109,7 +119,7 @@ fun <T> OpenCodeReorderableList(
     onContextAction: ((T) -> Unit)? = null,
     supportsContextAction: (T) -> Boolean = { true },
     contextActionLabel: String = "Remove",
-    row: @Composable (T) -> Unit,
+    row: @Composable OpenCodeReorderableRowScope.(T) -> Unit,
 ) {
     val density = LocalDensity.current
     val haptic = LocalHapticFeedback.current
@@ -264,6 +274,60 @@ fun <T> OpenCodeReorderableList(
                     }
                 }
 
+                // Lifts the row under [pointerId] and drags it until release; shared by the
+                // long-press lift and the drag handle.
+                suspend fun AwaitPointerEventScope.liftAndDrag(pointerId: PointerId) {
+                    draggedKey = itemKey
+                    translation = 0f
+                    announcedTarget = currentItems.indexOfFirst { key(it) == itemKey }
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    val completed =
+                        drag(pointerId) { change ->
+                            val delta = change.positionChange().y
+                            change.consume()
+                            translation += delta
+                            val itemsNow = currentItems
+                            val from = itemsNow.indexOfFirst { key(it) == itemKey }
+                            if (from < 0) return@drag
+                            val heightsNow = itemsNow.map { rowHeights[key(it)] ?: fallbackHeightPx }
+                            val canMoveNow: (Int) -> Boolean =
+                                { candidate -> currentCanMove(itemsNow[candidate]) }
+                            val target =
+                                ReorderableListMath.targetIndex(
+                                    from,
+                                    ReorderableListMath.clampedTranslation(
+                                        translation,
+                                        from,
+                                        heightsNow,
+                                        canMoveNow,
+                                    ),
+                                    heightsNow,
+                                    canMoveNow,
+                                )
+                            if (target != announcedTarget) {
+                                announcedTarget = target
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                        }
+                    if (completed) {
+                        currentEvent.changes.forEach { if (it.changedToUp()) it.consume() }
+                    }
+                    finishLift(commit = completed)
+                }
+
+                val rowScope =
+                    remember(itemKey) { ReorderableRowScopeImpl() }.also { scope ->
+                        scope.isMovable = movable
+                        scope.lift = { pointerId ->
+                            try {
+                                liftAndDrag(pointerId)
+                            } catch (cancelled: CancellationException) {
+                                if (draggedKey == itemKey) finishLift(commit = false)
+                                throw cancelled
+                            }
+                        }
+                    }
+
                 Box(
                     modifier =
                         Modifier
@@ -289,19 +353,7 @@ fun <T> OpenCodeReorderableList(
                                         .width(revealWidthDp)
                                         .fillMaxHeight()
                                         .graphicsLayer { translationX = revealWidthPx - revealPx }
-                                        .background(MaterialTheme.colorScheme.error, shape)
-                                        .then(
-                                            // Only tappable once settled open, so a
-                                            // half-revealed strip cannot be hit.
-                                            if (openKey == itemKey) {
-                                                Modifier.clickable {
-                                                    openKey = null
-                                                    onContextAction?.invoke(item)
-                                                }
-                                            } else {
-                                                Modifier
-                                            },
-                                        ),
+                                        .background(MaterialTheme.colorScheme.error, shape),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Text(
@@ -453,44 +505,7 @@ fun <T> OpenCodeReorderableList(
                                                     swiping = false
                                                 }
 
-                                                RowGesturePhase.Lift -> {
-                                                    draggedKey = itemKey
-                                                    translation = 0f
-                                                    announcedTarget = currentItems.indexOfFirst { key(it) == itemKey }
-                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    val completed =
-                                                        drag(down.id) { change ->
-                                                            val delta = change.positionChange().y
-                                                            change.consume()
-                                                            translation += delta
-                                                            val itemsNow = currentItems
-                                                            val from = itemsNow.indexOfFirst { key(it) == itemKey }
-                                                            if (from < 0) return@drag
-                                                            val heightsNow = itemsNow.map { rowHeights[key(it)] ?: fallbackHeightPx }
-                                                            val canMoveNow: (Int) -> Boolean =
-                                                                { candidate -> currentCanMove(itemsNow[candidate]) }
-                                                            val target =
-                                                                ReorderableListMath.targetIndex(
-                                                                    from,
-                                                                    ReorderableListMath.clampedTranslation(
-                                                                        translation,
-                                                                        from,
-                                                                        heightsNow,
-                                                                        canMoveNow,
-                                                                    ),
-                                                                    heightsNow,
-                                                                    canMoveNow,
-                                                                )
-                                                            if (target != announcedTarget) {
-                                                                announcedTarget = target
-                                                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                                                            }
-                                                        }
-                                                    if (completed) {
-                                                        currentEvent.changes.forEach { if (it.changedToUp()) it.consume() }
-                                                    }
-                                                    finishLift(commit = completed)
-                                                }
+                                                RowGesturePhase.Lift -> liftAndDrag(down.id)
 
                                                 RowGesturePhase.Undecided, RowGesturePhase.Cancelled -> Unit
                                             }
@@ -503,13 +518,89 @@ fun <T> OpenCodeReorderableList(
                                     }
                                 },
                     ) {
-                        row(item)
+                        rowScope.row(item)
+                    }
+                    if (canReveal && openKey == itemKey) {
+                        // The row's pointerInput covers its layout frame; graphicsLayer
+                        // only slides the pixels. This target sits above that frame in
+                        // the revealed gap, or Remove never receives the tap.
+                        Box(modifier = Modifier.matchParentSize()) {
+                            Box(
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .width(revealWidthDp)
+                                        .fillMaxHeight()
+                                        .clickable {
+                                            openKey = null
+                                            onContextAction?.invoke(item)
+                                        },
+                            )
+                        }
                     }
                 }
             }
         }
     }
 }
+
+/** Content scope of an [OpenCodeReorderableList] row. */
+interface OpenCodeReorderableRowScope {
+    /** Whether this row can be reordered right now. */
+    val isMovable: Boolean
+
+    /**
+     * Grip that lifts the row as soon as it is touched and drags it while held. Shown dimmed
+     * and inert while the row cannot move. Decorative for accessibility: the row carries
+     * Move up / Move down actions.
+     */
+    @Composable
+    fun DragHandle(modifier: Modifier)
+}
+
+private class ReorderableRowScopeImpl : OpenCodeReorderableRowScope {
+    override var isMovable: Boolean by mutableStateOf(false)
+    var lift: suspend AwaitPointerEventScope.(PointerId) -> Unit = {}
+
+    @Composable
+    override fun DragHandle(modifier: Modifier) {
+        val color = openCodeColor("icon-base")
+        val movable = isMovable
+        Box(
+            modifier =
+                modifier
+                    .size(ReorderableDragHandleTouchSize)
+                    .clearAndSetSemantics {}
+                    .pointerInput(movable) {
+                        if (!movable) return@pointerInput
+                        awaitEachGesture {
+                            val down = awaitFirstDown()
+                            down.consume()
+                            lift(down.id)
+                        }
+                    },
+            contentAlignment = Alignment.Center,
+        ) {
+            Canvas(modifier = Modifier.size(ReorderableDragHandleGlyphSize).alpha(if (movable) 1f else 0.4f)) {
+                val stroke = 1.5.dp.toPx()
+                val inset = size.width * 0.15f
+                listOf(0.3f, 0.5f, 0.7f).forEach { fraction ->
+                    val y = size.height * fraction
+                    drawLine(
+                        color = color,
+                        start = Offset(inset, y),
+                        end = Offset(size.width - inset, y),
+                        strokeWidth = stroke,
+                        cap = StrokeCap.Round,
+                    )
+                }
+            }
+        }
+    }
+}
+
+private val ReorderableDragHandleTouchSize = 40.dp
+private val ReorderableDragHandleGlyphSize = 20.dp
 
 private data class ReorderablePreviewProject(
     val id: String,

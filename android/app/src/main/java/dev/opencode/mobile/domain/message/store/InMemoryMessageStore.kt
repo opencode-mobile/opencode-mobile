@@ -605,7 +605,7 @@ class InMemoryMessageStore
             if (existing is MessagePart.Tool) {
                 val previous =
                     existing.input
-                        ?.get("preview")
+                        ?.get(ToolArgumentsPreview.INPUT_KEY)
                         ?.jsonPrimitive
                         ?.contentOrNull
                         .orEmpty()
@@ -613,8 +613,8 @@ class InMemoryMessageStore
                     existing.copy(
                         input =
                             buildJsonObject {
-                                existing.input?.forEach { (key, value) -> if (key != "preview") put(key, value) }
-                                put("preview", previous + delta)
+                                existing.input?.forEach { (key, value) -> if (key != ToolArgumentsPreview.INPUT_KEY) put(key, value) }
+                                put(ToolArgumentsPreview.INPUT_KEY, previous + delta)
                             },
                     )
                 return SessionChangeSet(
@@ -1042,6 +1042,8 @@ class InMemoryMessageStore
             }
         }
 
+        private fun isSettledTool(status: ToolStatus): Boolean = status == ToolStatus.Completed || status == ToolStatus.Error
+
         private fun mergePart(
             existing: MessagePart?,
             incoming: MessagePart,
@@ -1056,7 +1058,16 @@ class InMemoryMessageStore
             val merged =
                 when {
                     existing is MessagePart.Tool && incoming is MessagePart.Tool -> {
-                        val mergedInput = mergeJson(existing.input, incoming.input)
+                        val mergedInput = ToolArgumentsPreview.mergedInput(existing.input, incoming.input)
+                        // A tool part runs once. v1 sends each update on both event buses, so a
+                        // late in-flight duplicate must not reopen a call that already settled.
+                        if (isSettledTool(existing.status) && !isSettledTool(incoming.status)) {
+                            return existing.copy(
+                                input = mergedInput,
+                                metadata = mergeJson(existing.metadata, incoming.metadata),
+                                timeStartEpochMs = existing.timeStartEpochMs ?: incoming.timeStartEpochMs,
+                            )
+                        }
                         existing.copy(
                             toolName =
                                 ToolPartIdentity.resolvedName(
@@ -1183,6 +1194,7 @@ class InMemoryMessageStore
                 is MessagePart.File -> id
                 is MessagePart.Compaction -> id
                 is MessagePart.Reasoning -> id
+                is MessagePart.Notice -> id
             }
 
         private fun MessagePart.isStreamingPart(): Boolean =

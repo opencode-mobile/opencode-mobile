@@ -15,6 +15,23 @@ struct ClientSlashActionCatalogTests {
         #expect(visible == [.new, .terminal, .files, .mcp])
     }
 
+    @Test func visibleActions_sideQuestionServer_putsBtwFirst() {
+        let input = ClientSlashActionVisibilityInput(
+            visibleUserMessageCount: 0,
+            hasUndoableUserMessage: false,
+            hasActiveSessionRevert: false,
+            hasSelectedComposerModel: false,
+            supportsSideQuestion: true
+        )
+
+        #expect(ClientSlashActionCatalog.visibleActions(input).first == .btw)
+        #expect(ClientSlashAction.btw.rowTitle == "[btw] Ask a side question")
+        #expect(ClientSlashAction.btw.tileLabel == "Btw")
+        var unsupported = input
+        unsupported.supportsSideQuestion = false
+        #expect(!ClientSlashActionCatalog.visibleActions(unsupported).contains(.btw))
+    }
+
     @Test func visibleActions_userMessageWithoutModel_showsNewForkUndo() {
         let visible = ClientSlashActionCatalog.visibleActions(
             ClientSlashActionVisibilityInput(

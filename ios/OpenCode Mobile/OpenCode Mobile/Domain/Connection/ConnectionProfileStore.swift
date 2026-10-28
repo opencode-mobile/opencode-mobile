@@ -135,13 +135,14 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
         defer { lock.unlock() }
         let previous = migratedCatalog()
         let next = try previous.save(profile)
-        writeCatalog(next)
-        copyLegacyWorktrees(from: previous, to: next)
+        // The password goes to the Keychain first: a failed write leaves the catalog untouched.
         if let saved = next.profiles.first(where: { stored in
             stored.id == profile.id || ConnectionProfileIdentity.sameSavedServer(stored, profile)
         }) {
-            writePassword(saved, password: profile.password)
+            try writePassword(saved, password: profile.password)
         }
+        writeCatalog(next)
+        copyLegacyWorktrees(from: previous, to: next)
         revisionSignal.yield()
     }
 
@@ -256,8 +257,11 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
             defaults.set(legacyWorktrees, forKey: worktreeIdPrefix + id)
         }
         if let password = secureCredentialStore.readPassword(serverBaseURL: normalized) {
-            secureCredentialStore.writePassword(serverBaseURL: id, password: password)
-            secureCredentialStore.deletePassword(serverBaseURL: normalized)
+            // Legacy key migration: if the new key cannot be written, keep the old one so the
+            // password is not lost; the next save surfaces the Keychain failure to the user.
+            if (try? secureCredentialStore.writePassword(serverBaseURL: id, password: password)) != nil {
+                secureCredentialStore.deletePassword(serverBaseURL: normalized)
+            }
             migrated.password = password
         }
         defaults.removeObject(forKey: activeBaseURLKey)
@@ -337,8 +341,8 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
         return catalog.profiles.first(where: matches)
     }
 
-    private func writePassword(_ profile: ConnectionProfile, password: String) {
-        secureCredentialStore.writePassword(serverBaseURL: profile.id, password: password)
+    private func writePassword(_ profile: ConnectionProfile, password: String) throws {
+        try secureCredentialStore.writePassword(serverBaseURL: profile.id, password: password)
         secureCredentialStore.deletePassword(serverBaseURL: profile.baseURL)
     }
 }

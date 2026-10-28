@@ -53,25 +53,33 @@ nonisolated enum SessionChatTimelineProjector {
     ) -> TimelineFrame {
         let resolveLabel = metadataLabel ?? { message in Self.metadataLabel(for: message) }
         let previousByID = Dictionary(
-            uniqueKeysWithValues: (previous?.rows ?? []).map { ($0.id, $0) }
+            (previous?.rows ?? []).map { ($0.id, $0) },
+            uniquingKeysWith: { _, latest in latest }
         )
 
         let serverRows = serverRows(from: frame, previousByID: previousByID, metadataLabel: resolveLabel)
 
-        let merged: [TimelineRow] =
+        let merged: (rows: [TimelineRow], echoes: [String: String]) =
             if optimistic.mergePending {
                 mergeWithPending(
                     serverRows,
                     pendingRows: optimistic.pendingRows,
-                    baselineSignatureCounts: optimistic.baselineSignatureCounts
+                    baselineIDs: optimistic.baselineIDs
                 )
             } else {
-                serverRows
+                (serverRows, [:])
             }
-        let rows = merged.filter { !isHiddenPendingPrompt($0) }
+        let rows = merged.rows.filter { !isHiddenPendingPrompt($0) }
 
         let previousIDs = Set(previousByID.keys)
         let nextIDs = Set(rows.map(\.id))
+        // Alias only an echo that replaces its optimistic row in this frame. A server
+        // row the host already shows under its own id keeps that identity.
+        var listIDAliases = (previous?.listIDAliases ?? [:]).filter { nextIDs.contains($0.key) }
+        for (serverID, pendingID) in merged.echoes
+        where previousIDs.contains(pendingID) && !previousIDs.contains(serverID) && nextIDs.contains(serverID) {
+            listIDAliases[serverID] = pendingID
+        }
         let inserted = nextIDs.subtracting(previousIDs)
         let removed = previousIDs.subtracting(nextIDs)
 
@@ -111,7 +119,8 @@ nonisolated enum SessionChatTimelineProjector {
             layoutChangedRowIDs: layoutChanged,
             grewBottomRowIDs: grewBottom,
             decorateRowIDs: decorate,
-            isRequired: false
+            isRequired: false,
+            listIDAliases: listIDAliases
         )
     }
 
@@ -123,28 +132,10 @@ nonisolated enum SessionChatTimelineProjector {
     ) -> [TimelineRow] {
         let resolveLabel = metadataLabel ?? { message in Self.metadataLabel(for: message) }
         let previousByID = Dictionary(
-            uniqueKeysWithValues: (previous?.rows ?? []).map { ($0.id, $0) }
+            (previous?.rows ?? []).map { ($0.id, $0) },
+            uniquingKeysWith: { _, latest in latest }
         )
         return serverRows(from: frame, previousByID: previousByID, metadataLabel: resolveLabel)
-    }
-
-    static func signatureCounts(
-        fromDisplayMessages messages: [DisplayMessage],
-        sessionKey: String,
-        serverCommands: [ServerCommand] = [],
-        collapseConsecutiveToolCalls: Bool = false,
-        chipTimeline: Bool = false
-    ) -> [String: Int] {
-        let frame = DisplayFrameBuilder.build(
-            sessionKey: sessionKey,
-            frameRevision: 0,
-            sourceRevision: 0,
-            displayMessages: messages,
-            serverCommands: serverCommands,
-            collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
-            chipTimeline: chipTimeline
-        )
-        return signatureCounts(serverRows(from: frame))
     }
 
     static func isHiddenPendingPrompt(_ row: SessionChatRow) -> Bool {
@@ -296,107 +287,76 @@ nonisolated enum SessionChatTimelineProjector {
         row.role == .user && row.pendingDelivery != nil
     }
 
+    /// Merged rows plus, for each dropped optimistic row matched to its server
+    /// echo, `serverID → pendingID`.
     private static func mergeWithPending(
         _ serverRows: [TimelineRow],
         pendingRows: [TimelineRow],
-        baselineSignatureCounts: [String: Int]
-    ) -> [TimelineRow] {
-        guard !pendingRows.isEmpty else { return serverRows }
+        baselineIDs: Set<String>
+    ) -> (rows: [TimelineRow], echoes: [String: String]) {
+        guard !pendingRows.isEmpty else { return (serverRows, [:]) }
         let pendingToKeep = unmatchedPending(
             pendingRows,
             serverRows: serverRows,
-            baselineSignatureCounts: baselineSignatureCounts
+            baselineIDs: baselineIDs
         )
         let keptIDs = Set(pendingToKeep.map(\.id))
         let dropped = pendingRows.filter { !keptIDs.contains($0.id) }
-        return splicePending(
-            applyPendingChrome(serverRows, dropped: dropped),
-            pendingToKeep: pendingToKeep
-        )
+        let chromed = applyPendingChrome(serverRows, dropped: dropped, baselineIDs: baselineIDs)
+        return (splicePending(chromed.rows, pendingToKeep: pendingToKeep), chromed.echoes)
     }
 
-    /// Pending optimistic rows that no new server echo accounts for yet. A row is
-    /// matched by exact signature when the server count exceeds the send-time
-    /// baseline; attachment rows fall back to a text-only match. Shared with
+    /// Pending optimistic rows that no new server echo accounts for yet. Shared with
     /// `SessionChatTimeline` so reconciliation and merge agree on "acknowledged".
+    ///
+    /// A shown optimistic row is not retired by a waiting steer echo. v2 enqueues every
+    /// prompt, idle sends included, as a steer delivered at the next step boundary;
+    /// retiring on that hidden copy left a frame with neither bubble. A queued echo
+    /// still retires it, since the pending strip owns a real queue.
     static func unmatchedPending(
         _ pendingRows: [TimelineRow],
         serverRows: [TimelineRow],
-        baselineSignatureCounts: [String: Int]
+        baselineIDs: Set<String>
     ) -> [TimelineRow] {
-        var serverExact = signatureCounts(serverRows)
-        var serverTextOnly = textOnlySignatureCounts(serverRows)
-        let baselineTextOnly = textOnlySignatureCounts(fromExact: baselineSignatureCounts)
-        return pendingRows.filter { pending in
-            let exact = optimisticSignature(pending)
-            if serverExact[exact, default: 0] > baselineSignatureCounts[exact, default: 0] {
-                serverExact[exact, default: 0] -= 1
-                return false
-            }
-            let text = textSignature(pending)
-            if pending.hasAttachments,
-               !text.isEmpty,
-               serverTextOnly[text, default: 0] > baselineTextOnly[text, default: 0]
-            {
-                serverTextOnly[text, default: 0] -= 1
-                return false
-            }
-            if pending.hasAttachments,
-               text.isEmpty,
-               consumeNewAttachmentEcho(
-                   pending,
-                   serverRows: serverRows,
-                   serverExact: &serverExact,
-                   baselineSignatureCounts: baselineSignatureCounts
-               )
-            {
-                return false
-            }
-            return true
+        let shownPending = pendingRows.filter { !isHiddenPendingPrompt($0) }
+        guard !shownPending.isEmpty else {
+            return unmatched(pendingRows, serverRows: serverRows, baselineIDs: baselineIDs)
         }
+        let keptIDs = Set(
+            unmatched(
+                shownPending,
+                serverRows: serverRows.filter { $0.pendingDelivery != .steer },
+                baselineIDs: baselineIDs
+            ).map(\.id)
+        ).union(
+            unmatched(
+                pendingRows.filter(isHiddenPendingPrompt),
+                serverRows: serverRows,
+                baselineIDs: baselineIDs
+            ).map(\.id)
+        )
+        return pendingRows.filter { keptIDs.contains($0.id) }
     }
 
-    /// Blank-text attachment send: match a new blank-text server row by file
-    /// identity (count + id/filename). A captioned reuse of the same files is
-    /// not an echo.
-    private static func consumeNewAttachmentEcho(
-        _ pending: TimelineRow,
+    private static func unmatched(
+        _ pendingRows: [TimelineRow],
         serverRows: [TimelineRow],
-        serverExact: inout [String: Int],
-        baselineSignatureCounts: [String: Int]
-    ) -> Bool {
-        for server in serverRows where server.role == .user {
-            guard textSignature(server).isEmpty, attachmentsCorrespond(server, pending) else { continue }
-            let exact = optimisticSignature(server)
-            guard serverExact[exact, default: 0] > baselineSignatureCounts[exact, default: 0] else {
-                continue
-            }
-            serverExact[exact, default: 0] -= 1
-            return true
-        }
-        return false
-    }
-
-    private static func attachments(of row: TimelineRow) -> [FilePart] {
-        row.blocks.compactMap { block in
-            if case .attachment(_, let file) = block { return file }
-            return nil
+        baselineIDs: Set<String>
+    ) -> [TimelineRow] {
+        pendingRows.filter { pending in
+            !serverRows.contains { isNewServerEcho($0, of: pending, baselineIDs: baselineIDs) }
         }
     }
 
-    private static func attachmentsMatch(_ left: FilePart, _ right: FilePart) -> Bool {
-        if left.id == right.id { return true }
-        let leftName = left.filename.trimmingCharacters(in: .whitespacesAndNewlines)
-        let rightName = right.filename.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !leftName.isEmpty, leftName == rightName { return true }
-        return leftName.isEmpty || rightName.isEmpty
-    }
-
-    static func attachmentsCorrespond(_ left: TimelineRow, _ right: TimelineRow) -> Bool {
-        let leftFiles = attachments(of: left)
-        let rightFiles = attachments(of: right)
-        guard leftFiles.count == rightFiles.count, !leftFiles.isEmpty else { return false }
-        return zip(leftFiles, rightFiles).allSatisfy { attachmentsMatch($0, $1) }
+    /// A pending row whose send carried a `ClientMessageID` is echoed only by the user
+    /// row the server created under that id, whatever its text or filenames.
+    ///
+    /// A v2 command takes no id, and its echo is the expanded template, so the first
+    /// user row that was not loaded when the send began stands for it.
+    static func isNewServerEcho(_ server: TimelineRow, of pending: TimelineRow, baselineIDs: Set<String>) -> Bool {
+        guard server.role == .user else { return false }
+        if ClientMessageID.isClientID(pending.id) { return server.id == pending.id }
+        return !baselineIDs.contains(server.id)
     }
 
     private static func splicePending(
@@ -415,40 +375,20 @@ nonisolated enum SessionChatTimelineProjector {
 
     private static func applyPendingChrome(
         _ serverRows: [TimelineRow],
-        dropped: [TimelineRow]
-    ) -> [TimelineRow] {
-        guard !dropped.isEmpty else { return serverRows }
-        var remaining = dropped
+        dropped: [TimelineRow],
+        baselineIDs: Set<String>
+    ) -> (rows: [TimelineRow], echoes: [String: String]) {
+        guard !dropped.isEmpty else { return (serverRows, [:]) }
         var pendingByServerID: [String: TimelineRow] = [:]
-        for row in serverRows where row.role == .user {
-            let exact = optimisticSignature(row)
-            guard let index = remaining.firstIndex(where: { optimisticSignature($0) == exact }) else {
-                continue
-            }
-            pendingByServerID[row.id] = remaining.remove(at: index)
-        }
-        for pending in remaining where pending.hasAttachments {
-            let text = textSignature(pending)
-            if !text.isEmpty {
-                guard let target = serverRows.last(where: { server in
-                    server.role == .user
-                        && !server.hasAttachments
-                        && pendingByServerID[server.id] == nil
-                        && textSignature(server) == text
-                }) else { continue }
-                pendingByServerID[target.id] = pending
-                continue
-            }
-            guard let target = serverRows.last(where: { server in
-                server.role == .user
-                    && pendingByServerID[server.id] == nil
-                    && textSignature(server).isEmpty
-                    && attachmentsCorrespond(server, pending)
+        for pending in dropped {
+            guard let target = serverRows.first(where: { server in
+                pendingByServerID[server.id] == nil && isNewServerEcho(server, of: pending, baselineIDs: baselineIDs)
             }) else { continue }
             pendingByServerID[target.id] = pending
         }
-        guard !pendingByServerID.isEmpty else { return serverRows }
-        return serverRows.map { row in
+        guard !pendingByServerID.isEmpty else { return (serverRows, [:]) }
+        let echoes = pendingByServerID.mapValues(\.id)
+        let rows = serverRows.map { row in
             guard let pending = pendingByServerID[row.id] else { return row }
             var next = row
             if row.metadataLabel.isEmpty, !pending.metadataLabel.isEmpty {
@@ -463,69 +403,7 @@ nonisolated enum SessionChatTimelineProjector {
             }
             return next
         }
-    }
-
-    static func signatureCounts(_ rows: [TimelineRow]) -> [String: Int] {
-        rows.reduce(into: [:]) { counts, row in
-            guard row.role == .user else { return }
-            counts[optimisticSignature(row), default: 0] += 1
-        }
-    }
-
-    static func optimisticSignature(_ row: TimelineRow) -> String {
-        let content = row.blocks.compactMap { block -> String? in
-            switch block {
-            case .text(_, let text, _):
-                return "text:\(text)"
-            case .attachment(_, let file):
-                let name = file.filename.trimmingCharacters(in: .whitespacesAndNewlines)
-                return name.isEmpty ? "file:\(file.mime)" : "file:\(name):\(file.mime)"
-            case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stopNote, .failureLine:
-                return nil
-            }
-        }
-        return content.isEmpty ? "text:\(row.text)" : content.joined(separator: "|")
-    }
-
-    static func textSignature(_ row: TimelineRow) -> String {
-        let texts = row.blocks.compactMap { block -> String? in
-            if case .text(_, let text, _) = block { return "text:\(text)" }
-            return nil
-        }
-        if !texts.isEmpty { return texts.joined(separator: "|") }
-        let trimmed = row.text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "" : "text:\(trimmed)"
-    }
-
-    static func textOnlySignatureCounts(_ rows: [TimelineRow]) -> [String: Int] {
-        rows.reduce(into: [:]) { counts, row in
-            guard row.role == .user, !row.hasAttachments else { return }
-            let text = textSignature(row)
-            guard !text.isEmpty else { return }
-            counts[text, default: 0] += 1
-        }
-    }
-
-    static func textOnlySignatureCounts(fromExact counts: [String: Int]) -> [String: Int] {
-        counts.reduce(into: [:]) { aggregated, pair in
-            guard !pair.key.split(separator: "|").contains(where: { $0.hasPrefix("file:") }) else {
-                return
-            }
-            let text = textKey(fromExact: pair.key)
-            guard !text.isEmpty else { return }
-            aggregated[text, default: 0] += pair.value
-        }
-    }
-
-    static func textKey(fromExact exact: String) -> String {
-        let parts = exact.split(separator: "|", omittingEmptySubsequences: false)
-            .map(String.init)
-            .filter { $0.hasPrefix("text:") }
-        return parts.joined(separator: "|")
-    }
-
-    static func signatureCounts(fromSessionChatRows rows: [SessionChatRow]) -> [String: Int] {
-        signatureCounts(rows.map { TimelineRow.fromSessionChatRow($0) })
+        return (rows, echoes)
     }
 
     // MARK: - Change / layout helpers
@@ -557,7 +435,7 @@ nonisolated enum SessionChatTimelineProjector {
             case .text(let id, _, let doc):
                 "t:\(id):\(doc != nil)"
             case .attachment(let id, let file):
-                "a:\(id):\(file.id)"
+                "a:\(id):\(file.id):\(file.previewData != nil)"
             case .toolCard(let id, let card):
                 "c:\(id):\(card.errorText != nil):\(card.additions ?? -1):\(card.deletions ?? -1)"
             case .toolGroup(let id, let group):
@@ -571,10 +449,22 @@ nonisolated enum SessionChatTimelineProjector {
                     + paragraph.chips.map {
                         "\($0.status.rawValue)/\($0.additions ?? -1)/\($0.deletions ?? -1)"
                     }.joined(separator: ",")
+            case .stepRail(let id, let rail):
+                "sr:\(id):"
+                    + rail.steps.map {
+                        "\($0.id)/\($0.status.rawValue)/\($0.isBranch)/\($0.detail != nil)/\($0.additions ?? -1)/\($0.deletions ?? -1)"
+                    }.joined(separator: ",")
+            case .activityCard(let id, let card):
+                "ac:\(id):"
+                    + card.steps.map {
+                        "\($0.id)/\($0.status.rawValue)/\($0.additions ?? -1)/\($0.deletions ?? -1)"
+                    }.joined(separator: ",")
             case .stopNote(let id, let reason):
                 "x:\(id):\(reason.rawValue)"
-            case .failureLine(let id, _, let body, let neutral, let action, _, _):
-                "f:\(id):\(body != nil):\(neutral):\(action != nil)"
+            case .failureLine(let id, _, let body, let neutral, let action, _, _, let retryAt):
+                "f:\(id):\(body != nil):\(neutral):\(action != nil):\(retryAt != nil)"
+            case .notice(let id, let notice):
+                "o:\(id):\(String(describing: notice.kind).hashValue)"
             }
         }.joined(separator: "|")
         return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(row.pendingDelivery == nil ? "0" : "1"):\(blockKey)"
@@ -609,10 +499,16 @@ nonisolated enum SessionChatTimelineProjector {
                 "n:\(id)"
             case .stepParagraph(let id, let paragraph):
                 "s:\(id):\(paragraph.chips.count)"
+            case .stepRail(let id, let rail):
+                "sr:\(id):\(rail.steps.count)"
+            case .activityCard(let id, let card):
+                "ac:\(id):\(card.steps.count)"
             case .stopNote(let id, let reason):
                 "x:\(id):\(reason.rawValue)"
-            case .failureLine(let id, _, let body, _, _, _, _):
+            case .failureLine(let id, _, let body, _, _, _, _, _):
                 "f:\(id):\(body != nil)"
+            case .notice(let id, _):
+                "o:\(id)"
             }
         }.joined(separator: "|")
         return "\(row.blocks.count)|\(attachments)|\(blocks)"

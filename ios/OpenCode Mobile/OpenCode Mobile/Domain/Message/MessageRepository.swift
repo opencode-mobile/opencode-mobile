@@ -19,6 +19,8 @@ protocol MessageRepository: Sendable {
     func sendMessage(sessionID: String, text: String, directory: String?) async throws -> Message
     func sendPromptAsync(sessionID: String, options: PromptSendOptions, directory: String?) async throws
     func sendPromptAsync(sessionID: String, text: String, directory: String?) async throws
+    /// Runs a composer `!` command in the session; its output arrives through shell events.
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws
 }
 
 extension MessageRepository {
@@ -181,6 +183,13 @@ final class DefaultMessageRepository: MessageRepository {
             )
         }
         DiagnosticLog.info(.chat, "prompt_async done session=\(sessionID)")
+    }
+
+    func runShellCommand(sessionID: String, options: ShellCommandOptions, directory: String?) async throws {
+        DiagnosticLog.info(.chat, "runShellCommand session=\(sessionID)")
+        try await run {
+            try await messageRemote.runShellCommand(sessionID: sessionID, options: options, directory: directory)
+        }
     }
 
     private func run<T>(_ work: () async throws -> T) async throws -> T {

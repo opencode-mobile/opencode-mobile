@@ -3,9 +3,11 @@ package dev.opencode.mobile.data.remote
 import dev.opencode.mobile.data.remote.dto.ApiListEnvelope
 import dev.opencode.mobile.data.remote.dto.MessageDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
+import dev.opencode.mobile.data.remote.dto.V1ShellRequestDto
 import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionMessageDto
+import dev.opencode.mobile.data.remote.dto.V2ShellRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchAgentRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
 import dev.opencode.mobile.domain.message.Attachment
@@ -161,6 +163,35 @@ class MessagesApi private constructor(
         ) {
             PromptJsonBodyWriter.writeV2Prompt(body, attachments, promptTempDir())
         }
+    }
+
+    /**
+     * Both protocols run the command before they answer, so the request stays open for as
+     * long as the command does. Both calls get the long prompt-send ceiling instead of the
+     * default REST one ([postSuccess] applies it for v2).
+     */
+    suspend fun runShell(
+        sessionId: String,
+        body: V1ShellRequestDto,
+        directory: String? = null,
+    ) {
+        val response =
+            httpClient.get().post("session/$sessionId/shell") {
+                applyDurableSend(null)
+                applyDirectory(directory)
+                setJsonBody(json, body)
+            }
+        if (!response.status.isSuccess()) {
+            response.fail("shell")
+        }
+        response.bodyAsText()
+    }
+
+    suspend fun runShellV2(
+        sessionId: String,
+        body: V2ShellRequestDto,
+    ) {
+        postSuccess("api/session/$sessionId/shell", body)
     }
 
     suspend fun switchSessionAgent(

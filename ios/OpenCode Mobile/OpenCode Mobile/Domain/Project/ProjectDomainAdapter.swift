@@ -7,7 +7,11 @@ struct ProjectDomainAdapter: Sendable {
             id: dto.id,
             worktree: worktree,
             displayName: Self.displayName(from: worktree),
-            activityAtEpochMs: dto.time?.activityEpochMs
+            activityAtEpochMs: dto.time?.activityEpochMs,
+            isRepository: !(dto.vcs ?? "").isEmpty,
+            isArchived: dto.time?.archived != nil,
+            name: dto.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            canonical: dto.canonical?.nilIfEmpty
         )
     }
 
@@ -36,4 +40,8 @@ struct ProjectDomainAdapter: Sendable {
         let name = ServerPathPolicy.name(worktree)
         return name.isEmpty ? worktree : name
     }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

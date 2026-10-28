@@ -29,7 +29,7 @@ struct ModelDomainAdapter: Sendable {
         models: [V2ModelInfoDTO],
         defaultModel: V2ModelInfoDTO? = nil
     ) -> ModelSelectionCatalog {
-        let providerNames = Dictionary(uniqueKeysWithValues: providers.map { ($0.id, $0.name ?? $0.id) })
+        let providerNames = Dictionary(providers.map { ($0.id, $0.name ?? $0.id) }, uniquingKeysWith: { _, latest in latest })
         let disabledProviders = Set(providers.filter { $0.disabled == true }.map(\.id))
         let options: [ModelSelectionOption] = models.compactMap { model in
             guard isUsable(model), !disabledProviders.contains(model.providerID) else { return nil }

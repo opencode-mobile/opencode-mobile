@@ -6,6 +6,19 @@ struct Project: Sendable, Equatable {
     let displayName: String
     /// Last activity in epoch ms (v2 `time.active`, else `time.updated`), when the server sent it.
     var activityAtEpochMs: Int64? = nil
+    /// True when the server tracks the folder with a version control system (`vcs`, e.g. git).
+    var isRepository = false
+    /// True when the server archived the project because its directories are gone (v2 `time.archived`).
+    var isArchived = false
+    /// User-set project name, when the server sent one.
+    var name: String? = nil
+    /// Main checkout of the project; `worktree` when the server did not say otherwise.
+    var canonical: String? = nil
+
+    var canonicalWorktree: String {
+        if let canonical, !canonical.isEmpty { return canonical }
+        return worktree
+    }
 }
 
 enum ServerProbeError: Error, Equatable {

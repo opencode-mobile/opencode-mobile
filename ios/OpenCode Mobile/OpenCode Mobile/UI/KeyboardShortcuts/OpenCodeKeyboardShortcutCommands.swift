@@ -135,7 +135,7 @@ enum OpenCodeKeyboardShortcutGate {
     /// Observable state; decides which shortcuts are listed and matched. A disabled
     /// (unlisted) shortcut leaves the key event to the focused field.
     static var allowsShortcuts: Bool {
-        OpenCodeKeyboardShortcutPolicy.allowsShortcuts(
+        !AppLockState.shared.isLocked && OpenCodeKeyboardShortcutPolicy.allowsShortcuts(
             textInputFocus: OpenCodeTextInputFocusMonitor.shared.focus,
             overlayPresented: OpenCodeWindowOverlayRegistry.shared.hasOverlay
         )
@@ -146,6 +146,7 @@ enum OpenCodeKeyboardShortcutGate {
     /// Also covers inputs that post no editing notifications, such as the web
     /// terminal.
     static func allowsShortcutsNow() -> Bool {
+        guard !AppLockState.shared.isLocked else { return false }
         let focus = OpenCodeTextInputFocusMonitor.classify(UIResponder.openCodeCurrentFirstResponder())
         guard OpenCodeKeyboardShortcutPolicy.allowsShortcuts(
             textInputFocus: focus,

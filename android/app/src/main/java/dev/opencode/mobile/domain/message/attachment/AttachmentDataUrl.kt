@@ -14,6 +14,9 @@ object AttachmentDataUrl {
             else -> null
         }
 
+    /** Like [kind], but any other mime is a generic [AttachmentKind.File] (uploaded files only). */
+    fun kindOrFile(mime: String): AttachmentKind = kind(mime) ?: AttachmentKind.File
+
     @OptIn(ExperimentalEncodingApi::class)
     fun make(
         bytes: ByteArray,

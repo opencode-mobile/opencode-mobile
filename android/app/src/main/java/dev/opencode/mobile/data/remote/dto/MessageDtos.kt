@@ -59,6 +59,8 @@ data class MessageErrorDataDto(
     val isRetryable: Boolean? = null,
     val providerID: String? = null,
     val retries: Int? = null,
+    /** v2 `retryAfterMs`, carried here by the live event translation; v1 servers never send it. */
+    val retryAfterMs: Long? = null,
 )
 
 @Serializable
@@ -83,6 +85,8 @@ data class MessagePartDto(
     val mime: String? = null,
     val url: String? = null,
     val filename: String? = null,
+    /** Absolute server path of a file the client uploaded (from a v2 prompt's `metadata.attachments`). */
+    val serverPath: String? = null,
     val system: String? = null,
     val tool: String? = null,
     val source: JsonObject? = null,
@@ -104,6 +108,8 @@ data class MessagePartDto(
     val auto: Boolean? = null,
     val completed: Boolean? = null,
     val summary: String? = null,
+    /** Client-only `notice` part from the v2 live projection (a timeline notice). */
+    val notice: JsonObject? = null,
 )
 
 @Serializable
@@ -142,12 +148,21 @@ data class SendMessageRequestDto(
     val model: SendPromptModelDto? = null,
     val variant: String? = null,
     val agent: String? = null,
+    @SerialName("messageID") val messageId: String? = null,
 )
 
 @Serializable
 data class SendPromptModelDto(
     @SerialName("providerID") val providerId: String,
     @SerialName("modelID") val modelId: String,
+)
+
+/** v1 `POST /session/{id}/shell`. The server records the run under [agent] and [model]. */
+@Serializable
+data class V1ShellRequestDto(
+    val agent: String,
+    val command: String,
+    val model: SendPromptModelDto? = null,
 )
 
 @Serializable
@@ -179,11 +194,14 @@ data class AgentPartSourceDto(
 
 @Serializable
 data class V2PromptRequestDto(
+    val id: String? = null,
     val text: String,
     val files: List<V2PromptFileDto>? = null,
     val agents: List<V2PromptAgentDto>? = null,
     val skills: List<V2PromptSkillDto>? = null,
     val delivery: String,
+    /** `{attachments: [{name, mime, path}]}` for files uploaded to the server instead of sent inline. */
+    val metadata: JsonObject? = null,
     /** Project-file mentions. Written into `files` as literal URIs, after device attachments. */
     @Transient val fileMentions: List<V2PromptFileMentionDto>? = null,
 )
@@ -197,6 +215,7 @@ data class V2PromptFileMentionDto(
 @Serializable
 data class V2PromptSkillDto(
     val id: String,
+    val mention: V2PromptSourceDto? = null,
 )
 
 @Serializable
@@ -211,6 +230,12 @@ data class V2PromptFileDto(
 data class V2PromptAgentDto(
     val name: String,
     val mention: V2PromptSourceDto? = null,
+)
+
+/** v2 `POST /api/session/{id}/shell`; output streams back as `session.shell.*` events. */
+@Serializable
+data class V2ShellRequestDto(
+    val command: String,
 )
 
 @Serializable

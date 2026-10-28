@@ -132,13 +132,16 @@ android {
         }
     }
     compileOptions {
+        // minSdk 24 has no java.time; desugaring backports it to API 24-25.
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures {
         compose = true
         aidl = false
-        buildConfig = false
+        // BuildConfig.DEBUG gates logcat output and the Ktor Logging plugin (#755).
+        buildConfig = true
         shaders = false
     }
 
@@ -151,6 +154,7 @@ android {
     sourceSets {
         getByName("test") {
             resources.srcDir("../../shared/sse-recovery")
+            resources.srcDir("../../shared/feedback")
         }
     }
 }
@@ -160,6 +164,8 @@ kotlin {
 }
 
 dependencies {
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)
     androidTestImplementation(composeBom)
@@ -171,6 +177,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.compose.ui)
@@ -223,4 +230,5 @@ dependencies {
     releaseImplementation(libs.firebase.crashlytics)
     releaseImplementation(libs.firebase.analytics)
     releaseImplementation(libs.firebase.config)
+    releaseImplementation(libs.firebase.appcheck.playintegrity)
 }

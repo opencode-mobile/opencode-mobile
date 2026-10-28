@@ -1,5 +1,25 @@
 import Foundation
 
+/// A skill admitted on a v2 user prompt. The skill body stays on the server;
+/// chat only needs the id and slash name so the prompt can show as `[/name]`.
+nonisolated struct PromptSkill: Equatable, Sendable {
+    let id: String
+    let name: String
+    /// Mention text already present in the prompt, when another client recorded one.
+    let mentionText: String?
+    /// Offsets of that mention into the prompt text, when the sender recorded them.
+    let mentionStart: Int?
+    let mentionEnd: Int?
+
+    init(id: String, name: String, mentionText: String? = nil, mentionStart: Int? = nil, mentionEnd: Int? = nil) {
+        self.id = id
+        self.name = name
+        self.mentionText = mentionText
+        self.mentionStart = mentionStart
+        self.mentionEnd = mentionEnd
+    }
+}
+
 nonisolated struct Message: Equatable, Sendable, Identifiable {
     let id: String
     let role: MessageRole
@@ -22,6 +42,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
     var stopReason: MessageStopReason?
     /// A run failure to show under the reply. Nil when the run did not fail, or the user stopped it.
     var failure: SessionFailure?
+    /// Skills admitted with this prompt. Empty for v1 and for messages that did not load a skill.
+    var promptSkills: [PromptSkill]
 
     init(
         id: String,
@@ -42,7 +64,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         followUpDelivery: FollowUpDelivery? = nil,
         isWaitingForPickup: Bool = false,
         stopReason: MessageStopReason? = nil,
-        failure: SessionFailure? = nil
+        failure: SessionFailure? = nil,
+        promptSkills: [PromptSkill] = []
     ) {
         self.id = id
         self.role = role
@@ -63,15 +86,17 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
         self.isWaitingForPickup = isWaitingForPickup
         self.stopReason = stopReason
         self.failure = failure
+        self.promptSkills = promptSkills
     }
 
-    /// Fills agent, model, variant, and an omitted failure this copy lacks from `base`.
+    /// Fills agent, model, variant, prompt skills, and an omitted failure this copy lacks from `base`.
     /// v2 live infos are partial. An explicit null error is a clear and must not be restored.
     func withMetadata(from base: Message?, failureOmitted: Bool) -> Message {
         guard let base else { return self }
         var copy = self
         if copy.stopReason == nil { copy.stopReason = base.stopReason }
         if copy.failure == nil, failureOmitted { copy.failure = base.failure }
+        if copy.promptSkills.isEmpty { copy.promptSkills = base.promptSkills }
         guard mode == nil || model == nil else { return copy }
         let takeModel = model == nil
         return Message(
@@ -93,7 +118,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             followUpDelivery: followUpDelivery,
             isWaitingForPickup: isWaitingForPickup,
             stopReason: copy.stopReason,
-            failure: copy.failure
+            failure: copy.failure,
+            promptSkills: copy.promptSkills
         )
     }
 
@@ -120,7 +146,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             followUpDelivery: followUpDelivery,
             isWaitingForPickup: isWaitingForPickup,
             stopReason: stopReason,
-            failure: failure
+            failure: failure,
+            promptSkills: promptSkills
         )
     }
 
@@ -144,7 +171,8 @@ nonisolated struct Message: Equatable, Sendable, Identifiable {
             followUpDelivery: followUpDelivery,
             isWaitingForPickup: isWaitingForPickup,
             stopReason: stopReason,
-            failure: failure
+            failure: failure,
+            promptSkills: promptSkills
         )
     }
 }
@@ -174,6 +202,29 @@ nonisolated struct SessionFailure: Equatable, Sendable {
     var providerID: String? = nil
     var retries: Int? = nil
     var source: FailureSource = .step
+    /// v2 `retryAfterMs`: how long the provider asked to wait.
+    var retryAfterMs: Int64? = nil
+    /// When the failure was recorded; set only with `retryAfterMs`.
+    var recordedAtEpochMs: Int64? = nil
+
+    /// When the provider said to try again; nil when the server sent no `retryAfterMs`
+    /// or one too large to add (Int64 addition traps on overflow).
+    func retryAtEpochMs() -> Int64? {
+        guard let retryAfterMs, let recordedAtEpochMs else { return nil }
+        let (retryAt, overflow) = recordedAtEpochMs.addingReportingOverflow(retryAfterMs)
+        return overflow ? nil : retryAt
+    }
+
+    /// "Try again in N s", minutes above 90 s; nil once the wait is over.
+    static func retryAfterLabel(remainingMs: Int64) -> String? {
+        guard remainingMs > 0 else { return nil }
+        if remainingMs <= 90_000 { return "Try again in \(ceilDiv(remainingMs, 1_000)) s" }
+        return "Try again in \(ceilDiv(remainingMs, 60_000)) min"
+    }
+
+    private static func ceilDiv(_ value: Int64, _ unit: Int64) -> Int64 {
+        (value + unit - 1) / unit
+    }
 
     /// The composer retry status already shows this failure, so the transcript mark waits.
     func coversLiveRetry() -> Bool {
@@ -185,6 +236,7 @@ nonisolated struct SessionFailure: Equatable, Sendable {
     func action() -> FailureAction? {
         let kind = type?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? ""
         if kind == "provider.no-route" { return .pickModel }
+        if kind == "provider.free-limit" || kind == "provider.model-budget-limit" { return .pickModel }
         if kind == "provider.content-filter" { return nil }
         if isContextOverflow() { return .compact }
         if kind == "unknown" || kind == "provider.unknown" { return .copy }
@@ -255,7 +307,9 @@ nonisolated struct SessionFailure: Equatable, Sendable {
         isRetryable: Bool? = nil,
         providerID: String? = nil,
         retries: Int? = nil,
-        source: FailureSource = .step
+        source: FailureSource = .step,
+        retryAfterMs: Int64? = nil,
+        recordedAtEpochMs: Int64? = nil
     ) -> SessionFailure? {
         if isSilent(type: name) { return nil }
         return build(
@@ -267,7 +321,9 @@ nonisolated struct SessionFailure: Equatable, Sendable {
             isRetryable: isRetryable,
             providerID: providerID,
             retries: retries,
-            source: source
+            source: source,
+            retryAfterMs: retryAfterMs,
+            recordedAtEpochMs: recordedAtEpochMs
         )
     }
 
@@ -277,7 +333,9 @@ nonisolated struct SessionFailure: Equatable, Sendable {
         status: Int?,
         providerBody: String?,
         outcome: String? = nil,
-        source: FailureSource = .step
+        source: FailureSource = .step,
+        retryAfterMs: Int64? = nil,
+        recordedAtEpochMs: Int64? = nil
     ) -> SessionFailure? {
         if outcome?.caseInsensitiveCompare("succeeded") == .orderedSame
             || outcome?.caseInsensitiveCompare("interrupted") == .orderedSame
@@ -291,7 +349,9 @@ nonisolated struct SessionFailure: Equatable, Sendable {
             status: status,
             providerBody: providerBody,
             emptyFallback: "",
-            source: source
+            source: source,
+            retryAfterMs: retryAfterMs,
+            recordedAtEpochMs: recordedAtEpochMs
         )
     }
 
@@ -306,7 +366,9 @@ nonisolated struct SessionFailure: Equatable, Sendable {
         isRetryable: Bool? = nil,
         providerID: String? = nil,
         retries: Int? = nil,
-        source: FailureSource = .step
+        source: FailureSource = .step,
+        retryAfterMs: Int64? = nil,
+        recordedAtEpochMs: Int64? = nil
     ) -> SessionFailure? {
         let trimmedBody = providerBody?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let body = trimmedBody.isEmpty ? nil : String(trimmedBody.prefix(maxBody))
@@ -322,6 +384,7 @@ nonisolated struct SessionFailure: Equatable, Sendable {
         if shown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && body == nil && http == nil {
             return nil
         }
+        let wait = retryAfterMs.flatMap { $0 >= 0 ? $0 : nil }
         return SessionFailure(
             type: trimmedType.isEmpty ? nil : trimmedType,
             message: shown,
@@ -330,7 +393,9 @@ nonisolated struct SessionFailure: Equatable, Sendable {
             isRetryable: isRetryable,
             providerID: providerID,
             retries: retries,
-            source: source
+            source: source,
+            retryAfterMs: wait,
+            recordedAtEpochMs: wait == nil ? nil : recordedAtEpochMs
         )
     }
 }
@@ -396,6 +461,8 @@ nonisolated enum MessagePart: Equatable, Sendable {
     /// behind a disclosure, never as reply text.
     case compaction(CompactionPart)
     case reasoning(ReasoningPart)
+    /// A session-level change recorded between turns. Only on a `.notice` message.
+    case notice(TimelineNotice)
 }
 
 nonisolated struct TextPart: Equatable, Sendable {
@@ -428,6 +495,26 @@ nonisolated enum AttachmentKind: String, Equatable, Sendable {
     case image
     case pdf
     case text
+    /// Anything else, which only travels as a file uploaded to the server.
+    case file
+}
+
+/// Where an attachment's bytes live: in the prompt body (`inline`), on their way to the server,
+/// or already on the server at `serverPath` (streamed upload, #644).
+nonisolated enum AttachmentUploadState: Equatable, Sendable {
+    case inline
+    case uploading(fraction: Double)
+    case uploaded(serverPath: String)
+
+    var isPending: Bool {
+        if case .uploading = self { return true }
+        return false
+    }
+
+    var serverPath: String? {
+        if case let .uploaded(path) = self { return path }
+        return nil
+    }
 }
 
 nonisolated struct Attachment: Equatable, Sendable, Identifiable {
@@ -439,8 +526,13 @@ nonisolated struct Attachment: Equatable, Sendable, Identifiable {
     let fileURL: URL?
     let byteCount: Int64
     let previewData: Data?
+    var upload: AttachmentUploadState
 
     var usesFileBackedBody: Bool { fileURL != nil }
+    /// Bytes already on the server: the prompt names the path instead of carrying them.
+    var uploadedServerPath: String? { upload.serverPath }
+    var isServerFile: Bool { uploadedServerPath != nil }
+    var isUploadPending: Bool { upload.isPending }
 
     init(
         id: String,
@@ -450,7 +542,8 @@ nonisolated struct Attachment: Equatable, Sendable, Identifiable {
         dataURL: String,
         fileURL: URL? = nil,
         byteCount: Int64 = 0,
-        previewData: Data? = nil
+        previewData: Data? = nil,
+        upload: AttachmentUploadState = .inline
     ) {
         self.id = id
         self.filename = filename
@@ -460,7 +553,21 @@ nonisolated struct Attachment: Equatable, Sendable, Identifiable {
         self.fileURL = fileURL
         self.byteCount = byteCount
         self.previewData = previewData
+        self.upload = upload
     }
+
+    func withUpload(_ upload: AttachmentUploadState) -> Attachment {
+        var copy = self
+        copy.upload = upload
+        return copy
+    }
+}
+
+extension Sequence where Element == Attachment {
+    /// Attachments whose bytes ride in the prompt body.
+    var inlineAttachments: [Attachment] { filter { !$0.isServerFile } }
+    /// Attachments already on the server; the prompt names their paths.
+    var uploadedAttachments: [Attachment] { filter(\.isServerFile) }
 }
 
 nonisolated struct FilePart: Equatable, Sendable {
@@ -470,6 +577,8 @@ nonisolated struct FilePart: Equatable, Sendable {
     let kind: AttachmentKind
     let dataURL: String
     let previewData: Data?
+    /// Absolute path on the server when the bytes were uploaded (`metadata.attachments`).
+    let serverPath: String?
 
     init(
         id: String,
@@ -477,7 +586,8 @@ nonisolated struct FilePart: Equatable, Sendable {
         mime: String,
         kind: AttachmentKind,
         dataURL: String,
-        previewData: Data? = nil
+        previewData: Data? = nil,
+        serverPath: String? = nil
     ) {
         self.id = id
         self.filename = filename
@@ -485,6 +595,7 @@ nonisolated struct FilePart: Equatable, Sendable {
         self.kind = kind
         self.dataURL = dataURL
         self.previewData = previewData
+        self.serverPath = serverPath
     }
 }
 
@@ -591,6 +702,42 @@ nonisolated struct ReasoningPart: Equatable, Sendable {
     }
 }
 
+/// A session-level change the timeline shows as a quiet line where it happened:
+/// the working directory moved, the agent or model changed, instructions were
+/// updated, or the server resumed a turn after a restart. Only v2 records these.
+nonisolated struct TimelineNotice: Equatable, Sendable {
+    /// The server message id; a live notice and its REST copy share it.
+    let id: String
+    let kind: TimelineNoticeKind
+}
+
+nonisolated enum TimelineNoticeKind: Equatable, Sendable {
+    /// The session's working directory moved.
+    case moved(directory: String)
+    /// The primary agent changed. `previous` is nil when unknown or unchanged.
+    case agentChanged(agent: String, previous: String?)
+    /// The model or its variant changed. `previous` is nil when unknown (live).
+    case modelChanged(model: TimelineNoticeModel, previous: TimelineNoticeModel?)
+    /// Instruction files changed; `sources` may be empty when the server named none.
+    case instructionsUpdated(sources: [String])
+    /// Any other system update, by its human-readable description.
+    case systemNote(String)
+    /// The server restarted mid-turn and resumed it.
+    case restart
+}
+
+nonisolated struct TimelineNoticeModel: Equatable, Sendable {
+    let providerID: String?
+    let modelID: String
+    let variant: String?
+
+    init(providerID: String?, modelID: String, variant: String? = nil) {
+        self.providerID = providerID
+        self.modelID = modelID
+        self.variant = variant
+    }
+}
+
 nonisolated struct CompactionPart: Equatable, Sendable {
     let id: String?
     let auto: Bool
@@ -615,8 +762,16 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
     let fileMentions: [FileMention]
     /// Server worktree used to build `file://` URLs for file mentions.
     let worktree: String?
-    let skillIDs: [String]
+    /// v2 skills placed as `/name` spans; sent with their offsets into `text`.
+    let skillMentions: [SkillMention]
     let delivery: FollowUpDelivery
+    /// `ClientMessageID` the server gives the user message it creates.
+    let messageID: String?
+
+    /// Attachments whose bytes ride in the prompt body.
+    var inlineAttachments: [Attachment] { attachments.inlineAttachments }
+    /// Attachments already uploaded; the prompt names their server paths.
+    var uploadedAttachments: [Attachment] { attachments.uploadedAttachments }
 
     init(
         text: String,
@@ -627,8 +782,9 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
         agentMentions: [AgentMention] = [],
         fileMentions: [FileMention] = [],
         worktree: String? = nil,
-        skillIDs: [String] = [],
-        delivery: FollowUpDelivery = .steer
+        skillMentions: [SkillMention] = [],
+        delivery: FollowUpDelivery = .steer,
+        messageID: String? = nil
     ) {
         self.text = text
         self.attachments = attachments
@@ -638,8 +794,9 @@ nonisolated struct PromptSendOptions: Equatable, Sendable {
         self.agentMentions = agentMentions
         self.fileMentions = fileMentions
         self.worktree = worktree
-        self.skillIDs = skillIDs
+        self.skillMentions = skillMentions
         self.delivery = delivery
+        self.messageID = messageID
     }
 }
 
@@ -648,12 +805,22 @@ nonisolated struct PromptModelSelection: Equatable, Sendable {
     let modelID: String
 }
 
+/// A shell command typed as `!command` in the composer. v1 records the run under `agent` and
+/// `model`; v2 runs it in the session as it is and ignores both.
+nonisolated struct ShellCommandOptions: Equatable, Sendable {
+    let command: String
+    let agent: String
+    let model: PromptModelSelection?
+}
+
 nonisolated enum MessageRole: String, Sendable {
     case user
     case assistant
     case system
     case command
     case tool
+    /// A timeline notice: neither the user's prompt nor a reply.
+    case notice
     case unknown
 
     var displayLabel: String {
@@ -668,6 +835,8 @@ nonisolated enum MessageRole: String, Sendable {
             "Command"
         case .tool:
             "Tool"
+        case .notice:
+            "Notice"
         case .unknown:
             "Message"
         }

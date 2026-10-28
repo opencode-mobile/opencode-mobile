@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.PrivacyPolicy
@@ -30,7 +31,10 @@ import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
+import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
+import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.openCodeColor
@@ -49,6 +53,8 @@ import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
+import dev.opencode.mobile.ui.components.openCodeBottomSheetScrollTarget
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 @Composable
@@ -61,6 +67,7 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onServersClick: () -> Unit,
     onAppearanceClick: () -> Unit,
+    onSendFeedbackClick: () -> Unit = {},
     onClearData: () -> Unit,
     onClearSessionCache: () -> Unit,
     sessionCacheSizeLabel: String,
@@ -69,22 +76,27 @@ fun SettingsScreen(
     build: String,
     hideUserDirectoryPrefix: Boolean,
     onHideUserDirectoryPrefixChange: (Boolean) -> Unit,
+    showsWorktrees: Boolean = true,
+    onShowsWorktreesChange: (Boolean) -> Unit = {},
+    sessionRowStyle: HomeSessionRowStyle = HomeSessionRowStyle.DEFAULT,
+    onSessionRowStyleChange: (HomeSessionRowStyle) -> Unit = {},
     recentWindowHours: Int,
     onRecentWindowHoursChange: (Int) -> Unit,
     collapseConsecutiveToolCalls: Boolean,
     onCollapseConsecutiveToolCallsChange: (Boolean) -> Unit,
-    chipTimeline: Boolean,
-    onChipTimelineChange: (Boolean) -> Unit,
+    timelineStyle: SessionChatTimelineStyle,
+    onTimelineStyleChange: (SessionChatTimelineStyle) -> Unit,
     chipTimelineAvailable: Boolean = true,
     followUpDelivery: FollowUpDelivery,
     onFollowUpDeliveryChange: (FollowUpDelivery) -> Unit,
     supportsFollowUpDelivery: Boolean,
-    composerDictation: Boolean,
-    onComposerDictationChange: (Boolean) -> Unit,
     textMateEnabled: Boolean,
     onTextMateEnabledChange: (Boolean) -> Unit,
     productAnalyticsConsented: Boolean,
     onProductAnalyticsConsentedChange: (Boolean) -> Unit,
+    appLockEnabled: Boolean = false,
+    appLockAvailable: Boolean = false,
+    onAppLockEnabledChange: (Boolean) -> Unit = {},
     serversSummary: ServersSummary = ServersSummary(),
     modifier: Modifier = Modifier,
     selectedDetail: SettingsDetail? = null,
@@ -93,6 +105,8 @@ fun SettingsScreen(
     var showClearSessionCacheConfirmation by remember { mutableStateOf(false) }
     var showRecentWindowPicker by remember { mutableStateOf(false) }
     var showFollowUpPicker by remember { mutableStateOf(false) }
+    var showTimelineStylePicker by remember { mutableStateOf(false) }
+    var showSessionRowStylePicker by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val currentTheme = ThemeManager.currentTheme
     val currentSyntax = ThemeManager.currentSyntaxPreset
@@ -157,6 +171,17 @@ fun SettingsScreen(
                         logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_CONNECTION)
                         onServersClick()
                     },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeSectionHeader(title = "Help & Feedback")
+
+                OpenCodeListItem(
+                    title = "Send Feedback",
+                    subtitle = "Report a bug or share an idea",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Edit, "Send Feedback"),
+                    onClick = onSendFeedbackClick,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
@@ -227,23 +252,15 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
-                if (chipTimelineAvailable) {
-                    OpenCodeListItem(
-                        title = "Chip Timeline",
-                        subtitle = "Show the tools an agent used as chips under its narration",
-                        style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Chip Timeline"),
-                        accessory =
-                            OpenCodeListItemAccessory.Toggle(
-                                checked = chipTimeline,
-                                onCheckedChange = { enabled ->
-                                    logSettingsToggle(ProductAnalytics.Action.SETTINGS_TOGGLE_CHIP_TIMELINE, enabled)
-                                    onChipTimelineChange(enabled)
-                                },
-                            ),
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-                }
+                OpenCodeListItem(
+                    title = "Timeline Style",
+                    subtitle = timelineStyle.title,
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Timeline Style"),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = { showTimelineStylePicker = true },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
 
                 OpenCodeListItem(
                     title = "Follow-up send",
@@ -275,25 +292,6 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
-                OpenCodeListItem(
-                    title = "Composer Dictation",
-                    subtitle = "Speak into the composer. Off until you turn this on.",
-                    style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Mic, "Composer Dictation"),
-                    accessory =
-                        OpenCodeListItemAccessory.Toggle(
-                            checked = composerDictation,
-                            onCheckedChange = { enabled ->
-                                logSettingsToggle(
-                                    ProductAnalytics.Action.SETTINGS_TOGGLE_COMPOSER_DICTATION,
-                                    enabled,
-                                )
-                                onComposerDictationChange(enabled)
-                            },
-                        ),
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-
                 themeLoadError?.let { error ->
                     OpenCodeInlineNotice(
                         message = error,
@@ -301,6 +299,37 @@ fun SettingsScreen(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
+
+                OpenCodeSectionHeader(title = "Home")
+
+                OpenCodeListItem(
+                    title = "Worktrees",
+                    subtitle = WORKTREES_SETTING_SUBTITLE,
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, "Worktrees"),
+                    accessory =
+                        OpenCodeListItemAccessory.Toggle(
+                            checked = showsWorktrees,
+                            onCheckedChange = { enabled ->
+                                logSettingsToggle(ProductAnalytics.Action.SETTINGS_TOGGLE_WORKTREES, enabled)
+                                onShowsWorktreesChange(enabled)
+                            },
+                        ),
+                    modifier = Modifier.padding(horizontal = 16.dp).testTag("settingsWorktreesToggle"),
+                )
+
+                OpenCodeListItem(
+                    title = "Session rows",
+                    subtitle = sessionRowStyle.settingsTitle(),
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.List, "Session rows"),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = {
+                        logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_SESSION_ROWS_PICKER)
+                        showSessionRowStylePicker = true
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp).testTag("settingsSessionRows"),
+                )
 
                 OpenCodeSectionHeader(title = "Session Cache")
 
@@ -327,6 +356,28 @@ fun SettingsScreen(
                 OpenCodeSectionHeader(title = "Privacy")
 
                 OpenCodeListItem(
+                    title = "App Lock",
+                    subtitle =
+                        if (appLockAvailable) {
+                            "Require your fingerprint, face or device PIN when the app returns from the background"
+                        } else {
+                            "Set a screen lock on this device to use App Lock"
+                        },
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Lock, "App Lock"),
+                    accessory =
+                        OpenCodeListItemAccessory.Toggle(
+                            checked = appLockEnabled,
+                            onCheckedChange = { enabled ->
+                                if (enabled && !appLockAvailable) return@Toggle
+                                onAppLockEnabledChange(enabled)
+                                logSettingsToggle(ProductAnalytics.Action.SETTINGS_TOGGLE_APP_LOCK, enabled)
+                            },
+                        ),
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
+                OpenCodeListItem(
                     title = "Privacy Policy",
                     subtitle = "How the apps handle data",
                     style = OpenCodeListItemStyle.Card,
@@ -342,8 +393,8 @@ fun SettingsScreen(
                 )
 
                 OpenCodeListItem(
-                    title = "Product Analytics",
-                    subtitle = "Allow optional product usage events. Crash reporting is unchanged.",
+                    title = "Analytics & crash reports",
+                    subtitle = "Allow optional product usage events and crash reports. Off sends nothing to Firebase.",
                     style = OpenCodeListItemStyle.Card,
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Product Analytics"),
                     accessory =
@@ -471,6 +522,19 @@ fun SettingsScreen(
                         onClick = onFeatureFlagsClick,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
+
+                    OpenCodeListItem(
+                        title = "Performance Overlay",
+                        subtitle = "Live FPS and frame-time spikes",
+                        style = OpenCodeListItemStyle.Card,
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, "Performance Overlay"),
+                        accessory =
+                            OpenCodeListItemAccessory.Toggle(
+                                checked = PerformanceOverlayPreferences.enabled,
+                                onCheckedChange = PerformanceOverlayPreferences::updateEnabled,
+                            ),
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
                 }
             }
         }
@@ -479,6 +543,7 @@ fun SettingsScreen(
     OpenCodeBottomSheet(
         visible = showRecentWindowPicker,
         title = "Recent Window",
+        scrollTargetKey = recentWindowHours,
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.SETTINGS_RECENT_WINDOW_PICKER,
@@ -491,17 +556,13 @@ fun SettingsScreen(
             text = "Sessions stay in Recent while Running or Ready, or when updated within this window.",
             style = MaterialTheme.typography.bodySmall,
             color = openCodeColor("text-base"),
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            modifier = Modifier.openCodeBottomSheetContentInset().padding(bottom = 8.dp),
         )
         HomeSessionLadder.ALLOWED_WINDOW_HOURS.forEach { hours ->
             OpenCodeBottomSheetEntry(
                 title = HomeSessionLadder.formatWindowHoursLabel(hours),
-                endDecorator =
-                    if (hours == recentWindowHours) {
-                        BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
-                    } else {
-                        BottomSheetEntryDecorator.None
-                    },
+                selected = hours == recentWindowHours,
+                modifier = Modifier.openCodeBottomSheetScrollTarget(hours),
                 onClick = {
                     ProductAnalytics.logUserAction(
                         screenId = ProductAnalytics.Screen.SETTINGS_RECENT_WINDOW_PICKER,
@@ -510,6 +571,56 @@ fun SettingsScreen(
                     )
                     onRecentWindowHoursChange(hours)
                     showRecentWindowPicker = false
+                },
+            )
+        }
+    }
+
+    OpenCodeBottomSheet(
+        visible = showTimelineStylePicker,
+        title = "Timeline Style",
+        onDismissRequest = { showTimelineStylePicker = false },
+    ) {
+        SessionChatTimelineStyle
+            .available(chipTimelineAvailable)
+            .forEach { style ->
+                OpenCodeBottomSheetEntry(
+                    title = style.title,
+                    subtitle = style.subtitle,
+                    selected = style == timelineStyle,
+                    onClick = {
+                        // Chips keeps the existing toggle event; leaving Chips logs it disabled.
+                        if (style == SessionChatTimelineStyle.Chips || timelineStyle == SessionChatTimelineStyle.Chips) {
+                            logSettingsToggle(
+                                ProductAnalytics.Action.SETTINGS_TOGGLE_CHIP_TIMELINE,
+                                style == SessionChatTimelineStyle.Chips,
+                            )
+                        }
+                        onTimelineStyleChange(style)
+                        showTimelineStylePicker = false
+                    },
+                )
+            }
+    }
+
+    OpenCodeBottomSheet(
+        visible = showSessionRowStylePicker,
+        title = "Session rows",
+        onDismissRequest = { showSessionRowStylePicker = false },
+    ) {
+        HomeSessionRowStyle.entries.forEach { style ->
+            OpenCodeBottomSheetEntry(
+                title = style.settingsTitle(),
+                subtitle = style.settingsSubtitle(),
+                selected = style == sessionRowStyle,
+                onClick = {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.SETTINGS,
+                        actionId = ProductAnalytics.Action.SETTINGS_SESSION_ROWS,
+                        parameters = mapOf(ProductAnalytics.Param.MODE to style.wireValue),
+                    )
+                    onSessionRowStyleChange(style)
+                    showSessionRowStylePicker = false
                 },
             )
         }
@@ -525,15 +636,15 @@ fun SettingsScreen(
                 title = if (mode == FollowUpDelivery.Steer) "Steer" else "Queue",
                 startDecorator =
                     BottomSheetEntryDecorator.Icon(
-                        if (mode == FollowUpDelivery.Steer) OpenCodeIcons.ArrowWarmUp else OpenCodeIcons.ArrowUpward,
-                        null,
+                        if (mode ==
+                            FollowUpDelivery.Steer
+                        ) {
+                            OpenCodeIcons.ArrowWarmUp
+                        } else {
+                            OpenCodeIcons.ArrowUpward
+                        },
                     ),
-                endDecorator =
-                    if (mode == followUpDelivery) {
-                        BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, "Selected")
-                    } else {
-                        BottomSheetEntryDecorator.None
-                    },
+                selected = mode == followUpDelivery,
                 onClick = {
                     onFollowUpDeliveryChange(mode)
                     showFollowUpPicker = false
@@ -604,6 +715,18 @@ fun SettingsScreen(
     )
 }
 
+private fun HomeSessionRowStyle.settingsTitle(): String =
+    when (this) {
+        HomeSessionRowStyle.Compact -> "Compact"
+        HomeSessionRowStyle.Classic -> "Classic"
+    }
+
+private fun HomeSessionRowStyle.settingsSubtitle(): String =
+    when (this) {
+        HomeSessionRowStyle.Compact -> "Two lines: title and time, then project / worktree"
+        HomeSessionRowStyle.Classic -> "Project and worktree on their own lines"
+    }
+
 private fun logSettingsAction(actionId: String) {
     ProductAnalytics.logUserAction(
         screenId = ProductAnalytics.Screen.SETTINGS,
@@ -619,6 +742,9 @@ private fun copyAboutValueToClipboard(
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
     clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
 }
+
+internal const val WORKTREES_SETTING_SUBTITLE =
+    "Show each project\u2019s worktrees and branches on Home, and let New session pick a worktree when you hold it."
 
 private fun logSettingsToggle(
     actionId: String,
@@ -656,13 +782,11 @@ private fun SettingsScreenLightPreview() {
             collapseConsecutiveToolCalls =
                 SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
             onCollapseConsecutiveToolCallsChange = {},
-            chipTimeline = SessionChatDisplayPreferences.chipTimeline,
-            onChipTimelineChange = {},
+            timelineStyle = SessionChatDisplayPreferences.timelineStyle,
+            onTimelineStyleChange = {},
             followUpDelivery = FollowUpDelivery.Steer,
             onFollowUpDeliveryChange = {},
             supportsFollowUpDelivery = true,
-            composerDictation = SessionChatDisplayPreferences.composerDictation,
-            onComposerDictationChange = {},
             textMateEnabled = false,
             onTextMateEnabledChange = {},
             productAnalyticsConsented = false,
@@ -696,13 +820,11 @@ private fun SettingsScreenDarkPreview() {
             collapseConsecutiveToolCalls =
                 SessionChatDisplayPreferences.collapseConsecutiveToolCalls,
             onCollapseConsecutiveToolCallsChange = {},
-            chipTimeline = SessionChatDisplayPreferences.chipTimeline,
-            onChipTimelineChange = {},
+            timelineStyle = SessionChatDisplayPreferences.timelineStyle,
+            onTimelineStyleChange = {},
             followUpDelivery = FollowUpDelivery.Steer,
             onFollowUpDeliveryChange = {},
             supportsFollowUpDelivery = true,
-            composerDictation = SessionChatDisplayPreferences.composerDictation,
-            onComposerDictationChange = {},
             textMateEnabled = false,
             onTextMateEnabledChange = {},
             productAnalyticsConsented = false,

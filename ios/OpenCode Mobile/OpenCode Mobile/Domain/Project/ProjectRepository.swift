@@ -6,6 +6,14 @@ protocol ProjectRepository: Sendable {
     func getCurrentProject(directory: String?) async throws -> Project
 }
 
+struct UnavailableProjectRepository: ProjectRepository {
+    func probeServer() async throws {}
+    func listProjects() async throws -> [Project] { [] }
+    func getCurrentProject(directory: String?) async throws -> Project {
+        Project(id: "", worktree: directory ?? "", displayName: "")
+    }
+}
+
 struct DefaultProjectRepository: ProjectRepository, Sendable {
     private let api: ProjectsAPIClient
     private let adapter: ProjectDomainAdapter

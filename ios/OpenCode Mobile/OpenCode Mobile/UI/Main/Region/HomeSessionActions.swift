@@ -7,7 +7,6 @@ import Observation
 final class HomeSessionActions {
     private(set) var target: HomeSessionActionTarget?
     private(set) var sheetVisible = false
-    private(set) var canFork = false
     private(set) var canArchive = true
     private(set) var lifecycle: HomeSessionLifecycle = .active
     private(set) var showsSettle = false
@@ -28,7 +27,7 @@ final class HomeSessionActions {
     private let messageRepository: any MessageRepository
     private let capabilities: () -> SessionCapabilities
 
-    private var forkGateTask: Task<Void, Never>?
+    private var forkCheckTask: Task<Void, Never>?
     private var forkedOpenTarget: SessionListItem?
 
     init(
@@ -54,7 +53,6 @@ final class HomeSessionActions {
         let next = HomeSessionActionTarget(sessionId: sessionId, title: title, worktree: worktree)
         target = next
         sheetVisible = presentSheet
-        canFork = false
         self.canArchive = canArchive && lifecycle == .active
         self.lifecycle = lifecycle
         self.showsSettle = showsSettle
@@ -63,10 +61,8 @@ final class HomeSessionActions {
         snoozeAmount = "1"
         snoozeUnit = .hours
         snoozeError = nil
-        forkGateTask?.cancel()
-        // Archived, settled, and snoozed rows do not fork. Swipes skip the lookup.
-        guard presentSheet, lifecycle == .active else { return }
-        forkGateTask = Task { await resolveForkVisibility(next) }
+        forkCheckTask?.cancel()
+        forkCheckTask = nil
     }
 
     /// Settles the armed session. True when the server accepted it.
@@ -295,6 +291,8 @@ final class HomeSessionActions {
             isVisible: true,
             draftTitle: ProjectListHomeViewModel.suggestedForkTitle(for: target.title)
         )
+        forkCheckTask?.cancel()
+        forkCheckTask = Task { await resolveForkCheck(target) }
     }
 
     func updateForkDraft(_ text: String) {
@@ -310,6 +308,7 @@ final class HomeSessionActions {
 
     func confirmFork() async -> String? {
         guard let target, !forkDialog.isSubmitting else { return nil }
+        if forkDialog.blockedMessage != nil { return ProductAnalytics.Outcome.blocked }
         let trimmed = forkDialog.draftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
             forkDialog.errorMessage = Self.emptyTitleError
@@ -317,6 +316,13 @@ final class HomeSessionActions {
         }
         forkDialog.isSubmitting = true
         forkDialog.errorMessage = nil
+        // A quick confirm can beat the check started when the dialog opened.
+        await forkCheckTask?.value
+        guard self.target == target else { return nil }
+        if forkDialog.blockedMessage != nil {
+            forkDialog.isSubmitting = false
+            return ProductAnalytics.Outcome.blocked
+        }
         do {
             let forked = try await sessionRepository.forkSession(id: target.sessionId, atMessageID: nil)
             let updated = try await sessionRepository.updateSession(
@@ -418,14 +424,15 @@ final class HomeSessionActions {
         }
     }
 
-    /// Fork parity with Commands: at least one visible user message. A failed fetch
-    /// leaves Fork hidden rather than offering an action the server may reject.
-    private func resolveForkVisibility(_ target: HomeSessionActionTarget) async {
+    /// Fork parity with Commands: at least one visible user message. The sheet always lists
+    /// Fork so it never reflows; this runs once the fork dialog opens and blocks the dialog
+    /// when there is nothing to fork. A failed fetch leaves the server to decide.
+    private func resolveForkCheck(_ target: HomeSessionActionTarget) async {
         guard let messages = try? await messageRepository.listMessages(
             sessionID: target.sessionId,
             directory: target.worktree
         ) else { return }
-        guard !Task.isCancelled, self.target == target else { return }
+        guard !Task.isCancelled, self.target == target, forkDialog.isVisible else { return }
         let refs = messages.map { message in
             ClientSlashMessageRef(
                 id: message.id,
@@ -440,9 +447,11 @@ final class HomeSessionActions {
             revertMessageID: nil,
             hasSelectedComposerModel: false
         )
-        canFork = ClientSlashActionCatalog.visibleActions(input)
+        let visible = ClientSlashActionCatalog.visibleActions(input)
             .filter { capabilities().allowsClientSlashAction($0) }
-            .contains(.fork)
+        if !visible.contains(.fork) {
+            forkDialog.blockedMessage = Self.nothingToForkError
+        }
     }
 
     private var hasOpenDialog: Bool {
@@ -455,11 +464,10 @@ final class HomeSessionActions {
     }
 
     private func clear() {
-        forkGateTask?.cancel()
-        forkGateTask = nil
+        forkCheckTask?.cancel()
+        forkCheckTask = nil
         target = nil
         sheetVisible = false
-        canFork = false
         canArchive = true
         lifecycle = .active
         showsSettle = false
@@ -483,6 +491,7 @@ final class HomeSessionActions {
     }
 
     private static let emptyTitleError = "Enter a session title"
+    private static let nothingToForkError = "Nothing to fork yet"
     private static let archiveError = "Couldn't archive session."
     private static let unarchiveError = "Couldn't unarchive session."
     private static let unsettleError = "Couldn't unsettle session."

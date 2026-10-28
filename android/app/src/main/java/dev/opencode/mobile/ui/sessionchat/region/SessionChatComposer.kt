@@ -4,14 +4,17 @@ import dev.opencode.mobile.domain.agent.AgentRepository
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import dev.opencode.mobile.domain.agent.ComposerSuggestionMode
 import dev.opencode.mobile.domain.agent.FileMention
+import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.filesystem.ProjectFilesRepository
 import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.command.CommandError
 import dev.opencode.mobile.domain.command.CommandInvocationCollapser
 import dev.opencode.mobile.domain.command.CommandRepository
 import dev.opencode.mobile.domain.command.CommandRunOptions
+import dev.opencode.mobile.domain.command.ComposerShellCommand
 import dev.opencode.mobile.domain.command.ComposerSubmitIntent
 import dev.opencode.mobile.domain.command.ComposerSubmitRouting
+import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.engine.SessionCapabilities
@@ -20,15 +23,27 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentDestination
+import dev.opencode.mobile.domain.message.AttachmentDropRouting
+import dev.opencode.mobile.domain.message.AttachmentIngestionResult
+import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
+import dev.opencode.mobile.domain.message.AttachmentUpload
+import dev.opencode.mobile.domain.message.AttachmentUploadPolicy
+import dev.opencode.mobile.domain.message.AttachmentUploadResult
+import dev.opencode.mobile.domain.message.AttachmentUploadService
+import dev.opencode.mobile.domain.message.ClientMessageId
 import dev.opencode.mobile.domain.message.FollowUpDelivery
+import dev.opencode.mobile.domain.message.InlineRejection
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.PromptModelSelection
 import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgress
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
+import dev.opencode.mobile.domain.message.ShellCommandOptions
+import dev.opencode.mobile.domain.message.UnavailableAttachmentUploadService
 import dev.opencode.mobile.domain.model.ComposerSlashSkill
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelection
@@ -40,6 +55,7 @@ import dev.opencode.mobile.domain.model.SessionModelSelection
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.t3.T3Errors
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
@@ -72,6 +88,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -90,6 +107,7 @@ class SessionChatComposer(
     private val scope: CoroutineScope,
     private val foregroundEventStream: ForegroundEventStream? = null,
     private val projectFilesRepository: ProjectFilesRepository? = null,
+    private val attachmentUploads: AttachmentUploadService = UnavailableAttachmentUploadService,
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
     var capabilities: SessionCapabilities = SessionCapabilities.OpenCode
@@ -123,6 +141,7 @@ class SessionChatComposer(
     private var persistDraftJob: Job? = null
     private var nextAttachmentRevision = 1
     private val attachmentRevisions = mutableMapOf<String, Int>()
+    private val uploadJobs = mutableMapOf<String, Job>()
     private var catalogLoadGeneration = 0
     private var catalogEventJob: Job? = null
     private var catalogRetryJob: Job? = null
@@ -170,6 +189,7 @@ class SessionChatComposer(
             val snapshot = currentDraft()
             scope.launch { persistDraft(previousSessionId, previousWorktree, snapshot) }
         }
+        cancelUploads()
         discardStoredAttachments(_state.value.composer.attachments)
         boundSessionId = sessionId
         boundWorktree = worktree
@@ -202,6 +222,35 @@ class SessionChatComposer(
         loadSelectableAgents(force = true)
         applyOrLoadDraft(preserve)
         startCatalogEventRefresh()
+    }
+
+    /**
+     * The bound session moved to [worktree] (v2 `session.moved`). Keeps the draft, attachments
+     * and model; carries the draft and selection over to the new directory and reloads what the
+     * directory scopes (models, commands, mentionable agents, file search).
+     */
+    fun moveDirectory(worktree: String) {
+        val sessionId = boundSessionId ?: return
+        val previousWorktree = boundWorktree ?: return
+        if (previousWorktree == worktree || OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        persistDraftJob?.cancel()
+        persistDraftJob = null
+        val snapshot = currentDraft()
+        boundWorktree = worktree
+        logI("move session=$sessionId from=$previousWorktree to=$worktree")
+        scope.launch {
+            persistDraft(sessionId, previousWorktree, ComposerDraft(text = ""))
+            persistDraft(sessionId, worktree, snapshot)
+        }
+        // A search still running answers for the old directory.
+        fileSearchJob?.cancel()
+        fileSearchGeneration++
+        _state.update { it.copy(fileSuggestions = emptyList(), fileSuggestionQuery = null) }
+        if (!provisionalSelection) persistCurrentSelection(updatePreference = false)
+        // Project config can differ per directory; a model the new one lacks falls back with a notice.
+        loadCatalog(keepLoadedCatalogOnFailure = true)
+        loadServerCommands(force = true)
+        loadMentionableAgents(force = true)
     }
 
     /**
@@ -280,6 +329,8 @@ class SessionChatComposer(
                         text = state.composer.text,
                         cursor = state.composer.cursor,
                         mentions = state.composer.agentMentions,
+                        fileMentions = state.composer.fileMentions,
+                        skillMentions = state.composer.skillMentions,
                     )
                 }
             }.onFailure { throwable ->
@@ -291,6 +342,8 @@ class SessionChatComposer(
                         text = state.composer.text,
                         cursor = state.composer.cursor,
                         mentions = state.composer.agentMentions,
+                        fileMentions = state.composer.fileMentions,
+                        skillMentions = state.composer.skillMentions,
                     )
                 }
             }
@@ -340,6 +393,8 @@ class SessionChatComposer(
                         text = state.composer.text,
                         cursor = state.composer.cursor,
                         mentions = state.composer.agentMentions,
+                        fileMentions = state.composer.fileMentions,
+                        skillMentions = state.composer.skillMentions,
                     )
                 }
             }.onFailure { throwable ->
@@ -350,6 +405,8 @@ class SessionChatComposer(
                         text = state.composer.text,
                         cursor = state.composer.cursor,
                         mentions = state.composer.agentMentions,
+                        fileMentions = state.composer.fileMentions,
+                        skillMentions = state.composer.skillMentions,
                     )
                 }
             }
@@ -645,6 +702,7 @@ class SessionChatComposer(
                     cursor = cursor,
                     mentions = previous.agentMentions,
                     fileMentions = previous.fileMentions,
+                    skillMentions = previous.skillMentions,
                 )
             when (mode) {
                 is ComposerSuggestionMode.At -> {
@@ -667,6 +725,7 @@ class SessionChatComposer(
                         cursor = cursor.coerceIn(0, text.length),
                         mentions = previous.agentMentions,
                         fileMentions = previous.fileMentions,
+                        skillMentions = previous.skillMentions,
                     )
             }
             scheduleFileSearch()
@@ -681,6 +740,7 @@ class SessionChatComposer(
                 proposedText = text,
                 proposedCursor = cursor,
                 previousFileMentions = previous.fileMentions,
+                previousSkillMentions = previous.skillMentions,
             )
         val mode =
             suggestionMode(
@@ -688,6 +748,7 @@ class SessionChatComposer(
                 cursor = reconciled.cursor,
                 mentions = reconciled.mentions,
                 fileMentions = reconciled.fileMentions,
+                skillMentions = reconciled.skillMentions,
             )
         when (mode) {
             is ComposerSuggestionMode.At -> {
@@ -711,6 +772,7 @@ class SessionChatComposer(
                             text = reconciled.text,
                             agentMentions = reconciled.mentions,
                             fileMentions = reconciled.fileMentions,
+                            skillMentions = reconciled.skillMentions,
                             cursor = reconciled.cursor,
                             selectionRevision =
                                 if (selectionChanged) {
@@ -724,6 +786,7 @@ class SessionChatComposer(
                     cursor = reconciled.cursor,
                     mentions = reconciled.mentions,
                     fileMentions = reconciled.fileMentions,
+                    skillMentions = reconciled.skillMentions,
                 )
         }
         scheduleFileSearch()
@@ -741,11 +804,89 @@ class SessionChatComposer(
         }
     }
 
+    /**
+     * Replaces the open `/query` at the caret. A v2 skill becomes a tracked `/name` span;
+     * a server command inserts `/name ` with no span. The rest of the draft stays.
+     */
+
+    /**
+     * Inserts the pick at the caret, keeping the rest of the draft: a v2 skill becomes a `/name`
+     * span, a command the leading `/name ` token. A draft without an open `/` query (the Commands
+     * sheet) gets the pick at the caret too.
+     */
     fun selectSlashSuggestion(commandName: String) {
-        val inserted =
-            _state.value.slashSkills().firstOrNull { it.name == commandName }?.insertion
-                ?: ComposerSubmitRouting.insertSelection(commandName)
-        updateComposerText(inserted, cursor = inserted.length)
+        val localSkill = _state.value.slashSkills().firstOrNull { it.name == commandName }
+        val serverCommand = _state.value.serverCommands.firstOrNull { it.name == commandName }
+        if (localSkill != null && (serverCommand == null || !allowsSlashCommands)) {
+            val inserted = localSkill.insertion
+            updateComposerText(inserted, cursor = inserted.length)
+            return
+        }
+        val composer = _state.value.composer
+        val command = serverCommand
+        val skillId = command?.skillId?.takeIf { command.isV2Skill }
+        var text = composer.text
+        var cursor = composer.cursor.coerceIn(0, text.length)
+        val openQuery =
+            ComposerMentionRouting.slashSuggestionQuery(
+                text = text,
+                cursor = cursor,
+                mentions = composer.agentMentions,
+                fileMentions = composer.fileMentions,
+                skillMentions = composer.skillMentions,
+            )
+        if (openQuery == null) {
+            // No open query at the caret: open one so the insert replaces only itself.
+            val needsSpace = cursor > 0 && !text[cursor - 1].isWhitespace()
+            val opener = if (needsSpace) " /" else "/"
+            text = text.substring(0, cursor) + opener + text.substring(cursor)
+            cursor += opener.length
+        }
+        val result =
+            if (skillId != null) {
+                ComposerMentionRouting.insertSkillMention(
+                    text = text,
+                    cursor = cursor,
+                    skillId = skillId,
+                    name = commandName,
+                    mentionId = UUID.randomUUID().toString(),
+                    existingMentions = composer.agentMentions,
+                    existingFileMentions = composer.fileMentions,
+                    existingSkillMentions = composer.skillMentions,
+                )
+            } else {
+                ComposerMentionRouting.insertCommandSelection(
+                    text = text,
+                    cursor = cursor,
+                    commandName = commandName,
+                    existingMentions = composer.agentMentions,
+                    existingFileMentions = composer.fileMentions,
+                    existingSkillMentions = composer.skillMentions,
+                )
+            }
+        draftRevision += 1
+        fileSearchJob?.cancel()
+        fileSearchGeneration += 1
+        _state.update { state ->
+            state.copy(
+                composer =
+                    state.composer.copy(
+                        text = result.text,
+                        agentMentions = result.mentions,
+                        fileMentions = result.fileMentions,
+                        skillMentions = result.skillMentions,
+                        cursor = result.cursor,
+                        selectionRevision = state.composer.selectionRevision + 1,
+                    ),
+                slashSuggestionsVisible = false,
+                slashSuggestions = emptyList(),
+                atSuggestionsVisible = false,
+                atSuggestions = emptyList(),
+                fileSuggestions = emptyList(),
+                fileSuggestionQuery = null,
+            )
+        }
+        schedulePersistDraft()
     }
 
     fun selectAtSuggestion(id: String) {
@@ -761,6 +902,7 @@ class SessionChatComposer(
                     mentionId = UUID.randomUUID().toString(),
                     existingMentions = composer.agentMentions,
                     existingFileMentions = composer.fileMentions,
+                    existingSkillMentions = composer.skillMentions,
                 )
             } else {
                 ComposerMentionRouting.insertMention(
@@ -770,6 +912,7 @@ class SessionChatComposer(
                     mentionId = UUID.randomUUID().toString(),
                     existingMentions = composer.agentMentions,
                     existingFileMentions = composer.fileMentions,
+                    existingSkillMentions = composer.skillMentions,
                 )
             }
         draftRevision += 1
@@ -782,6 +925,7 @@ class SessionChatComposer(
                         text = result.text,
                         agentMentions = result.mentions,
                         fileMentions = result.fileMentions,
+                        skillMentions = result.skillMentions,
                         cursor = result.cursor,
                         selectionRevision = state.composer.selectionRevision + 1,
                     ),
@@ -802,12 +946,25 @@ class SessionChatComposer(
         val option =
             _state.value.composer.selectedModel
                 ?.option
-        val accepted = attachments.filter { option?.acceptsAttachmentKind(it.kind) != false }
-        val rejected = attachments.filter { option?.acceptsAttachmentKind(it.kind) == false }
-        if (accepted.isNotEmpty()) {
+        val uploadAvailable = uploadsAvailable()
+        val draft = _state.value.composer.attachments
+        val duplicates = mutableListOf<Attachment>()
+        val fresh = mutableListOf<Attachment>()
+        attachments.forEach { attachment ->
+            val seen = draft + fresh
+            if (AttachmentUploadPolicy.isDuplicate(attachment, seen)) duplicates += attachment else fresh += attachment
+        }
+        val toUpload =
+            fresh.filter { destinationFor(it, option, uploadAvailable) == AttachmentDestination.Upload && it.localPath != null }
+        val inlineVerdicts = fresh.filter { it !in toUpload }.associateWith { AttachmentUploadPolicy.inlineRejection(it, option) }
+        val accepted = inlineVerdicts.filterValues { it == null }.keys.toList()
+        val tooLarge = inlineVerdicts.filterValues { it == InlineRejection.TooLarge }.keys.toList()
+        val rejected = inlineVerdicts.filterValues { it == InlineRejection.Unsupported }.keys.toList()
+        val staged = accepted + toUpload.map { it.copy(upload = AttachmentUpload.Uploading()) }
+        if (staged.isNotEmpty()) {
             updateComposer { composer ->
                 val ordered = composer.attachments.toMutableList()
-                accepted.forEach { attachment ->
+                staged.forEach { attachment ->
                     attachmentRevisions[attachment.id] = nextAttachmentRevision++
                     val index = ordered.indexOfFirst { it.id == attachment.id }
                     if (index >= 0) {
@@ -822,28 +979,160 @@ class SessionChatComposer(
                 }
                 composer.copy(attachments = ordered)
             }
+            toUpload.forEach(::startUpload)
         }
-        if (accepted.isNotEmpty()) {
+        if (staged.isNotEmpty()) {
             DiagnosticLog.info(
                 DiagnosticLogArea.Chat,
-                "attachments selected accepted=${accepted.size} rejected=${rejected.size}",
+                "attachments selected accepted=${staged.size} rejected=${rejected.size + tooLarge.size + duplicates.size}",
             )
         }
-        if (rejected.isNotEmpty()) {
-            discardStoredAttachments(rejected)
-            reportAttachmentError(unsupportedAttachmentMessage(rejected))
-        } else if (accepted.isNotEmpty()) {
-            _state.update { it.copy(errorMessage = null) }
+        discardStoredAttachments(duplicates + tooLarge)
+        when {
+            tooLarge.isNotEmpty() -> reportAttachmentError(AttachmentLimits.TOO_LARGE_ERROR)
+            duplicates.isNotEmpty() -> reportAttachmentError(AttachmentUploadPolicy.DUPLICATE_ERROR)
+            rejected.isNotEmpty() -> reportAttachmentError(unsupportedAttachmentMessage(rejected))
+            staged.isNotEmpty() -> _state.update { it.copy(errorMessage = null) }
+        }
+        if (rejected.isNotEmpty()) discardStoredAttachments(rejected)
+    }
+
+    /**
+     * Pasted or dropped content (#870), already ingested: attached like files from the picker. An
+     * item that failed to ingest, or a skipped folder, shows its error only when adding the rest
+     * left nothing else to say. Returns whether a chip was added.
+     */
+    fun addPastedOrDroppedAttachments(
+        result: AttachmentIngestionResult,
+        skippedFolders: Int,
+    ): Boolean {
+        val before = _state.value.composer.attachments.size
+        val errorBefore = _state.value.errorMessage
+        addAttachments(result.attachments)
+        val errorAfter = _state.value.errorMessage
+        val quiet = errorAfter == null || errorAfter == errorBefore
+        val error = result.errors.firstOrNull()
+        when {
+            quiet && error != null -> reportAttachmentError(error)
+            quiet && skippedFolders > 0 -> reportAttachmentError(AttachmentDropRouting.FOLDER_ERROR)
+        }
+        return _state.value.composer.attachments.size > before
+    }
+
+    private fun uploadsAvailable(): Boolean = boundWorktree != null && attachmentUploads.isAvailable()
+
+    private fun destinationFor(
+        attachment: Attachment,
+        option: ModelSelectionOption?,
+        uploadAvailable: Boolean,
+    ): AttachmentDestination =
+        if (!attachment.isInline) {
+            AttachmentDestination.Inline
+        } else {
+            AttachmentUploadPolicy.destination(attachment.mime, attachment.byteCount, option, uploadAvailable)
+        }
+
+    /** Streams [attachment]'s staged file; the chip carries progress and its remove control cancels. */
+    private fun startUpload(attachment: Attachment) {
+        val file = attachment.localPath?.let(::File) ?: return
+        val directory = boundWorktree ?: return
+        uploadJobs[attachment.id] =
+            scope.launch {
+                val result =
+                    withContext(ioDispatcher) {
+                        attachmentUploads.upload(file, attachment.filename, directory) { sent, total ->
+                            applyUploadProgress(attachment.id, sent, total)
+                        }
+                    }
+                uploadJobs.remove(attachment.id)
+                finishUpload(attachment, result)
+            }
+    }
+
+    private fun applyUploadProgress(
+        id: String,
+        sent: Long,
+        total: Long,
+    ) {
+        val percent = (sent * 100 / total).toInt().coerceIn(0, 100)
+        updateAttachment(id) { current ->
+            val upload = current.upload as? AttachmentUpload.Uploading ?: return@updateAttachment current
+            if (upload.percent == percent) current else current.copy(upload = AttachmentUpload.Uploading(percent))
         }
     }
 
-    fun removeAttachment(id: String) {
+    private fun finishUpload(
+        attachment: Attachment,
+        result: AttachmentUploadResult,
+    ) {
+        if (_state.value.composer.attachments
+                .none { it.id == attachment.id }
+        ) {
+            return
+        }
+        when (result) {
+            is AttachmentUploadResult.Uploaded ->
+                updateAttachment(attachment.id) { it.copy(upload = AttachmentUpload.Uploaded(result.serverPath)) }
+            AttachmentUploadResult.ContractMiss -> {
+                // The route is not what the contract promised: stop trying it and send this file the old way.
+                attachmentUploads.onContractMiss()
+                val option =
+                    _state.value.composer.selectedModel
+                        ?.option
+                when (AttachmentUploadPolicy.inlineRejection(attachment, option)) {
+                    null -> updateAttachment(attachment.id) { it.copy(upload = AttachmentUpload.Inline) }
+                    InlineRejection.TooLarge -> {
+                        dropAttachment(attachment.id)
+                        reportAttachmentError(AttachmentLimits.TOO_LARGE_ERROR)
+                    }
+                    InlineRejection.Unsupported -> {
+                        dropAttachment(attachment.id)
+                        reportAttachmentError(unsupportedAttachmentMessage(listOf(attachment)))
+                    }
+                }
+            }
+            AttachmentUploadResult.TransportFailure -> {
+                dropAttachment(attachment.id)
+                reportAttachmentError(AttachmentUploadPolicy.UPLOAD_FAILED_ERROR)
+            }
+        }
+    }
+
+    private fun updateAttachment(
+        id: String,
+        transform: (Attachment) -> Attachment,
+    ) {
+        _state.update { state ->
+            val index = state.composer.attachments.indexOfFirst { it.id == id }
+            if (index < 0) return@update state
+            val updated = transform(state.composer.attachments[index])
+            if (updated == state.composer.attachments[index]) return@update state
+            val attachments =
+                state.composer.attachments
+                    .toMutableList()
+                    .also { it[index] = updated }
+            state.copy(composer = state.composer.copy(attachments = attachments))
+        }
+    }
+
+    private fun dropAttachment(id: String) {
         val removed =
             _state.value.composer.attachments
                 .filter { it.id == id }
         attachmentRevisions.remove(id)
         updateComposer { composer -> composer.copy(attachments = composer.attachments.filterNot { it.id == id }) }
         discardStoredAttachments(removed)
+    }
+
+    private fun cancelUploads() {
+        uploadJobs.values.forEach { it.cancel() }
+        uploadJobs.clear()
+    }
+
+    fun removeAttachment(id: String) {
+        // Removing a chip that is still uploading is the cancel control: abort quietly.
+        uploadJobs.remove(id)?.cancel()
+        dropAttachment(id)
     }
 
     fun reportAttachmentError(message: String) {
@@ -854,12 +1143,13 @@ class SessionChatComposer(
     fun selectModel(option: ModelSelectionOption) {
         val dropped =
             _state.value.composer.attachments
-                .filterNot { option.acceptsAttachmentKind(it.kind) }
+                .filterNot { !it.isInline || option.acceptsAttachmentKind(it.kind) }
         dropped.forEach { attachmentRevisions.remove(it.id) }
         updateComposer { composer ->
             val previousVariant = composer.selectedVariant
             val variant = previousVariant?.takeIf { it in option.variants }
-            val keptAttachments = composer.attachments.filter { option.acceptsAttachmentKind(it.kind) }
+            val keptAttachments =
+                composer.attachments.filter { !it.isInline || option.acceptsAttachmentKind(it.kind) }
             composer.copy(
                 selectedModel = ModelSelection(option, variant),
                 selectedVariant = variant,
@@ -905,6 +1195,7 @@ class SessionChatComposer(
                 text = text,
                 agentMentions = emptyList(),
                 fileMentions = emptyList(),
+                skillMentions = emptyList(),
                 cursor = text.length,
                 selectionRevision = it.selectionRevision + 1,
             )
@@ -939,29 +1230,51 @@ class SessionChatComposer(
         onSendFailed: (optimisticId: String, error: String) -> Unit,
         isSessionBusy: Boolean,
         supportsFollowUp: Boolean,
+        commandKeepsClientMessageId: Boolean = false,
         holdUntil: suspend () -> Boolean = { true },
         serverAlreadyAccepted: () -> Boolean = { false },
+        beforePrompt: suspend () -> Unit = {},
     ) {
+        if (ComposerShellCommand.isShellMode(_state.value.composer.text)) {
+            runShellCommand(
+                sessionId = sessionId,
+                worktree = worktree,
+                isSessionBusy = isSessionBusy,
+                supportsFollowUp = supportsFollowUp,
+            )
+            return
+        }
         val composer = _state.value.composer
         val submittedText = composer.text
         val submittedMentions = composer.agentMentions
         val submittedFileMentions = composer.fileMentions
+        val submittedSkillMentions = composer.skillMentions
         val mentionText: String
         val mentionList: List<dev.opencode.mobile.domain.agent.AgentMention>
         val fileList: List<FileMention>
+        val skillList: List<SkillMention>
         if (allowsMentions) {
             mentionText = submittedText
             mentionList = submittedMentions
             fileList = submittedFileMentions
+            skillList = submittedSkillMentions
         } else {
             mentionText = ComposerMentionRouting.withoutMentionTokens(submittedText, submittedMentions)
             mentionList = emptyList()
             fileList = emptyList()
+            skillList = emptyList()
         }
-        val trimmed = ComposerMentionRouting.trimForSend(mentionText, mentionList, fileList)
+        val trimmed =
+            ComposerMentionRouting.trimForSend(
+                mentionText,
+                mentionList,
+                fileList,
+                skillList,
+            )
         val prompt = trimmed.text
         val mentionsForSend = trimmed.agentMentions
         val filesForSend = trimmed.fileMentions
+        val skillsForSend = withLeadingSkill(prompt, trimmed.skillMentions, _state.value.serverCommands)
         val attachments = composer.attachments
         val submittedDraftRevision = draftRevision
         val submittedAttachmentRevisions =
@@ -974,6 +1287,7 @@ class SessionChatComposer(
         if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
         if ((prompt.isEmpty() && attachments.isEmpty()) || _state.value.isSending) return
         if (capabilities.requiresComposerModel && !composer.isModelSelectionReady) return
+        if (composer.hasPendingUploads) return
         if (
             ComposerSubmitRouting.resolve(
                 text = prompt,
@@ -985,16 +1299,29 @@ class SessionChatComposer(
         }
 
         val collapsedDisplay =
-            CommandInvocationCollapser.collapse(
+            CommandInvocationCollapser.collapseSkillMentions(prompt, skillsForSend)
+                ?: CommandInvocationCollapser.collapse(
+                    text = prompt,
+                    commands = _state.value.serverCommands,
+                )
+        val displayText = collapsedDisplay?.text ?: prompt
+        val intent =
+            ComposerSubmitRouting.resolve(
                 text = prompt,
                 commands = _state.value.serverCommands,
+                allowsSlashCommands = allowsSlashCommands,
             )
-        val displayText = collapsedDisplay?.text ?: prompt
+        // The echo of a send that carries its id comes back under it. v2 commands take
+        // no id, so their row keeps a local id and retires on text instead.
+        val messageId =
+            ClientMessageId.next().takeIf {
+                intent !is ComposerSubmitIntent.ServerCommand || commandKeepsClientMessageId
+            }
         scope.launch {
             val display =
                 withContext(ioDispatcher) {
                     messageRepository.prepareOptimisticUserMessage(
-                        id = "pending-${UUID.randomUUID()}",
+                        id = messageId ?: "pending-${UUID.randomUUID()}",
                         text = displayText,
                         attachments = attachments,
                     )
@@ -1058,6 +1385,7 @@ class SessionChatComposer(
                         submittedText = submittedText,
                         submittedMentions = submittedMentions,
                         submittedFileMentions = submittedFileMentions,
+                        submittedSkillMentions = submittedSkillMentions,
                         submittedAttachments = attachments,
                         submittedAttachmentRevisions = submittedAttachmentRevisions,
                     )
@@ -1065,12 +1393,6 @@ class SessionChatComposer(
                     onSendFailed(display.id, PENDING_SEND_TIMEOUT_ERROR)
                     return@launch
                 }
-                val intent =
-                    ComposerSubmitRouting.resolve(
-                        text = prompt,
-                        commands = _state.value.serverCommands,
-                        allowsSlashCommands = allowsSlashCommands,
-                    )
                 val hasAttachments = attachments.isNotEmpty()
                 val progress =
                     PromptSendProgressReporter { sent, total ->
@@ -1079,10 +1401,12 @@ class SessionChatComposer(
                 withContext(NonCancellable + progress) {
                     suspend fun sendPrompt(
                         text: String,
-                        skillIds: List<String>,
+                        skillMentions: List<SkillMention>,
                         mentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
                         fileMentions: List<FileMention>,
                     ) {
+                        beforePrompt()
+
                         suspend fun send(delivery: FollowUpDelivery) {
                             messageRepository.sendPromptAsync(
                                 sessionId = sessionId,
@@ -1102,8 +1426,9 @@ class SessionChatComposer(
                                         agentMentions = mentions,
                                         fileMentions = fileMentions,
                                         worktree = worktree,
-                                        skillIds = skillIds,
+                                        skillMentions = skillMentions,
                                         delivery = delivery,
+                                        messageId = messageId,
                                     ),
                                 directory = worktree,
                             )
@@ -1123,8 +1448,11 @@ class SessionChatComposer(
                                 throw busy
                             }
                         }
-                        if (mentions.isNotEmpty() || fileMentions.isNotEmpty()) {
-                            logI("prompt send agentParts=${mentions.size} fileParts=${fileMentions.size}")
+                        if (mentions.isNotEmpty() || fileMentions.isNotEmpty() || skillMentions.isNotEmpty()) {
+                            logI(
+                                "prompt send agentParts=${mentions.size} fileParts=${fileMentions.size} " +
+                                    "skillParts=${skillMentions.size}",
+                            )
                         }
                     }
                     when (intent) {
@@ -1146,20 +1474,26 @@ class SessionChatComposer(
                                         variant = composer.selectedVariant,
                                         mode = composer.selectedMode,
                                         delivery = composer.followUpDelivery,
+                                        skillIds =
+                                            ComposerMentionRouting
+                                                .skillParts(prompt, skillsForSend)
+                                                .map { it.skillId }
+                                                .distinct(),
+                                        messageId = messageId,
                                     ),
                                 directory = worktree,
                             )
                         is ComposerSubmitIntent.Prompt ->
                             sendPrompt(
                                 text = intent.text,
-                                skillIds = emptyList(),
+                                skillMentions = skillsForSend,
                                 mentions = mentionsForSend,
                                 fileMentions = filesForSend,
                             )
                         is ComposerSubmitIntent.SkillPrompt ->
                             sendPrompt(
                                 text = intent.text,
-                                skillIds = listOf(intent.skillId),
+                                skillMentions = emptyList(),
                                 mentions = emptyList(),
                                 fileMentions = emptyList(),
                             )
@@ -1190,6 +1524,7 @@ class SessionChatComposer(
                     submittedText = submittedText,
                     submittedMentions = submittedMentions,
                     submittedFileMentions = submittedFileMentions,
+                    submittedSkillMentions = submittedSkillMentions,
                     submittedAttachments = attachments,
                     submittedAttachmentRevisions = submittedAttachmentRevisions,
                 )
@@ -1197,6 +1532,79 @@ class SessionChatComposer(
                 onSendFailed(display.id, errorMessage(throwable))
             }
         }
+    }
+
+    /**
+     * Runs a shell-mode draft (`!command`) instead of sending a prompt, like the TUI and web app.
+     * The output arrives through the session's shell or message events, so there is no optimistic
+     * row and no send progress: the server answers only when the command ends, and the composer stays
+     * free meanwhile. Attachments stay in the composer because a command cannot carry them. A
+     * failure restores the draft (unless it was edited since) and shows the error the way a
+     * failed prompt does.
+     */
+    private fun runShellCommand(
+        sessionId: String,
+        worktree: String,
+        isSessionBusy: Boolean,
+        supportsFollowUp: Boolean,
+    ) {
+        val composer = _state.value.composer
+        val command = ComposerShellCommand.command(composer.text) ?: return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        if (_state.value.isSending || !composer.isModelSelectionReady) return
+        // Like the TUI and web app, a command runs now or not at all; it cannot wait in the queue.
+        if (supportsFollowUp && isSessionBusy && composer.followUpDelivery == FollowUpDelivery.Queue) {
+            _state.update { it.copy(errorMessage = SHELL_CANNOT_QUEUE_ERROR) }
+            return
+        }
+        val submittedText = composer.text
+        val submittedMentions = composer.agentMentions
+        val submittedFileMentions = composer.fileMentions
+        val submittedSkillMentions = composer.skillMentions
+        val submittedDraftRevision = draftRevision
+        val options =
+            ShellCommandOptions(
+                command = command,
+                agent = composer.selectedMode,
+                model =
+                    composer.selectedModel?.let {
+                        PromptModelSelection(it.option.providerId, it.option.modelId)
+                    },
+            )
+        clearAcceptedSubmission(textRevision = submittedDraftRevision, submittedAttachmentRevisions = emptyMap())
+        _state.update { it.copy(errorMessage = null) }
+        scope.launch {
+            try {
+                withContext(NonCancellable) {
+                    messageRepository.runShellCommand(sessionId = sessionId, options = options, directory = worktree)
+                }
+                logI("shell command accepted session=$sessionId")
+            } catch (throwable: CancellationException) {
+                throw throwable
+            } catch (throwable: Throwable) {
+                DiagnosticLog.error(DiagnosticLogArea.Chat, "runShellCommand failed", throwable)
+                restoreFailedSubmission(
+                    textRevision = submittedDraftRevision,
+                    submittedText = submittedText,
+                    submittedMentions = submittedMentions,
+                    submittedFileMentions = submittedFileMentions,
+                    submittedSkillMentions = submittedSkillMentions,
+                    submittedAttachments = emptyList(),
+                    submittedAttachmentRevisions = emptyMap(),
+                )
+                _state.update { it.copy(errorMessage = errorMessage(throwable)) }
+            }
+        }
+    }
+
+    /** Leaves shell mode by dropping the leading `!`; the rest of the draft stays. */
+    fun exitShellMode() {
+        val composer = _state.value.composer
+        if (!ComposerShellCommand.isShellMode(composer.text)) return
+        updateComposerText(
+            text = ComposerShellCommand.exitShellMode(composer.text),
+            cursor = (composer.cursor - 1).coerceAtLeast(0),
+        )
     }
 
     private fun clearAcceptedSubmission(
@@ -1217,6 +1625,7 @@ class SessionChatComposer(
             val clearedText = if (draftRevision == textRevision) "" else state.composer.text
             val clearedMentions = if (draftRevision == textRevision) emptyList() else state.composer.agentMentions
             val clearedFiles = if (draftRevision == textRevision) emptyList() else state.composer.fileMentions
+            val clearedSkills = if (draftRevision == textRevision) emptyList() else state.composer.skillMentions
             val clearedCursor = if (draftRevision == textRevision) 0 else state.composer.cursor
             state
                 .copy(
@@ -1226,6 +1635,7 @@ class SessionChatComposer(
                             attachments = keptAttachments,
                             agentMentions = clearedMentions,
                             fileMentions = clearedFiles,
+                            skillMentions = clearedSkills,
                             cursor = clearedCursor,
                             selectionRevision = state.composer.selectionRevision + 1,
                         ),
@@ -1234,6 +1644,7 @@ class SessionChatComposer(
                     cursor = clearedCursor,
                     mentions = clearedMentions,
                     fileMentions = clearedFiles,
+                    skillMentions = clearedSkills,
                 )
         }
         persistDraftJob?.cancel()
@@ -1245,6 +1656,7 @@ class SessionChatComposer(
         submittedText: String,
         submittedMentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
         submittedFileMentions: List<FileMention>,
+        submittedSkillMentions: List<SkillMention>,
         submittedAttachments: List<Attachment>,
         submittedAttachmentRevisions: Map<String, Int>,
     ) {
@@ -1258,6 +1670,7 @@ class SessionChatComposer(
             val text = if (restoreText) submittedText else state.composer.text
             val mentions = if (restoreText) submittedMentions else state.composer.agentMentions
             val files = if (restoreText) submittedFileMentions else state.composer.fileMentions
+            val skills = if (restoreText) submittedSkillMentions else state.composer.skillMentions
             val cursor = if (restoreText) submittedText.length else state.composer.cursor
             val currentIds =
                 state.composer.attachments
@@ -1273,6 +1686,7 @@ class SessionChatComposer(
                             attachments = restoredAttachments,
                             agentMentions = mentions,
                             fileMentions = files,
+                            skillMentions = skills,
                             cursor = cursor,
                             selectionRevision = state.composer.selectionRevision + 1,
                         ),
@@ -1281,6 +1695,7 @@ class SessionChatComposer(
                     cursor = cursor,
                     mentions = mentions,
                     fileMentions = files,
+                    skillMentions = skills,
                 )
         }
         persistDraftJob?.cancel()
@@ -1372,6 +1787,7 @@ class SessionChatComposer(
             text = composer.text,
             agentMentions = composer.agentMentions,
             fileMentions = composer.fileMentions,
+            skillMentions = composer.skillMentions,
         )
     }
 
@@ -1384,6 +1800,7 @@ class SessionChatComposer(
                             text = draft.text,
                             agentMentions = draft.agentMentions,
                             fileMentions = draft.fileMentions,
+                            skillMentions = draft.skillMentions,
                             cursor = draft.text.length,
                             selectionRevision = state.composer.selectionRevision + 1,
                         ),
@@ -1392,6 +1809,7 @@ class SessionChatComposer(
                     cursor = draft.text.length,
                     mentions = draft.agentMentions,
                     fileMentions = draft.fileMentions,
+                    skillMentions = draft.skillMentions,
                 )
         }
     }
@@ -1666,6 +2084,7 @@ class SessionChatComposer(
                 cursor = composer.cursor,
                 mentions = composer.agentMentions,
                 fileMentions = composer.fileMentions,
+                skillMentions = composer.skillMentions,
             )
         }
         scheduleFileSearch()
@@ -1676,8 +2095,9 @@ class SessionChatComposer(
         cursor: Int,
         mentions: List<dev.opencode.mobile.domain.agent.AgentMention> = emptyList(),
         fileMentions: List<FileMention> = emptyList(),
+        skillMentions: List<SkillMention> = emptyList(),
     ): SessionChatComposerRegionState =
-        when (val mode = suggestionMode(text, cursor, mentions, fileMentions)) {
+        when (val mode = suggestionMode(text, cursor, mentions, fileMentions, skillMentions)) {
             is ComposerSuggestionMode.At -> {
                 val files = if (fileSuggestionQuery == mode.query) fileSuggestions else emptyList()
                 copy(
@@ -1690,13 +2110,20 @@ class SessionChatComposer(
                     slashSuggestions = emptyList(),
                 )
             }
-            is ComposerSuggestionMode.Slash ->
+            is ComposerSuggestionMode.Slash -> {
+                // Commands only make sense as a leading token; v2 skills go anywhere.
+                // A skill already in the draft as a span is not offered again.
+                val mentioned = skillMentions.map { it.skillId }.toSet()
+                val offered =
+                    serverCommands.filter { command ->
+                        if (command.isV2Skill) command.skillId !in mentioned else mode.isLeading
+                    }
                 copy(
                     slashSuggestionsVisible = true,
                     slashSuggestions =
                         if (allowsSlashCommands) {
                             ComposerSubmitRouting
-                                .filterCommands(serverCommands, mode.query)
+                                .filterCommands(offered, mode.query)
                                 .map { it.toSlashSuggestion() }
                         } else {
                             slashSkills().filter { it.matches(mode.query) }.map { it.toSlashSuggestion() }
@@ -1704,6 +2131,7 @@ class SessionChatComposer(
                     atSuggestionsVisible = false,
                     atSuggestions = emptyList(),
                 )
+            }
             ComposerSuggestionMode.None ->
                 copy(
                     slashSuggestionsVisible = false,
@@ -1718,19 +2146,23 @@ class SessionChatComposer(
         cursor: Int,
         mentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
         fileMentions: List<FileMention> = emptyList(),
-    ): ComposerSuggestionMode = _state.value.suggestionMode(text, cursor, mentions, fileMentions)
+        skillMentions: List<SkillMention> = emptyList(),
+    ): ComposerSuggestionMode =
+        _state.value.suggestionMode(text, cursor, mentions, fileMentions, skillMentions)
 
     private fun SessionChatComposerRegionState.suggestionMode(
         text: String,
         cursor: Int,
         mentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
         fileMentions: List<FileMention> = emptyList(),
+        skillMentions: List<SkillMention> = emptyList(),
     ): ComposerSuggestionMode =
         ComposerMentionRouting.suggestionMode(
             text = text,
             cursor = cursor,
             mentions = mentions,
             fileMentions = fileMentions,
+            skillMentions = skillMentions,
             allowsMentions = allowsMentions,
             allowsSlashCommands = allowsSlashCommands || slashSkills().isNotEmpty(),
         )
@@ -1748,6 +2180,7 @@ class SessionChatComposer(
                 cursor = composer.cursor,
                 mentions = composer.agentMentions,
                 fileMentions = composer.fileMentions,
+                skillMentions = composer.skillMentions,
             )
         val query = (mode as? ComposerSuggestionMode.At)?.query
         if (query == null) {
@@ -1783,6 +2216,7 @@ class SessionChatComposer(
                             cursor = current.cursor,
                             mentions = current.agentMentions,
                             fileMentions = current.fileMentions,
+                            skillMentions = current.skillMentions,
                         )
                     if (currentMode !is ComposerSuggestionMode.At || currentMode.query != query) return@update state
                     state
@@ -1794,9 +2228,33 @@ class SessionChatComposer(
                             cursor = current.cursor,
                             mentions = current.agentMentions,
                             fileMentions = current.fileMentions,
+                            skillMentions = current.skillMentions,
                         )
                 }
             }
+    }
+
+    /**
+     * A hand-typed leading `/name` that names a v2 skill gets a synthesised span so it is
+     * admitted like a picked one. Spans that already start at offset 0 win.
+     */
+    private fun withLeadingSkill(
+        prompt: String,
+        skillMentions: List<SkillMention>,
+        commands: List<ServerCommand>,
+    ): List<SkillMention> {
+        if (skillMentions.any { it.start == 0 }) return skillMentions
+        val skill = ComposerSubmitRouting.leadingSkill(prompt, commands) ?: return skillMentions
+        val skillId = skill.skillId ?: return skillMentions
+        val leading =
+            SkillMention(
+                id = UUID.randomUUID().toString(),
+                skillId = skillId,
+                name = skill.name,
+                start = 0,
+                end = skill.name.length + 1,
+            )
+        return (listOf(leading) + skillMentions).sortedBy { it.start }
     }
 
     private fun formatSentTime(epochMs: Long): String =
@@ -1810,6 +2268,7 @@ class SessionChatComposer(
         return when (kinds) {
             setOf(AttachmentKind.Image) -> "This model does not support image attachments."
             setOf(AttachmentKind.Pdf) -> "This model does not support PDF attachments."
+            setOf(AttachmentKind.File) -> AttachmentIngestionService.UNSUPPORTED_ERROR
             else -> "This model does not support some of the selected attachments."
         }
     }
@@ -1825,6 +2284,9 @@ class SessionChatComposer(
             is CommandError.Http -> throwable.message ?: "Request failed"
             is CommandError.Transport -> "Unable to reach the server"
             is CommandError.Decoding -> "Unable to read server response"
+            is SessionError.Http -> throwable.message ?: "Request failed"
+            is SessionError.Transport -> "Unable to reach the server"
+            is SessionError.Decoding -> "Unable to read server response"
             else -> throwable.message ?: "Something went wrong"
         }
 
@@ -1856,6 +2318,7 @@ class SessionChatComposer(
         private const val DRAFT_PERSIST_DEBOUNCE_MS = 300L
         const val ModelFilterThreshold = 10
         const val PENDING_SEND_TIMEOUT_ERROR = "Couldn't send. Try again."
+        const val SHELL_CANNOT_QUEUE_ERROR = "Shell commands can't be queued. Switch to Steer to run it now."
         private val SentTimeFormatter = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
     }
 

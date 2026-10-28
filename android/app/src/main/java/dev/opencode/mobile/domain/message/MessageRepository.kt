@@ -80,4 +80,11 @@ interface MessageRepository {
         options: PromptSendOptions,
         directory: String? = null,
     )
+
+    /** Runs a composer `!` command in the session; its output arrives through shell events. */
+    suspend fun runShellCommand(
+        sessionId: String,
+        options: ShellCommandOptions,
+        directory: String? = null,
+    )
 }

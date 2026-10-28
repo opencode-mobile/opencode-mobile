@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.serialization.json.JsonObject
@@ -1616,6 +1617,52 @@ class SessionChatTimelineBlocksTest {
     }
 
     @Test
+    fun build_v2PatchToolRendersAsPatchWithPerFileCounts() {
+        fun file(
+            path: String,
+            additions: Int,
+            deletions: Int,
+        ) = JsonObject(
+            mapOf(
+                "file" to JsonPrimitive(path),
+                "additions" to JsonPrimitive(additions),
+                "deletions" to JsonPrimitive(deletions),
+            ),
+        )
+        val tool =
+            buildBlocks(
+                role = MessageRole.Assistant,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "patch",
+                            status = ToolStatus.Completed,
+                            id = "prt-1",
+                            metadata =
+                                JsonObject(
+                                    mapOf(
+                                        "files" to
+                                            kotlinx.serialization.json.JsonArray(
+                                                listOf(
+                                                    file("src/currency.ts", 1, 0),
+                                                    file("src/format.ts", 2, 1),
+                                                    file("src/legacy-format.js", 0, 3),
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    ),
+            ).single() as SessionChatTimelineBlock.ToolCard
+
+        assertEquals("Patch", tool.title)
+        assertEquals("3 files", tool.subtitle)
+        assertEquals(3, tool.additions)
+        assertEquals(4, tool.deletions)
+        assertTrue(tool.opensChangesReview)
+    }
+
+    @Test
     fun build_applyPatchSingleFileDeepLinksPath() {
         val tool =
             buildBlocks(
@@ -1922,6 +1969,47 @@ class SessionChatTimelineBlocksTest {
         assertTrue(blocks[0] is SessionChatTimelineBlock.ToolCard)
         assertTrue(blocks[1] is SessionChatTimelineBlock.ChildSessionRow)
         assertTrue(blocks[2] is SessionChatTimelineBlock.ToolCard)
+    }
+
+    @Test
+    fun build_noticeMessageIsOneNoticeBlockKeyedByItsId() {
+        val notice = TimelineNotice.AgentChanged("plan", previous = "build")
+        val parts = listOf(MessagePart.Notice(id = "msg_n", notice = notice))
+
+        assertEquals(
+            listOf(SessionChatTimelineBlock.Notice(blockID = "p:msg_n", notice = notice)),
+            buildBlocks(MessageRole.Notice, parts),
+        )
+        assertEquals(
+            listOf(SessionChatTimelineBlock.Notice(blockID = "p:msg_n", notice = notice)),
+            buildBlocks(MessageRole.Notice, parts, chipTimeline = true),
+        )
+    }
+
+    @Test
+    fun merge_noticeBetweenAssistantBodiesStaysItsOwnRow() {
+        val bodies =
+            listOf(
+                textBody("a1", "Looking.", chipTimeline = true),
+                noticeBody("n1", TimelineNotice.Moved("/repo/b")),
+                textBody("a2", "Found it.", chipTimeline = true),
+            )
+
+        val chips =
+            SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                bodies,
+                collapseConsecutiveToolCalls = false,
+                chipTimeline = true,
+            )
+        assertEquals(listOf("a1", "n1", "a2"), chips.map { it.message.id })
+        assertTrue(chips[1].blocks.single() is SessionChatTimelineBlock.Notice)
+
+        val tools =
+            SessionChatTimelineBlocks.mergeConsecutiveToolOnlyAssistantBodies(
+                listOf(toolOnlyBody("a1", "bash-1"), noticeBody("n1", TimelineNotice.Restart), toolOnlyBody("a2", "bash-2")),
+                collapseConsecutiveToolCalls = true,
+            )
+        assertEquals(listOf("a1", "n1", "a2"), tools.map { it.message.id })
     }
 
     @Test
@@ -3301,6 +3389,17 @@ class SessionChatTimelineBlocksTest {
                     collapseConsecutiveToolCalls = true,
                     chipTimeline = chipTimeline,
                 ),
+        )
+    }
+
+    private fun noticeBody(
+        id: String,
+        notice: TimelineNotice,
+    ): DisplayMessageBody {
+        val parts = listOf(MessagePart.Notice(id = id, notice = notice))
+        return DisplayMessageBody(
+            message = Message(id = id, role = MessageRole.Notice, text = "", parts = parts),
+            blocks = buildBlocks(MessageRole.Notice, parts),
         )
     }
 

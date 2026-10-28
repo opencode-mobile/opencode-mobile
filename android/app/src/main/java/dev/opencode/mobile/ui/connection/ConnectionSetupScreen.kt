@@ -28,6 +28,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.connection.CleartextPolicy
 import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.OpenCodeButton
@@ -64,6 +65,8 @@ fun ConnectionSetupScreen(
     onShowPairingCodeForm: () -> Unit = {},
     onShowHostPasswordForm: () -> Unit = {},
     onShowScanInstructions: () -> Unit = {},
+    onConfirmCleartext: () -> Unit = {},
+    onDismissCleartext: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -245,6 +248,15 @@ fun ConnectionSetupScreen(
                 onClick = { showRemoveConfirm = false },
             ),
         onDismissRequest = { showRemoveConfirm = false },
+    )
+
+    OpenCodeDialog(
+        visible = uiState.cleartextWarningHosts != null,
+        title = CleartextPolicy.WARNING_TITLE,
+        subtitle = uiState.cleartextWarningMessage,
+        primaryOption = OpenCodeDialogOption(title = "Connect anyway", onClick = onConfirmCleartext),
+        secondaryOption = OpenCodeDialogOption(title = "Cancel", onClick = onDismissCleartext),
+        onDismissRequest = onDismissCleartext,
     )
 }
 

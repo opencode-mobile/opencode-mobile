@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.main
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,10 +16,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -35,11 +38,20 @@ import dev.opencode.mobile.backwardRouteTransition
 import dev.opencode.mobile.forwardRouteTransition
 import dev.opencode.mobile.popRouteUnlessRoot
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
+import dev.opencode.mobile.domain.home.HomeCompactRowPath
 import dev.opencode.mobile.domain.home.HomeSettleFeed
 import dev.opencode.mobile.domain.home.HomeSettleGesture
+import dev.opencode.mobile.domain.home.HomeProject
+import dev.opencode.mobile.domain.home.HomeProjectGrouping
+import dev.opencode.mobile.domain.home.HomeProjectPickerState
+import dev.opencode.mobile.domain.home.HomeScope
+import dev.opencode.mobile.domain.home.HomeSessionLocation
+import dev.opencode.mobile.domain.home.HomeWorktreeCopy
+import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
+import dev.opencode.mobile.domain.worktree.WorktreeCreateCopy
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -47,9 +59,11 @@ import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
+import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderTextAction
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeight
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
 import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
@@ -70,10 +84,13 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
+import dev.opencode.mobile.ui.components.SessionListLocationPart
 import dev.opencode.mobile.ui.components.SessionListProjectPickerRows
+import dev.opencode.mobile.ui.components.SessionListProjectPickerTags
+import dev.opencode.mobile.ui.components.SessionListScopeLoad
 import dev.opencode.mobile.ui.components.SessionListSession
-import dev.opencode.mobile.ui.components.visibleForFilter
 import dev.opencode.mobile.ui.components.SessionListStatus
+import dev.opencode.mobile.ui.components.visibleForFilter
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.connection.listCaption
@@ -84,6 +101,15 @@ import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutRules
 import dev.opencode.mobile.ui.keyboard.SessionStepDirection
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
+import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
+import dev.opencode.mobile.ui.worktree.NewWorktreeRow
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormActions
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormBody
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormCallbacks
+import dev.opencode.mobile.ui.worktree.WorktreeCreateFormState
+import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
+import dev.opencode.mobile.ui.worktree.WorktreeCreateTags
+import dev.opencode.mobile.ui.worktree.worktreeCreateBackAction
 import kotlinx.serialization.Serializable
 
 /** Long-press session actions on home: sheet, rename/fork dialogs, delete confirm. */
@@ -137,8 +163,10 @@ fun MainScreen(
     val removalSnackbar by viewModel.removalSnackbar.collectAsStateWithLifecycle()
     val sessionActions by viewModel.sessionActions.collectAsStateWithLifecycle()
     val revealNewestToken by viewModel.revealNewestToken.collectAsStateWithLifecycle()
-    val pendingSelectedFilterId by viewModel.pendingSelectedFilterId.collectAsStateWithLifecycle()
+    val pendingScopeRequest by viewModel.pendingScopeRequest.collectAsStateWithLifecycle()
     val serversChrome by viewModel.serversChrome.collectAsStateWithLifecycle()
+    val worktreeCreateForm by viewModel.worktreeCreateForm.collectAsStateWithLifecycle()
+    val worktreeServerCanCreate by viewModel.worktreeServerCanCreate.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         viewModel.onHomeRevealed()
     }
@@ -152,8 +180,9 @@ fun MainScreen(
         removalSnackbar = removalSnackbar,
         sessionActions = sessionActions,
         revealNewestToken = revealNewestToken,
-        pendingSelectedFilterId = pendingSelectedFilterId,
-        onConsumePendingSelectedFilter = viewModel::consumePendingSelectedFilter,
+        pendingScopeRequest = pendingScopeRequest,
+        onConsumePendingScopeRequest = viewModel::consumePendingScopeRequest,
+        onRetryProjectLoad = viewModel::retryProjectLoad,
         serversChrome = serversChrome,
         sessionActionsCallbacks =
             HomeSessionActionsCallbacks(
@@ -161,7 +190,7 @@ fun MainScreen(
                     viewModel.onSessionLongPress(
                         sessionId = session.id,
                         title = session.title,
-                        worktree = session.worktree,
+                        worktree = session.directory,
                     )
                 },
                 onDismissSheet = viewModel::dismissSessionActionsSheet,
@@ -187,7 +216,7 @@ fun MainScreen(
                 onSnoozePreset = viewModel::chooseSnoozePreset,
                 onConfirmCustomSnooze = viewModel::confirmCustomSnooze,
                 onSettleGesture = { session, gesture ->
-                    viewModel.onSettleGesture(session.id, session.title, session.worktree, gesture)
+                    viewModel.onSettleGesture(session.id, session.title, session.directory, gesture)
                 },
                 onChooseDelete = viewModel::chooseDelete,
                 onConfirmDelete = viewModel::confirmDelete,
@@ -211,8 +240,25 @@ fun MainScreen(
                 onSelectSuggestion = viewModel::selectAddProjectSuggestion,
                 onRetry = viewModel::retryAddProjectListing,
                 onConfirm = viewModel::confirmAddProject,
+                onBrowse = viewModel::browseAddProjectFolders,
+                onCloseBrowser = viewModel::closeAddProjectBrowser,
+                onSubmitField = viewModel::submitAddProjectField,
+                onFolderRowAppeared = viewModel::addProjectFolderRowAppeared,
+                onFolderRowDisappeared = viewModel::addProjectFolderRowDisappeared,
             ),
         onNewSession = viewModel::createSession,
+        worktreeCreateForm = worktreeCreateForm,
+        worktreeServerCanCreate = worktreeServerCanCreate,
+        onOpenRunInNewWorktree = viewModel::openRunInNewWorktree,
+        worktreeCreateCallbacks =
+            WorktreeCreateFormCallbacks(
+                onNameChange = viewModel::updateNewWorktreeName,
+                onShowBasePicker = viewModel::showNewWorktreeBasePicker,
+                onHideBasePicker = viewModel::hideNewWorktreeBasePicker,
+                onSelectBase = viewModel::selectNewWorktreeBase,
+                onSubmit = viewModel::submitNewWorktree,
+                onBack = viewModel::closeNewWorktreeForm,
+            ),
         onConsumePendingOpenSession = viewModel::consumePendingOpenSession,
         onRemoveProject = viewModel::requestRemoveProject,
         onReorderProjects = viewModel::reorderProjects,
@@ -266,8 +312,9 @@ internal fun MainScreen(
     sessionActions: HomeSessionActionsUiState = HomeSessionActionsUiState(),
     sessionActionsCallbacks: HomeSessionActionsCallbacks = HomeSessionActionsCallbacks(),
     revealNewestToken: Int = 0,
-    pendingSelectedFilterId: String? = null,
-    onConsumePendingSelectedFilter: () -> Unit = {},
+    pendingScopeRequest: HomeScopeRequest? = null,
+    onConsumePendingScopeRequest: () -> Unit = {},
+    onRetryProjectLoad: (String) -> Unit = {},
     serversChrome: HomeServersChrome = HomeServersChrome(),
     onTitleClick: () -> Unit = {},
     onDismissServersSheet: () -> Unit = {},
@@ -276,12 +323,21 @@ internal fun MainScreen(
     onManageServersClick: () -> Unit = {},
     selectedSessionId: String? = null,
     sessionKeyboardNavigationEnabled: Boolean = false,
+    worktreeCreateForm: WorktreeCreateFormState? = null,
+    worktreeServerCanCreate: Boolean = true,
+    onOpenRunInNewWorktree: (String) -> Unit = {},
+    worktreeCreateCallbacks: WorktreeCreateFormCallbacks = WorktreeCreateFormCallbacks(),
     showsHomeSettle: Boolean = false,
     showsTerminal: Boolean = true,
 ) {
+    var newSessionSheetMode by rememberSaveable(stateSaver = NewSessionSheetModeSaver) {
+        mutableStateOf<SessionListHomeChrome.NewSessionSheetMode?>(null)
+    }
     val pendingOpenSession = (uiState as? MainScreenUiState.Loaded)?.pendingOpenSession
     LaunchedEffect(pendingOpenSession) {
         pendingOpenSession?.let { target ->
+            // A session made from the New worktree form closes the New session sheet too.
+            newSessionSheetMode = null
             onSessionClick(target)
             onConsumePendingOpenSession()
         }
@@ -299,18 +355,39 @@ internal fun MainScreen(
             else -> null
         }
 
-    var showNewSessionProjectPicker by rememberSaveable { mutableStateOf(false) }
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
-    val loadedSections = (uiState as? MainScreenUiState.Loaded)?.sections.orEmpty()
-    val chromeProjects = loadedSections.toHomeChromeProjects()
+    val worktreesEnabled = HomeDisplayPreferences.showsWorktrees
+    val loaded = uiState as? MainScreenUiState.Loaded
+    val nowEpochMs = System.currentTimeMillis()
+    val homeSessions =
+        loaded?.homeSessions(worktreesEnabled, showsSettle = showsHomeSettle, nowEpochMs = nowEpochMs).orEmpty()
+    val settledSessions =
+        loaded?.homeSettledSessions(worktreesEnabled, showsSettle = showsHomeSettle, nowEpochMs = nowEpochMs).orEmpty()
+    val chromeProjects =
+        remember(loaded, homeSessions) {
+            loaded?.let { state -> homeChromeProjects(state.projects, homeSessions, state.projectLoads) }.orEmpty()
+        }
     val showTerminalAction =
         SessionListHomeChrome.terminalAction(chromeProjects, showsTerminal = showsTerminal) is
             SessionListHomeChrome.TerminalAction.OpenCatalog
-    val newSessionPickerProjects =
-        when (uiState) {
-            is MainScreenUiState.Loaded -> uiState.sections
-            else -> emptyList()
+    val startNewSession: (SessionListHomeChrome.NewSessionAction) -> Unit = { action ->
+        when (action) {
+            SessionListHomeChrome.NewSessionAction.None -> Unit
+            is SessionListHomeChrome.NewSessionAction.PresentSheet -> {
+                if (newSessionSheetMode == null) {
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.HOME,
+                        actionId = ProductAnalytics.Action.HOME_OPEN_NEW_SESSION_PROJECT_PICKER,
+                    )
+                }
+                newSessionSheetMode = action.mode
+            }
+            is SessionListHomeChrome.NewSessionAction.Create -> {
+                newSessionSheetMode = null
+                onNewSession(action.worktree)
+            }
         }
+    }
 
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.HOME_CONNECTION_EMPTY,
@@ -330,7 +407,7 @@ internal fun MainScreen(
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
         presentation = ProductAnalytics.Presentation.SHEET,
-        visible = showNewSessionProjectPicker,
+        visible = newSessionSheetMode != null,
     )
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.HOME_REMOVE_PROJECT_CONFIRM,
@@ -358,56 +435,148 @@ internal fun MainScreen(
             entryProvider =
                 entryProvider {
                     entry<HomeColumnFeed> {
-                        HomeColumn(
-                            uiState = uiState,
-                            liveUpdatesConnectionStatus = liveUpdatesConnectionStatus,
-                            serversChrome = serversChrome,
-                            showTerminalAction = showTerminalAction,
-                            onTitleClick = onTitleClick,
-                            onTerminalClick = onTerminalClick,
-                            onSettingsClick = onSettingsClick,
-                            content = {
-                                HomeColumnBody(
-                                    uiState = uiState,
-                                    isRefreshing = isRefreshing,
-                                    removalSnackbar = removalSnackbar,
-                                    onBrowseProjectsClick = onAddProjectClick,
-                                    onSessionClick = onSessionClick,
-                                    onRequestNewSessionProjectPicker = {
+        Column(modifier = Modifier.fillMaxSize()) {
+            OpenCodeTopBar(
+                title = serversChrome.title,
+                onTitleClick = if (serversChrome.isSwitcher) onTitleClick else null,
+                titleMenuExpanded = serversChrome.sheetVisible,
+                subtitleAccessory =
+                    if (showsLiveUpdatesStatus(uiState)) {
+                        OpenCodeTopBarSubtitleAccessory.StatusDot(
+                            liveUpdatesConnectionStatus.toOpenCodeSessionConnectionStatus(),
+                        )
+                    } else {
+                        null
+                    },
+                actions =
+                    buildList {
+                        if (showTerminalAction) {
+                            add(
+                                OpenCodeTopBarAction.Icon(
+                                    imageVector = OpenCodeIcons.Terminal,
+                                    contentDescription = "Terminal",
+                                    onClick = {
                                         ProductAnalytics.logUserAction(
                                             screenId = ProductAnalytics.Screen.HOME,
-                                            actionId = ProductAnalytics.Action.HOME_OPEN_NEW_SESSION_PROJECT_PICKER,
+                                            actionId = ProductAnalytics.Action.HOME_OPEN_TERMINAL,
                                         )
-                                        showNewSessionProjectPicker = true
+                                        onTerminalClick()
                                     },
-                                    onCreateSession = onNewSession,
-                                    onRemoveProject = onRemoveProject,
-                                    onReorderProjects = onReorderProjects,
-                                    onRefresh = onRefresh,
-                                    onRetryProbe = onRetryProbe,
-                                    onEditConnection = onEditConnection,
-                                    onConnectClick = onConnectClick,
-                                    sessionActionsCallbacks = sessionActionsCallbacks,
-                                    showsHomeSettle = showsHomeSettle,
-                                    revealNewestToken = revealNewestToken,
-                                    pendingSelectedFilterId = pendingSelectedFilterId,
-                                    onConsumePendingSelectedFilter = onConsumePendingSelectedFilter,
-                                    selectedFilterId = selectedFilterId,
-                                    onSelectedFilterIdChange = { selectedFilterId = it },
-                                    selectedSessionId = selectedSessionId,
-                                    sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
-                                    onOpenSettled = {
-                                        if (columnStack.lastOrNull() != SettledSessionsRoute) {
-                                            columnStack.add(SettledSessionsRoute)
-                                        }
-                                    },
+                                ),
+                            )
+                        }
+                        add(
+                            OpenCodeTopBarAction.Icon(
+                                imageVector = OpenCodeIcons.Settings,
+                                contentDescription = "Settings",
+                                onClick = {
+                                    ProductAnalytics.logUserAction(
+                                        screenId = ProductAnalytics.Screen.HOME,
+                                        actionId = ProductAnalytics.Action.HOME_OPEN_SETTINGS,
+                                    )
+                                    onSettingsClick()
+                                },
+                            ),
+                        )
+                    },
+            )
+
+            when (uiState) {
+                is MainScreenUiState.Disconnected -> {
+                    Box(
+                        modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        ConnectionOnboardingScreen(
+                            onConnectClick = {
+                                ProductAnalytics.logUserAction(
+                                    screenId = ProductAnalytics.Screen.HOME_CONNECTION_EMPTY,
+                                    actionId = ProductAnalytics.Action.HOME_CONNECT,
                                 )
+                                onConnectClick()
                             },
                         )
                     }
+                }
+                MainScreenUiState.Probing,
+                MainScreenUiState.Loading,
+                -> {
+                    OpenCodeStatusStack(
+                        title = "Loading sessions",
+                        subtitle = "Checking server…",
+                        testTag = "homeLoading",
+                        modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+                    )
+                }
+                is MainScreenUiState.ProbeFailed -> {
+                    ProbeFailedContent(
+                        message = uiState.message,
+                        onRetry = onRetryProbe,
+                        onEditConnection = onEditConnection,
+                        modifier = Modifier.fillMaxSize().navigationBarsPadding(),
+                    )
+                }
+                is MainScreenUiState.Empty,
+                is MainScreenUiState.Loaded,
+                -> {
+                    val sections =
+                        when (uiState) {
+                            is MainScreenUiState.Loaded -> uiState.sections
+                            else -> emptyList()
+                        }
+                    val projectSessionCreateError =
+                        when (uiState) {
+                            is MainScreenUiState.Empty -> uiState.projectSessionCreateError
+                            is MainScreenUiState.Loaded -> uiState.projectSessionCreateError
+                            else -> null
+                        }
+                    HomeProjectsContent(
+                        sections = sections,
+                        sessions = homeSessions,
+                        chromeProjects = chromeProjects,
+                        onRetryProjectLoad = onRetryProjectLoad,
+                        projectSessionCreateError = projectSessionCreateError,
+                        isRefreshing = isRefreshing,
+                        onRefresh = onRefresh,
+                        onBrowseProjectsClick = onAddProjectClick,
+                        onSessionClick = { target ->
+                            ProductAnalytics.logUserAction(
+                                screenId = ProductAnalytics.Screen.HOME,
+                                actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
+                            )
+                            onSessionClick(target)
+                        },
+                        onNewSessionAction = startNewSession,
+                        worktreesEnabled = worktreesEnabled,
+                        onRemoveProject = onRemoveProject,
+                        onReorderProjects = onReorderProjects,
+                        removalSnackbar = removalSnackbar,
+                        onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
+                        projects = loaded?.projects.orEmpty(),
+                        revealNewestToken = revealNewestToken,
+                        pendingScopeRequest = pendingScopeRequest,
+                        onConsumePendingScopeRequest = onConsumePendingScopeRequest,
+                        selectedFilterId = selectedFilterId,
+                        onSelectedFilterIdChange = { selectedFilterId = it },
+                        selectedSessionId = selectedSessionId,
+                        sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
+                        showsSettle = showsHomeSettle,
+                        settledSessions = settledSessions,
+                        onOpenSettled = {
+                            if (columnStack.lastOrNull() != SettledSessionsRoute) {
+                                columnStack.add(SettledSessionsRoute)
+                            }
+                        },
+                        onSettleGesture = sessionActionsCallbacks.onSettleGesture,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        }
+                    }
                     entry<SettledSessionsRoute> {
                         SettledSessionsColumn(
-                            sections = loadedSections,
+                            sessions = settledSessions,
                             selectedFilterId = selectedFilterId,
                             isRefreshing = isRefreshing,
                             onRefresh = onRefresh,
@@ -436,6 +605,19 @@ internal fun MainScreen(
         visible = serversChrome.sheetVisible,
         title = "Servers",
         onDismissRequest = onDismissServersSheet,
+        pinnedBottom = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.FullWidthText("Add server"),
+                    onClick = onAddServerClick,
+                )
+                OpenCodeButton(
+                    variant = OpenCodeButtonVariant.FullWidthText("Manage in Settings"),
+                    contrast = OpenCodeButtonContrast.Low,
+                    onClick = onManageServersClick,
+                )
+            }
+        },
     ) {
         val active = serversChrome.active
         if (active != null) {
@@ -473,21 +655,6 @@ internal fun MainScreen(
                 )
             }
         }
-        OpenCodeListItem(
-            title = "Add server",
-            subtitle = "New Connection Profile",
-            startDecorator = StartDecorator.Icon(OpenCodeIcons.Add, "Add server"),
-            onClick = onAddServerClick,
-            modifier = Modifier.padding(horizontal = 16.dp),
-        )
-        OpenCodeListItem(
-            title = "Manage in Settings",
-            onClick = onManageServersClick,
-            modifier =
-                Modifier
-                    .padding(horizontal = 16.dp)
-                    .padding(bottom = 8.dp),
-        )
     }
 
     val pendingProjectRemoval = (uiState as? MainScreenUiState.Loaded)?.pendingProjectRemoval
@@ -516,59 +683,146 @@ internal fun MainScreen(
 
     HomeSessionActions(state = sessionActions, callbacks = sessionActionsCallbacks)
 
-    if (showAddSheet) {
-        AddProjectSheet(
-            sheet = addProjectSheet ?: AddProjectSheetUi.empty(),
-            callbacks = addProjectCallbacks,
-            onDismiss = onDismissAddProject,
-        )
-    }
+    AddProjectSheet(
+        visible = showAddSheet,
+        sheet = addProjectSheet ?: AddProjectSheetUi.empty(),
+        callbacks = addProjectCallbacks,
+        onDismiss = onDismissAddProject,
+    )
 
-    if (showNewSessionProjectPicker) {
-        OpenCodeBottomSheet(
-            visible = true,
-            title = "New session",
-            onDismissRequest = {
-                ProductAnalytics.logUserAction(
-                    screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
-                    actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_DISMISS,
-                )
-                showNewSessionProjectPicker = false
-            },
-        ) {
-            if (newSessionPickerProjects.isEmpty()) {
-                OpenCodeBottomSheetEntry(title = "No projects", enabled = false, onClick = {})
+    // One New session sheet: the project list, "Run in" for a project, or the New worktree form
+    // in place of Run in. Keeps the shown content while the sheet plays its exit motion.
+    var heldSheetMode by remember { mutableStateOf(newSessionSheetMode) }
+    newSessionSheetMode?.let { heldSheetMode = it }
+    val pickProject: (SessionListHomeChrome.Project, Boolean) -> Unit = { project, holdPick ->
+        ProductAnalytics.logUserAction(
+            screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
+            actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_SELECT_PROJECT,
+        )
+        // A hold-pick with Worktrees on stays open and asks where to run.
+        startNewSession(SessionListHomeChrome.projectPickAction(project, holdPick, worktreesEnabled))
+    }
+    val heldRunInKey = (heldSheetMode as? SessionListHomeChrome.NewSessionSheetMode.RunIn)?.projectId
+    val runInForm =
+        worktreeCreateForm?.takeIf { form ->
+            heldRunInKey != null && (form.origin as? WorktreeCreateOrigin.RunIn)?.projectKey == heldRunInKey
+        }
+    OpenCodeBottomSheet(
+        visible = newSessionSheetMode != null,
+        title = if (runInForm != null) WorktreeCreateCopy.FORM_TITLE else "New session",
+        onDismissRequest = {
+            ProductAnalytics.logUserAction(
+                screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
+                actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_DISMISS,
+            )
+            newSessionSheetMode = null
+            worktreeCreateCallbacks.onBack()
+        },
+        headerTrailingAction = runInForm?.let { worktreeCreateBackAction(it, worktreeCreateCallbacks) },
+        keyboard =
+            if (runInForm != null && !runInForm.basePickerVisible) {
+                OpenCodeBottomSheetKeyboard.Keep
             } else {
-                newSessionPickerProjects.forEach { project ->
+                OpenCodeBottomSheetKeyboard.Dismiss
+            },
+        pinnedBottom = if (runInForm != null) ({ WorktreeCreateFormActions(runInForm, worktreeCreateCallbacks) }) else null,
+    ) {
+        val mode = heldSheetMode
+        val runIn =
+            (mode as? SessionListHomeChrome.NewSessionSheetMode.RunIn)?.let { runInMode ->
+                chromeProjects.firstOrNull { it.id == runInMode.projectId }
+            }
+        if (runInForm != null) {
+            WorktreeCreateFormBody(runInForm, worktreeCreateCallbacks)
+        } else if (mode is SessionListHomeChrome.NewSessionSheetMode.RunIn && runIn != null) {
+            OpenCodeSectionHeader(title = HomeWorktreeCopy.RUN_IN)
+            runIn.worktrees.forEach { worktree ->
+                OpenCodeListItem(
+                    title = worktree.title,
+                    subtitle = worktree.subtitle,
+                    caption = worktree.runningCount.takeIf { it > 0 }?.let(HomeWorktreeCopy::runningCount),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, null),
+                    onClick = {
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
+                            actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_SELECT_PROJECT,
+                        )
+                        startNewSession(SessionListHomeChrome.NewSessionAction.Create(worktree.directory))
+                    },
+                    modifier = Modifier.testTag(HomeNewSessionSheetTags.runInRow(worktree.title)),
+                )
+            }
+            NewWorktreeRow(
+                availability =
+                    NewWorktreeAvailability.runIn(
+                        project = loaded?.projects?.firstOrNull { it.key == runIn.id },
+                        worktreesEnabled = worktreesEnabled,
+                        serverCanCreate = worktreeServerCanCreate,
+                    ),
+                testTag = WorktreeCreateTags.RUN_IN_ROW,
+                onClick = { onOpenRunInNewWorktree(runIn.id) },
+            )
+            val others = chromeProjects.filter { it.id != runIn.id }
+            if (mode.showsOtherProjects && others.isNotEmpty()) {
+                OpenCodeSectionHeader(title = HomeWorktreeCopy.OTHER_PROJECTS)
+                others.forEach { project ->
                     OpenCodeBottomSheetEntry(
-                        title = project.displayName,
-                        startDecorator =
-                            BottomSheetEntryDecorator.Icon(
-                                imageVector = OpenCodeIcons.Folder,
-                                contentDescription = null,
-                            ),
-                        onClick = {
-                            ProductAnalytics.logUserAction(
-                                screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
-                                actionId = ProductAnalytics.Action.NEW_SESSION_PICKER_SELECT_PROJECT,
-                            )
-                            showNewSessionProjectPicker = false
-                            onNewSession(project.worktree)
-                        },
+                        title = project.title,
+                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
+                        onClick = { pickProject(project, true) },
                     )
                 }
+            }
+        } else if (chromeProjects.isEmpty()) {
+            OpenCodeBottomSheetEntry(title = "No projects", enabled = false, onClick = {})
+        } else {
+            val holdPick = (mode as? SessionListHomeChrome.NewSessionSheetMode.Projects)?.holdPick ?: true
+            chromeProjects.forEach { project ->
+                OpenCodeBottomSheetEntry(
+                    title = project.title,
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
+                    onClick = { pickProject(project, holdPick) },
+                )
             }
         }
     }
 }
+
+/** Test tags of the New session sheet. */
+internal object HomeNewSessionSheetTags {
+    fun runInRow(title: String): String = "newSessionRunInRow:$title"
+}
+
+/** Saves the New session sheet mode across configuration changes. */
+private val NewSessionSheetModeSaver: Saver<SessionListHomeChrome.NewSessionSheetMode?, String> =
+    Saver(
+        save = { mode ->
+            when (mode) {
+                null -> ""
+                is SessionListHomeChrome.NewSessionSheetMode.Projects -> "p:${mode.holdPick}"
+                is SessionListHomeChrome.NewSessionSheetMode.RunIn -> "r:${mode.showsOtherProjects}:${mode.projectId}"
+            }
+        },
+        restore = { saved ->
+            when {
+                saved.startsWith("p:") -> SessionListHomeChrome.NewSessionSheetMode.Projects(holdPick = saved == "p:true")
+                saved.startsWith("r:") -> {
+                    val body = saved.removePrefix("r:")
+                    SessionListHomeChrome.NewSessionSheetMode.RunIn(
+                        projectId = body.substringAfter(':'),
+                        showsOtherProjects = body.substringBefore(':') == "true",
+                    )
+                }
+                else -> null
+            }
+        },
+    )
 
 @Composable
 private fun HomeSessionActions(
     state: HomeSessionActionsUiState,
     callbacks: HomeSessionActionsCallbacks,
 ) {
-    val target = state.target ?: return
-
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.HOME_SESSION_ACTIONS,
         presentation = ProductAnalytics.Presentation.SHEET,
@@ -605,26 +859,26 @@ private fun HomeSessionActions(
                 OpenCodeBottomSheetEntry(
                     title = "Unarchive",
                     enabled = !state.lifecycleInFlight,
-                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive, null),
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive),
                     onClick = callbacks.onChooseUnarchive,
                 )
             HomeSessionLifecycle.Settled ->
                 OpenCodeBottomSheetEntry(
                     title = "Unsettle",
                     enabled = !state.lifecycleInFlight,
-                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, null),
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check),
                     onClick = callbacks.onChooseUnsettle,
                 )
             HomeSessionLifecycle.Snoozed -> {
                 OpenCodeBottomSheetEntry(
                     title = "Wake",
                     enabled = !state.lifecycleInFlight,
-                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, null),
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check),
                     onClick = callbacks.onChooseWake,
                 )
                 OpenCodeBottomSheetEntry(
                     title = "Rename session",
-                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, null),
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit),
                     onClick = callbacks.onChooseRename,
                 )
             }
@@ -638,7 +892,7 @@ private fun HomeSessionActions(
                                 "Settle"
                             },
                         enabled = state.snoozeBlockReason == null && !state.lifecycleInFlight,
-                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, null),
+                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check),
                         onClick = callbacks.onChooseSettle,
                     )
                     OpenCodeBottomSheetEntry(
@@ -649,27 +903,25 @@ private fun HomeSessionActions(
                                 "Snooze"
                             },
                         enabled = state.snoozeBlockReason == null && !state.lifecycleInFlight,
-                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check, null),
+                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check),
                         onClick = callbacks.onChooseSnooze,
                     )
                 }
                 OpenCodeBottomSheetEntry(
                     title = "Rename session",
-                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit, null),
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit),
                     onClick = callbacks.onChooseRename,
                 )
-                if (state.canFork) {
-                    OpenCodeBottomSheetEntry(
-                        title = "Fork session",
-                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy, null),
-                        onClick = callbacks.onChooseFork,
-                    )
-                }
+                OpenCodeBottomSheetEntry(
+                    title = "Fork session",
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy),
+                    onClick = callbacks.onChooseFork,
+                )
                 if (state.canArchive) {
                     OpenCodeBottomSheetEntry(
                         title = "Archive",
                         enabled = !state.lifecycleInFlight,
-                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive, null),
+                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive),
                         onClick = callbacks.onChooseArchive,
                     )
                 }
@@ -679,7 +931,7 @@ private fun HomeSessionActions(
             title = "Delete",
             enabled = !state.lifecycleInFlight,
             destructive = true,
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close, null),
+            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close),
             onClick = callbacks.onChooseDelete,
         )
     }
@@ -713,6 +965,9 @@ private fun HomeSessionActions(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
         )
     }
+
+    // The sheet stays composed without a target so it can play its exit motion.
+    val target = state.target ?: return
 
     OpenCodeDialog(
         visible = state.renameVisible,
@@ -750,7 +1005,7 @@ private fun HomeSessionActions(
         primaryOption =
             OpenCodeDialogOption(
                 title = "Fork",
-                enabled = !state.forkSubmitting,
+                enabled = !state.forkSubmitting && state.forkBlockedMessage == null,
                 onClick = callbacks.onConfirmFork,
             ),
         secondaryOption =
@@ -765,7 +1020,7 @@ private fun HomeSessionActions(
                 onValueChange = callbacks.onForkDraftChange,
                 hint = "Title",
                 enabled = !state.forkSubmitting,
-                errorMessage = state.forkError,
+                errorMessage = state.forkError ?: state.forkBlockedMessage,
             ),
         onDismissRequest = {
             if (!state.forkSubmitting) {
@@ -810,182 +1065,10 @@ private data object HomeColumnFeed : NavKey
 @Serializable
 private data object SettledSessionsRoute : NavKey
 
-@Composable
-private fun HomeColumn(
-    uiState: MainScreenUiState,
-    liveUpdatesConnectionStatus: SessionConnectionStatus,
-    serversChrome: HomeServersChrome,
-    showTerminalAction: Boolean,
-    onTitleClick: () -> Unit,
-    onTerminalClick: () -> Unit,
-    onSettingsClick: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        OpenCodeTopBar(
-            title = serversChrome.title,
-            onTitleClick = if (serversChrome.isSwitcher) onTitleClick else null,
-            titleMenuExpanded = serversChrome.sheetVisible,
-            subtitleAccessory =
-                if (showsLiveUpdatesStatus(uiState)) {
-                    OpenCodeTopBarSubtitleAccessory.StatusDot(
-                        liveUpdatesConnectionStatus.toOpenCodeSessionConnectionStatus(),
-                    )
-                } else {
-                    null
-                },
-            actions =
-                buildList {
-                    if (showTerminalAction) {
-                        add(
-                            OpenCodeTopBarAction.Icon(
-                                imageVector = OpenCodeIcons.Terminal,
-                                contentDescription = "Terminal",
-                                onClick = {
-                                    ProductAnalytics.logUserAction(
-                                        screenId = ProductAnalytics.Screen.HOME,
-                                        actionId = ProductAnalytics.Action.HOME_OPEN_TERMINAL,
-                                    )
-                                    onTerminalClick()
-                                },
-                            ),
-                        )
-                    }
-                    add(
-                        OpenCodeTopBarAction.Icon(
-                            imageVector = OpenCodeIcons.Settings,
-                            contentDescription = "Settings",
-                            onClick = {
-                                ProductAnalytics.logUserAction(
-                                    screenId = ProductAnalytics.Screen.HOME,
-                                    actionId = ProductAnalytics.Action.HOME_OPEN_SETTINGS,
-                                )
-                                onSettingsClick()
-                            },
-                        ),
-                    )
-                },
-        )
-        Box(modifier = Modifier.weight(1f)) {
-            content()
-        }
-    }
-}
-
-@Composable
-private fun HomeColumnBody(
-    uiState: MainScreenUiState,
-    isRefreshing: Boolean,
-    removalSnackbar: OpenCodeSnackbarMessage?,
-    onBrowseProjectsClick: () -> Unit,
-    onSessionClick: (SessionOpenTarget) -> Unit,
-    onRequestNewSessionProjectPicker: () -> Unit,
-    onCreateSession: (String) -> Unit,
-    onRemoveProject: (String) -> Unit,
-    onReorderProjects: (List<String>) -> Unit,
-    onRefresh: () -> Unit,
-    onRetryProbe: () -> Unit,
-    onEditConnection: () -> Unit,
-    onConnectClick: () -> Unit,
-    sessionActionsCallbacks: HomeSessionActionsCallbacks,
-    showsHomeSettle: Boolean,
-    revealNewestToken: Int,
-    pendingSelectedFilterId: String?,
-    onConsumePendingSelectedFilter: () -> Unit,
-    selectedFilterId: String,
-    onSelectedFilterIdChange: (String) -> Unit,
-    selectedSessionId: String?,
-    sessionKeyboardNavigationEnabled: Boolean,
-    onOpenSettled: () -> Unit,
-) {
-    when (uiState) {
-        is MainScreenUiState.Disconnected -> {
-            Box(
-                modifier = Modifier.fillMaxSize().navigationBarsPadding(),
-                contentAlignment = Alignment.Center,
-            ) {
-                ConnectionOnboardingScreen(
-                    onConnectClick = {
-                        ProductAnalytics.logUserAction(
-                            screenId = ProductAnalytics.Screen.HOME_CONNECTION_EMPTY,
-                            actionId = ProductAnalytics.Action.HOME_CONNECT,
-                        )
-                        onConnectClick()
-                    },
-                )
-            }
-        }
-        MainScreenUiState.Probing,
-        MainScreenUiState.Loading,
-        -> {
-            OpenCodeStatusStack(
-                title = "Loading sessions",
-                subtitle = "Checking server…",
-                testTag = "homeLoading",
-                modifier = Modifier.fillMaxSize().navigationBarsPadding(),
-            )
-        }
-        is MainScreenUiState.ProbeFailed -> {
-            ProbeFailedContent(
-                message = uiState.message,
-                onRetry = onRetryProbe,
-                onEditConnection = onEditConnection,
-                modifier = Modifier.fillMaxSize().navigationBarsPadding(),
-            )
-        }
-        is MainScreenUiState.Empty,
-        is MainScreenUiState.Loaded,
-        -> {
-            val sections =
-                when (uiState) {
-                    is MainScreenUiState.Loaded -> uiState.sections
-                    else -> emptyList()
-                }
-            val projectSessionCreateError =
-                when (uiState) {
-                    is MainScreenUiState.Empty -> uiState.projectSessionCreateError
-                    is MainScreenUiState.Loaded -> uiState.projectSessionCreateError
-                    else -> null
-                }
-            HomeProjectsContent(
-                sections = sections,
-                projectSessionCreateError = projectSessionCreateError,
-                isRefreshing = isRefreshing,
-                onRefresh = onRefresh,
-                onBrowseProjectsClick = onBrowseProjectsClick,
-                onSessionClick = { target ->
-                    ProductAnalytics.logUserAction(
-                        screenId = ProductAnalytics.Screen.HOME,
-                        actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
-                    )
-                    onSessionClick(target)
-                },
-                onRequestNewSessionProjectPicker = onRequestNewSessionProjectPicker,
-                onCreateSession = onCreateSession,
-                onRemoveProject = onRemoveProject,
-                onReorderProjects = onReorderProjects,
-                removalSnackbar = removalSnackbar,
-                onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
-                showsSettle = showsHomeSettle,
-                onOpenSettled = onOpenSettled,
-                onSettleGesture = sessionActionsCallbacks.onSettleGesture,
-                revealNewestToken = revealNewestToken,
-                pendingSelectedFilterId = pendingSelectedFilterId,
-                onConsumePendingSelectedFilter = onConsumePendingSelectedFilter,
-                selectedFilterId = selectedFilterId,
-                onSelectedFilterIdChange = onSelectedFilterIdChange,
-                selectedSessionId = selectedSessionId,
-                sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
-                modifier = Modifier.fillMaxSize(),
-            )
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SettledSessionsColumn(
-    sections: List<ProjectSectionUi>,
+    sessions: List<SessionListSession>,
     selectedFilterId: String,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
@@ -994,21 +1077,11 @@ private fun SettledSessionsColumn(
     onSessionLongPress: (SessionListSession) -> Unit,
     onSettleGesture: (SessionListSession, HomeSettleGesture) -> Unit,
 ) {
-    val feed = sections.homeFeed(showsSettle = true, nowEpochMs = System.currentTimeMillis())
-    val resolvedFilterId =
-        SessionListHomeChrome.resolvedFilterId(
-            selectedId = selectedFilterId,
-            tabs =
-                SessionListHomeChrome.filterTabs(
-                    projects = sections.toHomeChromeProjects(),
-                    sessionCount = feed.activeCount,
-                ),
-        )
-    val sessions = feed.settled.visibleForFilter(resolvedFilterId)
+    val visible = sessions.visibleForFilter(selectedFilterId)
     Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         OpenCodeTopBar(
             title = "Settled",
-            subtitle = if (sessions.size == 1) "1 thread" else "${sessions.size} threads",
+            subtitle = if (visible.size == 1) "1 thread" else "${visible.size} threads",
             leading = OpenCodeTopBarLeading.Back(onClick = onBack),
         )
         PullToRefreshBox(
@@ -1017,7 +1090,7 @@ private fun SettledSessionsColumn(
             modifier = Modifier.weight(1f),
         ) {
             SettledSessionsPage(
-                sessions = sessions,
+                sessions = visible,
                 onSessionSelected = { session ->
                     ProductAnalytics.logUserAction(
                         screenId = ProductAnalytics.Screen.HOME,
@@ -1027,7 +1100,7 @@ private fun SettledSessionsColumn(
                         SessionOpenTarget(
                             sessionId = session.id,
                             title = session.title,
-                            worktree = session.worktree,
+                            worktree = session.directory,
                         ),
                     )
                 },
@@ -1059,27 +1132,32 @@ private fun ProbeFailedContent(
 @Composable
 private fun HomeProjectsContent(
     sections: List<ProjectSectionUi>,
+    sessions: List<SessionListSession>,
+    chromeProjects: List<SessionListHomeChrome.Project>,
+    onRetryProjectLoad: (String) -> Unit,
     projectSessionCreateError: String?,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onBrowseProjectsClick: () -> Unit,
     onSessionClick: (SessionOpenTarget) -> Unit,
-    onRequestNewSessionProjectPicker: () -> Unit,
-    onCreateSession: (String) -> Unit,
+    onNewSessionAction: (SessionListHomeChrome.NewSessionAction) -> Unit,
     onRemoveProject: (String) -> Unit,
     onReorderProjects: (List<String>) -> Unit,
     removalSnackbar: OpenCodeSnackbarMessage?,
     onSessionLongPress: (SessionListSession) -> Unit,
-    showsSettle: Boolean = false,
-    onOpenSettled: () -> Unit = {},
-    onSettleGesture: (SessionListSession, HomeSettleGesture) -> Unit = { _, _ -> },
+    projects: List<HomeProject> = emptyList(),
     revealNewestToken: Int = 0,
-    pendingSelectedFilterId: String? = null,
-    onConsumePendingSelectedFilter: () -> Unit = {},
+    pendingScopeRequest: HomeScopeRequest? = null,
+    onConsumePendingScopeRequest: () -> Unit = {},
     selectedFilterId: String,
     onSelectedFilterIdChange: (String) -> Unit,
     selectedSessionId: String? = null,
     sessionKeyboardNavigationEnabled: Boolean = false,
+    worktreesEnabled: Boolean = true,
+    showsSettle: Boolean = false,
+    settledSessions: List<SessionListSession> = emptyList(),
+    onOpenSettled: () -> Unit = {},
+    onSettleGesture: (SessionListSession, HomeSettleGesture) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     // Rows exactly as the list renders them for the selected filter; read by Ctrl+Tab stepping.
@@ -1093,7 +1171,7 @@ private fun HomeProjectsContent(
             SessionOpenTarget(
                 sessionId = session.id,
                 title = session.title,
-                worktree = session.worktree,
+                worktree = session.directory,
             ),
         )
     }
@@ -1119,31 +1197,34 @@ private fun HomeProjectsContent(
         onRefresh = onRefresh,
         modifier = modifier.fillMaxSize(),
     ) {
-        val nowEpochMs = System.currentTimeMillis()
-        val feed = sections.homeFeed(showsSettle = showsSettle, nowEpochMs = nowEpochMs)
-        val chromeProjects = sections.toHomeChromeProjects()
         val filterTabs =
             SessionListHomeChrome.filterTabs(
                 projects = chromeProjects,
-                sessionCount = if (showsSettle) feed.activeCount else feed.ladder.size,
+                sessionCount = sessions.size,
+                worktreesEnabled = worktreesEnabled,
             )
+        val worktreeTabs = SessionListHomeChrome.worktreeTabs(chromeProjects, worktreesEnabled)
         var showProjectPicker by rememberSaveable { mutableStateOf(false) }
+        var pickerState by remember { mutableStateOf(HomeProjectPickerState()) }
+        // An older scope id (an added path) reads as the project that path now belongs to, and
+        // so does a worktree scope while worktrees are off.
         val resolvedFilterId =
             SessionListHomeChrome.resolvedFilterId(
-                selectedId = selectedFilterId,
+                selectedId = homeScopeId(selectedFilterId, projects, worktreesEnabled),
                 tabs = filterTabs,
+                worktreeTabs = worktreeTabs,
             )
         LaunchedEffect(resolvedFilterId) {
             if (selectedFilterId != resolvedFilterId) {
                 onSelectedFilterIdChange(resolvedFilterId)
             }
         }
-        LaunchedEffect(pendingSelectedFilterId) {
-            pendingSelectedFilterId?.let { filterId ->
-                if (resolvedFilterId != SessionListFilterTab.ALL_ID) {
-                    onSelectedFilterIdChange(filterId)
+        LaunchedEffect(pendingScopeRequest) {
+            pendingScopeRequest?.let { request ->
+                if (request.evenFromAll || resolvedFilterId != SessionListFilterTab.ALL_ID) {
+                    onSelectedFilterIdChange(homeScopeId(request.filterId, projects, worktreesEnabled))
                 }
-                onConsumePendingSelectedFilter()
+                onConsumePendingScopeRequest()
             }
         }
         LaunchedEffect(removalSnackbar) {
@@ -1157,10 +1238,7 @@ private fun HomeProjectsContent(
             visible = showProjectPicker,
         )
         SessionList(
-            sessions = feed.ladder,
-            settledSessions = if (showsSettle) feed.settled else emptyList(),
-            onOpenSettled = if (showsSettle) onOpenSettled else null,
-            onSettleGesture = if (showsSettle) onSettleGesture else null,
+            sessions = sessions,
             filterTabs = filterTabs,
             selectedFilterId = resolvedFilterId,
             createError = projectSessionCreateError,
@@ -1169,6 +1247,12 @@ private fun HomeProjectsContent(
                     screenId = ProductAnalytics.Screen.HOME,
                     actionId = ProductAnalytics.Action.HOME_OPEN_PROJECT_PICKER,
                 )
+                // Fresh each time: a worktree scope opens with its project expanded.
+                pickerState =
+                    HomeProjectPickerState.initial(
+                        selectedScope = HomeScope.resolve(resolvedFilterId, projects, worktreesEnabled),
+                        projects = projects,
+                    )
                 showProjectPicker = true
             },
             onFilterSelected = { filterId ->
@@ -1182,33 +1266,30 @@ private fun HomeProjectsContent(
             onDisplayedSessionsChange = { displayedSessions.value = it },
             onAddProject = onBrowseProjectsClick,
             onNewSession = {
-                when (
-                    val action =
-                        SessionListHomeChrome.newSessionAction(
-                            projects = chromeProjects,
-                            selectedFilterId = resolvedFilterId,
-                        )
-                ) {
-                    SessionListHomeChrome.NewSessionAction.None -> Unit
-                    SessionListHomeChrome.NewSessionAction.PresentPicker ->
-                        onRequestNewSessionProjectPicker()
-                    is SessionListHomeChrome.NewSessionAction.Create ->
-                        onCreateSession(action.worktree)
-                }
+                onNewSessionAction(
+                    SessionListHomeChrome.newSessionAction(
+                        projects = chromeProjects,
+                        selectedFilterId = resolvedFilterId,
+                        worktreesEnabled = worktreesEnabled,
+                    ),
+                )
             },
             onNewSessionLongPress =
-                if (
-                    SessionListHomeChrome.newSessionLongPressAction(
+                SessionListHomeChrome
+                    .newSessionLongPressAction(
                         projects = chromeProjects,
-                    ) is SessionListHomeChrome.NewSessionAction.PresentPicker
-                ) {
-                    onRequestNewSessionProjectPicker
-                } else {
-                    null
-                },
+                        selectedFilterId = resolvedFilterId,
+                        worktreesEnabled = worktreesEnabled,
+                    ).takeIf { it != SessionListHomeChrome.NewSessionAction.None }
+                    ?.let { action -> { onNewSessionAction(action) } },
             onSessionLongPress = onSessionLongPress,
+            settledSessions = if (showsSettle) settledSessions else emptyList(),
+            onOpenSettled = if (showsSettle) onOpenSettled else null,
+            onSettleGesture = if (showsSettle) onSettleGesture else null,
             revealNewestToken = revealNewestToken,
             selectedSessionId = selectedSessionId,
+            onRetryScopeLoad = onRetryProjectLoad,
+            scopeTabs = worktreeTabs,
             modifier = Modifier.fillMaxSize(),
             emptyContent =
                 if (sections.isEmpty()) {
@@ -1224,6 +1305,14 @@ private fun HomeProjectsContent(
             // natural for this list (#680).
             height = OpenCodeBottomSheetHeight.Half,
             keyboard = OpenCodeBottomSheetKeyboard.Keep,
+            headerTrailingAction =
+                OpenCodeBottomSheetHeaderTextAction(
+                    title = if (pickerState.isEditing) HomeWorktreeCopy.DONE else HomeWorktreeCopy.EDIT,
+                    // Reordering needs two projects; the control stays visible either way.
+                    enabled = chromeProjects.size >= 2 || pickerState.isEditing,
+                    onClick = { pickerState = pickerState.setEditing(!pickerState.isEditing) },
+                    testTag = SessionListProjectPickerTags.EDIT,
+                ),
             onDismissRequest = {
                 ProductAnalytics.logUserAction(
                     screenId = ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER,
@@ -1233,7 +1322,16 @@ private fun HomeProjectsContent(
             },
         ) {
             SessionListProjectPickerRows(
-                tabs = filterTabs,
+                rows =
+                    SessionListHomeChrome.pickerRows(
+                        projects = chromeProjects,
+                        sessionCount = sessions.size,
+                        state = pickerState,
+                        worktreesEnabled = worktreesEnabled,
+                    ),
+                isEditing = pickerState.isEditing,
+                onToggleWorktrees = { projectId -> pickerState = pickerState.toggleExpanded(projectId) },
+                onToggleShowAll = { projectId -> pickerState = pickerState.toggleShowAll(projectId) },
                 onSelect = { filterId ->
                     ProductAnalytics.logUserAction(
                         screenId = ProductAnalytics.Screen.HOME_FILTER_PROJECT_PICKER,
@@ -1254,154 +1352,249 @@ private class DisplayedSessions {
     var value: List<SessionListSession> = emptyList()
 }
 
-private data class HomeFeed(
-    val ladder: List<SessionListSession>,
-    val settled: List<SessionListSession>,
-    val activeCount: Int,
-)
+/**
+ * Scope id for [id] against [projects]: an added path maps to its project, and so does a
+ * worktree while [worktreesEnabled] is off; anything else is kept.
+ */
+internal fun homeScopeId(
+    id: String,
+    projects: List<HomeProject>,
+    worktreesEnabled: Boolean = true,
+): String = HomeScope.resolve(id, projects, worktreesEnabled)?.let(HomeScope::id) ?: id
 
-/** Active rows on the ladder. Settled rows move to [HomeFeed.settled] only when settle is on. */
-private fun List<ProjectSectionUi>.homeFeed(
-    showsSettle: Boolean,
-    nowEpochMs: Long,
-): HomeFeed {
-    if (!showsSettle) {
-        val ladder =
-            crossProjectRows(sessionsOf = { it.allSessions }) +
-                crossProjectRows(sessionsOf = { it.archivedSessions })
-        return HomeFeed(ladder = ladder, settled = emptyList(), activeCount = ladder.size)
-    }
-    val ladder =
-        crossProjectRows({ it.allSessions }, nowEpochMs, showsSettle = true) +
-            crossProjectRows(
-                { section -> section.archivedSessions.filterNot { it.isSettled } },
-                nowEpochMs,
-                showsSettle = true,
-            )
-    val settled =
-        crossProjectRows(
-            { section -> section.archivedSessions.filter { it.isSettled } },
-            nowEpochMs,
-            showsSettle = true,
-            settledPage = true,
-        )
-    return HomeFeed(
-        ladder = ladder,
-        settled = settled,
-        activeCount = sumOf { it.allSessions.size },
+/** Rows for every Home project, one per session id. Settled rows stay off this list. */
+internal fun MainScreenUiState.Loaded.homeSessions(
+    worktreesEnabled: Boolean = true,
+    showsSettle: Boolean = false,
+    nowEpochMs: Long = System.currentTimeMillis(),
+): List<SessionListSession> =
+    homeSessionListSessions(
+        projects,
+        sections,
+        home.extraSessions,
+        worktreesEnabled,
+        showsSettle = showsSettle,
+        nowEpochMs = nowEpochMs,
+        settledOnly = false,
+    )
+
+/** Settled rows for the settled page. Empty unless settle is on. */
+internal fun MainScreenUiState.Loaded.homeSettledSessions(
+    worktreesEnabled: Boolean = true,
+    showsSettle: Boolean = false,
+    nowEpochMs: Long = System.currentTimeMillis(),
+): List<SessionListSession> {
+    if (!showsSettle) return emptyList()
+    return homeSessionListSessions(
+        projects,
+        sections,
+        home.extraSessions,
+        worktreesEnabled,
+        showsSettle = true,
+        nowEpochMs = nowEpochMs,
+        settledOnly = true,
     )
 }
 
-/** Active rows newest first, then archived rows newest first. */
+/** Without project data, each section is its own project (tests and previews). */
 internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> =
-    crossProjectRows(sessionsOf = { it.allSessions }) +
-        crossProjectRows(sessionsOf = { it.archivedSessions })
+    homeSessionListSessions(HomeProjectGrouping.group(map { it.worktree }, emptyMap()), this)
 
-private fun List<ProjectSectionUi>.crossProjectRows(
-    sessionsOf: (ProjectSectionUi) -> List<SessionSummary>,
-    nowEpochMs: Long = 0L,
+/**
+ * Home rows: each project's sessions from its added paths' lists and (v1) its other
+ * worktrees' lists. A session listed more than once keeps its newest copy (the earlier
+ * source on a tie); rows are newest first. Settled rows are a separate list when settle is on.
+ */
+internal fun homeSessionListSessions(
+    projects: List<HomeProject>,
+    sections: List<ProjectSectionUi>,
+    extraSessions: Map<String, List<SessionSummary>> = emptyMap(),
+    worktreesEnabled: Boolean = true,
     showsSettle: Boolean = false,
-    settledPage: Boolean = false,
+    nowEpochMs: Long = 0L,
+    settledOnly: Boolean = false,
 ): List<SessionListSession> {
+    val sectionsByPath = sections.associateBy { it.worktree }
     val flattened =
-        flatMap { section ->
-            sessionsOf(section).map { session -> section to session }
+        projects.flatMap { project ->
+            project.memberPaths.flatMap { path ->
+                val section = sectionsByPath[path]
+                val summaries =
+                    if (settledOnly) {
+                        section?.archivedSessions.orEmpty().filter { it.isSettled }
+                    } else {
+                        section?.allSessions.orEmpty() +
+                            section?.archivedSessions.orEmpty().filter { session ->
+                                !showsSettle || !session.isSettled
+                            }
+                    }
+                summaries.map { HomeRowSource(project, path, it) }
+            } +
+                if (settledOnly) {
+                    emptyList()
+                } else {
+                    project.worktrees.flatMap { worktree ->
+                        extraSessions[worktree.directory].orEmpty().map { HomeRowSource(project, worktree.directory, it) }
+                    }
+                }
         }
     val chosenIndexById = mutableMapOf<String, Int>()
-    flattened.forEachIndexed { index, (_, session) ->
-        val timestamp =
-            if (settledPage) {
-                session.settledAtEpochMs ?: session.updatedAtEpochMs ?: 0L
-            } else {
-                session.updatedAtEpochMs ?: 0L
-            }
-        val chosenIndex = chosenIndexById[session.id]
-        val chosenTimestamp =
-            chosenIndex?.let { chosen ->
-                val chosenSession = flattened[chosen].second
-                if (settledPage) {
-                    chosenSession.settledAtEpochMs ?: chosenSession.updatedAtEpochMs ?: 0L
-                } else {
-                    chosenSession.updatedAtEpochMs ?: 0L
-                }
-            }
+    flattened.forEachIndexed { index, source ->
+        val timestamp = source.session.rowTimestamp(settledOnly)
+        val chosenIndex = chosenIndexById[source.session.id]
+        val chosenTimestamp = chosenIndex?.let { flattened[it].session.rowTimestamp(settledOnly) }
         if (chosenTimestamp == null || timestamp > chosenTimestamp) {
-            chosenIndexById[session.id] = index
+            chosenIndexById[source.session.id] = index
         }
     }
     return chosenIndexById.values
         .sortedWith(
             compareByDescending<Int> { index ->
-                val session = flattened[index].second
-                if (settledPage) {
-                    session.settledAtEpochMs ?: session.updatedAtEpochMs ?: 0L
-                } else {
-                    session.updatedAtEpochMs ?: 0L
-                }
+                flattened[index].session.rowTimestamp(settledOnly)
             }.thenBy { index -> index },
         ).map { index ->
-            val (section, session) = flattened[index]
-            val snoozed =
-                showsSettle &&
-                    !settledPage &&
-                    HomeSettleFeed.isSnoozed(session.snoozedUntilEpochMs, nowEpochMs, session.isSettled)
-            val gestures =
-                when {
-                    !showsSettle -> emptyList()
-                    settledPage -> listOf(HomeSettleGesture.Unsettle)
-                    else ->
-                        HomeSettleFeed.gestures(
-                            showsSettle = true,
-                            isSettled = false,
-                            isSnoozed = snoozed,
-                            snoozeBlocked = session.snoozeBlockReason != null,
-                            isArchived = session.isArchived,
-                        )
-                }
-            val until = session.snoozedUntilEpochMs
-            SessionListSession(
-                id = session.id,
-                title = session.title,
-                worktree = section.worktree,
-                letter = section.letter,
-                letterAccent = section.letterAccent,
-                subtitle =
-                    when {
-                        settledPage -> ""
-                        snoozed && until != null -> "Until ${HomeSettleFeed.untilLabel(until, nowEpochMs)}"
-                        else -> section.pathSubtitle
-                    },
-                status = if (snoozed && !session.needsApproval) SessionListStatus.Snoozed else session.toSessionListStatus(),
-                caption =
-                    when {
-                        settledPage -> session.settledAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty()
-                        snoozed && until != null -> HomeSettleFeed.wakeInLabel(until, nowEpochMs)
-                        else -> session.homeCaption()
-                    },
-                updatedAtEpochMs = session.updatedAtEpochMs,
-                retryAttempt = session.retryAttempt(),
-                statusStale = session.statusStale,
-                settleGestures = gestures,
-                showStatus = !settledPage,
+            flattened[index].toSessionListSession(
+                worktreesEnabled = worktreesEnabled,
+                showsSettle = showsSettle,
+                nowEpochMs = nowEpochMs,
+                settledPage = settledOnly,
             )
         }
 }
 
+private fun SessionSummary.rowTimestamp(settledPage: Boolean): Long =
+    if (settledPage) settledAtEpochMs ?: updatedAtEpochMs ?: 0L else updatedAtEpochMs ?: 0L
 
-internal fun List<ProjectSectionUi>.toHomeChromeProjects(): List<SessionListHomeChrome.Project> {
-    val counts = toCrossProjectSessionListSessions().groupingBy { it.worktree }.eachCount()
-    return map { section ->
-        SessionListHomeChrome.Project(
-            worktree = section.worktree,
-            title = section.displayName,
-            sessionCount = counts[section.worktree] ?: 0,
+private data class HomeRowSource(
+    val project: HomeProject,
+    /** The added path or worktree whose list carried the session. */
+    val listedIn: String,
+    val session: SessionSummary,
+) {
+    fun toSessionListSession(
+        worktreesEnabled: Boolean = true,
+        showsSettle: Boolean = false,
+        nowEpochMs: Long = 0L,
+        settledPage: Boolean = false,
+    ): SessionListSession {
+        val directory = session.directory?.takeIf { it.isNotEmpty() } ?: listedIn
+        val worktree = project.worktree(directory)?.takeIf { worktreesEnabled && project.hasManyWorktrees }
+        val until = session.snoozedUntilEpochMs
+        val snoozed =
+            showsSettle &&
+                !settledPage &&
+                HomeSettleFeed.isSnoozed(until, nowEpochMs, session.isSettled)
+        val gestures =
+            when {
+                !showsSettle -> emptyList()
+                settledPage -> listOf(HomeSettleGesture.Unsettle)
+                else ->
+                    HomeSettleFeed.gestures(
+                        showsSettle = true,
+                        isSettled = false,
+                        isSnoozed = snoozed,
+                        snoozeBlocked = session.snoozeBlockReason != null,
+                        isArchived = session.isArchived,
+                    )
+            }
+        val hideLocation = settledPage || snoozed
+        return SessionListSession(
+            id = session.id,
+            title = session.title,
+            worktree = project.key,
+            letter = letterCharacterForProject(project.displayName),
+            letterAccent = letterAccentForWorktree(project.primaryPath),
+            subtitle =
+                when {
+                    settledPage -> ""
+                    snoozed && until != null -> "Until ${HomeSettleFeed.untilLabel(until, nowEpochMs)}"
+                    else -> listedIn
+                },
+            directory = directory,
+            status =
+                if (snoozed && !session.needsApproval) {
+                    SessionListStatus.Snoozed
+                } else {
+                    session.toSessionListStatus()
+                },
+            caption =
+                when {
+                    settledPage -> session.settledAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty()
+                    snoozed && until != null -> HomeSettleFeed.wakeInLabel(until, nowEpochMs)
+                    else -> session.homeCaption()
+                },
+            updatedAtEpochMs = session.updatedAtEpochMs,
+            retryAttempt = session.retryAttempt(),
+            statusStale = session.statusStale,
+            settleGestures = gestures,
+            showStatus = !settledPage,
+            worktreeScopeId = worktree?.let { HomeScope.worktreeId(project.key, it.directory) },
+            location =
+                if (hideLocation) {
+                    null
+                } else {
+                    HomeSessionLocation
+                        .parts(project, directory, includeProjectName = false, worktreesEnabled = worktreesEnabled)
+                        ?.map { SessionListLocationPart(it.text, isBranch = it.isBranch) }
+                },
+            projectName = if (hideLocation) null else project.displayName,
+            compactWorktree =
+                if (hideLocation) {
+                    null
+                } else {
+                    HomeCompactRowPath.worktreeLabel(project, directory, worktreesEnabled)
+                },
         )
     }
 }
 
-internal fun SessionSummary.toSessionListStatus(): SessionListStatus =
+/** Dock and picker projects: counts per project and per worktree, and unfinished first loads. */
+internal fun homeChromeProjects(
+    projects: List<HomeProject>,
+    sessions: List<SessionListSession>,
+    projectLoads: Map<String, ProjectFirstLoad> = emptyMap(),
+): List<SessionListHomeChrome.Project> {
+    val counts = sessions.groupingBy { it.worktree }.eachCount()
+    val worktreeCounts = sessions.mapNotNull { it.worktreeScopeId }.groupingBy { it }.eachCount()
+    val runningCounts =
+        sessions
+            .filter { it.status == SessionListStatus.Running || it.status == SessionListStatus.Retrying }
+            .mapNotNull { it.worktreeScopeId }
+            .groupingBy { it }
+            .eachCount()
+    return projects.map { project ->
+        // A path that joined a project already on Home does not put the whole project back into loading.
+        val loads = project.memberPaths.map { projectLoads[it] }
+        SessionListHomeChrome.Project(
+            worktree = project.primaryPath,
+            title = project.displayName,
+            sessionCount = counts[project.key] ?: 0,
+            load = loads.takeIf { all -> all.all { it != null } }?.firstOrNull()?.toScopeLoad(),
+            id = project.key,
+            worktrees =
+                project.worktrees.map { worktree ->
+                    val scopeId = HomeScope.worktreeId(project.key, worktree.directory)
+                    SessionListHomeChrome.Worktree(
+                        worktree = worktree,
+                        sessionCount = worktreeCounts[scopeId] ?: 0,
+                        runningCount = runningCounts[scopeId] ?: 0,
+                        scopeId = scopeId,
+                    )
+                },
+        )
+    }
+}
+
+internal fun ProjectFirstLoad.toScopeLoad(): SessionListScopeLoad =
+    when (this) {
+        is ProjectFirstLoad.Loading -> SessionListScopeLoad.Loading(isSlow = isSlow)
+        is ProjectFirstLoad.Failed -> SessionListScopeLoad.Failed
+    }
+
+@Suppress("UNUSED_PARAMETER")
+internal fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = false): SessionListStatus =
     when {
-        needsApproval -> SessionListStatus.NeedsApproval
+        needsApproval || hasPendingPermission -> SessionListStatus.NeedsApproval
         statusLabel == "Working" -> SessionListStatus.Running
         statusLabel?.startsWith("Retrying") == true -> SessionListStatus.Retrying
         // v2: server read state. Only set on servers that track it, so v1 keeps Ready.

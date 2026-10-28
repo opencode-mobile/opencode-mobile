@@ -10,6 +10,19 @@ sealed class StartDecorator {
         val character: Char,
         val accent: LetterAccent,
         val statusDot: OpenCodeListItemStatusTone? = null,
+        /** Small worktree mark on the bottom-end corner. With a status dot the two merge into one status-colored badge. */
+        val worktree: Boolean = false,
+    ) : StartDecorator()
+
+    /**
+     * Small round project letter badge, for [OpenCodeListItemVariant.Compact]. A [statusDot]
+     * sits on its top-end edge; [pulsing] fades it while work runs.
+     */
+    data class Tile(
+        val character: Char,
+        val accent: LetterAccent,
+        val statusDot: OpenCodeListItemStatusTone? = null,
+        val pulsing: Boolean = false,
     ) : StartDecorator()
 
     data class Icon(

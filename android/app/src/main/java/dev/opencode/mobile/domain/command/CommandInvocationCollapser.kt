@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.command
 
+import dev.opencode.mobile.domain.agent.SkillMention
+
 /**
  * Collapses server-expanded slash-command / skill templates back into a
  * compact chat display: `[/name]` plus the arguments the user typed.
@@ -16,9 +18,69 @@ object CommandInvocationCollapser {
         val commandName: String,
         val arguments: String,
         val text: String,
-        /** UTF-16 code-unit range covering `[/name]` inside [text]. */
-        val highlightRange: IntRange,
+        /** UTF-16 code-unit ranges covering each `[/name]` inside [text]. */
+        val highlightRanges: List<IntRange>,
     )
+
+    /**
+     * Rewrites every placeable skill span of [text] from `/name` to `[/name]`. A span whose
+     * offsets no longer match the text falls back to the first unused occurrence of its
+     * token; one that cannot be placed is skipped. Null when nothing was placed.
+     */
+    fun collapseSkillMentions(
+        text: String,
+        skillMentions: List<SkillMention>,
+    ): Display? {
+        if (skillMentions.isEmpty() || text.isEmpty()) return null
+        val placed = mutableListOf<IntRange>()
+
+        fun free(range: IntRange): Boolean = placed.none { it.first < range.last + 1 && it.last + 1 > range.first }
+
+        skillMentions.sortedBy { it.start }.forEach { mention ->
+            val token = mention.token
+            val exact = mention.start until mention.end
+            val matches =
+                mention.start >= 0 &&
+                    mention.end <= text.length &&
+                    mention.start < mention.end &&
+                    text.substring(mention.start, mention.end) == token
+            if (matches && free(exact)) {
+                placed += exact
+                return@forEach
+            }
+            var from = 0
+            while (from <= text.length) {
+                val index = text.indexOf(token, from)
+                if (index < 0) break
+                val candidate = index until index + token.length
+                if (free(candidate)) {
+                    placed += candidate
+                    break
+                }
+                from = index + 1
+            }
+        }
+        if (placed.isEmpty()) return null
+        val ordered = placed.sortedBy { it.first }
+        val out = StringBuilder()
+        val ranges = mutableListOf<IntRange>()
+        var cursor = 0
+        ordered.forEach { range ->
+            out.append(text, cursor, range.first)
+            val start = out.length
+            out.append('[').append(text, range.first, range.last + 1).append(']')
+            ranges += start until out.length
+            cursor = range.last + 1
+        }
+        out.append(text, cursor, text.length)
+        val first = ordered.first()
+        return Display(
+            commandName = text.substring(first.first + 1, first.last + 1),
+            arguments = "",
+            text = out.toString(),
+            highlightRanges = ranges,
+        )
+    }
 
     fun collapse(
         text: String,
@@ -83,7 +145,7 @@ object CommandInvocationCollapser {
             commandName = commandName,
             arguments = arguments,
             text = text,
-            highlightRange = 0 until token.length,
+            highlightRanges = listOf(0 until token.length),
         )
     }
 }

@@ -1,7 +1,9 @@
 package dev.opencode.mobile.domain.command
 
+import dev.opencode.mobile.domain.agent.SkillMention
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CommandInvocationCollapserTest {
@@ -12,7 +14,7 @@ class CommandInvocationCollapserTest {
         assertEquals("prototype", display.commandName)
         assertEquals("ship the home page", display.arguments)
         assertEquals("[/prototype] ship the home page", display.text)
-        assertEquals(0 until "[/prototype]".length, display.highlightRange)
+        assertEquals(listOf(0 until "[/prototype]".length), display.highlightRanges)
     }
 
     @Test
@@ -85,8 +87,56 @@ class CommandInvocationCollapserTest {
     }
 
     @Test
-    fun commandTokenHighlightRange_coversToken() {
-        assertEquals(0..11, commandTokenHighlightRange("[/prototype] hello"))
-        assertNull(commandTokenHighlightRange("hello [/prototype]"))
+    fun commandTokenHighlightRanges_coverEveryToken() {
+        assertEquals(listOf(0..11), commandTokenHighlightRanges("[/prototype] hello"))
+        assertEquals(listOf(6..17), commandTokenHighlightRanges("hello [/prototype]"))
+        assertEquals(
+            listOf(4..9, 26..42),
+            commandTokenHighlightRanges("fix [/tdd] the login flow [/security-check]"),
+        )
+        assertTrue(commandTokenHighlightRanges("plain text").isEmpty())
+    }
+
+    @Test
+    fun collapseSkillMentions_rewritesEverySpan() {
+        val text = "fix @reviewer /tdd the login flow /security-check"
+        val display =
+            CommandInvocationCollapser.collapseSkillMentions(
+                text,
+                listOf(
+                    SkillMention(id = "s2", skillId = "security-check", name = "security-check", start = 34, end = 49),
+                    SkillMention(id = "s1", skillId = "tdd", name = "tdd", start = 14, end = 18),
+                ),
+            )!!
+        assertEquals("fix @reviewer [/tdd] the login flow [/security-check]", display.text)
+        assertEquals(listOf(14 until 20, 36 until 53), display.highlightRanges)
+        assertEquals("tdd", display.commandName)
+    }
+
+    @Test
+    fun collapseSkillMentions_fallsBackToFirstUnusedOccurrence() {
+        val text = "/tdd then /tdd again"
+        val display =
+            CommandInvocationCollapser.collapseSkillMentions(
+                text,
+                listOf(
+                    SkillMention(id = "s1", skillId = "tdd", name = "tdd", start = 0, end = 4),
+                    SkillMention(id = "s2", skillId = "tdd", name = "tdd", start = 99, end = 103),
+                    SkillMention(id = "s3", skillId = "missing", name = "missing", start = 5, end = 13),
+                ),
+            )!!
+        assertEquals("[/tdd] then [/tdd] again", display.text)
+        assertEquals(2, display.highlightRanges.size)
+    }
+
+    @Test
+    fun collapseSkillMentions_nothingPlaced_returnsNull() {
+        assertNull(
+            CommandInvocationCollapser.collapseSkillMentions(
+                "hello",
+                listOf(SkillMention(id = "s1", skillId = "tdd", name = "tdd", start = 0, end = 4)),
+            ),
+        )
+        assertNull(CommandInvocationCollapser.collapseSkillMentions("/tdd", emptyList()))
     }
 }

@@ -167,7 +167,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             followUpDelivery: baseMessage.followUpDelivery,
             isWaitingForPickup: baseMessage.isWaitingForPickup,
             stopReason: baseMessage.stopReason,
-            failure: baseMessage.failure
+            failure: baseMessage.failure,
+            promptSkills: baseMessage.promptSkills
         )
     }
 
@@ -330,6 +331,10 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             }
             if infoDict["error"] == nil, let error = prior["error"] {
                 merged["error"] = error
+            }
+            // Only the v2 enqueue info carries a prompt's skills; delivery omits them.
+            if infoDict["skills"] == nil, let skills = prior["skills"] {
+                merged["skills"] = skills
             }
             // v2 infos are partial projections: keep the times an update omits.
             if infoDict["time"] == nil, let time = prior["time"] {
@@ -584,9 +589,9 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         let baseText: String
         switch existing {
         case .tool(let tool):
-            let previous = tool.input?["preview"]?.stringValue ?? ""
+            let previous = tool.input?[ToolArgumentsPreview.inputKey]?.stringValue ?? ""
             var input = tool.input ?? [:]
-            input["preview"] = .string(previous + delta)
+            input[ToolArgumentsPreview.inputKey] = .string(previous + delta)
             partsCache[sessionID]?[messageID]?[partID] = .tool(
                 ToolPart(
                     id: tool.id,
@@ -1144,6 +1149,10 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         return next
     }
 
+    private func isSettledTool(_ status: ToolStatus) -> Bool {
+        status == .completed || status == .error
+    }
+
     private func mergePart(existing: MessagePart?, incoming: MessagePart) -> MessagePart {
         if existing == nil {
             if case .tool(let tool) = incoming {
@@ -1170,7 +1179,28 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
         let merged: MessagePart
         switch (existing, incoming) {
         case (.tool(let prior), .tool(let next)):
-            let mergedInput = mergeDict(prior.input, next.input)
+            let mergedInput = ToolArgumentsPreview.mergedInput(prior.input, next.input)
+            // A tool part runs once. v1 sends each update on both event buses, so a
+            // late in-flight duplicate must not reopen a call that already settled.
+            if isSettledTool(prior.status), !isSettledTool(next.status) {
+                merged = .tool(
+                    ToolPart(
+                        id: prior.id,
+                        toolName: prior.toolName,
+                        status: prior.status,
+                        title: prior.title,
+                        error: prior.error,
+                        callID: prior.callID,
+                        input: mergedInput,
+                        output: prior.output,
+                        metadata: mergeDict(prior.metadata, next.metadata),
+                        timeStartEpochMs: prior.timeStartEpochMs ?? next.timeStartEpochMs,
+                        isInterrupted: prior.isInterrupted,
+                        isMalformed: prior.isMalformed
+                    )
+                )
+                break
+            }
             merged = .tool(
                 ToolPart(
                     id: prior.id,
@@ -1353,6 +1383,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             part.id
         case .reasoning(let part):
             part.id
+        case .notice(let notice):
+            notice.id
         }
     }
 

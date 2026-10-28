@@ -12,9 +12,13 @@ import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessagePatch
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
+import dev.opencode.mobile.domain.message.NoticeModelRef
+import dev.opencode.mobile.domain.message.TimelineNotice
+import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -279,6 +283,115 @@ class V2LiveTurnTimelineTest {
     }
 
     @Test
+    fun liveNotices_showWithoutRestThenShareOneRowWithTheRestItem() {
+        apply(prompt("u1", "First", at = 1_000))
+        apply(step("a1", at = 1_050))
+        apply(text("a1", "Reply.", at = 1_060))
+        apply(stepEnded("a1", "stop", at = 1_070))
+        apply(idle(at = 1_080))
+        apply(moved("/repo/.worktrees/feat", at = 2_000))
+        apply(agentSelected("plan", at = 2_001))
+        apply(modelSelected(SCRIPTED_HIGH, at = 2_002))
+        apply(instructionsUpdated(at = 2_003))
+        apply(restart(at = 2_004))
+
+        val live = store.messages(SESSION).filter { it.role == MessageRole.Notice }
+        val ids =
+            listOf(
+                "msg_session.moved2000",
+                "msg_session.agent.selected2001",
+                "msg_session.model.selected2002",
+                "msg_session.instructions.updated2003",
+                "msg_session.synthetic2004",
+            )
+        assertEquals(ids, live.map { it.id })
+        assertEquals(
+            listOf(
+                TimelineNotice.Moved("/repo/.worktrees/feat"),
+                TimelineNotice.AgentChanged("plan"),
+                TimelineNotice.ModelChanged(NoticeModelRef("sim", "scripted", "high")),
+                TimelineNotice.InstructionsUpdated(listOf("AGENTS.md")),
+                TimelineNotice.Restart,
+            ),
+            live.map { it.notice() },
+        )
+        // Each notice is its own row, after the finished turn.
+        val rows = chipBodies(displayOrder(store.messages(SESSION)))
+        assertEquals(listOf("u1", "a1") + ids, rows.map { it.message.id })
+        rows.drop(2).forEach { row ->
+            assertTrue(row.blocks.single() is SessionChatTimelineBlock.Notice)
+        }
+
+        // REST records the same items under the same ids, with what changed from.
+        reload(
+            """
+            [
+              {"id":"u1","type":"user","text":"First","time":{"created":1000}},
+              {"id":"a1","type":"assistant","agent":"build","model":{"id":"m","providerID":"p"},
+               "content":[{"type":"text","text":"Reply."}],"time":{"created":1050}},
+              {"id":"${ids[0]}","type":"location-switched","location":{"directory":"/repo/.worktrees/feat"},
+               "previous":{"location":{"directory":"/repo"}},"time":{"created":2000}},
+              {"id":"${ids[1]}","type":"agent-switched","agent":"plan","previous":"build","time":{"created":2001}},
+              {"id":"${ids[2]}","type":"model-switched","model":$SCRIPTED_HIGH,
+               "previous":{"id":"m","providerID":"p"},"time":{"created":2002}},
+              {"id":"${ids[3]}","type":"system","text":"model text","description":"Instructions updated: AGENTS.md",
+               "metadata":{"notice":"instructions","instructionSources":["AGENTS.md"]},"time":{"created":2003}},
+              {"id":"${ids[4]}","type":"synthetic","text":"Resume.","metadata":{"notice":"restart"},"time":{"created":2004}}
+            ]
+            """,
+            inbox = "[]",
+        )
+
+        val reloaded = store.messages(SESSION).filter { it.role == MessageRole.Notice }
+        assertEquals(ids, reloaded.map { it.id })
+        assertEquals(TimelineNotice.AgentChanged("plan", previous = "build"), reloaded[1].notice())
+        assertEquals(TimelineNotice.Moved("/repo/.worktrees/feat", previousDirectory = "/repo"), reloaded[0].notice())
+    }
+
+    @Test
+    fun noticeBetweenAssistantSteps_isAStandaloneRowThatSplitsTheChipMerge() {
+        apply(prompt("u1", "Explore", at = 1_000))
+        apply(step("a1", at = 1_100))
+        apply(text("a1", "Looking around.", at = 1_110))
+        apply(tool("a1", "call_glob", "glob", at = 1_120))
+        apply(stepEnded("a1", "tool-calls", at = 1_130))
+        apply(moved("/repo/b", at = 1_150))
+        apply(step("a2", at = 1_200))
+        apply(text("a2", "Found it.", at = 1_210))
+        apply(stepEnded("a2", "stop", at = 1_220))
+        apply(idle(at = 1_230))
+
+        val notice = "msg_session.moved1150"
+        val rows = chipBodies(displayOrder(store.messages(SESSION)))
+        assertEquals(listOf("u1", "a1", notice, "a2"), rows.map { it.message.id })
+        val block = rows[2].blocks.single() as SessionChatTimelineBlock.Notice
+        assertEquals("p:$notice", block.blockID)
+        assertEquals(TimelineNotice.Moved("/repo/b"), block.notice)
+        assertEquals(listOf("Looking around."), rows[1].blocks.stepParagraphs().map { it.text })
+        assertEquals(listOf("Found it."), rows[3].blocks.stepParagraphs().map { it.text })
+    }
+
+    @Test
+    fun restSwitchNoticesAfterTheLastReply_stampTheNextLivePrompt() {
+        reload(
+            """
+            [
+              {"id":"u1","type":"user","text":"First","time":{"created":1000}},
+              {"id":"a1","type":"assistant","agent":"build","model":$SCRIPTED,
+               "content":[{"type":"text","text":"Answer."}],"time":{"created":1100}},
+              {"id":"s1","type":"agent-switched","agent":"plan","previous":"build","time":{"created":2000}},
+              {"id":"s2","type":"model-switched","model":$SCRIPTED_HIGH,"previous":$SCRIPTED,"time":{"created":2001}}
+            ]
+            """,
+            inbox = "[]",
+        )
+        // The switches happened before this app connected: only REST knows them.
+        apply(prompt("u2", "Next prompt", at = 2_100))
+
+        assertEquals("plan|scripted|high", store.messages(SESSION).single { it.id == "u2" }.metaLine())
+    }
+
+    @Test
     fun stoppedTool_isInterruptedNotFailed_liveAndAfterReload() {
         apply(prompt("u1", "Start the deployment.", at = 1_000))
         apply(step("a1", at = 1_100))
@@ -317,6 +430,135 @@ class V2LiveTurnTimelineTest {
                 """,
             )
         assertTrue(rest[1].parts.filterIsInstance<MessagePart.Tool>().single().isInterrupted)
+    }
+
+    @Test
+    fun streamingShellArguments_growOnThePendingCardUntilCalledSettlesThem() {
+        apply(prompt("u1", "List files", at = 1_000))
+        apply(step("a1", at = 1_100))
+        val fields = """"assistantMessageID":"a1","id":"call_sh","name":"bash""""
+        apply(listOf(envelope("session.tool.input.started", 1_120, fields)))
+        // Servers that do not stream tool input still show the placeholder until `ended`.
+        assertEquals("Writing command…", toolCard("a1").subtitle)
+        apply(listOf(inputDelta(fields, """{"comm""", at = 1_121)))
+
+        val waiting = toolCard("a1")
+        assertEquals(ToolStatus.Pending, waiting.status)
+        assertTrue(waiting.isReceivingArguments)
+        assertEquals("Writing command…", waiting.subtitle)
+
+        apply(listOf(inputDelta(fields, """and":"ls -la /tm""", at = 1_122)))
+        assertEquals("ls -la /tm", toolCard("a1").subtitle)
+        apply(listOf(inputDelta(fields, """p/scratch","description":"List""", at = 1_123)))
+        assertEquals("ls -la /tmp/scratch", toolCard("a1").subtitle)
+        val chip =
+            chipBodies(store.messages(SESSION))[1]
+                .blocks
+                .stepParagraphs()
+                .single()
+                .chips
+                .single()
+        assertEquals("ls -la /tmp/scratch", chip.label)
+
+        apply(
+            listOf(
+                envelope("session.tool.called", 1_130, """$fields,"input":{"command":"ls -la /tmp","description":"List"}"""),
+            ),
+        )
+        val tool = liveTool("a1")
+        assertFalse(tool.input!!.containsKey("preview"))
+        val called = toolCard("a1")
+        assertEquals(ToolStatus.Running, called.status)
+        assertFalse(called.isReceivingArguments)
+        assertEquals("ls -la /tmp", called.subtitle)
+
+        apply(listOf(envelope("session.tool.success", 1_140, """$fields,"content":[{"type":"text","text":"ok"}]""")))
+        val done = toolCard("a1")
+        assertEquals(ToolStatus.Completed, done.status)
+        assertFalse(done.isReceivingArguments)
+        assertEquals("ls -la /tmp", done.subtitle)
+        assertEquals("ok", done.detailText)
+    }
+
+    @Test
+    fun streamingFileArguments_showThePathOnReadEditAndWriteCards() {
+        apply(prompt("u1", "Change files", at = 1_000))
+        apply(step("a1", at = 1_100))
+        val cases =
+            listOf(
+                Triple("read", "Preparing read…", """{"filePath":"/repo/src/app.ts"""),
+                Triple("edit", "Preparing edit…", """{"filePath":"/repo/src/app.ts","oldString":"a"""),
+                Triple("write", "Preparing write…", """{"content":"line 1\nline 2","filePath":"/repo/NOTES"""),
+            )
+        cases.forEachIndexed { index, (name, placeholder, partial) ->
+            val fields = """"assistantMessageID":"a1","id":"call_$name","name":"$name""""
+            val at = 1_200L + index * 10
+            apply(listOf(envelope("session.tool.input.started", at, fields), inputDelta(fields, "{", at = at + 1)))
+            assertEquals(placeholder, toolCard("a1", "call_$name").subtitle)
+            apply(listOf(inputDelta(fields, partial.removePrefix("{"), at = at + 2)))
+            val card = toolCard("a1", "call_$name")
+            assertTrue(card.isReceivingArguments)
+            assertEquals(if (name == "write") "/repo/NOTES" else "/repo/src/app.ts", card.subtitle)
+            assertFalse(card.opensChangesReview)
+        }
+    }
+
+    @Test
+    fun inputEnded_replacesThePreviewWithTheSettledArguments() {
+        apply(prompt("u1", "List files", at = 1_000))
+        apply(step("a1", at = 1_100))
+        val fields = """"assistantMessageID":"a1","id":"call_sh","name":"bash""""
+        apply(
+            listOf(
+                envelope("session.tool.input.started", 1_120, fields),
+                inputDelta(fields, """{"command":"ls -l""", at = 1_121),
+                envelope("session.tool.input.ended", 1_122, """$fields,"text":"{\"command\":\"ls -la\"}""""),
+            ),
+        )
+
+        val tool = liveTool("a1")
+        assertEquals("""{"command":"ls -la"}""", tool.input.toString())
+        val card = toolCard("a1")
+        assertEquals(ToolStatus.Pending, card.status)
+        assertFalse(card.isReceivingArguments)
+        assertEquals("ls -la", card.subtitle)
+    }
+
+    @Test
+    fun restReloadMidStream_keepsTheStreamingArgumentsAsThePreview() {
+        val rest =
+            restMessages(
+                """
+                [
+                  {"id":"a1","type":"assistant","content":[
+                    {"type":"tool","id":"call_sh","name":"bash","state":{"status":"streaming","input":"{\"command\":\"git st"}}],
+                   "time":{"created":1100}}
+                ]
+                """,
+            )
+        val card = toolCards(rest.single()).single()
+        assertTrue(card.isReceivingArguments)
+        assertEquals("git st", card.subtitle)
+    }
+
+    @Test
+    fun v1AndSettledCards_keepTodaysChrome() {
+        val v1Pending = MessagePart.Tool(toolName = "bash", status = ToolStatus.Pending, id = "call_v1")
+        val v1Card = toolCards(listOf(v1Pending)).single()
+        assertFalse(v1Card.isReceivingArguments)
+        assertEquals(null, v1Card.subtitle)
+
+        // A settled card ignores a stray preview the server never replaced.
+        val stray = JsonObject(mapOf("preview" to JsonPrimitive("""{"command":"rm""")))
+        for (status in listOf(ToolStatus.Completed, ToolStatus.Error)) {
+            val card =
+                toolCards(listOf(MessagePart.Tool(toolName = "bash", status = status, input = stray, id = "call_$status")))
+                    .single()
+            assertFalse(card.isReceivingArguments)
+            assertEquals(null, card.subtitle)
+        }
+        val generic = MessagePart.Tool(toolName = "sim_task", status = ToolStatus.Pending, input = stray, id = "call_g")
+        assertEquals(null, toolCards(listOf(generic)).single().subtitle)
     }
 
     @Test
@@ -646,6 +888,19 @@ class V2LiveTurnTimelineTest {
         at: Long,
     ): List<String> = listOf(envelope("session.model.selected", at, """"model":$model"""))
 
+    private fun moved(
+        directory: String,
+        at: Long,
+    ): List<String> = listOf(envelope("session.moved", at, """"location":{"directory":"$directory"},"projectID":"prj_1""""))
+
+    private fun instructionsUpdated(at: Long): List<String> =
+        listOf(envelope("session.instructions.updated", at, """"delta":{"AGENTS.md":{}},"text":"<instructions>""""))
+
+    private fun restart(at: Long): List<String> =
+        listOf(envelope("session.synthetic", at, """"text":"Resume.","metadata":{"notice":"restart"}"""))
+
+    private fun Message.notice(): TimelineNotice = parts.filterIsInstance<MessagePart.Notice>().single().notice
+
     private fun Message.metaLine(): String? = if (mode == null && model == null) null else "$mode|$model|$variant"
 
     private fun textStarted(
@@ -677,6 +932,35 @@ class V2LiveTurnTimelineTest {
             envelope("session.tool.called", at + 1, """$fields,"input":{"pattern":"*"}"""),
             envelope("session.tool.success", at + 2, """$fields,"content":[{"type":"text","text":"ok"}]"""),
         )
+    }
+
+    private fun inputDelta(
+        fields: String,
+        delta: String,
+        at: Long,
+    ): String = envelope("session.tool.input.delta", at, """$fields,"delta":${Json.encodeToString(delta)}""")
+
+    private fun liveTool(messageId: String): MessagePart.Tool =
+        store
+            .messages(SESSION)
+            .single { it.id == messageId }
+            .parts
+            .filterIsInstance<MessagePart.Tool>()
+            .single()
+
+    private fun toolCard(
+        messageId: String,
+        callId: String? = null,
+    ): SessionChatTimelineBlock.ToolCard {
+        val message = store.messages(SESSION).single { it.id == messageId }
+        return toolCards(message).single { callId == null || it.blockID == PresentationBlockId.direct(callId) }
+    }
+
+    private fun toolCards(message: Message): List<SessionChatTimelineBlock.ToolCard> = toolCards(message.parts)
+
+    private fun toolCards(parts: List<MessagePart>): List<SessionChatTimelineBlock.ToolCard> {
+        val result = SessionChatTimelineBlocks.build(role = MessageRole.Assistant, parts = parts)
+        return (result as SessionChatTimelineBlocksResult.Ok).blocks.filterIsInstance<SessionChatTimelineBlock.ToolCard>()
     }
 
     private fun stepEnded(
@@ -782,6 +1066,7 @@ class V2LiveTurnTimelineTest {
             is MessagePart.Tool -> id
             is MessagePart.File -> id
             is MessagePart.Compaction -> id
+            is MessagePart.Notice -> id
             is MessagePart.Reasoning -> id
         }
 

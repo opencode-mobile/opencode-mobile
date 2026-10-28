@@ -15,16 +15,17 @@ struct LiveUpdatesTests {
         #expect(chrome.composerEnabled)
     }
 
-    @Test func occupyingDisconnectedIsConnecting() {
+    @Test func occupyingDisconnectedIsOffline() {
+        // Disconnected means no server protocol answered a re-check, not a transient reconnect.
         let chrome = composeLiveUpdates(
             connectionState: .disconnected,
             path: .ready,
             occupancy: .active,
             hasConnection: true
         )
-        #expect(chrome.label == .connecting)
+        #expect(chrome.label == .offline)
         #expect(!chrome.canMutate)
-        #expect(chrome.composerEnabled)
+        #expect(!chrome.composerEnabled)
     }
 
     @Test func connectedAndReadyIsLive() {

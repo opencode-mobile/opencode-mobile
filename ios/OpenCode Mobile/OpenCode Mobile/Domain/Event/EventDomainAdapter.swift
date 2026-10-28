@@ -4,6 +4,9 @@ nonisolated struct EventDomainAdapter: Sendable {
     /// v2 compaction item id per session, remembered from `compaction.started`:
     /// `ended` / `failed` carry no id while the server updates the running item.
     private let runningCompactionIDs = RunningCompactionIDs()
+    /// v2 shell item id per shell id, remembered from `shell.started`: `ended`
+    /// carries only the shell while the server updates the item it started.
+    private let runningShellMessageIDs = RunningCompactionIDs()
 
     func parseEvent(dataLine: String) -> OpencodeEvent? {
         parseEvents(dataLine: dataLine).first
@@ -165,7 +168,9 @@ nonisolated struct EventDomainAdapter: Sendable {
             [event(type: "question.rejected", properties: properties)]
         case "session.next.prompt.admitted", "session.inbox.enqueued",
              "session.inbox.delivery.changed":
-            userPromptEvents(properties, waiting: true)
+            // A `synthetic` item is server-injected context (a finished shell command's
+            // output, Plan mode's reminder), not a prompt the user queued: no pending chrome.
+            userPromptEvents(properties, waiting: !isSyntheticInboxItem(properties))
         case "session.next.prompted", "session.inbox.delivered":
             userPromptEvents(properties, waiting: false)
         case "session.inbox.cancelled":
@@ -195,12 +200,20 @@ nonisolated struct EventDomainAdapter: Sendable {
         case "session.next.tool.input.delta", "session.tool.input.delta":
             [toolInputDelta(properties)]
         case "session.next.shell.started", "session.shell.started":
-            [
-                statusEvent(properties, statusType: "busy"),
-                shellPartUpdated(properties, status: "running"),
-            ]
+            if let shell = properties["shell"] as? [String: Any] {
+                shellItemStarted(properties, shell: shell, envelopeID: envelopeID)
+            } else {
+                [
+                    statusEvent(properties, statusType: "busy"),
+                    shellPartUpdated(properties, status: "running"),
+                ]
+            }
         case "session.next.shell.ended", "session.shell.ended":
-            [shellPartUpdated(properties, status: "completed")]
+            if let shell = properties["shell"] as? [String: Any] {
+                shellItemEnded(properties, shell: shell)
+            } else {
+                [shellPartUpdated(properties, status: "completed")]
+            }
         case "session.next.compaction.started", "session.compaction.started":
             [statusEvent(properties, statusType: "busy")]
                 + compactionUpdated(properties, envelopeID: envelopeID, phase: .started)
@@ -227,9 +240,19 @@ nonisolated struct EventDomainAdapter: Sendable {
             [textPartUpdated(properties)]
         case "session.next.moved", "session.moved":
             [event(type: "session.updated", properties: properties)]
-        case "session.next.agent.switched", "session.next.model.switched",
-             "session.agent.selected", "session.model.selected":
+                + noticeEvents(.location, properties: properties, envelopeID: envelopeID)
+        case "session.next.agent.switched", "session.agent.selected":
             [event(type: "session.updated", properties: properties), messageContext(properties)].compactMap { $0 }
+                + noticeEvents(.agent, properties: properties, envelopeID: envelopeID)
+        case "session.next.model.switched", "session.model.selected":
+            [event(type: "session.updated", properties: properties), messageContext(properties)].compactMap { $0 }
+                + noticeEvents(.model, properties: properties, envelopeID: envelopeID)
+        case "session.instructions.updated":
+            [event(type: type, properties: properties)]
+                + noticeEvents(.instructions, properties: properties, envelopeID: envelopeID)
+        case "session.synthetic":
+            [event(type: type, properties: properties)]
+                + noticeEvents(.synthetic, properties: properties, envelopeID: envelopeID)
         case "session.renamed":
             [renamedToUpdated(properties)]
         case "session.forked":
@@ -324,8 +347,14 @@ nonisolated struct EventDomainAdapter: Sendable {
             info["agent"] = agent
             info["mode"] = agent
         }
-        if let delivery = deliveryValue(in: properties) {
+        if !isSyntheticInboxItem(properties), let delivery = deliveryValue(in: properties) {
             info["delivery"] = delivery
+        }
+        // Skill spans for `[/name]` display. Drop `text`: it is the model-facing skill body.
+        let skills = (promptObject(in: properties)?["skills"] as? [[String: Any]] ?? [])
+            .map { $0.filter { $0.key != "text" } }
+        if !skills.isEmpty {
+            info["skills"] = skills
         }
         return event(type: "message.updated", properties: ["info": info])
     }
@@ -338,7 +367,9 @@ nonisolated struct EventDomainAdapter: Sendable {
         // v2 inbox `synthetic` items (e.g. Plan mode's system-reminder) are server-injected
         // context, not something the user typed: keep the part but mark it hidden.
         let isSynthetic = (properties["item"] as? [String: Any]).flatMap { string(in: $0, key: "type") } == "synthetic"
-        if let text = prompt.flatMap({ string(in: $0, key: "text") }) ?? string(in: properties, key: "text"),
+        let uploaded = UploadedAttachmentMetadata.refs(fromJSON: prompt?["metadata"] ?? properties["metadata"])
+        if let rawText = prompt.flatMap({ string(in: $0, key: "text") }) ?? string(in: properties, key: "text"),
+           case let text = UploadedAttachmentMetadata.displayText(rawText, hiding: uploaded),
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
             parts.append(
@@ -350,6 +381,17 @@ nonisolated struct EventDomainAdapter: Sendable {
         for (index, element) in files.enumerated() {
             guard let file = element as? [String: Any] else { continue }
             parts.append(userFilePartUpdated(sessionID: sessionID, messageID: messageID, index: index, file: file))
+        }
+        for (index, ref) in uploaded.enumerated() {
+            var part: [String: Any] = [
+                "type": "file", "mime": ref.mime, "filename": ref.name, "serverPath": ref.path,
+            ]
+            if let messageID {
+                part["id"] = "\(messageID):upload:\(index)"
+                part["messageID"] = messageID
+            }
+            if let sessionID { part["sessionID"] = sessionID }
+            parts.append(event(type: "message.part.updated", properties: ["part": part]))
         }
         return parts
     }
@@ -388,13 +430,16 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let sessionID {
             part["sessionID"] = sessionID
         }
-        if let uri = string(in: file, key: "uri") {
-            part["url"] = uri
-        }
-        if let mime = string(in: file, key: "mime")
+        let mime = string(in: file, key: "mime")
             ?? string(in: file, key: "uri").flatMap(AttachmentDataURL.mime(fromDataURL:))
             ?? string(in: file, key: "name").flatMap(AttachmentDataURL.mime(fromFilename:))
-        {
+        if let uri = string(in: file, key: "uri") {
+            part["url"] = uri
+        } else if let data = string(in: file, key: "data"), let mime {
+            // Inline attachment (a sent photo): same data URL the REST mapping builds.
+            part["url"] = "data:\(mime.lowercased());base64,\(data)"
+        }
+        if let mime {
             part["mime"] = mime
         }
         if let name = string(in: file, key: "name") {
@@ -509,6 +554,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let body, !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             data["responseBody"] = body
         }
+        if let retryAfterMs = int64(in: error, key: "retryAfterMs") { data["retryAfterMs"] = retryAfterMs }
         var info: [String: Any] = ["data": data]
         if let type { info["name"] = type }
         return info
@@ -592,7 +638,7 @@ nonisolated struct EventDomainAdapter: Sendable {
             toolName: name,
             status: status,
             callID: callID,
-            input: objectInput(properties["input"]),
+            input: objectInput(properties["input"]) ?? streamingToolInput(type: type, properties: properties),
             output: output,
             error: error,
             metadata: metadata,
@@ -614,6 +660,20 @@ nonisolated struct EventDomainAdapter: Sendable {
         case (nil, let metadata?): return metadata
         case (let structured?, let metadata?): return structured.merging(metadata) { _, new in new }
         }
+    }
+
+    /// Arguments start streaming with an empty preview that deltas or `ended` fill.
+    private func streamingToolInput(type: String, properties: [String: Any]) -> [String: Any]? {
+        if type.hasSuffix("tool.input.started") { return [ToolArgumentsPreview.inputKey: ""] }
+        if type.hasSuffix("tool.input.ended") { return endedToolInput(properties["text"] as? String) }
+        return nil
+    }
+
+    /// `tool.input.ended` carries the whole argument text. Parsed, it settles the
+    /// arguments; otherwise it replaces the streamed preview with the final text.
+    private func endedToolInput(_ text: String?) -> [String: Any]? {
+        guard let text else { return nil }
+        return objectInput(text) ?? [ToolArgumentsPreview.inputKey: text]
     }
 
     private func toolInputDelta(_ properties: [String: Any]) -> OpencodeEvent {
@@ -646,7 +706,151 @@ nonisolated struct EventDomainAdapter: Sendable {
         )
     }
 
+    private func isSyntheticInboxItem(_ properties: [String: Any]) -> Bool {
+        (properties["item"] as? [String: Any]).flatMap { string(in: $0, key: "type") } == "synthetic"
+    }
+
+    /// A v2 shell run (`{shell: Info}`) is its own transcript item whose id is the
+    /// `started` envelope id with `evt_` swapped for `msg_`. It projects like the
+    /// REST copy: the command as a user message, then a Shell row under
+    /// `<id>:assistant`, so a history load replaces both in place. The shell runs
+    /// beside the agent loop, so it leaves the session status alone.
+    private func shellItemStarted(_ properties: [String: Any], shell: [String: Any], envelopeID: String?) -> [OpencodeEvent] {
+        guard let envelopeID, !envelopeID.isEmpty else { return [] }
+        let messageID = envelopeID.hasPrefix("evt_") ? "msg_" + String(envelopeID.dropFirst("evt_".count)) : envelopeID
+        if let shellID = string(in: shell, key: "id") {
+            runningShellMessageIDs.set(messageID, for: shellID)
+        }
+        let created = (shell["time"] as? [String: Any]).flatMap { int64(in: $0, key: "started") }
+            ?? int64(in: properties, key: "created")
+        return shellItemEvents(properties, shell: shell, messageID: messageID, created: created, completed: nil, output: nil)
+    }
+
+    private func shellItemEnded(_ properties: [String: Any], shell: [String: Any]) -> [OpencodeEvent] {
+        guard let shellID = string(in: shell, key: "id"),
+              let messageID = runningShellMessageIDs.id(for: shellID)
+        else { return [] }
+        runningShellMessageIDs.set(nil, for: shellID)
+        let time = shell["time"] as? [String: Any]
+        let output = (properties["output"] as? [String: Any]).flatMap { string(in: $0, key: "output") }
+            ?? string(in: properties, key: "output")
+        return shellItemEvents(
+            properties,
+            shell: shell,
+            messageID: messageID,
+            created: time.flatMap { int64(in: $0, key: "started") },
+            completed: time.flatMap { int64(in: $0, key: "completed") } ?? int64(in: properties, key: "created"),
+            output: output
+        )
+    }
+
+    private func shellItemEvents(
+        _ properties: [String: Any],
+        shell: [String: Any],
+        messageID: String,
+        created: Int64?,
+        completed: Int64?,
+        output: String?
+    ) -> [OpencodeEvent] {
+        let sessionID = sessionID(from: properties)
+        let command = string(in: shell, key: "command") ?? ""
+        var time: [String: Any] = [:]
+        if let created { time["created"] = created }
+        if let completed { time["completed"] = completed }
+        func info(id: String, role: String) -> [String: Any] {
+            var info: [String: Any] = ["id": id, "role": role]
+            if let sessionID { info["sessionID"] = sessionID }
+            if !time.isEmpty { info["time"] = time }
+            return info
+        }
+        let assistantID = "\(messageID):assistant"
+        var state: [String: Any] = ["status": completed == nil ? "running" : "completed", "title": "Shell"]
+        if !command.isEmpty { state["input"] = ["command": command] }
+        if let output { state["output"] = output }
+        if let exit = int64(in: shell, key: "exit") { state["metadata"] = ["exit": Int(exit)] }
+        if let created { state["time"] = ["start": created] }
+        var tool: [String: Any] = [
+            "id": "\(messageID):tool",
+            "messageID": assistantID,
+            "type": "tool",
+            "tool": "bash",
+            "state": state,
+        ]
+        if let sessionID { tool["sessionID"] = sessionID }
+        var events = [event(type: "message.updated", properties: ["info": info(id: messageID, role: "user")])]
+        if !command.isEmpty {
+            events.append(userTextPartUpdated(sessionID: sessionID, messageID: messageID, text: command))
+        }
+        events.append(event(type: "message.updated", properties: ["info": info(id: assistantID, role: "assistant")]))
+        events.append(event(type: "message.part.updated", properties: ["part": tool]))
+        return events
+    }
+
     private enum CompactionPhase { case started, ended, failed }
+
+    private enum NoticeSource { case location, agent, model, instructions, synthetic }
+
+    /// The timeline notice the server appends for a v2 move, switch, instruction update
+    /// or restart. Its message id is the envelope id with `evt_` swapped for `msg_`
+    /// (`SessionMessage.ID.fromEvent`), so the REST copy replaces this row in place.
+    /// Live events may omit `previous`; the REST copy fills it in.
+    private func noticeEvents(
+        _ source: NoticeSource,
+        properties: [String: Any],
+        envelopeID: String?
+    ) -> [OpencodeEvent] {
+        guard let envelopeID, !envelopeID.isEmpty, let sessionID = sessionID(from: properties) else { return [] }
+        let messageID = envelopeID.hasPrefix("evt_") ? "msg_" + String(envelopeID.dropFirst("evt_".count)) : envelopeID
+        var notice: [String: Any]
+        switch source {
+        case .location:
+            guard let location = properties["location"] as? [String: Any],
+                  let directory = string(in: location, key: "directory")
+            else { return [] }
+            notice = ["type": "location-switched", "location": ["directory": directory]]
+        case .agent:
+            guard let agent = string(in: properties, key: "agent") else { return [] }
+            notice = ["type": "agent-switched", "agent": agent]
+            if let previous = string(in: properties, key: "previous") { notice["previous"] = previous }
+        case .model:
+            guard let model = properties["model"] as? [String: Any] else { return [] }
+            notice = ["type": "model-switched", "model": model]
+            if let previous = properties["previous"] as? [String: Any] { notice["previous"] = previous }
+        case .instructions:
+            // The initial baseline and empty deltas carry no text and append no message.
+            guard properties["text"] is String else { return [] }
+            let sources = ((properties["delta"] as? [String: Any])?.keys).map { Array($0).sorted() } ?? []
+            notice = [
+                "type": "system",
+                "description": MessageDomainAdapter.instructionsDescriptionPrefix + sources.joined(separator: ", "),
+                "metadata": ["notice": "instructions", "instructionSources": sources],
+            ]
+        case .synthetic:
+            // Only the restart synthetic is a notice; other synthetic items stay as they are.
+            let metadata = properties["metadata"] as? [String: Any]
+            let description = string(in: properties, key: "description")
+            guard string(in: metadata, key: "notice") == "restart"
+                || description == MessageDomainAdapter.restartDescription
+            else { return [] }
+            notice = ["type": "synthetic", "metadata": ["notice": "restart"]]
+            if let description { notice["description"] = description }
+        }
+        var info: [String: Any] = ["id": messageID, "role": "notice", "sessionID": sessionID]
+        if let created = int64(in: properties, key: "created") {
+            info["time"] = ["created": created, "completed": created]
+        }
+        let part: [String: Any] = [
+            "id": messageID,
+            "messageID": messageID,
+            "sessionID": sessionID,
+            "type": "notice",
+            "notice": notice,
+        ]
+        return [
+            event(type: "message.updated", properties: ["info": info]),
+            event(type: "message.part.updated", properties: ["part": part]),
+        ]
+    }
 
     /// v2 compaction is its own transcript item (`type: compaction`). Its id is
     /// `inputID` or the `started` envelope id with `evt_` swapped for `msg_`; a
@@ -1107,6 +1311,55 @@ nonisolated struct EventDomainAdapter: Sendable {
         return SessionTitleUpdate(sessionID: sessionID, title: title)
     }
 
+    /// Pending-revert change. v1 `session.updated` carries the whole session, so an absent
+    /// `info.revert` means none; v2 stages, clears and commits with dedicated events. A partial
+    /// `info` (the v2 `session.renamed` projection) says nothing about the revert and is ignored.
+    func sessionRevertUpdate(from event: OpencodeEvent) -> SessionRevertUpdate? {
+        switch event.type {
+        case "session.updated":
+            guard let info = event.rawProperties?["info"]?.dictionaryValue, info["time"] != nil else { return nil }
+            guard let sessionID = event.sessionID ?? info["id"]?.stringValue else { return nil }
+            let messageID = info["revert"]?.dictionaryValue?["messageID"]?.stringValue
+            return SessionRevertUpdate(sessionID: sessionID, messageID: messageID)
+        case "session.revert.staged":
+            guard let sessionID = event.sessionID,
+                  let messageID = event.rawProperties?["revert"]?.dictionaryValue?["messageID"]?.stringValue
+            else { return nil }
+            return SessionRevertUpdate(sessionID: sessionID, messageID: messageID)
+        case "session.revert.cleared", "session.revert.committed":
+            guard let sessionID = event.sessionID else { return nil }
+            return SessionRevertUpdate(sessionID: sessionID, messageID: nil)
+        default:
+            return nil
+        }
+    }
+
+    /// New directory of a session the server moved (v2 `session.moved`, projected onto
+    /// `session.updated` with the move's `location`). Nil for any other event, including a v1
+    /// `session.updated` that carries the whole session under `info`.
+    func sessionMoved(from event: OpencodeEvent) -> SessionMovedUpdate? {
+        guard event.type == "session.updated", event.rawProperties?["info"] == nil else { return nil }
+        guard let sessionID = event.sessionID, !sessionID.isEmpty else { return nil }
+        let directory = event.rawProperties?["location"]?.dictionaryValue?["directory"]?.stringValue?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let directory, !directory.isEmpty else { return nil }
+        return SessionMovedUpdate(
+            sessionID: sessionID,
+            directory: directory,
+            projectID: event.namedProjectID
+        )
+    }
+
+    /// Session removed on the server. v1 carries the id only in `info.id`; v2 sends `sessionID`.
+    func sessionDeletedID(from event: OpencodeEvent) -> String? {
+        guard event.type == "session.deleted" else { return nil }
+        let info = event.rawProperties?["info"]?.dictionaryValue
+        return event.sessionID
+            ?? info?["id"]?.stringValue
+            ?? info?["sessionID"]?.stringValue
+            ?? info?["sessionId"]?.stringValue
+    }
+
     /// Viewed watermark carried by a v2 `session.viewed` event (`{ sessionID, idle }`).
     /// Returns nil when the event is not a usable viewed update.
     func sessionViewed(_ event: OpencodeEvent) -> SessionViewedUpdate? {
@@ -1143,6 +1396,13 @@ nonisolated enum EventParseOutcome: Sendable {
     case events([OpencodeEvent])
 }
 
+nonisolated struct SessionMovedUpdate: Equatable, Sendable {
+    let sessionID: String
+    /// The session's new working directory.
+    let directory: String
+    let projectID: String?
+}
+
 nonisolated struct SessionViewedUpdate: Equatable, Sendable {
     let sessionID: String
     let idleAtEpochMs: Int64
@@ -1151,6 +1411,13 @@ nonisolated struct SessionViewedUpdate: Equatable, Sendable {
 nonisolated struct SessionTitleUpdate: Equatable, Sendable {
     let sessionID: String
     let title: String
+}
+
+/// Pending revert of a session after an event: `messageID` is the first reverted message, nil
+/// when no revert is pending any more (cleared, or committed and already truncated).
+nonisolated struct SessionRevertUpdate: Equatable, Sendable {
+    let sessionID: String
+    let messageID: String?
 }
 
 /// Session → running v2 compaction item id, shared by copies of the adapter.

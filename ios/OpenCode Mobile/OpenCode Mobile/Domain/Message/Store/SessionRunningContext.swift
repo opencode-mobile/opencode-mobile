@@ -49,10 +49,14 @@ nonisolated struct SessionRunningContext: Equatable, Sendable {
     }
 
     /// Re-derive from an authoritative message list. A live switch survives only when it is
-    /// newer than everything in the list (REST drops trailing switch items from the projection).
+    /// newer than every prompt and reply in the list (REST carries switch items only as
+    /// notice rows, which hold no agent or model, so they do not count as newer).
     func reseeded(_ messages: [Message]) -> SessionRunningContext {
         var derived = messages.reduce(SessionRunningContext()) { $0.advanced(by: $1) }
-        let newest = messages.map { max($0.sentAtEpochMs ?? 0, $0.completedAtEpochMs ?? 0) }.max() ?? 0
+        let newest = messages
+            .filter { $0.role != .notice }
+            .map { max($0.sentAtEpochMs ?? 0, $0.completedAtEpochMs ?? 0) }
+            .max() ?? 0
         let hasSwitch = switchedAgent != nil || switchedModel != nil
         guard hasSwitch, switchedAtEpochMs.map({ $0 > newest }) ?? true else { return derived }
         derived.switchedAgent = switchedAgent
@@ -86,7 +90,8 @@ nonisolated struct SessionRunningContext: Equatable, Sendable {
             followUpDelivery: message.followUpDelivery,
             isWaitingForPickup: message.isWaitingForPickup,
             stopReason: message.stopReason,
-            failure: message.failure
+            failure: message.failure,
+            promptSkills: message.promptSkills
         )
     }
 

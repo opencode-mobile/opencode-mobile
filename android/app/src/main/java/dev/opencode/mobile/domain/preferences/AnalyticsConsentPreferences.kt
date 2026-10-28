@@ -6,9 +6,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 
 /**
- * Persists in-app consent for **product / custom** Analytics events (OPE-129).
- * Default is on for the tester phase. Does not gate Crashlytics or minimal
- * automatic breadcrumbs.
+ * Persists in-app consent for Firebase collection: product / custom Analytics
+ * events (OPE-129) and, since #755, Crashlytics and automatic Analytics too.
+ * Default is on for the tester phase.
  */
 object AnalyticsConsentPreferences {
     private const val PREFS_NAME = "opencode_analytics_consent"

@@ -92,6 +92,12 @@ class RoomSessionCacheStore
                         )
                     }
                 }
+                is SessionCacheEvictSelector.Connection ->
+                    if (selector.matchByUrlPrefix) {
+                        dao.deleteForUrlPrefix(selector.connectionIdOrUrlPrefix)
+                    } else {
+                        dao.deleteForConnection(selector.connectionIdOrUrlPrefix)
+                    }
             }
         }
 
@@ -128,6 +134,18 @@ class RoomSessionCacheStore
                                     connectionId = selector.connectionIdOrUrlPrefix,
                                     worktree = selector.worktree,
                                 ),
+                        )
+                    }
+                is SessionCacheEvictSelector.Connection ->
+                    if (selector.matchByUrlPrefix) {
+                        SessionCacheReport(
+                            totalBytes = dao.payloadBytesForUrlPrefix(selector.connectionIdOrUrlPrefix),
+                            entryCount = dao.entryCountForUrlPrefix(selector.connectionIdOrUrlPrefix),
+                        )
+                    } else {
+                        SessionCacheReport(
+                            totalBytes = dao.payloadBytesForConnection(selector.connectionIdOrUrlPrefix),
+                            entryCount = dao.entryCountForConnection(selector.connectionIdOrUrlPrefix),
                         )
                     }
             }

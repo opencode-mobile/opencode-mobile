@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.session
 
 import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
+import dev.opencode.mobile.data.remote.dto.V2LocationInfoDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 
 internal class V2SessionRemote(
@@ -14,14 +15,25 @@ internal class V2SessionRemote(
     override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> =
         api.listPendingFormsV2(directory).map(adapter::toQuestionRequest)
 
-    override suspend fun listSessions(directory: String?): List<Session> = api.listSessionsV2(directory).map(adapter::toSession)
+    override suspend fun listSessions(directory: String?): List<Session> {
+        val projectId =
+            directory?.let { path ->
+                runCatching { listableProjectId(api.locationForSessionList(path)) }.getOrNull()
+            }
+        return api
+            .listSessionsV2(
+                directory = if (projectId == null) directory else null,
+                projectId = projectId,
+                archived = false,
+            ).map(adapter::toSession)
+    }
 
     override suspend fun createSession(
         parentId: String?,
         title: String?,
         directory: String?,
     ): Session {
-        var created = adapter.toSession(api.createSessionV2(directory, title))
+        var created = adapter.toSession(api.createSessionV2(directory, title, parentId))
         if (!title.isNullOrBlank() && created.title != title) {
             created = created.copy(title = title)
         }
@@ -48,10 +60,16 @@ internal class V2SessionRemote(
         }
     }
 
+    /** Callers gate on `supportsSessionArchive`; servers before 2.1.0 would ignore the field. */
     override suspend fun archiveSession(
         id: String,
         directory: String?,
-    ): Session = throw SessionError.Http(404, "session archive is not available")
+    ): Session {
+        api.setSessionArchivedV2(id, archived = true)
+        return adapter.toSession(api.getSessionV2(id)).let { session ->
+            if (session.isArchived) session else session.copy(archivedAtEpochMs = System.currentTimeMillis())
+        }
+    }
 
     override suspend fun deleteSession(
         id: String,
@@ -82,6 +100,18 @@ internal class V2SessionRemote(
         directory: String?,
     ): Session = adapter.toSession(api.forkSessionV2(id, atMessageId))
 
+    override suspend fun moveSession(
+        id: String,
+        directory: String,
+    ) {
+        api.moveSessionV2(id, directory)
+    }
+
+    override suspend fun askSideQuestion(
+        sessionId: String,
+        question: String,
+    ): String = api.generateSessionTextV2(sessionId, SideQuestion.prompt(question)).trim()
+
     override suspend fun abortSession(
         id: String,
         directory: String?,
@@ -101,7 +131,7 @@ internal class V2SessionRemote(
         id: String,
         messageId: String?,
         directory: String?,
-    ): List<FileDiff> = throw SessionError.Http(404, "session message diff is not available")
+    ): List<FileDiff> = api.getSessionDiffV2(id, from = messageId).map(adapter::toFileDiff)
 
     override suspend fun getVcsInfo(directory: String?): VcsInfo = adapter.toVcsInfo(api.getVcsInfoV2(directory))
 
@@ -141,6 +171,11 @@ internal class V2SessionRemote(
         id: String,
         directory: String?,
     ): Boolean = api.clearRevertV2(id)
+
+    override suspend fun commitRevert(
+        id: String,
+        directory: String?,
+    ): Boolean = api.commitRevertV2(id)
 
     override suspend fun respondToPermission(
         sessionId: String,
@@ -215,4 +250,14 @@ internal class V2SessionRemote(
     ) {
         api.viewSessionV2(sessionId, idleAtEpochMs)
     }
+}
+
+/** Project id to list, or null when the directory should stay a directory-scoped list. */
+internal fun listableProjectId(location: V2LocationInfoDto): String? {
+    val project = location.project ?: return null
+    val id = project.id?.takeIf { it.isNotBlank() } ?: return null
+    val root = project.canonical ?: project.directory
+    // Non-git directories resolve to the global "/" project, which is not this folder's sessions.
+    if (root.isNullOrBlank() || root == "/") return null
+    return id
 }

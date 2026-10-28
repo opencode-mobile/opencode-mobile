@@ -27,7 +27,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import dev.opencode.mobile.domain.command.commandTokenHighlightRange
+import dev.opencode.mobile.domain.command.commandTokenHighlightRanges
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -112,20 +112,22 @@ fun OpenCodeOutgoingMessage(
                                         modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),
                                     )
                                 } else {
-                                    val highlight = commandTokenHighlightRange(part.text)
+                                    val highlights = commandTokenHighlightRanges(part.text)
                                     val highlightColor = openCodeColor("syntax-type")
                                     Text(
                                         text =
-                                            if (highlight == null) {
+                                            if (highlights.isEmpty()) {
                                                 AnnotatedString(part.text)
                                             } else {
                                                 buildAnnotatedString {
                                                     append(part.text)
-                                                    addStyle(
-                                                        SpanStyle(color = highlightColor),
-                                                        highlight.first,
-                                                        highlight.last + 1,
-                                                    )
+                                                    highlights.forEach { highlight ->
+                                                        addStyle(
+                                                            SpanStyle(color = highlightColor),
+                                                            highlight.first,
+                                                            highlight.last + 1,
+                                                        )
+                                                    }
                                                 }
                                             },
                                         style = MaterialTheme.typography.bodyLarge,

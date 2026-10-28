@@ -147,13 +147,13 @@ class DefaultForegroundEventStreamTest {
                     },
                 )
             val store = FakeProfileStore()
-            val probeEntered = CompletableDeferred<Unit>()
+            val probeFinished = CompletableDeferred<Unit>()
             val manager =
                 ActiveConnectionManager(
                     store,
                     ConnectionProbing {
-                        probeEntered.complete(Unit)
                         delay(5_000)
+                        probeFinished.complete(Unit)
                         ServerProtocol.V1
                     },
                 )
@@ -176,7 +176,8 @@ class DefaultForegroundEventStreamTest {
                         .url.encodedPath
                         .contains("/api/event"),
                 )
-                assertTrue(!probeEntered.isCompleted)
+                // The start check that the server still speaks v2 runs beside the open lease.
+                assertTrue(!probeFinished.isCompleted)
             } finally {
                 stream.stop()
                 client.close()
@@ -204,7 +205,7 @@ class DefaultForegroundEventStreamTest {
                         )
                     },
                 )
-            val store = FakeProfileStore(worktrees = listOf("/Users/ivan/Projects/permission-test"))
+            val store = FakeProfileStore(worktrees = listOf("/Users/example/Projects/permission-test"))
             val manager =
                 ActiveConnectionManager(
                     store,
@@ -227,7 +228,7 @@ class DefaultForegroundEventStreamTest {
                 assertTrue(paths.any { it.endsWith("/event") && !it.contains("global") })
                 assertTrue(
                     requests.any {
-                        it.url.parameters["directory"] == "/Users/ivan/Projects/permission-test"
+                        it.url.parameters["directory"] == "/Users/example/Projects/permission-test"
                     },
                 )
                 assertTrue(requests.none { it.url.encodedPath.contains("/api/event") })
@@ -254,7 +255,7 @@ class DefaultForegroundEventStreamTest {
                         )
                     },
                 )
-            val store = FakeProfileStore(worktrees = listOf("/Users/ivan/Projects/permission-test"))
+            val store = FakeProfileStore(worktrees = listOf("/Users/example/Projects/permission-test"))
             val manager =
                 ActiveConnectionManager(
                     store,
@@ -332,7 +333,7 @@ class DefaultForegroundEventStreamTest {
         }
 
     @Test
-    fun http401_setsAuthFailedAndStopsRetrying() =
+    fun http401_setsAuthFailedAndBacksOffInsteadOfHotLooping() =
         runBlocking {
             val attempts = AtomicInteger(0)
             val client =
@@ -469,7 +470,68 @@ class DefaultForegroundEventStreamTest {
         }
 
     @Test
-    fun http403_setsAuthFailedAndStopsRetrying() =
+    fun http401_recoversToConnectedOnWakeOnceAuthIsAccepted() =
+        runBlocking {
+            val attempts = AtomicInteger(0)
+            val client =
+                HttpClient(
+                    MockEngine {
+                        val n = attempts.incrementAndGet()
+                        if (n <= 2) {
+                            respond(content = "", status = HttpStatusCode.Unauthorized)
+                        } else {
+                            val channel = ByteChannel(autoFlush = true)
+                            channel.writeStringUtf8(CONNECTED_V1)
+                            respond(
+                                content = channel,
+                                status = HttpStatusCode.OK,
+                                headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                            )
+                        }
+                    },
+                )
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+            val stream =
+                DefaultForegroundEventStream(
+                    eventsApi = EventsApi(client),
+                    eventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+                    diagnosticLogger = DiagnosticLogger(DiagnosticLogBuffer()),
+                    activeConnectionManager = manager,
+                    connectionProfileStore = store,
+                )
+            try {
+                stream.start()
+                withTimeout(3_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.AuthFailed }
+                }
+                // Foreground or pull-to-refresh cut the auth backoff short; the stream keeps
+                // reporting the rejection until a retry is accepted.
+                stream.onReconnectWake()
+                withTimeout(3_000) {
+                    while (attempts.get() < 2) {
+                        delay(10)
+                    }
+                }
+                assertEquals(EventStreamConnectionState.AuthFailed, stream.connectionState.value)
+                stream.onReconnectWake()
+                withTimeout(3_000) {
+                    stream.connectionState.first { it == EventStreamConnectionState.Connected }
+                }
+                assertEquals(3, attempts.get())
+            } finally {
+                stream.stop()
+                client.close()
+            }
+        }
+
+    @Test
+    fun http403_setsAuthFailedAndBacksOffInsteadOfHotLooping() =
         runBlocking {
             val attempts = AtomicInteger(0)
             val client =

@@ -14,9 +14,11 @@ enum ComponentGalleryEntryID: String, Hashable {
     case colors
     case typography
     case icons
+    case fileIcon
     case skeletonIllustration
     case pageIndicator
     case bottomFade
+    case actionBar
     case tag
     case keyValueRow
     case attachment
@@ -26,7 +28,10 @@ enum ComponentGalleryEntryID: String, Hashable {
     case toolCallCard
     case toolChip
     case messageNote
+    case timelineNotice
     case childSessionRow
+    case stepRail
+    case activityCard
     case workingIndicator
     case reasoningRow
     case topBar
@@ -38,6 +43,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case snackbar
     case listItem
     case selectableCard
+    case optionCard
     case listGroup
     case sectionHeader
     case reorderableList
@@ -46,6 +52,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case actionPill
     case actionTile
     case syncingPill
+    case sideQuestionPill
     case reviewChangesPill
     case sessionTodosPill
     case sessionTodoItem
@@ -64,10 +71,12 @@ enum ComponentGalleryEntryID: String, Hashable {
     case codeSnippet
     case sessionList
     case sessionListDock
+    case sessionListSkeleton
     case sessionStatusBar
     case sessionBranchPill
     case sessionComposer
     case dictationCard
+    case dropOverlay
     case composerSuggestionOverlay
     case renderedMarkdown
     case messageList
@@ -94,6 +103,12 @@ let componentGalleryEntries = [
         category: .foundations
     ),
     ComponentGalleryEntry(
+        id: .fileIcon,
+        title: "File Icon",
+        description: "Colour file-type and folder icons picked from a path, as in opencode.",
+        category: .foundations
+    ),
+    ComponentGalleryEntry(
         id: .skeletonIllustration,
         title: "Skeleton Illustration",
         description: "Wireframe hero with one spotlit element for onboarding, tutorials, and hints.",
@@ -109,6 +124,12 @@ let componentGalleryEntries = [
         id: .bottomFade,
         title: "Bottom Fade",
         description: "Gradient that fades list content into the background under a dock.",
+        category: .navigation
+    ),
+    ComponentGalleryEntry(
+        id: .actionBar,
+        title: "Action Bar",
+        description: "Bottom-pinned primary action naming what it acts on; disabled titles give the reason.",
         category: .navigation
     ),
     ComponentGalleryEntry(
@@ -145,6 +166,12 @@ let componentGalleryEntries = [
         id: .syncingPill,
         title: "Syncing Pill",
         description: "Non-interactive floating status pill for quiet cache→network sync.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .sideQuestionPill,
+        title: "Side Question Pill",
+        description: "Floating /btw status above the composer: running, answer ready, or failed with Retry.",
         category: .controls
     ),
     ComponentGalleryEntry(
@@ -223,6 +250,12 @@ let componentGalleryEntries = [
         id: .selectableCard,
         title: "Selectable Card",
         description: "Title, blurb, and preview slot that can be selected.",
+        category: .lists
+    ),
+    ComponentGalleryEntry(
+        id: .optionCard,
+        title: "Option Card",
+        description: "Single-choice card with a radio, tag, subtitle, and preview illustration.",
         category: .lists
     ),
     ComponentGalleryEntry(
@@ -334,9 +367,27 @@ let componentGalleryEntries = [
         category: .chat
     ),
     ComponentGalleryEntry(
+        id: .timelineNotice,
+        title: "Timeline Notice",
+        description: "Quiet line for a moved directory, agent or model change, instructions, or a restart.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
         id: .childSessionRow,
         title: "Child Session Row",
         description: "Quiet person/thread row for a child session in Session Chat.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .stepRail,
+        title: "Step Rail",
+        description: "One line per agent step on a vertical rail, live while the agent works.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .activityCard,
+        title: "Activity Card",
+        description: "One live card per run of agent steps, with running agents and the current tool, that settles into an N steps line with the agents it used.",
         category: .chat
     ),
     ComponentGalleryEntry(
@@ -364,6 +415,12 @@ let componentGalleryEntries = [
         category: .session
     ),
     ComponentGalleryEntry(
+        id: .sessionListSkeleton,
+        title: "Session List Skeleton",
+        description: "Shimmering session-row placeholders while a project's sessions load, with an optional slow caption.",
+        category: .session
+    ),
+    ComponentGalleryEntry(
         id: .sessionComposer,
         title: "Session Composer",
         description: "Prompt entry and blocking permission states in one persistent session surface.",
@@ -373,6 +430,12 @@ let componentGalleryEntries = [
         id: .dictationCard,
         title: "Dictation Card",
         description: "Listening takeover for composer dictation.",
+        category: .session
+    ),
+    ComponentGalleryEntry(
+        id: .dropOverlay,
+        title: "Drop Overlay",
+        description: "Drag-over scrim card for images and files dropped on Session Chat.",
         category: .session
     ),
     ComponentGalleryEntry(

@@ -1,6 +1,9 @@
 import Foundation
 
 nonisolated struct MessageDomainAdapter: Sendable {
+    /// Receive time for a failure whose message has no completed time yet.
+    var nowEpochMs: @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1_000) }
+
     func message(from dto: MessageDTO) -> Message {
         let info = dto.info
         let domainParts = parseParts(from: dto.parts)
@@ -25,7 +28,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup: info.waiting == true,
             stopReason: stop,
-            failure: sessionFailure(info.error, stopReason: stop)
+            failure: sessionFailure(info.error, stopReason: stop, completedAtEpochMs: info.time?.completed)
         )
     }
 
@@ -54,7 +57,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup: info.waiting == true,
             stopReason: stop,
-            failure: sessionFailure(info.error, stopReason: stop)
+            failure: sessionFailure(info.error, stopReason: stop, completedAtEpochMs: info.time?.completed),
+            promptSkills: promptSkills(info.skills ?? [])
         )
     }
 
@@ -95,9 +99,83 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     timeEndEpochMs: dto.time?.end
                 )
             )
+        case "notice":
+            guard let id = dto.id ?? dto.messageID, let notice = dto.notice else { return nil }
+            return timelineNotice(id: id, from: notice).map(MessagePart.notice)
         default:
             return nil
         }
+    }
+
+    /// The product notice for a v2 notice item, or nil when the item draws no row
+    /// (an unknown type, a switch without its value, or a non-restart synthetic).
+    func timelineNotice(id: String, from dto: V2NoticeDTO) -> TimelineNotice? {
+        let kind: TimelineNoticeKind?
+        switch dto.type {
+        case "location-switched":
+            kind = Self.nonBlank(dto.location?.directory).map { TimelineNoticeKind.moved(directory: $0) }
+        case "agent-switched":
+            kind = Self.nonBlank(dto.agent).map { agent in
+                let previous = Self.nonBlank(dto.previous?.agent)
+                return .agentChanged(agent: agent, previous: previous == agent ? nil : previous)
+            }
+        case "model-switched":
+            kind = Self.noticeModel(dto.model).map { model in
+                .modelChanged(model: model, previous: Self.noticeModel(dto.previous?.model))
+            }
+        case "system":
+            kind = Self.systemNotice(metadata: dto.metadata, description: dto.description)
+        case "synthetic":
+            kind = Self.isRestartNotice(metadata: dto.metadata, description: dto.description) ? .restart : nil
+        default:
+            kind = nil
+        }
+        return kind.map { TimelineNotice(id: id, kind: $0) }
+    }
+
+    static let instructionsDescriptionPrefix = "Instructions updated: "
+    static let restartDescription = "Continuing after restart"
+
+    /// Instruction updates name their sources in metadata, or in the description
+    /// older servers wrote. Other system items show their description only: `text`
+    /// is the model-facing update.
+    private static func systemNotice(metadata: [String: AnyCodable]?, description: String?) -> TimelineNoticeKind {
+        if case .string("instructions")? = metadata?["notice"],
+           case .array(let values)? = metadata?["instructionSources"]
+        {
+            let sources = values.compactMap { value -> String? in
+                if case .string(let source) = value { return nonBlank(source) }
+                return nil
+            }
+            if !sources.isEmpty { return .instructionsUpdated(sources: sources) }
+        }
+        if let description, description.hasPrefix(instructionsDescriptionPrefix) {
+            let sources = description.dropFirst(instructionsDescriptionPrefix.count)
+                .split(separator: ",")
+                .compactMap { nonBlank(String($0)) }
+            return .instructionsUpdated(sources: sources)
+        }
+        if let description = nonBlank(description) { return .systemNote(description) }
+        return .instructionsUpdated(sources: [])
+    }
+
+    private static func isRestartNotice(metadata: [String: AnyCodable]?, description: String?) -> Bool {
+        if case .string("restart")? = metadata?["notice"] { return true }
+        return description == restartDescription
+    }
+
+    private static func noticeModel(_ dto: V2ModelRefDTO?) -> TimelineNoticeModel? {
+        guard let modelID = nonBlank(dto?.id) else { return nil }
+        return TimelineNoticeModel(
+            providerID: nonBlank(dto?.providerID),
+            modelID: modelID,
+            variant: nonBlank(dto?.variant)
+        )
+    }
+
+    private static func nonBlank(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else { return nil }
+        return trimmed
     }
 
     func toolPart(
@@ -166,8 +244,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     func sendRequest(options: PromptSendOptions) -> SendMessageRequestDTO {
         var parts: [SendMessagePartDTO] = []
-        if !options.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            parts.append(SendMessagePartDTO(type: "text", text: options.text))
+        let text = UploadedAttachmentMetadata.promptText(options.text, uploaded: options.uploadedAttachments)
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(SendMessagePartDTO(type: "text", text: text))
         }
         parts.append(contentsOf: ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
             SendMessagePartDTO(
@@ -179,40 +258,63 @@ nonisolated struct MessageDomainAdapter: Sendable {
         parts.append(contentsOf: fileReferenceParts(options))
         // Omit wire `id`: FilePartInput allows it only when it matches ^prt.
         // Local Attachment ids are UUIDs for composer chip identity.
-        parts.append(contentsOf: options.attachments.map {
+        parts.append(contentsOf: options.inlineAttachments.map {
             SendMessagePartDTO(type: "file", mime: $0.mime, filename: $0.filename, url: $0.dataURL)
         })
         return SendMessageRequestDTO(
             parts: parts,
             model: options.model.map { SendPromptModelDTO(providerID: $0.providerID, modelID: $0.modelID) },
             variant: options.variant,
-            agent: options.mode
+            agent: options.mode,
+            messageID: options.messageID
         )
     }
 
+    func v1ShellRequest(options: ShellCommandOptions) -> V1ShellRequestDTO {
+        V1ShellRequestDTO(
+            agent: options.agent,
+            command: options.command,
+            model: options.model.map { SendPromptModelDTO(providerID: $0.providerID, modelID: $0.modelID) }
+        )
+    }
+
+    func v2ShellRequest(options: ShellCommandOptions) -> V2ShellRequestDTO {
+        V2ShellRequestDTO(command: options.command)
+    }
+
     func v2PromptRequest(options: PromptSendOptions) -> V2PromptRequestDTO {
-        let files = options.attachments.map {
+        let files = options.inlineAttachments.map {
             V2PromptFileDTO(uri: $0.dataURL, name: $0.filename, mime: $0.mime)
         }
+        let uploaded = options.uploadedAttachments
+        let metadata = uploaded.isEmpty ? nil : V2PromptMetadataDTO(
+            attachments: uploaded.compactMap { attachment in
+                attachment.uploadedServerPath.map {
+                    V2PromptUploadedAttachmentDTO(name: attachment.filename, mime: attachment.mime, path: $0)
+                }
+            }
+        )
         let agents = ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
             V2PromptAgentDTO(
                 name: part.name,
                 mention: V2PromptSourceDTO(start: part.start, end: part.end, text: part.sourceValue)
             )
         }
-        var seen = Set<String>()
-        let skills = options.skillIDs.compactMap { raw -> V2PromptSkillDTO? in
-            let id = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !id.isEmpty, seen.insert(id).inserted else { return nil }
-            return V2PromptSkillDTO(id: id)
+        let skills = ComposerMentionRouting.skillParts(text: options.text, mentions: options.skillMentions).map { part in
+            V2PromptSkillDTO(
+                id: part.skillID,
+                mention: V2PromptSourceDTO(start: part.start, end: part.end, text: part.sourceValue)
+            )
         }
         return V2PromptRequestDTO(
-            text: options.text,
+            id: options.messageID,
+            text: UploadedAttachmentMetadata.promptText(options.text, uploaded: uploaded),
             files: files.isEmpty ? nil : files,
             agents: agents.isEmpty ? nil : agents,
             skills: skills.isEmpty ? nil : skills,
             delivery: options.delivery.wireValue,
-            fileMentions: v2FileMentions(options)
+            fileMentions: v2FileMentions(options),
+            metadata: metadata
         )
     }
 
@@ -285,13 +387,18 @@ nonisolated struct MessageDomainAdapter: Sendable {
             switch dto.type {
             case "agent-switched", "location-switched":
                 agent = dto.agent ?? agent
+                appendV2Notice(dto, to: &messages)
             case "model-switched":
                 model = dto.model
+                appendV2Notice(dto, to: &messages)
+            case "system":
+                appendV2Notice(dto, to: &messages)
             case "user":
                 messages.append(projectV2User(dto, agent: agent, model: model))
                 agent = dto.agent ?? agent
                 model = dto.model ?? model
             case "synthetic":
+                if appendV2Notice(dto, to: &messages) { break }
                 if let synthetic = projectV2Synthetic(dto, agent: agent, model: model) {
                     messages.append(synthetic)
                 }
@@ -321,7 +428,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             .sorted { $0.timeCreated < $1.timeCreated }
         if userItems.isEmpty { return messages }
         let existingIDs = Set(messages.map(\.id))
-        let itemsByID = Dictionary(uniqueKeysWithValues: userItems.map { ($0.id, $0) })
+        let itemsByID = Dictionary(userItems.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
         let merged = messages.map { message -> Message in
             guard let item = itemsByID[message.id] else { return message }
             return message.withPickupState(
@@ -358,9 +465,27 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     // MARK: Private
 
+    /// A notice is its own row: no agent, model or context estimate, so it never
+    /// reads as a prompt or reply and never moves the running context.
+    @discardableResult
+    private func appendV2Notice(_ dto: V2SessionMessageDTO, to messages: inout [Message]) -> Bool {
+        guard let notice = timelineNotice(id: dto.id, from: dto.notice) else { return false }
+        messages.append(
+            messageFromV2(
+                id: dto.id,
+                role: .notice,
+                parts: [.notice(notice)],
+                sentAtEpochMs: dto.time?.created,
+                completedAtEpochMs: dto.time?.created
+            )
+        )
+        return true
+    }
+
     private func projectV2User(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message {
         var parts: [MessagePart] = []
-        let text = dto.text ?? ""
+        let uploaded = UploadedAttachmentMetadata.refs(from: dto.metadata)
+        let text = UploadedAttachmentMetadata.displayText(dto.text ?? "", hiding: uploaded)
         if !text.isEmpty {
             parts.append(.text(TextPart(id: "\(dto.id):text:0", text: text, isStreaming: false)))
         }
@@ -369,10 +494,12 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 parts.append(part)
             }
         }
+        parts.append(contentsOf: UploadedAttachmentMetadata.fileParts(uploaded, messageID: dto.id))
         return messageFromV2(
             id: dto.id,
             role: .user,
             parts: parts,
+            promptSkills: promptSkills(dto.skills),
             mode: dto.agent ?? (agent.isEmpty ? nil : agent),
             model: dto.model ?? model,
             sentAtEpochMs: dto.time?.created,
@@ -381,6 +508,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 userCharacters: text.count
                     + dto.files.reduce(0) { $0 + ($1.mention?.text?.count ?? $1.source?.text?.count ?? 0) }
                     + dto.agents.reduce(0) { $0 + ($1.mention?.text?.count ?? $1.source?.text?.count ?? 0) }
+                    + dto.skills.reduce(0) { $0 + ($1.mention?.text?.count ?? 0) }
             )
         )
     }
@@ -439,7 +567,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
                         status: completed ? .completed : .running,
                         title: "Shell",
                         callID: dto.callID,
-                        output: dto.output
+                        input: command.isEmpty ? nil : ["command": .string(command)],
+                        output: dto.output,
+                        metadata: dto.exit.map { ["exit": .int($0)] }
                     )
                 )
             ],
@@ -463,10 +593,12 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 fallbackID = "\(dto.id):\(content.type):\(index)"
             }
             return v2AssistantPart(content, fallbackID: fallbackID)
-        }
+        } + UploadedAttachmentMetadata.fileParts(UploadedAttachmentMetadata.refs(from: dto.metadata), messageID: dto.id)
         let stopReason = MessageStopReason.from(finish: dto.finish, errorKind: dto.error?.type)
-        let failure = structuredFailure(dto.error, outcome: nil)
-            ?? dto.retry?.error.flatMap { structuredFailure($0, outcome: nil) }.flatMap { candidate in
+        let failure = structuredFailure(dto.error, outcome: nil, completedAtEpochMs: dto.time?.completed)
+            ?? dto.retry?.error.flatMap {
+                structuredFailure($0, outcome: nil, completedAtEpochMs: dto.time?.completed)
+            }.flatMap { candidate in
                 dto.finish?.caseInsensitiveCompare("error") == .orderedSame ? candidate : nil
             }
         var message = messageFromV2(
@@ -509,13 +641,23 @@ nonisolated struct MessageDomainAdapter: Sendable {
             sentAtEpochMs: dto.time?.created,
             completedAtEpochMs: dto.time?.completed,
             contextEstimate: MessageContextEstimate(assistantCharacters: summary.count),
-            failure: structuredFailure(dto.error, outcome: nil, source: .compaction)
+            failure: structuredFailure(
+                dto.error,
+                outcome: nil,
+                source: .compaction,
+                completedAtEpochMs: dto.time?.completed
+            )
         )
     }
 
     /// A failed idle item is its own row when the assistant message did not already carry the same failure.
     private func projectV2Idle(_ dto: V2SessionMessageDTO, messages: inout [Message]) {
-        guard let failure = structuredFailure(dto.error, outcome: dto.outcome, source: .execution) else { return }
+        guard let failure = structuredFailure(
+            dto.error,
+            outcome: dto.outcome,
+            source: .execution,
+            completedAtEpochMs: dto.time?.completed
+        ) else { return }
         if messages.last?.failure?.line() == failure.line() { return }
         messages.append(
             messageFromV2(
@@ -534,6 +676,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
         role: MessageRole,
         parts: [MessagePart],
         fallbackText: String = "",
+        promptSkills: [PromptSkill] = [],
         cost: Double? = nil,
         tokens: MessageTokenUsage? = nil,
         mode: String? = nil,
@@ -561,8 +704,27 @@ nonisolated struct MessageDomainAdapter: Sendable {
             completedAtEpochMs: completedAtEpochMs,
             contextInputTokens: contextInputTokens,
             contextEstimate: contextEstimate,
-            failure: failure
+            failure: failure,
+            promptSkills: promptSkills
         )
+    }
+
+    /// Skills ride on the user message. Keep id and name only — `text` is the
+    /// model-facing skill body and must not become a second chat bubble.
+    private func promptSkills(_ skills: [V2UserSkillDTO]) -> [PromptSkill] {
+        skills.compactMap { skill in
+            let id = skill.id?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+                ?? skill.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+            let name = skill.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? id
+            guard let name else { return nil }
+            return PromptSkill(
+                id: id ?? name,
+                name: name,
+                mentionText: skill.mention?.text?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+                mentionStart: skill.mention?.start,
+                mentionEnd: skill.mention?.end
+            )
+        }
     }
 
     private func v2AssistantPart(_ content: V2AssistantContentDTO, fallbackID: String) -> MessagePart? {
@@ -597,7 +759,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                         return unwrapped.isEmpty ? nil : unwrapped
                     },
                     callID: content.id,
-                    input: dictionaryFromInput(state?.input),
+                    input: dictionaryFromInput(state?.input) ?? streamingInputPreview(state),
                     output: toolOutput(state),
                     metadata: metadata,
                     timeStartEpochMs: content.time?.created,
@@ -616,7 +778,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             id: dto.id ?? (url.isEmpty ? nil : url) ?? dto.filename ?? "file",
             filename: dto.filename,
             mime: dto.mime,
-            dataURL: url
+            dataURL: url,
+            serverPath: dto.serverPath
         )
     }
 
@@ -633,13 +796,28 @@ nonisolated struct MessageDomainAdapter: Sendable {
         id: String,
         filename: String?,
         mime: String?,
-        dataURL: String
+        dataURL: String,
+        serverPath: String? = nil
     ) -> MessagePart? {
         let resolvedMime = (
             mime
                 ?? AttachmentDataURL.mime(fromDataURL: dataURL)
                 ?? filename.flatMap(AttachmentDataURL.mime(fromFilename:))
         )?.lowercased()
+        if let serverPath, !serverPath.isEmpty {
+            // Uploaded file: any type shows, at least as a chip.
+            let mime = resolvedMime ?? AttachmentMime.binaryFallback
+            return .file(
+                FilePart(
+                    id: id,
+                    filename: filename?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "Attachment",
+                    mime: mime,
+                    kind: AttachmentMime.kind(for: mime),
+                    dataURL: "",
+                    serverPath: serverPath
+                )
+            )
+        }
         guard let resolvedMime, let kind = AttachmentDataURL.kind(for: resolvedMime) else { return nil }
         if !dataURL.isEmpty {
             guard dataURL.lowercased().hasPrefix("data:"),
@@ -678,6 +856,14 @@ nonisolated struct MessageDomainAdapter: Sendable {
         default:
             return nil
         }
+    }
+
+    /// A tool whose arguments are still streaming keeps the partial text as its preview.
+    private func streamingInputPreview(_ state: V2ToolStateDTO?) -> [String: AnyCodable]? {
+        guard state?.status == "streaming" || state?.status == "pending",
+              case let .string(raw)? = state?.input
+        else { return nil }
+        return [ToolArgumentsPreview.inputKey: .string(raw)]
     }
 
     private func toolOutput(_ state: V2ToolStateDTO?) -> String? {
@@ -733,6 +919,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             .tool
         case "system":
             .system
+        case "notice":
+            .notice
         default:
             .unknown
         }
@@ -743,7 +931,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
         return MessageStopReason.from(finish: info.finish, errorKind: info.error?.name)
     }
 
-    private func sessionFailure(_ error: MessageErrorInfoDTO?, stopReason: MessageStopReason?) -> SessionFailure? {
+    private func sessionFailure(
+        _ error: MessageErrorInfoDTO?,
+        stopReason: MessageStopReason?,
+        completedAtEpochMs: Int64?
+    ) -> SessionFailure? {
         if stopReason == .interrupted { return nil }
         return SessionFailure.fromV1(
             name: error?.name,
@@ -752,14 +944,17 @@ nonisolated struct MessageDomainAdapter: Sendable {
             responseBody: error?.data?.responseBody,
             isRetryable: error?.data?.isRetryable,
             providerID: error?.data?.providerID,
-            retries: error?.data?.retries
+            retries: error?.data?.retries,
+            retryAfterMs: error?.data?.retryAfterMs,
+            recordedAtEpochMs: recordedAt(retryAfterMs: error?.data?.retryAfterMs, completedAtEpochMs: completedAtEpochMs)
         )
     }
 
     private func structuredFailure(
         _ error: V2UnknownErrorDTO?,
         outcome: String?,
-        source: FailureSource = .step
+        source: FailureSource = .step,
+        completedAtEpochMs: Int64?
     ) -> SessionFailure? {
         SessionFailure.fromV2(
             type: error?.type,
@@ -767,8 +962,16 @@ nonisolated struct MessageDomainAdapter: Sendable {
             status: error?.status,
             providerBody: error?.response?.body,
             outcome: outcome,
-            source: source
+            source: source,
+            retryAfterMs: error?.retryAfterMs,
+            recordedAtEpochMs: recordedAt(retryAfterMs: error?.retryAfterMs, completedAtEpochMs: completedAtEpochMs)
         )
+    }
+
+    /// The failed message's completion time, else when the app received it. Only a retry hint needs it.
+    private func recordedAt(retryAfterMs: Int64?, completedAtEpochMs: Int64?) -> Int64? {
+        guard retryAfterMs != nil else { return nil }
+        return completedAtEpochMs ?? nowEpochMs()
     }
 
     private func httpMessage(_ body: String?) -> String {
@@ -785,7 +988,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 guard t.isDisplayable else { return nil }
                 let trimmed = t.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 return trimmed.isEmpty ? nil : trimmed
-            case .file, .tool, .compaction, .reasoning:
+            case .file, .tool, .compaction, .reasoning, .notice:
                 return nil
             }
         }

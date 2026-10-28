@@ -2,6 +2,7 @@ import SwiftUI
 
 private enum ComposerSuggestionOverlayGalleryScenario: String, CaseIterable, Identifiable {
     case populated
+    case mentions
     case empty
 
     var id: String { rawValue }
@@ -9,6 +10,7 @@ private enum ComposerSuggestionOverlayGalleryScenario: String, CaseIterable, Ide
     var label: String {
         switch self {
         case .populated: "Populated"
+        case .mentions: "Mentions"
         case .empty: "Empty"
         }
     }
@@ -62,6 +64,24 @@ struct ComposerSuggestionOverlayGalleryView: View {
                     badge: index.isMultiple(of: 3) ? "skill" : (index.isMultiple(of: 2) ? "mcp" : nil)
                 )
             }
+        case .mentions:
+            [
+                OpenCodeComposerSuggestionItem(
+                    id: "build",
+                    title: "@build",
+                    subtitle: "Default agent",
+                    leadingIcon: .icon(.agent)
+                ),
+            ] + ["Package.swift", "app/build.gradle", "src/main.kt", "web/App.tsx", "README.md", "src"]
+                .map { path in
+                    let isFolder = !path.contains(".")
+                    return OpenCodeComposerSuggestionItem(
+                        id: "file:\(path)",
+                        title: path,
+                        subtitle: "File",
+                        leadingIcon: .file(path: path, kind: isFolder ? .directory : .file)
+                    )
+                }
         case .empty:
             []
         }

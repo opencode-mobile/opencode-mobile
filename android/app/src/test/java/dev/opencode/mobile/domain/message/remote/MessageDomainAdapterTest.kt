@@ -7,6 +7,7 @@ import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
 import dev.opencode.mobile.data.remote.dto.V2InboxUserPayloadDto
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
+import dev.opencode.mobile.domain.agent.SkillMention
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.int
@@ -115,6 +116,15 @@ class MessageDomainAdapterTest {
         assertEquals("APIError", message.failure?.type)
         assertEquals("HTTP 403 · Forbidden: unauthorized: not licensed to use Copilot", message.failure?.line())
         assertNull(message.failure?.providerBody)
+    }
+
+    @Test
+    fun sendRequests_carryClientMessageId() {
+        val options = PromptSendOptions(text = "Hello", messageId = "msg_client")
+
+        assertEquals("msg_client", adapter.toSendRequest(options).messageId)
+        assertEquals("msg_client", adapter.toV2PromptRequest(options).id)
+        assertEquals(null, adapter.toV2PromptRequest(PromptSendOptions(text = "Hello")).id)
     }
 
     @Test
@@ -365,16 +375,54 @@ class MessageDomainAdapterTest {
     }
 
     @Test
-    fun toV2PromptRequest_mapsSkillIds() {
+    fun toV2PromptRequest_mapsSkillMentionsDedupedWithOffsets() {
         val body =
             adapter.toV2PromptRequest(
                 PromptSendOptions(
-                    text = "check the error",
-                    skillIds = listOf(" opencode ", "opencode", ""),
+                    text = "/OpenCode check /OpenCode the /tdd error",
+                    skillMentions =
+                        listOf(
+                            SkillMention(id = "s1", skillId = "opencode", name = "OpenCode", start = 0, end = 9),
+                            SkillMention(id = "s2", skillId = "opencode", name = "OpenCode", start = 16, end = 25),
+                            SkillMention(id = "s3", skillId = "tdd", name = "tdd", start = 30, end = 34),
+                            SkillMention(id = "s4", skillId = "stale", name = "stale", start = 35, end = 40),
+                        ),
                 ),
             )
-        assertEquals("check the error", body.text)
-        assertEquals(listOf("opencode"), body.skills?.map { it.id })
+        assertEquals("/OpenCode check /OpenCode the /tdd error", body.text)
+        val skills = body.skills.orEmpty()
+        assertEquals(listOf("opencode", "tdd"), skills.map { it.id })
+        val first = skills.first().mention
+        assertEquals(0, first?.start)
+        assertEquals(9, first?.end)
+        assertEquals("/OpenCode", first?.text)
+        assertEquals("/tdd", skills.last().mention?.text)
+    }
+
+    @Test
+    fun projectV2_userSkillsRoundTripIntoSkillMentions() {
+        val message =
+            projectV2(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"/tdd the login flow",
+                    "skills":[{"id":"tdd","name":"tdd","mention":{"start":0,"end":4,"text":"/tdd"}},{"id":"bare"}],
+                    "time":{"created":1}
+                  }
+                ]
+                """,
+            ).single()
+
+        assertEquals(listOf("tdd", "bare"), message.promptSkills.map { it.id })
+        assertEquals("tdd", message.promptSkills[0].name)
+        assertEquals(0, message.promptSkills[0].mentionStart)
+        assertEquals(4, message.promptSkills[0].mentionEnd)
+        assertEquals("bare", message.promptSkills[1].name)
+        assertEquals(null, message.promptSkills[1].mentionStart)
+        assertEquals("/tdd the login flow".length + "/tdd".length, message.contextEstimate.userCharacters)
     }
 
     @Test
@@ -953,7 +1001,7 @@ class MessageDomainAdapterTest {
     }
 
     @Test
-    fun projectV2_mapsUserAssistantAndSkipsSwitches() {
+    fun projectV2_mapsUserAssistantAndSwitchNotice() {
         val dtos =
             json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
                 """
@@ -987,7 +1035,10 @@ class MessageDomainAdapterTest {
                 """.trimIndent(),
             )
 
-        val messages = adapter.projectV2(dtos)
+        val projected = adapter.projectV2(dtos)
+        assertEquals(listOf("msg_switch", "msg_user", "msg_asst"), projected.map { it.id })
+        assertEquals(MessageRole.Notice, projected[0].role)
+        val messages = projected.drop(1)
 
         assertEquals(2, messages.size)
         assertEquals(MessageRole.User, messages[0].role)
@@ -1134,7 +1185,7 @@ class MessageDomainAdapterTest {
                 """.trimIndent(),
             )
 
-        val message = adapter.projectV2(dtos).single()
+        val message = adapter.projectV2(dtos).single { it.role == MessageRole.Assistant }
 
         assertEquals("build", message.mode)
         assertEquals("gpt-5", message.modelId)
@@ -1258,13 +1309,7 @@ class MessageDomainAdapterTest {
                 """.trimIndent(),
             )
 
-        val tool =
-            adapter
-                .projectV2(dtos)
-                .single()
-                .parts
-                .filterIsInstance<MessagePart.Tool>()
-                .single()
+        val tool = adapter.projectV2(dtos).single().parts.filterIsInstance<MessagePart.Tool>().single()
 
         assertEquals("subagent", tool.toolName)
         assertEquals(ToolStatus.Completed, tool.status)
@@ -1378,6 +1423,47 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun projectV2_shellCarriesCommandInputAndExitCode() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {
+                    "id":"msg_shell",
+                    "type":"shell",
+                    "shellID":"sh_1",
+                    "command":"false",
+                    "status":"exited",
+                    "exit":1,
+                    "output":{"output":"","truncated":false},
+                    "time":{"created":1,"completed":2}
+                  }
+                ]
+                """.trimIndent(),
+            )
+
+        val projected = adapter.projectV2(dtos)
+        val tool = projected[1].parts.filterIsInstance<MessagePart.Tool>().single()
+
+        assertEquals(listOf("msg_shell", "msg_shell:assistant"), projected.map { it.id })
+        assertEquals("msg_shell:tool", tool.id)
+        assertEquals(
+            "false",
+            tool.input
+                ?.get("command")
+                ?.jsonPrimitive
+                ?.content,
+        )
+        assertEquals(
+            "1",
+            tool.metadata
+                ?.get("exit")
+                ?.jsonPrimitive
+                ?.content,
+        )
+    }
+
+    @Test
     fun mergeInbox_marksExistingUserMessageWaiting() {
         val messages =
             listOf(
@@ -1468,6 +1554,85 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun projectV2_freeLimitCarriesRetryAfterFromTheCompletedTime() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [{
+                  "id":"a1","type":"assistant","finish":"error","content":[],
+                  "time":{"created":1000,"completed":2000},
+                  "error":{"type":"provider.free-limit",
+                    "message":"Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.",
+                    "status":429,"retryAfterMs":3600000}
+                }]
+                """.trimIndent(),
+            )
+        val failure = MessageDomainAdapter(nowEpochMs = { 9_999L }).projectV2(dtos).single().failure
+        assertEquals("provider.free-limit", failure?.type)
+        assertEquals(
+            "HTTP 429 · Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.",
+            failure?.line(),
+        )
+        assertEquals(FailureAction.PickModel, failure?.action())
+        assertEquals(3_600_000L, failure?.retryAfterMs)
+        assertEquals(2_000L, failure?.recordedAtEpochMs)
+        assertEquals(3_602_000L, failure?.retryAtEpochMs())
+    }
+
+    @Test
+    fun projectV2_budgetLimitsFromTheConsoleEnvelope() {
+        // Payloads as anomalyco/opencode#58694 builds them (dev only, no release sends them yet).
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {"id":"a1","type":"assistant","finish":"error","content":[],
+                    "error":{"type":"provider.budget-limit",
+                      "message":"Workspace usage limit reached. Model use is paused until the limit resets.",
+                      "status":429,"retryAfterMs":120000,
+                      "response":{"body":"{\"type\":\"error\",\"error\":{\"type\":\"BudgetLimitError\"}}"}}},
+                  {"id":"u2","type":"user","text":"again","time":{"created":3000}},
+                  {"id":"a2","type":"assistant","finish":"error","content":[],"time":{"created":3001,"completed":3002},
+                    "error":{"type":"provider.model-budget-limit",
+                      "message":"You've reached the spend limit for this model. Switch models to keep going.",
+                      "status":429,
+                      "response":{"body":"{\"type\":\"error\",\"error\":{\"type\":\"BudgetLimitError\",\"metadata\":{\"coverage\":\"models\"}}}"}}}
+                ]
+                """.trimIndent(),
+            )
+        val messages = MessageDomainAdapter(nowEpochMs = { 9_999L }).projectV2(dtos)
+        val budget = messages.first().failure
+        assertEquals("HTTP 429 · Workspace usage limit reached. Model use is paused until the limit resets.", budget?.line())
+        assertNull(budget?.action())
+        // No completed time on the failed message: the countdown runs from when the app received it.
+        assertEquals(9_999L, budget?.recordedAtEpochMs)
+        assertEquals(129_999L, budget?.retryAtEpochMs())
+
+        val modelBudget = messages.last().failure
+        assertEquals("provider.model-budget-limit", modelBudget?.type)
+        assertEquals(FailureAction.PickModel, modelBudget?.action())
+        assertNull(modelBudget?.retryAtEpochMs())
+        assertNull(modelBudget?.recordedAtEpochMs)
+    }
+
+    @Test
+    fun v1Failure_hasNoRetryTime() {
+        val dto =
+            json.decodeFromString<MessageDto>(
+                """
+                {"info":{"id":"m1","role":"assistant","time":{"created":1,"completed":2},
+                  "error":{"name":"APIError","data":{"message":"Rate limited","statusCode":429,"isRetryable":true}}},
+                 "parts":[]}
+                """.trimIndent(),
+            )
+        val failure = adapter.toMessage(dto).failure
+        assertEquals("HTTP 429 · Rate limited", failure?.line())
+        assertNull(failure?.retryAfterMs)
+        assertNull(failure?.recordedAtEpochMs)
+        assertNull(failure?.retryAtEpochMs())
+    }
+
+    @Test
     fun projectV2_hidesAbortAndProjectsFailedIdleAndCompaction() {
         val dtos =
             json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
@@ -1525,9 +1690,339 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun projectV2_userSkillAndFile_keepsArgumentsAndSkillRefWithoutSkillBody() {
+        val message =
+            projectV2(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"prototype me a better list item",
+                    "files":[{"name":"16136.png","mime":"image/png","uri":"data:image/png;base64,YQ=="}],
+                    "skills":[{
+                      "id":"publish-prototype",
+                      "name":"publish-prototype",
+                      "text":"SKILL BODY should stay off the transcript"
+                    }]
+                  }
+                ]
+                """,
+            ).single()
+
+        assertEquals("prototype me a better list item", message.text)
+        assertFalse(message.text.contains("SKILL BODY"))
+        assertFalse(message.parts.any { it is MessagePart.Text && it.text.contains("SKILL BODY") })
+        assertEquals(
+            listOf(PromptSkill(id = "publish-prototype", name = "publish-prototype")),
+            message.promptSkills,
+        )
+        assertEquals(1, message.parts.filterIsInstance<MessagePart.File>().size)
+    }
+
+    @Test
     fun mergeInbox_emptyInboxIsNoOp() {
         val messages = listOf(Message(id = "msg-1", role = MessageRole.User, text = "Hello"))
         assertEquals(messages, adapter.mergeInbox(messages, emptyList()))
+    }
+
+    // MARK: v2 timeline notices
+
+    @Test
+    fun toV2PromptRequest_namesUploadedFilesInTextAndMetadata_andKeepsThemOutOfFiles() {
+        val uploaded =
+            Attachment(
+                id = "u1",
+                filename = "data.zip",
+                mime = "application/zip",
+                kind = AttachmentKind.File,
+                dataUrl = "",
+                byteCount = 50_000_000,
+                localPath = "/tmp/staged/data.zip",
+                upload = AttachmentUpload.Uploaded("/srv/tmp/uploads/abc/data.zip"),
+            )
+        val inline =
+            Attachment(
+                id = "i1",
+                filename = "shot.png",
+                mime = "image/png",
+                kind = AttachmentKind.Image,
+                dataUrl = "data:image/png;base64,AA==",
+                byteCount = 1,
+            )
+
+        val body = adapter.toV2PromptRequest(PromptSendOptions(text = "look", attachments = listOf(inline, uploaded)))
+
+        assertEquals("look\nAttached file: `/srv/tmp/uploads/abc/data.zip`", body.text)
+        assertEquals(listOf("shot.png"), body.files?.map { it.name })
+        assertEquals(
+            """{"attachments":[{"name":"data.zip","mime":"application/zip","path":"/srv/tmp/uploads/abc/data.zip"}]}""",
+            body.metadata.toString(),
+        )
+    }
+
+    @Test
+    fun toV2PromptRequest_withoutUploadsHasNoMetadataAndKeepsTheText() {
+        val body = adapter.toV2PromptRequest(PromptSendOptions(text = "plain"))
+
+        assertEquals("plain", body.text)
+        assertEquals(null, body.metadata)
+    }
+
+    @Test
+    fun projectV2_userMetadataAttachmentsBecomeFilePartsAndDropTheAttachedFileLines() {
+        val message =
+            projectV2(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"look\nAttached file: `/srv/tmp/uploads/abc/data.zip`\nAttached file: `/srv/tmp/uploads/def/shot.png`",
+                    "metadata":{"attachments":[
+                      {"name":"data.zip","mime":"application/zip","path":"/srv/tmp/uploads/abc/data.zip"},
+                      {"name":"shot.png","mime":"image/png","path":"/srv/tmp/uploads/def/shot.png"}
+                    ]},
+                    "time":{"created":1}
+                  }
+                ]
+                """,
+            ).single()
+
+        assertEquals("look", message.text)
+        val files = message.parts.filterIsInstance<MessagePart.File>()
+        assertEquals(listOf(AttachmentKind.File, AttachmentKind.Image), files.map { it.kind })
+        assertEquals(listOf("/srv/tmp/uploads/abc/data.zip", "/srv/tmp/uploads/def/shot.png"), files.map { it.serverPath })
+        assertEquals(listOf("data.zip", "shot.png"), files.map { it.filename })
+    }
+
+    @Test
+    fun projectV2_keepsATypedAttachedFileLineWithoutMatchingMetadata() {
+        val typed = "see Attached file: `/srv/tmp/uploads/u1/data.zip`"
+        val plain = projectV2("""[{"id":"m1","type":"user","text":"$typed","time":{"created":1}}]""").single()
+        assertEquals(typed, plain.text)
+
+        val other =
+            projectV2(
+                """
+                [{"id":"m2","type":"user","text":"Attached file: `/typed/by/user.txt`\nAttached file: `/srv/real.zip`",
+                  "metadata":{"attachments":[{"name":"real.zip","mime":"application/zip","path":"/srv/real.zip"}]},
+                  "time":{"created":1}}]
+                """,
+            ).single()
+        assertEquals("Attached file: `/typed/by/user.txt`", other.text)
+    }
+
+    @Test
+    fun projectV2_attachmentOnlyUploadLeavesNoTextPart() {
+        val message =
+            projectV2(
+                """
+                [{"id":"m","type":"user","text":"Attached file: `/t/a.bin`",
+                  "metadata":{"attachments":[{"name":"a.bin","mime":"application/octet-stream","path":"/t/a.bin"}]},
+                  "time":{"created":1}}]
+                """,
+            ).single()
+
+        assertEquals(emptyList<MessagePart.Text>(), message.parts.filterIsInstance<MessagePart.Text>())
+        assertEquals(1, message.parts.filterIsInstance<MessagePart.File>().size)
+    }
+
+    private fun projectV2(body: String): List<Message> =
+        adapter.projectV2(json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(body.trimIndent()))
+
+    private fun Message.notice(): TimelineNotice = parts.filterIsInstance<MessagePart.Notice>().single().notice
+
+    @Test
+    fun projectV2_projectsEveryNoticeKindInOrderAsItsOwnRow() {
+        val messages =
+            projectV2(
+                """
+                [
+                  {"id":"msg_moved","type":"location-switched","location":{"directory":"/repo/.worktrees/feat"},
+                   "projectID":"prj_1","previous":{"location":{"directory":"/repo"},"projectID":"prj_1"},
+                   "time":{"created":1}},
+                  {"id":"msg_agent","type":"agent-switched","agent":"plan","previous":"build","time":{"created":2}},
+                  {"id":"msg_model","type":"model-switched","model":{"id":"gpt-5","providerID":"openai"},
+                   "previous":{"id":"claude","providerID":"anthropic"},"time":{"created":3}},
+                  {"id":"msg_instr","type":"system","text":"<model-facing>","description":"Instructions updated: AGENTS.md, CLAUDE.md",
+                   "metadata":{"notice":"instructions","instructionSources":["AGENTS.md","CLAUDE.md"]},"time":{"created":4}},
+                  {"id":"msg_restart","type":"synthetic","text":"Continue the turn.","metadata":{"notice":"restart"},
+                   "time":{"created":5}},
+                  {"id":"msg_user","type":"user","text":"Go","time":{"created":6}}
+                ]
+                """,
+            )
+
+        assertEquals(
+            listOf("msg_moved", "msg_agent", "msg_model", "msg_instr", "msg_restart", "msg_user"),
+            messages.map { it.id },
+        )
+        val notices = messages.dropLast(1)
+        notices.forEach { message ->
+            assertEquals(MessageRole.Notice, message.role)
+            assertEquals("", message.text)
+            assertNull(message.mode)
+            assertNull(message.model)
+            assertEquals(MessageContextEstimate(), message.contextEstimate)
+            assertEquals(message.id, message.parts.single().partId())
+        }
+        assertEquals(TimelineNotice.Moved("/repo/.worktrees/feat", previousDirectory = "/repo"), notices[0].notice())
+        assertEquals(TimelineNotice.AgentChanged(agent = "plan", previous = "build"), notices[1].notice())
+        assertEquals(
+            TimelineNotice.ModelChanged(
+                model = NoticeModelRef(providerId = "openai", modelId = "gpt-5"),
+                previous = NoticeModelRef(providerId = "anthropic", modelId = "claude"),
+            ),
+            notices[2].notice(),
+        )
+        assertEquals(TimelineNotice.InstructionsUpdated(listOf("AGENTS.md", "CLAUDE.md")), notices[3].notice())
+        assertEquals(TimelineNotice.Restart, notices[4].notice())
+        assertEquals(1L, notices[0].sentAtEpochMs)
+    }
+
+    @Test
+    fun projectV2_noticesKeepTheRunningAgentAndModelForLaterPrompts() {
+        val messages =
+            projectV2(
+                """
+                [
+                  {"id":"msg_agent","type":"agent-switched","agent":"plan","time":{"created":1}},
+                  {"id":"msg_model","type":"model-switched","model":{"id":"gpt-5","providerID":"openai","variant":"high"},
+                   "time":{"created":2}},
+                  {"id":"msg_moved","type":"location-switched","location":{"directory":"/repo/b"},"time":{"created":3}},
+                  {"id":"msg_user","type":"user","text":"Go","time":{"created":4}}
+                ]
+                """,
+            )
+
+        val user = messages.single { it.role == MessageRole.User }
+        assertEquals("plan", user.mode)
+        assertEquals("gpt-5", user.modelId)
+        assertEquals("high", user.variant)
+    }
+
+    @Test
+    fun projectV2_agentNoticeWithoutPrevious() {
+        val notice =
+            projectV2("""[{"id":"msg_a","type":"agent-switched","agent":"build","time":{"created":1}}]""")
+                .single()
+                .notice()
+
+        assertEquals(TimelineNotice.AgentChanged(agent = "build", previous = null), notice)
+    }
+
+    @Test
+    fun projectV2_modelNoticeTellsAVariantOnlyChangeFromAModelChange() {
+        val messages =
+            projectV2(
+                """
+                [
+                  {"id":"msg_v","type":"model-switched","model":{"id":"gpt-5","providerID":"openai","variant":"high"},
+                   "previous":{"id":"gpt-5","providerID":"openai"},"time":{"created":1}},
+                  {"id":"msg_m","type":"model-switched","model":{"id":"gpt-5","providerID":"openai"},
+                   "previous":{"id":"gpt-5","providerID":"azure"},"time":{"created":2}},
+                  {"id":"msg_n","type":"model-switched","model":{"id":"gpt-5","providerID":"openai"},"time":{"created":3}}
+                ]
+                """,
+            )
+
+        val notices = messages.map { it.notice() as TimelineNotice.ModelChanged }
+        assertTrue(notices[0].isVariantOnly)
+        assertEquals("high", notices[0].model.variant)
+        assertFalse(notices[1].isVariantOnly)
+        assertFalse(notices[2].isVariantOnly)
+    }
+
+    @Test
+    fun projectV2_systemNoticeReadsSourcesFromMetadataThenDescription() {
+        val messages =
+            projectV2(
+                """
+                [
+                  {"id":"msg_meta","type":"system","text":"model text","description":"Instructions updated: A.md",
+                   "metadata":{"notice":"instructions","instructionSources":["AGENTS.md","docs/RULES.md"]},"time":{"created":1}},
+                  {"id":"msg_desc","type":"system","text":"model text","description":"Instructions updated: AGENTS.md, CLAUDE.md",
+                   "time":{"created":2}},
+                  {"id":"msg_other","type":"system","text":"model text","description":"Tools changed","time":{"created":3}},
+                  {"id":"msg_bare","type":"system","text":"model text","time":{"created":4}}
+                ]
+                """,
+            )
+
+        assertEquals(
+            listOf(
+                TimelineNotice.InstructionsUpdated(listOf("AGENTS.md", "docs/RULES.md")),
+                TimelineNotice.InstructionsUpdated(listOf("AGENTS.md", "CLAUDE.md")),
+                TimelineNotice.SystemNote("Tools changed"),
+                TimelineNotice.InstructionsUpdated(emptyList()),
+            ),
+            messages.map { it.notice() },
+        )
+        // The model-facing text is never shown.
+        assertTrue(messages.none { it.text.contains("model text") })
+    }
+
+    @Test
+    fun projectV2_restartSyntheticIsANoticeWhileOtherSyntheticStaysHiddenUserText() {
+        val messages =
+            projectV2(
+                """
+                [
+                  {"id":"msg_r","type":"synthetic","text":"Resume.","description":"Continuing after restart","time":{"created":1}},
+                  {"id":"msg_s","type":"synthetic","text":"Subagent finished.","description":"Subagent done",
+                   "metadata":{"source":"subagent"},"time":{"created":2}}
+                ]
+                """,
+            )
+
+        assertEquals(MessageRole.Notice, messages[0].role)
+        assertEquals(TimelineNotice.Restart, messages[0].notice())
+        assertEquals(MessageRole.User, messages[1].role)
+        val text = messages[1].parts.single() as MessagePart.Text
+        assertEquals("Subagent done", text.text)
+        assertTrue(text.isSynthetic)
+    }
+
+    @Test
+    fun toMessage_decodesTheLiveNoticeProjection() {
+        val dto =
+            json.decodeFromString<MessageDto>(
+                """
+                {
+                  "info": {"id": "msg_n", "role": "notice", "time": {"created": 5}},
+                  "parts": [
+                    {"id": "msg_n", "messageID": "msg_n", "type": "notice",
+                     "notice": {"kind": "agent", "agent": "plan", "previous": "build"}}
+                  ]
+                }
+                """.trimIndent(),
+            )
+
+        val message = adapter.toMessage(dto)
+
+        assertEquals(MessageRole.Notice, message.role)
+        assertEquals("", message.text)
+        assertEquals(TimelineNotice.AgentChanged(agent = "plan", previous = "build"), message.notice())
+    }
+
+    @Test
+    fun timelineNoticeCodec_roundTripsEveryKind() {
+        val notices =
+            listOf(
+                TimelineNotice.Moved("/repo/b", previousDirectory = "/repo/a"),
+                TimelineNotice.Moved("/repo/b"),
+                TimelineNotice.AgentChanged("plan", previous = "build"),
+                TimelineNotice.ModelChanged(
+                    model = NoticeModelRef("openai", "gpt-5", variant = "high"),
+                    previous = NoticeModelRef("openai", "gpt-5"),
+                ),
+                TimelineNotice.InstructionsUpdated(listOf("AGENTS.md")),
+                TimelineNotice.SystemNote("Tools changed"),
+                TimelineNotice.Restart,
+            )
+
+        notices.forEach { assertEquals(it, TimelineNoticeCodec.decode(TimelineNoticeCodec.encode(it))) }
     }
 }
 
@@ -1537,5 +2032,6 @@ private fun MessagePart.partId(): String? =
         is MessagePart.Tool -> id
         is MessagePart.File -> id
         is MessagePart.Compaction -> id
+        is MessagePart.Notice -> id
         is MessagePart.Reasoning -> id
     }

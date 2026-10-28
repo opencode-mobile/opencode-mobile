@@ -11,6 +11,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case check = "lucide_check"
     case chevronRight = "lucide_chevron_right"
     case keyboardArrowDown = "lucide_keyboard_arrow_down"
+    case dragHandle = "lucide_drag_handle"
     case close = "lucide_close"
     case contentCopy = "lucide_content_copy"
     case collapseContent = "lucide_collapse_content"
@@ -18,6 +19,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case description = "lucide_description"
     case edit = "lucide_edit"
     case expandContent = "lucide_expand_content"
+    case agent = "lucide_agent"
     case folder = "lucide_folder"
     case createNewFolder = "lucide_create_new_folder"
     case folderCheck = "lucide_folder_check"
@@ -44,6 +46,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case mic = "lucide_mic"
     case plug = "lucide_plug"
     case code = "lucide_code"
+    case lock = "lucide_lock"
 
     var accessibilityIdentifier: String { rawValue }
 }

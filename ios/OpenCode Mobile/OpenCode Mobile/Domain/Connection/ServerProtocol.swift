@@ -22,6 +22,9 @@ nonisolated enum ServerProtocol: String, Sendable, Equatable, Hashable {
 /// that fallback must not turn OpenCode-only controls back on.
 ///
 /// Screen Models read these flags instead of branching on protocol themselves.
+///
+/// v2 session archive, per-turn diff and side questions depend on the server release, not the protocol:
+/// pass `v2Features` from the server's API contract probe.
 nonisolated struct ServerCapabilities: Sendable, Equatable {
     let supportsSessionMessageDiff: Bool
     let supportsSessionArchive: Bool
@@ -33,6 +36,16 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
     var supportsPendingPrompts: Bool = false
     /// Server-tracked unread state (`time.idle` / `time.viewed`, `POST /view`, `session.viewed`).
     var supportsSessionViewed: Bool = false
+    /// `POST /api/session/{id}/move` (v2). v1 has no move endpoint.
+    var supportsSessionMove: Bool = false
+    /// The command route keeps a client message id (v1 `messageID`); v2 `…/command` takes none.
+    var commandKeepsClientMessageID: Bool = false
+    /// `/btw` side questions: `POST /api/session/{id}/generate` answers from the session's context
+    /// without adding to it (v2 releases that declare it). v1 has no equivalent.
+    var supportsSideQuestion: Bool = false
+    /// Files can stream to the server (`POST /api/experimental/fs/write`, #644). Off unless the
+    /// server's API contract still matches what the app sends.
+    var supportsStreamedUpload: Bool = false
     var supportsTerminal: Bool = true
     var supportsRevert: Bool = true
     var supportsMentions: Bool = true
@@ -59,22 +72,27 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
         return capabilities
     }
 
-    static func forProtocol(_ serverProtocol: ServerProtocol) -> ServerCapabilities {
+    static func forProtocol(_ serverProtocol: ServerProtocol, v2Features: V2ServerFeatures = V2ServerFeatures()) -> ServerCapabilities {
         switch serverProtocol {
         case .v1:
             return ServerCapabilities(
                 supportsSessionMessageDiff: true,
                 supportsSessionArchive: true,
                 supportsFollowUpDelivery: false,
-                supportsSessionViewed: false
+                supportsSessionViewed: false,
+                supportsSessionMove: false,
+                commandKeepsClientMessageID: true
             )
         case .v2:
             return ServerCapabilities(
-                supportsSessionMessageDiff: false,
-                supportsSessionArchive: false,
+                supportsSessionMessageDiff: v2Features.sessionTurnDiff,
+                supportsSessionArchive: v2Features.sessionArchive,
                 supportsFollowUpDelivery: true,
                 supportsPendingPrompts: true,
-                supportsSessionViewed: true
+                supportsSessionViewed: true,
+                supportsSessionMove: true,
+                supportsSideQuestion: v2Features.sessionGenerate,
+                supportsStreamedUpload: v2Features.streamedUpload
             )
         }
     }

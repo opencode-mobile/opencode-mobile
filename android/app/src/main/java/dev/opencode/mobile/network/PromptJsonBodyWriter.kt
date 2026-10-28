@@ -3,6 +3,7 @@ package dev.opencode.mobile.network
 import dev.opencode.mobile.data.remote.dto.RunCommandRequestDto
 import dev.opencode.mobile.data.remote.dto.SendMessageRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PromptRequestDto
+import dev.opencode.mobile.data.remote.dto.V2PromptSkillDto
 import dev.opencode.mobile.data.remote.dto.V2RunCommandRequestDto
 import dev.opencode.mobile.domain.message.Attachment
 import java.io.File
@@ -102,6 +103,10 @@ object PromptJsonBodyWriter {
                 writer.key("agent")
                 writer.writeString(it)
             }
+            body.messageId?.let {
+                writer.key("messageID")
+                writer.writeString(it)
+            }
             writer.endObject()
         }
 
@@ -112,6 +117,10 @@ object PromptJsonBodyWriter {
     ): File =
         write(directory) { writer ->
             writer.beginObject()
+            body.id?.let {
+                writer.key("id")
+                writer.writeString(it)
+            }
             writer.key("text")
             writer.writeString(body.text)
             val mentionFiles = body.fileMentions.orEmpty()
@@ -182,16 +191,10 @@ object PromptJsonBodyWriter {
                 }
                 writer.endArray()
             }
-            body.skills?.takeIf { it.isNotEmpty() }?.let { skills ->
-                writer.key("skills")
-                writer.beginArray()
-                skills.forEach { skill ->
-                    writer.beginObject()
-                    writer.key("id")
-                    writer.writeString(skill.id)
-                    writer.endObject()
-                }
-                writer.endArray()
+            writeSkills(body.skills, writer)
+            body.metadata?.let {
+                writer.key("metadata")
+                writer.writeRawJson(it.toString())
             }
             writer.key("delivery")
             writer.writeString(body.delivery)
@@ -240,6 +243,10 @@ object PromptJsonBodyWriter {
                 }
                 writer.endArray()
             }
+            body.messageId?.let {
+                writer.key("messageID")
+                writer.writeString(it)
+            }
             writer.endObject()
         }
 
@@ -269,10 +276,44 @@ object PromptJsonBodyWriter {
                 }
                 writer.endArray()
             }
+            writeSkills(body.skills, writer)
             writer.key("delivery")
             writer.writeString(body.delivery)
             writer.endObject()
         }
+
+    private fun writeSkills(
+        skills: List<V2PromptSkillDto>?,
+        writer: JsonStreamWriter,
+    ) {
+        val present = skills?.takeIf { it.isNotEmpty() } ?: return
+        writer.key("skills")
+        writer.beginArray()
+        present.forEach { skill ->
+            writer.beginObject()
+            writer.key("id")
+            writer.writeString(skill.id)
+            skill.mention?.let { mention ->
+                writer.key("mention")
+                writer.beginObject()
+                mention.start?.let {
+                    writer.key("start")
+                    writer.writeInt(it)
+                }
+                mention.end?.let {
+                    writer.key("end")
+                    writer.writeInt(it)
+                }
+                mention.text?.let {
+                    writer.key("text")
+                    writer.writeString(it)
+                }
+                writer.endObject()
+            }
+            writer.endObject()
+        }
+        writer.endArray()
+    }
 
     private fun write(
         directory: File,

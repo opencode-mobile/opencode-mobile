@@ -15,12 +15,28 @@ enum OpenCodeReleaseObservability {
         #endif
     }
 
+    /// In-app feedback submitter (#721). Release with Firebase configured sends
+    /// over REST with an App Attest App Check token; Debug, and a Release build
+    /// without `GoogleService-Info.plist`, hand the report to the share sheet.
+    static func makeFeedbackSubmitter() -> any FeedbackSubmitter {
+        #if DEBUG
+        return ShareFeedbackSubmitter()
+        #else
+        return ReleaseFirebaseBootstrap.makeFeedbackSubmitter() ?? ShareFeedbackSubmitter()
+        #endif
+    }
+
     static func isProductAnalyticsConsented() -> Bool {
         AnalyticsConsentPreferences.shared.productAnalyticsConsented
     }
 
+    /// One switch for everything that leaves the phone through Firebase: product events,
+    /// automatic Analytics breadcrumbs and Crashlytics reports (#755).
     static func setProductAnalyticsConsented(_ value: Bool) {
         AnalyticsConsentPreferences.shared.setProductAnalyticsConsented(value)
+        #if !DEBUG
+        ReleaseFirebaseBootstrap.applyCollectionConsent(value)
+        #endif
     }
 
     /// Logs a product / custom Analytics event when consent is on (Release only).
@@ -41,6 +57,7 @@ enum OpenCodeReleaseObservability {
 
 #if !DEBUG
 import FirebaseAnalytics
+import FirebaseAppCheck
 import FirebaseCore
 import FirebaseCrashlytics
 import FirebaseRemoteConfig
@@ -53,8 +70,13 @@ private enum ReleaseFirebaseBootstrap {
             return
         }
         if FirebaseApp.app() == nil {
+            // App Check must have its provider before Firebase is configured.
+            AppCheck.setAppCheckProviderFactory(ReleaseAppAttestProviderFactory())
             FirebaseApp.configure()
         }
+        // Collection is off in the plist; the consent setting turns it on (or keeps it off)
+        // before anything else runs, so an opted-out user sends no crash or analytics data.
+        applyCollectionConsent(OpenCodeReleaseObservability.isProductAnalyticsConsented())
         activateFeatureFlags()
 
         let verificationEnabled = CrashlyticsVerificationPolicy.isEnabled(in: .main)
@@ -81,6 +103,36 @@ private enum ReleaseFirebaseBootstrap {
         Crashlytics.crashlytics().record(error: error)
         defaults.set(true, forKey: markerKey)
         defaults.synchronize()
+    }
+
+    static func applyCollectionConsent(_ consented: Bool) {
+        guard FirebaseApp.app() != nil else { return }
+        let enabled = ReleaseCollectionPolicy.collectionEnabled(consented: consented)
+        Crashlytics.crashlytics().setCrashlyticsCollectionEnabled(enabled)
+        Analytics.setAnalyticsCollectionEnabled(enabled)
+    }
+
+    /// REST feedback submitter configured from the `FirebaseApp` options, or
+    /// nil when Firebase is not configured.
+    static func makeFeedbackSubmitter() -> (any FeedbackSubmitter)? {
+        guard let options = FirebaseApp.app()?.options,
+              let projectID = options.projectID, !projectID.isEmpty,
+              let storageBucket = options.storageBucket, !storageBucket.isEmpty,
+              let apiKey = options.apiKey, !apiKey.isEmpty
+        else {
+            return nil
+        }
+        return FirebaseFeedbackRESTSubmitter(
+            configuration: FirebaseFeedbackConfiguration(
+                apiKey: apiKey,
+                projectID: projectID,
+                storageBucket: storageBucket
+            ),
+            appCheckToken: {
+                try await AppCheck.appCheck().token(forcingRefresh: false).token
+            },
+            tokenStore: KeychainFeedbackRefreshTokenStore()
+        )
     }
 
     static func logProductEvent(name: String, parameters: [String: String]) {
@@ -111,6 +163,13 @@ private enum ReleaseFirebaseBootstrap {
             }
         }
         return values
+    }
+}
+
+/// App Attest only: the deployment target is iOS 17.5, so no DeviceCheck fallback.
+private final class ReleaseAppAttestProviderFactory: NSObject, AppCheckProviderFactory {
+    func createProvider(with app: FirebaseApp) -> AppCheckProvider? {
+        AppAttestProvider(app: app)
     }
 }
 #endif

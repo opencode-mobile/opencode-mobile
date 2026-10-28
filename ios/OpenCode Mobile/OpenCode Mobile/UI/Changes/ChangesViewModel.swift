@@ -112,6 +112,7 @@ final class ChangesViewModel {
     private let repository: SessionRepository
     private let capabilitiesProvider: () -> ServerCapabilities
     private let lastTurnReviewChangesStore: LastTurnReviewChangesStore
+    private let foregroundEventStream: (any ForegroundEventStream)?
     private var availableSources: [ChangeSource]
     private var capabilities: ServerCapabilities { capabilitiesProvider() }
     private var filter = ""
@@ -132,7 +133,8 @@ final class ChangesViewModel {
         repository: SessionRepository,
         capabilities: ServerCapabilities = .forProtocol(.v1),
         capabilitiesProvider: (() -> ServerCapabilities)? = nil,
-        lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil
+        lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil,
+        foregroundEventStream: (any ForegroundEventStream)? = nil
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
@@ -141,6 +143,7 @@ final class ChangesViewModel {
         let provider = capabilitiesProvider ?? { capabilities }
         self.capabilitiesProvider = provider
         self.lastTurnReviewChangesStore = lastTurnReviewChangesStore ?? LastTurnReviewChangesStore()
+        self.foregroundEventStream = foregroundEventStream
         let sources = Self.capabilitySources(provider())
         self.availableSources = sources
         state = ChangesState(
@@ -157,6 +160,7 @@ final class ChangesViewModel {
         repository = PreviewChangesRepository(files: files)
         capabilitiesProvider = { .forProtocol(.v1) }
         lastTurnReviewChangesStore = LastTurnReviewChangesStore()
+        foregroundEventStream = nil
         let sources = Self.capabilitySources(.forProtocol(.v1))
         availableSources = sources
         state = ChangesState(selectedSource: initialSource, availableSources: sources)
@@ -166,6 +170,31 @@ final class ChangesViewModel {
     func load() async { await load(refreshAvailability: true) }
     func retry() async { await load(refreshAvailability: true) }
     func refresh() async { await load(refreshAvailability: true, preserveContent: true) }
+
+    /// Neither protocol pushes a diff for the finished turn, so Last turn refetches when its
+    /// session goes idle. A turn still running compares against the working copy until then.
+    /// Runs until the calling task is cancelled.
+    func observeSessionIdle() async {
+        guard let foregroundEventStream else { return }
+        let sessionID = sessionID
+        // Filter off the main actor: the stream also carries every streaming delta.
+        let idle = AsyncStream<Void> { continuation in
+            let task = Task.detached {
+                for await event in foregroundEventStream.events()
+                    where event.type == Self.sessionIdleEvent && event.sessionID == sessionID {
+                    continuation.yield()
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+        for await _ in idle {
+            guard messageID != nil, state.selectedSource == .lastTurn else { continue }
+            await refresh()
+        }
+    }
+
+    private nonisolated static let sessionIdleEvent = "session.idle"
 
     func selectSource(_ source: ChangeSource) async {
         guard source != state.selectedSource, availableSources.contains(source) else { return }
@@ -269,11 +298,11 @@ final class ChangesViewModel {
                     phase: restoredPhase,
                     selectedSource: requestedSource,
                     availableSources: availableSources,
-                    refreshError: error.localizedDescription
+                    refreshError: TurnDiffUnavailable.userFacing(error) ?? error.localizedDescription
                 )
             } else {
                 state = ChangesState(
-                    phase: .error(error.localizedDescription),
+                    phase: .error(TurnDiffUnavailable.userFacing(error) ?? error.localizedDescription),
                     selectedSource: activeSource,
                     availableSources: availableSources
                 )

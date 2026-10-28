@@ -6,6 +6,7 @@ struct TextInputGalleryView: View {
     @State private var enabled = true
     @State private var showsError = false
     @State private var isEmpty = true
+    @State private var multiline = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -14,6 +15,7 @@ struct TextInputGalleryView: View {
                     ForEach(OpenCodeTextInputKind.allCases, id: \.self) { option in
                         OpenCodeChoiceBadge(label: label(option), selected: kind == option) {
                             kind = option
+                            if option != .text { multiline = false }
                             text = isEmpty ? "" : sampleValue(option)
                         }
                     }
@@ -26,13 +28,19 @@ struct TextInputGalleryView: View {
                     isEmpty.toggle()
                     text = isEmpty ? "" : sampleValue(kind)
                 }
+                OpenCodeChoiceBadge(label: "Multi-line", selected: multiline) {
+                    multiline.toggle()
+                    if multiline { kind = .text }
+                }
             }
             OpenCodeTextInput(
                 text: $text,
                 hint: fieldHint,
                 kind: kind,
                 enabled: enabled,
-                errorMessage: showsError ? errorMessage : nil
+                errorMessage: showsError ? errorMessage : nil,
+                minLines: multiline ? 4 : 1,
+                maxLines: multiline ? 8 : 1
             )
         }
     }

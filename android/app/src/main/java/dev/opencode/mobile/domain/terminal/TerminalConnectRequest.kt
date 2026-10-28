@@ -40,6 +40,9 @@ data class TerminalConnectRequest(
                 } else {
                     null
                 }
+            // Credentials travel only in the `Authorization` header, which both protocols accept on
+            // the upgrade request. Query strings end up in tunnel, proxy, and server access logs, so
+            // the server's `auth_token` query fallback (meant for browsers) is never used here.
             val query =
                 buildList {
                     if (isV1) {
@@ -50,8 +53,6 @@ data class TerminalConnectRequest(
                     add("cursor" to cursor)
                     if (trimmedTicket != null) {
                         add("ticket" to trimmedTicket)
-                    } else if (token != null) {
-                        add("auth_token" to token)
                     }
                 }.joinToString("&") { (name, value) ->
                     "${queryEncode(name)}=${queryEncode(value)}"

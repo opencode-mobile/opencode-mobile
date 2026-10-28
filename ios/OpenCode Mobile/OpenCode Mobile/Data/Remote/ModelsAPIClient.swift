@@ -8,15 +8,15 @@ nonisolated enum ModelsAPIError: Error {
 
 nonisolated struct ModelsAPIClient: Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
-    private let urlSession: URLSession
+    private let resolveURLSession: @Sendable () -> URLSession
     private let decoder = JSONDecoder()
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = OpenCodeURLSessions.rest
+        urlSession: URLSession? = nil
     ) {
         self.connectionProvider = connectionProvider
-        self.urlSession = urlSession
+        self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
     }
 
     func listProviders(directory: String? = nil) async throws -> ConfigProvidersResponseDTO {
@@ -68,7 +68,7 @@ nonisolated struct ModelsAPIClient: Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await urlSession.data(for: request)
+            (data, response) = try await resolveURLSession().data(for: request)
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error

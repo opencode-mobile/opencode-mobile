@@ -31,6 +31,8 @@ protocol MessagesAPI: Sendable {
     func switchSessionAgent(sessionID: String, agent: String, directory: String?) async throws
     func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws
     func listInboxV2(sessionID: String) async throws -> [V2InboxItemDTO]
+    func runShell(sessionID: String, body: V1ShellRequestDTO, directory: String?) async throws
+    func runShellV2(sessionID: String, body: V2ShellRequestDTO) async throws
 }
 
 extension MessagesAPI {
@@ -72,22 +74,26 @@ extension MessagesAPI {
     func switchSessionModel(sessionID: String, body: V2SwitchModelRequestDTO, directory: String?) async throws {}
 
     func listInboxV2(sessionID _: String) async throws -> [V2InboxItemDTO] { [] }
+
+    func runShell(sessionID _: String, body _: V1ShellRequestDTO, directory _: String?) async throws {}
+
+    func runShellV2(sessionID _: String, body _: V2ShellRequestDTO) async throws {}
 }
 
 nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
     private let connectionProvider: @Sendable () -> ServerConnection?
-    private let urlSession: URLSession
+    private let resolveURLSession: @Sendable () -> URLSession
     private let bodyUploader: DurableJSONUploader?
     private let decoder = JSONDecoder()
     private let encoder = JSONEncoder()
 
     init(
         connectionProvider: @escaping @Sendable () -> ServerConnection?,
-        urlSession: URLSession = OpenCodeURLSessions.rest,
+        urlSession: URLSession? = nil,
         bodyUploader: DurableJSONUploader? = nil
     ) {
         self.connectionProvider = connectionProvider
-        self.urlSession = urlSession
+        self.resolveURLSession = OpenCodeURLSessions.restResolver(injected: urlSession)
         self.bodyUploader = bodyUploader
     }
 
@@ -231,6 +237,23 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         try await postNoContent(path: "api/session/\(sessionID)/model", body: body, directory: nil)
     }
 
+    /// Both protocols run the command before they answer, so the request stays open for as
+    /// long as the command does. It goes through the durable uploader, like a prompt, instead
+    /// of the REST pool's 60-second resource ceiling.
+    func runShell(sessionID: String, body: V1ShellRequestDTO, directory: String? = nil) async throws {
+        try await postShell(path: "session/\(sessionID)/shell", body: body, directory: directory)
+    }
+
+    func runShellV2(sessionID: String, body: V2ShellRequestDTO) async throws {
+        try await postShell(path: "api/session/\(sessionID)/shell", body: body, directory: nil)
+    }
+
+    private func postShell<B: Encodable>(path: String, body: B, directory: String?) async throws {
+        var request = try requireConnection().authorizedRequest(path: path, method: "POST", directory: directory)
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        _ = try await sendBody(request, body: try encoder.encode(body))
+    }
+
     private func postPrompt(path: String, body: V2PromptRequestDTO, attachments: [Attachment], directory: String?) async throws {
         var request = try requireConnection().authorizedRequest(path: path, method: "POST", directory: directory)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -370,7 +393,7 @@ nonisolated struct MessagesAPIClient: MessagesAPI, Sendable {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await urlSession.data(for: request)
+            (data, response) = try await resolveURLSession().data(for: request)
         } catch {
             OpenCodeAPITrace.failure(request, error: error, startedAt: startedAt)
             throw error

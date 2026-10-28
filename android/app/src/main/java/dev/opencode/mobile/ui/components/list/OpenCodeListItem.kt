@@ -8,8 +8,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.indication
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
@@ -46,10 +48,13 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -57,7 +62,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodePillShape
@@ -82,17 +89,36 @@ private val ListItemSelectionShape = RoundedCornerShape(OpenCodeRadius.medium)
 private val ListItemVerticalPadding = 12.dp
 private val ListItemTitleSubtitleSpacing = 2.dp
 private val ListItemMetaSpacing = 4.dp
+private val SubtitleIconWidth = 1.15.em
+private val SubtitleIconHeight = 1.em
+private val ListItemTitleTagSpacing = 6.dp
 private val StatusChipShape = OpenCodePillShape
 private const val ListItemPressedScale = 0.965f
 private const val ListItemPopPeakScale = 1.035f
+
+private fun subtitleIconId(index: Int): String = "subtitle-icon-$index"
 
 enum class OpenCodeListItemStyle {
     Plain,
     Card,
 }
 
+enum class OpenCodeListItemVariant {
+    /** Title, subtitle and detail lines, with caption and status stacked at the end. */
+    Standard,
+
+    /**
+     * Two lines of fixed height: the title and caption, then a path and a coloured status label.
+     * Pairs with [StartDecorator.Tile].
+     */
+    Compact,
+}
+
 enum class OpenCodeListItemSubtitleTone {
     Secondary,
+
+    /** Quieter than [Secondary], for the detail line under the subtitle. */
+    Tertiary,
     Addition,
     Deletion,
 }
@@ -100,6 +126,8 @@ enum class OpenCodeListItemSubtitleTone {
 data class OpenCodeListItemSubtitleSegment(
     val text: String,
     val tone: OpenCodeListItemSubtitleTone,
+    /** Small mark drawn before [text] in the segment's color (e.g. a branch). */
+    val icon: ImageVector? = null,
 )
 
 enum class OpenCodeListItemStatusTone {
@@ -134,8 +162,12 @@ fun OpenCodeListItem(
     title: String,
     subtitle: String? = null,
     subtitleSegments: List<OpenCodeListItemSubtitleSegment>? = null,
+    /** Optional third line under the subtitle, such as a branch. Truncates on its own. */
+    detailSegments: List<OpenCodeListItemSubtitleSegment>? = null,
     status: OpenCodeListItemStatus? = null,
     caption: String? = null,
+    /** Small tag after the title, such as "git". The title truncates; the tag never does. */
+    titleTag: String? = null,
     selected: Boolean = false,
     enabled: Boolean = true,
     style: OpenCodeListItemStyle = OpenCodeListItemStyle.Plain,
@@ -145,6 +177,12 @@ fun OpenCodeListItem(
     onLongPress: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     trailing: (@Composable () -> Unit)? = null,
+    /** [OpenCodeListItemVariant.Compact] draws two fixed lines: title and caption, then [path] and status. */
+    variant: OpenCodeListItemVariant = OpenCodeListItemVariant.Standard,
+    /** Compact line 2: `project / worktree`. Falls back to [subtitle]. */
+    path: OpenCodeListItemPath? = null,
+    /** Compact title in a heavier weight, for finished work not opened yet. */
+    titleEmphasized: Boolean = false,
 ) {
     require(subtitle == null || subtitleSegments == null) {
         "List Item accepts either a plain subtitle or semantic segments"
@@ -270,92 +308,100 @@ fun OpenCodeListItem(
                             .indication(interactionSource, ripple(bounded = true)),
                 )
             }
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = ListItemVerticalPadding),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(ListItemTitleSubtitleSpacing),
+            if (variant == OpenCodeListItemVariant.Compact) {
+                CompactListItemContent(
+                    title = title,
+                    titleEmphasized = titleEmphasized,
+                    path = path,
+                    subtitle = subtitle,
+                    status = status,
+                    caption = caption,
+                    startDecorator = startDecorator,
+                    enabled = enabled,
+                )
+            } else {
+                Row(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = ListItemVerticalPadding),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text(
-                        text = title,
-                        color = if (enabled) textStrong else textWeaker,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (subtitleSegments != null) {
-                        val disabledColor = textWeaker
-                        Text(
-                            text =
-                                buildAnnotatedString {
-                                    subtitleSegments.forEach { segment ->
-                                        val color =
-                                            if (!enabled) {
-                                                disabledColor
-                                            } else {
-                                                when (segment.tone) {
-                                                    OpenCodeListItemSubtitleTone.Secondary -> textBase
-                                                    OpenCodeListItemSubtitleTone.Addition -> openCodeColor("diff-add")
-                                                    OpenCodeListItemSubtitleTone.Deletion -> openCodeColor("diff-delete")
-                                                }
-                                            }
-                                        withStyle(SpanStyle(color = color)) { append(segment.text) }
-                                    }
-                                },
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    } else if (subtitle != null) {
-                        Text(
-                            text = subtitle,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = if (enabled) textBase else textWeaker,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                    ListItemStartDecoration(decorator = startDecorator, enabled = enabled)
+
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(ListItemTitleSubtitleSpacing),
+                    ) {
+                        val titleText = @Composable { titleModifier: Modifier ->
+                            Text(
+                                text = title,
+                                color = if (enabled) textStrong else textWeaker,
+                                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = titleModifier,
+                            )
+                        }
+                        if (titleTag.isNullOrBlank()) {
+                            titleText(Modifier)
+                        } else {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(ListItemTitleTagSpacing),
+                            ) {
+                                titleText(Modifier.weight(1f, fill = false))
+                                OpenCodeTag(title = titleTag, size = OpenCodeTagSize.Small)
+                            }
+                        }
+                        if (subtitleSegments != null) {
+                            ListItemSegmentsText(subtitleSegments, enabled)
+                        } else if (subtitle != null) {
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (enabled) textBase else textWeaker,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        if (!detailSegments.isNullOrEmpty()) {
+                            ListItemSegmentsText(detailSegments, enabled)
+                        }
                     }
-                }
 
-                if (hasMeta) {
-                    ListItemMetaColumn(
-                        status = status,
-                        caption = caption,
-                        enabled = enabled,
-                        textBase = textBase,
-                        textWeaker = textWeaker,
-                        surfaceRaised = surfaceRaised,
-                    )
-                }
-
-                if (trailing != null) {
-                    Box(contentAlignment = Alignment.Center) { trailing() }
-                }
-
-                when (val itemAccessory = accessory) {
-                    null -> Unit
-                    OpenCodeListItemAccessory.Disclosure -> {
-                        Icon(
-                            imageVector = OpenCodeIcons.ChevronRight,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = if (enabled) openCodeColor("text-base") else openCodeColor("text-weaker"),
-                        )
-                    }
-                    is OpenCodeListItemAccessory.Toggle -> {
-                        Switch(
-                            checked = itemAccessory.checked,
-                            onCheckedChange = itemAccessory.onCheckedChange,
+                    if (hasMeta) {
+                        ListItemMetaColumn(
+                            status = status,
+                            caption = caption,
                             enabled = enabled,
+                            textBase = textBase,
+                            textWeaker = textWeaker,
                         )
+                    }
+
+                    if (trailing != null) {
+                        Box(contentAlignment = Alignment.Center) { trailing() }
+                    }
+
+                    when (val itemAccessory = accessory) {
+                        null -> Unit
+                        OpenCodeListItemAccessory.Disclosure -> {
+                            Icon(
+                                imageVector = OpenCodeIcons.ChevronRight,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp),
+                                tint = if (enabled) openCodeColor("text-base") else openCodeColor("text-weaker"),
+                            )
+                        }
+                        is OpenCodeListItemAccessory.Toggle -> {
+                            Switch(
+                                checked = itemAccessory.checked,
+                                onCheckedChange = itemAccessory.onCheckedChange,
+                                enabled = enabled,
+                            )
+                        }
                     }
                 }
             }
@@ -370,7 +416,6 @@ private fun ListItemMetaColumn(
     enabled: Boolean,
     textBase: Color,
     textWeaker: Color,
-    surfaceRaised: Color,
 ) {
     Column(
         modifier = Modifier.width(IntrinsicSize.Max),
@@ -388,29 +433,35 @@ private fun ListItemMetaColumn(
             )
         }
         if (status != null) {
-            val foreground = if (enabled) status.tone.foreground() else textWeaker
-            val background = if (enabled) status.tone.background() else surfaceRaised
-            Text(
-                text = status.text,
-                color = foreground,
-                textAlign = TextAlign.Center,
-                style =
-                    MaterialTheme.typography.labelSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                maxLines = 1,
-                modifier =
-                    Modifier
-                        .clip(StatusChipShape)
-                        .background(background)
-                        .padding(horizontal = 8.dp, vertical = 3.dp),
-            )
+            ListItemStatusPill(status = status, enabled = enabled)
         }
     }
 }
 
+/** Status chip. */
 @Composable
-private fun OpenCodeListItemStatusTone.foreground(): Color =
+internal fun ListItemStatusPill(
+    status: OpenCodeListItemStatus,
+    enabled: Boolean,
+) {
+    val foreground = if (enabled) status.tone.foreground() else openCodeColor("text-weaker")
+    val background = if (enabled) status.tone.background() else openCodeColor("surface-raised-base")
+    Text(
+        text = status.text,
+        color = foreground,
+        textAlign = TextAlign.Center,
+        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+        maxLines = 1,
+        modifier =
+            Modifier
+                .clip(StatusChipShape)
+                .background(background)
+                .padding(horizontal = 8.dp, vertical = 3.dp),
+    )
+}
+
+@Composable
+internal fun OpenCodeListItemStatusTone.foreground(): Color =
     when (this) {
         OpenCodeListItemStatusTone.Interactive -> openCodeColor("interactive")
         OpenCodeListItemStatusTone.Success -> openCodeColor("success")
@@ -421,7 +472,7 @@ private fun OpenCodeListItemStatusTone.foreground(): Color =
     }
 
 @Composable
-private fun OpenCodeListItemStatusTone.background(): Color =
+internal fun OpenCodeListItemStatusTone.background(): Color =
     when (this) {
         OpenCodeListItemStatusTone.Interactive -> openCodeColor("interactive").copy(alpha = 0.12f)
         OpenCodeListItemStatusTone.Success -> openCodeColor("success").copy(alpha = 0.12f)
@@ -432,19 +483,17 @@ private fun OpenCodeListItemStatusTone.background(): Color =
     }
 
 @Composable
-private fun ListItemStartDecoration(
+internal fun ListItemStartDecoration(
     decorator: StartDecorator,
     enabled: Boolean,
 ) {
     if (decorator is StartDecorator.None) return
-    val dark = isSystemInDarkTheme()
     val emphasize =
         Modifier.then(
             if (enabled) Modifier else Modifier.alpha(0.7f),
         )
     when (decorator) {
         is StartDecorator.Letter -> {
-            val (fill, tint) = decorator.accent.badgeColors(dark)
             val backgroundBase = openCodeColor("background-base")
             Box(
                 modifier =
@@ -452,36 +501,67 @@ private fun ListItemStartDecoration(
                         .size(ListItemLetterBadgeSize)
                         .then(emphasize),
             ) {
-                Box(
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape)
-                            .background(fill)
-                            .semantics { hideFromAccessibility() },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = normalizedBadgeLetter(decorator.character),
-                        fontSize = ListItemLetterGlyphSize,
-                        fontWeight = FontWeight.Bold,
-                        color = tint,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1,
-                    )
-                }
-                decorator.statusDot?.let { tone ->
+                ListItemLetterCircle(
+                    character = decorator.character,
+                    accent = decorator.accent,
+                    glyphSize = ListItemLetterGlyphSize,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                val statusTone = decorator.statusDot
+                val showWorktree = decorator.worktree
+                if (statusTone != null && showWorktree) {
                     Box(
                         modifier =
                             Modifier
                                 .align(Alignment.BottomEnd)
                                 .offset(x = 1.dp, y = 1.dp)
-                                .size(ListItemLetterStatusDotSize)
+                                .size(ListItemLetterStatusDotSize + 4.dp)
                                 .border(2.dp, backgroundBase, CircleShape)
                                 .clip(CircleShape)
-                                .background(tone.foreground())
-                                .semantics { hideFromAccessibility() },
-                    )
+                                .background(statusTone.foreground()),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            imageVector = OpenCodeIcons.CallSplit,
+                            contentDescription = "Worktree",
+                            modifier = Modifier.size(10.dp),
+                            tint = backgroundBase,
+                        )
+                    }
+                } else {
+                    statusTone?.let { tone ->
+                        Box(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = 1.dp, y = 1.dp)
+                                    .size(ListItemLetterStatusDotSize)
+                                    .border(2.dp, backgroundBase, CircleShape)
+                                    .clip(CircleShape)
+                                    .background(tone.foreground())
+                                    .semantics { hideFromAccessibility() },
+                        )
+                    }
+                    if (showWorktree) {
+                        Box(
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .offset(x = 1.dp, y = 1.dp)
+                                    .size(ListItemLetterStatusDotSize + 4.dp)
+                                    .border(2.dp, backgroundBase, CircleShape)
+                                    .clip(CircleShape)
+                                    .background(openCodeColor("surface-raised-base")),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = OpenCodeIcons.CallSplit,
+                                contentDescription = "Worktree",
+                                modifier = Modifier.size(10.dp),
+                                tint = openCodeColor("icon-strong-base"),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -518,8 +598,98 @@ private fun ListItemStartDecoration(
                 )
             }
         }
+        is StartDecorator.Tile -> ListItemTile(decorator = decorator, modifier = emphasize)
         is StartDecorator.None -> Unit
     }
+}
+
+/** Round project letter badge in its letter accent colours; the caller sets the size. */
+@Composable
+internal fun ListItemLetterCircle(
+    character: Char,
+    accent: LetterAccent,
+    glyphSize: TextUnit,
+    modifier: Modifier = Modifier,
+) {
+    val (fill, tint) = accent.badgeColors(isSystemInDarkTheme())
+    Box(
+        modifier =
+            modifier
+                .clip(CircleShape)
+                .background(fill)
+                .semantics { hideFromAccessibility() },
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = normalizedBadgeLetter(character),
+            fontSize = glyphSize,
+            fontWeight = FontWeight.Bold,
+            color = tint,
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+        )
+    }
+}
+
+/** One line of semantic segments with inline icons, cut with an ellipsis at its end. */
+@Composable
+private fun ListItemSegmentsText(
+    segments: List<OpenCodeListItemSubtitleSegment>,
+    enabled: Boolean,
+) {
+    val textBase = openCodeColor("text-base")
+    val textWeak = openCodeColor("text-weak")
+    val textWeaker = openCodeColor("text-weaker")
+    val diffAdd = openCodeColor("diff-add")
+    val diffDelete = openCodeColor("diff-delete")
+    val segmentColors =
+        segments.map { segment ->
+            if (!enabled) {
+                textWeaker
+            } else {
+                when (segment.tone) {
+                    OpenCodeListItemSubtitleTone.Secondary -> textBase
+                    OpenCodeListItemSubtitleTone.Tertiary -> textWeak
+                    OpenCodeListItemSubtitleTone.Addition -> diffAdd
+                    OpenCodeListItemSubtitleTone.Deletion -> diffDelete
+                }
+            }
+        }
+    val inlineIcons =
+        segments
+            .mapIndexedNotNull { index, segment ->
+                val icon = segment.icon ?: return@mapIndexedNotNull null
+                subtitleIconId(index) to
+                    InlineTextContent(
+                        Placeholder(
+                            width = SubtitleIconWidth,
+                            height = SubtitleIconHeight,
+                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = segmentColors[index],
+                            modifier = Modifier.fillMaxSize().padding(end = 2.dp),
+                        )
+                    }
+            }.toMap()
+    Text(
+        text =
+            buildAnnotatedString {
+                segments.forEachIndexed { index, segment ->
+                    // Decorative icon: alternate text must be non-empty, so use a zero-width space
+                    // rather than the default replacement character screen readers announce.
+                    if (segment.icon != null) appendInlineContent(subtitleIconId(index), "\u200B")
+                    withStyle(SpanStyle(color = segmentColors[index])) { append(segment.text) }
+                }
+            },
+        inlineContent = inlineIcons,
+        style = MaterialTheme.typography.labelMedium,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Preview(showBackground = true)
@@ -571,6 +741,29 @@ private fun OpenCodeListItemPreview() {
                 status = OpenCodeListItemStatus(text = "Running", tone = OpenCodeListItemStatusTone.Stale),
                 caption = "now",
                 startDecorator = StartDecorator.Letter('O', LetterAccent.Violet),
+            )
+            OpenCodeListItem(
+                title = "Keep split pane in step with the sidebar",
+                subtitleSegments =
+                    listOf(
+                        OpenCodeListItemSubtitleSegment(
+                            "opencode-mobile-enterprise-edition",
+                            OpenCodeListItemSubtitleTone.Secondary,
+                            OpenCodeIcons.Folder,
+                        ),
+                    ),
+                detailSegments =
+                    listOf(
+                        OpenCodeListItemSubtitleSegment(
+                            "feature/ope-1042-show-worktree-and-project-on-home-rows",
+                            OpenCodeListItemSubtitleTone.Tertiary,
+                            OpenCodeIcons.CallSplit,
+                        ),
+                        OpenCodeListItemSubtitleSegment(" · opencode-mobile-1042", OpenCodeListItemSubtitleTone.Tertiary),
+                    ),
+                status = OpenCodeListItemStatus(text = "Running", tone = OpenCodeListItemStatusTone.Interactive),
+                caption = "13m ago",
+                startDecorator = StartDecorator.Letter('O', LetterAccent.Red),
             )
             OpenCodeListItem(
                 title = "All projects",
