@@ -1,9 +1,9 @@
 package dev.opencode.mobile.highlight.bench
 
 /**
- * Which cases a run covers, see [HighlightBenchPlan.cases]. [Quick] and [Basic] run cold start,
- * 2K and 16K throughput, and chat fences, inline only; [Full] adds 128K throughput, 1 MB files,
- * and worst cases. Languages per tier: [HighlightBenchPlan.languages].
+ * Which cases a run covers, see [HighlightBenchPlan.cases]. [Quick], [Basic], and [FullLanguages]
+ * run cold start, 2K and 16K throughput, and chat fences, inline only; [Full] adds 128K
+ * throughput, 1 MB files, and worst cases. Languages per tier: [HighlightBenchPlan.languages].
  */
 enum class HighlightBenchTier {
     /** The six languages of the first baseline (seconds on a host), kept so runs stay comparable over time. */
@@ -12,8 +12,22 @@ enum class HighlightBenchTier {
     /** Javascript and the 17 Basic languages, at quick depth (about a minute with TextMate on a host). */
     Basic,
 
+    /** The Full milestone's 38 remaining languages ([HighlightBenchCorpus.fullLanguages]), at quick depth. */
+    FullLanguages,
+
     /** Every language at every size, plus every worst case (minutes). */
     Full,
+    ;
+
+    /** The `labRun` selection that names this tier: "quick", "basic", "full-languages", "full". */
+    val selection: String
+        get() =
+            buildString {
+                name.forEachIndexed { index, char ->
+                    if (index > 0 && char.isUpperCase()) append('-')
+                    append(char.lowercaseChar())
+                }
+            }
 }
 
 /** How a case measures its data set; also the report section, in report order. */
@@ -118,7 +132,8 @@ object HighlightBenchPlan {
     fun languages(tier: HighlightBenchTier): List<String> =
         when (tier) {
             HighlightBenchTier.Quick -> HighlightBenchCorpus.quickLanguages
-            HighlightBenchTier.Basic -> HighlightBenchCorpus.languages - HighlightBenchCorpus.quickLanguages.toSet()
+            HighlightBenchTier.Basic -> listOf("javascript") + HighlightBenchCorpus.basicLanguages
+            HighlightBenchTier.FullLanguages -> HighlightBenchCorpus.fullLanguages
             HighlightBenchTier.Full -> HighlightBenchCorpus.languages
         }
 

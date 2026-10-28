@@ -20,6 +20,10 @@ class HighlightBenchHeadlessTest {
         assertEquals(HighlightBenchTier.Basic, basic.tier)
         assertEquals(HighlightBenchPlan.cases(HighlightBenchTier.Basic).map { it.id }, basic.cases().map { it.id })
         assertEquals(listOf("textmate", "highlight-core"), basic.engineIds)
+        val fullLanguages = HighlightBenchHeadless.parse("full-languages:engines=highlight-core")
+        assertEquals(HighlightBenchTier.FullLanguages, fullLanguages.tier)
+        assertEquals(HighlightBenchPlan.cases(HighlightBenchTier.FullLanguages).map { it.id }, fullLanguages.cases().map { it.id })
+        assertEquals(listOf("quick", "basic", "full-languages", "full"), HighlightBenchTier.entries.map { it.selection })
     }
 
     @Test
@@ -41,7 +45,8 @@ class HighlightBenchHeadlessTest {
     fun invalidValuesNameTheProblem() {
         mapOf(
             "" to "needs a selection",
-            "typical/cobol/2k" to "Unknown data set: typical/cobol/2k",
+            "typical/cobol/3k" to "Unknown data set: typical/cobol/3k",
+            "fulllanguages" to "Unknown data set: fulllanguages",
             "quick:speed=fast" to "Unknown option: speed",
             "quick:engines=" to "needs a value",
             "quick:limitMs=0" to "limitMs must be a positive number",

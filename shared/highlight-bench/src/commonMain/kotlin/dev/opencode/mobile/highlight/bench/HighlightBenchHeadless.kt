@@ -10,16 +10,20 @@ package dev.opencode.mobile.highlight.bench
  * The value is a selection followed by optional `:`-separated options, with no spaces, so it
  * passes through `adb shell` and `simctl` without quoting:
  *
- * - selection: a [HighlightBenchTier] (`quick`, `basic`, `full`), or comma-separated data set ids
- *   from [HighlightBenchCatalog] (each runs its default case, see [HighlightBenchPlan.cases]).
- *   `basic` compares javascript and the 17 Basic languages; for their 128K, 1 MB, or worst cases,
- *   list the ids, for example `typical/rust/128k,typical/rust/1mb,worst/rust-unclosed-raw-string-1mb`.
+ * - selection: a [HighlightBenchTier] (`quick`, `basic`, `full-languages`, `full`), or
+ *   comma-separated data set ids from [HighlightBenchCatalog] (each runs its default case, see
+ *   [HighlightBenchPlan.cases]). `basic` compares javascript and the 17 Basic languages;
+ *   `full-languages` compares the Full milestone's 38 remaining languages
+ *   ([HighlightBenchCorpus.fullLanguages]), both at quick depth (2K, 16K, chat fences). For their
+ *   128K, 1 MB, or worst cases, list the ids, for example
+ *   `typical/rust/128k,typical/rust/1mb,worst/rust-unclosed-raw-string-1mb` or
+ *   `typical/lua/1mb,worst/lua-unclosed-long-string-1mb`.
  * - `engines=<id>,<id>`: engines to run, in that order; the first is the comparison baseline.
  *   Default: every engine the app passes, in its order.
  * - `limitMs=<n>`: per-call limit (default 10000). `graceMs=<n>`: cancel grace (default 2000).
  * - `whileStuck=skip|run`: [HighlightBenchStuckPolicy] (default skip).
  *
- * Examples: `quick`, `basic:engines=textmate,highlight-core`, `full:engines=textmate`, `typical/kotlin/16k,worst/binary-200k:engines=textmate,semantic-fallback:limitMs=5000`.
+ * Examples: `quick`, `basic:engines=textmate,highlight-core`, `full-languages:engines=textmate,highlight-core`, `full:engines=textmate`, `typical/kotlin/16k,worst/binary-200k:engines=textmate,semantic-fallback:limitMs=5000`.
  */
 object HighlightBenchHeadless {
     const val ARGUMENT_NAME: String = "labRun"
@@ -29,8 +33,8 @@ object HighlightBenchHeadless {
     fun parse(value: String): HighlightBenchHeadlessRequest {
         val parts = value.trim().split(':')
         val selection = parts.first()
-        require(selection.isNotEmpty()) { "labRun needs a selection: quick, basic, full, or data set ids" }
-        val tier = HighlightBenchTier.entries.firstOrNull { it.name.lowercase() == selection }
+        require(selection.isNotEmpty()) { "labRun needs a selection: quick, basic, full-languages, full, or data set ids" }
+        val tier = HighlightBenchTier.entries.firstOrNull { it.selection == selection }
         val dataSetIds = if (tier == null) selection.split(',') else emptyList()
         dataSetIds.forEach { id -> require(HighlightBenchCatalog.dataSet(id) != null) { "Unknown data set: $id" } }
         var engineIds = emptyList<String>()
@@ -87,7 +91,7 @@ object HighlightBenchHeadless {
 }
 
 class HighlightBenchHeadlessRequest internal constructor(
-    /** The selection as given: "quick", "basic", "full", or the data set ids. */
+    /** The selection as given: "quick", "basic", "full-languages", "full", or the data set ids. */
     val selection: String,
     /** Null when the selection lists data sets. */
     val tier: HighlightBenchTier?,

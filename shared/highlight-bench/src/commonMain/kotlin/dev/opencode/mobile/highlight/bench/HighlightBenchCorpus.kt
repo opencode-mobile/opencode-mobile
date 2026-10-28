@@ -19,8 +19,17 @@ object HighlightBenchCorpus {
             "ruby", "php", "sql", "toml", "docker", "xml",
         )
 
-    /** Every language with typical code and chat fences: [quickLanguages], javascript, then [basicLanguages]. */
-    val languages: List<String> = quickLanguages + "javascript" + basicLanguages
+    /** The Full milestone's 38 remaining languages (#872), by their TextMate manifest ids. */
+    val fullLanguages: List<String> =
+        listOf(
+            "abap", "ada", "apex", "asm", "awk", "clojure", "cobol", "coffee", "common-lisp", "crystal", "dart",
+            "elixir", "erlang", "fortran-fixed-form", "fortran-free-form", "fsharp", "graphql", "groovy", "haskell",
+            "julia", "lua", "make", "matlab", "nim", "objective-c", "ocaml", "pascal", "perl", "powershell", "prolog",
+            "r", "sas", "scala", "smalltalk", "svelte", "vb", "vue", "zig",
+        )
+
+    /** Every language with typical code and chat fences: [quickLanguages], javascript, [basicLanguages], then [fullLanguages]. */
+    val languages: List<String> = quickLanguages + "javascript" + basicLanguages + fullLanguages
 
     const val ONE_MB: Int = 1_000_000
 
@@ -31,7 +40,10 @@ object HighlightBenchCorpus {
     ): String {
         require(language in languages) { "No typical code for $language" }
         if (language == "json") return json(size)
-        val template = TEMPLATES[language] ?: HighlightBenchCorpusTemplates.basic.getValue(language)
+        val template =
+            TEMPLATES[language]
+                ?: HighlightBenchCorpusTemplates.basic[language]
+                ?: HighlightBenchCorpusFullTemplates.full.getValue(language)
         val builder = StringBuilder(size + template.length)
         var index = 0
         while (builder.length < size) {
@@ -59,7 +71,10 @@ object HighlightBenchCorpus {
         }
     }
 
-    /** Pathological inputs, each generated on demand because several are megabytes; the Basic languages add their own after the first 15. */
+    /**
+     * Pathological inputs, each generated on demand because several are megabytes; the Basic
+     * languages add their own after the first 15, and the Full languages theirs after those.
+     */
     internal fun worstCases(): List<HighlightBenchDataSet> =
         listOf(
             worst("minified-js-1mb", "Minified JS, one 1 MB line", "javascript", ONE_MB) {
@@ -115,6 +130,21 @@ object HighlightBenchCorpus {
             },
             worst("c-byte-array-1mb", "C byte array initializer, 1 MB", "c", ONE_MB) { byteArrayC(Random(874)) },
             worst("xml-deep-50k", "XML nested 50K deep, one line", "xml", 350_000) { "<n>".repeat(50_000) + "</n>".repeat(50_000) },
+            worst("lua-unclosed-long-string-1mb", "Lua long string never closed, 1 MB", "lua", ONE_MB) { "local s = [==[\n" + code("lua", ONE_MB) },
+            worst("haskell-unclosed-nested-comment-1mb", "Haskell nested comment never closed, 1 MB", "haskell", ONE_MB) {
+                "{- outer {- inner -}\n" + code("haskell", ONE_MB)
+            },
+            worst("ocaml-unclosed-nested-comment-1mb", "OCaml nested comment never closed, 1 MB", "ocaml", ONE_MB) {
+                "(* outer (* inner *)\n" + code("ocaml", ONE_MB)
+            },
+            worst("perl-unclosed-heredoc-1mb", "Perl heredoc never closed, 1 MB", "perl", ONE_MB) { "print <<\"NEVER_ENDS\";\n" + code("perl", ONE_MB) },
+            worst("vue-unclosed-script-1mb", "Vue <script> never closed, 1 MB", "vue", ONE_MB) {
+                "<template>\n  <p>{{ title }}</p>\n</template>\n\n<script setup lang=\"ts\">\n" + code("typescript", ONE_MB)
+            },
+            worst("make-continued-line-1mb", "Make variable continued over 1 MB", "make", ONE_MB) { makeContinuedLine() },
+            worst("clojure-deep-50k", "Clojure forms nested 50K deep, one line", "clojure", 100_000) {
+                "(".repeat(50_000) + "x" + ")".repeat(50_000)
+            },
         )
 
     private fun worst(
@@ -154,6 +184,15 @@ object HighlightBenchCorpus {
             append("---\n")
             repeat(depth) { level -> append("  ".repeat(level)).append("k").append(level).append(": # level ").append(level).append('\n') }
             append("  ".repeat(depth)).append("leaf: |\n").append("  ".repeat(depth + 1)).append("block scalar at the bottom\n")
+        }
+
+    /** A generated source list: one logical line of about 1 MB, continued with backslashes. */
+    private fun makeContinuedLine(): String =
+        buildString {
+            append("SOURCES := \\\n")
+            var index = 0
+            while (length < ONE_MB - 40) append("  src/session/module_").append(index++).append(".c \\\n")
+            append("  src/main.c\n\nall: ${'$'}(SOURCES:.c=.o)\n")
         }
 
     /** `xxd -i` output: a 1 MB `unsigned char` array, twelve bytes per line. */
