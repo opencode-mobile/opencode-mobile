@@ -32,6 +32,14 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     private let protocolHint: @Sendable () -> ServerProtocol
     private let cachedProtocol: @Sendable () -> ServerProtocol?
     private let protocolProbe: (@Sendable () async -> ServerProtocol)?
+    private let engineProvider: @Sendable () -> ConnectionEngine
+    private let t3ConnectionStates: @Sendable () -> AsyncStream<EventStreamConnectionState>
+    private let t3Lifecycle: @Sendable (T3LiveSignals.Lifecycle) async -> Void
+    /// Synthetic events the T3 client derives from its live shell.
+    private let t3Events: @Sendable () -> AsyncStream<OpencodeEvent>
+    /// True while occupancy follows the T3 socket instead of SSE leases.
+    private var t3Occupancy = false
+    private var authTerminal = false
     private let protocolRedetect: (@Sendable () async -> ProtocolRedetection)?
     private let protocolRecheckInterval: Duration
     private let connectionEpoch: ConnectionEpoch
@@ -87,6 +95,10 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         protocolHint: (@Sendable () -> ServerProtocol)? = nil,
         cachedProtocol: (@Sendable () -> ServerProtocol?)? = nil,
         protocolProbe: (@Sendable () async -> ServerProtocol)? = nil,
+        engineProvider: (@Sendable () -> ConnectionEngine)? = nil,
+        t3ConnectionStates: (@Sendable () -> AsyncStream<EventStreamConnectionState>)? = nil,
+        t3Lifecycle: (@Sendable (T3LiveSignals.Lifecycle) async -> Void)? = nil,
+        t3Events: (@Sendable () -> AsyncStream<OpencodeEvent>)? = nil,
         protocolRedetect: (@Sendable () async -> ProtocolRedetection)? = nil,
         protocolRecheckInterval: Duration = ProtocolRecheckPolicy.minInterval
     ) {
@@ -104,8 +116,16 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         self.protocolHint = protocolHint ?? { api.eventProtocol }
         self.cachedProtocol = cachedProtocol ?? { nil }
         self.protocolProbe = protocolProbe
+        self.engineProvider = engineProvider ?? { .opencode }
+        self.t3ConnectionStates = t3ConnectionStates ?? { T3LiveSignals.shared.connectionStateUpdates() }
+        self.t3Lifecycle = t3Lifecycle ?? { await T3LiveSignals.shared.emit($0) }
+        self.t3Events = t3Events ?? { T3LiveSignals.shared.eventUpdates() }
         self.protocolRedetect = protocolRedetect
         self.protocolRecheckInterval = protocolRecheckInterval
+    }
+
+    func publishSynthetic(_ event: OpencodeEvent) {
+        publish(event)
     }
 
     func events() -> AsyncStream<OpencodeEvent> {
@@ -158,7 +178,16 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
     }
 
     func start() {
+        if engineProvider() == .t3 {
+            startT3Live()
+            return
+        }
         lock.lock()
+        if authTerminal {
+            lock.unlock()
+            return
+        }
+        t3Occupancy = false
         if occupancyTask != nil {
             let stuckIdle = _connectionState == .idle && appliedConfig == nil
             if !stuckIdle {
@@ -189,6 +218,86 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         _ = connectionEpoch.bump()
     }
 
+    /// T3 engine: occupancy follows the real websocket state published by
+    /// `T3EnvironmentClient` (connecting / connected / disconnected) instead of
+    /// SSE leases. `start` asks the client to open its socket; `stop` closes it.
+    private func startT3Live() {
+        lock.lock()
+        if t3Occupancy, occupancyTask != nil {
+            lock.unlock()
+            DiagnosticLog.debug(.sse, "foreground live start ignored; already following T3 socket")
+            return
+        }
+        occupancyTask?.cancel()
+        revisionTask?.cancel()
+        protocolProbeTask?.cancel()
+        occupancyTask = nil
+        revisionTask = nil
+        protocolProbeTask = nil
+        let leaseWork = cancelAllLeasesLocked()
+        occupancySerial += 1
+        streamGeneration += 1
+        let generation = streamGeneration
+        appliedConfig = nil
+        pendingStartConfig = nil
+        authTerminal = false
+        protocolConfirmed = true
+        t3Occupancy = true
+        let states = t3ConnectionStates
+        let events = t3Events
+        let lifecycle = t3Lifecycle
+        occupancyTask = Task { [weak self] in
+            // Subscribe to shell events before `start` so nothing published
+            // during the client's first snapshot is missed.
+            let eventStream = events()
+            await lifecycle(.start)
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask { [weak self] in
+                    for await state in states() {
+                        guard let self, !Task.isCancelled, self.stillCurrent(generation) else { return }
+                        self.applyConnectionState(state, generation: generation)
+                        self.publishT3Snapshot(state: state, generation: generation)
+                    }
+                }
+                group.addTask { [weak self] in
+                    for await event in eventStream {
+                        guard let self, !Task.isCancelled, self.stillCurrent(generation) else { return }
+                        self.publish(event)
+                    }
+                }
+            }
+        }
+        lock.unlock()
+        DiagnosticLog.info(.sse, "foreground live stream following T3 socket state")
+        for loop in leaseWork.loops {
+            loop.cancel()
+        }
+        for stream in leaseWork.streams {
+            stream.cancel()
+        }
+    }
+
+    private func publishT3Snapshot(state: EventStreamConnectionState, generation: UInt64) {
+        lock.lock()
+        guard streamGeneration == generation else {
+            lock.unlock()
+            return
+        }
+        _snapshot = LiveConnectionSnapshot(
+            config: nil,
+            generation: generation,
+            connectionState: state,
+            requiredTargets: ["t3"],
+            liveTargets: state == .connected ? ["t3"] : []
+        )
+        let conts = Array(snapshotContinuations.values)
+        let snapshot = _snapshot
+        lock.unlock()
+        for continuation in conts {
+            continuation.yield(snapshot)
+        }
+    }
+
     func stop() async {
         lock.lock()
         let hadTask = occupancyTask != nil
@@ -209,6 +318,9 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         probe?.cancel()
         pendingStartConfig = nil
         protocolConfirmed = false
+        let wasT3 = t3Occupancy
+        t3Occupancy = false
+        authTerminal = false
         serverUnreachable = false
         lastProtocolRecheck = nil
         let recheck = protocolRecheckTask
@@ -223,6 +335,12 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
         appliedConfig = nil
         overall = LiveOverallFlags(wasFullyConnected: wasFullyConnected)
         lock.unlock()
+        if wasT3 {
+            DiagnosticLog.info(.sse, "foreground live stream releasing T3 socket")
+        }
+        // Always forwarded: a profile switch from T3 to opencode must close the
+        // T3 socket too, and the client treats a redundant stop as a no-op.
+        await t3Lifecycle(.stop)
         api.retireStreamingSession(token: generation &- 1)
         api.retireStreamingSessions(olderThan: generation)
         if hadTask || state != .idle {
@@ -512,6 +630,10 @@ nonisolated final class DefaultForegroundEventStream: LiveConnection, @unchecked
 
     private func reconcileLeases(_ config: LiveConnectionConfig, generation: UInt64) {
         guard stillCurrent(generation), isOccupying() else { return }
+        if engineProvider() == .t3 {
+            startT3Live()
+            return
+        }
         lock.lock()
         appliedConfig = config
         lastDirectoriesByIdentity[config.identity] = config.directories

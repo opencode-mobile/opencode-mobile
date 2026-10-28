@@ -5,7 +5,7 @@ import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import dev.opencode.mobile.domain.session.DefaultSessionRepository
+import dev.opencode.mobile.domain.engine.EngineSessionRepository
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionRepository
 import javax.inject.Singleton
@@ -15,7 +15,7 @@ import javax.inject.Singleton
 abstract class SessionModule {
     @Binds
     @Singleton
-    abstract fun bindSessionRepository(impl: DefaultSessionRepository): SessionRepository
+    abstract fun bindSessionRepository(impl: EngineSessionRepository): SessionRepository
 
     companion object {
         @Provides

@@ -17,6 +17,7 @@ import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.session.SessionSettleBlockedException
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionInfoRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionRenameUiState
@@ -244,6 +245,124 @@ class SessionInfo(
                         )
                     }
                 }
+        }
+    }
+
+    fun settleSession() {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        if (_state.value.isLifecycleActionInFlight) return
+        scope.launch {
+            _state.update {
+                it.copy(isLifecycleActionInFlight = true, lifecycleErrorMessage = null)
+            }
+            logI("settle start session=$sessionId")
+            runCatching { sessionRepository.settleSession(id = sessionId, directory = worktree) }
+                .onSuccess { settled ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
+                    if (settled) {
+                        logI("settle success session=$sessionId")
+                        _state.update {
+                            it.copy(isLifecycleActionInFlight = false, shouldLeaveSession = true)
+                        }
+                    } else {
+                        logI("settle rejected session=$sessionId")
+                        _state.update {
+                            it.copy(
+                                isLifecycleActionInFlight = false,
+                                lifecycleErrorMessage = SETTLE_ERROR,
+                            )
+                        }
+                    }
+                }.onFailure { error ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onFailure
+                    logI("settle failure session=$sessionId error=${error.message}")
+                    _state.update {
+                        it.copy(
+                            isLifecycleActionInFlight = false,
+                            lifecycleErrorMessage =
+                                if (error is SessionSettleBlockedException) {
+                                    SessionSettleBlockedException.USER_MESSAGE
+                                } else {
+                                    SETTLE_ERROR
+                                },
+                        )
+                    }
+                }
+        }
+    }
+
+    /** Changes the thread's runtime mode; [onApplied] receives the refreshed session. */
+    fun setRuntimeMode(
+        runtimeMode: String,
+        onApplied: (dev.opencode.mobile.domain.session.Session) -> Unit = {},
+    ) {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        if (_state.value.isLifecycleActionInFlight) return
+        scope.launch {
+            _state.update {
+                it.copy(isLifecycleActionInFlight = true, lifecycleErrorMessage = null)
+            }
+            logI("runtime mode start session=$sessionId mode=$runtimeMode")
+            runCatching { sessionRepository.setRuntimeMode(id = sessionId, runtimeMode = runtimeMode, directory = worktree) }
+                .onSuccess { session ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
+                    logI("runtime mode success session=$sessionId mode=${session.runtimeMode}")
+                    _state.update { it.copy(isLifecycleActionInFlight = false) }
+                    onApplied(session)
+                }.onFailure { error ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onFailure
+                    logI("runtime mode failure session=$sessionId error=${error.message}")
+                    _state.update {
+                        it.copy(
+                            isLifecycleActionInFlight = false,
+                            lifecycleErrorMessage = RUNTIME_MODE_ERROR,
+                        )
+                    }
+                }
+        }
+    }
+
+    /** Dispatches a model change for the bound session; [onApplied] receives the refreshed session. */
+    fun setModelSelection(
+        providerId: String,
+        modelId: String,
+        onApplied: (dev.opencode.mobile.domain.session.Session) -> Unit = {},
+    ) {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        if (_state.value.isLifecycleActionInFlight) return
+        scope.launch {
+            _state.update {
+                it.copy(isLifecycleActionInFlight = true, lifecycleErrorMessage = null)
+            }
+            logI("model selection start session=$sessionId provider=$providerId")
+            runCatching {
+                sessionRepository.setModelSelection(
+                    id = sessionId,
+                    providerInstanceId = providerId,
+                    modelId = modelId,
+                    directory = worktree,
+                )
+            }.onSuccess { session ->
+                if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
+                logI("model selection success session=$sessionId provider=${session.providerInstanceId}")
+                _state.update { it.copy(isLifecycleActionInFlight = false) }
+                onApplied(session)
+            }.onFailure { error ->
+                if (!isCurrentBinding(sessionId, worktree)) return@onFailure
+                logI("model selection failure session=$sessionId error=${error.message}")
+                _state.update {
+                    it.copy(
+                        isLifecycleActionInFlight = false,
+                        lifecycleErrorMessage = MODEL_SELECTION_ERROR,
+                    )
+                }
+            }
         }
     }
 
@@ -488,6 +607,9 @@ class SessionInfo(
         private const val TAG = "SessionInfo"
         private const val EMPTY_TITLE_ERROR = "Enter a session title"
         const val ARCHIVE_ERROR = "Couldn't archive session."
+        const val SETTLE_ERROR = "Couldn't settle session."
         const val DELETE_ERROR = "Couldn't delete session."
+        const val RUNTIME_MODE_ERROR = "Couldn't change runtime mode."
+        const val MODEL_SELECTION_ERROR = "Couldn't change the model."
     }
 }

@@ -13,6 +13,17 @@ interface SessionRepository {
         directory: String? = null,
     ): Session
 
+    /**
+     * Creates a session with an explicit model and runtime mode. Engines without
+     * creation-time choices ignore [options] and create as [createSession] does.
+     */
+    suspend fun createSession(
+        parentId: String?,
+        title: String?,
+        directory: String?,
+        options: SessionCreateOptions,
+    ): Session = createSession(parentId, title, directory)
+
     suspend fun getAllSessionStatuses(directory: String? = null): List<SessionStatus>
 
     suspend fun getSession(
@@ -212,6 +223,49 @@ interface SessionRepository {
         directory: String? = null,
     ): Boolean = false
 
+    suspend fun settleSession(
+        id: String,
+        directory: String? = null,
+    ): Boolean = false
+
+    /** Archived or settled sessions hidden from [listSessions]; engines without the concept return nothing. */
+    suspend fun listArchivedSessions(directory: String? = null): List<Session> = emptyList()
+
+    suspend fun unarchiveSession(
+        id: String,
+        directory: String? = null,
+    ): Session = throw SessionError.Http(400, "Unarchive is not available")
+
+    suspend fun unsettleSession(
+        id: String,
+        directory: String? = null,
+    ): Boolean = false
+
+    /** Hides the thread until [snoozedUntil], an ISO-8601 timestamp. Engines without snooze ignore it. */
+    suspend fun snoozeSession(
+        id: String,
+        snoozedUntil: String,
+        directory: String? = null,
+    ): Boolean = false
+
+    /** Clears a snooze. Engines without snooze ignore it. */
+    suspend fun wakeSession(
+        id: String,
+        directory: String? = null,
+    ): Boolean = false
+
+    suspend fun setRuntimeMode(
+        id: String,
+        runtimeMode: String,
+        directory: String? = null,
+    ): Session = throw SessionError.Http(400, "Runtime mode is not available")
+
+    suspend fun setModelSelection(
+        id: String,
+        providerInstanceId: String,
+        modelId: String,
+        directory: String? = null,
+    ): Session = throw SessionError.Http(400, "Model selection is not available")
     /**
      * Acknowledges that the run which ended at [idleAtEpochMs] was seen. Only
      * servers with `supportsSessionViewed` track this; elsewhere it is a no-op.
@@ -222,6 +276,13 @@ interface SessionRepository {
         idleAtEpochMs: Long,
     ) = Unit
 }
+
+/** Creation-time choices for a new session; null fields fall back to the server's defaults. */
+data class SessionCreateOptions(
+    val providerId: String? = null,
+    val modelId: String? = null,
+    val runtimeMode: String? = null,
+)
 
 /** How the server handled a compact request. */
 enum class CompactionStart {

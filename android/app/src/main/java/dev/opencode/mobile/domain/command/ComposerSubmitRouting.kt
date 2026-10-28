@@ -6,18 +6,24 @@ object ComposerSubmitRouting {
     fun resolve(
         text: String,
         serverCommandNames: Set<String>,
-    ): ComposerSubmitIntent = resolve(text, serverCommandNames.map { ServerCommand(name = it) })
+        allowsSlashCommands: Boolean = true,
+    ): ComposerSubmitIntent = resolve(text, serverCommandNames.map { ServerCommand(name = it) }, allowsSlashCommands)
 
     /**
      * A leading `/head` that names a non-skill server command (or a v1 skill without a
      * skill id) runs on the command route. A leading v2 skill (has a skill id) stays a
      * prompt: the skill travels as an inline mention. Everything else is a prompt.
+     * Slash text on an engine with [allowsSlashCommands] false is [ComposerSubmitIntent.Ignored].
      */
     fun resolve(
         text: String,
         commands: List<ServerCommand>,
+        allowsSlashCommands: Boolean = true,
     ): ComposerSubmitIntent {
         val trimmed = text.trim()
+        if (!allowsSlashCommands && trimmed.startsWith("/")) {
+            return ComposerSubmitIntent.Ignored
+        }
         val match = leadingCommand(trimmed, commands) ?: return ComposerSubmitIntent.Prompt(text = trimmed)
         if (match.isV2Skill) return ComposerSubmitIntent.Prompt(text = trimmed)
         val arguments = trimmed.split(" ", limit = 2).getOrNull(1).orEmpty()

@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.event
 
 import dev.opencode.mobile.data.remote.EventsApi
 import dev.opencode.mobile.data.remote.SseAttemptOutcome
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
@@ -11,6 +12,8 @@ import dev.opencode.mobile.domain.connection.ReadyDeviceNetworkPath
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogger
+import dev.opencode.mobile.domain.t3.NoopT3LiveSession
+import dev.opencode.mobile.domain.t3.T3LiveSession
 import dev.opencode.mobile.domain.message.ConnectionEpoch
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
@@ -59,6 +62,8 @@ class DefaultForegroundEventStream
         private val activeConnectionManager: ActiveConnectionManager,
         private val connectionProfileStore: ConnectionProfileStore,
         private val deviceNetworkPath: DeviceNetworkPath = ReadyDeviceNetworkPath,
+        /** Lazy breaks the T3Runtime -> ForegroundEventStream -> T3LiveSession cycle. */
+        private val t3LiveSession: dagger.Lazy<T3LiveSession> = dagger.Lazy { NoopT3LiveSession },
     ) : LiveConnection {
         internal constructor(
             eventsApi: EventsApi,
@@ -151,6 +156,11 @@ class DefaultForegroundEventStream
         override val events: SharedFlow<OpencodeEvent> = _events.asSharedFlow()
 
         override fun start() {
+            if (activeConnectionManager.currentProfile()?.engine == ConnectionEngine.T3) {
+                diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE skipped; T3 websocket owns liveness")
+                t3LiveSession.get().start()
+                return
+            }
             var overlappingJob: Job? = null
             var overlappingSerial = 0L
             var newJob: Job? = null
@@ -251,8 +261,32 @@ class DefaultForegroundEventStream
             reconnectWake.tryEmit(Unit)
         }
 
+        override fun publishSynthetic(event: OpencodeEvent) {
+            _events.tryEmit(event)
+        }
+
+        /**
+         * T3 has no SSE leases. A connected socket is the one live target, matching
+         * iOS `publishT3Snapshot`, so [canCatchUp] stays true after the first paint
+         * and home can reload when a thread is created or the user pulls to refresh.
+         */
+        override fun publishExternalConnectionState(state: EventStreamConnectionState) {
+            if (activeConnectionManager.currentProfile()?.engine != ConnectionEngine.T3) return
+            val live = state == EventStreamConnectionState.Connected
+            _connectionState.value = state
+            _snapshot.value =
+                LiveConnectionSnapshot(
+                    generation = streamGeneration.get(),
+                    connectionState = state,
+                    requiredTargets = listOf(T3_LIVE_TARGET),
+                    liveTargets = if (live) listOf(T3_LIVE_TARGET) else emptyList(),
+                )
+        }
+
         override suspend fun stop() {
             diagnosticLogger.info(DiagnosticLogArea.Sse, "foreground SSE stream stopping")
+            // Always: the profile may already have switched away from T3.
+            t3LiveSession.get().stop()
             val generation: Long
             val snapshot: LiveConnectionSnapshot
             val occupancyToJoin: Job?
@@ -1184,5 +1218,6 @@ class DefaultForegroundEventStream
             const val DEFAULT_IDLE_TIMEOUT_MS = 45_000L
             const val FIRST_FRAME_TIMEOUT_MS = 3_000L
             const val FIRST_FRAME_FAILED = "SSE first frame failed"
+            const val T3_LIVE_TARGET = "t3"
         }
     }

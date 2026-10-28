@@ -3409,6 +3409,61 @@ class DefaultPermissionLiveStoreTest {
         }
 
     @Test
+    fun indexedPermissionEvent_refreshesOnlyTheOwningDirectory() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository()
+            val approval = testPermissionRequest("perm-a").copy(sessionId = "ses-a")
+            repository.permissionsByDirectory =
+                mapOf(
+                    "/repo-a" to listOf(approval),
+                    "/repo-b" to emptyList(),
+                )
+            val eventStream = FakeForegroundEventStream()
+            val store = store(repository, eventStream, CoroutineScope(SupervisorJob() + testDispatcher))
+            store.noteSessions("/repo-a", setOf("ses-a"))
+            store.noteSessions("/repo-b", setOf("ses-b"))
+            val jobA = launch { store.observePermissions("/repo-a").collect { } }
+            val jobB = launch { store.observePermissions("/repo-b").collect { } }
+            advanceUntilIdle()
+            assertEquals(1, repository.permissionDirectories.count { it == "/repo-a" })
+            assertEquals(1, repository.permissionDirectories.count { it == "/repo-b" })
+
+            eventStream.emit(OpencodeEvent(type = "permission.asked", sessionId = "ses-a"))
+            advanceUntilIdle()
+            assertEquals(2, repository.permissionDirectories.count { it == "/repo-a" })
+            assertEquals(1, repository.permissionDirectories.count { it == "/repo-b" })
+
+            // The session left the home list, but the open request still belongs to this project.
+            store.noteSessions("/repo-a", emptySet())
+            eventStream.emit(OpencodeEvent(type = "permission.replied", sessionId = "ses-a"))
+            advanceUntilIdle()
+            assertEquals(3, repository.permissionDirectories.count { it == "/repo-a" })
+            assertEquals(1, repository.permissionDirectories.count { it == "/repo-b" })
+
+            eventStream.emit(OpencodeEvent(type = "permission.asked", sessionId = "ses-other"))
+            advanceUntilIdle()
+            assertEquals(3, repository.permissionDirectories.count { it == "/repo-a" })
+            assertEquals(1, repository.permissionDirectories.count { it == "/repo-b" })
+
+            val jobC = launch { store.observePermissions("/repo-c").collect { } }
+            advanceUntilIdle()
+            assertEquals(1, repository.permissionDirectories.count { it == "/repo-c" })
+            eventStream.emit(OpencodeEvent(type = "permission.asked", sessionId = "ses-other"))
+            advanceUntilIdle()
+            jobA.cancel()
+            jobB.cancel()
+            jobC.cancel()
+
+            assertEquals(
+                "an unindexed directory still refetches on any permission event",
+                2,
+                repository.permissionDirectories.count { it == "/repo-c" },
+            )
+            assertEquals(3, repository.permissionDirectories.count { it == "/repo-a" })
+            assertEquals(1, repository.permissionDirectories.count { it == "/repo-b" })
+        }
+
+    @Test
     fun reconnectPair_coalescesIntoOneRefresh() =
         runTest(testDispatcher) {
             val repository = FakeSessionRepository()
@@ -3946,6 +4001,8 @@ private class FakeSessionRepository(
 ) : SessionRepository {
     var listSessionsCallCount = 0
     var permissionFetchCount = 0
+    val permissionDirectories = mutableListOf<String?>()
+    var permissionsByDirectory: Map<String, List<PermissionRequest>> = emptyMap()
     var questionFetchCount = 0
     var nextListGate: CompletableDeferred<Unit>? = null
     var statusDelayMs: Long = 0
@@ -3979,6 +4036,8 @@ private class FakeSessionRepository(
 
     override suspend fun listPendingPermissions(directory: String?): List<PermissionRequest> {
         permissionFetchCount += 1
+        permissionDirectories += directory
+        permissionsByDirectory[directory]?.let { return it }
         val scripted = if (permissionScript.isEmpty()) null else permissionScript.removeAt(0)
         if (scripted == null) return permissions
         delay(scripted.first)

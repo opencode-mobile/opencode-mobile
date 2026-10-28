@@ -1,6 +1,9 @@
 package dev.opencode.mobile.domain.connection
 
+import dev.opencode.mobile.network.ServerConnection
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ServerProtocolMatrixTest {
@@ -41,6 +44,29 @@ class ServerProtocolMatrixTest {
                 ServerCapabilities.forProtocol(row.protocol).supportsSessionViewed,
             )
         }
+    }
+
+    @Test
+    fun t3CapabilitiesIgnoreTheV1ProtocolFallback() {
+        val t3 = ServerCapabilities.forEngine(ConnectionEngine.T3, ServerProtocol.V1)
+        assertFalse(t3.supportsSessionMessageDiff)
+        assertTrue(t3.supportsSessionArchive)
+        assertFalse(t3.supportsFollowUpDelivery)
+        assertTrue(t3.supportsPendingPrompts)
+        assertFalse(ServerCapabilities.forProtocol(ServerProtocol.V1).supportsPendingPrompts)
+        assertTrue(ServerCapabilities.forProtocol(ServerProtocol.V2).supportsPendingPrompts)
+        assertFalse(t3.supportsTerminal)
+        assertFalse(t3.supportsRevert)
+        assertFalse(t3.supportsMentions)
+        assertFalse(t3.supportsSlashCommands)
+        assertFalse(t3.supportsDocumentAttachments)
+        assertEquals(
+            ServerCapabilities.t3,
+            ServerConnection(baseUrl = "http://t3.test", engine = ConnectionEngine.T3).capabilities,
+        )
+        assertTrue(ServerCapabilities.forProtocol(ServerProtocol.V1).supportsTerminal)
+        assertTrue(ServerCapabilities.forProtocol(ServerProtocol.V2).supportsDocumentAttachments)
+        assertTrue(ServerCapabilities.forEngine(ConnectionEngine.OPENCODE, null).supportsMentions)
     }
 
     private data class Row(

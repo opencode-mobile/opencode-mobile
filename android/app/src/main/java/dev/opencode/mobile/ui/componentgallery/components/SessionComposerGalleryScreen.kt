@@ -440,6 +440,7 @@ private val OpenCodeSessionComposerAction.label: String
             OpenCodeSessionComposerAction.SelectModel -> "Select model"
             OpenCodeSessionComposerAction.SelectMode -> "Select mode"
             OpenCodeSessionComposerAction.SelectVariant -> "Select variant"
+            OpenCodeSessionComposerAction.SelectRuntimeMode -> "Select runtime mode"
             OpenCodeSessionComposerAction.Attach -> "Attach"
             OpenCodeSessionComposerAction.OpenCommands -> "Open commands"
             is OpenCodeSessionComposerAction.RemoveAttachment -> "Remove attachment"

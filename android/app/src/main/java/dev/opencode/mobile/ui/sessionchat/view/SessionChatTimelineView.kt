@@ -196,6 +196,7 @@ internal data class SessionChatTimelineViewProps(
     val onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit = { _, _ -> },
     val onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit = { _, _ -> },
     val supportsSessionMessageDiff: Boolean = true,
+    val supportsRevert: Boolean = true,
     /**
      * Chip-timeline paragraphs expanded past `+N more` (expansion id to chip
      * count at tap time); owned by the Session Chat screen model.
@@ -306,6 +307,7 @@ internal fun SessionChatTimelineView(
                 onChildSessionTap = props.onChildSessionTap,
                 onChangesReviewTap = props.onChangesReviewTap,
                 supportsSessionMessageDiff = props.supportsSessionMessageDiff,
+                supportsRevert = props.supportsRevert,
                 expandedStepParagraphs = props.expandedStepParagraphs,
                 onExpandStepParagraph = props.onExpandStepParagraph,
                 unfoldedStepRails = props.unfoldedStepRails,
@@ -352,6 +354,7 @@ private fun SessionChatTimelineReadyView(
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
+    supportsRevert: Boolean,
     expandedStepParagraphs: Map<String, Int>,
     onExpandStepParagraph: (expansionId: String, chipCount: Int) -> Unit,
     unfoldedStepRails: Set<String>,
@@ -549,6 +552,7 @@ private fun SessionChatTimelineReadyView(
                     onChildSessionTap = onChildSessionTap,
                     onChangesReviewTap = onChangesReviewTap,
                     supportsSessionMessageDiff = supportsSessionMessageDiff,
+                    supportsRevert = supportsRevert,
                     expandedStepParagraphs = expandedStepParagraphs,
                     onExpandStepParagraph = onExpandStepParagraph,
                     unfoldedStepRails = unfoldedStepRails,
@@ -660,6 +664,7 @@ private fun SessionChatMessageRow(
     onChildSessionTap: (sessionId: String, sessionTitle: String) -> Unit,
     onChangesReviewTap: (assistantMessageId: String, initialFilePath: String?) -> Unit,
     supportsSessionMessageDiff: Boolean,
+    supportsRevert: Boolean,
     expandedStepParagraphs: Map<String, Int>,
     onExpandStepParagraph: (expansionId: String, chipCount: Int) -> Unit,
     unfoldedStepRails: Set<String>,
@@ -705,7 +710,7 @@ private fun SessionChatMessageRow(
                     metadataLabel = message.metadataLabel,
                     content = message.outgoingContent(),
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = { openMessageActions(showsRevertMessage = true) },
+                    onClick = { openMessageActions(showsRevertMessage = supportsRevert) },
                 )
 
             MessageRole.Assistant ->

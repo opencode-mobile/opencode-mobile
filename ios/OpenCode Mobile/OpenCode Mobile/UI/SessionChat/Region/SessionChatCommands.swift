@@ -24,6 +24,7 @@ final class SessionChatCommands {
     private var forkSource: ForkSource?
     private var lastMessages: [SessionChatRow] = []
     private var lastHasSelectedComposerModel = false
+    private var lastCapabilities = SessionCapabilities.opencode
     private var lastDomainMessages: [Message] = []
     private var completedCompactionIDsAtStart: Set<String> = []
     private var lastIsSessionBusy = false
@@ -78,9 +79,16 @@ final class SessionChatCommands {
     /// Pure state recomputation; callers invoked synchronously from `SessionChatViewModel.publishUiState`
     /// (which reads `state` right after) must not trigger `onChange` here to avoid re-entrant publishing.
     /// Callers from async contexts (e.g. `refreshRevertNow`) must call `notifyChange()` themselves.
-    func updateVisibility(messages: [SessionChatRow], hasSelectedComposerModel: Bool) {
+    func updateVisibility(
+        messages: [SessionChatRow],
+        hasSelectedComposerModel: Bool,
+        capabilities: SessionCapabilities? = nil
+    ) {
         lastMessages = messages
         lastHasSelectedComposerModel = hasSelectedComposerModel
+        if let capabilities {
+            lastCapabilities = capabilities
+        }
         let refs = messages.map { message in
             ClientSlashMessageRef(
                 id: message.id,
@@ -97,6 +105,7 @@ final class SessionChatCommands {
             supportsSideQuestion: activeConnectionManager.capabilities.supportsSideQuestion
         )
         state.visibleActions = ClientSlashActionCatalog.visibleActions(input)
+            .filter { lastCapabilities.allowsClientSlashAction($0) }
     }
 
     func observeLoadedMessages(_ messages: [Message], isSessionBusy: Bool = false) {

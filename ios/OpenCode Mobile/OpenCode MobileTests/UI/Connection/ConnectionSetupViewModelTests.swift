@@ -1039,6 +1039,273 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.usesQRLayout)
         #expect(viewModel.snackbar == nil)
     }
+
+    @Test func submit_t3_exchangesTokenAndSavesEngine() async {
+        let store = RecordingConnectionProfileStore()
+        let pairing = FakeT3PairingClient(
+            result: .success(T3PairingResult(accessToken: "access-token", label: "Desk"))
+        )
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: store
+            ),
+            t3PairingClient: pairing,
+            mode: .add
+        )
+        viewModel.selectEngine(.t3)
+        viewModel.baseURL = "http://10.0.0.2:3000/"
+        viewModel.pairingToken = "pair-token"
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(store.saved.last?.engine == .t3)
+        #expect(store.saved.last?.username == T3Auth.username)
+        #expect(store.saved.last?.password == "access-token")
+        #expect(store.saved.last?.name == "Desk")
+        #expect(store.saved.last?.serverProtocol == nil)
+    }
+
+    @Test func submit_t3_showsPairingError() async {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            t3PairingClient: FakeT3PairingClient(
+                result: .failure(T3ClientError.unsupportedProtocol(1))
+            ),
+            mode: .add
+        )
+        viewModel.selectEngine(.t3)
+        viewModel.baseURL = "http://10.0.0.2:3000/"
+        viewModel.pairingToken = "pair-token"
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(viewModel.snackbar?.text == T3ClientError.unsupportedProtocol(1).errorDescription)
+    }
+
+    @Test func t3Edit_hidesStoredAccessTokenFromForm() {
+        let viewModel = t3EditViewModel(store: RecordingConnectionProfileStore(), pairing: pairingClient())
+        #expect(viewModel.pairingToken.isEmpty)
+        #expect(viewModel.hasStoredT3Token == true)
+        #expect(viewModel.connectionUnchanged == true)
+    }
+
+    @Test func t3Edit_renameOnly_savesWithoutPairingAndKeepsToken() async {
+        let store = RecordingConnectionProfileStore()
+        let pairing = pairingClient()
+        let viewModel = t3EditViewModel(store: store, pairing: pairing)
+        viewModel.name = "Desk renamed"
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(pairing.pairCalls.isEmpty)
+        #expect(pairing.validateCalls.isEmpty)
+        #expect(store.saved.last?.name == "Desk renamed")
+        #expect(store.saved.last?.password == "stored-access-token")
+        #expect(store.saved.last?.engine == .t3)
+        #expect(viewModel.snackbar == nil)
+    }
+
+    @Test func t3Edit_changedHostWithoutToken_validatesEnvironmentAndKeepsToken() async {
+        let store = RecordingConnectionProfileStore()
+        let pairing = pairingClient()
+        let viewModel = t3EditViewModel(store: store, pairing: pairing)
+        viewModel.baseURL = "https://desk.tail1234.ts.net/"
+        viewModel.onFieldChanged()
+        #expect(viewModel.connectionUnchanged == false)
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(pairing.pairCalls.isEmpty)
+        #expect(pairing.validateCalls == ["https://desk.tail1234.ts.net/"])
+        #expect(store.saved.last?.baseURL == "https://desk.tail1234.ts.net/")
+        #expect(store.saved.last?.password == "stored-access-token")
+    }
+
+    @Test func t3Edit_changedHostWithNewToken_pairsAgainAtNewHost() async {
+        let store = RecordingConnectionProfileStore()
+        let pairing = pairingClient()
+        let viewModel = t3EditViewModel(store: store, pairing: pairing)
+        viewModel.baseURL = "https://desk.tail1234.ts.net/"
+        viewModel.pairingToken = "fresh-pairing-token"
+        viewModel.onFieldChanged()
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(pairing.pairCalls.count == 1)
+        #expect(pairing.pairCalls.first?.baseURL == "https://desk.tail1234.ts.net/")
+        #expect(pairing.pairCalls.first?.pairingToken == "fresh-pairing-token")
+        #expect(store.saved.last?.password == "new-access-token")
+        #expect(store.saved.last?.baseURL == "https://desk.tail1234.ts.net/")
+    }
+
+    @Test func t3Edit_newTokenSameHost_pairsAndReplacesStoredToken() async {
+        let store = RecordingConnectionProfileStore()
+        let pairing = pairingClient()
+        let viewModel = t3EditViewModel(store: store, pairing: pairing)
+        viewModel.pairingToken = "fresh-pairing-token"
+        viewModel.onFieldChanged()
+        #expect(viewModel.connectionUnchanged == false)
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(pairing.pairCalls.first?.pairingToken == "fresh-pairing-token")
+        #expect(store.saved.last?.password == "new-access-token")
+        #expect(store.saved.last?.id == "t3-1")
+    }
+
+    @Test func t3Edit_changedHostProtocolMismatch_doesNotSave() async {
+        let store = RecordingConnectionProfileStore()
+        let pairing = FakeT3PairingClient(
+            result: .success(T3PairingResult(accessToken: "new-access-token", label: "Desk")),
+            validateResult: .failure(T3ClientError.unsupportedProtocol(1))
+        )
+        let viewModel = t3EditViewModel(store: store, pairing: pairing)
+        viewModel.baseURL = "https://other.example/"
+        viewModel.onFieldChanged()
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        #expect(store.saved.isEmpty)
+        #expect(viewModel.snackbar?.text == T3ClientError.unsupportedProtocol(1).errorDescription)
+    }
+
+    @Test func t3Add_rejectedPairingToken_showsReadableMessageNotServerBody() async {
+        let pairing = FakeT3PairingClient(
+            result: .failure(T3ClientError.accessRevoked(statusCode: 401, body: "{\"error\":\"invalid_grant\",\"trace\":\"secret\"}"))
+        )
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            t3PairingClient: pairing,
+            mode: .add
+        )
+        viewModel.selectEngine(.t3)
+        viewModel.baseURL = "https://desk.example/"
+        viewModel.pairingToken = "stale-pairing-token"
+        let saved = await viewModel.submit()
+        #expect(saved == false)
+        let text = viewModel.snackbar?.text ?? ""
+        #expect(text == "T3 rejected this pairing token. Paste a new pairing token from T3 Code.")
+        #expect(text.contains("secret") == false)
+    }
+
+    @Test func t3Add_hostWithoutScheme_defaultsToHttps() async {
+        let store = RecordingConnectionProfileStore()
+        let pairing = pairingClient()
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: store
+            ),
+            t3PairingClient: pairing,
+            mode: .add
+        )
+        viewModel.selectEngine(.t3)
+        #expect(viewModel.baseURL == "https://")
+        viewModel.baseURL = "desk.tail1234.ts.net:3773"
+        viewModel.pairingToken = "pair-token"
+        let saved = await viewModel.submit()
+        #expect(saved == true)
+        #expect(pairing.pairCalls.first?.baseURL == "https://desk.tail1234.ts.net:3773/")
+        #expect(store.saved.last?.baseURL == "https://desk.tail1234.ts.net:3773/")
+    }
+
+    @Test func applyPairingQR_t3DesktopLink_switchesEngineAndFillsHostAndToken() async {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            t3PairingClient: pairingClient(),
+            mode: .add
+        )
+        await viewModel.applyPairingQR("http://192.168.0.160:3773/pair#token=pair-abc")
+        #expect(viewModel.engine == .t3)
+        #expect(viewModel.baseURL == "http://192.168.0.160:3773/")
+        #expect(viewModel.pairingToken == "pair-abc")
+        #expect(viewModel.username == T3Auth.username)
+        #expect(viewModel.snackbar == nil)
+    }
+
+    @Test func applyPairingQR_t3HostedLink_usesBackendHostAndLabel() async {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            t3PairingClient: pairingClient(),
+            mode: .add
+        )
+        await viewModel.applyPairingQR(
+            "https://app.t3.codes/pair?host=https%3A%2F%2Fdesk.tail1234.ts.net&label=Desk#token=pair-hosted"
+        )
+        #expect(viewModel.engine == .t3)
+        #expect(viewModel.baseURL == "https://desk.tail1234.ts.net/")
+        #expect(viewModel.pairingToken == "pair-hosted")
+        #expect(viewModel.name == "Desk")
+    }
+
+    @Test func applyPairingQR_t3LoopbackLink_showsSnackbar() async {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            t3PairingClient: pairingClient(),
+            mode: .add
+        )
+        await viewModel.applyPairingQR("http://127.0.0.1:3773/pair#token=pair-abc")
+        #expect(viewModel.snackbar?.text == "That QR only has a localhost address")
+        #expect(viewModel.baseURL.isEmpty)
+    }
+
+    @Test func applyPairingQR_invalidWhileT3Selected_showsT3Message() async {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            t3PairingClient: pairingClient(),
+            mode: .add
+        )
+        viewModel.selectEngine(.t3)
+        await viewModel.applyPairingQR("nope")
+        #expect(viewModel.snackbar?.text == "This isn't a T3 pairing link")
+    }
+
+    private func pairingClient() -> FakeT3PairingClient {
+        FakeT3PairingClient(result: .success(T3PairingResult(accessToken: "new-access-token", label: "Desk")))
+    }
+
+    private func t3EditViewModel(
+        store: RecordingConnectionProfileStore,
+        pairing: FakeT3PairingClient
+    ) -> ConnectionSetupViewModel {
+        ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v1)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: store
+            ),
+            t3PairingClient: pairing,
+            initialProfile: ConnectionProfile(
+                baseURL: "https://desk.example/",
+                username: T3Auth.username,
+                password: "stored-access-token",
+                engine: .t3,
+                id: "t3-1",
+                name: "Desk"
+            ),
+            mode: .edit
+        )
+    }
 }
 
 private let qrScanFailureMessage = "QR didn't connect. OpenCode 2's pairing API is still changing, so a scan can fail while this app is working. Enter the host and connect. Password is optional. A pairing code works too."
@@ -1215,6 +1482,37 @@ private final class RecordingConnectionProfileStore: ConnectionProfileStore, @un
     func removeWorktree(serverBaseURL: String, worktree: String) async {}
     func setAddedWorktrees(serverBaseURL: String, worktrees: [String]) async {}
     func clearAll() async { saved.removeAll() }
+}
+
+private final class FakeT3PairingClient: T3PairingClient, @unchecked Sendable {
+    let result: Result<T3PairingResult, Error>
+    let validateResult: Result<T3EnvironmentDescriptor, Error>
+    private let lock = NSLock()
+    private var pairCallsStorage: [(baseURL: String, pairingToken: String)] = []
+    private var validateCallsStorage: [String] = []
+
+    init(
+        result: Result<T3PairingResult, Error>,
+        validateResult: Result<T3EnvironmentDescriptor, Error> = .success(
+            T3EnvironmentDescriptor(environmentID: "env-1", label: "Desk", orchestrationProtocolVersion: 2)
+        )
+    ) {
+        self.result = result
+        self.validateResult = validateResult
+    }
+
+    var pairCalls: [(baseURL: String, pairingToken: String)] { lock.withLock { pairCallsStorage } }
+    var validateCalls: [String] { lock.withLock { validateCallsStorage } }
+
+    func pair(baseURL: String, pairingToken: String) async throws -> T3PairingResult {
+        lock.withLock { pairCallsStorage.append((baseURL, pairingToken)) }
+        return try result.get()
+    }
+
+    func validateEnvironment(baseURL: String) async throws -> T3EnvironmentDescriptor {
+        lock.withLock { validateCallsStorage.append(baseURL) }
+        return try validateResult.get()
+    }
 }
 
 private struct FakeSetupConnectionProfileStore: ConnectionProfileStore {

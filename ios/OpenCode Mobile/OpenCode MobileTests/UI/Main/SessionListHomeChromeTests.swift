@@ -304,6 +304,16 @@ struct SessionListHomeChromeTests {
         #expect(SessionListHomeChrome.terminalAction(projects: [mobile]) == .openCatalog)
     }
 
+    @Test func terminalAction_hiddenWhenTerminalIsUnsupported() {
+        #expect(
+            SessionListHomeChrome.terminalAction(projects: [mobile], showsTerminal: false) == .none
+        )
+    }
+
+    @Test func terminalAction_twoProjectsOpensCatalog() {
+        #expect(SessionListHomeChrome.terminalAction(projects: [mobile, playground]) == .openCatalog)
+    }
+
     @Test func newSessionLongPressAction_opensRunInForAnyTargetWhileWorktreesAreOn() {
         // #752: Run in lists New worktree…, so even one checkout has something to choose.
         #expect(

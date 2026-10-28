@@ -5,6 +5,14 @@ protocol SessionRepository: Sendable {
     func listPendingQuestions(directory: String?) async throws -> [QuestionRequest]
     func listSessions(directory: String?) async throws -> [Session]
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session
+    /// Creation with engine-specific choices (T3 harness, model, runtime mode).
+    /// Engines without those choices ignore them.
+    func createSession(
+        parentID: String?,
+        title: String?,
+        directory: String?,
+        options: SessionCreateOptions
+    ) async throws -> Session
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus]
     func getSession(id: String, directory: String?) async throws -> Session
     func updateSession(id: String, title: String?, directory: String?) async throws -> Session
@@ -42,6 +50,17 @@ protocol SessionRepository: Sendable {
     func cancelPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
     func steerPendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
     func queuePendingPrompt(sessionID: String, inboxID: String) async throws -> Bool
+    func settleSession(id: String, directory: String?) async throws -> Bool
+    /// Archived or settled sessions hidden from `listSessions`; engines without the concept return nothing.
+    func listArchivedSessions(directory: String?) async throws -> [Session]
+    func unarchiveSession(id: String, directory: String?) async throws -> Session
+    func unsettleSession(id: String, directory: String?) async throws -> Bool
+    /// Hides the thread until `snoozedUntil`, an ISO-8601 timestamp. Engines without snooze ignore it.
+    func snoozeSession(id: String, snoozedUntil: String, directory: String?) async throws -> Bool
+    /// Clears a snooze. Engines without snooze ignore it.
+    func wakeSession(id: String, directory: String?) async throws -> Bool
+    func setRuntimeMode(id: String, runtimeMode: String, directory: String?) async throws -> Session
+    func setModelSelection(id: String, providerInstanceID: String, modelID: String, directory: String?) async throws -> Session
     /// Acknowledges a finished run as viewed on the server (v2). No-op on v1.
     func markSessionViewed(sessionId: String, idleAtEpochMs: Int64) async throws
     /// Moves a session to another worktree of its project (v2). The server applies it at the
@@ -50,6 +69,21 @@ protocol SessionRepository: Sendable {
     /// Answers a `/btw` side question from the session's context and model without adding to the
     /// conversation (v2). Returns the trimmed markdown answer. v1 has no equivalent and throws.
     func askSideQuestion(sessionID: String, question: String) async throws -> String
+}
+
+/// Optional creation choices. Empty fields fall back to the engine's defaults.
+nonisolated struct SessionCreateOptions: Equatable, Sendable {
+    var providerInstanceID: String?
+    var modelID: String?
+    var runtimeMode: String?
+
+    init(providerInstanceID: String? = nil, modelID: String? = nil, runtimeMode: String? = nil) {
+        self.providerInstanceID = providerInstanceID
+        self.modelID = modelID
+        self.runtimeMode = runtimeMode
+    }
+
+    static let defaults = SessionCreateOptions()
 }
 
 /// How the server handled a compact request.
@@ -61,6 +95,15 @@ nonisolated enum CompactionStart: Sendable, Equatable {
 }
 
 extension SessionRepository {
+    func createSession(
+        parentID: String?,
+        title: String?,
+        directory: String?,
+        options _: SessionCreateOptions
+    ) async throws -> Session {
+        try await createSession(parentID: parentID, title: title, directory: directory)
+    }
+
     func compactSession(id: String, providerID: String, modelID: String) async throws -> CompactionStart {
         _ = try await summarizeSession(id: id, providerID: providerID, modelID: modelID)
         return .finished
@@ -125,6 +168,28 @@ extension SessionRepository {
 
     func getVcsStatus(directory: String?) async throws -> [VcsFileStatus] {
         throw SessionError.http(statusCode: 404, message: "VCS endpoints are unavailable")
+    }
+
+    func settleSession(id _: String, directory _: String?) async throws -> Bool { false }
+
+    func listArchivedSessions(directory _: String?) async throws -> [Session] { [] }
+
+    func unarchiveSession(id _: String, directory _: String?) async throws -> Session {
+        throw SessionError.http(statusCode: 400, message: "Unarchive is not available")
+    }
+
+    func unsettleSession(id _: String, directory _: String?) async throws -> Bool { false }
+
+    func snoozeSession(id _: String, snoozedUntil _: String, directory _: String?) async throws -> Bool { false }
+
+    func wakeSession(id _: String, directory _: String?) async throws -> Bool { false }
+
+    func setRuntimeMode(id _: String, runtimeMode _: String, directory _: String?) async throws -> Session {
+        throw SessionError.http(statusCode: 400, message: "Runtime mode is not available")
+    }
+
+    func setModelSelection(id _: String, providerInstanceID _: String, modelID _: String, directory _: String?) async throws -> Session {
+        throw SessionError.http(statusCode: 400, message: "Model selection is not available")
     }
 }
 

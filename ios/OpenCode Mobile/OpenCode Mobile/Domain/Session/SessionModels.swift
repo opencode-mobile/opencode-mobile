@@ -13,6 +13,18 @@ struct Session: Sendable, Equatable {
     let updatedAtEpochMs: Int64?
     var archivedAtEpochMs: Int64? = nil
     var revert: SessionRevert? = nil
+    var providerInstanceID: String? = nil
+    var runtimeMode: String? = nil
+    var modelName: String? = nil
+    var activeRunID: String? = nil
+    /// T3: when the thread was settled and not re-activated; nil for active sessions.
+    var settledAtEpochMs: Int64? = nil
+    /// T3: scheduled wake, whether or not the snooze is still in effect.
+    var snoozedUntilEpochMs: Int64? = nil
+    /// Why snooze and settle are unavailable: "Still running" or "Waiting on you".
+    var snoozeBlockReason: String? = nil
+    /// T3: a pending approval (not a question) is waiting on this device.
+    var needsApproval: Bool = false
     /// v2 only: when the latest run ended (strictly increasing per session).
     var idleAtEpochMs: Int64? = nil
     /// v2 only: server-wide "viewed up to" watermark for `idleAtEpochMs`.
@@ -21,6 +33,13 @@ struct Session: Sendable, Equatable {
     var idleOutcome: SessionIdleOutcome? = nil
 
     var isArchived: Bool { archivedAtEpochMs != nil }
+    var isSettled: Bool { settledAtEpochMs != nil }
+    var snoozeBlocked: Bool { snoozeBlockReason != nil }
+
+    func isSnoozed(nowEpochMs: Int64) -> Bool {
+        guard !isSettled, let snoozedUntilEpochMs else { return false }
+        return snoozedUntilEpochMs > nowEpochMs
+    }
 
     /// A finished run nobody has viewed yet (v2 server state; always false on v1).
     var isServerUnread: Bool {
@@ -290,6 +309,16 @@ enum SessionTodoList {
         !todos.isEmpty && !isFinished(todos)
     }
 
+    /// T3 keeps the pill up for the whole run, including after every step is done.
+    static func isPresented(_ todos: [SessionTodo], keepFinished: Bool) -> Bool {
+        keepFinished ? !todos.isEmpty : isVisible(todos)
+    }
+
+    /// The finished-hold timer stays off while `keepFinished` is holding the pill itself.
+    static func treatAsFinished(_ todos: [SessionTodo], keepFinished: Bool) -> Bool {
+        !keepFinished && isFinished(todos)
+    }
+
     /// Hold the all-done pill only after this presentation already showed an unfinished list.
     static func shouldHoldFinished(sawUnfinished: Bool, todos: [SessionTodo]) -> Bool {
         sawUnfinished && isFinished(todos)
@@ -432,6 +461,13 @@ enum SessionError: Error, Equatable {
     case transport(String)
     case http(statusCode: Int, message: String?)
     case decoding(String)
+}
+
+/// The engine refused to settle: the session is still running or waiting on the user.
+nonisolated struct SessionSettleBlockedError: Error, Equatable, LocalizedError {
+    static let message = "Can't settle while the thread is running or waiting on you."
+
+    var errorDescription: String? { Self.message }
 }
 
 extension SessionError: LocalizedError {

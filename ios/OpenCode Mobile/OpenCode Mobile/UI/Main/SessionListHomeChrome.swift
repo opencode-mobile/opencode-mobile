@@ -197,8 +197,8 @@ enum SessionListHomeChrome {
         return projects.filter { $0.key != projectKey }
     }
 
-    static func terminalAction(projects: [HomeProject]) -> TerminalAction {
-        if projects.isEmpty {
+    static func terminalAction(projects: [HomeProject], showsTerminal: Bool = true) -> TerminalAction {
+        if !showsTerminal || projects.isEmpty {
             return .none
         }
         return .openCatalog

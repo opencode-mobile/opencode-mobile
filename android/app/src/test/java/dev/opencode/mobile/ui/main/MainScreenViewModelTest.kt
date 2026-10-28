@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.main
 
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
@@ -21,6 +22,8 @@ import dev.opencode.mobile.domain.live.DefaultSessionReadyStore
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.InMemorySessionReadyPersistence
 import dev.opencode.mobile.domain.live.LiveStoreScope
+import dev.opencode.mobile.domain.live.NoOpPermissionLiveStore
+import dev.opencode.mobile.domain.live.PermissionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyClock
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionStatusLiveStore
@@ -41,6 +44,7 @@ import dev.opencode.mobile.domain.project.Project
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
+import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionActivityEntry
@@ -49,6 +53,7 @@ import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionDomainAdapter
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.session.SessionSettleBlockedException
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.session.VcsInfo
@@ -67,6 +72,7 @@ import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.ui.components.SessionListScrollPin
 import dev.opencode.mobile.ui.components.SessionListStatus
+import dev.opencode.mobile.ui.main.region.HomeSessionActions
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -88,6 +94,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -2298,6 +2305,57 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun openCodeHome_pendingPermissionOutranksRunning() =
+        runTest(testDispatcher) {
+            val sessions = listOf(Session(id = "ses-1", title = "Chat", updatedAtEpochMs = 1L))
+            val permissions = HomePermissionLiveStore(listOf(homePermissionRequest("perm-1", "ses-1")))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = mapOf("/repo" to sessions),
+                    statusLiveStoreOverride = FakeHomeStatusLiveStore(runningActivity("ses-1")),
+                    permissionLiveStore = permissions,
+                )
+            advanceUntilIdle()
+
+            assertEquals(
+                SessionListStatus.NeedsApproval,
+                homeSummaries(viewModel).getValue("ses-1").toSessionListStatus(),
+            )
+            assertEquals(listOf("/repo"), permissions.observedDirectories)
+            assertEquals(setOf("ses-1"), permissions.notedSessions["/repo"])
+
+            permissions.requests.value = emptyList()
+            advanceUntilIdle()
+            assertEquals(
+                SessionListStatus.Running,
+                homeSummaries(viewModel).getValue("ses-1").toSessionListStatus(),
+            )
+        }
+
+    @Test
+    fun t3Home_doesNotFetchOpenCodePermissions() =
+        runTest(testDispatcher) {
+            val sessions = listOf(Session(id = "ses-1", title = "Chat", updatedAtEpochMs = 1L))
+            val permissions = HomePermissionLiveStore(listOf(homePermissionRequest("perm-1", "ses-1")))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo"), engine = ConnectionEngine.T3),
+                    sessionsByWorktree = mapOf("/repo" to sessions),
+                    statusLiveStoreOverride = FakeHomeStatusLiveStore(runningActivity("ses-1")),
+                    permissionLiveStore = permissions,
+                    engine = ConnectionEngine.T3,
+                )
+            advanceUntilIdle()
+
+            assertEquals(
+                SessionListStatus.Running,
+                homeSummaries(viewModel).getValue("ses-1").toSessionListStatus(),
+            )
+            assertTrue(permissions.observedDirectories.isEmpty())
+        }
+
+    @Test
     fun v2Home_addingProjectNeverPaintsRunningSessionAsDoneFromCache() =
         runTest(testDispatcher) {
             val sessions = listOf(Session(id = "ses-1", title = "Chat", updatedAtEpochMs = 1L, idleAtEpochMs = 30L))
@@ -2398,6 +2456,59 @@ class MainScreenViewModelTest {
             ),
             Session(id = "ses-never-ran", title = "Never ran", updatedAtEpochMs = 1L),
         )
+
+    @Test
+    fun homeSessionActions_chooseSettle_skipsBusyThread() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(mutableMapOf())
+            val errors = mutableListOf<String>()
+            val region = HomeSessionActions(repository, FakeMessageRepository(), this, onLifecycleError = { errors += it })
+            region.begin(
+                sessionId = "thr-1",
+                title = "Busy",
+                worktree = "/repo",
+                canArchive = true,
+                showsSettle = true,
+                snoozeBlockReason = "Waiting on you",
+                presentSheet = false,
+            )
+
+            region.chooseSettle()
+            advanceUntilIdle()
+
+            assertEquals(emptyList<String>(), repository.settledIds)
+            assertEquals(emptyList<String>(), errors)
+            assertFalse(region.state.value.lifecycleInFlight)
+        }
+
+    @Test
+    fun homeSessionActions_settleBlockedByServer_explainsWhy() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(mutableMapOf(), settleError = SessionSettleBlockedException())
+            val errors = mutableListOf<String>()
+            val region = HomeSessionActions(repository, FakeMessageRepository(), this, onLifecycleError = { errors += it })
+            region.begin(sessionId = "thr-1", title = "Idle", worktree = "/repo", canArchive = true, showsSettle = true)
+
+            region.chooseSettle()
+            advanceUntilIdle()
+
+            assertEquals(listOf("thr-1"), repository.settledIds)
+            assertEquals(listOf(SessionSettleBlockedException.USER_MESSAGE), errors)
+        }
+
+    @Test
+    fun homeSessionActions_settleFailure_staysGenericForOtherErrors() =
+        runTest(testDispatcher) {
+            val repository = FakeSessionRepository(mutableMapOf(), settleError = IllegalStateException("boom"))
+            val errors = mutableListOf<String>()
+            val region = HomeSessionActions(repository, FakeMessageRepository(), this, onLifecycleError = { errors += it })
+            region.begin(sessionId = "thr-1", title = "Idle", worktree = "/repo", canArchive = true, showsSettle = true)
+
+            region.chooseSettle()
+            advanceUntilIdle()
+
+            assertEquals(listOf("Couldn't settle session."), errors)
+        }
 
     private fun addProjectSheetVisible(viewModel: MainScreenViewModel): Boolean =
         when (val state = viewModel.uiState.value) {
@@ -2759,6 +2870,8 @@ class MainScreenViewModelTest {
         readyStoreOverride: SessionReadyStore? = null,
         serverProtocol: ServerProtocol? = null,
         sessionCache: SessionCache = NoOpSessionCache,
+        permissionLiveStore: PermissionLiveStore = NoOpPermissionLiveStore,
+        engine: ConnectionEngine = ConnectionEngine.OPENCODE,
         projectFirstLoadTiming: ProjectFirstLoadTiming = ProjectFirstLoadTiming(),
         modelRepository: ModelRepository =
             object : ModelRepository {
@@ -2772,7 +2885,12 @@ class MainScreenViewModelTest {
         val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
         runBlocking {
             activeConnectionManager.applyProfile(
-                ConnectionProfile(baseUrl = serverUrl, username = "opencode", password = ""),
+                ConnectionProfile(
+                    baseUrl = serverUrl,
+                    username = if (engine == ConnectionEngine.T3) ConnectionEngine.T3_USERNAME else "opencode",
+                    password = "",
+                    engine = engine,
+                ),
                 serverProtocol = serverProtocol,
             )
         }
@@ -2837,6 +2955,7 @@ class MainScreenViewModelTest {
             sessionLiveStore = sessionLiveStore,
             sessionStatusLiveStore = sessionStatusLiveStore,
             sessionReadyStore = sessionReadyStore,
+            permissionLiveStore = permissionLiveStore,
             activeConnectionManager = activeConnectionManager,
             connectionSessionCoordinator = coordinator,
             sessionCache = sessionCache,
@@ -2910,8 +3029,10 @@ private class FakeSessionRepository(
     private val deleteError: Throwable? = null,
     private val forkError: Throwable? = null,
     private val deleteResult: Boolean = true,
+    private val settleError: Throwable? = null,
     private val branches: Map<String, String> = emptyMap(),
 ) : SessionRepository {
+    val settledIds = mutableListOf<String>()
     var listSessionsCallCount = 0
     val listedDirectories = mutableListOf<String?>()
     var nextListGate: CompletableDeferred<Unit>? = null
@@ -2991,6 +3112,15 @@ private class FakeSessionRepository(
             updatedAtEpochMs = 20L,
             archivedAtEpochMs = 20L,
         )
+    }
+
+    override suspend fun settleSession(
+        id: String,
+        directory: String?,
+    ): Boolean {
+        settledIds += id
+        settleError?.let { throw it }
+        return true
     }
 
     override suspend fun deleteSession(
@@ -3139,6 +3269,7 @@ private class FakeMessageRepository(
 private class FakeConnectionProfileStore(
     initial: List<String> = emptyList(),
     private val serverProtocol: ServerProtocol? = null,
+    private val engine: ConnectionEngine = ConnectionEngine.OPENCODE,
 ) : ConnectionProfileStore {
     private val data = mutableMapOf<String, List<String>>()
 
@@ -3151,7 +3282,13 @@ private class FakeConnectionProfileStore(
     fun added(serverBaseUrl: String): List<String> = data[serverBaseUrl].orEmpty()
 
     override suspend fun activeProfile(): ConnectionProfile? =
-        ConnectionProfile(baseUrl = serverUrlKey(), username = "opencode", password = "", serverProtocol = serverProtocol)
+        ConnectionProfile(
+            baseUrl = serverUrlKey(),
+            username = if (engine == ConnectionEngine.T3) ConnectionEngine.T3_USERNAME else "opencode",
+            password = "",
+            serverProtocol = serverProtocol,
+            engine = engine,
+        )
 
     override suspend fun saveProfile(profile: ConnectionProfile) = Unit
 
@@ -3271,6 +3408,58 @@ private class FakeSessionModelSelectionStore : SessionModelSelectionStore {
     ) {
         preferences["${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree"] = selection
     }
+}
+
+private fun runningActivity(sessionId: String) =
+    MutableStateFlow(
+        SessionActivitySnapshot(
+            entries =
+                mapOf(
+                    sessionId to
+                        SessionActivityEntry(
+                            activity = SessionActivity.Running,
+                            source = SessionActivitySource.Server,
+                            observedAtMs = 0L,
+                        ),
+                ),
+            seeded = true,
+        ),
+    )
+
+private fun homePermissionRequest(
+    id: String,
+    sessionId: String,
+) = PermissionRequest(
+    id = id,
+    sessionId = sessionId,
+    permission = "bash",
+    patterns = listOf("git status"),
+    metadata = JsonObject(emptyMap()),
+    always = emptyList(),
+    toolMessageId = null,
+    toolCallId = null,
+)
+
+private class HomePermissionLiveStore(
+    initial: List<PermissionRequest>,
+) : PermissionLiveStore {
+    val requests = MutableStateFlow(initial)
+    val observedDirectories = mutableListOf<String>()
+    val notedSessions = mutableMapOf<String, Set<String>>()
+
+    override fun observePermissions(directory: String): Flow<List<PermissionRequest>> {
+        observedDirectories += directory
+        return requests
+    }
+
+    override fun noteSessions(
+        directory: String,
+        sessionIds: Set<String>,
+    ) {
+        notedSessions[directory] = sessionIds
+    }
+
+    override fun clearCache() = Unit
 }
 
 /** Status store whose stream never emits, so the combined Home stream stays gated. */

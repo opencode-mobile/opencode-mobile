@@ -7,6 +7,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     case active
     case attachments
     case revert
+    case runtimeMode
     case shell
     case sideQuestion
     case childLockout
@@ -33,6 +34,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
         case .active: "Active"
         case .attachments: "Attachments"
         case .revert: "Revert"
+        case .runtimeMode: "Runtime mode"
         case .shell: "Shell"
         case .sideQuestion: "/btw"
         case .childLockout: "Child"
@@ -159,6 +161,8 @@ struct SessionComposerGalleryView: View {
             ])
         case .revert:
             promptState(text: "Add a dark mode toggle to Settings", showPendingRevert: true)
+        case .runtimeMode:
+            promptState(text: "", runtimeModeLabel: "Supervised")
         case .shell:
             promptState(text: shellText, shellMode: ComposerShellCommand.isShellMode(shellText))
         case .sideQuestion:
@@ -258,6 +262,7 @@ struct SessionComposerGalleryView: View {
         attachments: [OpenCodeAttachmentPresentation] = [],
         showPendingRevert: Bool = false,
         showStop: Bool = false,
+        runtimeModeLabel: String? = nil,
         shellMode: Bool = false,
         sideQuestionMode: Bool = false
     ) -> OpenCodeSessionComposerState {
@@ -271,6 +276,9 @@ struct SessionComposerGalleryView: View {
                 selectedModeLabel: "Build",
                 selectedVariantLabel: "Default",
                 showVariant: true,
+                showRuntimeMode: runtimeModeLabel != nil,
+                runtimeModeLabel: runtimeModeLabel ?? "",
+                runtimeModeEnabled: runtimeModeLabel != nil,
                 sendEnabled: shellMode
                     ? ComposerShellCommand.command(text) != nil
                     : !text.isEmpty || !attachments.isEmpty,
@@ -428,6 +436,7 @@ private extension OpenCodeSessionComposerAction {
         case .selectModel: "Select model"
         case .selectMode: "Select mode"
         case .selectVariant: "Select variant"
+        case .selectRuntimeMode: "Select runtime mode"
         case .attach: "Attach"
         case .openCommands: "Open commands"
         case .removeAttachment: "Remove attachment"

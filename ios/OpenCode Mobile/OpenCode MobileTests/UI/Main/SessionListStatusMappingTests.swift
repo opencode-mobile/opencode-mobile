@@ -2,6 +2,24 @@ import XCTest
 @testable import OpenCode_Mobile
 
 final class SessionListStatusMappingTests: XCTestCase {
+    func testNeedsApprovalOutranksRunning() {
+        let status = SessionListItem(
+            id: "ses-1",
+            title: "Session",
+            worktree: "/repo",
+            statusLabel: "Working",
+            isReady: true,
+            unreadOutcome: .failed,
+            needsApproval: true
+        ).sessionListStatus()
+        XCTAssertEqual(status, .needsApproval)
+        let pill = SessionListStatus.needsApproval.listItemStatus()
+        XCTAssertEqual(pill.text, "Needs approval")
+        XCTAssertEqual(pill.tone, .warning)
+        XCTAssertTrue(status.isAttention)
+        XCTAssertFalse(status.isReady)
+    }
+
     func testRunningOutranksReady() {
         XCTAssertEqual(
             sessionListStatus(statusLabel: "Working", isReady: true),

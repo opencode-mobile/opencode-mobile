@@ -14,6 +14,10 @@ interface ForegroundEventStream {
     suspend fun stop()
 
     fun onReconnectWake() {}
+
+    fun publishSynthetic(event: OpencodeEvent) {}
+
+    fun publishExternalConnectionState(state: EventStreamConnectionState) {}
 }
 
 /** No events. View-model tests use this when they do not pass a stream. */

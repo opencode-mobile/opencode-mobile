@@ -13,6 +13,14 @@ enum OpenCodeSessionComposerState {
         let selectedModeLabel: String
         let selectedVariantLabel: String
         let showVariant: Bool
+        let showModel: Bool
+        let showAgent: Bool
+        let showProvider: Bool
+        let showRuntimeMode: Bool
+        let providerLabel: String
+        let runtimeModeLabel: String
+        /// The runtime-mode badge is tappable (`selectRuntimeMode`); display-only otherwise.
+        let runtimeModeEnabled: Bool
         let sendEnabled: Bool
         let attachEnabled: Bool
         let showStop: Bool
@@ -40,6 +48,13 @@ enum OpenCodeSessionComposerState {
             selectedModeLabel: String,
             selectedVariantLabel: String,
             showVariant: Bool,
+            showModel: Bool = true,
+            showAgent: Bool = true,
+            showProvider: Bool = false,
+            showRuntimeMode: Bool = false,
+            providerLabel: String = "",
+            runtimeModeLabel: String = "",
+            runtimeModeEnabled: Bool = false,
             sendEnabled: Bool,
             attachEnabled: Bool = true,
             showStop: Bool,
@@ -60,6 +75,13 @@ enum OpenCodeSessionComposerState {
             self.selectedModeLabel = selectedModeLabel
             self.selectedVariantLabel = selectedVariantLabel
             self.showVariant = showVariant
+            self.showModel = showModel
+            self.showAgent = showAgent
+            self.showProvider = showProvider
+            self.showRuntimeMode = showRuntimeMode
+            self.providerLabel = providerLabel
+            self.runtimeModeLabel = runtimeModeLabel
+            self.runtimeModeEnabled = runtimeModeEnabled
             self.sendEnabled = sendEnabled
             self.attachEnabled = attachEnabled
             self.showStop = showStop
@@ -217,6 +239,7 @@ enum OpenCodeSessionComposerAction {
     case selectModel
     case selectMode
     case selectVariant
+    case selectRuntimeMode
     case attach
     case openCommands
     case removeAttachment(String)
@@ -578,18 +601,22 @@ struct OpenCodeSessionComposer: View {
                     .accessibilityLabel("Shell mode")
                     .accessibilityHint("Leave shell mode")
                 } else {
-                    OpenCodeChoiceBadge(
-                        label: prompt.selectedModelLabel,
-                        selected: false,
-                        variant: .glass,
-                        action: { onAction(.selectModel) }
-                    )
-                    OpenCodeChoiceBadge(
-                        label: prompt.selectedModeLabel,
-                        selected: false,
-                        variant: .glass,
-                        action: { onAction(.selectMode) }
-                    )
+                    if prompt.showModel {
+                        OpenCodeChoiceBadge(
+                            label: prompt.selectedModelLabel,
+                            selected: false,
+                            variant: .glass,
+                            action: { onAction(.selectModel) }
+                        )
+                    }
+                    if prompt.showAgent {
+                        OpenCodeChoiceBadge(
+                            label: prompt.selectedModeLabel,
+                            selected: false,
+                            variant: .glass,
+                            action: { onAction(.selectMode) }
+                        )
+                    }
                     if prompt.showVariant {
                         OpenCodeChoiceBadge(
                             label: prompt.selectedVariantLabel,
@@ -598,6 +625,24 @@ struct OpenCodeSessionComposer: View {
                             action: { onAction(.selectVariant) }
                         )
                     }
+                }
+                if prompt.showProvider, !prompt.providerLabel.isEmpty {
+                    OpenCodeChoiceBadge(
+                        label: prompt.providerLabel,
+                        selected: false,
+                        enabled: false,
+                        variant: .glass,
+                        action: {}
+                    )
+                }
+                if prompt.showRuntimeMode, !prompt.runtimeModeLabel.isEmpty {
+                    OpenCodeChoiceBadge(
+                        label: prompt.runtimeModeLabel,
+                        selected: false,
+                        enabled: prompt.runtimeModeEnabled,
+                        variant: .glass,
+                        action: { onAction(.selectRuntimeMode) }
+                    )
                 }
             }
             if #available(iOS 26, *) {
@@ -675,21 +720,12 @@ struct OpenCodeSessionComposer: View {
             }
             Text(permission.permission.replacingOccurrences(of: "_", with: " "))
                 .font(OpenCodeTypography.bodySecondary)
-            if permission.files.isEmpty {
-                ForEach(Array(permission.patterns.enumerated()), id: \.offset) { _, pattern in
-                    Text(pattern)
-                        .font(OpenCodeTypography.code)
-                        .textSelection(.enabled)
-                }
-            } else {
-                ForEach(permission.files, id: \.self) { file in
-                    permissionFileLine(file)
-                }
-            }
+            permissionDetail(permission)
             if !permission.alwaysPatterns.isEmpty {
                 Text("Always allows: \(permission.alwaysPatterns.joined(separator: ", "))")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeak)
+                    .lineLimit(2)
             }
             if let errorMessage = permission.errorMessage {
                 Text(errorMessage)
@@ -729,6 +765,36 @@ struct OpenCodeSessionComposer: View {
                     onAction(.allowPermissionOnce(requestID: permission.requestID, sessionID: permission.sessionID))
                 }
             )
+        }
+    }
+
+    /// Command or file list. A long approval scrolls here so Deny and Allow stay on screen.
+    @ViewBuilder
+    private func permissionDetail(_ permission: OpenCodeSessionComposerState.Permission) -> some View {
+        if permission.files.isEmpty, permission.patterns.isEmpty {
+            EmptyView()
+        } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 6) {
+                    if permission.files.isEmpty {
+                        ForEach(Array(permission.patterns.enumerated()), id: \.offset) { _, pattern in
+                            Text(pattern)
+                                .font(OpenCodeTypography.code)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    } else {
+                        ForEach(permission.files, id: \.self) { file in
+                            permissionFileLine(file)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                }
+            }
+            .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+            // Hug a short command, then clamp. frame-then-fixedSize reports the full height.
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxHeight: Self.permissionDetailMaxHeight, alignment: .top)
         }
     }
 
@@ -906,6 +972,8 @@ struct OpenCodeSessionComposer: View {
     }
 
     private static let shellCornerRadius: CGFloat = 26
+    /// About eight lines of 14pt command text. Longer approvals scroll inside this.
+    private static let permissionDetailMaxHeight: CGFloat = 160
 
     /// Send button label. Steer/Queue only describe what Send does while work is running;
     /// an idle session just sends. A shell command always runs now.

@@ -49,4 +49,24 @@ class ComposerAttachmentSourcesTest {
         assertEquals(true, sources.photos)
         assertEquals(true, sources.logFile)
     }
+
+    @Test
+    fun engineOwnedModel_enablesPhotosWithoutComposerModel() {
+        // T3 keeps the model on the session, so the composer may have none selected.
+        val composer = SessionChatComposerState()
+
+        assertEquals(
+            ComposerAttachmentSources(photos = true, files = false, logFile = false),
+            composer.attachmentSources(developerToolsUnlocked = false, allowsDocuments = false, modelOwnedByEngine = true),
+        )
+        assertEquals(
+            ComposerAttachmentSources(photos = true, files = true, logFile = false),
+            composer.attachmentSources(developerToolsUnlocked = false, allowsDocuments = true, modelOwnedByEngine = true),
+        )
+    }
+
+    @Test
+    fun composerOwnedModel_withoutSelection_disablesAttach() {
+        assertFalse(SessionChatComposerState().attachmentSources(developerToolsUnlocked = false).isAttachEnabled)
+    }
 }

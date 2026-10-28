@@ -40,14 +40,73 @@ object ComposerMentionRouting {
         mentions: List<AgentMention> = emptyList(),
         fileMentions: List<FileMention> = emptyList(),
         skillMentions: List<SkillMention> = emptyList(),
+        allowsMentions: Boolean = true,
+        allowsSlashCommands: Boolean = true,
     ): ComposerSuggestionMode {
-        val atQuery = atSuggestionQuery(text, cursor, mentions, fileMentions, skillMentions)
-        if (atQuery != null) return ComposerSuggestionMode.At(query = atQuery)
-        val slash = openTriggerQuery(text, cursor, '/', mentions, fileMentions, skillMentions)
-        if (slash != null) {
-            return ComposerSuggestionMode.Slash(query = slash.query, isLeading = slash.triggerIndex == 0)
+        if (allowsMentions) {
+            val atQuery = atSuggestionQuery(text, cursor, mentions, fileMentions, skillMentions)
+            if (atQuery != null) return ComposerSuggestionMode.At(query = atQuery)
+        }
+        if (allowsSlashCommands) {
+            val slash = openTriggerQuery(text, cursor, '/', mentions, fileMentions, skillMentions)
+            if (slash != null) {
+                return ComposerSuggestionMode.Slash(query = slash.query, isLeading = slash.triggerIndex == 0)
+            }
         }
         return ComposerSuggestionMode.None
+    }
+
+    /**
+     * Drops structured mentions and unresolved `@tokens` (start, or after
+     * whitespace, then a non-whitespace run). An address such as `a@b.com`
+     * stays. A bare `@` stays unless it is the end of the text.
+     */
+    fun withoutMentionTokens(
+        text: String,
+        mentions: List<AgentMention> = emptyList(),
+    ): String {
+        var result = text
+        for (mention in mentions.sortedByDescending { it.start }) {
+            if (mention.start < 0 || mention.end > result.length || mention.start > mention.end) continue
+            val dropFollowingSpace =
+                mention.start > 0 &&
+                    result[mention.start - 1].isWhitespace() &&
+                    mention.end < result.length &&
+                    result[mention.end].isWhitespace()
+            val end = if (dropFollowingSpace) mention.end + 1 else mention.end
+            result = result.removeRange(mention.start, end)
+        }
+        return stripUnresolvedAtTokens(result)
+    }
+
+    private fun stripUnresolvedAtTokens(text: String): String {
+        val out = StringBuilder()
+        var index = 0
+        while (index < text.length) {
+            val atBoundary = text[index] == '@' && (index == 0 || text[index - 1].isWhitespace())
+            if (!atBoundary) {
+                out.append(text[index])
+                index += 1
+                continue
+            }
+            var end = index + 1
+            while (end < text.length && !text[end].isWhitespace()) end += 1
+            val hasName = end > index + 1
+            val isTrailingBare = !hasName && end == text.length
+            if (!hasName && !isTrailingBare) {
+                out.append(text[index])
+                index += 1
+                continue
+            }
+            index = end
+            if (index < text.length && text[index].isWhitespace() && (out.isEmpty() || out.last().isWhitespace())) {
+                index += 1
+            }
+            if (out.isEmpty()) {
+                while (index < text.length && text[index].isWhitespace()) index += 1
+            }
+        }
+        return out.toString().trim()
     }
 
     fun filterAgents(

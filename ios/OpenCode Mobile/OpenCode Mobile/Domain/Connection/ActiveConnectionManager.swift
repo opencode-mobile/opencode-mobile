@@ -5,6 +5,7 @@ final class ActiveConnectionManager: @unchecked Sendable {
     private let probeLock = NSLock()
     private let connectionProbing: (any ConnectionProbing)?
     private let profileStore: (any ConnectionProfileStore)?
+    private let fileAttachmentLimit: T3FileAttachmentLimit?
     private var _connection: ServerConnection?
     private var _profile: ConnectionProfile?
     /// Health `version` from the last probe of the active connection (#721).
@@ -21,10 +22,12 @@ final class ActiveConnectionManager: @unchecked Sendable {
 
     init(
         connectionProbing: (any ConnectionProbing)? = nil,
-        profileStore: (any ConnectionProfileStore)? = nil
+        profileStore: (any ConnectionProfileStore)? = nil,
+        fileAttachmentLimit: T3FileAttachmentLimit? = nil
     ) {
         self.connectionProbing = connectionProbing
         self.profileStore = profileStore
+        self.fileAttachmentLimit = fileAttachmentLimit
     }
 
     var connection: ServerConnection? {
@@ -46,9 +49,15 @@ final class ActiveConnectionManager: @unchecked Sendable {
 
     var capabilities: ServerCapabilities {
         lock.lock()
-        defer { lock.unlock() }
-        guard let connection = _connection else { return .forProtocol(.v1) }
-        return .forProtocol(connection.serverProtocol ?? .v1, v2Features: _v2Features)
+        let engine = _profile?.engine
+        let active = _connection
+        let features = _v2Features
+        lock.unlock()
+        if engine == .t3 || active?.engine == .t3 {
+            return .t3(supportsDocumentAttachments: fileAttachmentLimit?.maxBytes != nil)
+        }
+        guard let connection = active else { return .forProtocol(.v1) }
+        return .forProtocol(connection.serverProtocol ?? .v1, v2Features: features)
     }
 
     /// `paths.tmp` where uploads go, only while streamed upload is on for this connection.
@@ -424,6 +433,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
     private let occupancy: @Sendable () -> StreamOccupancy
     private let emitProfileSwitched: @Sendable () -> Void
     private let hasActiveConnection: @Sendable () -> Bool
+    private let resetEngineRuntime: @Sendable () async -> Void
     private let profileChangeGate = ProfileChangeGate()
     private let lock = NSLock()
     private var profileSavedHandlers: [() -> Void] = []
@@ -450,7 +460,8 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         bindReadyProfile: @escaping @Sendable (String?) async -> Void = { _ in },
         occupancy: @escaping @Sendable () -> StreamOccupancy = { .active },
         emitProfileSwitched: @escaping @Sendable () -> Void = {},
-        hasActiveConnection: @escaping @Sendable () -> Bool = { false }
+        hasActiveConnection: @escaping @Sendable () -> Bool = { false },
+        resetEngineRuntime: @escaping @Sendable () async -> Void = { await T3LiveSignals.shared.emit(.stop) }
     ) {
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
@@ -466,6 +477,7 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         self.occupancy = occupancy
         self.emitProfileSwitched = emitProfileSwitched
         self.hasActiveConnection = hasActiveConnection
+        self.resetEngineRuntime = resetEngineRuntime
     }
 
     func onProfileSaved(_ handler: @escaping () -> Void) {
@@ -558,6 +570,9 @@ final class ConnectionSessionCoordinator: @unchecked Sendable {
         if let stream = eventStream() {
             await stream.stop()
         }
+        // The T3 socket and shell cache are bound to the outgoing profile;
+        // close them before the new profile is bound so nothing leaks across.
+        await resetEngineRuntime()
         syncCoordinator()?.beginProfileSwitch(generation: generation)
 
         let nextProfile = await connectionProfileStore.activeProfile()

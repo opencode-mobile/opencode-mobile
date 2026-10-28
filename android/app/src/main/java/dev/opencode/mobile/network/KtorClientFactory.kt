@@ -1,6 +1,7 @@
 package dev.opencode.mobile.network
 
 import dev.opencode.mobile.BuildConfig
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import io.ktor.client.HttpClient
@@ -107,7 +108,8 @@ object KtorClientFactory {
                 }
                 defaultRequest { url(connection.apiBaseUrl) }
                 val password = connection.password
-                if (!password.isNullOrEmpty()) {
+                // T3 hosts use bearer tokens on their own client; never send OpenCode basic auth.
+                if (!password.isNullOrEmpty() && connection.engine != ConnectionEngine.T3) {
                     install(Auth) {
                         basic {
                             credentials {

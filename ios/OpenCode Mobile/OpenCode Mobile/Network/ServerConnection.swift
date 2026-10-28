@@ -9,11 +9,12 @@ nonisolated struct ServerConnection: Sendable {
     let serverProtocol: ServerProtocol?
     let profileID: String
     let serverURLs: [String]
+    let engine: ConnectionEngine
 
     var apiBaseURL: URL { baseURL }
 
     var capabilities: ServerCapabilities {
-        ServerCapabilities.forProtocol(serverProtocol ?? .v1)
+        ServerCapabilities.forEngine(engine, protocol: serverProtocol)
     }
 
     /// `nil` when the profile's address does not parse. There is no default host: a
@@ -28,6 +29,7 @@ nonisolated struct ServerConnection: Sendable {
         self.serverProtocol = serverProtocol ?? profile.serverProtocol
         self.profileID = profile.id
         self.serverURLs = profile.serverURLs
+        self.engine = profile.engine
     }
 
     init(
@@ -36,7 +38,8 @@ nonisolated struct ServerConnection: Sendable {
         password: String?,
         serverProtocol: ServerProtocol? = nil,
         profileID: String = "",
-        serverURLs: [String] = []
+        serverURLs: [String] = [],
+        engine: ConnectionEngine = .opencode
     ) {
         self.baseURL = baseURL
         self.username = username
@@ -44,6 +47,7 @@ nonisolated struct ServerConnection: Sendable {
         self.serverProtocol = serverProtocol
         self.profileID = profileID
         self.serverURLs = serverURLs
+        self.engine = engine
     }
 
     func hasSameIdentity(as other: ServerConnection) -> Bool {
@@ -68,7 +72,8 @@ nonisolated struct ServerConnection: Sendable {
             password: password,
             serverProtocol: serverProtocol,
             profileID: profileID,
-            serverURLs: serverURLs
+            serverURLs: serverURLs,
+            engine: engine
         )
     }
 

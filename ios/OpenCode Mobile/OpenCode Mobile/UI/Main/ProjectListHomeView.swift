@@ -45,8 +45,16 @@ struct ProjectListHomeView: View {
     }
 
     var body: some View {
-        NavigationStack(path: homeNavigationPath) {
-            Group {
+        // Sheets sit on the stack itself so they also present over a pushed Settled page.
+        sessionPresentations(projectPresentations(
+            NavigationStack(path: homeNavigationPath) {
+                homeChrome
+            }
+        ))
+    }
+
+    private var homeChrome: some View {
+        Group {
                 if isSplitLayout {
                     OpenCodeSplitPane(
                         screen: .home,
@@ -105,6 +113,20 @@ struct ProjectListHomeView: View {
                         worktree: terminal.worktree,
                         projectTitle: terminal.projectTitle,
                         ptyId: terminal.ptyId
+                    )
+                case .settled(_):
+                    SettledSessionsDestination(
+                        viewModel: viewModel,
+                        selectedFilterId: selectedSessionFilterId,
+                        worktreesEnabled: homeDisplayPreferences.showsWorktrees,
+                        onOpenSession: { session in
+                            ProductAnalytics.logUserAction(
+                                screenId: ProductAnalytics.Screen.home,
+                                actionId: ProductAnalytics.Action.homeOpenSession
+                            )
+                            stackedChatViewModels[session.navigationID] = Self.makeChatViewModel(session)
+                            homeRoutes.append(.session(session))
+                        }
                     )
                 }
             }
@@ -176,6 +198,16 @@ struct ProjectListHomeView: View {
                     viewModel.onHomeRevealed()
                 }
             }
+            // Session Chat's "Move to worktree…" lists the session's project worktrees from Home.
+            .environment(\.homeProjects, viewModel.homeProjects)
+            // and refreshes them after it creates one.
+            .environment(\.refreshHomeWorktrees, { [viewModel] directory in
+                await viewModel.refreshWorktreeInventory(containing: directory)
+            })
+    }
+
+    private func projectPresentations<Content: View>(_ content: Content) -> some View {
+        content
             .openCodeBottomSheet(
                 isPresented: addProjectPresentedBinding,
                 title: "Add project",
@@ -309,35 +341,23 @@ struct ProjectListHomeView: View {
                     }
                 }
             }
+    }
+
+    private func sessionPresentations<Content: View>(_ content: Content) -> some View {
+        content
             .openCodeBottomSheet(
                 isPresented: sessionActionsSheetBinding,
                 title: "Session actions"
             ) {
-                OpenCodeBottomSheetEntry(
-                    title: "Rename session",
-                    startDecorator: .icon(.edit),
-                    action: { viewModel.openSessionRename() }
-                )
-                OpenCodeBottomSheetEntry(
-                    title: "Fork session",
-                    startDecorator: .icon(.contentCopy),
-                    action: { viewModel.openSessionFork() }
-                )
-                if viewModel.sessionActionsCanArchive {
-                    OpenCodeBottomSheetEntry(
-                        title: "Archive",
-                        enabled: !viewModel.sessionActionInFlight,
-                        startDecorator: .icon(.archive),
-                        action: { Task { await viewModel.archiveSessionAction() } }
-                    )
-                }
-                OpenCodeBottomSheetEntry(
-                    title: "Delete",
-                    enabled: !viewModel.sessionActionInFlight,
-                    destructive: true,
-                    startDecorator: .icon(.close),
-                    action: { viewModel.requestDeleteSessionAction() }
-                )
+                sessionActionsSheetContent
+            }
+            .openCodeBottomSheet(
+                isPresented: snoozeSheetBinding,
+                title: "Snooze until",
+                height: .half,
+                keyboard: .expand
+            ) {
+                snoozeSheetContent
             }
             .fullScreenCover(item: $connectionSetupPresentation) { presentation in
                 ConnectionSetupView(
@@ -445,13 +465,116 @@ struct ProjectListHomeView: View {
                     action: viewModel.cancelDeleteSessionAction
                 )
             )
+    }
+
+    @ViewBuilder
+    private var sessionActionsSheetContent: some View {
+        if viewModel.sessionActionsLifecycle == .snoozed {
+            OpenCodeBottomSheetEntry(
+                title: "Wake",
+                enabled: !viewModel.sessionActionInFlight,
+                startDecorator: .icon(.check),
+                action: { Task { await viewModel.wakeSessionAction() } }
+            )
         }
-        // Session Chat's "Move to worktree…" lists the session's project worktrees from Home.
-        .environment(\.homeProjects, viewModel.homeProjects)
-        // and refreshes them after it creates one.
-        .environment(\.refreshHomeWorktrees, { [viewModel] directory in
-            await viewModel.refreshWorktreeInventory(containing: directory)
-        })
+        if viewModel.sessionActionsLifecycle == .active && viewModel.sessionActionsShowsSettle {
+            OpenCodeBottomSheetEntry(
+                title: settleActionTitle,
+                enabled: viewModel.sessionActionsSnoozeBlockReason == nil && !viewModel.sessionActionInFlight,
+                startDecorator: .icon(.check),
+                action: { Task { await viewModel.settleSessionAction() } }
+            )
+            OpenCodeBottomSheetEntry(
+                title: snoozeActionTitle,
+                enabled: viewModel.sessionActionsSnoozeBlockReason == nil && !viewModel.sessionActionInFlight,
+                startDecorator: .icon(.check),
+                action: { viewModel.openSnooze() }
+            )
+        }
+        if viewModel.sessionActionsLifecycle == .active || viewModel.sessionActionsLifecycle == .snoozed {
+            OpenCodeBottomSheetEntry(
+                title: "Rename session",
+                startDecorator: .icon(.edit),
+                action: { viewModel.openSessionRename() }
+            )
+        }
+        OpenCodeBottomSheetEntry(
+            title: "Fork session",
+            startDecorator: .icon(.contentCopy),
+            action: { viewModel.openSessionFork() }
+        )
+        if viewModel.sessionActionsCanArchive {
+            OpenCodeBottomSheetEntry(
+                title: "Archive",
+                enabled: !viewModel.sessionActionInFlight,
+                startDecorator: .icon(.archive),
+                action: { Task { await viewModel.archiveSessionAction() } }
+            )
+        }
+        if viewModel.sessionActionsLifecycle == .archived {
+            OpenCodeBottomSheetEntry(
+                title: "Unarchive",
+                enabled: !viewModel.sessionActionInFlight,
+                startDecorator: .icon(.archive),
+                action: { Task { await viewModel.unarchiveSessionAction() } }
+            )
+        }
+        if viewModel.sessionActionsLifecycle == .settled {
+            OpenCodeBottomSheetEntry(
+                title: "Unsettle",
+                enabled: !viewModel.sessionActionInFlight,
+                startDecorator: .icon(.check),
+                action: { Task { await viewModel.unsettleSessionAction() } }
+            )
+        }
+        OpenCodeBottomSheetEntry(
+            title: "Delete",
+            enabled: !viewModel.sessionActionInFlight,
+            destructive: true,
+            startDecorator: .icon(.close),
+            action: { viewModel.requestDeleteSessionAction() }
+        )
+    }
+
+    private var settleActionTitle: String {
+        if let reason = viewModel.sessionActionsSnoozeBlockReason {
+            return "Settle · \(reason)"
+        }
+        return "Settle"
+    }
+
+    private var snoozeActionTitle: String {
+        if let reason = viewModel.sessionActionsSnoozeBlockReason {
+            return "Snooze · \(reason)"
+        }
+        return "Snooze"
+    }
+
+    @ViewBuilder
+    private var snoozeSheetContent: some View {
+        ForEach(HomeSettleFeed.snoozePresets(nowEpochMs: homeNowEpochMs), id: \.id) { preset in
+            OpenCodeBottomSheetEntry(
+                title: "\(preset.label) · \(preset.whenLabel)",
+                action: { Task { await viewModel.chooseSnoozePreset(untilEpochMs: preset.atEpochMs) } }
+            )
+        }
+        OpenCodeTextInput(
+            text: snoozeAmountBinding,
+            hint: "Amount",
+            accessibilityLabel: "Snooze amount",
+            errorMessage: viewModel.snoozeError
+        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        OpenCodeBottomSheetEntry(
+            title: viewModel.snoozeUnit.label,
+            action: { viewModel.cycleSnoozeUnit() }
+        )
+        OpenCodeButton(variant: .compactText(title: "Snooze")) {
+            Task { await viewModel.confirmCustomSnooze() }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(16)
     }
 
     private var serversSheetBinding: Binding<Bool> {
@@ -751,7 +874,11 @@ struct ProjectListHomeView: View {
     }
 
     private var showsTerminalAction: Bool {
-        SessionListHomeChrome.terminalAction(projects: viewModel.homeProjects) == .openCatalog
+        guard viewModel.showsTerminal else { return false }
+        return SessionListHomeChrome.terminalAction(
+            projects: viewModel.homeProjects,
+            showsTerminal: viewModel.showsTerminal
+        ) == .openCatalog
     }
 
     private var homeTopBarActions: [OpenCodeTopBarAction] {
@@ -778,7 +905,10 @@ struct ProjectListHomeView: View {
             screenId: ProductAnalytics.Screen.home,
             actionId: ProductAnalytics.Action.homeOpenTerminal
         )
-        if case .openCatalog = SessionListHomeChrome.terminalAction(projects: viewModel.homeProjects) {
+        if case .openCatalog = SessionListHomeChrome.terminalAction(
+            projects: viewModel.homeProjects,
+            showsTerminal: viewModel.showsTerminal
+        ) {
             homeRoutes.append(.terminalsCatalog)
         }
     }
@@ -931,6 +1061,26 @@ struct ProjectListHomeView: View {
         )
     }
 
+    private var homeNowEpochMs: Int64 {
+        Int64(Date().timeIntervalSince1970 * 1000)
+    }
+
+    private var snoozeSheetBinding: Binding<Bool> {
+        Binding(
+            get: { viewModel.snoozeSheetVisible },
+            set: { presented in
+                if !presented { viewModel.dismissSnooze() }
+            }
+        )
+    }
+
+    private var snoozeAmountBinding: Binding<String> {
+        Binding(
+            get: { viewModel.snoozeAmount },
+            set: { viewModel.updateSnoozeAmount($0) }
+        )
+    }
+
     private var projectPickerBinding: Binding<Bool> {
         Binding(
             get: { showProjectPicker },
@@ -1061,9 +1211,16 @@ struct ProjectListHomeView: View {
         sections: [ProjectSectionItem],
         createError: String?
     ) -> some View {
+        let showsSettle = viewModel.showsHomeSettle
         let worktreesEnabled = homeDisplayPreferences.showsWorktrees
         let projects = sections.isEmpty ? [] : viewModel.homeProjects
-        let sessions = sections.crossProjectSessionListSessions(projects: projects, worktreesEnabled: worktreesEnabled)
+        let feed = sections.homeFeed(
+            showsSettle: showsSettle,
+            nowEpochMs: homeNowEpochMs,
+            projects: projects,
+            worktreesEnabled: worktreesEnabled
+        )
+        let sessions = feed.ladder
         let filterTabs = homeFilterTabs(projects: projects, sessions: sessions)
         let selectedFilterId = SessionListHomeChrome.resolvedFilterId(
             selectedId: selectedSessionFilterId,
@@ -1077,7 +1234,7 @@ struct ProjectListHomeView: View {
             worktreesEnabled: worktreesEnabled
         )
         SessionList(
-            sessions: sessions,
+            sessions: feed.ladder,
             filterTabs: filterTabs,
             selectedFilterId: selectedFilterId,
             selectedScopeTab: SessionListHomeChrome.selectedScopeTab(
@@ -1152,6 +1309,20 @@ struct ProjectListHomeView: View {
                 }
             },
             showsEmptyContent: sections.isEmpty,
+            settledSessions: showsSettle ? feed.settled : [],
+            onOpenSettled: showsSettle ? { homeRoutes.append(.settled(SettledSessionsRoute())) } : nil,
+            onSettleGesture: showsSettle
+                ? { session, gesture in
+                    Task {
+                        await viewModel.onSettleGesture(
+                            sessionId: session.id,
+                            title: session.title,
+                            worktree: session.directory,
+                            gesture: gesture
+                        )
+                    }
+                }
+                : nil,
             emptyContent: { NoProjectsEmptyState() }
         )
         .onChange(of: selectedFilterId, initial: true) { _, resolved in
@@ -1159,6 +1330,92 @@ struct ProjectListHomeView: View {
                 selectedSessionFilterId = resolved
             }
         }
+    }
+}
+
+struct SettledSessionsRoute: Hashable {}
+
+/// Pushed from Home the same way as a session, so it slides in and pops with the system Back gesture.
+private struct SettledSessionsDestination: View {
+    let viewModel: ProjectListHomeViewModel
+    let selectedFilterId: String
+    let worktreesEnabled: Bool
+    let onOpenSession: (SessionListItem) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let sessions = settledSessions
+        VStack(spacing: 0) {
+            OpenCodeTopBar(
+                title: "Settled",
+                subtitle: sessions.count == 1 ? "1 thread" : "\(sessions.count) threads",
+                leading: .back(action: { dismiss() })
+            )
+            SettledSessionsPage(
+                sessions: sessions,
+                onSessionSelected: { session in
+                    onOpenSession(
+                        SessionListItem(
+                            id: session.id,
+                            title: session.title,
+                            worktree: session.directory
+                        )
+                    )
+                },
+                onSessionLongPress: { session in
+                    viewModel.onSessionLongPress(
+                        sessionId: session.id,
+                        title: session.title,
+                        worktree: session.directory
+                    )
+                },
+                onSettleGesture: { session, gesture in
+                    Task {
+                        await viewModel.onSettleGesture(
+                            sessionId: session.id,
+                            title: session.title,
+                            worktree: session.directory,
+                            gesture: gesture
+                        )
+                    }
+                },
+                onRefresh: { await viewModel.pullToRefresh() }
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(OpenCodeColors.backgroundBase)
+        .toolbar(.hidden, for: .navigationBar)
+        .navigationBarBackButtonHidden(true)
+        .onChange(of: viewModel.showsHomeSettle) { _, shows in
+            if !shows { dismiss() }
+        }
+    }
+
+    private var settledSessions: [SessionListSession] {
+        guard viewModel.showsHomeSettle, case let .loaded(sections, _, _, _) = viewModel.state else {
+            return []
+        }
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        let projects = viewModel.homeProjects
+        let feed = sections.homeFeed(
+            showsSettle: true,
+            nowEpochMs: now,
+            projects: projects,
+            worktreesEnabled: worktreesEnabled
+        )
+        let tabs = SessionListHomeChrome.filterTabs(
+            projects: projects,
+            sessions: feed.ladder,
+            worktreesEnabled: worktreesEnabled
+        )
+        let resolved = SessionListHomeChrome.resolvedFilterId(
+            selectedId: selectedFilterId,
+            tabs: tabs,
+            projects: projects,
+            worktreesEnabled: worktreesEnabled
+        )
+        return feed.settled.visibleForFilter(resolved)
     }
 }
 
@@ -1177,6 +1434,13 @@ struct SessionListItem: Identifiable, Hashable {
     /// Unique per optimistic new-session navigation so back-stack entries do not reuse a promoted chat.
     let optimisticNavigationInstanceID: UUID?
     let parentID: String?
+    /// Active rows come from `listSessions`; archived and settled ones from `listArchivedSessions`.
+    var lifecycle: HomeSessionLifecycle = .active
+    var snoozedUntilEpochMs: Int64? = nil
+    var snoozeBlockReason: String? = nil
+    var settledAtEpochMs: Int64? = nil
+    /// Pending tool approval. Outranks Running and Snoozed on the home pill.
+    var needsApproval: Bool = false
     /// Directory the session runs in. Nil when the row should use the added project path.
     let directory: String?
 
@@ -1192,6 +1456,10 @@ struct SessionListItem: Identifiable, Hashable {
         statusIsStale: Bool = false,
         optimisticNavigationInstanceID: UUID? = nil,
         parentID: String? = nil,
+        snoozedUntilEpochMs: Int64? = nil,
+        snoozeBlockReason: String? = nil,
+        settledAtEpochMs: Int64? = nil,
+        needsApproval: Bool = false,
         directory: String? = nil
     ) {
         self.id = id
@@ -1205,13 +1473,17 @@ struct SessionListItem: Identifiable, Hashable {
         self.statusIsStale = statusIsStale
         self.optimisticNavigationInstanceID = optimisticNavigationInstanceID
         self.parentID = parentID
+        self.snoozedUntilEpochMs = snoozedUntilEpochMs
+        self.snoozeBlockReason = snoozeBlockReason
+        self.settledAtEpochMs = settledAtEpochMs
+        self.needsApproval = needsApproval
         self.directory = directory
     }
 }
 
 extension SessionListItem {
-    func sessionListStatus(hasPendingPermission: Bool = false) -> SessionListStatus {
-        _ = hasPendingPermission // Reserved for a future home Needs approval pill.
+    func sessionListStatus() -> SessionListStatus {
+        if needsApproval { return .needsApproval }
         switch statusLabel {
         case "Working":
             return SessionListStatus.running
@@ -1248,25 +1520,103 @@ enum HomeSplitSelection {
     }
 }
 
+extension SessionListItem {
+    /// `Archived · 2h ago` for restorable rows; the relative time alone for active ones.
+    var homeCaption: String {
+        let relative = updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? ""
+        let prefix: String
+        switch lifecycle {
+        case .active, .snoozed: return relative
+        case .archived: prefix = "Archived"
+        case .settled: prefix = "Settled"
+        }
+        return relative.isEmpty ? prefix : "\(prefix) · \(relative)"
+    }
+}
+
+private struct HomeFeed {
+    var ladder: [SessionListSession]
+    var settled: [SessionListSession]
+    var activeCount: Int
+}
+
 extension Array where Element == ProjectSectionItem {
+    /// Active rows stay on the ladder. Settled rows move off it only when settle is on.
+    fileprivate func homeFeed(
+        showsSettle: Bool,
+        nowEpochMs: Int64,
+        projects: [HomeProject]? = nil,
+        worktreesEnabled: Bool = true
+    ) -> HomeFeed {
+        if !showsSettle {
+            let ladder = crossProjectSessionListSessions(projects: projects, worktreesEnabled: worktreesEnabled)
+            return HomeFeed(ladder: ladder, settled: [], activeCount: ladder.count)
+        }
+        let ladder =
+            crossProjectRows(
+                \.allSessions,
+                nowEpochMs: nowEpochMs,
+                showsSettle: true,
+                projects: projects,
+                worktreesEnabled: worktreesEnabled
+            )
+            + crossProjectRows(
+                { $0.archivedSessions.filter { $0.lifecycle != .settled } },
+                nowEpochMs: nowEpochMs,
+                showsSettle: true,
+                projects: projects,
+                worktreesEnabled: worktreesEnabled
+            )
+        let settled = crossProjectRows(
+            { $0.archivedSessions.filter { $0.lifecycle == .settled } },
+            nowEpochMs: nowEpochMs,
+            showsSettle: true,
+            settledPage: true,
+            projects: projects,
+            worktreesEnabled: worktreesEnabled
+        )
+        return HomeFeed(
+            ladder: ladder,
+            settled: settled,
+            activeCount: reduce(0) { $0 + $1.allSessions.count }
+        )
+    }
+
     /// Every session on Home once, newest first, filed under its Home project. A session listed
     /// by two added paths (worktrees of one project on v2, or the same id twice) keeps the newer row.
     /// `projects` defaults to one project per added path.
+    /// Active rows come first; archived rows that are not already active follow. Settled rows stay
+    /// in that list until `homeFeed` moves them off the ladder.
     func crossProjectSessionListSessions(
+        projects: [HomeProject]? = nil,
+        worktreesEnabled: Bool = true
+    ) -> [SessionListSession] {
+        let active = crossProjectRows(\.allSessions, projects: projects, worktreesEnabled: worktreesEnabled)
+        let activeIDs = Set(active.map(\.id))
+        let archived = crossProjectRows(\.archivedSessions, projects: projects, worktreesEnabled: worktreesEnabled)
+            .filter { !activeIDs.contains($0.id) }
+        return active + archived
+    }
+
+    private func crossProjectRows(
+        _ sessionsOf: (ProjectSectionItem) -> [SessionListItem],
+        nowEpochMs: Int64 = 0,
+        showsSettle: Bool = false,
+        settledPage: Bool = false,
         projects: [HomeProject]? = nil,
         worktreesEnabled: Bool = true
     ) -> [SessionListSession] {
         let projects = projects ?? HomeProjectGrouping.group(addedPaths: map(\.worktree), resolutions: [:])
         let flattened = flatMap { section in
-            section.allSessions.map { session in
+            sessionsOf(section).map { session in
                 (section: section, session: session)
             }
         }
         var chosenIndexById: [String: Int] = [:]
         for (index, row) in flattened.enumerated() {
-            let timestamp = row.session.updatedAtEpochMs ?? 0
+            let timestamp = sortEpoch(row.session, settledPage: settledPage)
             if let chosenIndex = chosenIndexById[row.session.id] {
-                let chosenTimestamp = flattened[chosenIndex].session.updatedAtEpochMs ?? 0
+                let chosenTimestamp = sortEpoch(flattened[chosenIndex].session, settledPage: settledPage)
                 if timestamp > chosenTimestamp {
                     chosenIndexById[row.session.id] = index
                 }
@@ -1279,54 +1629,116 @@ extension Array where Element == ProjectSectionItem {
             uniquingKeysWith: { first, _ in first }
         )
         return chosenIndexById.values.sorted { lhs, rhs in
-            let leftTimestamp = flattened[lhs].session.updatedAtEpochMs ?? 0
-            let rightTimestamp = flattened[rhs].session.updatedAtEpochMs ?? 0
+            let leftTimestamp = sortEpoch(flattened[lhs].session, settledPage: settledPage)
+            let rightTimestamp = sortEpoch(flattened[rhs].session, settledPage: settledPage)
             if leftTimestamp != rightTimestamp {
                 return leftTimestamp > rightTimestamp
             }
             return lhs < rhs
         }.map { index in
-            let section = flattened[index].section
-            let session = flattened[index].session
-            let directory = session.directory?.isEmpty == false ? session.directory! : section.worktree
-            let project = projectByPath[section.worktree]
-            let worktreeScopeID = project.flatMap { project -> String? in
-                guard worktreesEnabled, project.hasManyWorktrees,
-                      let worktree = project.worktree(at: directory)
-                else { return nil }
-                return HomeScope.worktree(projectKey: project.key, directory: worktree.directory).id
-            }
-            return SessionListSession(
-                id: session.id,
-                title: session.title,
-                worktree: project?.key ?? section.worktree,
-                letter: project.map { letterCharacter(for: $0.displayName) } ?? section.letter,
-                letterAccent: project.map { letterAccent(for: $0.primaryPath) } ?? section.letterAccent,
-                subtitle: section.pathSubtitle,
-                status: session.sessionListStatus(),
-                statusIsStale: session.statusIsStale,
-                caption: session.updatedAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? "",
-                updatedAtEpochMs: session.updatedAtEpochMs,
-                directory: directory,
-                worktreeScopeID: worktreeScopeID,
-                location: project.flatMap {
-                    HomeRowLocation.make(
-                        project: $0,
-                        sessionDirectory: directory,
-                        includesProjectName: false,
-                        worktreesEnabled: worktreesEnabled
-                    )
-                },
-                projectName: project?.displayName,
-                worktreeLabel: project.flatMap {
-                    HomeCompactRowPath.worktreeLabel(
-                        project: $0,
-                        sessionDirectory: directory,
-                        worktreesEnabled: worktreesEnabled
-                    )
-                }
+            sessionListRow(
+                section: flattened[index].section,
+                session: flattened[index].session,
+                nowEpochMs: nowEpochMs,
+                showsSettle: showsSettle,
+                settledPage: settledPage,
+                projectByPath: projectByPath,
+                worktreesEnabled: worktreesEnabled
             )
         }
+    }
+
+    private func sortEpoch(_ session: SessionListItem, settledPage: Bool) -> Int64 {
+        if settledPage {
+            return session.settledAtEpochMs ?? session.updatedAtEpochMs ?? 0
+        }
+        return session.updatedAtEpochMs ?? 0
+    }
+
+    private func sessionListRow(
+        section: ProjectSectionItem,
+        session: SessionListItem,
+        nowEpochMs: Int64,
+        showsSettle: Bool,
+        settledPage: Bool,
+        projectByPath: [String: HomeProject],
+        worktreesEnabled: Bool
+    ) -> SessionListSession {
+        let directory = session.directory?.isEmpty == false ? session.directory! : section.worktree
+        let project = projectByPath[section.worktree]
+        let worktreeScopeID = project.flatMap { project -> String? in
+            guard worktreesEnabled, project.hasManyWorktrees,
+                  let worktree = project.worktree(at: directory)
+            else { return nil }
+            return HomeScope.worktree(projectKey: project.key, directory: worktree.directory).id
+        }
+        let snoozed =
+            showsSettle && !settledPage && HomeSettleFeed.isSnoozed(
+                snoozedUntilEpochMs: session.snoozedUntilEpochMs,
+                nowEpochMs: nowEpochMs,
+                isSettled: session.lifecycle == .settled
+            )
+        let gestures: [HomeSettleGesture]
+        if !showsSettle {
+            gestures = []
+        } else if settledPage {
+            gestures = [.unsettle]
+        } else {
+            gestures = HomeSettleFeed.gestures(
+                showsSettle: true,
+                isSettled: false,
+                isSnoozed: snoozed,
+                snoozeBlocked: session.snoozeBlockReason != nil,
+                isArchived: session.lifecycle == .archived
+            )
+        }
+        let until = session.snoozedUntilEpochMs
+        let subtitle: String
+        let caption: String
+        if settledPage {
+            subtitle = ""
+            caption = session.settledAtEpochMs.map { RelativeTimeFormatting.format(epochMs: $0) } ?? ""
+        } else if snoozed, let until {
+            subtitle = "Until \(HomeSettleFeed.untilLabel(epochMs: until, nowEpochMs: nowEpochMs))"
+            caption = HomeSettleFeed.wakeInLabel(snoozedUntilEpochMs: until, nowEpochMs: nowEpochMs)
+        } else {
+            subtitle = section.pathSubtitle
+            caption = session.homeCaption
+        }
+        // Branch location replaces the path subtitle. Snooze and settled copy need that line instead.
+        let showBranchLine = !settledPage && !snoozed
+        return SessionListSession(
+            id: session.id,
+            title: session.title,
+            worktree: project?.key ?? section.worktree,
+            letter: project.map { letterCharacter(for: $0.displayName) } ?? section.letter,
+            letterAccent: project.map { letterAccent(for: $0.primaryPath) } ?? section.letterAccent,
+            subtitle: subtitle,
+            status: snoozed && !session.needsApproval ? .snoozed : session.sessionListStatus(),
+            statusIsStale: session.statusIsStale,
+            caption: caption,
+            updatedAtEpochMs: session.updatedAtEpochMs,
+            settleGestures: gestures,
+            showStatus: !settledPage,
+            directory: directory,
+            worktreeScopeID: worktreeScopeID,
+            location: showBranchLine ? project.flatMap {
+                HomeRowLocation.make(
+                    project: $0,
+                    sessionDirectory: directory,
+                    includesProjectName: false,
+                    worktreesEnabled: worktreesEnabled
+                )
+            } : nil,
+            projectName: project?.displayName,
+            worktreeLabel: showBranchLine ? project.flatMap {
+                HomeCompactRowPath.worktreeLabel(
+                    project: $0,
+                    sessionDirectory: directory,
+                    worktreesEnabled: worktreesEnabled
+                )
+            } : nil
+        )
     }
 }
 

@@ -52,5 +52,17 @@ interface SessionModelSelectionStore {
         selection: SessionModelSelection,
     )
 
+    /** The runtime mode last chosen for new sessions on this connection and worktree (T3). */
+    suspend fun loadNewSessionRuntimeMode(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+    ): String? = null
+
+    suspend fun saveNewSessionRuntimeMode(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        runtimeMode: String,
+    ) = Unit
+
     suspend fun clearAll()
 }

@@ -78,6 +78,7 @@ import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.domain.session.SideQuestion
 import dev.opencode.mobile.domain.worktree.WorktreeCreateCopy
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.domain.t3.T3RuntimeModeLabels
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.ComposerDictationCardModel
@@ -271,9 +272,15 @@ private fun SessionChatScreenBody(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     // After `session.moved` the route still names the old directory; actions follow the session.
     val currentWorktree = uiState.worktree.ifEmpty { worktree }
-    val attachmentSources = uiState.composer.attachmentSources(DeveloperToolsPreferences.unlocked)
+    val attachmentSources =
+        uiState.composer.attachmentSources(
+            DeveloperToolsPreferences.unlocked,
+            allowsDocuments = uiState.supportsDocumentAttachments,
+            modelOwnedByEngine = !uiState.capabilities.requiresComposerModel,
+        )
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     var showDeleteConfirmation by remember { mutableStateOf(false) }
+    var showRuntimeModePicker by rememberSaveable { mutableStateOf(false) }
     val feedbackSheet = rememberFeedbackSheetState()
     var activePicker by remember { mutableStateOf<ComposerPickerKind?>(null) }
     var activeModelProviderId by remember { mutableStateOf<String?>(null) }
@@ -296,6 +303,8 @@ private fun SessionChatScreenBody(
         }
     val sessionCreated = !OptimisticSessionCreate.isPlaceholder(uiState.sessionId)
     val lifecycleActionsEnabled = sessionCreated && !uiState.isLifecycleActionInFlight
+    // A not-yet-created thread keeps the choice locally and launches with it.
+    val runtimeModePickerEnabled = !uiState.isLifecycleActionInFlight
     var showAttachmentSource by rememberSaveable { mutableStateOf(false) }
 
     val blocksSessionTodosSheet = uiState.permissionRequest != null || uiState.questionRequest != null
@@ -744,29 +753,33 @@ private fun SessionChatScreenBody(
                                 },
                             ),
                         )
-                        add(
-                            OpenCodeOverflowMenuEntry(
-                                title = "Review changes",
-                                icon = OpenCodeIcons.Description,
-                                enabled = sessionCreated,
-                                onClick = {
-                                    logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_REVIEW_CHANGES)
-                                    menuExpanded = false
-                                    onReviewChangesClick(uiState.changesNavigationTarget(currentWorktree))
-                                },
-                            ),
-                        )
-                        add(
-                            OpenCodeOverflowMenuEntry(
-                                title = "Fork session",
-                                icon = OpenCodeIcons.CallSplit,
-                                enabled = sessionCreated,
-                                onClick = {
-                                    menuExpanded = false
-                                    viewModel.openForkSession()
-                                },
-                            ),
-                        )
+                        if (uiState.capabilities.showsReview) {
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = "Review changes",
+                                    icon = OpenCodeIcons.Description,
+                                    enabled = sessionCreated,
+                                    onClick = {
+                                        logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_REVIEW_CHANGES)
+                                        menuExpanded = false
+                                        onReviewChangesClick(uiState.changesNavigationTarget(currentWorktree))
+                                    },
+                                ),
+                            )
+                        }
+                        if (uiState.capabilities.showsChildSessions) {
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = "Fork session",
+                                    icon = OpenCodeIcons.CallSplit,
+                                    enabled = sessionCreated,
+                                    onClick = {
+                                        menuExpanded = false
+                                        viewModel.openForkSession()
+                                    },
+                                ),
+                            )
+                        }
                         add(
                             OpenCodeOverflowMenuEntry(
                                 title = SessionChatWorktreeMoveCopy.MENU_TITLE,
@@ -780,30 +793,34 @@ private fun SessionChatScreenBody(
                                 },
                             ),
                         )
-                        add(
-                            OpenCodeOverflowMenuEntry(
-                                title = "Browse files",
-                                icon = OpenCodeIcons.Folder,
-                                enabled = sessionCreated,
-                                onClick = {
-                                    logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_BROWSE_FILES)
-                                    menuExpanded = false
-                                    onFilesRequested(currentWorktree)
-                                },
-                            ),
-                        )
-                        add(
-                            OpenCodeOverflowMenuEntry(
-                                title = "Session context",
-                                icon = OpenCodeIcons.Architecture,
-                                enabled = sessionCreated,
-                                onClick = {
-                                    logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_SESSION_CONTEXT)
-                                    menuExpanded = false
-                                    onSessionContextClick()
-                                },
-                            ),
-                        )
+                        if (uiState.capabilities.showsFiles) {
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = "Browse files",
+                                    icon = OpenCodeIcons.Folder,
+                                    enabled = sessionCreated,
+                                    onClick = {
+                                        logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_BROWSE_FILES)
+                                        menuExpanded = false
+                                        onFilesRequested(currentWorktree)
+                                    },
+                                ),
+                            )
+                        }
+                        if (uiState.capabilities.showsContext) {
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = "Session context",
+                                    icon = OpenCodeIcons.Architecture,
+                                    enabled = sessionCreated,
+                                    onClick = {
+                                        logOverflowAction(ProductAnalytics.Action.CHAT_OVERFLOW_SESSION_CONTEXT)
+                                        menuExpanded = false
+                                        onSessionContextClick()
+                                    },
+                                ),
+                            )
+                        }
                         add(
                             OpenCodeOverflowMenuEntry(
                                 title = "Copy session ID",
@@ -825,6 +842,48 @@ private fun SessionChatScreenBody(
                                     onClick = {
                                         menuExpanded = false
                                         viewModel.archiveSession()
+                                    },
+                                ),
+                            )
+                        }
+                        if (uiState.capabilities.showsSettle) {
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = "Settle",
+                                    icon = OpenCodeIcons.Check,
+                                    enabled = lifecycleActionsEnabled,
+                                    onClick = {
+                                        menuExpanded = false
+                                        viewModel.settleSession()
+                                    },
+                                ),
+                            )
+                        }
+                        if (uiState.capabilities.canSetRuntimeMode) {
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = uiState.runtimeModeLabel?.let { "Runtime mode · $it" } ?: "Runtime mode",
+                                    icon = OpenCodeIcons.Architecture,
+                                    enabled = runtimeModePickerEnabled,
+                                    onClick = {
+                                        menuExpanded = false
+                                        showRuntimeModePicker = true
+                                    },
+                                ),
+                            )
+                        }
+                        // Opens the composer's model picker once the provider catalogue is loaded.
+                        uiState.modelSelectionLabel?.takeIf { uiState.capabilities.showsModelSelection }?.let { label ->
+                            val canPick = uiState.composer.modelOptions.isNotEmpty()
+                            add(
+                                OpenCodeOverflowMenuEntry(
+                                    title = "Model · $label",
+                                    icon = OpenCodeIcons.Description,
+                                    enabled = canPick && lifecycleActionsEnabled,
+                                    onClick = {
+                                        menuExpanded = false
+                                        activeModelProviderId = null
+                                        activePicker = ComposerPickerKind.Model
                                     },
                                 ),
                             )
@@ -983,14 +1042,16 @@ private fun SessionChatScreenBody(
                                 )
                             },
                             onChildSessionTap = { childSessionId, childTitle ->
-                                logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
-                                onChildSessionClick(
-                                    ChildSessionNavigationTarget(
-                                        sessionId = childSessionId,
-                                        sessionTitle = childTitle,
-                                        worktree = currentWorktree,
-                                    ),
-                                )
+                                if (uiState.capabilities.showsChildSessions) {
+                                    logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
+                                    onChildSessionClick(
+                                        ChildSessionNavigationTarget(
+                                            sessionId = childSessionId,
+                                            sessionTitle = childTitle,
+                                            worktree = currentWorktree,
+                                        ),
+                                    )
+                                }
                             },
                             onChangesReviewTap = changesReview@{ assistantMessageId, initialFilePath ->
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES_FROM_TOOL)
@@ -1007,6 +1068,7 @@ private fun SessionChatScreenBody(
                                 onReviewChangesClick(target)
                             },
                             supportsSessionMessageDiff = uiState.supportsSessionMessageDiff,
+                            supportsRevert = uiState.supportsRevert,
                             expandedStepParagraphs = uiState.expandedStepParagraphs,
                             onExpandStepParagraph = viewModel::expandStepParagraph,
                             unfoldedStepRails = uiState.unfoldedStepRails,
@@ -1256,10 +1318,29 @@ private fun SessionChatScreenBody(
                                         attachments =
                                             uiState.composer.attachments.map(AttachmentPresentationMapper::from),
                                         showPendingRevert = uiState.hasPendingRevert,
-                                        selectedModelLabel = uiState.composer.selectedModelLabel,
+                                        selectedModelLabel =
+                                            if (uiState.capabilities.labelsComposerModelWithProvider) {
+                                                uiState.composer.selectedProviderModelLabel
+                                                    ?: uiState.modelSelectionLabel
+                                                    ?: uiState.composer.selectedModelLabel
+                                            } else {
+                                                uiState.composer.selectedModelLabel
+                                            },
                                         selectedModeLabel = uiState.composer.selectedModeLabel,
                                         selectedVariantLabel = uiState.composer.selectedVariantLabel,
-                                        showVariant = uiState.composer.canSelectVariant,
+                                        showVariant =
+                                            uiState.capabilities.showsVariant &&
+                                                uiState.composer.canSelectVariant,
+                                        showAgent = uiState.capabilities.showsAgent,
+                                        showModel = uiState.capabilities.showsComposerModel,
+                                        providerLabel =
+                                            uiState.providerLabel.takeIf {
+                                                uiState.capabilities.showsProvider &&
+                                                    !uiState.capabilities.labelsComposerModelWithProvider
+                                            },
+                                        runtimeModeLabel =
+                                            uiState.runtimeModeLabel.takeIf { uiState.capabilities.showsRuntimeMode },
+                                        runtimeModeSelectable = uiState.runtimeModeSelectable,
                                         sendEnabled =
                                             (
                                                 if (sideQuestionMode) {
@@ -1267,8 +1348,13 @@ private fun SessionChatScreenBody(
                                                     uiState.composer.text.isNotBlank()
                                                 } else {
                                                     uiState.composer.canSend &&
-                                                        uiState.composer.selectedModel != null &&
-                                                        uiState.composer.isModelSelectionReady &&
+                                                        (
+                                                            !uiState.capabilities.requiresComposerModel ||
+                                                                (
+                                                                    uiState.composer.selectedModel != null &&
+                                                                        uiState.composer.isModelSelectionReady
+                                                                )
+                                                        ) &&
                                                         !uiState.isSending &&
                                                         !blockedSideQuestion
                                                 }
@@ -1279,7 +1365,10 @@ private fun SessionChatScreenBody(
                                         attachEnabled =
                                             attachmentSources.isAttachEnabled &&
                                                 sessionCreated &&
-                                                uiState.composer.isModelSelectionReady &&
+                                                (
+                                                    !uiState.capabilities.requiresComposerModel ||
+                                                        uiState.composer.isModelSelectionReady
+                                                ) &&
                                                 !uiState.composer.isShellMode &&
                                                 !sideQuestionMode,
                                         showStop = uiState.sessionStatusLabel != null,
@@ -1338,6 +1427,9 @@ private fun SessionChatScreenBody(
                                     OpenCodeSessionComposerAction.SelectMode -> {
                                         logChatAction(ProductAnalytics.Action.COMPOSER_OPEN_MODE_PICKER)
                                         activePicker = ComposerPickerKind.Mode
+                                    }
+                                    OpenCodeSessionComposerAction.SelectRuntimeMode -> {
+                                        if (uiState.runtimeModeSelectable) showRuntimeModePicker = true
                                     }
                                     OpenCodeSessionComposerAction.SelectVariant -> {
                                         logChatAction(ProductAnalytics.Action.COMPOSER_OPEN_VARIANT_PICKER)
@@ -1576,6 +1668,7 @@ private fun SessionChatScreenBody(
             modelFilterText = modelFilterText,
             modelOptions = uiState.composer.modelOptions,
             selectedModel = uiState.composer.selectedModel?.option,
+            modelChangeLock = uiState.modelChangeLock,
             selectedMode = uiState.composer.selectedMode,
             selectableAgents = uiState.composer.selectableAgents,
             selectedVariant = uiState.composer.selectedVariant,
@@ -1602,6 +1695,29 @@ private fun SessionChatScreenBody(
                 activePicker = null
             },
         )
+
+        OpenCodeBottomSheet(
+            visible = showRuntimeModePicker,
+            title = "Runtime mode",
+            onDismissRequest = { showRuntimeModePicker = false },
+        ) {
+            uiState.runtimeModeOptions.ifEmpty { T3RuntimeModeLabels.allModes }.forEach { mode ->
+                OpenCodeBottomSheetEntry(
+                    title = T3RuntimeModeLabels.displayName(mode),
+                    enabled = runtimeModePickerEnabled,
+                    endDecorator =
+                        if (mode == uiState.runtimeMode) {
+                            BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check)
+                        } else {
+                            BottomSheetEntryDecorator.None
+                        },
+                    onClick = {
+                        showRuntimeModePicker = false
+                        viewModel.selectRuntimeMode(mode)
+                    },
+                )
+            }
+        }
 
         OpenCodeDialog(
             visible = uiState.rename.isDialogVisible,

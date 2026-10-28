@@ -121,6 +121,10 @@ class SessionDomainAdapter {
             updatedAtEpochMs = session.updatedAtEpochMs,
             isReady = isReady,
             statusStale = statusStale,
+            snoozedUntilEpochMs = session.snoozedUntilEpochMs,
+            snoozeBlockReason = session.snoozeBlockReason,
+            settledAtEpochMs = session.settledAtEpochMs,
+            needsApproval = session.needsApproval,
             unreadOutcome = unreadOutcome,
             directory = session.directory,
         )

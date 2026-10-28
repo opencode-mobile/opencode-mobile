@@ -91,6 +91,10 @@ nonisolated struct SessionDomainAdapter: Sendable {
             unreadOutcome: unreadOutcome,
             statusIsStale: statusIsStale,
             parentID: session.parentID,
+            snoozedUntilEpochMs: session.snoozedUntilEpochMs,
+            snoozeBlockReason: session.snoozeBlockReason,
+            settledAtEpochMs: session.settledAtEpochMs,
+            needsApproval: session.needsApproval,
             directory: session.directory
         )
     }

@@ -86,7 +86,7 @@ extension SessionChatRow: MessageListTimelineHeightEstimating {
             switch role {
             case .user:
                 .outgoing
-            case .assistant:
+            case .assistant, .system:
                 .assistant
             case .notice:
                 .line
@@ -176,11 +176,17 @@ struct SessionChatComposerState: Equatable {
         selectedModel?.option.canAttachFiles == true || (selectedModel != nil && streamedUploadAvailable)
     }
 
-    func attachmentSources(developerToolsUnlocked: Bool) -> ComposerAttachmentSources {
+    /// `modelOwnedByEngine`: the engine keeps the model outside the composer (T3), so
+    /// there is no composer model to ask and the server validates attachments.
+    func attachmentSources(
+        developerToolsUnlocked: Bool,
+        allowsDocuments: Bool = true,
+        modelOwnedByEngine: Bool = false
+    ) -> ComposerAttachmentSources {
         ComposerAttachmentSources(
-            photos: canAttachPhotos,
-            files: canAttachFiles,
-            logFile: developerToolsUnlocked
+            photos: modelOwnedByEngine || canAttachPhotos,
+            files: (modelOwnedByEngine || canAttachFiles) && allowsDocuments,
+            logFile: developerToolsUnlocked && allowsDocuments
         )
     }
 }
@@ -267,6 +273,13 @@ struct ComposerDictationUiState: Equatable {
 struct SessionChatUiState: Equatable {
     var sessionID: String
     var sessionTitle: String
+    var capabilities: SessionCapabilities = .opencode
+    var providerLabel: String? = nil
+    var runtimeModeLabel: String? = nil
+    /// Raw contract runtime mode (`approval-required`, ...); drives the picker's selection.
+    var runtimeMode: String? = nil
+    /// `Codex · gpt-5` style label of the thread's current model selection.
+    var modelSelectionLabel: String? = nil
     /// Smart project label for top-bar chrome; nil when worktree missing.
     var projectLabel: String? = nil
     var projectLetter: Character? = nil
@@ -332,6 +345,8 @@ struct SessionChatUiState: Equatable {
     var reviewChangesSummary: ReviewChangesSummary?
     var supportsSessionMessageDiff: Bool = true
     var supportsSessionArchive: Bool = true
+    var supportsRevert: Bool = true
+    var supportsDocumentAttachments: Bool = true
     /// Move to worktree is a v2 server feature.
     var supportsSessionMove: Bool = false
     var moveSheetVisible = false
@@ -380,8 +395,17 @@ struct SessionChatUiState: Equatable {
     /// One-time Timeline Style picker for updated installs (#805).
     var timelineStylePickerVisible = false
     var dictation: ComposerDictationUiState? = nil
+    /// T3 harness + model chip and picker; nil on engines that use the composer catalogue.
+    var harnessPicker: SessionChatHarnessPickerUiState? = nil
+    /// Runtime modes the session menu offers (the harness's supported ones when known).
+    var runtimeModeOptions: [String] = T3RuntimeModeLabel.allModes
     /// `/btw` side questions: composer mode, chips above the composer and the answer sheet.
     var sideQuestions = SessionChatSideQuestionsUiState()
+
+    /// The composer's runtime-mode badge opens the runtime-mode sheet; display-only otherwise.
+    var runtimeModeBadgeSelectable: Bool {
+        capabilities.canSetRuntimeMode && runtimeMode != nil
+    }
 
     /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.
     var blocksChipTimelineIntro: Bool {
@@ -786,6 +810,8 @@ struct SessionChatComposerRegionState: Equatable {
     var errorMessage: String?
     var abortErrorMessage: String?
     var serverCommands: [ServerCommand] = []
+    /// T3 skills offered from `/`. Empty on engines that use the command catalogue.
+    var slashSkills: [ComposerSlashSkill] = []
     var mentionableAgents: [MentionableAgent] = []
     var slashSuggestionsVisible = false
     var slashSuggestions: [SessionChatSlashSuggestion] = []
@@ -809,6 +835,18 @@ extension ServerCommand {
                 case .command: nil
                 }
             }(),
+            commandName: name
+        )
+    }
+}
+
+extension ComposerSlashSkill {
+    func toSlashSuggestion() -> SessionChatSlashSuggestion {
+        SessionChatSlashSuggestion(
+            id: name,
+            title: menuTitle,
+            subtitle: menuSubtitle,
+            badge: nil,
             commandName: name
         )
     }
@@ -852,6 +890,9 @@ struct SessionInfoRegionState: Equatable {
     var lifecycleErrorMessage: String?
     var shouldLeaveSession = false
     var errorMessage: String?
+    var providerInstanceID: String?
+    var runtimeMode: String?
+    var modelName: String?
 
     mutating func applyStatus(
         authoritative: String?,

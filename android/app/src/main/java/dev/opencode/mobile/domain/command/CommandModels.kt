@@ -50,6 +50,18 @@ sealed class ComposerSubmitIntent {
         val command: String,
         val arguments: String,
     ) : ComposerSubmitIntent()
+
+    /**
+     * A slash skill admitted on the prompt, not the command route.
+     * v2 skills with an id resolve as [Prompt] so the draft can carry an inline mention.
+     */
+    data class SkillPrompt(
+        val skillId: String,
+        val text: String,
+    ) : ComposerSubmitIntent()
+
+    /** Slash text on an engine that has no command catalogue. Nothing is sent. */
+    data object Ignored : ComposerSubmitIntent()
 }
 
 sealed class CommandError : Exception() {

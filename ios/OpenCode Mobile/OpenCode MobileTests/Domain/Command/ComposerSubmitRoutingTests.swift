@@ -53,6 +53,24 @@ struct ComposerSubmitRoutingTests {
         #expect(intent == .prompt(text: "/not-a-command please"))
     }
 
+    @Test func resolve_disabledSlash_isIgnored() {
+        let intent = ComposerSubmitRouting.resolve(
+            text: "/not-a-command please",
+            serverCommandNames: catalog,
+            allowsSlashCommands: false
+        )
+        #expect(intent == .ignored)
+    }
+
+    @Test func resolve_disabledSlash_plainTextStillPrompts() {
+        let intent = ComposerSubmitRouting.resolve(
+            text: "email a@b.com",
+            serverCommandNames: catalog,
+            allowsSlashCommands: false
+        )
+        #expect(intent == .prompt(text: "email a@b.com"))
+    }
+
     @Test func resolve_normalText_isPrompt() {
         let intent = ComposerSubmitRouting.resolve(text: "hello", serverCommandNames: catalog)
         #expect(intent == .prompt(text: "hello"))

@@ -8,7 +8,7 @@ import dagger.hilt.components.SingletonComponent
 import dev.opencode.mobile.data.local.DataStoreComposerDraftStore
 import dev.opencode.mobile.data.local.DataStoreSessionModelSelectionStore
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
-import dev.opencode.mobile.domain.model.DefaultModelRepository
+import dev.opencode.mobile.domain.engine.EngineModelRepository
 import dev.opencode.mobile.domain.model.ModelDomainAdapter
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.SessionModelSelectionStore
@@ -19,7 +19,7 @@ import javax.inject.Singleton
 abstract class ModelModule {
     @Binds
     @Singleton
-    abstract fun bindModelRepository(impl: DefaultModelRepository): ModelRepository
+    abstract fun bindModelRepository(impl: EngineModelRepository): ModelRepository
 
     @Binds
     @Singleton

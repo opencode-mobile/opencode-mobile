@@ -91,6 +91,17 @@ private let sessionListGallerySamples: [SessionListSession] = {
     let now = Int64(Date().timeIntervalSince1970 * 1000)
     return [
         SessionListSession(
+            id: "session-approval",
+            title: "Fix stale T3 disconnect error",
+            worktree: "/Users/demo/opencode-mobile",
+            letter: "O",
+            letterAccent: .violet,
+            subtitle: "/Users/demo/opencode-mobile",
+            status: .needsApproval,
+            caption: "now",
+            updatedAtEpochMs: now
+        ),
+        SessionListSession(
             id: "session-1",
             title: "Refactor Navigation",
             worktree: "/Users/demo/opencode-mobile",
@@ -157,14 +168,14 @@ private let sessionListGallerySamples: [SessionListSession] = {
 }()
 
 private let sessionListGalleryFilterTabs: [SessionListFilterTab] = [
-    .all(projectCount: 3, sessionCount: 5),
-    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 3),
+    .all(projectCount: 3, sessionCount: 6),
+    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 4),
     .project(worktree: "/Users/demo/playground", title: "playground", count: 1),
     .project(worktree: "/Users/demo/api-client", title: "api-client", count: 1),
 ]
 
 private let sessionListGalleryOneProjectFilterTabs: [SessionListFilterTab] = [
-    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 3),
+    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 4),
 ]
 
 #Preview {

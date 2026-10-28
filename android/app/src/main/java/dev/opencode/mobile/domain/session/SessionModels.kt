@@ -15,6 +15,17 @@ data class Session(
     val updatedAtEpochMs: Long? = null,
     val archivedAtEpochMs: Long? = null,
     val revert: SessionRevert? = null,
+    val providerInstanceId: String? = null,
+    val runtimeMode: String? = null,
+    val modelId: String? = null,
+    /** T3: when the thread was settled and not re-activated; null for active sessions. */
+    val settledAtEpochMs: Long? = null,
+    /** T3: scheduled wake, whether or not the snooze is still in effect. */
+    val snoozedUntilEpochMs: Long? = null,
+    /** Why snooze and settle are unavailable: "Still running" or "Waiting on you". */
+    val snoozeBlockReason: String? = null,
+    /** T3: a pending approval (not a question) is waiting on this device. */
+    val needsApproval: Boolean = false,
     /** v2 only: when the latest run ended. */
     val idleAtEpochMs: Long? = null,
     /** v2 only: server read watermark. */
@@ -25,6 +36,13 @@ data class Session(
     val isArchived: Boolean
         get() = archivedAtEpochMs != null
 
+    val isSettled: Boolean
+        get() = settledAtEpochMs != null
+
+    val snoozeBlocked: Boolean
+        get() = snoozeBlockReason != null
+
+    fun isSnoozed(nowEpochMs: Long): Boolean = !isSettled && snoozedUntilEpochMs != null && snoozedUntilEpochMs > nowEpochMs
     /** Server-tracked unread: a run ended after the last view acknowledgement. */
     val isServerUnread: Boolean
         get() {
@@ -76,6 +94,13 @@ data class SessionSummary(
     val updatedAtEpochMs: Long? = null,
     val isReady: Boolean = false,
     val statusStale: Boolean = false,
+    val isArchived: Boolean = false,
+    val isSettled: Boolean = false,
+    val snoozedUntilEpochMs: Long? = null,
+    val snoozeBlockReason: String? = null,
+    val settledAtEpochMs: Long? = null,
+    /** Pending tool approval. Outranks Running on the home pill. */
+    val needsApproval: Boolean = false,
     /** v2 only: outcome of an unread finished run; null when read, running, or on v1. */
     val unreadOutcome: SessionIdleOutcome? = null,
     /** Directory the session runs in. Null when the row should use the added project path. */
@@ -217,6 +242,21 @@ object SessionTodoList {
     /** Visible while non-empty and not fully finished, including after idle. */
     fun isVisible(todos: List<SessionTodo>): Boolean = todos.isNotEmpty() && !isFinished(todos)
 
+    /**
+     * T3 keeps the pill up for the whole run, including after every step is done.
+     * The list is emptied when the run settles, which hides the pill.
+     */
+    fun isPresented(
+        todos: List<SessionTodo>,
+        keepFinished: Boolean,
+    ): Boolean = if (keepFinished) todos.isNotEmpty() else isVisible(todos)
+
+    /** The finished-hold timer stays off while [keepFinished] is holding the pill itself. */
+    fun treatAsFinished(
+        todos: List<SessionTodo>,
+        keepFinished: Boolean,
+    ): Boolean = !keepFinished && isFinished(todos)
+
     /** Hold the all-done pill only after this presentation already showed an unfinished list. */
     fun shouldHoldFinished(
         sawUnfinished: Boolean,
@@ -349,4 +389,13 @@ sealed class SessionError : Exception() {
     data class Decoding(
         override val cause: Throwable,
     ) : SessionError()
+}
+
+/** The engine refused to settle: the session is still running or waiting on the user. */
+class SessionSettleBlockedException(
+    cause: Throwable? = null,
+) : Exception(USER_MESSAGE, cause) {
+    companion object {
+        const val USER_MESSAGE = "Can't settle while the thread is running or waiting on you."
+    }
 }

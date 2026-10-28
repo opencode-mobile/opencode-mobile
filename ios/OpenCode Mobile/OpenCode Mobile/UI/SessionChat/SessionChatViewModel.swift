@@ -22,6 +22,8 @@ final class SessionChatViewModel {
     private let repoStrip: SessionChatRepoStrip
     private let commands: SessionChatCommands
     private let inbox: SessionChatInbox
+    /// T3 harness/model picker; nil when the container provides no T3 harness seam.
+    private let harnessPicker: SessionChatHarnessPicker?
     private let sideQuestions: SessionChatSideQuestions
     private let sessionRepository: any SessionRepository
     private let sessionReadyStore: any SessionReadyStore
@@ -125,6 +127,7 @@ final class SessionChatViewModel {
         syncCoordinator: (any SyncCoordinator)? = nil,
         clock: any SyncClock = SystemSyncClock(),
         mcpRepository: (any McpRepository)? = nil,
+        harnessRepository: (any T3HarnessRepository)? = nil,
         projectFilesRepository: (any ProjectFilesRepository)? = nil,
         attachmentUploadRepository: (any AttachmentUploadRepository)? = nil,
         attachmentImageLoader: (any AttachmentImageLoading)? = nil,
@@ -230,6 +233,15 @@ final class SessionChatViewModel {
             canMutate: { boundSessionInfo.state.canMutate },
             loadedMessages: { boundTimeline.loadedMessages() }
         )
+        self.harnessPicker = harnessRepository.map { repository in
+            SessionChatHarnessPicker(
+                worktree: worktree,
+                repository: repository,
+                sessionRepository: sessionRepository,
+                store: sessionModelSelectionStore,
+                activeConnectionManager: activeConnectionManager
+            )
+        }
         lastSnackbarKey = nil
         suppressedSnackbarKey = nil
         snackbarSequence = 0
@@ -247,10 +259,43 @@ final class SessionChatViewModel {
         repoStrip.onChange = { [weak self] in self?.publishUiState() }
         commands.onChange = { [weak self] in self?.publishUiState() }
         inbox.onChange = { [weak self] in self?.publishUiState() }
+        harnessPicker?.onChange = { [weak self] in self?.publishUiState() }
+        composer.setRequiresComposerModel(sessionCapabilities.requiresComposerModel)
         sideQuestions.onChange = { [weak self] in self?.publishUiState() }
         sideQuestions.canPresentAnswer = { [weak self] in self?.canPresentSideQuestionAnswer ?? false }
         refreshProjectIdentity()
         publishUiState()
+    }
+
+    private var sessionCapabilities: SessionCapabilities {
+        SessionCapabilities.forEngine(activeConnectionManager.currentProfile()?.engine ?? .opencode)
+    }
+
+    /// The T3 harness picker when the active profile is a T3 environment.
+    private var activeHarnessPicker: SessionChatHarnessPicker? {
+        activeConnectionManager.currentProfile()?.engine == .t3 ? harnessPicker : nil
+    }
+
+    /// Pushes the active harness's skills into the `/` menu. Unchanged lists do not republish.
+    private func syncT3SlashSkills() {
+        let skills = activeHarnessPicker?.slashSkills(
+            threadSelection: threadModelSelection,
+            hasStarted: threadHasStarted
+        ) ?? []
+        composer.setSlashSkills(skills)
+    }
+
+    /// The thread's current harness + model as the session chrome reports it.
+    private var threadModelSelection: T3ModelSelection? {
+        let info = sessionInfo.state
+        guard let instance = info.providerInstanceID, !instance.isEmpty,
+              let model = info.modelName, !model.isEmpty else { return nil }
+        return T3ModelSelection(instanceID: instance, model: model)
+    }
+
+    /// A thread with a conversation; T3 then limits model changes.
+    private var threadHasStarted: Bool {
+        !OptimisticSessionCreate.isPlaceholder(sessionID) && !timeline.loadedMessages().isEmpty
     }
 
     /// A Session Chat screen started showing this view model. Starts observing for
@@ -276,6 +321,9 @@ final class SessionChatViewModel {
         startCollapsePreferenceObservation()
         repoStrip.start()
         reviewChanges.start()
+        // T3 connects lazily on the first request; warming it here lets the
+        // indicator show connecting -> connected instead of offline.
+        activeHarnessPicker?.start()
         sideQuestions.start()
         if OptimisticSessionCreate.isPlaceholder(sessionID) {
             beginOptimisticCreate()
@@ -330,6 +378,25 @@ final class SessionChatViewModel {
     func archiveSession() {
         guard hasCreatedSession else { return }
         sessionInfo.archiveSession()
+    }
+
+    /// Applies a runtime mode from the composer badge or session menu. Before the
+    /// thread exists the pick is held and launches the thread; afterwards the
+    /// chrome follows the server's answer.
+    func selectRuntimeMode(_ mode: String) async {
+        guard sessionCapabilities.canSetRuntimeMode,
+              T3RuntimeModeLabel.allModes.contains(mode) else { return }
+        if let picker = activeHarnessPicker {
+            guard picker.selectRuntimeMode(mode, isCreated: hasCreatedSession) else { return }
+        } else if !hasCreatedSession {
+            return
+        }
+        await sessionInfo.setRuntimeMode(mode)
+    }
+
+    func settleSession() {
+        guard hasCreatedSession else { return }
+        sessionInfo.settleSession()
     }
 
     func deleteSession() {
@@ -591,7 +658,40 @@ final class SessionChatViewModel {
             screenId: ProductAnalytics.Screen.sessionModelPicker,
             actionId: ProductAnalytics.Action.modelPickerSelectModel
         )
+        if let picker = activeHarnessPicker {
+            Task { await self.selectHarnessModel(option, picker: picker) }
+            return
+        }
         composer.selectModel(option)
+    }
+
+    /// T3: applies a harness/model pick (creation input or a thread change).
+    func selectHarnessModel(_ option: ModelSelectionOption) async {
+        guard let picker = activeHarnessPicker else { return }
+        await selectHarnessModel(option, picker: picker)
+    }
+
+    private func selectHarnessModel(_ option: ModelSelectionOption, picker: SessionChatHarnessPicker) async {
+        let session = await picker.select(
+            option,
+            sessionID: sessionID,
+            current: threadModelSelection,
+            hasStarted: threadHasStarted
+        )
+        if let session {
+            sessionInfo.applySessionChrome(session)
+        }
+    }
+
+    /// T3: a chip tap on a thread whose harness forbids model changes after it started.
+    func showHarnessLockedNotice() {
+        activeHarnessPicker?.showLockedNotice(current: threadModelSelection)
+    }
+
+    /// T3: refetches the harness catalogue after a failed or empty load.
+    func retryHarnessCatalog() async {
+        logChatAction(ProductAnalytics.Action.composerRetryModelCatalog)
+        await activeHarnessPicker?.loadCatalog(force: true)
     }
 
     func selectMode(_ mode: String) {
@@ -1181,7 +1281,7 @@ final class SessionChatViewModel {
         optimistic: @escaping () -> Void,
         call: @escaping (String) async throws -> Bool
     ) {
-        guard activeConnectionManager.capabilities.supportsFollowUpDelivery else { return }
+        guard activeConnectionManager.capabilities.supportsPendingPrompts else { return }
         logChatAction(actionId)
         let sessionID = sessionID
         Task {
@@ -1530,6 +1630,7 @@ final class SessionChatViewModel {
         reviewChanges.stop()
         repoStrip.stop()
         composer.stopCatalogEventRefresh()
+        harnessPicker?.stop()
     }
 
     /// Identity from the inventories Home (or an earlier Session Chat) loaded; nil when the
@@ -1687,6 +1788,35 @@ final class SessionChatViewModel {
         optimisticCreateTask = Task {
             do {
                 let profile = activeConnectionManager.currentProfile()
+                if let picker = activeHarnessPicker {
+                    let selection = await picker.selectionForNewThread()
+                    let runtimeMode = await picker.runtimeModeForNewThread()
+                    let session = try await sessionRepository.createSession(
+                        parentID: nil,
+                        title: nil,
+                        directory: worktree,
+                        options: SessionCreateOptions(
+                            providerInstanceID: selection?.instanceID,
+                            modelID: selection?.model,
+                            runtimeMode: runtimeMode
+                        )
+                    )
+                    guard !Task.isCancelled else { return }
+                    OpenCodeLog.sessionChat.info("optimistic create success id=\(session.id) engine=t3")
+                    optimisticCreateTask = nil
+                    promoteOptimisticSession(id: session.id, title: session.title)
+                    sessionInfo.applySessionChrome(session)
+                    let launched = session.providerInstanceID.flatMap { instance in
+                        session.modelName.map { T3ModelSelection(instanceID: instance, model: $0) }
+                    } ?? selection
+                    if let changed = await picker.didCreateThread(sessionID: session.id, launchedWith: launched) {
+                        sessionInfo.applySessionChrome(changed)
+                    }
+                    if let mode = picker.runtimeModeToApplyAfterCreate(launchedWith: session.runtimeMode ?? runtimeMode) {
+                        await sessionInfo.setRuntimeMode(mode)
+                    }
+                    return
+                }
                 let session = try await sessionRepository.createSession(
                     parentID: nil,
                     title: nil,
@@ -1759,6 +1889,7 @@ final class SessionChatViewModel {
         publishUiState()
     }
     private func publishUiState() {
+        syncT3SlashSkills()
         inbox.refilterOrphans()
         let inboxState = inbox.state
         let timelineState = timeline.state
@@ -1770,7 +1901,8 @@ final class SessionChatViewModel {
         let composerState = composer.state
         commands.updateVisibility(
             messages: timelineState.messages,
-            hasSelectedComposerModel: composerState.composer.selectedModel != nil
+            hasSelectedComposerModel: composerState.composer.selectedModel != nil,
+            capabilities: sessionCapabilities
         )
         commands.observeLoadedMessages(
             timeline.loadedMessages(),
@@ -1877,6 +2009,14 @@ final class SessionChatViewModel {
                 "workingLamp label=\(workingIndicatorLabel ?? "none") collapsed=\(workingIndicatorCollapsed ? 1 : 0) fading=\(workingIndicatorFading ? 1 : 0) hold=\(workingHold != nil ? 1 : 0) status=\(sessionStatusLabel ?? "none") awaitingUser=\(awaitingUser ? 1 : 0) lastIsThinking=\(lastIsThinking ? 1 : 0)"
             )
         }
+        let harnessState = activeHarnessPicker?.presentation(
+            threadSelection: threadModelSelection,
+            hasStarted: threadHasStarted
+        )
+        let runtimeMode = activeHarnessPicker?.displayedRuntimeMode(
+            threadMode: infoState.runtimeMode,
+            isCreated: hasCreatedSession
+        ) ?? infoState.runtimeMode
         let pendingResolution = pendingPromptsGate.resolve(
             Self.pendingPrompts(
                 loaded: timeline.loadedMessages(),
@@ -1885,9 +2025,18 @@ final class SessionChatViewModel {
             nowMs: clock.nowMs()
         )
         schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
-        uiState = SessionChatUiState(
+        var nextUiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
+            capabilities: sessionCapabilities,
+            providerLabel: harnessState?.harnessLabel ?? T3ProviderLabel.displayName(infoState.providerInstanceID),
+            runtimeModeLabel: T3RuntimeModeLabel.displayName(runtimeMode),
+            runtimeMode: runtimeMode,
+            modelSelectionLabel: harnessState?.selectionLabel
+                ?? T3ProviderLabel.modelSelectionLabel(
+                    instanceID: infoState.providerInstanceID,
+                    model: infoState.modelName
+                ),
             projectLabel: projectIdentity.label,
             projectLetter: projectIdentity.letter,
             projectLetterAccent: projectIdentity.accent,
@@ -1917,8 +2066,14 @@ final class SessionChatViewModel {
                 ? SessionMessageSyncChrome.statusLabel
                 : nil,
             sessionTodos: inboxState.sessionTodos,
-            sessionTodosVisible: SessionTodoList.isVisible(inboxState.sessionTodos),
-            sessionTodosFinished: SessionTodoList.isFinished(inboxState.sessionTodos),
+            sessionTodosVisible: SessionTodoList.isPresented(
+                inboxState.sessionTodos,
+                keepFinished: sessionCapabilities.keepsFinishedTodosVisible
+            ),
+            sessionTodosFinished: SessionTodoList.treatAsFinished(
+                inboxState.sessionTodos,
+                keepFinished: sessionCapabilities.keepsFinishedTodosVisible
+            ),
             sessionTodoActivePreview: SessionTodoList.activePreview(in: inboxState.sessionTodos),
             sessionTodoCompletedCount: SessionTodoList.completedCount(in: inboxState.sessionTodos),
             sessionTodoTotalCount: inboxState.sessionTodos.count,
@@ -1954,6 +2109,8 @@ final class SessionChatViewModel {
             reviewChangesSummary: reviewChangesState.summary,
             supportsSessionMessageDiff: activeConnectionManager.capabilities.supportsSessionMessageDiff,
             supportsSessionArchive: activeConnectionManager.capabilities.supportsSessionArchive,
+            supportsRevert: activeConnectionManager.capabilities.supportsRevert,
+            supportsDocumentAttachments: activeConnectionManager.capabilities.supportsDocumentAttachments,
             supportsSessionMove: activeConnectionManager.capabilities.supportsSessionMove,
             moveSheetVisible: moveSheetVisible,
             moveInFlight: moveInFlight,
@@ -1997,6 +2154,14 @@ final class SessionChatViewModel {
                 return next
             }()
         )
+        if let harnessState {
+            nextUiState.harnessPicker = harnessState
+            nextUiState.runtimeModeOptions = harnessState.runtimeModes
+            if let notice = harnessState.notice {
+                nextUiState.composer.modelNotice = notice
+            }
+        }
+        uiState = nextUiState
     }
 
     /// Drops a listening card and any in-flight finishing insert. Does not touch composer text.

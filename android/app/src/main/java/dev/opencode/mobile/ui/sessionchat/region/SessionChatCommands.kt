@@ -2,6 +2,7 @@ package dev.opencode.mobile.ui.sessionchat.region
 
 import dev.opencode.mobile.domain.command.ClientSlashActionCatalog
 import dev.opencode.mobile.domain.command.ClientSlashMessageRef
+import dev.opencode.mobile.domain.engine.SessionCapabilities
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
@@ -54,6 +55,7 @@ class SessionChatCommands(
     private val supportsSideQuestion: () -> Boolean = { false },
 ) {
     var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    var capabilities: SessionCapabilities = SessionCapabilities.OpenCode
 
     private var mcpJob: Job? = null
 
@@ -138,7 +140,7 @@ class SessionChatCommands(
                 hasSelectedComposerModel = hasSelectedComposerModel,
                 supportsSideQuestion = supportsSideQuestion(),
             )
-        _state.update { it.copy(visibleActions = ClientSlashActionCatalog.visibleActions(input)) }
+        _state.update { it.copy(visibleActions = ClientSlashActionCatalog.visibleActions(input, capabilities)) }
     }
 
     fun observeLoadedMessages(

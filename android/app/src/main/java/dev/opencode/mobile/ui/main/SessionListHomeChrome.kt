@@ -256,8 +256,11 @@ object SessionListHomeChrome {
             NewSessionAction.Create(project.mainCheckoutDirectory)
         }
 
-    fun terminalAction(projects: List<Project>): TerminalAction {
-        if (projects.isEmpty()) {
+    fun terminalAction(
+        projects: List<Project>,
+        showsTerminal: Boolean = true,
+    ): TerminalAction {
+        if (!showsTerminal || projects.isEmpty()) {
             return TerminalAction.None
         }
         return TerminalAction.OpenCatalog

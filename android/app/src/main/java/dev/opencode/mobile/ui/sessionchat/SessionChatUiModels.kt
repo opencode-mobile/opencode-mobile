@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.ComposerShellCommand
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.command.ServerCommandSource
+import dev.opencode.mobile.domain.engine.SessionCapabilities
 import dev.opencode.mobile.domain.event.LiveUpdatesLabel
 import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.mcp.McpServerSummary
@@ -17,6 +18,9 @@ import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.model.ComposerSlashSkill
+import dev.opencode.mobile.domain.model.ModelChangeLock
+import dev.opencode.mobile.domain.model.ModelProviderTraits
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
@@ -42,6 +46,7 @@ data class SessionChatComposerState(
     val attachments: List<Attachment> = emptyList(),
     val selectedModel: ModelSelection? = null,
     val modelOptions: List<ModelSelectionOption> = emptyList(),
+    val modelProviderTraits: Map<String, ModelProviderTraits> = emptyMap(),
     val selectedMode: String = SelectableAgent.DefaultId,
     val selectableAgents: List<SelectableAgent> = SelectableAgent.Fallback,
     val selectedVariant: String? = null,
@@ -69,6 +74,14 @@ data class SessionChatComposerState(
 
     val selectedModelLabel: String
         get() = if (isModelSelectionReady) selectedModel?.modelLabel ?: "Model" else "Loading model…"
+
+    /** `<provider> · <model>` once a model is selected; null while none is. */
+    val selectedProviderModelLabel: String?
+        get() =
+            selectedModel
+                ?.option
+                ?.takeIf { isModelSelectionReady }
+                ?.let { "${it.providerLabel} · ${it.modelLabel}" }
 
     val selectedVariantLabel: String
         get() = TitleCaseIdentifier.displayName(selectedVariant ?: ModelSelection.DefaultVariantLabel)
@@ -108,11 +121,19 @@ data class SessionChatComposerState(
     val canAttachFiles: Boolean
         get() = selectedModel?.option?.canAttachFiles == true || (attachmentUploadAvailable && selectedModel != null)
 
-    fun attachmentSources(developerToolsUnlocked: Boolean): ComposerAttachmentSources =
+    /**
+     * [modelOwnedByEngine]: the engine keeps the model on the session (T3), so the
+     * composer's selection is not the gate and the server validates attachments.
+     */
+    fun attachmentSources(
+        developerToolsUnlocked: Boolean,
+        allowsDocuments: Boolean = true,
+        modelOwnedByEngine: Boolean = false,
+    ): ComposerAttachmentSources =
         ComposerAttachmentSources(
-            photos = canAttachPhotos,
-            files = canAttachFiles,
-            logFile = developerToolsUnlocked,
+            photos = modelOwnedByEngine || canAttachPhotos,
+            files = (modelOwnedByEngine || canAttachFiles) && allowsDocuments,
+            logFile = developerToolsUnlocked && allowsDocuments,
         )
 }
 
@@ -262,6 +283,8 @@ data class SessionChatUiState(
     val sessionBranchPill: SessionBranchPillUiState? = null,
     val supportsSessionMessageDiff: Boolean = true,
     val supportsSessionArchive: Boolean = true,
+    val supportsRevert: Boolean = true,
+    val supportsDocumentAttachments: Boolean = true,
     val rename: SessionRenameUiState = SessionRenameUiState(),
     val slashSuggestionsVisible: Boolean = false,
     val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),
@@ -288,6 +311,19 @@ data class SessionChatUiState(
     /** Worktree to open in the File Browser; consumed by the screen once it navigates. */
     val pendingFilesOpen: String? = null,
     val hasPendingRevert: Boolean = false,
+    val capabilities: SessionCapabilities = SessionCapabilities.OpenCode,
+    val providerLabel: String? = null,
+    val runtimeModeLabel: String? = null,
+    /** Raw contract runtime mode (`approval-required`, ...); drives the picker's selection. */
+    val runtimeMode: String? = null,
+    /** `Codex · gpt-5` style label of the thread's current model selection. */
+    val modelSelectionLabel: String? = null,
+    /** Runtime modes the session's provider accepts, in picker order. */
+    val runtimeModeOptions: List<String> = emptyList(),
+    /** The composer's runtime-mode badge opens the runtime-mode picker (engines that can set it). */
+    val runtimeModeSelectable: Boolean = false,
+    /** Why the picker cannot change a started session's model; null when it can. */
+    val modelChangeLock: ModelChangeLock? = null,
     /** Smart project label for top-bar chrome; null when worktree missing. */
     val projectLabel: String? = null,
     val projectLetter: Char? = null,
@@ -649,6 +685,15 @@ data class SessionChatComposerRegionState(
     val fileSuggestionQuery: String? = null,
     val followUpNotice: String? = null,
 )
+
+fun ComposerSlashSkill.toSlashSuggestion(): SessionChatSlashSuggestion =
+    SessionChatSlashSuggestion(
+        id = name,
+        title = menuTitle,
+        subtitle = menuSubtitle,
+        badge = null,
+        commandName = name,
+    )
 
 fun ServerCommand.toSlashSuggestion(): SessionChatSlashSuggestion =
     SessionChatSlashSuggestion(

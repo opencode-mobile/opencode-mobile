@@ -816,6 +816,7 @@ nonisolated struct ShellCommandOptions: Equatable, Sendable {
 nonisolated enum MessageRole: String, Sendable {
     case user
     case assistant
+    case system
     case command
     case tool
     /// A timeline notice: neither the user's prompt nor a reply.
@@ -828,6 +829,8 @@ nonisolated enum MessageRole: String, Sendable {
             "You"
         case .assistant:
             "Assistant"
+        case .system:
+            "System"
         case .command:
             "Command"
         case .tool:

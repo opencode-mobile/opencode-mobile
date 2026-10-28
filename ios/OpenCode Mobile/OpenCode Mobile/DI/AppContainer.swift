@@ -27,7 +27,8 @@ extension Container {
         onMainActor {
             ActiveConnectionManager(
                 connectionProbing: self.connectionProbing(),
-                profileStore: self.connectionProfileStore()
+                profileStore: self.connectionProfileStore(),
+                fileAttachmentLimit: self.t3FileAttachmentLimit()
             )
         }.singleton
     }
@@ -131,9 +132,17 @@ extension Container {
 
     var projectRepository: Factory<any ProjectRepository> {
         onMainActor {
-            DefaultProjectRepository(
-                api: self.projectsAPIClient(),
-                adapter: self.projectDomainAdapter(),
+            EngineProjectRepository(
+                opencode: DefaultProjectRepository(
+                    api: self.projectsAPIClient(),
+                    adapter: self.projectDomainAdapter(),
+                    activeConnectionManager: self.activeConnectionManager()
+                ),
+                t3: T3ProjectRepository(
+                    client: self.t3EnvironmentClient(),
+                    activeConnectionManager: self.activeConnectionManager(),
+                    connectionProfileStore: self.connectionProfileStore()
+                ),
                 activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
@@ -159,13 +168,34 @@ extension Container {
         }.singleton
     }
 
+    var t3FileAttachmentLimit: Factory<T3FileAttachmentLimit> {
+        onMainActor { T3FileAttachmentLimit() }.singleton
+    }
+
+    var t3EnvironmentClient: Factory<T3EnvironmentClient> {
+        onMainActor {
+            T3EnvironmentClient(
+                connectionProvider: self.connectionProvider(),
+                fileAttachmentLimit: self.t3FileAttachmentLimit()
+            )
+        }.singleton
+    }
+
+    var t3PairingClient: Factory<any T3PairingClient> {
+        onMainActor { T3PairingService() }.singleton
+    }
+
     var sessionRepository: Factory<any SessionRepository> {
         onMainActor {
-            DefaultSessionRepository(
-                api: self.sessionsAPIClient(),
-                adapter: self.sessionDomainAdapter(),
-                sessionModelSelectionStore: self.sessionModelSelectionStore(),
-                composerDraftStore: self.composerDraftStore(),
+            EngineSessionRepository(
+                opencode: DefaultSessionRepository(
+                    api: self.sessionsAPIClient(),
+                    adapter: self.sessionDomainAdapter(),
+                    sessionModelSelectionStore: self.sessionModelSelectionStore(),
+                    composerDraftStore: self.composerDraftStore(),
+                    activeConnectionManager: self.activeConnectionManager()
+                ),
+                t3: T3SessionRepository(client: self.t3EnvironmentClient()),
                 activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
@@ -331,13 +361,21 @@ extension Container {
 
     var messageRepository: Factory<any MessageRepository> {
         onMainActor {
-            DefaultMessageRepository(
-                api: self.messagesAPIClient(),
-                adapter: self.messageDomainAdapter(),
-                messageSync: self.messageSync(),
-                displayMessagePipeline: self.displayMessagePipeline(),
-                contentPreparer: self.messageContentPreparer(),
-                messageRemote: self.messageRemote()
+            EngineMessageRepository(
+                opencode: DefaultMessageRepository(
+                    api: self.messagesAPIClient(),
+                    adapter: self.messageDomainAdapter(),
+                    messageSync: self.messageSync(),
+                    displayMessagePipeline: self.displayMessagePipeline(),
+                    contentPreparer: self.messageContentPreparer(),
+                    messageRemote: self.messageRemote()
+                ),
+                t3: T3MessageRepository(
+                    client: self.t3EnvironmentClient(),
+                    eventStream: self.foregroundEventStream(),
+                    contentPreparer: self.messageContentPreparer()
+                ),
+                activeConnectionManager: self.activeConnectionManager()
             )
         }.singleton
     }
@@ -499,6 +537,7 @@ extension Container {
                 protocolHint: { manager.protocolHint() },
                 cachedProtocol: { manager.serverProtocol },
                 protocolProbe: { await manager.currentProtocolOrProbe() },
+                engineProvider: { manager.currentProfile()?.engine ?? .opencode },
                 protocolRedetect: { await manager.redetectProtocol() }
             )
         }.singleton
@@ -670,6 +709,7 @@ extension Container {
                 sessionLiveStore: self.sessionLiveStore(),
                 sessionStatusLiveStore: self.sessionStatusLiveStore(),
                 sessionReadyStore: self.sessionReadyStore(),
+                permissionLiveStore: self.permissionLiveStore(),
                 connectionSessionCoordinator: self.connectionSessionCoordinator(),
                 sessionCache: self.sessionCache(),
                 liveUpdates: self.liveUpdates(),
@@ -715,6 +755,7 @@ extension Container {
                 sideQuestionStore: self.sideQuestionStore(),
                 syncCoordinator: self.syncCoordinator(),
                 mcpRepository: self.mcpRepository(),
+                harnessRepository: DefaultT3HarnessRepository(client: self.t3EnvironmentClient()),
                 projectFilesRepository: self.projectFilesRepository(),
                 attachmentUploadRepository: self.attachmentUploadRepository(),
                 attachmentImageLoader: self.attachmentImageLoader(),
@@ -794,6 +835,7 @@ extension Container {
             connectionProbeService: shared.connectionProbing(),
             connectionSessionCoordinator: shared.connectionSessionCoordinator(),
             pairingCodeRedeemer: PairingCodeRedeemer(),
+            t3PairingClient: shared.t3PairingClient(),
             initialProfile: initialProfile,
             mode: mode
         )

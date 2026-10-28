@@ -1,5 +1,6 @@
 package dev.opencode.mobile.network
 
+import dev.opencode.mobile.domain.connection.ConnectionEngine
 import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
@@ -12,6 +13,7 @@ import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.V2ServerFeatures
 import dev.opencode.mobile.domain.connection.toProbeStatus
 import dev.opencode.mobile.domain.project.ServerProbeError
+import dev.opencode.mobile.domain.t3.T3FileAttachmentLimit
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Mutex
@@ -22,6 +24,7 @@ import javax.inject.Singleton
 class ActiveConnectionManager(
     private val connectionProfileStore: ConnectionProfileStore,
     private val connectionProbing: ConnectionProbing? = null,
+    private val fileAttachmentLimit: T3FileAttachmentLimit? = null,
 ) {
     private val mutex = Mutex()
     private var connection: ServerConnection? = null
@@ -72,6 +75,10 @@ class ActiveConnectionManager(
     fun protocolHint(): ServerProtocol = currentProtocol() ?: ServerProtocol.V1
 
     fun currentCapabilities(): ServerCapabilities {
+        val engine = connection?.engine ?: profile?.engine
+        if (engine == ConnectionEngine.T3) {
+            return ServerCapabilities.t3(supportsDocumentAttachments = fileAttachmentLimit?.maxBytes != null)
+        }
         val active = connection ?: return ServerCapabilities.forProtocol(ServerProtocol.V1)
         return ServerCapabilities.forProtocol(
             active.serverProtocol ?: ServerProtocol.V1,
@@ -154,6 +161,9 @@ class ActiveConnectionManager(
     private suspend fun sharedProbe(force: Boolean): Result<ServerProtocol> {
         var existing: CompletableDeferred<Result<ServerProtocol>>? = null
         mutex.withLock {
+            if (profile?.engine == ConnectionEngine.T3) {
+                return Result.success(ServerProtocol.V1)
+            }
             if (!force) {
                 connection?.serverProtocol?.let { return Result.success(it) }
                 if (probeFailed) return Result.success(ServerProtocol.V1)

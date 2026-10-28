@@ -50,7 +50,10 @@ import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.domain.message.ShellCommandOptions
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.model.ComposerSlashSkill
 import dev.opencode.mobile.domain.model.ModelCatalogStore
+import dev.opencode.mobile.domain.model.ModelChangeLock
+import dev.opencode.mobile.domain.model.ModelProviderTraits
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
 import dev.opencode.mobile.domain.model.ModelSelectionConnectionIdentity
@@ -75,9 +78,11 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionRevert
+import dev.opencode.mobile.domain.session.SessionSettleBlockedException
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SideQuestionStore
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
+import dev.opencode.mobile.domain.t3.T3RuntimeModeLabels
 import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
 import dev.opencode.mobile.domain.worktree.CreatedWorktree
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
@@ -426,6 +431,41 @@ class SessionChatViewModelTest {
             assertTrue(viewModel.uiState.value.shouldLeaveSession)
             assertEquals(false, viewModel.uiState.value.isLifecycleActionInFlight)
             assertEquals(null, viewModel.uiState.value.errorMessage)
+        }
+
+    @Test
+    fun settleSession_blockedByServer_explainsWhy() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = FakeSessionRepository(settleError = SessionSettleBlockedException()),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.settleSession()
+            advanceUntilIdle()
+
+            assertEquals(false, viewModel.uiState.value.shouldLeaveSession)
+            assertEquals(SessionSettleBlockedException.USER_MESSAGE, viewModel.uiState.value.snackbar?.message)
+        }
+
+    @Test
+    fun settleSession_otherFailure_staysGeneric() =
+        runTest(testDispatcher) {
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = FakeSessionRepository(settleError = SessionError.Http(500, "boom")),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.settleSession()
+            advanceUntilIdle()
+
+            assertEquals("Couldn't settle session.", viewModel.uiState.value.snackbar?.message)
         }
 
     @Test
@@ -7871,6 +7911,465 @@ class SessionChatViewModelTest {
             text = "Change it",
             metadataLabel = "Build",
         )
+
+    // region T3 harness and model selection
+
+    private val t3ChatProfile =
+        ConnectionProfile(
+            baseUrl = "http://127.0.0.1:8787",
+            username = dev.opencode.mobile.domain.connection.ConnectionEngine.T3_USERNAME,
+            password = "token",
+            id = "profile-t3",
+            engine = dev.opencode.mobile.domain.connection.ConnectionEngine.T3,
+        )
+
+    private fun t3Option(
+        providerId: String,
+        providerName: String,
+        modelId: String,
+        modelName: String,
+    ) = ModelSelectionOption(
+        providerId = providerId,
+        providerName = providerName,
+        modelId = modelId,
+        modelName = modelName,
+        modelNameIsDisplayReady = true,
+    )
+
+    private val claudeOpus = t3Option("claude-1", "Claude", "claude-opus-4", "Opus")
+    private val claudeSonnet = t3Option("claude-1", "Claude", "claude-sonnet-4", "Sonnet")
+    private val codexGpt = t3Option("codex-1", "Codex", "gpt-5", "GPT-5")
+
+    private fun t3Catalog(requiresNewThread: Boolean) =
+        ModelSelectionCatalog(
+            options = listOf(claudeOpus, claudeSonnet, codexGpt),
+            serverDefault = codexGpt,
+            providerTraits =
+                mapOf(
+                    "claude-1" to
+                        ModelProviderTraits(
+                            supportedRuntimeModes = listOf("approval-required", "full-access"),
+                            requiresNewSessionForModelChange = requiresNewThread,
+                        ),
+                    "codex-1" to ModelProviderTraits(),
+                ),
+        )
+
+    private fun selectedOption(viewModel: SessionChatViewModel): ModelSelectionOption? =
+        viewModel.uiState.value.composer.selectedModel
+            ?.option
+
+    private fun t3ThreadSession() =
+        Session(
+            id = "ses-1",
+            title = "Title",
+            directory = "/repo",
+            providerInstanceId = "claude-1",
+            modelId = "claude-opus-4",
+            runtimeMode = "approval-required",
+        )
+
+    @Test
+    fun t3Thread_composerOffersHarnessCatalogueAndPinsTheThreadModel() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(getSessionResult = t3ThreadSession())
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertTrue(state.capabilities.showsComposerModel)
+            assertEquals(listOf("claude-1", "claude-1", "codex-1"), state.composer.modelOptions.map { it.providerId })
+            // The thread's own selection outranks the server default.
+            assertEquals(claudeOpus, state.composer.selectedModel?.option)
+            assertEquals("Claude · Opus", state.composer.selectedProviderModelLabel)
+            assertEquals("Claude · Opus", state.modelSelectionLabel)
+            assertEquals("Claude", state.providerLabel)
+            assertEquals(listOf("approval-required", "full-access"), state.runtimeModeOptions)
+            assertNull(state.modelChangeLock)
+        }
+
+    @Test
+    fun t3Slash_offersSelectedHarnessSkillsAndInsertsMention() =
+        runTest(testDispatcher) {
+            val prototype =
+                ComposerSlashSkill(
+                    name = "prototype",
+                    description = "Build a throwaway",
+                    shortDescription = "Throwaway UI",
+                )
+            val base = t3Catalog(requiresNewThread = false)
+            val catalog =
+                base.copy(
+                    providerTraits =
+                        base.providerTraits +
+                            (
+                                "claude-1" to
+                                    base.providerTraits.getValue("claude-1").copy(slashSkills = listOf(prototype))
+                            ),
+                )
+            val repository = FakeMessageRepository(messages = emptyList())
+            val viewModel =
+                createViewModel(
+                    repository,
+                    modelRepository = FakeModelRepository(catalog),
+                    sessionRepository = FakeSessionRepository(getSessionResult = t3ThreadSession()),
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.updateComposerText("/")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.slashSuggestionsVisible)
+            assertEquals(listOf("skill:prototype"), viewModel.uiState.value.slashSuggestions.map { it.title })
+            assertEquals(listOf("Throwaway UI"), viewModel.uiState.value.slashSuggestions.map { it.subtitle })
+
+            viewModel.updateComposerText("/nope")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.slashSuggestions.isEmpty())
+
+            viewModel.updateComposerText("/")
+            viewModel.selectSlashSuggestion("prototype")
+            advanceUntilIdle()
+            assertEquals("\$prototype ", viewModel.uiState.value.composer.text)
+            assertFalse(viewModel.uiState.value.slashSuggestionsVisible)
+
+            viewModel.sendPrompt()
+            advanceUntilIdle()
+            assertTrue(repository.sendPromptAsyncCalled)
+            assertEquals("\$prototype", repository.sentOptions?.text)
+            assertTrue(repository.sentOptions?.skillMentions.isNullOrEmpty())
+        }
+
+    @Test
+    fun t3StartedThread_requiresNewThreadBlocksModelChangeWithNotice() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(getSessionResult = t3ThreadSession())
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = true)),
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val lock = viewModel.uiState.value.modelChangeLock
+            assertEquals("claude-1", lock?.providerId)
+            assertEquals(true, lock?.modelsLocked)
+
+            viewModel.selectModel(claudeSonnet)
+            advanceUntilIdle()
+
+            assertTrue(sessionRepository.modelSelectionRequests.isEmpty())
+            assertEquals(claudeOpus, selectedOption(viewModel))
+            assertEquals(
+                ModelChangeLock.CHANGE_MODEL_NOTICE,
+                viewModel.uiState.value.composer.modelNotice,
+            )
+        }
+
+    @Test
+    fun t3StartedThread_flexibleHarnessDispatchesModelSelection() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(getSessionResult = t3ThreadSession())
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.selectModel(codexGpt)
+            advanceUntilIdle()
+            assertTrue("a started thread never switches providers", sessionRepository.modelSelectionRequests.isEmpty())
+
+            viewModel.selectModel(claudeSonnet)
+            advanceUntilIdle()
+
+            assertEquals(listOf(Triple("ses-1", "claude-1", "claude-sonnet-4")), sessionRepository.modelSelectionRequests)
+            assertEquals(claudeSonnet, selectedOption(viewModel))
+            assertEquals("Claude · Sonnet", viewModel.uiState.value.modelSelectionLabel)
+        }
+
+    @Test
+    fun t3NewThread_createsWithRememberedSelection() =
+        runTest(testDispatcher) {
+            val store = FakeSessionModelSelectionStore()
+            store.saveNewSessionPreference(
+                ModelSelectionConnectionIdentity(t3ChatProfile.baseUrl, t3ChatProfile.username),
+                "/repo",
+                SessionModelSelection(providerId = "claude-1", modelId = "claude-sonnet-4"),
+            )
+            val sessionRepository =
+                FakeSessionRepository(
+                    createSessionResult =
+                        Session(
+                            id = "ses-new",
+                            title = "New thread",
+                            directory = "/repo",
+                            providerInstanceId = "claude-1",
+                            modelId = "claude-sonnet-4",
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = true)),
+                    sessionModelSelectionStore = store,
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("ses-new", viewModel.uiState.value.sessionId)
+            assertEquals("claude-1", sessionRepository.createSessionOptions?.providerId)
+            assertEquals("claude-sonnet-4", sessionRepository.createSessionOptions?.modelId)
+            assertEquals(claudeSonnet, selectedOption(viewModel))
+            // No history yet: the requires-new-thread harness still lets the empty thread change.
+            assertNull(viewModel.uiState.value.modelChangeLock)
+        }
+
+    @Test
+    fun t3Thread_composerRequestsNoOpenCodeCatalogs() =
+        runTest(testDispatcher) {
+            val commands = FakeCommandRepository()
+            val agents = FakeAgentRepository()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    commandRepository = commands,
+                    agentRepository = agents,
+                    sessionRepository = FakeSessionRepository(getSessionResult = t3ThreadSession()),
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.bind("ses-1", "Title", "/repo")
+            viewModel.refreshMessages()
+            viewModel.updateComposerText("/")
+            viewModel.updateComposerText("@")
+            advanceUntilIdle()
+
+            assertEquals(0, commands.listCommandsCount)
+            assertEquals(0, agents.mentionableAgentsCount)
+            assertEquals(0, agents.selectableAgentsCount)
+            // The harness catalogue still resolves the thread's model without agents.
+            assertEquals(claudeOpus, selectedOption(viewModel))
+        }
+
+    @Test
+    fun t3NewThread_rebindRequestsNoOpenCodeCatalogs() =
+        runTest(testDispatcher) {
+            val commands = FakeCommandRepository()
+            val agents = FakeAgentRepository()
+            val sessionRepository = t3NewThreadRepository()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    commandRepository = commands,
+                    agentRepository = agents,
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("ses-new", viewModel.uiState.value.sessionId)
+            assertEquals(0, commands.listCommandsCount)
+            assertEquals(0, agents.mentionableAgentsCount)
+            assertEquals(0, agents.selectableAgentsCount)
+            assertTrue(viewModel.uiState.value.composer.isModelSelectionReady)
+        }
+
+    @Test
+    fun openCodeThread_composerLoadsAgentAndCommandCatalogs() =
+        runTest(testDispatcher) {
+            val commands = FakeCommandRepository()
+            val agents = FakeAgentRepository()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    commandRepository = commands,
+                    agentRepository = agents,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertTrue(commands.listCommandsCount > 0)
+            assertTrue(agents.mentionableAgentsCount > 0)
+            assertTrue(agents.selectableAgentsCount > 0)
+        }
+
+    private val t3Identity = ModelSelectionConnectionIdentity(t3ChatProfile.baseUrl, t3ChatProfile.username)
+
+    private fun t3NewThreadRepository() =
+        FakeSessionRepository(
+            createSessionResult =
+                Session(
+                    id = "ses-new",
+                    title = "New thread",
+                    directory = "/repo",
+                    providerInstanceId = "claude-1",
+                    modelId = "claude-opus-4",
+                    runtimeMode = "full-access",
+                ),
+        )
+
+    @Test
+    fun t3NewThread_runtimeModeChosenBeforeCreateUpdatesBadgeAndLaunchesWithIt() =
+        runTest(testDispatcher) {
+            val store = FakeSessionModelSelectionStore()
+            val sessionRepository = t3NewThreadRepository()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionModelSelectionStore = store,
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            assertEquals("approval-required", viewModel.uiState.value.runtimeMode)
+            assertEquals("Supervised", viewModel.uiState.value.runtimeModeLabel)
+            assertTrue(viewModel.uiState.value.runtimeModeSelectable)
+
+            viewModel.selectRuntimeMode("full-access")
+            assertEquals("full-access", viewModel.uiState.value.runtimeMode)
+            assertEquals("Full access", viewModel.uiState.value.runtimeModeLabel)
+            advanceUntilIdle()
+
+            assertEquals("ses-new", viewModel.uiState.value.sessionId)
+            assertEquals("full-access", sessionRepository.createSessionOptions?.runtimeMode)
+            assertTrue("launch carries the mode; no extra round trip", sessionRepository.runtimeModeRequests.isEmpty())
+            assertEquals("full-access", store.runtimeModes["${t3Identity.serverBaseUrl}|${t3Identity.username}|/repo"])
+        }
+
+    @Test
+    fun t3NewThread_rememberedRuntimeModePrefillsAndLaunches() =
+        runTest(testDispatcher) {
+            val store = FakeSessionModelSelectionStore()
+            store.saveNewSessionRuntimeMode(t3Identity, "/repo", "auto-accept-edits")
+            val sessionRepository = t3NewThreadRepository()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionModelSelectionStore = store,
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("auto-accept-edits", sessionRepository.createSessionOptions?.runtimeMode)
+        }
+
+    @Test
+    fun t3NewThread_withoutRememberedModeLaunchesSupervised() =
+        runTest(testDispatcher) {
+            val sessionRepository = t3NewThreadRepository()
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            assertEquals("approval-required", sessionRepository.createSessionOptions?.runtimeMode)
+        }
+
+    @Test
+    fun t3StartedThread_selectRuntimeModeCallsServerAndRemembersIt() =
+        runTest(testDispatcher) {
+            val store = FakeSessionModelSelectionStore()
+            val sessionRepository = FakeSessionRepository(getSessionResult = t3ThreadSession())
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionModelSelectionStore = store,
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.runtimeModeSelectable)
+
+            viewModel.selectRuntimeMode("full-access")
+            advanceUntilIdle()
+
+            assertEquals(listOf("ses-1" to "full-access"), sessionRepository.runtimeModeRequests)
+            assertEquals("full-access", viewModel.uiState.value.runtimeMode)
+            assertEquals("Full access", viewModel.uiState.value.runtimeModeLabel)
+            assertEquals("full-access", store.runtimeModes["${t3Identity.serverBaseUrl}|${t3Identity.username}|/repo"])
+        }
+
+    @Test
+    fun t3NewThread_withoutLoadedCatalogueOffersAllRuntimeModes() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository(createSessionError = SessionError.Transport(IllegalStateException("offline")))
+            val viewModel =
+                createViewModel(
+                    FakeMessageRepository(messages = emptyList()),
+                    modelRepository = FakeModelRepository(t3Catalog(requiresNewThread = false)),
+                    sessionRepository = sessionRepository,
+                    connectionProfileStore = FakeConnectionProfileStore(active = t3ChatProfile),
+                )
+
+            viewModel.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, "New Session", "/repo")
+            advanceUntilIdle()
+
+            assertEquals(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, viewModel.uiState.value.sessionId)
+            assertEquals(T3RuntimeModeLabels.allModes, viewModel.uiState.value.runtimeModeOptions)
+            // The choice is kept locally on the not-yet-created thread.
+            viewModel.selectRuntimeMode("auto")
+            assertEquals("Auto", viewModel.uiState.value.runtimeModeLabel)
+            assertTrue(sessionRepository.runtimeModeRequests.isEmpty())
+        }
+
+    @Test
+    fun openCodeSession_runtimeModeBadgeIsNotSelectable() =
+        runTest(testDispatcher) {
+            val sessionRepository = FakeSessionRepository()
+            val viewModel = createViewModel(FakeMessageRepository(), sessionRepository = sessionRepository)
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            assertFalse(viewModel.uiState.value.runtimeModeSelectable)
+            viewModel.selectRuntimeMode("full-access")
+            advanceUntilIdle()
+            assertTrue(sessionRepository.runtimeModeRequests.isEmpty())
+            assertNull(viewModel.uiState.value.runtimeMode)
+        }
+
+    // endregion
+
 }
 
 private class RecordingSessionViewReporter : SessionViewReporter {
@@ -7920,6 +8419,7 @@ private class FakeSessionModelSelectionStore(
 ) : SessionModelSelectionStore {
     private val saved = mutableMapOf<String, SessionModelSelection>()
     private val preferences = mutableMapOf<String, SessionModelSelection>()
+    val runtimeModes = mutableMapOf<String, String>()
 
     fun seed(
         serverBaseUrl: String,
@@ -7992,6 +8492,19 @@ private class FakeSessionModelSelectionStore(
         selection: SessionModelSelection,
     ) {
         preferences["${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree"] = selection
+    }
+
+    override suspend fun loadNewSessionRuntimeMode(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+    ): String? = runtimeModes["${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree"]
+
+    override suspend fun saveNewSessionRuntimeMode(
+        connectionIdentity: ModelSelectionConnectionIdentity,
+        worktree: String,
+        runtimeMode: String,
+    ) {
+        runtimeModes["${connectionIdentity.serverBaseUrl}|${connectionIdentity.username}|$worktree"] = runtimeMode
     }
 
     fun preference(
@@ -8123,10 +8636,12 @@ private class FakeCommandRepository(
     var runCommandCalled: Boolean = false
     var lastRunOptions: CommandRunOptions? = null
     var lastRunSessionId: String? = null
+    var listCommandsCount: Int = 0
 
     val listCommandsDirectories = mutableListOf<String?>()
 
     override suspend fun listCommands(directory: String?): List<ServerCommand> {
+        listCommandsCount += 1
         listCommandsDirectories += directory
         return commands
     }
@@ -8156,12 +8671,19 @@ private class FakeAgentRepository(
         dev.opencode.mobile.domain.agent.SelectableAgent.Fallback,
     private val selectableAgentsGate: CompletableDeferred<Unit>? = null,
 ) : dev.opencode.mobile.domain.agent.AgentRepository {
+    var selectableAgentsCount: Int = 0
+    var mentionableAgentsCount: Int = 0
+
     override suspend fun listSelectableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.SelectableAgent> {
+        selectableAgentsCount += 1
         selectableAgentsGate?.await()
         return selectableAgents
     }
 
-    override suspend fun listMentionableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.MentionableAgent> = agents
+    override suspend fun listMentionableAgents(directory: String?): List<dev.opencode.mobile.domain.agent.MentionableAgent> {
+        mentionableAgentsCount += 1
+        return agents
+    }
 }
 
 private class FakeMessageRepository(
@@ -8398,6 +8920,7 @@ private class FakeSessionRepository(
     private val sessionStatusError: SessionError? = null,
     private val updateSessionError: SessionError? = null,
     private val archiveError: Throwable? = null,
+    private val settleError: Throwable? = null,
     private val deleteError: Throwable? = null,
     private val deleteResult: Boolean = true,
     private val archiveHoldUntil: CompletableDeferred<Unit>? = null,
@@ -8535,6 +9058,49 @@ private class FakeSessionRepository(
         return createSessionResult ?: Session(id = "new-ses", title = title.orEmpty(), directory = directory)
     }
 
+    var createSessionOptions: dev.opencode.mobile.domain.session.SessionCreateOptions? = null
+
+    override suspend fun createSession(
+        parentId: String?,
+        title: String?,
+        directory: String?,
+        options: dev.opencode.mobile.domain.session.SessionCreateOptions,
+    ): Session {
+        createSessionOptions = options
+        return createSession(parentId, title, directory)
+    }
+
+    val runtimeModeRequests = mutableListOf<Pair<String, String>>()
+
+    override suspend fun setRuntimeMode(
+        id: String,
+        runtimeMode: String,
+        directory: String?,
+    ): Session {
+        runtimeModeRequests += id to runtimeMode
+        val updated =
+            (getSessionResult ?: Session(id = id, title = "Title", directory = directory))
+                .copy(runtimeMode = runtimeMode)
+        getSessionResult = updated
+        return updated
+    }
+
+    val modelSelectionRequests = mutableListOf<Triple<String, String, String>>()
+
+    override suspend fun setModelSelection(
+        id: String,
+        providerInstanceId: String,
+        modelId: String,
+        directory: String?,
+    ): Session {
+        modelSelectionRequests += Triple(id, providerInstanceId, modelId)
+        val updated =
+            (getSessionResult ?: Session(id = id, title = "Title", directory = directory))
+                .copy(providerInstanceId = providerInstanceId, modelId = modelId)
+        getSessionResult = updated
+        return updated
+    }
+
     override suspend fun getAllSessionStatuses(directory: String?): List<SessionStatus> {
         sessionStatusError?.let { throw it }
         return listOf(SessionStatus(sessionId = "ses-1", raw = mapOf("type" to sessionStatusType)))
@@ -8568,6 +9134,14 @@ private class FakeSessionRepository(
         archiveHoldUntil?.await()
         archiveError?.let { throw it }
         return Session(id = id, title = "Archived", archivedAtEpochMs = 1L)
+    }
+
+    override suspend fun settleSession(
+        id: String,
+        directory: String?,
+    ): Boolean {
+        settleError?.let { throw it }
+        return true
     }
 
     override suspend fun deleteSession(

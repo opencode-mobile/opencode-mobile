@@ -6,6 +6,8 @@ enum HomeRoute: Hashable {
     case session(SessionListItem)
     case terminalsCatalog
     case terminal(TerminalRoute)
+    /// Settled list pushed on the same stack, so system Back pops it like any other route.
+    case settled(SettledSessionsRoute)
 
     var session: SessionListItem? {
         if case let .session(session) = self { return session }

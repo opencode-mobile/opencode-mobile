@@ -17,6 +17,7 @@ import dev.opencode.mobile.domain.command.ComposerSubmitRouting
 import dev.opencode.mobile.domain.command.ServerCommand
 import dev.opencode.mobile.domain.composer.ComposerDraft
 import dev.opencode.mobile.domain.composer.ComposerDraftStore
+import dev.opencode.mobile.domain.engine.SessionCapabilities
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
@@ -43,6 +44,7 @@ import dev.opencode.mobile.domain.message.PromptSendProgress
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.domain.message.ShellCommandOptions
 import dev.opencode.mobile.domain.message.UnavailableAttachmentUploadService
+import dev.opencode.mobile.domain.model.ComposerSlashSkill
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
@@ -55,6 +57,7 @@ import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.domain.t3.T3Errors
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.ui.sessionchat.AttachmentPresentationMapper
 import dev.opencode.mobile.ui.sessionchat.LatestAgentHint
@@ -107,6 +110,9 @@ class SessionChatComposer(
     private val attachmentUploads: AttachmentUploadService = UnavailableAttachmentUploadService,
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
+    var capabilities: SessionCapabilities = SessionCapabilities.OpenCode
+    var allowsMentions: Boolean = true
+    var allowsSlashCommands: Boolean = true
 
     /** Debounce before `findFiles` while an `@` query is open. Tests set this to 0. */
     var fileSearchDelayMs: Long = 200L
@@ -122,6 +128,9 @@ class SessionChatComposer(
     private var loadedCatalog: ModelSelectionCatalog? = null
     private var loadedSelectableAgents = false
     private var cachedSelection: SessionModelSelection? = null
+
+    /** The selection the server records on the session (T3); outranks every local hint. */
+    private var sessionSelection: SessionModelSelection? = null
     private var newSessionPreference: SessionModelSelection? = null
     private var initialSelectionState = InitialSelectionState.LoadingCache
     private var latestTimelineState: SessionChatTimelineRegionState? = null
@@ -187,6 +196,7 @@ class SessionChatComposer(
         loadedCatalog = null
         loadedSelectableAgents = false
         cachedSelection = null
+        sessionSelection = null
         newSessionPreference = null
         initialSelectionState = InitialSelectionState.LoadingCache
         latestTimelineState = null
@@ -304,6 +314,7 @@ class SessionChatComposer(
     }
 
     fun loadServerCommands(force: Boolean = false) {
+        if (!allowsSlashCommands) return
         val worktree = boundWorktree ?: return
         if (!force && _state.value.serverCommands.isNotEmpty()) return
         scope.launch {
@@ -340,6 +351,12 @@ class SessionChatComposer(
     }
 
     fun loadSelectableAgents(force: Boolean = false) {
+        // Selectable agents are an OpenCode catalog; an engine without agents has none to fetch.
+        if (!capabilities.showsAgent) {
+            loadedSelectableAgents = true
+            applyInitialSelectionIfReady()
+            return
+        }
         val worktree = boundWorktree ?: return
         if (!force && loadedSelectableAgents) return
         scope.launch {
@@ -361,6 +378,7 @@ class SessionChatComposer(
     }
 
     fun loadMentionableAgents(force: Boolean = false) {
+        if (!allowsMentions) return
         val worktree = boundWorktree ?: return
         if (!force && _state.value.mentionableAgents.isNotEmpty()) return
         scope.launch {
@@ -395,7 +413,19 @@ class SessionChatComposer(
         }
     }
 
-    fun loadCatalog() = loadCatalog(keepLoadedCatalogOnFailure = false)
+    fun loadCatalog() {
+        if (!capabilities.showsComposerModel) {
+            updateComposer {
+                it.copy(
+                    isModelSelectionReady = true,
+                    modelCatalogError = null,
+                    modelNotice = null,
+                )
+            }
+            return
+        }
+        loadCatalog(keepLoadedCatalogOnFailure = false)
+    }
 
     /**
      * [emptyRetryAttempt] is non-zero only for a backoff retry of an empty answer. [force] asks
@@ -506,17 +536,21 @@ class SessionChatComposer(
                 return
             }
         }
-        val staleCached = staleCachedSelection()
+        val authoritative = sessionSelection?.takeIf { catalog.option(it.providerId, it.modelId) != null }
+        val staleCached = if (authoritative != null) null else staleCachedSelection()
         val validCached = cachedSelection?.takeIf { staleCached == null }
         val validUserHint = historyHints.user?.takeIf { catalog.option(it.providerId, it.modelId) != null }
         val validAssistantHint = historyHints.assistant?.takeIf { catalog.option(it.providerId, it.modelId) != null }
         val validPreference = newSessionPreference?.takeIf { catalog.option(it.providerId, it.modelId) != null }
-        val chosen = chooseInitialSelection(validCached, validUserHint, validAssistantHint, validPreference)
+        val chosen =
+            authoritative?.let { InitialSelection.Session(it) }
+                ?: chooseInitialSelection(validCached, validUserHint, validAssistantHint, validPreference)
         val option =
             when (chosen) {
                 is InitialSelection.Cached -> catalog.option(chosen.value.providerId, chosen.value.modelId)
                 is InitialSelection.History -> catalog.option(chosen.value.providerId, chosen.value.modelId)
                 is InitialSelection.Preference -> catalog.option(chosen.value.providerId, chosen.value.modelId)
+                is InitialSelection.Session -> catalog.option(chosen.value.providerId, chosen.value.modelId)
                 null -> null
             } ?: catalog.serverDefault ?: catalog.options.first()
         val rememberedVariant =
@@ -524,6 +558,7 @@ class SessionChatComposer(
                 is InitialSelection.Cached -> chosen.value.variant
                 is InitialSelection.History -> chosen.value.variant
                 is InitialSelection.Preference -> chosen.value.variant
+                is InitialSelection.Session -> cachedSelection?.variant
                 null -> null
             }
         val variant = resolvedVariant(rememberedVariant, option)
@@ -582,6 +617,44 @@ class SessionChatComposer(
             InitialSelectionState.Resolved
         }
 
+    /**
+     * Pins the chip to the model the server records on the session (T3 threads keep
+     * their own selection; sends never carry the composer's). Applies now when the
+     * catalogue is loaded, else when the initial selection resolves.
+     */
+    fun applySessionSelection(
+        providerId: String?,
+        modelId: String?,
+    ) {
+        if (providerId.isNullOrBlank() || modelId.isNullOrBlank()) return
+        sessionSelection = SessionModelSelection(providerId = providerId, modelId = modelId)
+        if (initialSelectionState != InitialSelectionState.Resolved &&
+            initialSelectionState != InitialSelectionState.FailedWithFallback
+        ) {
+            applyInitialSelectionIfReady()
+            return
+        }
+        val option = loadedCatalog?.option(providerId, modelId) ?: return
+        if (_state.value.composer.selectedModel
+                ?.option == option
+        ) {
+            return
+        }
+        updateComposer { composer ->
+            composer.copy(
+                selectedModel = ModelSelection(option, null),
+                selectedVariant = null,
+                modelNotice = null,
+            )
+        }
+        persistCurrentSelection(updatePreference = false)
+    }
+
+    /** Shows [notice] under the composer until the next model change. */
+    fun showModelNotice(notice: String) {
+        updateComposer { it.copy(modelNotice = notice) }
+    }
+
     private fun chooseInitialSelection(
         cached: SessionModelSelection?,
         userHint: LatestModelHint?,
@@ -624,7 +697,7 @@ class SessionChatComposer(
         val previous = _state.value.composer
         if (text == previous.text) {
             val mode =
-                ComposerMentionRouting.suggestionMode(
+                suggestionMode(
                     text = text,
                     cursor = cursor,
                     mentions = previous.agentMentions,
@@ -670,7 +743,7 @@ class SessionChatComposer(
                 previousSkillMentions = previous.skillMentions,
             )
         val mode =
-            ComposerMentionRouting.suggestionMode(
+            suggestionMode(
                 text = reconciled.text,
                 cursor = reconciled.cursor,
                 mentions = reconciled.mentions,
@@ -742,8 +815,15 @@ class SessionChatComposer(
      * sheet) gets the pick at the caret too.
      */
     fun selectSlashSuggestion(commandName: String) {
+        val localSkill = _state.value.slashSkills().firstOrNull { it.name == commandName }
+        val serverCommand = _state.value.serverCommands.firstOrNull { it.name == commandName }
+        if (localSkill != null && (serverCommand == null || !allowsSlashCommands)) {
+            val inserted = localSkill.insertion
+            updateComposerText(inserted, cursor = inserted.length)
+            return
+        }
         val composer = _state.value.composer
-        val command = _state.value.serverCommands.firstOrNull { it.name == commandName }
+        val command = serverCommand
         val skillId = command?.skillId?.takeIf { command.isV2Skill }
         var text = composer.text
         var cursor = composer.cursor.coerceIn(0, text.length)
@@ -1169,12 +1249,27 @@ class SessionChatComposer(
         val submittedMentions = composer.agentMentions
         val submittedFileMentions = composer.fileMentions
         val submittedSkillMentions = composer.skillMentions
+        val mentionText: String
+        val mentionList: List<dev.opencode.mobile.domain.agent.AgentMention>
+        val fileList: List<FileMention>
+        val skillList: List<SkillMention>
+        if (allowsMentions) {
+            mentionText = submittedText
+            mentionList = submittedMentions
+            fileList = submittedFileMentions
+            skillList = submittedSkillMentions
+        } else {
+            mentionText = ComposerMentionRouting.withoutMentionTokens(submittedText, submittedMentions)
+            mentionList = emptyList()
+            fileList = emptyList()
+            skillList = emptyList()
+        }
         val trimmed =
             ComposerMentionRouting.trimForSend(
-                composer.text,
-                composer.agentMentions,
-                composer.fileMentions,
-                composer.skillMentions,
+                mentionText,
+                mentionList,
+                fileList,
+                skillList,
             )
         val prompt = trimmed.text
         val mentionsForSend = trimmed.agentMentions
@@ -1187,10 +1282,21 @@ class SessionChatComposer(
                 .mapNotNull { attachment ->
                     attachmentRevisions[attachment.id]?.let { attachment.id to it }
                 }.toMap()
-        val selectedModel = composer.selectedModel ?: return
+        val selectedModel = composer.selectedModel
+        if (capabilities.requiresComposerModel && selectedModel == null) return
         if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
-        if ((prompt.isEmpty() && attachments.isEmpty()) || _state.value.isSending || !composer.isModelSelectionReady) return
+        if ((prompt.isEmpty() && attachments.isEmpty()) || _state.value.isSending) return
+        if (capabilities.requiresComposerModel && !composer.isModelSelectionReady) return
         if (composer.hasPendingUploads) return
+        if (
+            ComposerSubmitRouting.resolve(
+                text = prompt,
+                commands = emptyList(),
+                allowsSlashCommands = allowsSlashCommands,
+            ) is ComposerSubmitIntent.Ignored
+        ) {
+            return
+        }
 
         val collapsedDisplay =
             CommandInvocationCollapser.collapseSkillMentions(prompt, skillsForSend)
@@ -1203,6 +1309,7 @@ class SessionChatComposer(
             ComposerSubmitRouting.resolve(
                 text = prompt,
                 commands = _state.value.serverCommands,
+                allowsSlashCommands = allowsSlashCommands,
             )
         // The echo of a send that carries its id comes back under it. v2 commands take
         // no id, so their row keeps a local id and retires on text instead.
@@ -1308,10 +1415,12 @@ class SessionChatComposer(
                                         text = text,
                                         attachments = attachments,
                                         model =
-                                            PromptModelSelection(
-                                                selectedModel.option.providerId,
-                                                selectedModel.option.modelId,
-                                            ),
+                                            selectedModel?.let {
+                                                PromptModelSelection(
+                                                    it.option.providerId,
+                                                    it.option.modelId,
+                                                )
+                                            },
                                         variant = composer.selectedVariant,
                                         mode = composer.selectedMode,
                                         agentMentions = mentions,
@@ -1356,10 +1465,12 @@ class SessionChatComposer(
                                         arguments = intent.arguments,
                                         attachments = attachments,
                                         model =
-                                            PromptModelSelection(
-                                                selectedModel.option.providerId,
-                                                selectedModel.option.modelId,
-                                            ),
+                                            selectedModel?.let {
+                                                PromptModelSelection(
+                                                    it.option.providerId,
+                                                    it.option.modelId,
+                                                )
+                                            },
                                         variant = composer.selectedVariant,
                                         mode = composer.selectedMode,
                                         delivery = composer.followUpDelivery,
@@ -1379,6 +1490,15 @@ class SessionChatComposer(
                                 mentions = mentionsForSend,
                                 fileMentions = filesForSend,
                             )
+                        is ComposerSubmitIntent.SkillPrompt ->
+                            sendPrompt(
+                                text = intent.text,
+                                skillMentions = emptyList(),
+                                mentions = emptyList(),
+                                fileMentions = emptyList(),
+                            )
+                        ComposerSubmitIntent.Ignored ->
+                            error("Slash commands are not available")
                     }
                     persistCurrentSelection(updatePreference = false)
                     _state.update { it.copy(sendProgressPercent = null) }
@@ -1884,7 +2004,13 @@ class SessionChatComposer(
             return
         }
         loadedCatalog = catalog
-        updateComposer { it.copy(modelOptions = catalog.options, modelCatalogError = null) }
+        updateComposer {
+            it.copy(
+                modelOptions = catalog.options,
+                modelProviderTraits = catalog.providerTraits,
+                modelCatalogError = null,
+            )
+        }
         revalidateSelection(catalog)
         applyInitialSelectionIfReady()
     }
@@ -1971,7 +2097,7 @@ class SessionChatComposer(
         fileMentions: List<FileMention> = emptyList(),
         skillMentions: List<SkillMention> = emptyList(),
     ): SessionChatComposerRegionState =
-        when (val mode = ComposerMentionRouting.suggestionMode(text, cursor, mentions, fileMentions, skillMentions)) {
+        when (val mode = suggestionMode(text, cursor, mentions, fileMentions, skillMentions)) {
             is ComposerSuggestionMode.At -> {
                 val files = if (fileSuggestionQuery == mode.query) fileSuggestions else emptyList()
                 copy(
@@ -1995,9 +2121,13 @@ class SessionChatComposer(
                 copy(
                     slashSuggestionsVisible = true,
                     slashSuggestions =
-                        ComposerSubmitRouting
-                            .filterCommands(offered, mode.query)
-                            .map { it.toSlashSuggestion() },
+                        if (allowsSlashCommands) {
+                            ComposerSubmitRouting
+                                .filterCommands(offered, mode.query)
+                                .map { it.toSlashSuggestion() }
+                        } else {
+                            slashSkills().filter { it.matches(mode.query) }.map { it.toSlashSuggestion() }
+                        },
                     atSuggestionsVisible = false,
                     atSuggestions = emptyList(),
                 )
@@ -2011,10 +2141,41 @@ class SessionChatComposer(
                 )
         }
 
+    private fun suggestionMode(
+        text: String,
+        cursor: Int,
+        mentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
+        fileMentions: List<FileMention> = emptyList(),
+        skillMentions: List<SkillMention> = emptyList(),
+    ): ComposerSuggestionMode =
+        _state.value.suggestionMode(text, cursor, mentions, fileMentions, skillMentions)
+
+    private fun SessionChatComposerRegionState.suggestionMode(
+        text: String,
+        cursor: Int,
+        mentions: List<dev.opencode.mobile.domain.agent.AgentMention>,
+        fileMentions: List<FileMention> = emptyList(),
+        skillMentions: List<SkillMention> = emptyList(),
+    ): ComposerSuggestionMode =
+        ComposerMentionRouting.suggestionMode(
+            text = text,
+            cursor = cursor,
+            mentions = mentions,
+            fileMentions = fileMentions,
+            skillMentions = skillMentions,
+            allowsMentions = allowsMentions,
+            allowsSlashCommands = allowsSlashCommands || slashSkills().isNotEmpty(),
+        )
+
+    private fun SessionChatComposerRegionState.slashSkills(): List<ComposerSlashSkill> {
+        val providerId = composer.selectedModel?.option?.providerId ?: return emptyList()
+        return composer.modelProviderTraits[providerId]?.slashSkills.orEmpty()
+    }
+
     private fun scheduleFileSearch() {
         val composer = _state.value.composer
         val mode =
-            ComposerMentionRouting.suggestionMode(
+            suggestionMode(
                 text = composer.text,
                 cursor = composer.cursor,
                 mentions = composer.agentMentions,
@@ -2050,7 +2211,7 @@ class SessionChatComposer(
                 _state.update { state ->
                     val current = state.composer
                     val currentMode =
-                        ComposerMentionRouting.suggestionMode(
+                        suggestionMode(
                             text = current.text,
                             cursor = current.cursor,
                             mentions = current.agentMentions,
@@ -2130,7 +2291,7 @@ class SessionChatComposer(
         }
 
     private fun logSendFailure(throwable: Throwable) {
-        DiagnosticLog.error(DiagnosticLogArea.Chat, "sendPromptAsync failed", throwable)
+        DiagnosticLog.error(DiagnosticLogArea.Chat, T3Errors.diagnosticMessage("sendPromptAsync failed", throwable), throwable)
     }
 
     private fun logI(message: String) {
@@ -2181,6 +2342,12 @@ class SessionChatComposer(
             val value: SessionModelSelection,
         ) : InitialSelection {
             override val sourceName = "new-session-preference"
+        }
+
+        data class Session(
+            val value: SessionModelSelection,
+        ) : InitialSelection {
+            override val sourceName = "session-record"
         }
     }
 }

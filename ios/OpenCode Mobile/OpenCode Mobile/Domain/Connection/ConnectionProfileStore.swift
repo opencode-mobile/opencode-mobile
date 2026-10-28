@@ -41,6 +41,7 @@ private struct StoredConnectionProfile: Codable {
     var username: String
     var serverProtocol: String?
     var serverURLs: [String]
+    var engine: String?
 
     init(
         id: String,
@@ -48,7 +49,8 @@ private struct StoredConnectionProfile: Codable {
         baseURL: String,
         username: String,
         serverProtocol: String?,
-        serverURLs: [String]
+        serverURLs: [String],
+        engine: String?
     ) {
         self.id = id
         self.name = name
@@ -56,6 +58,7 @@ private struct StoredConnectionProfile: Codable {
         self.username = username
         self.serverProtocol = serverProtocol
         self.serverURLs = serverURLs
+        self.engine = engine
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -65,6 +68,7 @@ private struct StoredConnectionProfile: Codable {
         case username
         case serverProtocol
         case serverURLs
+        case engine
     }
 
     init(from decoder: Decoder) throws {
@@ -75,6 +79,7 @@ private struct StoredConnectionProfile: Codable {
         username = try container.decode(String.self, forKey: .username)
         serverProtocol = try container.decodeIfPresent(String.self, forKey: .serverProtocol)
         serverURLs = try container.decodeIfPresent([String].self, forKey: .serverURLs) ?? []
+        engine = try container.decodeIfPresent(String.self, forKey: .engine)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -85,6 +90,7 @@ private struct StoredConnectionProfile: Codable {
         try container.encode(username, forKey: .username)
         try container.encodeIfPresent(serverProtocol, forKey: .serverProtocol)
         try container.encode(serverURLs, forKey: .serverURLs)
+        try container.encodeIfPresent(engine, forKey: .engine)
     }
 }
 
@@ -278,6 +284,7 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
                     username: record.username,
                     password: "",
                     serverProtocol: record.serverProtocol.flatMap(ServerProtocol.init(rawValue:)),
+                    engine: record.engine.flatMap(ConnectionEngine.init(rawValue:)) ?? .opencode,
                     id: record.id,
                     name: record.name
                 )
@@ -296,7 +303,8 @@ struct UserDefaultsConnectionProfileStore: ConnectionProfileStore, @unchecked Se
                     baseURL: profile.baseURL,
                     username: profile.username,
                     serverProtocol: profile.serverProtocol?.rawValue,
-                    serverURLs: ConnectionProfileIdentity.normalizedAddressList(profile.serverURLs)
+                    serverURLs: ConnectionProfileIdentity.normalizedAddressList(profile.serverURLs),
+                    engine: profile.engine == .opencode ? nil : profile.engine.rawValue
                 )
             }
         )

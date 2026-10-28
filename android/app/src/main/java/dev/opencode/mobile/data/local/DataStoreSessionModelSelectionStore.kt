@@ -138,6 +138,24 @@ class DataStoreSessionModelSelectionStore
             }
         }
 
+        override suspend fun loadNewSessionRuntimeMode(
+            connectionIdentity: ModelSelectionConnectionIdentity,
+            worktree: String,
+        ): String? =
+            dataStore.data
+                .first()[runtimeModeKey(connectionIdentity, worktree)]
+                ?.takeIf { it.isNotBlank() }
+
+        override suspend fun saveNewSessionRuntimeMode(
+            connectionIdentity: ModelSelectionConnectionIdentity,
+            worktree: String,
+            runtimeMode: String,
+        ) {
+            dataStore.edit { prefs ->
+                prefs[runtimeModeKey(connectionIdentity, worktree)] = runtimeMode
+            }
+        }
+
         override suspend fun clearAll() {
             dataStore.edit { prefs ->
                 prefs.clear()
@@ -167,6 +185,11 @@ class DataStoreSessionModelSelectionStore
             identity: ModelSelectionConnectionIdentity,
             worktree: String,
         ) = stringPreferencesKey("${preferencePrefix(identity)}${encode(worktree)}")
+
+        private fun runtimeModeKey(
+            identity: ModelSelectionConnectionIdentity,
+            worktree: String,
+        ) = stringPreferencesKey("$VERSION_PREFIX|runtimeMode|${identityKey(identity)}|${encode(worktree)}")
 
         private fun sessionPrefix(identity: ModelSelectionConnectionIdentity): String = "$VERSION_PREFIX|session|${identityKey(identity)}|"
 

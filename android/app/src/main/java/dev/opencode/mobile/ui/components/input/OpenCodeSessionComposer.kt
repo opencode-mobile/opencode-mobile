@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -21,6 +22,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -100,6 +102,12 @@ sealed interface OpenCodeSessionComposerState {
         val selectedModeLabel: String,
         val selectedVariantLabel: String,
         val showVariant: Boolean,
+        val showAgent: Boolean = true,
+        val showModel: Boolean = true,
+        val providerLabel: String? = null,
+        val runtimeModeLabel: String? = null,
+        /** When true the runtime-mode badge is a control that emits [OpenCodeSessionComposerAction.SelectRuntimeMode]. */
+        val runtimeModeSelectable: Boolean = false,
         val sendEnabled: Boolean,
         val attachEnabled: Boolean = true,
         val showStop: Boolean,
@@ -190,6 +198,8 @@ sealed interface OpenCodeSessionComposerAction {
     data object SelectMode : OpenCodeSessionComposerAction
 
     data object SelectVariant : OpenCodeSessionComposerAction
+
+    data object SelectRuntimeMode : OpenCodeSessionComposerAction
 
     data object Attach : OpenCodeSessionComposerAction
 
@@ -934,18 +944,22 @@ private fun PickerChipsRow(
                         modifier = Modifier.semantics { contentDescription = "Shell mode. Leave shell mode" },
                     )
                 } else {
-                    OpenCodeChoiceBadge(
-                        label = state.selectedModelLabel,
-                        selected = false,
-                        onClick = { onAction(OpenCodeSessionComposerAction.SelectModel) },
-                        variant = OpenCodeChoiceBadgeVariant.Glass,
-                    )
-                    OpenCodeChoiceBadge(
-                        label = state.selectedModeLabel,
-                        selected = false,
-                        onClick = { onAction(OpenCodeSessionComposerAction.SelectMode) },
-                        variant = OpenCodeChoiceBadgeVariant.Glass,
-                    )
+                    if (state.showModel) {
+                        OpenCodeChoiceBadge(
+                            label = state.selectedModelLabel,
+                            selected = false,
+                            onClick = { onAction(OpenCodeSessionComposerAction.SelectModel) },
+                            variant = OpenCodeChoiceBadgeVariant.Glass,
+                        )
+                    }
+                    if (state.showAgent) {
+                        OpenCodeChoiceBadge(
+                            label = state.selectedModeLabel,
+                            selected = false,
+                            onClick = { onAction(OpenCodeSessionComposerAction.SelectMode) },
+                            variant = OpenCodeChoiceBadgeVariant.Glass,
+                        )
+                    }
                     if (state.showVariant) {
                         OpenCodeChoiceBadge(
                             label = state.selectedVariantLabel,
@@ -954,6 +968,24 @@ private fun PickerChipsRow(
                             variant = OpenCodeChoiceBadgeVariant.Glass,
                         )
                     }
+                }
+                state.providerLabel?.takeIf { it.isNotBlank() }?.let { label ->
+                    OpenCodeChoiceBadge(
+                        label = label,
+                        selected = false,
+                        enabled = false,
+                        onClick = {},
+                        variant = OpenCodeChoiceBadgeVariant.Glass,
+                    )
+                }
+                state.runtimeModeLabel?.takeIf { it.isNotBlank() }?.let { label ->
+                    OpenCodeChoiceBadge(
+                        label = label,
+                        selected = false,
+                        enabled = state.runtimeModeSelectable,
+                        onClick = { onAction(OpenCodeSessionComposerAction.SelectRuntimeMode) },
+                        variant = OpenCodeChoiceBadgeVariant.Glass,
+                    )
                 }
             }
         }
@@ -1055,12 +1087,23 @@ private fun PermissionApprovalContent(
             )
         }
         Text(state.permission.replace('_', ' '), style = MaterialTheme.typography.bodyMedium)
-        SelectionContainer {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (state.files.isNotEmpty()) {
-                    state.files.forEach { file -> PermissionFileLine(file) }
-                } else {
-                    state.patterns.forEach { Text(it, style = PermissionCodeStyle) }
+        if (state.files.isNotEmpty() || state.patterns.isNotEmpty()) {
+            // Cap the command so Deny and Allow stay on screen. Shorter text hugs this height.
+            Column(
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = PermissionDetailMaxHeight)
+                        .verticalScroll(rememberScrollState()),
+            ) {
+                SelectionContainer {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (state.files.isNotEmpty()) {
+                            state.files.forEach { file -> PermissionFileLine(file) }
+                        } else {
+                            state.patterns.forEach { Text(it, style = PermissionCodeStyle) }
+                        }
+                    }
                 }
             }
         }
@@ -1069,6 +1112,8 @@ private fun PermissionApprovalContent(
                 text = "Always allows: ${state.alwaysPatterns.joinToString(", ")}",
                 style = MaterialTheme.typography.bodySmall,
                 color = openCodeColor("text-weak"),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         state.errorMessage?.let {
@@ -1114,6 +1159,9 @@ private fun PermissionApprovalContent(
 
 /** Commands and paths read as code (iOS: `OpenCodeTypography.code`). */
 private val PermissionCodeStyle = CodeTextStyle.copy(fontSize = 13.sp, lineHeight = 18.sp)
+
+/** About eight lines of command text. Longer approvals scroll inside this. */
+private val PermissionDetailMaxHeight = 160.dp
 
 @Composable
 private fun PermissionFileLine(file: OpenCodeSessionComposerState.PermissionFile) {

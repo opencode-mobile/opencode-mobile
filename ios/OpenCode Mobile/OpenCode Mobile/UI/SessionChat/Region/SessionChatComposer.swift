@@ -56,9 +56,13 @@ final class SessionChatComposer {
     private var catalogRefreshTask: Task<Void, Never>?
     private var catalogRetryTask: Task<Void, Never>?
     private let catalogRetryDelaysMs: [Int]
+    private(set) var requiresComposerModel = true
     private var fileSearchTask: Task<Void, Never>?
     private var fileSearchGeneration = 0
     var fileSearchDelayMs = 200
+
+    private var allowsMentions: Bool { activeConnectionManager.capabilities.supportsMentions }
+    private var allowsSlashCommands: Bool { activeConnectionManager.capabilities.supportsSlashCommands }
 
     init(
         sessionID: String,
@@ -139,17 +143,34 @@ final class SessionChatComposer {
             await self.loadCachedSelection()
             self.applyOrLoadDraft(preserve: preserve)
         }
-        loadServerCommands()
-        loadMentionableAgents()
-        loadSelectableAgents()
+        loadComposerCatalogs()
+    }
+
+    func setRequiresComposerModel(_ value: Bool) {
+        requiresComposerModel = value
+        if !value {
+            updateComposer { $0.isModelSelectionReady = true }
+        }
     }
 
     func startCatalogLoads() {
         Task { await refreshUploadAvailability() }
+        loadComposerCatalogs()
+        if requiresComposerModel {
+            startCatalogEventRefresh()
+        }
+    }
+
+    /// Server commands and agents are OpenCode catalogs. An engine without agents (T3) has
+    /// neither, and asking for them would send OpenCode requests and protocol probes to it.
+    private func loadComposerCatalogs() {
+        guard requiresComposerModel else {
+            updateComposer { $0.isModelSelectionReady = true }
+            return
+        }
         loadServerCommands()
         loadMentionableAgents()
         loadSelectableAgents()
-        startCatalogEventRefresh()
     }
 
     func stopCatalogEventRefresh() {
@@ -209,6 +230,10 @@ final class SessionChatComposer {
 
     /// `force` asks the shared catalog for a fresh answer instead of joining one in flight.
     func loadCatalog(force: Bool = false) async {
+        guard requiresComposerModel else {
+            updateComposer { $0.isModelSelectionReady = true }
+            return
+        }
         await loadCatalog(force: force, emptyRetryAttempt: 0)
     }
 
@@ -258,7 +283,20 @@ final class SessionChatComposer {
         }
     }
 
+    /// Replaces the T3 skill rows offered from `/`. A no-op when the list is unchanged.
+    func setSlashSkills(_ skills: [ComposerSlashSkill]) {
+        guard skills != state.slashSkills else { return }
+        state.slashSkills = skills
+        refreshComposerSuggestions(
+            for: state.composer.text,
+            cursor: state.composer.cursor,
+            mentions: state.composer.agentMentions
+        )
+        notifyChange()
+    }
+
     func loadServerCommands(force: Bool = false) {
+        guard allowsSlashCommands else { return }
         if !force, !state.serverCommands.isEmpty { return }
         serverCommandsTask?.cancel()
         serverCommandsTask = Task {
@@ -281,6 +319,12 @@ final class SessionChatComposer {
     }
 
     func loadSelectableAgents(force: Bool = false) {
+        // Selectable agents are an OpenCode catalog; an engine without agents has none to fetch.
+        guard requiresComposerModel else {
+            loadedSelectableAgents = true
+            applyInitialSelectionIfReady()
+            return
+        }
         if !force, loadedSelectableAgents { return }
         selectableAgentsTask?.cancel()
         selectableAgentsTask = Task {
@@ -301,6 +345,7 @@ final class SessionChatComposer {
     }
 
     func loadMentionableAgents(force: Bool = false) {
+        guard allowsMentions else { return }
         if !force, !state.mentionableAgents.isEmpty { return }
         mentionableAgentsTask?.cancel()
         mentionableAgentsTask = Task {
@@ -467,7 +512,7 @@ final class SessionChatComposer {
         let previous = state.composer
         if text == previous.text {
             ensureSuggestionCatalogLoaded(
-                for: ComposerMentionRouting.suggestionMode(
+                for: suggestionMode(
                     text: text,
                     cursor: cursor,
                     mentions: previous.agentMentions,
@@ -499,7 +544,7 @@ final class SessionChatComposer {
             previousSkillMentions: previous.skillMentions
         )
         ensureSuggestionCatalogLoaded(
-            for: ComposerMentionRouting.suggestionMode(
+            for: suggestionMode(
                 text: reconciled.text,
                 cursor: reconciled.cursor,
                 mentions: reconciled.mentions,
@@ -532,6 +577,11 @@ final class SessionChatComposer {
     /// span, a command becomes the leading `/name ` token. A draft without an open `/` query
     /// (the Commands sheet) gets the pick at the caret too.
     func selectSlashSuggestion(commandName: String) {
+        if !allowsSlashCommands, let skill = state.slashSkills.first(where: { $0.name == commandName }) {
+            let inserted = skill.insertion
+            updateComposerText(inserted, cursor: inserted.count)
+            return
+        }
         let composer = state.composer
         let command = state.serverCommands.first { $0.name == commandName }
         var text = composer.text
@@ -1011,11 +1061,26 @@ final class SessionChatComposer {
         let submittedMentions = state.composer.agentMentions
         let submittedFileMentions = state.composer.fileMentions
         let submittedSkillMentions = state.composer.skillMentions
+        let mentionText: String
+        let mentionList: [AgentMention]
+        let fileList: [FileMention]
+        let skillList: [SkillMention]
+        if allowsMentions {
+            mentionText = submittedText
+            mentionList = submittedMentions
+            fileList = submittedFileMentions
+            skillList = submittedSkillMentions
+        } else {
+            mentionText = ComposerMentionRouting.withoutMentionTokens(text: submittedText, mentions: submittedMentions)
+            mentionList = []
+            fileList = []
+            skillList = []
+        }
         let trimmedPrompt = ComposerMentionRouting.trimForSend(
-            text: submittedText,
-            mentions: state.composer.agentMentions,
-            fileMentions: state.composer.fileMentions,
-            skillMentions: state.composer.skillMentions
+            text: mentionText,
+            mentions: mentionList,
+            fileMentions: fileList,
+            skillMentions: skillList
         )
         let trimmed = trimmedPrompt.text
         let mentionsForSend = trimmedPrompt.agentMentions
@@ -1033,13 +1098,20 @@ final class SessionChatComposer {
             }
         )
         guard !OptimisticSessionCreate.isPlaceholder(sessionID) else { return }
-        guard (!trimmed.isEmpty || !submittedAttachments.isEmpty),
-              let selectedModel = state.composer.selectedModel,
-              state.composer.isModelSelectionReady,
-              !state.isSending
-        else { return }
+        guard (!trimmed.isEmpty || !submittedAttachments.isEmpty), !state.isSending else { return }
+        if requiresComposerModel {
+            guard state.composer.selectedModel != nil, state.composer.isModelSelectionReady else { return }
+        }
+        if case .ignored = ComposerSubmitRouting.resolve(
+            text: trimmed,
+            commands: [],
+            allowsSlashCommands: allowsSlashCommands
+        ) {
+            return
+        }
 
         let composer = state.composer
+        let selectedModel = composer.selectedModel
 
         let attachmentBlocks = submittedAttachments.map { attachment in
             SessionChatTimelineBlock.attachment(
@@ -1061,7 +1133,8 @@ final class SessionChatComposer {
         let displayText = collapsedDisplay?.text ?? trimmed
         let intent = ComposerSubmitRouting.resolve(
             text: trimmed,
-            commands: state.serverCommands
+            commands: state.serverCommands,
+            allowsSlashCommands: allowsSlashCommands
         )
         // The echo of a send that carries its id comes back under it. v2 commands take
         // no id, so their row keeps a local id and retires on text instead.
@@ -1152,7 +1225,7 @@ final class SessionChatComposer {
                     fileMentions: [FileMention],
                     sessionID: String,
                     attachments: [Attachment],
-                    model: ModelSelection,
+                    model: ModelSelection?,
                     worktree: String?
                 ) async throws {
                     try await beforePrompt()
@@ -1162,10 +1235,12 @@ final class SessionChatComposer {
                             options: PromptSendOptions(
                                 text: text,
                                 attachments: attachments,
-                                model: PromptModelSelection(
-                                    providerID: model.option.providerID,
-                                    modelID: model.option.modelID
-                                ),
+                                model: model.map {
+                                    PromptModelSelection(
+                                        providerID: $0.option.providerID,
+                                        modelID: $0.option.modelID
+                                    )
+                                },
                                 variant: composer.selectedVariant,
                                 mode: composer.selectedMode,
                                 agentMentions: mentions,
@@ -1204,10 +1279,12 @@ final class SessionChatComposer {
                             command: command,
                             arguments: arguments,
                             attachments: submittedAttachments,
-                            model: PromptModelSelection(
-                                providerID: selectedModel.option.providerID,
-                                modelID: selectedModel.option.modelID
-                            ),
+                            model: selectedModel.map {
+                                PromptModelSelection(
+                                    providerID: $0.option.providerID,
+                                    modelID: $0.option.modelID
+                                )
+                            },
                             variant: composer.selectedVariant,
                             mode: composer.selectedMode,
                             delivery: composer.followUpDelivery,
@@ -1227,6 +1304,19 @@ final class SessionChatComposer {
                         model: selectedModel,
                         worktree: worktree
                     )
+                case let .skillPrompt(_, text):
+                    try await sendPrompt(
+                        text: text,
+                        skillMentions: [],
+                        mentions: [],
+                        fileMentions: [],
+                        sessionID: sessionID,
+                        attachments: submittedAttachments,
+                        model: selectedModel,
+                        worktree: worktree
+                    )
+                case .ignored:
+                    throw ComposerSubmitRefusal.slashUnavailable
                 }
             }
             persistCurrentSelection(updatePreference: false)
@@ -1724,6 +1814,24 @@ final class SessionChatComposer {
         scheduleFileSearch()
     }
 
+    private func suggestionMode(
+        text: String,
+        cursor: Int,
+        mentions: [AgentMention],
+        fileMentions: [FileMention] = [],
+        skillMentions: [SkillMention] = []
+    ) -> ComposerSuggestionMode {
+        ComposerMentionRouting.suggestionMode(
+            text: text,
+            cursor: cursor,
+            mentions: mentions,
+            fileMentions: fileMentions,
+            skillMentions: skillMentions,
+            allowsMentions: allowsMentions,
+            allowsSlashCommands: allowsSlashCommands || !state.slashSkills.isEmpty
+        )
+    }
+
     private func refreshComposerSuggestions(
         for text: String,
         cursor: Int,
@@ -1734,7 +1842,7 @@ final class SessionChatComposer {
         let mentions = mentions ?? state.composer.agentMentions
         let fileMentions = fileMentions ?? state.composer.fileMentions
         let skillMentions = skillMentions ?? state.composer.skillMentions
-        switch ComposerMentionRouting.suggestionMode(
+        switch suggestionMode(
             text: text,
             cursor: cursor,
             mentions: mentions,
@@ -1751,14 +1859,20 @@ final class SessionChatComposer {
             state.slashSuggestions = []
         case let .slash(query):
             state.slashSuggestionsVisible = true
-            state.slashSuggestions = ComposerSubmitRouting
-                .slashSuggestions(
-                    state.serverCommands,
-                    query: query,
-                    isLeading: ComposerMentionRouting.slashQueryIsLeading(text, cursor: cursor),
-                    skillMentions: skillMentions
-                )
-                .map { $0.toSlashSuggestion() }
+            if allowsSlashCommands {
+                state.slashSuggestions = ComposerSubmitRouting
+                    .slashSuggestions(
+                        state.serverCommands,
+                        query: query,
+                        isLeading: ComposerMentionRouting.slashQueryIsLeading(text, cursor: cursor),
+                        skillMentions: skillMentions
+                    )
+                    .map { $0.toSlashSuggestion() }
+            } else {
+                state.slashSuggestions = state.slashSkills
+                    .filter { $0.matches(query: query) }
+                    .map { $0.toSlashSuggestion() }
+            }
             state.atSuggestionsVisible = false
             state.atSuggestions = []
         case .none:
@@ -1771,7 +1885,7 @@ final class SessionChatComposer {
 
     private func scheduleFileSearch() {
         let composer = state.composer
-        let mode = ComposerMentionRouting.suggestionMode(
+        let mode = suggestionMode(
             text: composer.text,
             cursor: composer.cursor,
             mentions: composer.agentMentions,
@@ -1822,7 +1936,7 @@ final class SessionChatComposer {
             }
             guard generation == self.fileSearchGeneration else { return }
             let current = self.state.composer
-            let currentMode = ComposerMentionRouting.suggestionMode(
+            let currentMode = suggestionMode(
                 text: current.text,
                 cursor: current.cursor,
                 mentions: current.agentMentions,
@@ -2017,4 +2131,8 @@ final class SessionChatComposer {
             }
         }
     }
+}
+
+private enum ComposerSubmitRefusal: Error {
+    case slashUnavailable
 }

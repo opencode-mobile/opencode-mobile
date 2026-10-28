@@ -26,11 +26,11 @@ import dev.opencode.mobile.domain.event.WorldSignals
 import dev.opencode.mobile.domain.filesystem.DefaultFilesystemRepository
 import dev.opencode.mobile.domain.filesystem.DefaultProjectFilesRepository
 import dev.opencode.mobile.domain.filesystem.FilesystemDomainAdapter
+import dev.opencode.mobile.domain.engine.EngineProjectRepository
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.filesystem.ProjectFileHighlighter
 import dev.opencode.mobile.domain.filesystem.ProjectFilesRepository
 import dev.opencode.mobile.domain.filesystem.TextMateProjectFileHighlighter
-import dev.opencode.mobile.domain.project.DefaultProjectRepository
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.project.ProjectRepository
 import dev.opencode.mobile.domain.worktree.DefaultWorktreeRepository
@@ -49,7 +49,7 @@ import javax.inject.Singleton
 abstract class ProjectModule {
     @Binds
     @Singleton
-    abstract fun bindProjectRepository(impl: DefaultProjectRepository): ProjectRepository
+    abstract fun bindProjectRepository(impl: EngineProjectRepository): ProjectRepository
 
     @Binds
     @Singleton

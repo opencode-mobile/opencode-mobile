@@ -1903,6 +1903,99 @@ struct ProjectListHomeViewModelTests {
         #expect(homeSession(viewModel, id: "ses-1")?.isReady == true)
     }
 
+    @Test func openCodeHome_pendingPermissionOutranksRunning() async {
+        let sessions = [
+            Session(id: "ses-1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ]
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        sessionLive.emit(directory: "/repo", sessions: sessions)
+        readyLive.emit(directory: "/repo", ids: [])
+        statusLive.emit(
+            directory: "/repo",
+            statuses: ["ses-1": SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        )
+        let permissions = RecordingPermissionLiveStore(requests: [
+            PermissionRequest(
+                id: "perm-1",
+                sessionID: "ses-1",
+                permission: "bash",
+                patterns: ["git status"],
+                metadata: [:],
+                always: [],
+                toolMessageID: nil,
+                toolCallID: nil
+            ),
+        ])
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(sessions: sessions),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive,
+            permissionLiveStore: permissions
+        )
+        await viewModel.refresh()
+        let waiting = await waitUntil {
+            homeSession(viewModel, id: "ses-1")?.sessionListStatus() == .needsApproval
+        }
+        #expect(waiting)
+        #expect(permissions.observedDirectories == ["/repo"])
+        #expect(permissions.notedSessionIDs["/repo"] == Set(["ses-1"]))
+
+        permissions.emit([])
+        let running = await waitUntil {
+            homeSession(viewModel, id: "ses-1")?.sessionListStatus() == .running
+        }
+        #expect(running)
+    }
+
+    @Test func t3Home_doesNotFetchOpenCodePermissions() async {
+        let sessions = [
+            Session(id: "ses-1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ]
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        sessionLive.emit(directory: "/repo", sessions: sessions)
+        readyLive.emit(directory: "/repo", ids: [])
+        statusLive.emit(
+            directory: "/repo",
+            statuses: ["ses-1": SessionStatus(sessionID: "ses-1", raw: ["type": "busy"])]
+        )
+        let permissions = RecordingPermissionLiveStore(requests: [
+            PermissionRequest(
+                id: "perm-1",
+                sessionID: "ses-1",
+                permission: "bash",
+                patterns: [],
+                metadata: [:],
+                always: [],
+                toolMessageID: nil,
+                toolCallID: nil
+            ),
+        ])
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(sessions: sessions),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive,
+            permissionLiveStore: permissions,
+            engine: .t3
+        )
+        await viewModel.refresh()
+        let running = await waitUntil {
+            homeSession(viewModel, id: "ses-1")?.statusLabel == "Working"
+        }
+        #expect(running)
+        #expect(homeSession(viewModel, id: "ses-1")?.sessionListStatus() == .running)
+        #expect(permissions.observedDirectories.isEmpty)
+    }
+
     @Test func liveStatus_mapsRetryingAndHidesUntilSeeded() async {
         let sessions = [
             Session(id: "ses-1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
@@ -2122,6 +2215,57 @@ struct ProjectListHomeViewModelTests {
         #expect(homeSession(viewModel, id: "ses-1")?.unreadOutcome == nil)
     }
 
+    @Test func homeSessionActions_chooseSettle_skipsBusyThread() async {
+        let repository = FakeSessionRepository()
+        let region = HomeSessionActions(sessionRepository: repository, messageRepository: FakeMessageRepository())
+        var errors: [String] = []
+        region.onLifecycleError = { errors.append($0) }
+        region.begin(
+            sessionId: "thr-1",
+            title: "Busy",
+            worktree: "/repo",
+            canArchive: true,
+            showsSettle: true,
+            snoozeBlockReason: "Waiting on you",
+            presentSheet: false
+        )
+
+        let settled = await region.chooseSettle()
+
+        #expect(!settled)
+        #expect(repository.settledIDs.isEmpty)
+        #expect(errors.isEmpty)
+        #expect(!region.actionInFlight)
+    }
+
+    @Test func homeSessionActions_settleBlockedByServer_explainsWhy() async {
+        let repository = FakeSessionRepository()
+        repository.settleError = SessionSettleBlockedError()
+        let region = HomeSessionActions(sessionRepository: repository, messageRepository: FakeMessageRepository())
+        var errors: [String] = []
+        region.onLifecycleError = { errors.append($0) }
+        region.begin(sessionId: "thr-1", title: "Idle", worktree: "/repo", canArchive: true, showsSettle: true)
+
+        let settled = await region.chooseSettle()
+
+        #expect(!settled)
+        #expect(repository.settledIDs == ["thr-1"])
+        #expect(errors == [SessionSettleBlockedError.message])
+    }
+
+    @Test func homeSessionActions_settleFailure_staysGenericForOtherErrors() async {
+        let repository = FakeSessionRepository()
+        repository.settleError = SessionError.transport("boom")
+        let region = HomeSessionActions(sessionRepository: repository, messageRepository: FakeMessageRepository())
+        var errors: [String] = []
+        region.onLifecycleError = { errors.append($0) }
+        region.begin(sessionId: "thr-1", title: "Idle", worktree: "/repo", canArchive: true, showsSettle: true)
+
+        _ = await region.chooseSettle()
+
+        #expect(errors == [HomeSessionActions.settleError])
+    }
+
     // MARK: - First load of a newly added project (#741)
 
     @Test func addProject_newProject_exposesLoadingAfterGraceThenLoadsRows() async {
@@ -2332,6 +2476,8 @@ private func makeViewModel(
     sessionLiveStoreOverride: (any SessionLiveStore)? = nil,
     sessionStatusLiveStoreOverride: (any SessionStatusLiveStore)? = nil,
     sessionReadyStoreOverride: (any SessionReadyStore)? = nil,
+    permissionLiveStore: (any PermissionLiveStore)? = nil,
+    engine: ConnectionEngine = .opencode,
     projectLoadTiming: ProjectLoadTiming = .standard,
     worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
     branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)],
@@ -2342,7 +2488,12 @@ private func makeViewModel(
     eventStream.setConnectionState(.connected)
     let manager = ActiveConnectionManager()
     manager.apply(
-        ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
+        ConnectionProfile(
+            baseURL: "http://127.0.0.1:4096/",
+            username: engine == .t3 ? "t3" : "opencode",
+            password: "",
+            engine: engine
+        ),
         serverProtocol: serverProtocol
     )
     let coordinator = ConnectionSessionCoordinator(
@@ -2374,6 +2525,7 @@ private func makeViewModel(
         sessionLiveStore: sessionLiveStore,
         sessionStatusLiveStore: sessionStatusLiveStore,
         sessionReadyStore: sessionReadyStore,
+        permissionLiveStore: permissionLiveStore,
         connectionSessionCoordinator: coordinator,
         addProjectListingDebounce: .zero,
         projectLoadTiming: projectLoadTiming,
@@ -2381,6 +2533,38 @@ private func makeViewModel(
         branchRetryDelays: branchRetryDelays,
         worktreeInventoryCache: worktreeInventoryCache
     )
+}
+
+@MainActor
+private final class RecordingPermissionLiveStore: PermissionLiveStore {
+    private var requests: [PermissionRequest]
+    private var continuation: AsyncStream<[PermissionRequest]>.Continuation?
+    private(set) var observedDirectories: [String] = []
+    private(set) var notedSessionIDs: [String: Set<String>] = [:]
+
+    init(requests: [PermissionRequest]) {
+        self.requests = requests
+    }
+
+    func observePermissions(directory: String) -> AsyncStream<[PermissionRequest]> {
+        observedDirectories.append(directory)
+        let initial = requests
+        return AsyncStream { continuation in
+            self.continuation = continuation
+            continuation.yield(initial)
+        }
+    }
+
+    func emit(_ requests: [PermissionRequest]) {
+        self.requests = requests
+        continuation?.yield(requests)
+    }
+
+    func noteSessions(directory: String, sessionIDs: Set<String>) {
+        notedSessionIDs[directory] = sessionIDs
+    }
+
+    func clearCache() {}
 }
 
 private struct HomeModelRepository: ModelRepository {
@@ -2692,6 +2876,8 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
     private(set) var archivedIDs: [String] = []
     private(set) var deletedIDs: [String] = []
     private(set) var forkedIDs: [String] = []
+    private(set) var settledIDs: [String] = []
+    var settleError: Error?
     /// Answers `getVcsInfo`; nil keeps the protocol default (404).
     var vcsInfo: (@Sendable (String) async throws -> VcsInfo)?
 
@@ -2770,6 +2956,12 @@ private final class FakeSessionRepository: SessionRepository, @unchecked Sendabl
             updatedAtEpochMs: 30,
             archivedAtEpochMs: 30
         )
+    }
+
+    func settleSession(id: String, directory: String?) async throws -> Bool {
+        settledIDs.append(id)
+        if let settleError { throw settleError }
+        return true
     }
 
     func deleteSession(id: String, directory: String?) async throws -> Bool {

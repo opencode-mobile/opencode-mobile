@@ -14,8 +14,11 @@ settings) is owned by the home shell, not this component.
 - Models:
   - `SessionListSession`: `id`, `title`, `worktree`, `letter`, `letterAccent`,
     `subtitle`, `status`, `caption`, optional `updatedAtEpochMs` (used for home
-    time-ladder grouping and within-section sort).
-  - `SessionListStatus`: `idle` | `running` | `ready`.
+    time-ladder grouping and within-section sort), optional `settleGestures`
+    (empty means the row does not swipe), and `showStatus` (default true; the
+    settled page turns the pill off).
+  - `SessionListStatus`: `idle` | `running` | `ready` | `snoozed`. `snoozed`
+    draws **Snoozed** and stays in the time ladder. It is not attention.
   - `SessionListFilterTab`: `id`, `title`, `subtitle`, `count`, optional letter
     + accent. Use id `all` for the cross-project tab (chip title **All**;
     picker chrome **All projects**); other ids match `SessionListSession.worktree`.
@@ -45,6 +48,11 @@ settings) is owned by the home shell, not this component.
   - `onSessionLongPress(session)` on both platforms.
   - `onNewSessionLongPress()` forwarded to the dock. Callers set it only in
     picker chrome with two or more projects.
+  - `settledSessions` plus `onOpenSettled`. When the filtered settled list is
+    non-empty and `onOpenSettled` is set, the scroll ends with an **N settled**
+    link. The empty-content state does not show the link. Home passes these
+    only when settle is available.
+  - `onSettleGesture(session, gesture)` for the gestures stored on the row.
 - States: default and empty filtered list (dock and filters remain; optional
   caller-supplied empty content may fill the list region). Loading and
   load-error remain owned by the home screen shell. Page chrome is not part of

@@ -1,12 +1,15 @@
 package dev.opencode.mobile.ui.main
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -25,10 +28,19 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
+import androidx.navigation3.ui.NavDisplay
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.backwardRouteTransition
+import dev.opencode.mobile.forwardRouteTransition
+import dev.opencode.mobile.popRouteUnlessRoot
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.home.HomeCompactRowPath
+import dev.opencode.mobile.domain.home.HomeSettleFeed
+import dev.opencode.mobile.domain.home.HomeSettleGesture
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeProjectGrouping
 import dev.opencode.mobile.domain.home.HomeProjectPickerState
@@ -65,8 +77,10 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
+import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
+import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
@@ -76,6 +90,7 @@ import dev.opencode.mobile.ui.components.SessionListProjectPickerTags
 import dev.opencode.mobile.ui.components.SessionListScopeLoad
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
+import dev.opencode.mobile.ui.components.visibleForFilter
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.connection.ConnectionOnboardingScreen
 import dev.opencode.mobile.ui.connection.listCaption
@@ -95,6 +110,7 @@ import dev.opencode.mobile.ui.worktree.WorktreeCreateFormState
 import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
 import dev.opencode.mobile.ui.worktree.WorktreeCreateTags
 import dev.opencode.mobile.ui.worktree.worktreeCreateBackAction
+import kotlinx.serialization.Serializable
 
 /** Long-press session actions on home: sheet, rename/fork dialogs, delete confirm. */
 data class HomeSessionActionsCallbacks(
@@ -111,6 +127,17 @@ data class HomeSessionActionsCallbacks(
     val onForkOpen: () -> Unit = {},
     val onForkStay: () -> Unit = {},
     val onChooseArchive: () -> Unit = {},
+    val onChooseUnarchive: () -> Unit = {},
+    val onChooseUnsettle: () -> Unit = {},
+    val onChooseSettle: () -> Unit = {},
+    val onChooseWake: () -> Unit = {},
+    val onChooseSnooze: () -> Unit = {},
+    val onDismissSnooze: () -> Unit = {},
+    val onSnoozeAmountChange: (String) -> Unit = {},
+    val onCycleSnoozeUnit: () -> Unit = {},
+    val onSnoozePreset: (Long) -> Unit = {},
+    val onConfirmCustomSnooze: () -> Unit = {},
+    val onSettleGesture: (SessionListSession, HomeSettleGesture) -> Unit = { _, _ -> },
     val onChooseDelete: () -> Unit = {},
     val onConfirmDelete: () -> Unit = {},
     val onDismissDeleteConfirm: () -> Unit = {},
@@ -178,6 +205,19 @@ fun MainScreen(
                 onForkOpen = viewModel::chooseForkOpen,
                 onForkStay = viewModel::chooseForkStay,
                 onChooseArchive = viewModel::chooseArchive,
+                onChooseUnarchive = viewModel::chooseUnarchive,
+                onChooseUnsettle = viewModel::chooseUnsettle,
+                onChooseSettle = viewModel::chooseSettle,
+                onChooseWake = viewModel::chooseWake,
+                onChooseSnooze = viewModel::openSnooze,
+                onDismissSnooze = viewModel::dismissSnooze,
+                onSnoozeAmountChange = viewModel::updateSnoozeAmount,
+                onCycleSnoozeUnit = viewModel::cycleSnoozeUnit,
+                onSnoozePreset = viewModel::chooseSnoozePreset,
+                onConfirmCustomSnooze = viewModel::confirmCustomSnooze,
+                onSettleGesture = { session, gesture ->
+                    viewModel.onSettleGesture(session.id, session.title, session.directory, gesture)
+                },
                 onChooseDelete = viewModel::chooseDelete,
                 onConfirmDelete = viewModel::confirmDelete,
                 onDismissDeleteConfirm = viewModel::dismissDeleteConfirm,
@@ -236,6 +276,8 @@ fun MainScreen(
             viewModel.dismissServersSheet()
             onManageServersClick()
         },
+        showsHomeSettle = viewModel.showsHomeSettle(),
+        showsTerminal = viewModel.showsTerminal(),
         modifier = modifier,
         selectedSessionId = selectedSessionId,
         sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
@@ -285,6 +327,8 @@ internal fun MainScreen(
     worktreeServerCanCreate: Boolean = true,
     onOpenRunInNewWorktree: (String) -> Unit = {},
     worktreeCreateCallbacks: WorktreeCreateFormCallbacks = WorktreeCreateFormCallbacks(),
+    showsHomeSettle: Boolean = false,
+    showsTerminal: Boolean = true,
 ) {
     var newSessionSheetMode by rememberSaveable(stateSaver = NewSessionSheetModeSaver) {
         mutableStateOf<SessionListHomeChrome.NewSessionSheetMode?>(null)
@@ -314,13 +358,18 @@ internal fun MainScreen(
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     val worktreesEnabled = HomeDisplayPreferences.showsWorktrees
     val loaded = uiState as? MainScreenUiState.Loaded
-    val homeSessions = remember(loaded, worktreesEnabled) { loaded?.homeSessions(worktreesEnabled).orEmpty() }
+    val nowEpochMs = System.currentTimeMillis()
+    val homeSessions =
+        loaded?.homeSessions(worktreesEnabled, showsSettle = showsHomeSettle, nowEpochMs = nowEpochMs).orEmpty()
+    val settledSessions =
+        loaded?.homeSettledSessions(worktreesEnabled, showsSettle = showsHomeSettle, nowEpochMs = nowEpochMs).orEmpty()
     val chromeProjects =
         remember(loaded, homeSessions) {
             loaded?.let { state -> homeChromeProjects(state.projects, homeSessions, state.projectLoads) }.orEmpty()
         }
     val showTerminalAction =
-        SessionListHomeChrome.terminalAction(chromeProjects) is SessionListHomeChrome.TerminalAction.OpenCatalog
+        SessionListHomeChrome.terminalAction(chromeProjects, showsTerminal = showsTerminal) is
+            SessionListHomeChrome.TerminalAction.OpenCatalog
     val startNewSession: (SessionListHomeChrome.NewSessionAction) -> Unit = { action ->
         when (action) {
             SessionListHomeChrome.NewSessionAction.None -> Unit
@@ -366,7 +415,26 @@ internal fun MainScreen(
         visible = (uiState as? MainScreenUiState.Loaded)?.pendingProjectRemoval != null,
     )
 
+    val columnStack = rememberNavBackStack(HomeColumnFeed)
+    LaunchedEffect(showsHomeSettle) {
+        if (!showsHomeSettle) {
+            while (columnStack.lastOrNull() is SettledSessionsRoute) {
+                columnStack.popRouteUnlessRoot()
+            }
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
+        NavDisplay(
+            modifier = Modifier.fillMaxSize(),
+            backStack = columnStack,
+            onBack = { columnStack.popRouteUnlessRoot() },
+            transitionSpec = { forwardRouteTransition() },
+            popTransitionSpec = { backwardRouteTransition() },
+            predictivePopTransitionSpec = { backwardRouteTransition() },
+            entryProvider =
+                entryProvider {
+                    entry<HomeColumnFeed> {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBar(
                 title = serversChrome.title,
@@ -492,11 +560,34 @@ internal fun MainScreen(
                         onSelectedFilterIdChange = { selectedFilterId = it },
                         selectedSessionId = selectedSessionId,
                         sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
+                        showsSettle = showsHomeSettle,
+                        settledSessions = settledSessions,
+                        onOpenSettled = {
+                            if (columnStack.lastOrNull() != SettledSessionsRoute) {
+                                columnStack.add(SettledSessionsRoute)
+                            }
+                        },
+                        onSettleGesture = sessionActionsCallbacks.onSettleGesture,
                         modifier = Modifier.weight(1f),
                     )
                 }
             }
         }
+                    }
+                    entry<SettledSessionsRoute> {
+                        SettledSessionsColumn(
+                            sessions = settledSessions,
+                            selectedFilterId = selectedFilterId,
+                            isRefreshing = isRefreshing,
+                            onRefresh = onRefresh,
+                            onBack = { columnStack.popRouteUnlessRoot() },
+                            onSessionClick = onSessionClick,
+                            onSessionLongPress = sessionActionsCallbacks.onSessionLongPress,
+                            onSettleGesture = sessionActionsCallbacks.onSettleGesture,
+                        )
+                    }
+                },
+        )
 
         OpenCodeSnackbarHost(
             message = removalSnackbar,
@@ -763,23 +854,78 @@ private fun HomeSessionActions(
         title = "Session actions",
         onDismissRequest = callbacks.onDismissSheet,
     ) {
-        OpenCodeBottomSheetEntry(
-            title = "Rename session",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit),
-            onClick = callbacks.onChooseRename,
-        )
-        OpenCodeBottomSheetEntry(
-            title = "Fork session",
-            startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy),
-            onClick = callbacks.onChooseFork,
-        )
-        if (state.canArchive) {
-            OpenCodeBottomSheetEntry(
-                title = "Archive",
-                enabled = !state.lifecycleInFlight,
-                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive),
-                onClick = callbacks.onChooseArchive,
-            )
+        when (state.lifecycle) {
+            HomeSessionLifecycle.Archived ->
+                OpenCodeBottomSheetEntry(
+                    title = "Unarchive",
+                    enabled = !state.lifecycleInFlight,
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive),
+                    onClick = callbacks.onChooseUnarchive,
+                )
+            HomeSessionLifecycle.Settled ->
+                OpenCodeBottomSheetEntry(
+                    title = "Unsettle",
+                    enabled = !state.lifecycleInFlight,
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check),
+                    onClick = callbacks.onChooseUnsettle,
+                )
+            HomeSessionLifecycle.Snoozed -> {
+                OpenCodeBottomSheetEntry(
+                    title = "Wake",
+                    enabled = !state.lifecycleInFlight,
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check),
+                    onClick = callbacks.onChooseWake,
+                )
+                OpenCodeBottomSheetEntry(
+                    title = "Rename session",
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit),
+                    onClick = callbacks.onChooseRename,
+                )
+            }
+            HomeSessionLifecycle.Active -> {
+                if (state.showsSettle) {
+                    OpenCodeBottomSheetEntry(
+                        title =
+                            if (state.snoozeBlockReason != null) {
+                                "Settle · ${state.snoozeBlockReason}"
+                            } else {
+                                "Settle"
+                            },
+                        enabled = state.snoozeBlockReason == null && !state.lifecycleInFlight,
+                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check),
+                        onClick = callbacks.onChooseSettle,
+                    )
+                    OpenCodeBottomSheetEntry(
+                        title =
+                            if (state.snoozeBlockReason != null) {
+                                "Snooze · ${state.snoozeBlockReason}"
+                            } else {
+                                "Snooze"
+                            },
+                        enabled = state.snoozeBlockReason == null && !state.lifecycleInFlight,
+                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Check),
+                        onClick = callbacks.onChooseSnooze,
+                    )
+                }
+                OpenCodeBottomSheetEntry(
+                    title = "Rename session",
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit),
+                    onClick = callbacks.onChooseRename,
+                )
+                OpenCodeBottomSheetEntry(
+                    title = "Fork session",
+                    startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy),
+                    onClick = callbacks.onChooseFork,
+                )
+                if (state.canArchive) {
+                    OpenCodeBottomSheetEntry(
+                        title = "Archive",
+                        enabled = !state.lifecycleInFlight,
+                        startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive),
+                        onClick = callbacks.onChooseArchive,
+                    )
+                }
+            }
         }
         OpenCodeBottomSheetEntry(
             title = "Delete",
@@ -787,6 +933,36 @@ private fun HomeSessionActions(
             destructive = true,
             startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close),
             onClick = callbacks.onChooseDelete,
+        )
+    }
+
+    OpenCodeBottomSheet(
+        visible = state.snoozeVisible,
+        title = "Snooze until",
+        onDismissRequest = callbacks.onDismissSnooze,
+    ) {
+        HomeSettleFeed.snoozePresets(System.currentTimeMillis()).forEach { preset ->
+            OpenCodeBottomSheetEntry(
+                title = "${preset.label} · ${preset.whenLabel}",
+                onClick = { callbacks.onSnoozePreset(preset.atEpochMs) },
+            )
+        }
+        OpenCodeTextInput(
+            value = state.snoozeAmount,
+            onValueChange = callbacks.onSnoozeAmountChange,
+            hint = "Amount",
+            accessibilityLabel = "Snooze amount",
+            errorMessage = state.snoozeError,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        OpenCodeBottomSheetEntry(
+            title = state.snoozeUnit.label,
+            onClick = callbacks.onCycleSnoozeUnit,
+        )
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.CompactText("Snooze"),
+            onClick = callbacks.onConfirmCustomSnooze,
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
         )
     }
 
@@ -883,6 +1059,59 @@ private fun HomeSessionActions(
     )
 }
 
+@Serializable
+private data object HomeColumnFeed : NavKey
+
+@Serializable
+private data object SettledSessionsRoute : NavKey
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettledSessionsColumn(
+    sessions: List<SessionListSession>,
+    selectedFilterId: String,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
+    onBack: () -> Unit,
+    onSessionClick: (SessionOpenTarget) -> Unit,
+    onSessionLongPress: (SessionListSession) -> Unit,
+    onSettleGesture: (SessionListSession, HomeSettleGesture) -> Unit,
+) {
+    val visible = sessions.visibleForFilter(selectedFilterId)
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        OpenCodeTopBar(
+            title = "Settled",
+            subtitle = if (visible.size == 1) "1 thread" else "${visible.size} threads",
+            leading = OpenCodeTopBarLeading.Back(onClick = onBack),
+        )
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.weight(1f),
+        ) {
+            SettledSessionsPage(
+                sessions = visible,
+                onSessionSelected = { session ->
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.HOME,
+                        actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
+                    )
+                    onSessionClick(
+                        SessionOpenTarget(
+                            sessionId = session.id,
+                            title = session.title,
+                            worktree = session.directory,
+                        ),
+                    )
+                },
+                onSessionLongPress = onSessionLongPress,
+                onSettleGesture = onSettleGesture,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
 @Composable
 private fun ProbeFailedContent(
     message: String,
@@ -925,6 +1154,10 @@ private fun HomeProjectsContent(
     selectedSessionId: String? = null,
     sessionKeyboardNavigationEnabled: Boolean = false,
     worktreesEnabled: Boolean = true,
+    showsSettle: Boolean = false,
+    settledSessions: List<SessionListSession> = emptyList(),
+    onOpenSettled: () -> Unit = {},
+    onSettleGesture: (SessionListSession, HomeSettleGesture) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier,
 ) {
     // Rows exactly as the list renders them for the selected filter; read by Ctrl+Tab stepping.
@@ -1050,6 +1283,9 @@ private fun HomeProjectsContent(
                     ).takeIf { it != SessionListHomeChrome.NewSessionAction.None }
                     ?.let { action -> { onNewSessionAction(action) } },
             onSessionLongPress = onSessionLongPress,
+            settledSessions = if (showsSettle) settledSessions else emptyList(),
+            onOpenSettled = if (showsSettle) onOpenSettled else null,
+            onSettleGesture = if (showsSettle) onSettleGesture else null,
             revealNewestToken = revealNewestToken,
             selectedSessionId = selectedSessionId,
             onRetryScopeLoad = onRetryProjectLoad,
@@ -1126,9 +1362,39 @@ internal fun homeScopeId(
     worktreesEnabled: Boolean = true,
 ): String = HomeScope.resolve(id, projects, worktreesEnabled)?.let(HomeScope::id) ?: id
 
-/** Rows for every Home project, one per session id. */
-internal fun MainScreenUiState.Loaded.homeSessions(worktreesEnabled: Boolean = true): List<SessionListSession> =
-    homeSessionListSessions(projects, sections, home.extraSessions, worktreesEnabled)
+/** Rows for every Home project, one per session id. Settled rows stay off this list. */
+internal fun MainScreenUiState.Loaded.homeSessions(
+    worktreesEnabled: Boolean = true,
+    showsSettle: Boolean = false,
+    nowEpochMs: Long = System.currentTimeMillis(),
+): List<SessionListSession> =
+    homeSessionListSessions(
+        projects,
+        sections,
+        home.extraSessions,
+        worktreesEnabled,
+        showsSettle = showsSettle,
+        nowEpochMs = nowEpochMs,
+        settledOnly = false,
+    )
+
+/** Settled rows for the settled page. Empty unless settle is on. */
+internal fun MainScreenUiState.Loaded.homeSettledSessions(
+    worktreesEnabled: Boolean = true,
+    showsSettle: Boolean = false,
+    nowEpochMs: Long = System.currentTimeMillis(),
+): List<SessionListSession> {
+    if (!showsSettle) return emptyList()
+    return homeSessionListSessions(
+        projects,
+        sections,
+        home.extraSessions,
+        worktreesEnabled,
+        showsSettle = true,
+        nowEpochMs = nowEpochMs,
+        settledOnly = true,
+    )
+}
 
 /** Without project data, each section is its own project (tests and previews). */
 internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> =
@@ -1137,29 +1403,46 @@ internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Se
 /**
  * Home rows: each project's sessions from its added paths' lists and (v1) its other
  * worktrees' lists. A session listed more than once keeps its newest copy (the earlier
- * source on a tie); rows are newest first.
+ * source on a tie); rows are newest first. Settled rows are a separate list when settle is on.
  */
 internal fun homeSessionListSessions(
     projects: List<HomeProject>,
     sections: List<ProjectSectionUi>,
     extraSessions: Map<String, List<SessionSummary>> = emptyMap(),
     worktreesEnabled: Boolean = true,
+    showsSettle: Boolean = false,
+    nowEpochMs: Long = 0L,
+    settledOnly: Boolean = false,
 ): List<SessionListSession> {
     val sectionsByPath = sections.associateBy { it.worktree }
     val flattened =
         projects.flatMap { project ->
             project.memberPaths.flatMap { path ->
-                sectionsByPath[path]?.allSessions.orEmpty().map { HomeRowSource(project, path, it) }
+                val section = sectionsByPath[path]
+                val summaries =
+                    if (settledOnly) {
+                        section?.archivedSessions.orEmpty().filter { it.isSettled }
+                    } else {
+                        section?.allSessions.orEmpty() +
+                            section?.archivedSessions.orEmpty().filter { session ->
+                                !showsSettle || !session.isSettled
+                            }
+                    }
+                summaries.map { HomeRowSource(project, path, it) }
             } +
-                project.worktrees.flatMap { worktree ->
-                    extraSessions[worktree.directory].orEmpty().map { HomeRowSource(project, worktree.directory, it) }
+                if (settledOnly) {
+                    emptyList()
+                } else {
+                    project.worktrees.flatMap { worktree ->
+                        extraSessions[worktree.directory].orEmpty().map { HomeRowSource(project, worktree.directory, it) }
+                    }
                 }
         }
     val chosenIndexById = mutableMapOf<String, Int>()
     flattened.forEachIndexed { index, source ->
-        val timestamp = source.session.updatedAtEpochMs ?: 0L
+        val timestamp = source.session.rowTimestamp(settledOnly)
         val chosenIndex = chosenIndexById[source.session.id]
-        val chosenTimestamp = chosenIndex?.let { flattened[it].session.updatedAtEpochMs ?: 0L }
+        val chosenTimestamp = chosenIndex?.let { flattened[it].session.rowTimestamp(settledOnly) }
         if (chosenTimestamp == null || timestamp > chosenTimestamp) {
             chosenIndexById[source.session.id] = index
         }
@@ -1167,10 +1450,20 @@ internal fun homeSessionListSessions(
     return chosenIndexById.values
         .sortedWith(
             compareByDescending<Int> { index ->
-                flattened[index].session.updatedAtEpochMs ?: 0L
+                flattened[index].session.rowTimestamp(settledOnly)
             }.thenBy { index -> index },
-        ).map { index -> flattened[index].toSessionListSession(worktreesEnabled) }
+        ).map { index ->
+            flattened[index].toSessionListSession(
+                worktreesEnabled = worktreesEnabled,
+                showsSettle = showsSettle,
+                nowEpochMs = nowEpochMs,
+                settledPage = settledOnly,
+            )
+        }
 }
+
+private fun SessionSummary.rowTimestamp(settledPage: Boolean): Long =
+    if (settledPage) settledAtEpochMs ?: updatedAtEpochMs ?: 0L else updatedAtEpochMs ?: 0L
 
 private data class HomeRowSource(
     val project: HomeProject,
@@ -1178,29 +1471,79 @@ private data class HomeRowSource(
     val listedIn: String,
     val session: SessionSummary,
 ) {
-    fun toSessionListSession(worktreesEnabled: Boolean = true): SessionListSession {
+    fun toSessionListSession(
+        worktreesEnabled: Boolean = true,
+        showsSettle: Boolean = false,
+        nowEpochMs: Long = 0L,
+        settledPage: Boolean = false,
+    ): SessionListSession {
         val directory = session.directory?.takeIf { it.isNotEmpty() } ?: listedIn
         val worktree = project.worktree(directory)?.takeIf { worktreesEnabled && project.hasManyWorktrees }
+        val until = session.snoozedUntilEpochMs
+        val snoozed =
+            showsSettle &&
+                !settledPage &&
+                HomeSettleFeed.isSnoozed(until, nowEpochMs, session.isSettled)
+        val gestures =
+            when {
+                !showsSettle -> emptyList()
+                settledPage -> listOf(HomeSettleGesture.Unsettle)
+                else ->
+                    HomeSettleFeed.gestures(
+                        showsSettle = true,
+                        isSettled = false,
+                        isSnoozed = snoozed,
+                        snoozeBlocked = session.snoozeBlockReason != null,
+                        isArchived = session.isArchived,
+                    )
+            }
+        val hideLocation = settledPage || snoozed
         return SessionListSession(
             id = session.id,
             title = session.title,
             worktree = project.key,
             letter = letterCharacterForProject(project.displayName),
             letterAccent = letterAccentForWorktree(project.primaryPath),
-            subtitle = listedIn,
+            subtitle =
+                when {
+                    settledPage -> ""
+                    snoozed && until != null -> "Until ${HomeSettleFeed.untilLabel(until, nowEpochMs)}"
+                    else -> listedIn
+                },
             directory = directory,
-            status = session.toSessionListStatus(),
-            caption = session.updatedAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty(),
+            status =
+                if (snoozed && !session.needsApproval) {
+                    SessionListStatus.Snoozed
+                } else {
+                    session.toSessionListStatus()
+                },
+            caption =
+                when {
+                    settledPage -> session.settledAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty()
+                    snoozed && until != null -> HomeSettleFeed.wakeInLabel(until, nowEpochMs)
+                    else -> session.homeCaption()
+                },
             updatedAtEpochMs = session.updatedAtEpochMs,
             retryAttempt = session.retryAttempt(),
             statusStale = session.statusStale,
+            settleGestures = gestures,
+            showStatus = !settledPage,
             worktreeScopeId = worktree?.let { HomeScope.worktreeId(project.key, it.directory) },
             location =
-                HomeSessionLocation
-                    .parts(project, directory, includeProjectName = false, worktreesEnabled = worktreesEnabled)
-                    ?.map { SessionListLocationPart(it.text, isBranch = it.isBranch) },
-            projectName = project.displayName,
-            compactWorktree = HomeCompactRowPath.worktreeLabel(project, directory, worktreesEnabled),
+                if (hideLocation) {
+                    null
+                } else {
+                    HomeSessionLocation
+                        .parts(project, directory, includeProjectName = false, worktreesEnabled = worktreesEnabled)
+                        ?.map { SessionListLocationPart(it.text, isBranch = it.isBranch) }
+                },
+            projectName = if (hideLocation) null else project.displayName,
+            compactWorktree =
+                if (hideLocation) {
+                    null
+                } else {
+                    HomeCompactRowPath.worktreeLabel(project, directory, worktreesEnabled)
+                },
         )
     }
 }
@@ -1251,6 +1594,7 @@ internal fun ProjectFirstLoad.toScopeLoad(): SessionListScopeLoad =
 @Suppress("UNUSED_PARAMETER")
 internal fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = false): SessionListStatus =
     when {
+        needsApproval || hasPendingPermission -> SessionListStatus.NeedsApproval
         statusLabel == "Working" -> SessionListStatus.Running
         statusLabel?.startsWith("Retrying") == true -> SessionListStatus.Retrying
         // v2: server read state. Only set on servers that track it, so v1 keeps Ready.
@@ -1263,6 +1607,18 @@ internal fun SessionSummary.toSessionListStatus(hasPendingPermission: Boolean = 
         isReady -> SessionListStatus.Ready
         else -> SessionListStatus.Idle
     }
+
+/** `Archived · 2h ago` for restorable rows; the relative time alone for active ones. */
+internal fun SessionSummary.homeCaption(): String {
+    val relative = updatedAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty()
+    val lifecycle =
+        when {
+            isArchived -> "Archived"
+            isSettled -> "Settled"
+            else -> return relative
+        }
+    return if (relative.isEmpty()) lifecycle else "$lifecycle · $relative"
+}
 
 private fun SessionSummary.retryAttempt(): Int? =
     statusLabel

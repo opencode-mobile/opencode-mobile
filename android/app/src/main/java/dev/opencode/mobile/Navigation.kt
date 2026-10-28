@@ -646,6 +646,7 @@ fun MainNavigation() {
                                                 onCredentialSegmentChanged =
                                                     setupViewModel::onCredentialSegmentChanged,
                                                 onPairingCodeChanged = setupViewModel::onPairingCodeChanged,
+                                                onEngineChanged = setupViewModel::onEngineChanged,
                                                 onPasswordFocusConsumed =
                                                     setupViewModel::consumePasswordFocusRequest,
                                                 onSubmit = {

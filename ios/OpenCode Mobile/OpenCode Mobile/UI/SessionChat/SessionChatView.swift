@@ -19,6 +19,7 @@ struct SessionChatView: View {
     /// `sessionNavigationTaskID` the current `viewModelStorage` was built for.
     @State private var viewModelTaskID: String?
     @State private var activePicker: ComposerPickerKind?
+    @State private var showRuntimeModePicker = false
     @State private var activeModelProviderID: String?
     @State private var modelFilterText = ""
     @State private var showSessionContext = false
@@ -371,6 +372,7 @@ struct SessionChatView: View {
                         skillsTarget = target
                     },
                     onChildSessionTap: { sessionID, title in
+                        guard viewModel.uiState.capabilities.showsChildSessions else { return }
                         logChatAction(ProductAnalytics.Action.chatOpenChildSession)
                         childSessionTarget = ChildSessionNavigationTarget(
                             sessionID: sessionID,
@@ -398,6 +400,7 @@ struct SessionChatView: View {
                         )
                     },
                     supportsSessionMessageDiff: viewModel.uiState.supportsSessionMessageDiff,
+                    supportsRevert: viewModel.uiState.supportsRevert,
                     expandedStepParagraphs: viewModel.uiState.expandedStepParagraphs,
                     onExpandStepParagraph: { paragraphID, chipCount in
                         viewModel.expandStepParagraph(paragraphID, chipCount: chipCount)
@@ -633,11 +636,26 @@ struct SessionChatView: View {
                 completedCount: viewModel.uiState.sessionTodoCompletedCount,
                 totalCount: max(viewModel.uiState.sessionTodoTotalCount, 1)
             )
+            .openCodeBottomSheet(isPresented: $showRuntimeModePicker, title: "Runtime mode") {
+                ForEach(T3RuntimeModeLabel.allModes, id: \.self) { mode in
+                    OpenCodeBottomSheetEntry(
+                        title: T3RuntimeModeLabel.displayName(mode) ?? mode,
+                        enabled: !viewModel.uiState.isLifecycleActionInFlight,
+                        endDecorator: mode == viewModel.uiState.runtimeMode
+                            ? .icon(.check)
+                            : .none,
+                        action: {
+                            showRuntimeModePicker = false
+                            Task { await viewModel.selectRuntimeMode(mode) }
+                        }
+                    )
+                }
+            }
             .sessionChatPickerSheet(
                 activePicker: $activePicker,
                 activeModelProviderID: $activeModelProviderID,
                 modelFilterText: $modelFilterText,
-                composer: viewModel.uiState.composer,
+                composer: pickerComposerState,
                 onSelectModel: { viewModel.selectModel($0) },
                 onSelectMode: { viewModel.selectMode($0) },
                 onSelectVariant: { viewModel.selectVariant($0) }
@@ -1287,47 +1305,65 @@ struct SessionChatView: View {
                     viewModel.openRenameSession()
                 }
             ),
-            OpenCodeOverflowMenuEntry(
-                title: "Review changes",
-                icon: .description,
-                enabled: sessionCreated,
-                action: {
-                    logOverflowAction(ProductAnalytics.Action.chatOverflowReviewChanges)
-                    menuExpanded = false
-                    changesTarget = viewModel.uiState.changesNavigationTarget(worktree: boundSession.worktree)
-                }
-            ),
-            OpenCodeOverflowMenuEntry(
-                title: "Fork session",
-                icon: .callSplit,
-                enabled: sessionCreated,
-                action: {
-                    logOverflowAction(ProductAnalytics.Action.chatOverflowFork)
-                    menuExpanded = false
-                    viewModel.openForkDialog()
-                }
-            ),
-            moveToWorktreeMenuEntry(sessionCreated: sessionCreated),
-            OpenCodeOverflowMenuEntry(
-                title: "Browse files",
-                icon: .folder,
-                enabled: sessionCreated,
-                action: {
-                    logOverflowAction(ProductAnalytics.Action.chatOverflowBrowseFiles)
-                    menuExpanded = false
-                    filesRoute = FilesRoute(worktree: boundSession.worktree)
-                }
-            ),
-            OpenCodeOverflowMenuEntry(
-                title: "Session context",
-                icon: .architecture,
-                enabled: sessionCreated,
-                action: {
-                    logOverflowAction(ProductAnalytics.Action.chatOverflowSessionContext)
-                    menuExpanded = false
-                    showSessionContext = true
-                }
-            ),
+        ]
+        if viewModel.uiState.capabilities.showsReview {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Review changes",
+                    icon: .description,
+                    enabled: sessionCreated,
+                    action: {
+                        logOverflowAction(ProductAnalytics.Action.chatOverflowReviewChanges)
+                        menuExpanded = false
+                        changesTarget = viewModel.uiState.changesNavigationTarget(worktree: boundSession.worktree)
+                    }
+                )
+            )
+        }
+        if viewModel.uiState.capabilities.showsChildSessions {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Fork session",
+                    icon: .callSplit,
+                    enabled: sessionCreated,
+                    action: {
+                        logOverflowAction(ProductAnalytics.Action.chatOverflowFork)
+                        menuExpanded = false
+                        viewModel.openForkDialog()
+                    }
+                )
+            )
+        }
+        entries.append(moveToWorktreeMenuEntry(sessionCreated: sessionCreated))
+        if viewModel.uiState.capabilities.showsFiles {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Browse files",
+                    icon: .folder,
+                    enabled: sessionCreated,
+                    action: {
+                        logOverflowAction(ProductAnalytics.Action.chatOverflowBrowseFiles)
+                        menuExpanded = false
+                        filesRoute = FilesRoute(worktree: boundSession.worktree)
+                    }
+                )
+            )
+        }
+        if viewModel.uiState.capabilities.showsContext {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Session context",
+                    icon: .architecture,
+                    enabled: sessionCreated,
+                    action: {
+                        logOverflowAction(ProductAnalytics.Action.chatOverflowSessionContext)
+                        menuExpanded = false
+                        showSessionContext = true
+                    }
+                )
+            )
+        }
+        entries.append(
             OpenCodeOverflowMenuEntry(
                 title: "Copy session ID",
                 icon: .contentCopy,
@@ -1337,8 +1373,8 @@ struct SessionChatView: View {
                     menuExpanded = false
                     UIPasteboard.general.string = viewModel.uiState.sessionID
                 }
-            ),
-        ]
+            )
+        )
         if viewModel.uiState.supportsSessionArchive {
             entries.append(
                 OpenCodeOverflowMenuEntry(
@@ -1350,6 +1386,44 @@ struct SessionChatView: View {
                         menuExpanded = false
                         viewModel.archiveSession()
                     }
+                )
+            )
+        }
+        if viewModel.uiState.capabilities.showsSettle {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Settle",
+                    icon: .check,
+                    enabled: lifecycleEnabled,
+                    action: {
+                        menuExpanded = false
+                        viewModel.settleSession()
+                    }
+                )
+            )
+        }
+        if viewModel.uiState.capabilities.canSetRuntimeMode {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: viewModel.uiState.runtimeModeLabel.map { "Runtime mode · \($0)" } ?? "Runtime mode",
+                    icon: .architecture,
+                    // A not-yet-created thread takes the pick as its launch mode.
+                    enabled: !viewModel.uiState.isLifecycleActionInFlight,
+                    action: {
+                        menuExpanded = false
+                        showRuntimeModePicker = true
+                    }
+                )
+            )
+        }
+        // Read-only summary; the composer chip changes the selection.
+        if viewModel.uiState.capabilities.showsModelSelection, let model = viewModel.uiState.modelSelectionLabel {
+            entries.append(
+                OpenCodeOverflowMenuEntry(
+                    title: "Model · \(model)",
+                    icon: .description,
+                    enabled: false,
+                    action: {}
                 )
             )
         }
@@ -1504,18 +1578,22 @@ struct SessionChatView: View {
                 .init(
                     selectedModelLabel: composer.selectedModelLabel,
                     selectedVariantLabel: composer.selectedVariantLabel,
-                    showVariant: composer.canSelectVariant
+                    showVariant: composer.canSelectVariant && viewModel.uiState.capabilities.showsVariant
                 )
             )
         } else {
+            let capabilities = viewModel.uiState.capabilities
+            let harnessPicker = viewModel.uiState.harnessPicker
+            let modelReady = capabilities.requiresComposerModel
+                ? composer.selectedModel != nil && composer.isModelSelectionReady
+                : true
             let sideQuestions = viewModel.uiState.sideQuestions
             let sideQuestionMode = sideQuestions.composerMode
             let blockedSideQuestion = !sideQuestions.supported && SideQuestion.question(inDraft: composer.text) != nil
             let promptSendEnabled =
                 composer.hasSendableContent &&
                 !composer.hasPendingUploads &&
-                composer.selectedModel != nil &&
-                composer.isModelSelectionReady &&
+                modelReady &&
                 !isSending &&
                 !blockedSideQuestion
             // A side question answers with the session's own model, so it needs no model pick.
@@ -1530,11 +1608,20 @@ struct SessionChatView: View {
                     selectionRevision: composer.selectionRevision,
                     attachments: composer.attachments.map(attachmentPresentation),
                     showPendingRevert: viewModel.uiState.hasPendingRevert,
-                    selectedModelLabel: composer.selectedModelLabel,
+                    selectedModelLabel: harnessPicker?.chipLabel ?? composer.selectedModelLabel,
                     selectedModeLabel: composer.selectedModeLabel,
                     selectedVariantLabel: composer.selectedVariantLabel,
-                    showVariant: composer.canSelectVariant,
+                    showVariant: composer.canSelectVariant && capabilities.showsVariant,
+                    showModel: capabilities.requiresComposerModel || harnessPicker != nil,
+                    showAgent: capabilities.showsAgent,
+                    // The harness chip already names the provider.
+                    showProvider: capabilities.showsProvider && harnessPicker == nil,
+                    showRuntimeMode: capabilities.showsRuntimeMode,
+                    providerLabel: viewModel.uiState.providerLabel ?? "",
+                    runtimeModeLabel: viewModel.uiState.runtimeModeLabel ?? "",
+                    runtimeModeEnabled: viewModel.uiState.runtimeModeBadgeSelectable,
                     sendEnabled:
+                        !composer.hasPendingUploads &&
                         (sideQuestionMode ? sideQuestionSendEnabled : promptSendEnabled) &&
                         !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
                         viewModel.uiState.timeline != .creating &&
@@ -1588,6 +1675,18 @@ struct SessionChatView: View {
                 case let .textChanged(text, selectionStart, _):
                     viewModel.updateComposerText(text, cursor: selectionStart)
                 case .selectModel:
+                    if let harnessPicker = viewModel.uiState.harnessPicker {
+                        if harnessPicker.isLocked {
+                            viewModel.showHarnessLockedNotice()
+                        } else if harnessPicker.options.isEmpty {
+                            Task { await viewModel.retryHarnessCatalog() }
+                        } else {
+                            logChatAction(ProductAnalytics.Action.composerOpenModelPicker)
+                            activeModelProviderID = harnessPicker.selectedOption?.providerID
+                            activePicker = .model
+                        }
+                        return
+                    }
                     guard !composer.modelOptions.isEmpty else {
                         Task { await viewModel.retryModelCatalog() }
                         return
@@ -1601,6 +1700,9 @@ struct SessionChatView: View {
                 case .selectVariant:
                     logChatAction(ProductAnalytics.Action.composerOpenVariantPicker)
                     activePicker = .variant
+                case .selectRuntimeMode:
+                    guard viewModel.uiState.runtimeModeBadgeSelectable else { return }
+                    showRuntimeModePicker = true
                 case .attach:
                     logChatAction(ProductAnalytics.Action.composerAttach)
                     let sources = composerAttachmentSources
@@ -1825,9 +1927,21 @@ struct SessionChatView: View {
         )
     }
 
+    /// Composer state the picker sheet reads; on T3 its model level is the harness catalogue.
+    private var pickerComposerState: SessionChatComposerState {
+        var composer = viewModel.uiState.composer
+        if let harnessPicker = viewModel.uiState.harnessPicker {
+            composer.modelOptions = harnessPicker.options
+            composer.selectedModel = harnessPicker.selectedOption.map { ModelSelection(option: $0, selectedVariant: nil) }
+        }
+        return composer
+    }
+
     private var composerAttachmentSources: ComposerAttachmentSources {
         viewModel.uiState.composer.attachmentSources(
-            developerToolsUnlocked: developerToolsPreferences.unlocked
+            developerToolsUnlocked: developerToolsPreferences.unlocked,
+            allowsDocuments: viewModel.uiState.supportsDocumentAttachments,
+            modelOwnedByEngine: !viewModel.uiState.capabilities.requiresComposerModel
         )
     }
 

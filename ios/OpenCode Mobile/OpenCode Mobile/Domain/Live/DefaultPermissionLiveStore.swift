@@ -7,6 +7,7 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
     private let worldSignals: any WorldSignals
     private let syncCoordinator: any SyncCoordinator
     private let activeDirectories = ActiveDirectorySet()
+    private let sessionIndex = PermissionSessionIndex()
     private var cache: [String: SharedLiveObservation<[PermissionRequest]>] = [:]
 
     init(
@@ -48,6 +49,14 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
         }
     }
 
+    func noteSessions(directory: String, sessionIDs: Set<String>) {
+        sessionIndex.note(directory: directory, sessionIDs: sessionIDs)
+    }
+
+    func clearSessionIndex() {
+        sessionIndex.clear()
+    }
+
     func clearCache() {
         let stale = Array(cache.values)
         cache.removeAll()
@@ -62,6 +71,7 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
         let eventStream = eventStream
         let syncCoordinator = syncCoordinator
         let activeDirectories = activeDirectories
+        let sessionIndex = sessionIndex
         let observation = SharedLiveObservation<[PermissionRequest]> { yield in
             Task.detached {
                 await Self.runLoop(
@@ -70,6 +80,7 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
                     eventStream: eventStream,
                     syncCoordinator: syncCoordinator,
                     activeDirectories: activeDirectories,
+                    sessionIndex: sessionIndex,
                     yield: yield
                 )
             }
@@ -84,6 +95,7 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
         eventStream: any ForegroundEventStream,
         syncCoordinator: any SyncCoordinator,
         activeDirectories: ActiveDirectorySet,
+        sessionIndex: PermissionSessionIndex,
         yield: @escaping @Sendable ([PermissionRequest]) -> Void
     ) async {
         activeDirectories.insert(directory)
@@ -100,6 +112,10 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
                 },
                 commit: { requests in
                     guard syncCoordinator.profileGeneration == generation else { return }
+                    sessionIndex.record(
+                        directory: directory,
+                        sessionIDs: Set(requests.map(\.sessionID))
+                    )
                     DiagnosticLog.info(.permission, "permission refresh count=\(requests.count)")
                     guard lastEmitted.shouldEmit(requests) else {
                         DiagnosticLog.info(.permission, "permission emit skip cause=unchanged")
@@ -128,6 +144,11 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
                     guard event.type == "permission.asked" || event.type == "permission.replied" else {
                         continue
                     }
+                    // Events name a session and no directory. An index limits the refetch to the
+                    // project that owns that session. No index keeps the chat-wide refresh.
+                    guard sessionIndex.shouldRefresh(directory: directory, sessionID: event.sessionID) else {
+                        continue
+                    }
                     Task {
                         try? await loadAndCommit()
                     }
@@ -136,6 +157,41 @@ final class DefaultPermissionLiveStore: PermissionLiveStore {
             await group.next()
             group.cancelAll()
         }
+    }
+}
+
+/// Directory → session ids. A missing directory means "refresh on any permission event".
+private nonisolated final class PermissionSessionIndex: @unchecked Sendable {
+    private let lock = NSLock()
+    private var indexed: [String: Set<String>] = [:]
+    private var known: [String: Set<String>] = [:]
+
+    func note(directory: String, sessionIDs: Set<String>) {
+        lock.lock()
+        indexed[directory] = sessionIDs
+        lock.unlock()
+    }
+
+    func clear() {
+        lock.lock()
+        indexed.removeAll()
+        known.removeAll()
+        lock.unlock()
+    }
+
+    func record(directory: String, sessionIDs: Set<String>) {
+        lock.lock()
+        known[directory] = sessionIDs
+        lock.unlock()
+    }
+
+    func shouldRefresh(directory: String, sessionID: String?) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let sessions = indexed[directory] else { return true }
+        guard let sessionID else { return true }
+        if sessions.contains(sessionID) { return true }
+        return known[directory]?.contains(sessionID) == true
     }
 }
 
