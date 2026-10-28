@@ -104,7 +104,7 @@ internal fun LabTimingStrip(
             )
             OpenCodeKeyValueRow(
                 label = "Spans",
-                value = timing.spansLabel,
+                value = LabFormat.count(timing.spanCount),
                 style = OpenCodeKeyValueStyle.Stacked,
                 modifier = Modifier.weight(1f),
             )

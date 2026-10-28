@@ -15,6 +15,7 @@ class LabDataSetStore(
     private val catalog: List<HighlightBenchDataSet> = HighlightBenchCatalog.dataSets,
 ) {
     private val custom = mutableListOf<HighlightBenchDataSet>()
+    private val files = mutableMapOf<String, Pair<String, HighlightBenchDataSet>>()
     private val lengths = ConcurrentHashMap<String, Int>()
     private var nextCustomId = 1
 
@@ -43,14 +44,19 @@ class LabDataSetStore(
         source: String,
     ): HighlightBenchDataSet = add("pasted", "Pasted $language", language, source)
 
-    /** A File Viewer file; its language comes from the extension, as in the File Viewer. */
+    /**
+     * A File Viewer file; its language comes from the extension, as in the File Viewer. Opening
+     * the same path with the same text again returns the data set it already made.
+     */
     fun addFile(
         path: String,
         source: String,
-    ): HighlightBenchDataSet {
-        val language = ProjectFileLanguage.forPath(path).grammar ?: PLAIN_TEXT
-        return add("file", path.substringAfterLast('/'), language, source)
-    }
+    ): HighlightBenchDataSet =
+        synchronized(custom) {
+            files[path]?.takeIf { (text, _) -> text == source }?.second
+                ?: add("file", path.substringAfterLast('/'), ProjectFileLanguage.forPath(path).grammar ?: PLAIN_TEXT, source)
+                    .also { files[path] = source to it }
+        }
 
     /** Characters in [dataSet]'s text, generating it once (some are megabytes); call it off the main thread. */
     fun length(dataSet: HighlightBenchDataSet): Int = lengths.getOrPut(dataSet.id) { dataSet.generate().length }

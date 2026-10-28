@@ -8,7 +8,11 @@ import dev.opencode.mobile.highlight.bench.HighlightBenchPlan
 import dev.opencode.mobile.highlight.bench.HighlightBenchProgress
 import dev.opencode.mobile.highlight.bench.HighlightBenchReport
 import dev.opencode.mobile.highlight.bench.HighlightBenchRun
+import dev.opencode.mobile.highlight.bench.HighlightBenchSection
 import dev.opencode.mobile.highlight.bench.HighlightBenchTier
+import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
+import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,6 +82,8 @@ data class LabBenchmarkUiState(
     val report: LabSavedReport? = null,
     /** True when [report] came from storage, not from a run in this screen. */
     val reportFromStorage: Boolean = false,
+    /** The stored report as Markdown blocks, parsed off the main thread; null until parsed. */
+    val storedReportDocument: MarkdownDocument? = null,
     val error: String? = null,
 ) {
     val canRun: Boolean
@@ -122,8 +128,16 @@ class LabBenchmarkViewModel
 
         init {
             viewModelScope.launch {
-                val saved = withContext(engines.dispatcher) { reports.latest() }
-                if (saved != null) mutableState.update { if (it.report == null) it.copy(report = saved, reportFromStorage = true) else it }
+                val (saved, document) =
+                    withContext(engines.dispatcher) {
+                        val saved = reports.latest()
+                        saved to saved?.let { report -> parseReport(report.markdown) }
+                    }
+                if (saved != null) {
+                    mutableState.update {
+                        if (it.report == null) it.copy(report = saved, reportFromStorage = true, storedReportDocument = document) else it
+                    }
+                }
             }
             // The picker shows characters like the Data sets screen; small data sets come first.
             viewModelScope.launch {
@@ -210,6 +224,11 @@ class LabBenchmarkViewModel
             }
         }
 
+        private fun parseReport(markdown: String): MarkdownDocument? =
+            runCatching {
+                OpenCodeMarkdownParser.parse(markdown, codeHighlighter = OpenCodeSemanticFallbackHighlighter)
+            }.getOrNull()
+
         /** Cancels the call in progress and skips the remaining cases; the partial report is kept. */
         fun stop() {
             val run = run ?: return
@@ -258,7 +277,7 @@ class LabBenchmarkViewModel
             report.comparisons().map { comparison ->
                 LabComparisonRow(
                     caseTitle = comparison.case.title,
-                    section = report.sectionTitle(comparison.case.section),
+                    section = comparison.case.section.shortLabel,
                     candidate = comparison.candidate.engineName,
                     baselineMs = comparison.baselineMs?.let(LabFormat::ms) ?: comparison.baseline.status.name,
                     candidateMs = comparison.candidateMs?.let(LabFormat::ms) ?: comparison.candidate.status.name,
@@ -266,3 +285,15 @@ class LabBenchmarkViewModel
                 )
             }
     }
+
+/** A section's name for narrow table columns; report headings keep the full title. */
+internal val HighlightBenchSection.shortLabel: String
+    get() =
+        when (this) {
+            HighlightBenchSection.ColdStart -> "Cold start"
+            HighlightBenchSection.Throughput -> "Throughput"
+            HighlightBenchSection.ChatFences -> "Chat fences"
+            HighlightBenchSection.LargeFiles -> "1 MB files"
+            HighlightBenchSection.WorstCases -> "Worst cases"
+            HighlightBenchSection.Custom -> "Custom"
+        }

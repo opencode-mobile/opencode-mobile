@@ -56,7 +56,12 @@ data class LabCompareUiState(
     val left: LabComparePane? = null,
     val right: LabComparePane? = null,
     val summary: LabCompareSummary? = null,
-)
+    /** The screen opened on the picker, so Back from a comparison returns to it. */
+    val opensOnPicker: Boolean = false,
+) {
+    val backReturnsToPicker: Boolean
+        get() = opensOnPicker && phase != LabComparePhase.Picking
+}
 
 /** Two engines on one data set: both highlighted, differing ranges marked, agreement share. */
 @HiltViewModel
@@ -85,6 +90,7 @@ class LabCompareViewModel
         fun bind(dataSetId: String?) {
             if (bound) return
             bound = true
+            mutableState.update { it.copy(opensOnPicker = dataSetId == null) }
             if (dataSetId == null) showPicker() else selectDataSet(dataSetId)
         }
 

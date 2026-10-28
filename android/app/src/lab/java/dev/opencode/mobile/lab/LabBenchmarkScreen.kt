@@ -13,12 +13,9 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
@@ -177,24 +174,13 @@ internal fun LabBenchmarkScreen(
                             }
                         }
                     }
-                    if (state.reportFromStorage) {
+                    state.storedReportDocument?.takeIf { state.reportFromStorage }?.let { document ->
                         item(key = "stored-report") {
-                            val document =
-                                remember(report.markdown) {
-                                    runCatching {
-                                        OpenCodeMarkdownParser.parse(
-                                            report.markdown,
-                                            codeHighlighter = OpenCodeSemanticFallbackHighlighter,
-                                        )
-                                    }.getOrNull()
-                                }
-                            document?.let {
-                                OpenCodeRenderedMarkdown(
-                                    document = it,
-                                    variant = OpenCodeRenderedMarkdownVariant.Standalone,
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                )
-                            }
+                            OpenCodeRenderedMarkdown(
+                                document = document,
+                                variant = OpenCodeRenderedMarkdownVariant.Standalone,
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                            )
                         }
                     }
                 }

@@ -17,6 +17,20 @@ class LabHighlightTest {
     }
 
     @Test
+    fun fileDataSetsTakeTheExtensionsLanguageAndAreReusedForTheSameText() {
+        val store = LabDataSetStore(emptyList())
+        val first = store.addFile("/Users/example/project/Main.kt", KOTLIN_SOURCE)
+        assertEquals("kotlin", first.language)
+        assertEquals("Main.kt", first.displayName)
+        assertEquals(first.id, store.addFile("/Users/example/project/Main.kt", KOTLIN_SOURCE).id)
+        // Edited since: a new data set, so earlier timings stay attached to the old text.
+        val edited = store.addFile("/Users/example/project/Main.kt", KOTLIN_SOURCE + "\n")
+        assertTrue(edited.id != first.id)
+        assertEquals(LabDataSetStore.PLAIN_TEXT, store.addFile("/Users/example/project/notes.unknownext", "x").language)
+        assertEquals(3, store.all().size)
+    }
+
+    @Test
     fun marksSplitAcrossLines() {
         val lines = labCodeLines("abc\ndef\n", emptyList(), listOf(HighlightBenchRange(2, 6)))
         assertEquals(listOf(OpenCodeCodeMark(2, 3)), lines[0].marks)

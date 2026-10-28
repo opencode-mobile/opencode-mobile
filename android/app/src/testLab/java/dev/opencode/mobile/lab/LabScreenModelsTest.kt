@@ -135,12 +135,15 @@ class LabScreenModelsTest {
 
             model.bind(null)
             assertEquals(LabComparePhase.Picking, model.state.value.phase)
+            assertFalse(model.state.value.backReturnsToPicker)
             assertEquals(7, model.state.value.pickerRows.size)
 
             model.selectDataSet(id)
             advanceUntilIdle()
             val state = model.state.value
             assertEquals(LabComparePhase.Compared, state.phase)
+            // Opened on the picker, so Back goes to it rather than out of Compare.
+            assertTrue(state.backReturnsToPicker)
             val summary = requireNotNull(state.summary)
             // Only "val" (3 characters) differs: colored by beta, plain for alpha.
             assertEquals(1, summary.differingRanges)
@@ -169,6 +172,19 @@ class LabScreenModelsTest {
             model.changeDataSet()
             assertEquals(LabComparePhase.Picking, model.state.value.phase)
             assertNull(model.state.value.summary)
+            assertFalse(model.state.value.backReturnsToPicker)
+        }
+
+    @Test
+    fun compareOpenedOnADataSetLeavesBackToTheRoute() =
+        runTest(dispatcher) {
+            val store = smallStore()
+            val id = store.addPasted("kotlin", KOTLIN_SOURCE).id
+            val model = LabCompareViewModel(store, labEngines(dispatcher))
+            model.bind(id)
+            advanceUntilIdle()
+            assertEquals(LabComparePhase.Compared, model.state.value.phase)
+            assertFalse(model.state.value.backReturnsToPicker)
         }
 
     @Test
@@ -217,6 +233,7 @@ class LabScreenModelsTest {
             )
             assertEquals("Alpha", state.baselineName)
             assertEquals("Beta", state.comparisons.single().candidate)
+            assertEquals("Throughput", state.comparisons.single().section)
             val report = requireNotNull(state.report)
             assertFalse(state.reportFromStorage)
             assertTrue(report.markdown.contains("Highlighting Lab run: selected data sets (Alpha, Beta)"))
@@ -232,6 +249,8 @@ class LabScreenModelsTest {
                 reopened.state.value.report
                     ?.markdown,
             )
+            // Parsed by the Screen Model, so the screen does no Markdown work on the main thread.
+            assertTrue(requireNotNull(reopened.state.value.storedReportDocument).blocks.isNotEmpty())
         }
 
     @Test

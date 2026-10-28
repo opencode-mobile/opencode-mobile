@@ -1,5 +1,6 @@
 package dev.opencode.mobile.lab
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -40,11 +41,12 @@ internal fun LabCompareScreen(
     onSelectRightEngine: (String) -> Unit,
 ) {
     val picking = state.phase == LabComparePhase.Picking
+    BackHandler(enabled = state.backReturnsToPicker, onBack = onChangeDataSet)
     Column(Modifier.fillMaxSize()) {
         OpenCodeTopBar(
             title = if (picking) "Compare: pick a data set" else "Compare: ${state.title}",
             subtitle = state.subtitle.ifEmpty { null },
-            leading = OpenCodeTopBarLeading.Back(onNavigateBack),
+            leading = OpenCodeTopBarLeading.Back(if (state.backReturnsToPicker) onChangeDataSet else onNavigateBack),
             actions = if (picking) emptyList() else listOf(OpenCodeTopBarAction.Label("Data set", onClick = onChangeDataSet)),
             showDivider = true,
         )
