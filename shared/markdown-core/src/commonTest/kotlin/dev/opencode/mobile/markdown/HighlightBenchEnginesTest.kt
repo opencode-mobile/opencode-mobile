@@ -32,8 +32,9 @@ class HighlightBenchEnginesTest {
         assertEquals(CodeTokenRole.Property.name, call.spans!!.first { it.start == 1 }.role)
         assertTrue(engine.supportsLanguage("patch"))
 
-        assertFalse(engine.supportsLanguage("kotlin"))
-        val unsupported = probe(highlighter, "kotlin", "val a = 1\n")
+        assertTrue(engine.supportsLanguage("kotlin"))
+        assertFalse(engine.supportsLanguage("cobol"))
+        val unsupported = probe(highlighter, "cobol", "DISPLAY 'HI'.\n")
         assertEquals("Unsupported", unsupported.outcome)
         assertFalse(unsupported.highlighted)
     }

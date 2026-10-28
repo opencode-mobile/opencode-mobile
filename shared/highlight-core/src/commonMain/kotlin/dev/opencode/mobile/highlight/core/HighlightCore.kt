@@ -38,6 +38,10 @@ internal object HighlightLanguages {
         listOf(
             Entry("json", listOf("jsonc", "json5", "jsonl"), JsonLexer),
             Entry("diff", listOf("patch", "udiff"), DiffLexer),
+            Entry("typescript", listOf("ts", "tsx", "mts", "cts"), CLikeLanguages.typeScript),
+            Entry("javascript", listOf("js", "jsx", "mjs", "cjs"), CLikeLanguages.javaScript),
+            Entry("kotlin", listOf("kt", "kts"), CLikeLanguages.kotlin),
+            Entry("swift", emptyList(), CLikeLanguages.swift),
             Entry("python", listOf("py", "py3", "python3", "pyi"), PythonLexer),
         )
 

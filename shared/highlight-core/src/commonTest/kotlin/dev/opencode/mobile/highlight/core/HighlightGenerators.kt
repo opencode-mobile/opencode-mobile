@@ -2,15 +2,49 @@ package dev.opencode.mobile.highlight.core
 
 import kotlin.random.Random
 
-/** Random inputs for property tests and the randomized run: plausible JSON and diffs, damaged freely. */
+/** Random inputs for property tests and the randomized run: plausible code per language, damaged freely. */
 internal object HighlightGenerators {
-    val languages = listOf("json", "diff", "plaintext")
+    val languages = listOf("json", "diff", "typescript", "javascript", "kotlin", "swift", "plaintext")
 
     private val jsonPieces =
         listOf(
             "{", "}", "[", "]", ":", ",", " ", " ", "\n", "\n", "\r\n", "\"key\"", "\"str\\\"esc\\u00e9\"", "'s'", "\"open",
             "123", "-1.5e3", "0x1F", ".5", "true", "null", "NaN", "bare", "// note", "/* c */", "/* open", "*/", "\\",
             "😀", "\uD83D", "\uDE00", "​", "\r", "\t", "@",
+        )
+
+    private val cLikePieces =
+        listOf(
+            "{", "}", "(", ")", "[", "]", ";", ",", ".", " ", " ", " ", "\n", "\n", "\n", "\r\n", "\t", "\"s\\\"q\"", "\"open", "'c'",
+            "'open", "123", "0x1F", "1_000", ".5e-3", "1.5f", "foo", "Bar", "MAX_X", "if", "return", "class", "true", "null", "// line",
+            "/* c */", "/* open", "*/", "/*", "\\", "=", "=>", "->", "<", ">", "/", "?.", "::", ":", "@Ann", "#", "${'$'}", "${'$'}{", "😀",
+            "\uD83D", "\uDE00", "​", "\"", "'",
+        )
+
+    /** Pieces per language on top of [cLikePieces]; a language listed here gets code from its pieces. */
+    private val codePieces: Map<String, List<String>> =
+        mapOf(
+            "typescript" to
+                cLikePieces +
+                listOf(
+                    "`", "`tpl ${'$'}{", "/re[/]x/g", "<div>", "</div>", "<A b=\"c\" d={", "/>", "<>", "</>", "<T,>", "#priv", "this.x",
+                    "async", "type", "interface", "function", "#!", "x: string", "= <", "return <p>",
+                ),
+            "javascript" to
+                cLikePieces +
+                listOf("`", "`t${'$'}{", "${'$'}{", "/a\\/b/i", "<b>", "</b>", "<i x={", "/>", "<>", "</>", "#p", "async", "function", "#!"),
+            "kotlin" to
+                cLikePieces +
+                listOf(
+                    "\"\"\"", "\"${'$'}name ${'$'}{", "\"\"\"raw ${'$'}x ${'$'}{", "`name`", "'\\n'", "/* /* nested */", "fun", "val", "data",
+                    "@file:Ann", "${'$'}x",
+                ),
+            "swift" to
+                cLikePieces +
+                listOf(
+                    "\"\"\"", "\"\\(", "\\(", "#\"raw\"#", "##\"", "\"##", "#\"\"\"", "\"\"\"#", "\\#(", "#if", "#endif",
+                    "/* /* nested */", "func", "let", "nil", "${'$'}0", "`default`",
+                ),
         )
 
     private val diffLines =
@@ -28,8 +62,25 @@ internal object HighlightGenerators {
     ): String =
         when (random.nextInt(10)) {
             0 -> soup(random, size)
-            else -> if (language == "diff") diff(random, size) else json(random, size)
+            else ->
+                when (language) {
+                    "diff" -> diff(random, size)
+                    in codePieces -> pieces(codePieces.getValue(language), random, size)
+                    else -> json(random, size)
+                }
         }
+
+    fun code(
+        language: String,
+        random: Random,
+        size: Int,
+    ): String = pieces(codePieces.getValue(language), random, size)
+
+    private fun pieces(
+        pieces: List<String>,
+        random: Random,
+        size: Int,
+    ): String = buildString { while (length < size) append(pieces[random.nextInt(pieces.size)]) }
 
     fun json(
         random: Random,

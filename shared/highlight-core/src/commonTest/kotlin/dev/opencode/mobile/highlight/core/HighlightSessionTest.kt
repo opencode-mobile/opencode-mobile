@@ -34,7 +34,8 @@ class HighlightSessionTest {
 
     @Test
     fun aliasesResolveAndUnknownLanguagesArePlain() {
-        assertEquals(listOf("json", "diff"), HighlightCore.languages)
+        assertTrue(HighlightCore.languages.containsAll(listOf("json", "diff", "typescript", "javascript", "kotlin", "swift")))
+        assertEquals("typescript", HighlightCore.canonicalLanguage("TSX"))
         assertEquals("json", HighlightCore.canonicalLanguage(" JSONC "))
         assertEquals("diff", HighlightSession("patch").language)
         assertFalse(HighlightCore.supports("cobol"))

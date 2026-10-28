@@ -71,6 +71,9 @@ internal fun assertSpansValid(
 ) {
     var previousEnd = from
     var previousRole = -1
+    // Spans are sorted, so the line start is found by scanning forward once (linear on one long line).
+    var scanned = 0
+    var lineStart = 0
     for (index in 0 until spans.count) {
         val start = spans.start(index)
         val end = spans.end(index)
@@ -78,7 +81,10 @@ internal fun assertSpansValid(
         if (start < previousEnd || end <= start || end > text.length) fail("Span $index $start..<$end after $previousEnd in ${text.length}")
         if (role <= 0 || role >= HighlightRole.entries.size) fail("Span $index has role code $role")
         if (start == previousEnd && role == previousRole) fail("Span $index touches the one before with the same role")
-        val lineStart = text.lastIndexOf('\n', start - 1) + 1
+        while (scanned < start) {
+            if (text[scanned] == '\n') lineStart = scanned + 1
+            scanned += 1
+        }
         for (offset in start until end) {
             if (text[offset] == '\n') fail("Span $index crosses a line end at $offset")
             if (text[offset] == '\r' && offset + 1 < text.length && text[offset + 1] == '\n') fail("Span $index covers a CRLF terminator")
