@@ -157,12 +157,12 @@ class HighlightCoreHighlightingEngineTest {
     fun unsupportedLanguagesGoToTheFallbackEngine() {
         val engine = HighlightCoreHighlightingEngine(fallback)
 
-        val rust = runSuspend { engine.highlight(request("a", "rust", "fn main() {}")) }
+        val cobol = runSuspend { engine.highlight(request("a", "cobol", "DISPLAY \"HI\".")) }
         val none = runSuspend { engine.highlight(request("b", null, "plain")) }
         val kotlin = runSuspend { engine.highlight(request("c", "kt", "fun main() {}")) }
 
         assertEquals(listOf("a", "b"), fallback.requests.map { it.key.value })
-        assertEquals(listOf(CodeSpan(0, 1, CodeTokenRole.Keyword)), rust.spans)
+        assertEquals(listOf(CodeSpan(0, 1, CodeTokenRole.Keyword)), cobol.spans)
         assertEquals(listOf(CodeSpan(0, 1, CodeTokenRole.Keyword)), none.spans)
         assertEquals("kotlin", kotlin.canonicalLanguage)
         assertEquals(oneShot("kotlin", "fun main() {}"), kotlin.spans)
