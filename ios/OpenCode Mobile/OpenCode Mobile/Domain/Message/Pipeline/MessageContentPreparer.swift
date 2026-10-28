@@ -1,3 +1,4 @@
+import FactoryKit
 import Foundation
 
 nonisolated func stableMarkdownSourceHash(_ markdown: String) -> Int {
@@ -83,7 +84,7 @@ nonisolated private final class MessageMarkdownDocumentCache: @unchecked Sendabl
 }
 
 nonisolated final class MessageContentPreparer: @unchecked Sendable {
-    static let shared = MessageContentPreparer()
+    static let shared = MessageContentPreparer(textMateEngine: Container.codeHighlighter)
 
     /// Legacy size gate still used by disposable streaming decoration fixtures.
     /// Format-first text-lane parse no longer skips on size.

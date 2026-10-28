@@ -127,6 +127,14 @@ nonisolated final class MarkdownHighlightPreferences {
         TextMateLanguageGateRegistry.shared.update(next: gate)
     }
 
+    #if HIGHLIGHT_LAB
+    /// Prepares chat fences again without changing a stored preference, for the developer
+    /// highlighting-engine setting.
+    func invalidateHighlighting() {
+        bumpEpoch()
+    }
+    #endif
+
     private func bumpEpoch() {
         Self.epochLock.lock()
         Self.storedEpoch += 1

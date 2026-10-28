@@ -144,6 +144,14 @@ final class FilesViewModel {
     @ObservationIgnored private var highlightRevision: Int64 = 0
     @ObservationIgnored private var started = false
 
+    #if HIGHLIGHT_LAB
+    /// The developer Highlighting Engine setting (#872): highlight-core colors files it has a lexer for.
+    @ObservationIgnored var highlightCoreEnabled: () -> Bool = { HighlightEnginePreferences.usesHighlightCore() }
+    @ObservationIgnored var highlightCoreConfiguration = FileHighlightCorePass.Configuration.standard
+    @ObservationIgnored private var highlightCorePasses: [String: FileHighlightCorePass] = [:]
+    @ObservationIgnored private var engineChangeTask: Task<Void, Never>?
+    #endif
+
     private enum FolderLoad: Equatable {
         case loading
         case loaded([ProjectEntry])
@@ -167,6 +175,13 @@ final class FilesViewModel {
         self.findDebounce = findDebounce
         self.copyToPasteboard = copyToPasteboard
         state = FilesUiState(projectName: ProjectPaths.projectName(worktree: worktree))
+        #if HIGHLIGHT_LAB
+        engineChangeTask = Task { [weak self] in
+            for await _ in NotificationCenter.default.notifications(named: HighlightEnginePreferences.didChange) {
+                self?.rehighlightOpenFiles()
+            }
+        }
+        #endif
     }
 
     // MARK: Tree
@@ -355,6 +370,7 @@ final class FilesViewModel {
         fileTasks[relativePath] = nil
         highlightTasks[relativePath]?.cancel()
         highlightTasks[relativePath] = nil
+        cancelHighlightCore(relativePath)
         if state.activePath == relativePath {
             state.activePath = state.tabs.last?.relativePath
         }
@@ -389,6 +405,7 @@ final class FilesViewModel {
         fileTasks[path]?.cancel()
         highlightTasks[path]?.cancel()
         highlightTasks[path] = nil
+        cancelHighlightCore(path)
         let name = ProjectPaths.name(of: path)
         state.viewers[path] = ProjectFileViewerState(relativePath: path, name: name)
         let worktree = worktree
@@ -450,6 +467,10 @@ final class FilesViewModel {
     private func startHighlighting(_ path: String, document: FileTextDocument) {
         guard let language = document.language else { return }
         highlightTasks[path]?.cancel()
+        cancelHighlightCore(path)
+        #if HIGHLIGHT_LAB
+        if highlightCoreEnabled(), startHighlightCore(path, document: document, language: language.id) { return }
+        #endif
         let textMate: (any TextMateHighlighting)? = textMateEnabled() ? highlighter : nil
         highlightRevision += 1
         let revision = highlightRevision
@@ -471,6 +492,45 @@ final class FilesViewModel {
             self.highlightTasks[path] = nil
         }
     }
+
+    private func cancelHighlightCore(_ path: String) {
+        #if HIGHLIGHT_LAB
+        highlightCorePasses.removeValue(forKey: path)?.cancel()
+        #endif
+    }
+
+    #if HIGHLIGHT_LAB
+    /// A row of an open file appeared; highlight-core colors uncolored visible rows first.
+    func lineAppeared(_ path: String, line: Int) {
+        highlightCorePasses[path]?.lineAppeared(line)
+    }
+
+    func highlightCorePass(_ path: String) -> FileHighlightCorePass? {
+        highlightCorePasses[path]
+    }
+
+    /// The engine setting changed: color every open file again with the engine now selected.
+    func rehighlightOpenFiles() {
+        for (path, viewer) in state.viewers {
+            guard let document = viewer.textDocument else { continue }
+            state.viewers[path]?.lineSpans = [:]
+            startHighlighting(path, document: document)
+        }
+    }
+
+    /// highlight-core session per open file (#872): first screen, visible rows, then background
+    /// chunks. false when highlight-core has no lexer for the language (TextMate keeps it).
+    private func startHighlightCore(_ path: String, document: FileTextDocument, language: String) -> Bool {
+        guard let session = HighlightCoreFileSession(document: document, language: language) else { return false }
+        let pass = FileHighlightCorePass(session: session, configuration: highlightCoreConfiguration) { [weak self] spans in
+            guard let self, self.state.viewers[path]?.textDocument == document else { return }
+            self.state.viewers[path]?.lineSpans.merge(spans) { _, new in new }
+        }
+        highlightCorePasses[path] = pass
+        pass.start()
+        return true
+    }
+    #endif
 
     /// Outcomes Session Chat code fences do not attach (`attachTextMateResult`).
     nonisolated static let unattachableOutcomes: Set<String> = ["Failed", "Cancelled", "BudgetExceeded"]

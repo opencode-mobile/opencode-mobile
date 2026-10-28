@@ -433,7 +433,7 @@ struct FilesViewModelTests {
         textMateEnabled: Bool = true,
         fallbackHighlighter: @escaping @Sendable (String, String) -> [NativeCodeSpan] = { _, _ in [] }
     ) -> FilesViewModel {
-        FilesViewModel(
+        let viewModel = FilesViewModel(
             worktree: "/Users/demo/repo",
             repository: repository,
             highlighter: highlighter,
@@ -442,6 +442,10 @@ struct FilesViewModelTests {
             findDebounce: .milliseconds(20),
             copyToPasteboard: { _ in }
         )
+        #if HIGHLIGHT_LAB
+        viewModel.highlightCoreEnabled = { false }
+        #endif
+        return viewModel
     }
 
     private func entry(_ path: String, dir: Bool = false, ignored: Bool = false) -> ProjectEntry {
@@ -461,6 +465,134 @@ struct FilesViewModelTests {
             return nil
         }
     }
+
+    #if HIGHLIGHT_LAB
+    // MARK: highlight-core (#872)
+
+    /// A TypeScript file whose block comment runs from line 10 to line 2985, so a line far down
+    /// colors right only from the state carried down from the top.
+    private static let longTypeScript: String = {
+        var lines = (0..<10).map { "const value\($0) = \($0); // head" }
+        lines.append("/* opened here")
+        lines += (11..<2985).map { "comment body \($0) const not = code" }
+        lines.append("closed */ const after = \"text\";")
+        lines += (2986..<3000).map { "export function f\($0)(x: number) { return x + \($0) }" }
+        return lines.joined(separator: "\n")
+    }()
+
+    private func makeHighlightCoreViewModel(
+        _ repository: FakeProjectFilesRepository,
+        highlighter: FakeHighlighter = FakeHighlighter(),
+        holdsBackgroundFill: Bool
+    ) -> FilesViewModel {
+        let viewModel = makeViewModel(repository, highlighter: highlighter)
+        viewModel.highlightCoreEnabled = { true }
+        var configuration = FileHighlightCorePass.Configuration()
+        configuration.firstScreenLines = 40
+        configuration.visibleLinesAround = 20
+        configuration.chunkLines = 250
+        configuration.holdsBackgroundFill = holdsBackgroundFill
+        viewModel.highlightCoreConfiguration = configuration
+        return viewModel
+    }
+
+    /// The whole file colored in one highlight-core call, split per line.
+    private func referenceLineSpans(_ source: String, language: String) -> [Int: [NativeCodeSpan]] {
+        let lines = FileTextDocument.displayLines(source)
+        let spans = HighlightCoreHighlightingEngineTests.oneShot(language, lines.joined(separator: "\n"))
+        return FileCodeHighlightMapper.lineSpans(spans, lines: lines[...], firstLine: 0)
+    }
+
+    @Test func highlightCoreColorsTheFirstScreenFirstThenFillsTheRestInChunks() async {
+        let repository = FakeProjectFilesRepository()
+        let source = Self.longTypeScript
+        repository.contents["big.ts"] = .text(source, isTruncated: false, totalBytes: source.utf8.count)
+        let highlighter = FakeHighlighter()
+        let viewModel = makeHighlightCoreViewModel(repository, highlighter: highlighter, holdsBackgroundFill: true)
+        viewModel.openFile("big.ts")
+        await waitUntil { viewModel.state.viewers["big.ts"]?.lineSpans.count == 40 }
+        let pass = viewModel.highlightCorePass("big.ts")
+        let reference = referenceLineSpans(source, language: "typescript")
+
+        #expect(pass?.served.first == FileHighlightCorePass.Served(kind: .firstScreen, lines: 0..<40, settledEndLine: 40))
+        #expect(viewModel.state.viewers["big.ts"]?.lineSpans[39] == reference[39])
+        #expect(viewModel.state.viewers["big.ts"]?.lineSpans[40] == nil)
+        #expect(highlighter.requests.isEmpty)
+
+        pass?.holdsBackgroundFill = false
+        await waitUntil(iterations: 1_000) { pass?.isFinished == true }
+        #expect(viewModel.state.viewers["big.ts"]?.lineSpans == reference)
+        let kinds = pass?.served.dropFirst().map(\.kind) ?? []
+        #expect(!kinds.isEmpty && kinds.allSatisfy { $0 == .background })
+        #expect(pass?.served[1].lines == 40..<290)
+        #expect(pass?.firstColorDuration != nil && pass?.fullColorDuration != nil)
+        #expect(highlighter.requests.isEmpty)
+    }
+
+    @Test func highlightCoreColorsAJumpFarDownBeforeTheBackgroundFillGetsThere() async {
+        let repository = FakeProjectFilesRepository()
+        let source = Self.longTypeScript
+        repository.contents["big.ts"] = .text(source, isTruncated: false, totalBytes: source.utf8.count)
+        let viewModel = makeHighlightCoreViewModel(repository, holdsBackgroundFill: true)
+        viewModel.openFile("big.ts")
+        await waitUntil { viewModel.state.viewers["big.ts"]?.lineSpans.count == 40 }
+        let reference = referenceLineSpans(source, language: "typescript")
+
+        // Rows near the end appear after a scroll to the bottom.
+        for line in 2980..<3000 { viewModel.lineAppeared("big.ts", line: line) }
+        await waitUntil { viewModel.state.viewers["big.ts"]?.lineSpans[2999] != nil }
+        let spans = viewModel.state.viewers["big.ts"]?.lineSpans ?? [:]
+
+        #expect(viewModel.highlightCorePass("big.ts")?.served.last?.kind == .visible)
+        // Inside the comment that opened at line 10, then the code after it closes.
+        #expect(spans[2984] == reference[2984])
+        #expect(spans[2984]?.first?.role == .comment)
+        #expect(spans[2985] == reference[2985])
+        #expect(spans[2999] == reference[2999])
+        #expect(spans[1500] == nil)
+        #expect(spans.count < 200)
+    }
+
+    @Test func highlightCoreLeavesUnsupportedLanguagesToTextMate() async {
+        let repository = FakeProjectFilesRepository()
+        repository.contents["a.rb"] = .text("let a = 1", isTruncated: false, totalBytes: 9)
+        let highlighter = FakeHighlighter()
+        let viewModel = makeHighlightCoreViewModel(repository, highlighter: highlighter, holdsBackgroundFill: false)
+        viewModel.openFile("a.rb")
+        await waitUntil { viewModel.state.viewers["a.rb"]?.lineSpans.count == 1 }
+
+        #expect(viewModel.highlightCorePass("a.rb") == nil)
+        #expect(highlighter.requests.map(\.language) == ["ruby"])
+    }
+
+    @Test func switchingTheEngineColorsOpenFilesAgainAndClosingCancels() async {
+        let repository = FakeProjectFilesRepository()
+        repository.contents["a.py"] = .text("def f():\n    return 1", isTruncated: false, totalBytes: 21)
+        let highlighter = FakeHighlighter()
+        let viewModel = makeViewModel(repository, highlighter: highlighter)
+        var usesHighlightCore = false
+        viewModel.highlightCoreEnabled = { usesHighlightCore }
+        viewModel.openFile("a.py")
+        await waitUntil { highlighter.requests.count == 1 }
+        #expect(viewModel.highlightCorePass("a.py") == nil)
+
+        usesHighlightCore = true
+        viewModel.rehighlightOpenFiles()
+        await waitUntil { viewModel.highlightCorePass("a.py")?.isFinished == true }
+        #expect(viewModel.state.viewers["a.py"]?.lineSpans == referenceLineSpans("def f():\n    return 1", language: "python"))
+
+        usesHighlightCore = false
+        viewModel.rehighlightOpenFiles()
+        #expect(viewModel.highlightCorePass("a.py") == nil)
+        await waitUntil { highlighter.requests.count == 2 }
+
+        usesHighlightCore = true
+        viewModel.rehighlightOpenFiles()
+        #expect(viewModel.highlightCorePass("a.py") != nil)
+        viewModel.closeTab("a.py")
+        #expect(viewModel.highlightCorePass("a.py") == nil)
+    }
+    #endif
 
     private func waitUntil(iterations: Int = 400, _ condition: @MainActor () -> Bool) async {
         for _ in 0..<iterations {

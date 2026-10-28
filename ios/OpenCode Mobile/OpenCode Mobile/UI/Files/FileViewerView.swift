@@ -180,17 +180,33 @@ struct FileViewerContent: View {
                         OpenCodeStatusStack(spinner: "Rendering preview")
                     }
                 } else {
-                    OpenCodeCodeFile(
-                        lines: document.lines,
-                        lineSpans: viewer.lineSpans,
-                        wrapsLines: viewModel.state.wrapLines,
-                        maxLineLength: document.maxLineLength
-                    )
+                    codeFile(viewer, document: document)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             footer(viewer, document: document)
         }
+    }
+
+    private func codeFile(_ viewer: ProjectFileViewerState, document: FileTextDocument) -> some View {
+        #if HIGHLIGHT_LAB
+        let relativePath = relativePath
+        let viewModel = viewModel
+        return OpenCodeCodeFile(
+            lines: document.lines,
+            lineSpans: viewer.lineSpans,
+            wrapsLines: viewModel.state.wrapLines,
+            maxLineLength: document.maxLineLength,
+            onLineAppear: { viewModel.lineAppeared(relativePath, line: $0) }
+        )
+        #else
+        OpenCodeCodeFile(
+            lines: document.lines,
+            lineSpans: viewer.lineSpans,
+            wrapsLines: viewModel.state.wrapLines,
+            maxLineLength: document.maxLineLength
+        )
+        #endif
     }
 
     private func footer(_ viewer: ProjectFileViewerState, document: FileTextDocument) -> some View {

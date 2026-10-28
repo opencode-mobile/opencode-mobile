@@ -71,6 +71,9 @@ struct SettingsView: View {
     @State private var sessionChatDisplayPreferences = SessionChatDisplayPreferences.shared
     @State private var developerToolsPreferences = DeveloperToolsPreferences.shared
     @State private var performanceOverlayPreferences = PerformanceOverlayPreferences.shared
+    #if HIGHLIGHT_LAB
+    @State private var highlightEnginePreferences = HighlightEnginePreferences.shared
+    #endif
     @State private var showServers = false
     @State private var serversSubtitleState = "No servers saved"
     @State private var serversLetter: Character = "S"
@@ -685,6 +688,27 @@ struct SettingsView: View {
                         )
                         .padding(.horizontal, 16)
                         .accessibilityIdentifier("settings.highlightLab")
+
+                        OpenCodeListItem(
+                            title: "Highlighting Engine",
+                            subtitle: highlightEnginePreferences.engine.title
+                                + " · chat code fences and the File Viewer",
+                            style: .card,
+                            startDecorator: .icon(.code, accessibilityLabel: "Highlighting Engine"),
+                            accessory: .toggle(
+                                isOn: Binding(
+                                    get: { highlightEnginePreferences.engine == .highlightCore },
+                                    set: { usesHighlightCore in
+                                        highlightEnginePreferences.setEngine(usesHighlightCore ? .highlightCore : .textMate)
+                                        MessageContentPreparer.shared.clearDocumentCache()
+                                        BlockDecorationCache.shared.clear()
+                                    }
+                                ),
+                                accessibilityLabel: "Use highlight-core"
+                            )
+                        )
+                        .padding(.horizontal, 16)
+                        .accessibilityIdentifier("settings.highlightingEngine")
                         #endif
 
                         OpenCodeListItem(

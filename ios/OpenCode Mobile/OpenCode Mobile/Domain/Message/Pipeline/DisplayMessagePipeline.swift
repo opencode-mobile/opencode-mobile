@@ -1,3 +1,4 @@
+import FactoryKit
 import Foundation
 import UIKit
 
@@ -99,7 +100,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
         ) { [weak self] _ in
             self?.preparedHistoryCache.handleMemoryPressure()
             Task {
-                await KMPTextMateHighlightingEngine.shared.trim(.critical)
+                await Container.codeHighlighter.trim(.critical)
             }
         }
         observeThermalAndLowPower()
