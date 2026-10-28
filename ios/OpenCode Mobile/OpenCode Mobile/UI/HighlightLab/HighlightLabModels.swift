@@ -89,6 +89,12 @@ nonisolated struct HighlightLabTiming: Equatable, Sendable {
     }
 }
 
+/// An input's text, generated once and shown plain before any engine runs.
+nonisolated struct HighlightLabText: Sendable {
+    let language: String
+    let source: String
+}
+
 nonisolated struct HighlightLabProbeResult: Sendable {
     let source: String
     let language: String

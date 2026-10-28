@@ -14,6 +14,16 @@ nonisolated protocol HighlightLabService: Sendable {
     func characterCounts() async -> [String: Int]
     /// One timed call with spans. The first call per engine is cold; later ones are warm.
     func highlight(_ input: HighlightLabInput, engineID: String) async -> HighlightLabProbeResult
+    /// The input's text and language, generated off the main actor; no engine runs.
+    func text(of input: HighlightLabInput) async -> HighlightLabText
+    /// One timed call with spans that `cancellation` can end at once. A cancelled or given-up call
+    /// that has not returned keeps running in the background (threads cannot be stopped); it
+    /// counts in `backgroundCalls` until it returns.
+    func highlight(_ text: HighlightLabText, engineID: String, cancellation: HighlightLabCancellation) async -> HighlightLabProbeResult
+    /// Why `engineID` cannot highlight `language`, or nil when it can.
+    func unsupportedReason(engineID: String, language: String) -> String?
+    /// Engine calls that were abandoned and are still running.
+    var backgroundCalls: Int { get }
     func agreement(length: Int, baseline: [HighlightLabSpan], candidate: [HighlightLabSpan]) async -> HighlightLabAgreement
     /// Starts a run on its own thread; `onProgress` arrives on that thread.
     func runBenchmark(
@@ -53,6 +63,64 @@ nonisolated enum HighlightLabThread {
     }
 }
 
+/// Ends one viewer call: the call guard stops waiting for it as soon as `cancel()` runs.
+nonisolated final class HighlightLabCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var cancelled = false
+    private var wake: (() -> Void)?
+
+    init() {}
+
+    var isCancelled: Bool { lock.withLock { cancelled } }
+
+    func cancel() {
+        let action: (() -> Void)? = lock.withLock {
+            guard !cancelled else { return nil }
+            cancelled = true
+            defer { wake = nil }
+            return wake
+        }
+        action?()
+    }
+
+    /// Runs `action` on cancel, or right away if already cancelled.
+    fileprivate func onCancel(_ action: @escaping () -> Void) {
+        let now: Bool = lock.withLock {
+            if cancelled { return true }
+            wake = action
+            return false
+        }
+        if now { action() }
+    }
+}
+
+/// Like `HighlightBenchThreadGuard` (one big-stack thread per call, given up on after the limit
+/// and grace), but also stops waiting when the viewer cancels. Abandoned tasks go to `abandoned`.
+private nonisolated final class HighlightLabCancellableGuard: NSObject, HighlightBenchCallGuard, @unchecked Sendable {
+    private let cancellation: HighlightLabCancellation
+    private let abandoned: (HighlightBenchTask) -> Void
+
+    init(cancellation: HighlightLabCancellation, abandoned: @escaping (HighlightBenchTask) -> Void) {
+        self.cancellation = cancellation
+        self.abandoned = abandoned
+    }
+
+    func execute(task: HighlightBenchTask) -> HighlightBenchGuardExit {
+        // Cancelled before the call started: nothing runs, so nothing is left in the background.
+        if cancellation.isCancelled { return .abandoned }
+        let wake = DispatchSemaphore(value: 0)
+        cancellation.onCancel { wake.signal() }
+        HighlightLabThread.start("highlight-lab-viewer-call") {
+            task.execute()
+            wake.signal()
+        }
+        _ = wake.wait(timeout: .now() + .milliseconds(Int(task.giveUpAfterMs)))
+        if task.isFinished { return .finished }
+        abandoned(task)
+        return .abandoned
+    }
+}
+
 nonisolated final class KMPHighlightLabService: HighlightLabService, @unchecked Sendable {
     static let shared = KMPHighlightLabService()
 
@@ -65,6 +133,7 @@ nonisolated final class KMPHighlightLabService: HighlightLabService, @unchecked 
     /// Warm instances per engine id; taken out while a call uses one.
     private var warm: [String: any HighlightBenchHighlighter] = [:]
     private var counts: [String: Int]?
+    private var abandonedTasks: [HighlightBenchTask] = []
 
     init() {
         engines = HighlightBenchEngines.shared.available().map { HighlightLabEngineOption(id: $0.id, name: $0.displayName) }
@@ -118,6 +187,61 @@ nonisolated final class KMPHighlightLabService: HighlightLabService, @unchecked 
             )
             let spans = call.spans?.map { HighlightLabSpan(start: Int($0.start), end: Int($0.end), role: $0.role) }
             return HighlightLabProbeResult(source: source, language: language, spans: spans, timing: timing)
+        }
+    }
+
+    func text(of input: HighlightLabInput) async -> HighlightLabText {
+        await HighlightLabThread.run("highlight-lab-text") { [self] in
+            let (language, source) = text(input)
+            return HighlightLabText(language: language, source: source)
+        }
+    }
+
+    func highlight(_ text: HighlightLabText, engineID: String, cancellation: HighlightLabCancellation) async -> HighlightLabProbeResult {
+        await HighlightLabThread.run("highlight-lab-viewer") { [self] in
+            let source = text.source
+            let engine = HighlightBenchEngines.shared.engine(id: engineID)
+            let reused = lock.withLock { warm.removeValue(forKey: engineID) }
+            guard let highlighter = reused ?? engine?.doNewHighlighter() else {
+                let timing = HighlightLabTiming(engineName: engineID, elapsedMs: 0, characters: source.utf16.count, status: "Unknown engine", outcome: nil, spanCount: 0, cold: true)
+                return HighlightLabProbeResult(source: source, language: text.language, spans: nil, timing: timing)
+            }
+            let callGuard = HighlightLabCancellableGuard(cancellation: cancellation) { [self] task in
+                lock.withLock { abandonedTasks.append(task) }
+            }
+            let call = HighlightBenchProbe.shared.highlight(
+                highlighter: highlighter,
+                language: text.language,
+                source: source,
+                settings: HighlightBenchSettings.companion.standard,
+                callGuard: callGuard
+            )
+            if call.status != .abandoned, call.status != .forcestopped {
+                lock.withLock { if warm[engineID] == nil { warm[engineID] = highlighter } }
+            }
+            let timing = HighlightLabTiming(
+                engineName: engine?.displayName ?? engineID,
+                elapsedMs: call.elapsedMs,
+                characters: source.utf16.count,
+                status: cancellation.isCancelled && call.status == .abandoned ? "Cancelled" : call.status.name,
+                outcome: call.outcome,
+                spanCount: Int(call.spanCount),
+                cold: reused == nil
+            )
+            let spans = call.spans?.map { HighlightLabSpan(start: Int($0.start), end: Int($0.end), role: $0.role) }
+            return HighlightLabProbeResult(source: source, language: text.language, spans: spans, timing: timing)
+        }
+    }
+
+    func unsupportedReason(engineID: String, language: String) -> String? {
+        guard let engine = HighlightBenchEngines.shared.engine(id: engineID) else { return "Not available" }
+        return engine.supportsLanguage(language: language) ? nil : "No \(engine.displayName) lexer for \(language)"
+    }
+
+    var backgroundCalls: Int {
+        lock.withLock {
+            abandonedTasks.removeAll { $0.isFinished }
+            return abandonedTasks.count
         }
     }
 

@@ -35,36 +35,118 @@ struct HighlightLabDataSetsModelTests {
 
 @MainActor
 struct HighlightLabViewerModelTests {
-    @Test func highlightsOnTheFirstEngineThenOnTheChosenOne() async throws {
-        let service = FakeHighlightLabService()
-        let model = HighlightLabViewerModel(input: .catalog(id: "typical/kotlin/2k"), service: service)
-        #expect(model.state.title == "kotlin 2K")
-        #expect(model.state.isHighlighting)
-
-        await model.start()
-
-        let timing = try #require(model.state.timing)
-        #expect(timing.engineName == "Engine A")
-        #expect(timing.cold)
-        guard case let .ready(rendered) = model.state.phase else {
-            Issue.record("Expected a highlighted text")
-            return
-        }
-        #expect(rendered.lines == ["let a = 1", "let b = 2", ""])
-        #expect(rendered.lineSpans[0] == [NativeCodeSpan(start: 0, end: 3, role: .keyword)])
-
-        await model.selectEngine("b")
-        #expect(model.state.engineID == "b")
-        #expect(model.state.timing?.engineName == "Engine B")
-        #expect(service.calls == ["a:catalog/typical/kotlin/2k", "b:catalog/typical/kotlin/2k"])
+    private func makeModel(_ service: FakeHighlightLabService, _ input: HighlightLabInput = .catalog(id: "typical/kotlin/2k")) -> HighlightLabViewerModel {
+        HighlightLabViewerModel(input: input, service: service, backgroundPoll: .milliseconds(10))
     }
 
-    @Test func runAgainIsWarm() async {
+    @Test func opensAsPlainTextWithoutRunningAnEngine() async throws {
         let service = FakeHighlightLabService()
-        let model = HighlightLabViewerModel(input: .catalog(id: "typical/kotlin/2k"), service: service)
+        let model = makeModel(service)
+        #expect(model.state.title == "kotlin 2K")
+        #expect(model.state.phase == .loading)
+
         await model.start()
-        await model.runAgain()
+
+        #expect(model.state.phase == .plain)
+        #expect(model.state.timing == nil)
+        let rendered = try #require(model.state.rendered)
+        #expect(rendered.lines == ["let a = 1", "let b = 2", ""])
+        #expect(rendered.lineSpans.values.allSatisfy { $0.isEmpty })
+        #expect(model.state.engines.map(\.id) == ["a", "b"])
+        #expect(model.state.engines.allSatisfy { $0.isEnabled })
+        #expect(service.calls.isEmpty)
+    }
+
+    @Test func aTappedEngineRendersAndShowsItsTiming() async throws {
+        let service = FakeHighlightLabService()
+        let model = makeModel(service)
+        await model.start()
+
+        model.select("a")
+        #expect(model.state.phase == .rendering(engineID: "a"))
+        try await until { model.state.phase == .highlighted(engineID: "a") }
+        #expect(model.state.timing?.engineName == "Engine A")
+        #expect(model.state.timing?.cold == true)
+        #expect(model.state.rendered?.lineSpans[0] == [NativeCodeSpan(start: 0, end: 3, role: .keyword)])
+
+        model.select("b")
+        try await until { model.state.phase == .highlighted(engineID: "b") }
+        #expect(model.state.timing?.engineName == "Engine B")
+
+        model.select("a")
+        try await until { model.state.phase == .highlighted(engineID: "a") }
         #expect(model.state.timing?.cold == false)
+        #expect(service.calls == ["a:text", "b:text", "a:text"])
+    }
+
+    @Test func showPlainDropsTheResult() async throws {
+        let model = makeModel(FakeHighlightLabService())
+        await model.start()
+        model.select("a")
+        try await until { model.state.phase == .highlighted(engineID: "a") }
+
+        model.showPlain()
+
+        #expect(model.state.phase == .plain)
+        #expect(model.state.timing == nil)
+        #expect(model.state.rendered?.lineSpans.values.allSatisfy { $0.isEmpty } == true)
+    }
+
+    @Test func anUnsupportedEngineIsDisabledWithItsReason() async {
+        let text = HighlightLabCustomText(id: "paste-1", displayName: "Pasted json", language: "json", source: "{}")
+        let service = FakeHighlightLabService()
+        let model = makeModel(service, .custom(text))
+        await model.start()
+
+        #expect(model.state.engines.first { $0.id == "b" }?.unsupportedReason == "No Engine B lexer for json")
+        model.select("b")
+        #expect(model.state.phase == .plain)
+        #expect(service.calls.isEmpty)
+    }
+
+    @Test func cancelReturnsToPlainTextAtOnce() async throws {
+        let service = FakeHighlightLabService(slowEngines: ["a"])
+        let model = makeModel(service)
+        await model.start()
+        model.select("a")
+        try await until { service.calls == ["a:text"] }
+
+        model.cancel()
+
+        #expect(model.state.phase == .plain)
+        #expect(model.state.timing == nil)
+        #expect(model.state.rendered?.lineSpans.values.allSatisfy { $0.isEmpty } == true)
+        try await until { service.cancelledRuns == 1 }
+        #expect(model.state.phase == .plain)
+    }
+
+    @Test func anotherEngineMidRenderCancelsTheRunningOne() async throws {
+        let service = FakeHighlightLabService(slowEngines: ["a"])
+        let model = makeModel(service)
+        await model.start()
+        model.select("a")
+
+        model.select("b")
+
+        #expect(model.state.phase == .rendering(engineID: "b"))
+        try await until { model.state.phase == .highlighted(engineID: "b") }
+        try await until { service.cancelledRuns == 1 }
+        #expect(model.state.timing?.engineName == "Engine B")
+    }
+
+    @Test func aRunThatIgnoresCancelIsReportedUntilItReturns() async throws {
+        let service = FakeHighlightLabService(slowEngines: ["a"], ignoresCancel: true)
+        let model = makeModel(service)
+        await model.start()
+        model.select("a")
+        try await until { service.calls == ["a:text"] }
+
+        model.cancel()
+
+        #expect(model.state.phase == .plain)
+        try await until { model.state.backgroundCalls == 1 }
+        service.finishBackgroundCalls()
+        try await until { model.state.backgroundCalls == 0 }
     }
 
     @Test func customTextTitlesAfterItsName() {
@@ -301,6 +383,24 @@ nonisolated final class FakeHighlightLabService: HighlightLabService, @unchecked
     private let lock = NSLock()
     private var callLog: [String] = []
     private var usedEngines = Set<String>()
+    /// Engines whose viewer calls wait until cancelled.
+    private let slowEngines: Set<String>
+    /// A cancelled slow call keeps running, like an engine that ignores cancellation.
+    private let ignoresCancel: Bool
+    private var cancelled = 0
+    private var busy = 0
+
+    init(slowEngines: Set<String> = [], ignoresCancel: Bool = false) {
+        self.slowEngines = slowEngines
+        self.ignoresCancel = ignoresCancel
+    }
+
+    var cancelledRuns: Int { lock.withLock { cancelled } }
+    var backgroundCalls: Int { lock.withLock { busy } }
+
+    func finishBackgroundCalls() {
+        lock.withLock { busy = 0 }
+    }
     private var runs: [FakeRun] = []
     private var requests: [HighlightLabBenchmarkRequest] = []
 
@@ -324,6 +424,40 @@ nonisolated final class FakeHighlightLabService: HighlightLabService, @unchecked
         let name = engines.first { $0.id == engineID }?.name ?? engineID
         let timing = HighlightLabTiming(engineName: name, elapsedMs: 2, characters: Self.source.utf16.count, status: "Completed", outcome: "Highlighted", spanCount: spans.count, cold: cold)
         return HighlightLabProbeResult(source: Self.source, language: "kotlin", spans: spans, timing: timing)
+    }
+
+    func text(of input: HighlightLabInput) async -> HighlightLabText {
+        switch input {
+        case .catalog: HighlightLabText(language: "kotlin", source: Self.source)
+        case let .custom(text): HighlightLabText(language: text.language, source: text.source)
+        }
+    }
+
+    func highlight(_ text: HighlightLabText, engineID: String, cancellation: HighlightLabCancellation) async -> HighlightLabProbeResult {
+        let (cold, slow) = lock.withLock {
+            callLog.append("\(engineID):text")
+            return (usedEngines.insert(engineID).inserted, slowEngines.contains(engineID))
+        }
+        let name = engines.first { $0.id == engineID }?.name ?? engineID
+        if slow {
+            while !cancellation.isCancelled {
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+            lock.withLock {
+                cancelled += 1
+                if ignoresCancel { busy += 1 }
+            }
+            let timing = HighlightLabTiming(engineName: name, elapsedMs: 0, characters: text.source.utf16.count, status: "Cancelled", outcome: nil, spanCount: 0, cold: cold)
+            return HighlightLabProbeResult(source: text.source, language: text.language, spans: nil, timing: timing)
+        }
+        let secondRole = engineID == "a" ? "Keyword" : "Type"
+        let spans = [HighlightLabSpan(start: 0, end: 3, role: "Keyword"), HighlightLabSpan(start: 10, end: 13, role: secondRole)]
+        let timing = HighlightLabTiming(engineName: name, elapsedMs: 2, characters: text.source.utf16.count, status: "Completed", outcome: "Highlighted", spanCount: spans.count, cold: cold)
+        return HighlightLabProbeResult(source: text.source, language: text.language, spans: spans, timing: timing)
+    }
+
+    func unsupportedReason(engineID: String, language: String) -> String? {
+        engineID == "b" && language == "json" ? "No Engine B lexer for json" : nil
     }
 
     /// Character by character, like `HighlightBenchSpanDiff`.

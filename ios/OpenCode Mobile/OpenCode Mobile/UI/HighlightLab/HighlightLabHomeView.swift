@@ -114,6 +114,8 @@ struct HighlightLabChipRow<ID: Hashable>: View {
 struct HighlightLabTimingStrip: View {
     let timing: HighlightLabTiming?
     let isRunning: Bool
+    /// Shown when nothing ran yet.
+    var idleCaption = "Not run yet"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -136,7 +138,7 @@ struct HighlightLabTimingStrip: View {
 
     private var caption: String {
         if isRunning { return "Highlighting…" }
-        guard let timing else { return "Not run yet" }
+        guard let timing else { return idleCaption }
         let call = timing.cold ? "first call on a fresh instance" : "warm call"
         return "\(timing.engineName) · \(call) · \(timing.status) · \(HighlightLabFormat.count(timing.characters)) characters"
     }

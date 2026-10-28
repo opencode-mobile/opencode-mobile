@@ -109,44 +109,101 @@ struct HighlightLabViewerView: View {
                 title: state.title,
                 subtitle: state.subtitle,
                 leading: presentedModally ? .close(action: { dismiss() }) : .back(action: { dismiss() }),
-                actions: [
-                    .label(title: "Run again", enabled: !state.isHighlighting) {
-                        Task { await model.runAgain() }
-                    },
+                actions: state.phase.highlightedEngineID == nil ? [] : [
+                    .label(title: "Show plain") { model.showPlain() },
                 ],
                 showDivider: true
             )
-            HighlightLabChipRow(
-                title: "Engine",
-                options: state.engines.map { ($0.id, $0.name) },
-                selected: state.engineID,
-                onSelect: { id in
-                    guard let id else { return }
-                    Task { await model.selectEngine(id) }
-                }
-            )
-            .padding(.top, 8)
-            HighlightLabTimingStrip(timing: state.timing, isRunning: state.isHighlighting)
+            engines(state)
+            if let engineID = state.phase.renderingEngineID {
+                rendering(engineName: state.engines.first { $0.id == engineID }?.name ?? engineID)
+            } else {
+                HighlightLabTimingStrip(timing: state.timing, isRunning: false, idleCaption: "Not highlighted: plain text. Tap an engine to render it.")
+            }
+            if state.backgroundCalls > 0 {
+                OpenCodeInlineNotice(
+                    message: state.backgroundCalls == 1
+                        ? "A cancelled run is still busy in the background; timings may be slower until it returns."
+                        : "\(state.backgroundCalls) cancelled runs are still busy in the background; timings may be slower until they return.",
+                    variant: .banner
+                )
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+                .accessibilityIdentifier("highlightLab.backgroundCalls")
+            }
             Rectangle()
                 .fill(OpenCodeColors.borderWeakerBase)
                 .frame(height: 1)
-            switch state.phase {
-            case .highlighting:
-                OpenCodeStatusStack(spinner: "Highlighting")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            case let .ready(rendered):
+            if let rendered = state.rendered {
                 OpenCodeCodeFile(
                     lines: rendered.lines,
                     lineSpans: rendered.lineSpans,
                     maxLineLength: rendered.maxLineLength
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                OpenCodeStatusStack(spinner: "Loading text")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .background(OpenCodeColors.backgroundBase)
         .task { await model.start() }
+        .onDisappear { model.cancel() }
+    }
+
+    /// One button per engine; the shown or rendering engine is selected. They stay enabled while
+    /// an engine renders, so another tap switches engines at once.
+    private func engines(_ state: HighlightLabViewerUiState) -> some View {
+        let selected = state.phase.renderingEngineID ?? state.phase.highlightedEngineID
+        let unsupported = state.engines.filter { !$0.isEnabled }
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("Render with")
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textWeak)
+                .padding(.horizontal, 16)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(state.engines) { engine in
+                        OpenCodeChoiceBadge(label: engine.name, selected: engine.id == selected, enabled: engine.isEnabled) {
+                            model.select(engine.id)
+                        }
+                        .accessibilityHint(engine.unsupportedReason ?? "")
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            ForEach(unsupported) { engine in
+                Text("\(engine.name): \(engine.unsupportedReason ?? "")")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeaker)
+                    .padding(.horizontal, 16)
+            }
+        }
+        .padding(.top, 8)
+    }
+
+    private func rendering(engineName: String) -> some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .tint(OpenCodeColors.interactive)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Rendering with \(engineName)…")
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                Text("Showing plain text until it finishes")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+            }
+            Spacer(minLength: 0)
+            OpenCodeButton(variant: .compactText(title: "Cancel"), contrast: .low) { model.cancel() }
+                .accessibilityIdentifier("highlightLab.cancel")
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("highlightLab.rendering")
     }
 }
 
