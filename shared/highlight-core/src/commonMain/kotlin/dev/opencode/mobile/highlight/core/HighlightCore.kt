@@ -38,6 +38,7 @@ internal object HighlightLanguages {
         listOf(
             Entry("json", listOf("jsonc", "json5", "jsonl"), JsonLexer),
             Entry("diff", listOf("patch", "udiff"), DiffLexer),
+            Entry("python", listOf("py", "py3", "python3", "pyi"), PythonLexer),
         )
 
     private val byName: Map<String, Entry> =
