@@ -6,22 +6,27 @@ import dev.opencode.mobile.highlight.core.LexerScan.isHexDigit
 
 /**
  * The shared lexer for C-like languages, configured per language by a [CLikeSyntax]: TypeScript
- * and JavaScript (with JSX), Kotlin, and Swift so far.
+ * and JavaScript (with JSX), Kotlin, Swift, Rust, Go, Java, C, C++, and C#.
  *
  * Roles: keywords from the syntax's word table (contextual ones only before something a keyword
  * can precede), strings with escapes as Constant and interpolation delimiters as Punctuation,
  * comments, numbers, true/false/null-like Constant, Type for capitalized identifiers and the
  * names after `class`-like keywords, Function for an identifier before `(` or after `fun`-like
  * keywords, Property after `.` (and for object keys where the syntax has them), Attribute for
- * `@` annotations, Operator and Punctuation. Plain identifiers take the syntax's identifier role.
+ * `@` annotations (and Rust `#[…]`, C++ `[[…]]`, C# line-leading `[…]` attributes), Operator and
+ * Punctuation. Plain identifiers take the syntax's identifier role. C-family `#` directives are a
+ * Punctuation `#` and a Keyword name; Rust macros (`name!`) are Functions and lifetimes Types;
+ * printf-style placeholders in Go and C strings are Constant.
  *
  * Everything still open at a line end is packed into the state as a stack of up to four frames,
  * one byte each, innermost in the low byte: a block comment (nesting depth), a string that can
  * span lines or holds an interpolation (its kind, or a Swift raw string's `#` count), the code of
  * an interpolation or JSX expression (its open brace or paren depth), and a JSX element (inside a
- * tag, and how many elements are open). State 0 is code at the top of a document. Past four
- * frames a construct degrades instead of nesting: a string or comment ends with its line, an
- * interpolation stays string text, and `<` is an operator.
+ * tag, and how many elements are open), and a C or C++ directive continued with a trailing `\`.
+ * A C++ raw string is the one frame that uses the whole state: its delimiter's length and a hash
+ * of it ride above the frame byte, and it only opens with nothing else open. State 0 is code at
+ * the top of a document. Past four frames a construct degrades instead of nesting: a string or
+ * comment ends with its line, an interpolation stays string text, and `<` is an operator.
  *
  * Within a line the lexer also tracks the previous token (whether a `/` starts a regex and a `<`
  * a JSX element), pending `class`/`fun` names, and which bracket is innermost (object keys);
@@ -58,8 +63,19 @@ internal class CLikeSyntax(
     val capitalizedTypes: Boolean,
     /** What `#` starts: one of the `HASH_*` modes. */
     val hash: Int,
+    /** Capitalized identifiers of capitals and digits only (`MAX`, `EOF`) are constants too, not types. */
+    val allCapsConstants: Boolean = false,
 ) {
     val words = WordTable(words)
+
+    /** `name!` is a macro call (Rust). */
+    val macros: Boolean = strings == STRINGS_RUST
+
+    /** C and C++: `_t` names are types, `'` separates digits, and strings continue after a trailing `\`. */
+    val cFamily: Boolean = strings == STRINGS_C || strings == STRINGS_CPP
+
+    /** `%d`-style placeholders in double-quoted strings are Constant. */
+    val placeholders: Boolean = cFamily || strings == STRINGS_GO
 
     companion object {
         /** `'` and `"` single-line strings, backtick templates with `${}`. */
@@ -71,6 +87,24 @@ internal class CLikeSyntax(
         /** `"` and `"""` with `\()`, raw `#"…"#` strings, backtick names. */
         const val STRINGS_SWIFT = 2
 
+        /** `"` across lines with `{}` format braces, `b`/`c` prefixes, raw `r#"…"#`, `'c'` characters and `'a` lifetimes. */
+        const val STRINGS_RUST = 3
+
+        /** `"` on one line, raw backtick strings across lines, `'c'` runes. */
+        const val STRINGS_GO = 4
+
+        /** `"` on one line, `"""` text blocks across lines, `'c'` characters. */
+        const val STRINGS_JAVA = 5
+
+        /** `"` continued by a trailing `\`, `L`/`u`/`U`/`u8` prefixes, `'c'` characters. */
+        const val STRINGS_C = 6
+
+        /** [STRINGS_C] plus raw `R"delimiter(…)delimiter"` strings across lines. */
+        const val STRINGS_CPP = 7
+
+        /** `"` on one line, verbatim `@"…"` and raw `"""…"""` across lines, `$` interpolation in any of them. */
+        const val STRINGS_CSHARP = 8
+
         const val HASH_NONE = 0
 
         /** `#name` is a private name (JavaScript); `#!` on the first line is a comment. */
@@ -78,6 +112,12 @@ internal class CLikeSyntax(
 
         /** `#name` is a directive keyword and `#"` opens a raw string (Swift). */
         const val HASH_SWIFT = 2
+
+        /** `#[…]` and `#![…]` are attributes (Rust). */
+        const val HASH_RUST = 3
+
+        /** `#` first on a line starts a preprocessor directive (C, C++, C#). */
+        const val HASH_DIRECTIVE = 4
 
         // Word flags, above the role code.
         const val ROLE_MASK = 0xFF
@@ -165,19 +205,33 @@ private class CLikeLine(
     private var brackets = 0L
     private var bracketDepth = 0
 
+    // Where a directive or a C# attribute may start: the first non-blank, on a line begun in code.
+    private var firstNonBlank = -1
+
     fun run(state: Int): Int {
         stack = state
         if (lineStart == 0 && state == 0 && syntax.hash == CLikeSyntax.HASH_PRIVATE && LexerScan.startsWith(text, 0, end, "#!")) {
             out.span(0, end, RoleCode.COMMENT)
             return 0
         }
+        if (state == 0) firstNonBlank = LexerScan.skipBlanks(text, lineStart, end)
         while (index < end && !out.stopped) {
             val top = stack and 0xFF
             when (top ushr 5) {
                 NONE, BRACE, PAREN -> code()
-                STRING -> string(top and 31)
+                STRING ->
+                    when (val kind = top and 31) {
+                        CPP_RAW -> cppRawString()
+                        in TEMPLATE..SWIFT_MULTILINE -> string(kind)
+                        else -> familyString(kind)
+                    }
                 RAW -> rawString(top and 31, multiline = false)
-                RAW_MULTILINE -> rawString(top and 31, multiline = true)
+                RAW_MULTILINE ->
+                    when (syntax.strings) {
+                        CLikeSyntax.STRINGS_RUST -> rustRawString(top and 31)
+                        CLikeSyntax.STRINGS_CSHARP -> cSharpRawString(top and 31)
+                        else -> rawString(top and 31, multiline = true)
+                    }
                 COMMENT -> comment(top and 31)
                 JSX -> if (top and IN_TAG != 0) jsxTag(top and DEPTH) else jsxChildren(top and DEPTH)
             }
@@ -185,8 +239,22 @@ private class CLikeLine(
         // Single-line strings end with their line; an unterminated one leaves nothing open.
         val top = stack and 0xFF
         val kind = top ushr 5
-        if (kind == RAW || (kind == STRING && ((top and 31) == KOTLIN_LINE || (top and 31) == SWIFT_LINE))) stack = stack ushr 8
+        val value = top and 31
+        if (kind == RAW || (kind == STRING && (value == KOTLIN_LINE || value == SWIFT_LINE || value == CS_INTERPOLATED))) {
+            pop()
+        } else if (kind == STRING && value == C_LINE && !escapedLineEnd()) {
+            pop()
+        }
+        // A directive goes on to the next line only after a trailing `\`.
+        if ((stack and 0xFF) == DIRECTIVE && (end == lineStart || text[end - 1] != '\\')) pop()
         return stack
+    }
+
+    /** True when the line ends in an odd run of backslashes: a string escapes its line end. */
+    private fun escapedLineEnd(): Boolean {
+        var at = end
+        while (at > lineStart && text[at - 1] == '\\') at -= 1
+        return (end - at) % 2 == 1
     }
 
     // region Frames
@@ -229,9 +297,13 @@ private class CLikeLine(
             char == ';' || char == ',' -> separator()
             char == '@' -> at()
             char == '#' -> hash()
+            char == '$' && syntax.strings == CLikeSyntax.STRINGS_CSHARP -> cSharpDollar()
             char == '<' && syntax.jsx && previous == START && jsxStart() -> Unit
             isOperator(char) -> operator()
-            isIdentifierStart(char) -> word(index, identifierEnd(index + 1))
+            isIdentifierStart(char) -> {
+                val to = identifierEnd(index + 1)
+                if (!prefixedLiteral(index, to)) word(index, to)
+            }
             else -> index += 1
         }
     }
@@ -299,22 +371,41 @@ private class CLikeLine(
     }
 
     private fun number() {
-        var at = index
-        while (at < end && (isDigit(text[at]) || text[at] == '_')) at += 1
-        if (at + 1 < end && text[at] == '.' && isDigit(text[at + 1])) {
-            at += 1
-            while (at < end && (isDigit(text[at]) || text[at] == '_')) at += 1
-        }
+        var at = digitsEnd(index)
+        if (at + 1 < end && text[at] == '.' && isDigit(text[at + 1])) at = digitsEnd(at + 1)
         if (at < end && (text[at] == 'e' || text[at] == 'E')) {
             var exponent = at + 1
             if (exponent < end && (text[exponent] == '+' || text[exponent] == '-')) exponent += 1
             if (exponent < end && isDigit(text[exponent])) at = exponent
         }
-        // Prefixes after a leading 0 (0x, 0b, 0o), hex digits, and suffixes (n, L, f, u) ride along.
-        while (at < end && (isAsciiLetter(text[at]) || isDigit(text[at]) || text[at] == '_')) at += 1
+        // Prefixes after a leading 0 (0x, 0b, 0o), hex digits, and suffixes (n, L, f, u, i32) ride
+        // along, and so do a hex float's fraction and `p` exponent (`0x1.8p-3`) where there are some.
+        val hex = text[index] == '0' && index + 1 < end && (text[index + 1] == 'x' || text[index + 1] == 'X')
+        val hexFloats = hex && (syntax.cFamily || syntax.strings == CLikeSyntax.STRINGS_GO || syntax.strings == CLikeSyntax.STRINGS_JAVA)
+        while (at < end) {
+            val char = text[at]
+            at +=
+                when {
+                    isAsciiLetter(char) || isDigit(char) || char == '_' ->
+                        if (hexFloats && (char == 'p' || char == 'P') && at + 2 < end && (text[at + 1] == '+' || text[at + 1] == '-') && isDigit(text[at + 2])) 3 else 1
+                    hexFloats && char == '.' && at + 1 < end && (isHexDigit(text[at + 1]) || text[at + 1] == 'p' || text[at + 1] == 'P') -> 1
+                    syntax.cFamily && char == '\'' && at + 1 < end && isHexDigit(text[at + 1]) -> 1
+                    else -> break
+                }
+        }
         out.span(index, at, RoleCode.NUMBER)
         index = at
         value()
+    }
+
+    /** The end of a run of digits from [from], with `_` separators, and C's `'` ones between digits. */
+    private fun digitsEnd(from: Int): Int {
+        var at = from
+        while (at < end) {
+            val char = text[at]
+            if (isDigit(char) || char == '_' || (syntax.cFamily && char == '\'' && at > from && at + 1 < end && isDigit(text[at + 1]))) at += 1 else break
+        }
+        return at
     }
 
     private fun dot() {
@@ -331,7 +422,7 @@ private class CLikeLine(
                 expressionStart()
             }
             else -> {
-                out.span(index, index + 1, RoleCode.PUNCTUATION)
+                out.span(index, index + 1, if (syntax.strings == CLikeSyntax.STRINGS_RUST) RoleCode.OPERATOR else RoleCode.PUNCTUATION)
                 index += 1
                 previous = DOT
                 keyAllowed = false
@@ -357,6 +448,7 @@ private class CLikeLine(
                         out.span(index, index + 1, RoleCode.PUNCTUATION)
                         index += 1
                         pop()
+                        closeRawInterpolation()
                         value()
                         return
                     }
@@ -385,6 +477,7 @@ private class CLikeLine(
                 value()
             }
             '[' -> {
+                if (attributeBracket()) return
                 openBracket(1)
                 expressionStart()
             }
@@ -395,6 +488,45 @@ private class CLikeLine(
         }
         out.span(index, index + 1, RoleCode.PUNCTUATION)
         index += 1
+    }
+
+    /** C++ `[[name` and C# `[Name` first on a line: the bracket and the attribute's name; false when this `[` is neither. */
+    private fun attributeBracket(): Boolean {
+        val cpp = syntax.strings == CLikeSyntax.STRINGS_CPP && index + 1 < end && text[index + 1] == '['
+        val cSharp = syntax.strings == CLikeSyntax.STRINGS_CSHARP && index == firstNonBlank && stack == 0
+        if (!cpp && !cSharp) return false
+        val brackets = if (cpp) 2 else 1
+        out.span(index, index + brackets, RoleCode.PUNCTUATION)
+        repeat(brackets) { openBracket(1) }
+        index += brackets
+        expressionStart()
+        val name = LexerScan.skipBlanks(text, index, end)
+        if (name < end && isIdentifierStart(text[name])) {
+            // `gnu::cold`, `System.Obsolete`: a qualified name.
+            var to = identifierEnd(name + 1)
+            while (true) {
+                val separator = if (cpp && LexerScan.startsWith(text, to, end, "::")) 2 else if (!cpp && to < end && text[to] == '.') 1 else 0
+                if (separator == 0 || to + separator >= end || !isIdentifierStart(text[to + separator])) break
+                to = identifierEnd(to + separator + 1)
+            }
+            out.span(name, to, RoleCode.ATTRIBUTE)
+            index = to
+        }
+        return true
+    }
+
+    /** After the `}` that closes a C# `$$"""` interpolation: the rest of its closing braces. */
+    private fun closeRawInterpolation() {
+        val top = stack and 0xFF
+        if (syntax.strings != CLikeSyntax.STRINGS_CSHARP || top ushr 5 != RAW_MULTILINE) return
+        var extra = ((top and 31) ushr 3) - 1
+        var to = index
+        while (extra > 0 && to < end && text[to] == '}') {
+            to += 1
+            extra -= 1
+        }
+        out.span(index, to, RoleCode.PUNCTUATION)
+        index = to
     }
 
     private fun openBracket(bit: Long) {
@@ -417,9 +549,17 @@ private class CLikeLine(
     }
 
     private fun operator() {
+        if (syntax.strings == CLikeSyntax.STRINGS_CPP && LexerScan.startsWith(text, index, end, "::")) {
+            // C++ scope resolution is punctuation, apart from the operators around it.
+            out.span(index, index + 2, RoleCode.PUNCTUATION)
+            index += 2
+            expressionStart()
+            return
+        }
         var at = index + 1
         while (at < end && isOperator(text[at])) at += 1
-        val role = if (at - index == 1 && text[index] == ':') RoleCode.PUNCTUATION else RoleCode.OPERATOR
+        // A lone `:` is punctuation, except in Rust, where Shiki and TextMate both call it an operator.
+        val role = if (at - index == 1 && text[index] == ':' && syntax.strings != CLikeSyntax.STRINGS_RUST) RoleCode.PUNCTUATION else RoleCode.OPERATOR
         out.span(index, at, role)
         index = at
         expressionStart()
@@ -427,6 +567,23 @@ private class CLikeLine(
 
     /** `@name`, `@a.b`, `@file:Name`: an annotation, decorator, or attribute. A label (`return@x`) stays plain. */
     private fun at() {
+        when (syntax.strings) {
+            CLikeSyntax.STRINGS_CSHARP -> {
+                cSharpAt()
+                return
+            }
+            CLikeSyntax.STRINGS_RUST -> {
+                // A pattern binding: `n @ 1..=9`.
+                out.span(index, index + 1, RoleCode.OPERATOR)
+                index += 1
+                expressionStart()
+                return
+            }
+            CLikeSyntax.STRINGS_GO, CLikeSyntax.STRINGS_C, CLikeSyntax.STRINGS_CPP -> {
+                index += 1
+                return
+            }
+        }
         val from = index
         index += 1
         if (index >= end || !isIdentifierStart(text[index])) return
@@ -461,7 +618,79 @@ private class CLikeLine(
                     else -> index = at
                 }
             }
+            CLikeSyntax.HASH_RUST -> rustAttribute()
+            CLikeSyntax.HASH_DIRECTIVE ->
+                if (index == firstNonBlank && stack == 0) {
+                    directive()
+                } else {
+                    // `#` and `##` in a macro body.
+                    val to = if (index + 1 < end && text[index + 1] == '#') index + 2 else index + 1
+                    out.span(index, to, RoleCode.OPERATOR)
+                    index = to
+                    expressionStart()
+                }
             else -> index += 1
+        }
+    }
+
+    /** `#[name …]` or `#![name …]`: the opening as Punctuation and the attribute's path; its arguments lex as code. */
+    private fun rustAttribute() {
+        var at = index + 1
+        if (at < end && text[at] == '!') at += 1
+        if (at >= end || text[at] != '[') {
+            index += 1
+            return
+        }
+        out.span(index, at + 1, RoleCode.PUNCTUATION)
+        openBracket(1)
+        index = at + 1
+        expressionStart()
+        val name = LexerScan.skipBlanks(text, index, end)
+        if (name < end && isIdentifierStart(text[name])) {
+            var to = identifierEnd(name + 1)
+            while (LexerScan.startsWith(text, to, end, "::") && to + 2 < end && isIdentifierStart(text[to + 2])) to = identifierEnd(to + 3)
+            out.span(name, to, RoleCode.ATTRIBUTE)
+            index = to
+        }
+    }
+
+    /**
+     * A preprocessor directive at the line's first non-blank: `#` as Punctuation and the name as a
+     * Keyword, then by name: an `#include <file>` String, a `#define`d name (Function when a `(`
+     * follows at once, else Constant), an `#error` message String, a C# `#region` title as plain
+     * text. Anything else lexes as code. In C and C++ the directive frame stays open while lines
+     * end in `\`, so a `#` on a continued line is an operator.
+     */
+    private fun directive() {
+        val nameStart = LexerScan.skipBlanks(text, index + 1, end)
+        val nameEnd = if (nameStart < end && isAsciiLetter(text[nameStart])) identifierEnd(nameStart + 1) else nameStart
+        out.span(index, index + 1, RoleCode.PUNCTUATION)
+        out.span(nameStart, nameEnd, RoleCode.KEYWORD)
+        index = nameEnd
+        expressionStart()
+        val cSharp = syntax.strings == CLikeSyntax.STRINGS_CSHARP
+        if (!cSharp) stack = DIRECTIVE
+        val at = LexerScan.skipBlanks(text, index, end)
+        if (at >= end) return
+        fun named(word: String) = LexerScan.equals(text, nameStart, nameEnd, word)
+        when {
+            !cSharp && (named("include") || named("include_next") || named("import")) && text[at] == '<' -> {
+                var close = at + 1
+                while (close < end && text[close] != '>') close += 1
+                val to = minOf(close + 1, end)
+                out.span(at, to, RoleCode.STRING)
+                index = to
+            }
+            named("define") && isIdentifierStart(text[at]) -> {
+                val to = identifierEnd(at + 1)
+                out.span(at, to, if (to < end && text[to] == '(') RoleCode.FUNCTION else RoleCode.CONSTANT)
+                index = to
+            }
+            named("error") || named("warning") -> {
+                out.span(at, end, RoleCode.STRING)
+                index = end
+            }
+            cSharp && !named("if") && !named("elif") && !named("define") && !named("undef") -> index = end
         }
     }
 
@@ -469,6 +698,12 @@ private class CLikeLine(
         from: Int,
         to: Int,
     ) {
+        if (previous == DOT && syntax.strings == CLikeSyntax.STRINGS_RUST && LexerScan.equals(text, from, to, "await")) {
+            out.span(from, to, RoleCode.KEYWORD)
+            index = to
+            value()
+            return
+        }
         if (previous != DOT) {
             val entry = syntax.words.find(text, from, to)
             if (entry != 0 && (entry and CLikeSyntax.CONTEXTUAL == 0 || keywordFollows(to))) {
@@ -488,16 +723,25 @@ private class CLikeLine(
         to: Int,
     ) {
         val next = if (to < end) text[to] else ' '
+        if (syntax.macros && next == '!' && (to + 1 >= end || text[to + 1] != '=')) {
+            // A Rust macro call, `!` included.
+            out.span(from, to + 1, RoleCode.FUNCTION)
+            index = to + 1
+            expressionStart()
+            return
+        }
         val capitalized = syntax.capitalizedTypes && text[from] in 'A'..'Z'
         val role =
             when {
-                next == '(' && declaring != CLikeSyntax.DECLARES_TYPE -> RoleCode.FUNCTION
+                // In Rust a capitalized name before `(` is a tuple struct or variant: `Some(x)`.
+                next == '(' && declaring != CLikeSyntax.DECLARES_TYPE && !(capitalized && syntax.strings == CLikeSyntax.STRINGS_RUST) -> RoleCode.FUNCTION
                 capitalized && previous == DOT -> if (isConstantCase(from, to)) RoleCode.CONSTANT else RoleCode.TYPE
                 previous == DOT -> RoleCode.PROPERTY
                 declaring == CLikeSyntax.DECLARES_FUNCTION && next != '.' -> RoleCode.FUNCTION
                 declaring == CLikeSyntax.DECLARES_TYPE -> RoleCode.TYPE
                 syntax.objectKeys && keyAllowed && keyColonFollows(to) -> RoleCode.PROPERTY
                 capitalized -> if (isConstantCase(from, to)) RoleCode.CONSTANT else RoleCode.TYPE
+                syntax.cFamily && to - from > 2 && text[to - 2] == '_' && text[to - 1] == 't' -> RoleCode.TYPE
                 else -> syntax.identifierRole
             }
         emit(from, to, role)
@@ -520,7 +764,7 @@ private class CLikeLine(
         return at < end && text[at] == ':' && (at + 1 >= end || text[at + 1] != ':')
     }
 
-    /** `MAX_SIZE`: capitals, digits, and at least one underscore. */
+    /** `MAX_SIZE`: capitals, digits, and at least one underscore; or, where all caps are constants, `EOF`. */
     private fun isConstantCase(
         from: Int,
         to: Int,
@@ -530,7 +774,7 @@ private class CLikeLine(
             val char = text[at]
             if (char == '_') underscore = true else if (char !in 'A'..'Z' && !isDigit(char)) return false
         }
-        return underscore
+        return underscore || (syntax.allCapsConstants && to - from > 1 && text[from + 1] in 'A'..'Z')
     }
 
     private fun expressionStart() {
@@ -551,21 +795,41 @@ private class CLikeLine(
 
     private fun doubleQuote() {
         when (syntax.strings) {
-            CLikeSyntax.STRINGS_JS -> quotedString('"')
+            CLikeSyntax.STRINGS_JS, CLikeSyntax.STRINGS_GO -> quotedString('"')
             CLikeSyntax.STRINGS_KOTLIN -> openString(if (isTripleQuote(index)) KOTLIN_RAW else KOTLIN_LINE)
-            else -> openString(if (isTripleQuote(index)) SWIFT_MULTILINE else SWIFT_LINE)
+            CLikeSyntax.STRINGS_SWIFT -> openString(if (isTripleQuote(index)) SWIFT_MULTILINE else SWIFT_LINE)
+            CLikeSyntax.STRINGS_RUST -> openString(RUST)
+            CLikeSyntax.STRINGS_JAVA -> if (isTripleQuote(index)) openString(JAVA_TEXT_BLOCK) else quotedString('"')
+            CLikeSyntax.STRINGS_CSHARP -> cSharpQuote(0)
+            else -> cString()
         }
     }
 
     private fun singleQuote() {
-        // A JavaScript string or a Kotlin character; Swift has no single quotes.
-        if (syntax.strings == CLikeSyntax.STRINGS_SWIFT) index += 1 else quotedString('\'')
+        when (syntax.strings) {
+            // Swift has no single quotes.
+            CLikeSyntax.STRINGS_SWIFT -> index += 1
+            CLikeSyntax.STRINGS_RUST -> rustQuote()
+            // A JavaScript string, or a character everywhere else.
+            else -> quotedString('\'')
+        }
     }
 
     private fun backtick() {
-        if (syntax.strings == CLikeSyntax.STRINGS_JS) {
-            openString(TEMPLATE)
-            return
+        when (syntax.strings) {
+            CLikeSyntax.STRINGS_JS -> {
+                openString(TEMPLATE)
+                return
+            }
+            CLikeSyntax.STRINGS_GO -> {
+                openString(GO_RAW)
+                return
+            }
+            CLikeSyntax.STRINGS_KOTLIN, CLikeSyntax.STRINGS_SWIFT -> Unit
+            else -> {
+                index += 1
+                return
+            }
         }
         // A backtick-quoted name in Kotlin or Swift; a lone backtick stays plain.
         var close = index + 1
@@ -592,15 +856,312 @@ private class CLikeLine(
             }
         }
         val to = minOf(at, end)
-        stringWithEscapes(index, to)
+        stringWithEscapes(index, to, placeholders = quote == '"' && syntax.placeholders)
         index = to
         value()
     }
 
-    private fun openString(kind: Int) {
-        val delimiter = if (kind == KOTLIN_RAW || kind == SWIFT_MULTILINE) 3 else 1
+    /** A C string: one line, unless a trailing `\` continues it. */
+    private fun cString() {
+        var at = index + 1
+        var closed = false
+        while (at < end) {
+            val char = text[at]
+            at += 1
+            if (char == '\\') {
+                at += 1
+            } else if (char == '"') {
+                closed = true
+                break
+            }
+        }
+        val to = minOf(at, end)
+        stringWithEscapes(index, to, syntax.placeholders)
+        index = to
+        if (!closed && canPush() && escapedLineEnd()) push(STRING, C_LINE) else value()
+    }
+
+    /**
+     * Literals that start with a word: Rust `b"…"`, `b'x'`, `c"…"`, and raw `r#"…"#` strings (and
+     * `r#name` raw identifiers); C and C++ `L`, `u`, `U`, `u8` prefixes and C++ raw `R"x(…)x"`
+     * strings. False when the word at `[from, to)` is not one.
+     */
+    private fun prefixedLiteral(
+        from: Int,
+        to: Int,
+    ): Boolean {
+        if (to >= end || to - from > 3) return false
+        val next = text[to]
+        if (next != '"' && next != '\'' && next != '#') return false
+        val first = text[from]
+        val length = to - from
+        if (syntax.strings == CLikeSyntax.STRINGS_RUST) {
+            val raw = text[to - 1] == 'r' && (length == 1 || (length == 2 && (first == 'b' || first == 'c')))
+            if (raw && next != '\'') {
+                var quote = to
+                while (quote < end && text[quote] == '#') quote += 1
+                if (quote < end && text[quote] == '"') {
+                    openRustRawString(from, quote, quote - to)
+                    return true
+                }
+                if (length == 1 && quote == to + 1 && quote < end && isIdentifierStart(text[quote])) {
+                    identifier(from, identifierEnd(quote + 1))
+                    return true
+                }
+                return false
+            }
+            if (length != 1 || (first != 'b' && first != 'c') || next == '#' || (first == 'c' && next == '\'')) return false
+            out.span(from, to, RoleCode.STRING)
+            index = to
+            if (next == '"') openString(RUST) else rustQuote()
+            return true
+        }
+        if (!syntax.cFamily || next == '#') return false
+        if (syntax.strings == CLikeSyntax.STRINGS_CPP && next == '"' && text[to - 1] == 'R' && isEncodingPrefix(from, to - 1)) {
+            return cppRawStart(from, to)
+        }
+        if (!isEncodingPrefix(from, to) || length == 0) return false
+        out.span(from, to, RoleCode.STRING)
+        index = to
+        if (next == '"') cString() else quotedString('\'')
+        return true
+    }
+
+    /** `[from, to)` is empty or one of C's encoding prefixes: `L`, `u`, `U`, `u8`. */
+    private fun isEncodingPrefix(
+        from: Int,
+        to: Int,
+    ): Boolean =
+        when (to - from) {
+            0 -> true
+            1 -> text[from] == 'L' || text[from] == 'u' || text[from] == 'U'
+            2 -> text[from] == 'u' && text[from + 1] == '8'
+            else -> false
+        }
+
+    /** A Rust `'`: a character (`'x'`, `'\n'`, `'😀'`), else a lifetime or label (`'a`) as a Type. */
+    private fun rustQuote() {
+        val at = index + 1
+        if (at >= end) {
+            index += 1
+            return
+        }
+        val char = text[at]
+        if (char == '\\') {
+            quotedString('\'')
+            return
+        }
+        val width = if (char.isHighSurrogate() && at + 1 < end && text[at + 1].isLowSurrogate()) 2 else 1
+        if (at + width < end && text[at + width] == '\'') {
+            out.span(index, at + width + 1, RoleCode.STRING)
+            index = at + width + 1
+            value()
+        } else if (isIdentifierStart(char)) {
+            val to = identifierEnd(at + 1)
+            out.span(index, to, RoleCode.TYPE)
+            index = to
+            value()
+        } else {
+            index += 1
+        }
+    }
+
+    /** Rust `r#"`: [hashes] `#` before the quote at [quote]; the string runs to a quote and as many `#`, across lines. */
+    private fun openRustRawString(
+        from: Int,
+        quote: Int,
+        hashes: Int,
+    ) {
         if (!canPush()) {
-            flatString(index + delimiter, if (kind == TEMPLATE) '`' else '"', delimiter, 0, escapes = kind != KOTLIN_RAW)
+            index = from
+            flatString(quote + 1, '"', 1, hashes, escapes = false)
+            return
+        }
+        out.span(from, quote + 1, RoleCode.STRING)
+        index = quote + 1
+        push(RAW_MULTILINE, minOf(hashes, 31))
+    }
+
+    private fun rustRawString(hashes: Int) {
+        var at = index
+        while (at < end) {
+            if (text[at] == '"' && hashesAt(at + 1, hashes)) {
+                val close = at + 1 + hashes
+                out.span(index, close, RoleCode.STRING)
+                index = close
+                pop()
+                value()
+                return
+            }
+            at += 1
+        }
+        out.span(index, end, RoleCode.STRING)
+        index = end
+    }
+
+    /**
+     * C++ `R"delimiter(`: the raw string runs to `)delimiter"`, across lines. It opens only with
+     * nothing else open, since it keeps the delimiter's length and hash in the whole state; with
+     * frames open, or when nothing past the delimiter is on this line, it ends with its line.
+     * False when there is no valid delimiter and `(`, so the word and the quote lex on their own.
+     */
+    private fun cppRawStart(
+        from: Int,
+        quote: Int,
+    ): Boolean {
+        var paren = quote + 1
+        while (paren < end && paren - quote <= MAX_DELIMITER + 1) {
+            val char = text[paren]
+            if (char == '(') break
+            if (char == ')' || char == '\\' || char == '"' || char == ' ' || char == '\t' || char.code < 0x21 || char.code > 0x7E) return false
+            paren += 1
+        }
+        if (paren >= end || text[paren] != '(' || paren - quote - 1 > MAX_DELIMITER) return false
+        val length = paren - quote - 1
+        val hash = delimiterHash(quote + 1, paren)
+        out.span(from, paren + 1, RoleCode.STRING)
+        index = paren + 1
+        if (stack == 0) {
+            stack = (length shl 26) or (hash shl 8) or (STRING shl 5) or CPP_RAW
+            return true
+        }
+        val close = cppRawEnd(index, length, hash)
+        val to = if (close < 0) end else close
+        out.span(index, to, RoleCode.STRING)
+        index = to
+        value()
+        return true
+    }
+
+    private fun cppRawString() {
+        val close = cppRawEnd(index, stack ushr 26, (stack ushr 8) and DELIMITER_HASH_MASK)
+        if (close < 0) {
+            out.span(index, end, RoleCode.STRING)
+            index = end
+            return
+        }
+        out.span(index, close, RoleCode.STRING)
+        index = close
+        stack = 0
+        value()
+    }
+
+    /** The offset past the first `)delimiter"` at or after [from] whose delimiter has [length] and [hash]; -1 if none. */
+    private fun cppRawEnd(
+        from: Int,
+        length: Int,
+        hash: Int,
+    ): Int {
+        var at = from
+        while (at < end) {
+            if (text[at] == ')') {
+                val quote = at + 1 + length
+                if (quote < end && text[quote] == '"' && delimiterHash(at + 1, quote) == hash) return quote + 1
+            }
+            at += 1
+        }
+        return -1
+    }
+
+    private fun delimiterHash(
+        from: Int,
+        to: Int,
+    ): Int {
+        var hash = 0
+        for (at in from until to) hash = hash * 31 + text[at].code
+        return hash and DELIMITER_HASH_MASK
+    }
+
+    /** C# `"`: a one-line string, or a raw one of three or more quotes. [dollars] `$` came before it. */
+    private fun cSharpQuote(dollars: Int) {
+        var quotes = index
+        while (quotes < end && text[quotes] == '"') quotes += 1
+        val count = quotes - index
+        when {
+            count >= 3 -> {
+                if (!canPush()) {
+                    flatString(quotes, '"', 3, 0, escapes = false)
+                    return
+                }
+                out.span(index, quotes, RoleCode.STRING)
+                index = quotes
+                push(RAW_MULTILINE, minOf(count - 3, 7) or (minOf(dollars, 3) shl 3))
+            }
+            dollars > 0 -> openString(CS_INTERPOLATED)
+            else -> quotedString('"')
+        }
+    }
+
+    /** C# `$"`, `$@"`, `$$"""`: an interpolated string, its `$`s as String; a lone `$` stays plain. */
+    private fun cSharpDollar() {
+        var at = index
+        while (at < end && text[at] == '$') at += 1
+        val dollars = at - index
+        val verbatim = dollars == 1 && at + 1 < end && text[at] == '@' && text[at + 1] == '"'
+        if (!verbatim && (at >= end || text[at] != '"')) {
+            index = at
+            return
+        }
+        val quote = if (verbatim) at + 1 else at
+        out.span(index, quote, RoleCode.STRING)
+        index = quote
+        if (verbatim) openString(CS_VERBATIM_INTERPOLATED) else cSharpQuote(dollars)
+    }
+
+    /** C# `@"…"` and `@$"…"` verbatim strings and `@name` identifiers. */
+    private fun cSharpAt() {
+        val next = if (index + 1 < end) text[index + 1] else ' '
+        val interpolated = next == '$' && index + 2 < end && text[index + 2] == '"'
+        when {
+            next == '"' || interpolated -> {
+                val quote = if (interpolated) index + 2 else index + 1
+                out.span(index, quote, RoleCode.STRING)
+                index = quote
+                openString(if (interpolated) CS_VERBATIM_INTERPOLATED else CS_VERBATIM)
+            }
+            isIdentifierStart(next) -> identifier(index, identifierEnd(index + 2))
+            else -> index += 1
+        }
+    }
+
+    /** A C# raw string's body: [value] packs its quote count (minus three) and, above it, its `$` count. */
+    private fun cSharpRawString(value: Int) {
+        val quotes = (value and 7) + 3
+        val dollars = value ushr 3
+        var segment = index
+        var at = index
+        while (at < end) {
+            val char = text[at]
+            if (char == '"' || (char == '{' && dollars > 0)) {
+                var run = at + 1
+                while (run < end && text[run] == char) run += 1
+                if (char == '"' && run - at >= quotes) {
+                    out.span(segment, run, RoleCode.STRING)
+                    index = run
+                    pop()
+                    value()
+                    return
+                }
+                if (char == '{' && run - at >= dollars && canPush()) {
+                    // The last `dollars` braces open the interpolation; any before them are text.
+                    out.span(segment, run - dollars, RoleCode.STRING)
+                    openInterpolation(run - dollars, run, BRACE)
+                    return
+                }
+                at = run
+                continue
+            }
+            at += 1
+        }
+        out.span(segment, end, RoleCode.STRING)
+        index = end
+    }
+
+    private fun openString(kind: Int) {
+        val delimiter = if (kind == KOTLIN_RAW || kind == SWIFT_MULTILINE || kind == JAVA_TEXT_BLOCK) 3 else 1
+        if (!canPush()) {
+            val escapes = kind != KOTLIN_RAW && kind != GO_RAW && kind != CS_VERBATIM && kind != CS_VERBATIM_INTERPOLATED
+            flatString(index + delimiter, if (kind == TEMPLATE || kind == GO_RAW) '`' else '"', delimiter, 0, escapes)
             return
         }
         out.span(index, index + delimiter, RoleCode.STRING)
@@ -664,6 +1225,93 @@ private class CLikeLine(
         }
         out.span(segment, end, RoleCode.STRING)
         index = end
+    }
+
+    /**
+     * The body of a Rust, Go raw, Java text block, continued C, or C# string frame: text, escapes
+     * (`""` in a verbatim string), Rust format braces, C placeholders, and C# `{…}` interpolations
+     * (`{{` and `}}` are escapes), up to the closing delimiter.
+     */
+    private fun familyString(kind: Int) {
+        val escapes = kind == RUST || kind == JAVA_TEXT_BLOCK || kind == C_LINE || kind == CS_INTERPOLATED
+        val verbatim = kind == CS_VERBATIM || kind == CS_VERBATIM_INTERPOLATED
+        val interpolates = kind == CS_INTERPOLATED || kind == CS_VERBATIM_INTERPOLATED
+        val quote = if (kind == GO_RAW) '`' else '"'
+        var segment = index
+        var at = index
+        while (at < end) {
+            val char = text[at]
+            val next = if (at + 1 < end) text[at + 1] else ' '
+            val escapeEnd =
+                when {
+                    char == '\\' && escapes -> escapeEnd(at)
+                    verbatim && char == '"' && next == '"' -> at + 2
+                    interpolates && (char == '{' || char == '}') && next == char -> at + 2
+                    else -> -1
+                }
+            if (escapeEnd >= 0) {
+                if (out.collecting) {
+                    out.span(segment, at, RoleCode.STRING)
+                    out.span(at, escapeEnd, RoleCode.CONSTANT)
+                    segment = escapeEnd
+                }
+                at = escapeEnd
+                continue
+            }
+            if (char == quote && (kind != JAVA_TEXT_BLOCK || isTripleQuote(at))) {
+                val close = at + if (kind == JAVA_TEXT_BLOCK) 3 else 1
+                out.span(segment, close, RoleCode.STRING)
+                index = close
+                pop()
+                value()
+                return
+            }
+            if (interpolates && char == '{' && canPush()) {
+                out.span(segment, at, RoleCode.STRING)
+                openInterpolation(at, at + 1, BRACE)
+                return
+            }
+            if (out.collecting) {
+                val special =
+                    when {
+                        kind == RUST && (char == '{' || char == '}') -> if (next == char) -1 else at + 1
+                        kind == C_LINE && char == '%' -> placeholderEnd(at)
+                        else -> -1
+                    }
+                if (special > at) {
+                    out.span(segment, at, RoleCode.STRING)
+                    out.span(at, special, if (kind == RUST) RoleCode.PUNCTUATION else RoleCode.CONSTANT)
+                    segment = special
+                    at = special
+                    continue
+                }
+                // `{{` in a Rust format string is text: step over both.
+                if (kind == RUST && (char == '{' || char == '}')) at += 1
+            }
+            at += 1
+        }
+        out.span(segment, end, RoleCode.STRING)
+        index = end
+    }
+
+    /** The end of a printf-style placeholder at the `%` [at] (`%d`, `%-8.3f`, `%%`), or [at] when there is none. */
+    private fun placeholderEnd(at: Int): Int {
+        var to = at + 1
+        if (to < end && text[to] == '%') return to + 1
+        while (to < end && (text[to] == '-' || text[to] == '+' || text[to] == ' ' || text[to] == '#' || text[to] == '0')) to += 1
+        if (to < end && text[to] == '[') {
+            // Go's argument index: `%[1]d`.
+            var close = to + 1
+            while (close < end && isDigit(text[close])) close += 1
+            if (close < end && text[close] == ']') to = close + 1
+        }
+        while (to < end && (isDigit(text[to]) || text[to] == '*')) to += 1
+        if (to < end && text[to] == '.') {
+            to += 1
+            while (to < end && (isDigit(text[to]) || text[to] == '*')) to += 1
+        }
+        while (to < end && text[to] in PLACEHOLDER_LENGTHS) to += 1
+        return if (to < end && text[to] in PLACEHOLDER_VERBS) to + 1 else at
     }
 
     private fun openInterpolation(
@@ -772,10 +1420,14 @@ private class CLikeLine(
         value()
     }
 
-    /** A string's text with escapes as Constant; escapes are only split out when spans are collected. */
+    /**
+     * A string's text with escapes (and, with [placeholders], printf placeholders) as Constant;
+     * they are only split out when spans are collected.
+     */
     private fun stringWithEscapes(
         from: Int,
         to: Int,
+        placeholders: Boolean = false,
     ) {
         if (!out.collecting) {
             out.span(from, to, RoleCode.STRING)
@@ -784,12 +1436,17 @@ private class CLikeLine(
         var segment = from
         var at = from + 1
         while (at < to) {
-            if (text[at] == '\\') {
-                val escapeEnd = minOf(to, escapeEnd(at))
+            val special =
+                when {
+                    text[at] == '\\' -> minOf(to, escapeEnd(at))
+                    placeholders && text[at] == '%' && at + 1 < to -> minOf(to, placeholderEnd(at))
+                    else -> at
+                }
+            if (special > at) {
                 out.span(segment, at, RoleCode.STRING)
-                out.span(at, escapeEnd, RoleCode.CONSTANT)
-                segment = escapeEnd
-                at = escapeEnd
+                out.span(at, special, RoleCode.CONSTANT)
+                segment = special
+                at = special
             } else {
                 at += 1
             }
@@ -808,7 +1465,15 @@ private class CLikeLine(
                 if (close < end && text[close] == '}') close + 1 else at + 2
             }
             char == 'u' -> if (hexDigits(at + 2, 4)) at + 6 else at + 2
-            char == 'x' && syntax.strings == CLikeSyntax.STRINGS_JS -> if (hexDigits(at + 2, 2)) at + 4 else at + 2
+            char == 'x' && syntax.strings != CLikeSyntax.STRINGS_KOTLIN && syntax.strings != CLikeSyntax.STRINGS_SWIFT ->
+                if (hexDigits(at + 2, 2)) at + 4 else at + 2
+            char == 'U' && (syntax.placeholders || syntax.strings == CLikeSyntax.STRINGS_CSHARP) -> if (hexDigits(at + 2, 8)) at + 10 else at + 2
+            char in '0'..'7' && syntax.placeholders -> {
+                // C and Go octal escapes: up to three digits.
+                var close = at + 2
+                while (close < end && close < at + 4 && text[close] in '0'..'7') close += 1
+                close
+            }
             char.isHighSurrogate() && at + 2 < end && text[at + 2].isLowSurrogate() -> at + 3
             else -> at + 2
         }
@@ -1006,12 +1671,30 @@ private class CLikeLine(
         const val COMMENT = 6
         const val JSX = 7
 
+        // A NONE frame with a value: a C or C++ directive continued from the line above.
+        const val DIRECTIVE = 1
+
         // STRING frame values.
         const val TEMPLATE = 1
         const val KOTLIN_LINE = 2
         const val KOTLIN_RAW = 3
         const val SWIFT_LINE = 4
         const val SWIFT_MULTILINE = 5
+        const val RUST = 6
+        const val GO_RAW = 7
+        const val JAVA_TEXT_BLOCK = 8
+        const val C_LINE = 9
+        const val CS_INTERPOLATED = 10
+        const val CS_VERBATIM = 11
+        const val CS_VERBATIM_INTERPOLATED = 12
+        const val CPP_RAW = 13
+
+        // A C++ raw string's delimiter: up to 16 characters, kept as its length and an 18-bit hash.
+        const val MAX_DELIMITER = 16
+        const val DELIMITER_HASH_MASK = (1 shl 18) - 1
+
+        const val PLACEHOLDER_LENGTHS = "hlLqjzt"
+        const val PLACEHOLDER_VERBS = "diouxXeEfFgGaAcspnvTtbqUwO"
 
         // JSX frame value: inside a tag, and the number of open elements.
         const val IN_TAG = 16

@@ -4,7 +4,7 @@ import kotlin.random.Random
 
 /** Random inputs for property tests and the randomized run: plausible code per language, damaged freely. */
 internal object HighlightGenerators {
-    val languages = listOf("json", "diff", "typescript", "javascript", "kotlin", "swift", "python", "plaintext") + WebGenerators.languages
+    val languages = listOf("json", "diff", "typescript", "javascript", "kotlin", "swift", "python", "rust", "go", "java", "c", "cpp", "csharp", "plaintext") + WebGenerators.languages
 
     private val jsonPieces =
         listOf(
@@ -19,6 +19,12 @@ internal object HighlightGenerators {
             "'open", "123", "0x1F", "1_000", ".5e-3", "1.5f", "foo", "Bar", "MAX_X", "if", "return", "class", "true", "null", "// line",
             "/* c */", "/* open", "*/", "/*", "\\", "=", "=>", "->", "<", ">", "/", "?.", "::", ":", "@Ann", "#", "${'$'}", "${'$'}{", "😀",
             "\uD83D", "\uDE00", "​", "\"", "'",
+        )
+
+    private val cPieces =
+        listOf(
+            "\n#include <stdio.h>", "\n#define X(a) \\", "\n#if A", "\n#endif", "\n#", "##", "\\", "\\\n", "\"cont \\\n", "L\"w\"",
+            "u8'x'", "1'000", "0x1.8p3", "%d", "\"%-8.3lf %%\"", "NULL", "size_t", "struct", "typedef", "'\\''",
         )
 
     /** Pieces per language on top of [cLikePieces]; a language listed here gets code from its pieces. */
@@ -44,6 +50,38 @@ internal object HighlightGenerators {
                 listOf(
                     "\"\"\"", "\"\\(", "\\(", "#\"raw\"#", "##\"", "\"##", "#\"\"\"", "\"\"\"#", "\\#(", "#if", "#endif",
                     "/* /* nested */", "func", "let", "nil", "${'$'}0", "`default`",
+                ),
+            "rust" to
+                cLikePieces +
+                listOf(
+                    "r#\"raw\"#", "r##\"", "\"##", "\"#", "br\"", "c\"s\"", "b'x'", "'a", "'\\n'", "'😀'", "#[derive(", "#![", "]",
+                    "println!(", "vec![", "/* /* nested */", "fn", "let", "impl", "Self", "self", "1u32", "2.5f64", "\"{x} {{y}}\"", "{}",
+                    "&'static", "r#type", ".await", "x @ 1..=9", "\\\n",
+                ),
+            "go" to
+                cLikePieces +
+                listOf(
+                    "`", "`raw", "\"%5.2f %[1]d %%\"", "'r'", "'\\''", "func", "package", "type", "iota", "nil", "chan", "<-", ":=",
+                    "0x1p-2", "2i", "struct{", "map[string]int",
+                ),
+            "java" to
+                cLikePieces +
+                listOf(
+                    "\"\"\"", "\"\"\"\ntext \\\"\"\"\n\"\"\"", "@Override", "'\\u0041'", "100L", "0x1.8p3", "record", "class",
+                    "List<String>", "var", "@interface",
+                ),
+            "c" to cLikePieces + cPieces,
+            "cpp" to
+                cLikePieces + cPieces +
+                listOf(
+                    "R\"(", ")\"", "R\"d(", ")d\"", "LR\"x(", ")x\"", "u8R\"", "[[nodiscard]]", "[[", "]]", "template<typename T>",
+                    "std::", "nullptr", "1'000'000",
+                ),
+            "csharp" to
+                cLikePieces +
+                listOf(
+                    "@\"", "${'$'}\"", "${'$'}@\"", "@${'$'}\"", "\"\"\"", "\"\"\"\"", "${'$'}${'$'}\"\"\"", "{{", "}}", "{", "}", "\"\"",
+                    "\n[Serializable]", "\n[Obsolete(", "\n#region x", "\n#if DEBUG", "\n#endif", "@class", "1.5m", "get;", "${'$'}",
                 ),
             "python" to
                 listOf(

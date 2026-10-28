@@ -48,6 +48,12 @@ internal object HighlightLanguages {
             Entry("xml", listOf("xsd", "xsl", "xslt", "svg", "plist", "rss"), XmlLexer),
             Entry("php", emptyList(), PhpLexer),
             Entry("markdown", listOf("md", "mdx", "mkd"), MarkdownLexer),
+            Entry("rust", listOf("rs"), CLikeLanguages.rust),
+            Entry("go", listOf("golang"), CLikeLanguages.go),
+            Entry("java", emptyList(), CLikeLanguages.java),
+            Entry("c", listOf("h"), CLikeLanguages.c),
+            Entry("cpp", listOf("c++", "cc", "cxx", "hpp", "hh", "hxx"), CLikeLanguages.cpp),
+            Entry("csharp", listOf("cs", "c#"), CLikeLanguages.cSharp),
         )
 
     private val byName: Map<String, Entry> =
