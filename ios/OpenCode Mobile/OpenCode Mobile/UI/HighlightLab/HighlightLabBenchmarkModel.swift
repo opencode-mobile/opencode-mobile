@@ -148,12 +148,13 @@ final class HighlightLabBenchmarkModel {
     private func finish(_ run: any HighlightLabBenchmarkRun, runID: Int, label: String) async {
         let report = await run.report()
         guard runID == self.runID else { return }
+        let stopped = state.phase == .stopping
         self.run = nil
         state.phase = .idle
         state.report = report
         state.tables = report.tables
         do {
-            state.savedFiles = try storage.save(report, label: label)
+            state.savedFiles = try storage.save(report, label: stopped ? "\(label)-stopped" : label)
         } catch {
             state.errorMessage = "Could not save the report: \(error.localizedDescription)"
         }

@@ -140,6 +140,7 @@ struct HighlightLabBenchmarkModelTests {
         #expect(service.lastRun?.stopped == true)
         service.lastRun?.complete()
         try await until { model.state.phase == .idle }
+        #expect(model.state.savedFiles?.stampedMarkdown.lastPathComponent.hasSuffix("-quick-stopped.md") == true)
     }
 
     static func storage() throws -> HighlightLabStorage {
@@ -210,6 +211,38 @@ nonisolated struct HighlightLabRenderedTextTests {
         )
         #expect(rendered.lines[0].utf16.count == limit)
         #expect(rendered.lineSpans[0] == [NativeCodeSpan(start: limit - 2, end: limit, role: .keyword)])
+    }
+}
+
+nonisolated struct HighlightLabTimingTests {
+    private func timing(_ status: String, ms: Double = 12_000) -> HighlightLabTiming {
+        HighlightLabTiming(engineName: "TextMate", elapsedMs: ms, characters: 100_000, status: status, outcome: nil, spanCount: 0, cold: true)
+    }
+
+    @Test func rateOnlyForCompletedCalls() {
+        #expect(timing("Completed", ms: 10).charsPerMs == 10_000)
+        #expect(timing("CancelHonored").charsPerMs == nil)
+        #expect(timing("Abandoned").charsPerMs == nil)
+    }
+
+    @Test func callsGivenUpOnShowALowerBound() {
+        #expect(timing("Abandoned").elapsedLabel == "> 12000 ms")
+        #expect(timing("ForceStopped").elapsedLabel == "> 12000 ms")
+        #expect(timing("CancelHonored", ms: 10_018).elapsedLabel == "10018 ms")
+        #expect(timing("Completed", ms: 14.3).elapsedLabel == "14.30 ms")
+    }
+}
+
+@MainActor
+struct OpenCodeCodeFileTopLineTests {
+    @Test func offsetMapsToTheLineAtTheTop() {
+        #expect(OpenCodeCodeFile.topLine(offset: 0, lineCount: 100) == 0)
+        #expect(OpenCodeCodeFile.topLine(offset: 8, lineCount: 100) == 0)
+        #expect(OpenCodeCodeFile.topLine(offset: 8 + 12 * 20, lineCount: 100) == 12)
+        #expect(OpenCodeCodeFile.topLine(offset: 8 + 12 * 20 + 4, lineCount: 100) == 12)
+        #expect(OpenCodeCodeFile.topLine(offset: 100_000, lineCount: 100) == 99)
+        #expect(OpenCodeCodeFile.topLine(offset: -50, lineCount: 100) == 0)
+        #expect(OpenCodeCodeFile.topLine(offset: 40, lineCount: 0) == 0)
     }
 }
 

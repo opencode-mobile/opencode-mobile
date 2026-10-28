@@ -18,8 +18,9 @@ private enum OpenCodeCodeFileMetrics {
 /// Read-only source file: line-number gutter, optionally highlighted lines, and wrap on/off.
 /// Rows are lazy, so files with tens of thousands of lines stay responsive; `onLineAppear`
 /// lets the owner highlight what is on screen first. `lineMarks` draws ranges on the marked
-/// background (such as where two highlighters disagree); `topLine`, when given, reads and sets
-/// the line at the top, so two files can scroll together.
+/// background (such as where two highlighters disagree); `topLine`, when given, sets the line
+/// at the top and, on iOS 18 and later, follows scrolling, so two files can scroll together
+/// (unwrapped lines only, which share one row height).
 struct OpenCodeCodeFile: View {
     let lines: [String]
     let lineSpans: [Int: [NativeCodeSpan]]
@@ -29,6 +30,9 @@ struct OpenCodeCodeFile: View {
     let maxLineLength: Int
     let topLine: Binding<Int?>?
     let onLineAppear: ((Int) -> Void)?
+
+    /// The top line this file last scrolled to, so a `topLine` it reported is not scrolled back.
+    @State private var shownTopLine: Int?
 
     init(
         lines: [String],
@@ -61,9 +65,23 @@ struct OpenCodeCodeFile: View {
     }
 
     var body: some View {
-        if let topLine {
-            scrollView
-                .scrollPosition(id: topLine, anchor: .top)
+        if let topLine, !wrapsLines {
+            // `scrollPosition(id:)` does not report user scrolling in a two-axis scroll view, so
+            // the top line comes from the content offset and moves through `scrollTo`.
+            ScrollViewReader { proxy in
+                scrollView
+                    .openCodeOnVerticalOffsetChange { offset in
+                        let line = Self.topLine(offset: offset, lineCount: lines.count)
+                        guard line != shownTopLine else { return }
+                        shownTopLine = line
+                        if topLine.wrappedValue != line { topLine.wrappedValue = line }
+                    }
+                    .onChange(of: topLine.wrappedValue) { _, line in
+                        guard let line, line != shownTopLine, lines.indices.contains(line) else { return }
+                        shownTopLine = line
+                        proxy.scrollTo(line, anchor: .topLeading)
+                    }
+            }
         } else {
             scrollView
         }
@@ -80,6 +98,8 @@ struct OpenCodeCodeFile: View {
                 rows
                     .frame(minWidth: unwrappedWidth, alignment: .leading)
             }
+            // A two-axis scroll view centers content shorter than itself; keep short files at the top.
+            .defaultScrollAnchor(.topLeading)
         }
     }
 
@@ -89,9 +109,15 @@ struct OpenCodeCodeFile: View {
                 row(index)
             }
         }
-        .scrollTargetLayout()
         .padding(.vertical, OpenCodeCodeFileMetrics.verticalPadding)
         .accessibilityElement(children: .contain)
+    }
+
+    /// The line at the top of an unwrapped file whose content is scrolled down by `offset` points.
+    static func topLine(offset: CGFloat, lineCount: Int) -> Int {
+        guard lineCount > 0 else { return 0 }
+        let line = Int(((offset - OpenCodeCodeFileMetrics.verticalPadding) / OpenCodeCodeFileMetrics.lineMinHeight).rounded())
+        return min(max(line, 0), lineCount - 1)
     }
 
     private func row(_ index: Int) -> some View {
@@ -149,6 +175,20 @@ struct OpenCodeCodeFile: View {
             text[range].backgroundColor = OpenCodeColors.warning.opacity(OpenCodeCodeFileMetrics.markOpacity)
         }
         return text
+    }
+}
+
+private extension View {
+    /// Reports how far the content is scrolled down; iOS 17 has no scroll geometry API.
+    @ViewBuilder
+    func openCodeOnVerticalOffsetChange(_ action: @escaping (CGFloat) -> Void) -> some View {
+        if #available(iOS 18.0, *) {
+            onScrollGeometryChange(for: CGFloat.self, of: { $0.contentOffset.y + $0.contentInsets.top }) { _, offset in
+                action(offset)
+            }
+        } else {
+            self
+        }
     }
 }
 

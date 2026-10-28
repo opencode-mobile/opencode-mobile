@@ -118,7 +118,7 @@ struct HighlightLabTimingStrip: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 12) {
-                cell("Time", timing.map { HighlightLabFormat.milliseconds($0.elapsedMs) })
+                cell("Time", timing.map(\.elapsedLabel))
                 cell("Chars/ms", timing.map { HighlightLabFormat.rate($0.charsPerMs) })
                 cell("Outcome", timing.map { $0.outcome ?? "–" })
                 cell("Spans", timing.map { HighlightLabFormat.count($0.spanCount) })

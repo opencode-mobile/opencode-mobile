@@ -147,7 +147,7 @@ struct HighlightLabBenchmarkView: View {
                 Text(tables.title)
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textStrong)
-                Text(tables.complete ? "Complete" : "Partial: stopped or still running")
+                Text(tables.complete ? "Complete" : state.phase.isRunning ? "Partial: still running" : "Partial: stopped")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeak)
                 if let saved = state.savedFiles, !state.phase.isRunning {

@@ -163,7 +163,7 @@ struct HighlightLabCompareView: View {
                 Text(pane.timing.engineName)
                     .font(OpenCodeTypography.button)
                     .foregroundStyle(OpenCodeColors.textStrong)
-                Text("\(HighlightLabFormat.milliseconds(pane.timing.elapsedMs)) · \(pane.timing.outcome ?? pane.timing.status) · \(HighlightLabFormat.count(pane.timing.spanCount)) spans")
+                Text("\(pane.timing.elapsedLabel) · \(pane.timing.outcome ?? pane.timing.status) · \(HighlightLabFormat.count(pane.timing.spanCount)) spans")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeak)
                     .lineLimit(1)

@@ -77,8 +77,15 @@ nonisolated struct HighlightLabTiming: Equatable, Sendable {
     /// The call ran on a fresh engine instance (grammar loading included).
     let cold: Bool
 
+    /// Nil unless the call completed within its limit; a cancelled call did not highlight it all.
     var charsPerMs: Double? {
-        elapsedMs > 0 ? Double(characters) / elapsedMs : nil
+        status == "Completed" && elapsedMs > 0 ? Double(characters) / elapsedMs : nil
+    }
+
+    /// The call time; "> N ms" when the guard gave up on a call that never returned.
+    var elapsedLabel: String {
+        let time = HighlightLabFormat.milliseconds(elapsedMs)
+        return status == "Abandoned" || status == "ForceStopped" ? "> \(time)" : time
     }
 }
 

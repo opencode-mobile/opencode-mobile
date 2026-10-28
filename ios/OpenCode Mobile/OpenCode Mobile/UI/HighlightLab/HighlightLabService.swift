@@ -161,7 +161,7 @@ nonisolated final class KMPHighlightLabService: HighlightLabService, @unchecked 
             let report = run.run { progress in
                 onProgress(HighlightLabReportConverter.progress(progress, title: title))
             }
-            handle.finish(HighlightLabReportConverter.report(report, title: title, environment: environment))
+            handle.finish(HighlightLabReportConverter.report(report, title: title, environment: environment, stopped: run.isStopped))
         }
         return handle
     }
@@ -253,15 +253,16 @@ nonisolated enum HighlightLabReportConverter {
         )
     }
 
-    static func report(_ report: HighlightBenchReport, title: String, environment: [String]) -> HighlightLabReport {
+    /// A stopped run fills its remaining rows as skipped, so the shared report counts it complete.
+    static func report(_ report: HighlightBenchReport, title: String, environment: [String], stopped: Bool) -> HighlightLabReport {
         HighlightLabReport(
-            tables: tables(report, title: title),
+            tables: tables(report, title: title, stopped: stopped),
             markdown: report.markdown(title: title, environment: environment),
             json: report.json()
         )
     }
 
-    static func tables(_ report: HighlightBenchReport, title: String) -> HighlightLabReportTables {
+    static func tables(_ report: HighlightBenchReport, title: String, stopped: Bool = false) -> HighlightLabReportTables {
         let sections = report.sections.map { section in
             HighlightLabReportTables.Table(
                 id: section.name,
@@ -279,7 +280,7 @@ nonisolated enum HighlightLabReportConverter {
         return HighlightLabReportTables(
             title: title,
             engines: report.engines.map(\.displayName),
-            complete: report.isComplete,
+            complete: report.isComplete && !stopped,
             sections: sections,
             comparison: report.engines.count > 1 ? comparison(report) : nil
         )
