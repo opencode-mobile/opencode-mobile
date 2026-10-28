@@ -13,7 +13,8 @@ import dev.opencode.mobile.highlight.core.LexerScan.isDigit
  * and `=>` are Keyword. A name assigned a function (`name = (a) ->`, `name: ->`) or called
  * (`name(`) is Function; an object key (`key:`) and a name after `.` or `::` are Property
  * (Function when called). Keywords are Keyword; `true`, `false`, `yes`, `no`, `on`, `off`,
- * `null`, `undefined`, `NaN`, `Infinity` are Constant; capitalized names are Type. Numbers are
+ * `null`, `undefined`, `NaN`, `Infinity`, and ALL_CAPS names are Constant; other capitalized
+ * names are Type. Numbers are
  * Number; operators are Operator; brackets, `,`, `;`, `:`, `.`, and `::` are Punctuation.
  *
  * A `/` reads as a regex where a value is expected (line start, after an operator, `(`, `,`, or
@@ -152,7 +153,7 @@ internal object CoffeeScriptLexer : LiteralStackLexer(
                                 after < end && text[after] == '(' -> RoleCode.FUNCTION
                                 wasAfterDot -> RoleCode.PROPERTY
                                 isKey(text, after, end) -> RoleCode.PROPERTY
-                                text[index] in 'A'..'Z' -> RoleCode.TYPE
+                                text[index] in 'A'..'Z' -> if (isAllCaps(text, index, after)) RoleCode.CONSTANT else RoleCode.TYPE
                                 else -> 0
                             }
                         if (role != 0) out.span(index, after, role)

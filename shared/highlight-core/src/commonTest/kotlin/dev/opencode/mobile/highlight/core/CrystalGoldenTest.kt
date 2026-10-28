@@ -191,4 +191,13 @@ class CrystalGoldenTest {
             ),
         )
     }
+
+    @Test
+    fun nilableTypesTakeNoSuffix() {
+        assertGolden(
+            "crystal",
+            "def find(id : String) : T? = @items[id]?",
+            "«Keyword|def» «Function|find»«Punctuation|(»«Variable|id» «Punctuation|:» «Type|String»«Punctuation|)» «Punctuation|:» «Type|T»«Operator|?» «Operator|=» «Variable|@items»«Punctuation|[»id«Punctuation|]»«Operator|?»",
+        )
+    }
 }

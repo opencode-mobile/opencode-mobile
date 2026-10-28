@@ -152,4 +152,13 @@ class CoffeeScriptGoldenTest {
             ),
         )
     }
+
+    @Test
+    fun allCapsNamesAreConstants() {
+        assertGolden(
+            "coffee",
+            "MAX_SIZE = Base.LIMIT + Session.count",
+            "«Constant|MAX_SIZE» «Operator|=» «Type|Base»«Punctuation|.»«Property|LIMIT» «Operator|+» «Type|Session»«Punctuation|.»«Property|count»",
+        )
+    }
 }

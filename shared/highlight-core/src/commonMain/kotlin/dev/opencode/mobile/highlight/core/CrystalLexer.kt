@@ -216,7 +216,8 @@ internal object CrystalLexer : LiteralStackLexer(crystalKinds()) {
                 }
                 nameStartLength(text, index, end) > 0 -> {
                     var after = nameEnd(text, index, end)
-                    if (after < end && (text[after] == '?' || text[after] == '!') && !isOperatorPair(text, after, end)) after += 1
+                    // `valid?` and `save!` are names; `T?` is a nilable type, so capitalized names take no suffix.
+                    if (text[index] !in 'A'..'Z' && after < end && (text[after] == '?' || text[after] == '!') && !isOperatorPair(text, after, end)) after += 1
                     val suffixed = text[after - 1] == '?' || text[after - 1] == '!'
                     val label = !wasAfterDot && !wasAfterDef && after + 1 < end && text[after] == ':' && text[after + 1] != ':' && text[after + 1] != '"'
                     if (label && (text[after + 1] == ' ' || text[after + 1] == '\t')) {
