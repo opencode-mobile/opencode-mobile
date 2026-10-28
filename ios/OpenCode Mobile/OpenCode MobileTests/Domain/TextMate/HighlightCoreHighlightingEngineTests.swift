@@ -168,9 +168,9 @@ struct HighlightCoreHighlightingEngineTests {
         #expect(result.spans == Self.oneShot("kotlin", source))
         #expect(fallback.languages.isEmpty)
 
-        _ = try await engine.highlight(Self.request(language: "ruby", source: "puts 1"))
+        _ = try await engine.highlight(Self.request(language: "brainfuck", source: "++[>+<-]"))
         _ = try await engine.highlight(Self.request(language: nil, source: "plain"))
-        #expect(fallback.languages == ["ruby", nil])
+        #expect(fallback.languages == ["brainfuck", nil])
 
         // The result attaches to the fence like a TextMate result.
         let document = NativeMarkdownDocument(sourceHash: 1, blocks: [.codeBlock(language: "kotlin", code: source, spans: [])])

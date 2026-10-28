@@ -55,22 +55,22 @@ class HighlightingEngineTest {
 
             usesHighlightCore = true
             val kotlin = engine.highlight(request("kotlin", revision = 2))
-            engine.highlight(request("rust", revision = 3))
+            engine.highlight(request("brainfuck", revision = 3))
             assertEquals(HighlightCoreHighlightingEngine.BACKEND, kotlin.observation.backend)
             assertTrue(kotlin.spans.isNotEmpty())
-            assertEquals(listOf<String?>("kotlin", "rust"), textMate.languages)
+            assertEquals(listOf<String?>("kotlin", "brainfuck"), textMate.languages)
             assertEquals(1, highlightCore.sessionCount)
 
             // Back to TextMate at once, and the sessions are freed.
             usesHighlightCore = false
             engine.highlight(request("kotlin", revision = 4))
-            assertEquals(listOf<String?>("kotlin", "rust", "kotlin"), textMate.languages)
+            assertEquals(listOf<String?>("kotlin", "brainfuck", "kotlin"), textMate.languages)
             assertEquals(0, highlightCore.sessionCount)
         }
 
     @Test
     fun aFileSessionOnlyOpensForSupportedLanguages() {
-        assertNull(HighlightCoreFileSession.open("rust", "fn main() {}"))
+        assertNull(HighlightCoreFileSession.open("brainfuck", "++[>+<-]"))
         assertTrue(HighlightCoreFileSession.open("tsx", "const a = 1") != null)
     }
 

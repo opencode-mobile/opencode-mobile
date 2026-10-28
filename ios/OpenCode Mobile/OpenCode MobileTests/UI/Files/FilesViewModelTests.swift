@@ -553,16 +553,18 @@ struct FilesViewModelTests {
         #expect(spans.count < 200)
     }
 
-    @Test func highlightCoreLeavesUnsupportedLanguagesToTextMate() async {
+    /// Every file language the app maps now has a highlight-core lexer, so Ruby (TextMate-only
+    /// before the Basic milestone) no longer reaches TextMate.
+    @Test func highlightCoreTakesRubyFilesWithoutTextMate() async {
         let repository = FakeProjectFilesRepository()
-        repository.contents["a.rb"] = .text("let a = 1", isTruncated: false, totalBytes: 9)
+        repository.contents["a.rb"] = .text("puts 1", isTruncated: false, totalBytes: 6)
         let highlighter = FakeHighlighter()
         let viewModel = makeHighlightCoreViewModel(repository, highlighter: highlighter, holdsBackgroundFill: false)
         viewModel.openFile("a.rb")
-        await waitUntil { viewModel.state.viewers["a.rb"]?.lineSpans.count == 1 }
+        await waitUntil { viewModel.state.viewers["a.rb"]?.lineSpans.isEmpty == false }
 
-        #expect(viewModel.highlightCorePass("a.rb") == nil)
-        #expect(highlighter.requests.map(\.language) == ["ruby"])
+        #expect(viewModel.highlightCorePass("a.rb") != nil)
+        #expect(highlighter.requests.isEmpty)
     }
 
     @Test func switchingTheEngineColorsOpenFilesAgainAndClosingCancels() async {
