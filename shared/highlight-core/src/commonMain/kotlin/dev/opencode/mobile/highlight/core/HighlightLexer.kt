@@ -52,6 +52,13 @@ internal class SpanSink(
     /** False during a state-only pass: spans are counted for polling but not stored. */
     var collecting: Boolean = false
 
+    /**
+     * How many embedding lexers are lexing the current stretch for a host. A lexer that can embed
+     * itself (a Markdown fence of Markdown) stops embedding past [MAX_EMBEDDING_DEPTH], so nesting
+     * never grows the stack without bound. Depends only on the states above, so it is deterministic.
+     */
+    var embeddingDepth: Int = 0
+
     /** True once the call must stop; lexers end their loop when they see it. */
     var stopped: Boolean = false
         private set
@@ -121,8 +128,9 @@ internal class SpanSink(
 
     fun spans(): HighlightSpans = if (count == 0) HighlightSpans.empty else HighlightSpans(ints, count)
 
-    private companion object {
-        const val INITIAL_CAPACITY = 3 * 256
-        const val CHECK_INTERVAL = 1_024
+    companion object {
+        private const val INITIAL_CAPACITY = 3 * 256
+        private const val CHECK_INTERVAL = 1_024
+        const val MAX_EMBEDDING_DEPTH = 8
     }
 }

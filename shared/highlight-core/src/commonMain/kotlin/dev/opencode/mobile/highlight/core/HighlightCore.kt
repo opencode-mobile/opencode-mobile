@@ -43,6 +43,11 @@ internal object HighlightLanguages {
             Entry("kotlin", listOf("kt", "kts"), CLikeLanguages.kotlin),
             Entry("swift", emptyList(), CLikeLanguages.swift),
             Entry("python", listOf("py", "py3", "python3", "pyi"), PythonLexer),
+            Entry("html", listOf("htm", "xhtml"), HtmlLexer),
+            Entry("css", listOf("scss", "less"), CssLexer),
+            Entry("xml", listOf("xsd", "xsl", "xslt", "svg", "plist", "rss"), XmlLexer),
+            Entry("php", emptyList(), PhpLexer),
+            Entry("markdown", listOf("md", "mdx", "mkd"), MarkdownLexer),
         )
 
     private val byName: Map<String, Entry> =
