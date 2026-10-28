@@ -3,14 +3,15 @@ package dev.opencode.mobile.highlight.core
 /**
  * Random pieces for the [LiteralStackLexer] languages (Julia, Crystal, Nim, CoffeeScript,
  * Elixir, Erlang), merged into [HighlightGenerators]: every construct that spans lines appears
- * opened, closed, and damaged, next to CRLF, tabs, emoji, and lone surrogates.
+ * opened, closed, and damaged, next to CRLF, tabs, NUL and other control characters, emoji, and
+ * lone surrogates.
  */
 internal object LiteralStackGenerators {
     val languages = listOf("julia", "crystal", "nim", "coffee", "elixir", "erlang")
 
     private val common =
         listOf(
-            " ", " ", " ", "\n", "\n", "\n", "\r\n", "\t", "\\", "😀", "\uD83D", "\uDE00", "\u200B", "é", "\r", "(", ")", "[", "]",
+            " ", " ", " ", "\n", "\n", "\n", "\r\n", "\t", "\\", "😀", "\uD83D", "\uDE00", "\u200B", "é", "\r", "\u0000", "\u0001", "\u001F", "\u007F", "(", ")", "[", "]",
             "{", "}", ",", ";", ".", ":", "=", "\"", "'", "123", "0x1F", "1_000", "1.5e3", "x", "Foo", "MAX",
         )
 

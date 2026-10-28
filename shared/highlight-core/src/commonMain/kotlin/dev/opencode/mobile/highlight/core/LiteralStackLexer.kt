@@ -32,8 +32,14 @@ internal class LiteralKind(
     /** `#` starts a comment to the line end (CoffeeScript heregex). */
     val comments: Boolean = false,
 ) {
+    init {
+        require(close.isNotEmpty()) { "A literal needs a closer." }
+    }
+
     val first: Char = close[0]
-    val opener: Char = if (open.isEmpty()) '\u0000' else open[0]
+
+    /** True when the literal nests: [open] is non-empty. */
+    val nests: Boolean = open.isNotEmpty()
 }
 
 /**
@@ -188,7 +194,6 @@ internal abstract class LiteralStackLexer(
         val role = kind.role
         val close = kind.close
         val first = kind.first
-        val opener = kind.opener
         var nest = frame ushr COUNT_SHIFT
         var segment = from
         var index = from
@@ -221,7 +226,8 @@ internal abstract class LiteralStackLexer(
                 out.span(index, end, RoleCode.COMMENT)
                 return packedOutcome(AT_END, code or (nest shl COUNT_SHIFT), end)
             }
-            if (char == opener && LexerScan.startsWith(text, index, end, kind.open)) {
+            // Every branch below advances `index` by at least one: [open] and [close] are non-empty.
+            if (kind.nests && char == kind.open[0] && LexerScan.startsWith(text, index, end, kind.open)) {
                 if (nest < MAX_COUNT) nest += 1
                 index += kind.open.length
                 continue

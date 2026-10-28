@@ -148,6 +148,23 @@ class LiteralStackSessionTest {
     }
 
     @Test
+    fun controlCharactersInsideEveryConstructTerminate() {
+        // NUL once matched the "no nested opener" sentinel and stalled the literal scanner.
+        val controls = "\u0000\u0001\u0008\u000B\u000C\u001B\u001F\u007F\u0085"
+        for (language in LiteralStackGenerators.languages) {
+            for (piece in LiteralStackGenerators.pieces.getValue(language)) {
+                for (text in listOf(piece + controls + piece, piece + "\u0000", "\u0000" + piece + "\u0000\n\u0000" + piece)) {
+                    val result = HighlightCore.highlight(language, text, never, HighlightDeadline.after(2_000.0))
+                    assertEquals(HighlightStatus.Complete, result.status, "$language: ${text.replace("\u0000", "\\0")}")
+                    assertSpansValid(text, result.spans, HighlightLimits.standard)
+                }
+            }
+            val opened = HighlightGenerators.code(language, Random(language.hashCode()), 2_000).replace(' ', '\u0000')
+            HighlightPropertyChecks.checkAll(language, opened, Random(7), HighlightLimits.standard)
+        }
+    }
+
+    @Test
     fun theWorstCasesFinishFast() {
         val inputs =
             mapOf(
