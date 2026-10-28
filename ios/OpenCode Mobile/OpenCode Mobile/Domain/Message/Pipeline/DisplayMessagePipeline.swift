@@ -16,6 +16,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
     private let preparedHistoryCache: PreparedHistoryCache
     private let decorationCache: BlockDecorationCache
     private var memoryPressureObserver: NSObjectProtocol?
+    private var foregroundObserver: NSObjectProtocol?
 
     init(
         messageSync: MessageSync,
@@ -56,6 +57,9 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
     deinit {
         if let memoryPressureObserver {
             NotificationCenter.default.removeObserver(memoryPressureObserver)
+        }
+        if let foregroundObserver {
+            NotificationCenter.default.removeObserver(foregroundObserver)
         }
     }
 
@@ -100,6 +104,16 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
             self?.preparedHistoryCache.handleMemoryPressure()
             Task {
                 await KMPTextMateHighlightingEngine.shared.trim(.critical)
+            }
+        }
+        // iOS never says a memory warning is over; returning lifts TextMate trim limits.
+        foregroundObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { _ in
+            Task {
+                await KMPTextMateHighlightingEngine.shared.trim(.normal)
             }
         }
         observeThermalAndLowPower()

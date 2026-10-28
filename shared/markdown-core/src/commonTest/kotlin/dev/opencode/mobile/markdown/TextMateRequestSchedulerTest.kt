@@ -75,6 +75,94 @@ class TextMateRequestSchedulerTest {
     }
 
     @Test
+    fun trimModerateRecoversAfterCooldownWithoutNormal() {
+        val clock = FakeClock(0)
+        val scheduler =
+            TextMateRequestScheduler(
+                limits = TextMateSchedulerLimits(trimRecoveryMs = 1_000),
+                clock = clock::millis,
+            )
+        scheduler.trim(MemoryPressure.Moderate)
+
+        clock.now = 999
+        assertNull(scheduler.admit(request(key = "early", revision = 1, intent = HighlightIntent.BackgroundHistory)).ticketId)
+        assertTrue(scheduler.snapshot().backgroundDisabled)
+
+        clock.now = 1_000
+        assertNotNull(scheduler.admit(request(key = "late", revision = 1, intent = HighlightIntent.BackgroundHistory)).ticketId)
+        assertEquals(false, scheduler.snapshot().backgroundDisabled)
+        assertEquals("late", scheduler.pickNext()?.request?.key?.value)
+    }
+
+    @Test
+    fun trimCriticalRecoversHistoryAdmissionAfterCooldown() {
+        val clock = FakeClock(0)
+        val scheduler =
+            TextMateRequestScheduler(
+                limits = TextMateSchedulerLimits(trimRecoveryMs = 1_000),
+                clock = clock::millis,
+            )
+        scheduler.trim(MemoryPressure.Critical)
+        assertNull(scheduler.admit(request(key = "visible", revision = 1, intent = HighlightIntent.VisibleHistory)).ticketId)
+        assertTrue(scheduler.snapshot().historyAdmissionDisabled)
+
+        clock.now = 1_000
+        assertEquals(false, scheduler.snapshot().historyAdmissionDisabled)
+        assertNotNull(scheduler.admit(request(key = "visible", revision = 2, intent = HighlightIntent.VisibleHistory)).ticketId)
+        assertNotNull(scheduler.admit(request(key = "bg", revision = 1, intent = HighlightIntent.BackgroundHistory)).ticketId)
+    }
+
+    @Test
+    fun repeatedTrimRestartsCooldown() {
+        val clock = FakeClock(0)
+        val scheduler =
+            TextMateRequestScheduler(
+                limits = TextMateSchedulerLimits(trimRecoveryMs = 1_000),
+                clock = clock::millis,
+            )
+        scheduler.trim(MemoryPressure.Moderate)
+        clock.now = 800
+        scheduler.trim(MemoryPressure.Moderate)
+
+        clock.now = 1_200
+        assertNull(scheduler.admit(request(key = "bg", revision = 1, intent = HighlightIntent.BackgroundHistory)).ticketId)
+        clock.now = 1_800
+        assertNotNull(scheduler.admit(request(key = "bg", revision = 2, intent = HighlightIntent.BackgroundHistory)).ticketId)
+    }
+
+    @Test
+    fun trimNormalClearsRestrictionsBeforeCooldown() {
+        val clock = FakeClock(0)
+        val scheduler = TextMateRequestScheduler(clock = clock::millis)
+        scheduler.trim(MemoryPressure.Critical)
+        clock.now = 10
+
+        scheduler.trim(MemoryPressure.Normal)
+
+        val snapshot = scheduler.snapshot()
+        assertEquals(false, snapshot.backgroundDisabled)
+        assertEquals(false, snapshot.historyAdmissionDisabled)
+        assertNotNull(scheduler.admit(request(key = "bg", revision = 1, intent = HighlightIntent.BackgroundHistory)).ticketId)
+    }
+
+    @Test
+    fun trimRecoveryLeavesLowPowerRestrictionInPlace() {
+        val clock = FakeClock(0)
+        val scheduler =
+            TextMateRequestScheduler(
+                limits = TextMateSchedulerLimits(trimRecoveryMs = 1_000),
+                clock = clock::millis,
+            )
+        scheduler.setLowPowerOrThermal(true)
+        scheduler.trim(MemoryPressure.Moderate)
+
+        clock.now = 1_000
+        assertNull(scheduler.admit(request(key = "bg", revision = 1, intent = HighlightIntent.BackgroundHistory)).ticketId)
+        scheduler.trim(MemoryPressure.Normal)
+        assertTrue(scheduler.snapshot().backgroundDisabled)
+    }
+
+    @Test
     fun finishActiveRewritesSupersededWorkToCancelled() {
         val clock = FakeClock(0)
         val scheduler = TextMateRequestScheduler(clock = clock::millis)
