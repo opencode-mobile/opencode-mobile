@@ -53,6 +53,8 @@ class TextMateProcessPressureObserver
 
         override fun onStart(owner: LifecycleOwner) {
             pressure.onForeground()
+            // Battery saver can toggle while cached without any trim, so re-read it here.
+            publishPowerState()
         }
 
         private fun publishPowerState() {
