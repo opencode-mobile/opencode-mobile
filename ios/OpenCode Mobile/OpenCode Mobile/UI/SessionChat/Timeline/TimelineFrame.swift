@@ -15,6 +15,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
     let modelProviderID: String?
     let modelID: String?
     let contextInputTokens: Int64?
+    let sentAtEpochMs: Int64?
     /// Aggregate content revision of plain text (hash + length).
     let contentRevision: ContentRevision
     /// Advances on height-affecting changes (text, blocks, markdown presence, streaming).
@@ -33,6 +34,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
         modelProviderID: String? = nil,
         modelID: String? = nil,
         contextInputTokens: Int64? = nil,
+        sentAtEpochMs: Int64? = nil,
         contentRevision: ContentRevision,
         layoutRevision: UInt64
     ) {
@@ -48,6 +50,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
         self.modelProviderID = modelProviderID
         self.modelID = modelID
         self.contextInputTokens = contextInputTokens
+        self.sentAtEpochMs = sentAtEpochMs
         self.contentRevision = contentRevision
         self.layoutRevision = layoutRevision
     }
@@ -70,6 +73,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
             modelProviderID: modelProviderID,
             modelID: modelID,
             contextInputTokens: contextInputTokens,
+            sentAtEpochMs: sentAtEpochMs,
             contentRevision: contentRevision,
             layoutRevision: layoutRevision
         )
@@ -96,6 +100,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
             modelProviderID: modelProviderID,
             modelID: modelID,
             contextInputTokens: contextInputTokens,
+            sentAtEpochMs: sentAtEpochMs,
             contentRevision: contentRevision,
             layoutRevision: layoutRevision &+ 1
         )
@@ -116,6 +121,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
               lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count,
               lhs.text.count == rhs.text.count,
               lhs.metadataLabel == rhs.metadataLabel,
+              lhs.sentAtEpochMs == rhs.sentAtEpochMs,
               lhs.pendingDelivery == rhs.pendingDelivery,
               lhs.blocks.count == rhs.blocks.count
         else { return false }
@@ -580,7 +586,8 @@ extension TimelineRow {
             blocks: blocks,
             modelProviderID: modelProviderID,
             modelID: modelID,
-            contextInputTokens: contextInputTokens
+            contextInputTokens: contextInputTokens,
+            sentAtEpochMs: sentAtEpochMs
         )
     }
 
@@ -598,6 +605,7 @@ extension TimelineRow {
             modelProviderID: row.modelProviderID,
             modelID: row.modelID,
             contextInputTokens: row.contextInputTokens,
+            sentAtEpochMs: row.sentAtEpochMs,
             contentRevision: ContentRevision.of(row.text),
             layoutRevision: layoutRevision
         )

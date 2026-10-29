@@ -38,6 +38,9 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
     /// Files can stream to the server (`POST /api/experimental/fs/write`, #644). Off unless the
     /// server's API contract still matches what the app sends.
     var supportsStreamedUpload: Bool = false
+    /// The server records agent and model switches as timeline notices (v2). Without them
+    /// (v1) Session Chat derives the same notices from consecutive user messages.
+    var recordsTimelineChangeNotices: Bool = false
 
     static func forProtocol(_ serverProtocol: ServerProtocol, v2Features: V2ServerFeatures = V2ServerFeatures()) -> ServerCapabilities {
         switch serverProtocol {
@@ -58,7 +61,8 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
                 supportsSessionViewed: true,
                 supportsSessionMove: true,
                 supportsSideQuestion: v2Features.sessionGenerate,
-                supportsStreamedUpload: v2Features.streamedUpload
+                supportsStreamedUpload: v2Features.streamedUpload,
+                recordsTimelineChangeNotices: true
             )
         }
     }

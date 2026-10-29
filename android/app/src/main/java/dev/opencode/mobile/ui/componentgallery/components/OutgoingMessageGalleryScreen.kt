@@ -71,6 +71,7 @@ fun OutgoingMessageGalleryScreen(modifier: Modifier = Modifier) {
         OpenCodeOutgoingMessage(
             text = sample.text,
             metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+            sentAtEpochMs = System.currentTimeMillis() - 26 * 60 * 60 * 1000L,
             attachments = sample.attachments,
             modifier = Modifier.fillMaxWidth(),
             onClick = {},

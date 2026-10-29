@@ -714,6 +714,7 @@ private fun SessionChatMessageRow(
                     text = message.text,
                     renderedMarkdown = message.renderedMarkdown,
                     metadataLabel = message.metadataLabel,
+                    sentAtEpochMs = message.sentAtEpochMs,
                     content = message.outgoingContent(),
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { openMessageActions(showsRevertMessage = true) },

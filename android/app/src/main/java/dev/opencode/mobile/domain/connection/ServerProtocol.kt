@@ -44,6 +44,11 @@ data class ServerCapabilities(
     val supportsSideQuestion: Boolean = false,
     /** Attachments stream to the server (`POST /api/experimental/fs/write` plus `paths.tmp`, v2). */
     val supportsAttachmentUpload: Boolean = false,
+    /**
+     * The server records agent and model switches as timeline notices (v2). Without them
+     * (v1) Session Chat derives the same notices from consecutive user messages.
+     */
+    val recordsTimelineChangeNotices: Boolean = false,
 ) {
     companion object {
         fun forProtocol(
@@ -68,6 +73,7 @@ data class ServerCapabilities(
                         supportsSessionMove = true,
                         supportsSideQuestion = v2Features.sessionGenerate,
                         supportsAttachmentUpload = v2Features.attachmentUpload,
+                        recordsTimelineChangeNotices = true,
                     )
             }
     }

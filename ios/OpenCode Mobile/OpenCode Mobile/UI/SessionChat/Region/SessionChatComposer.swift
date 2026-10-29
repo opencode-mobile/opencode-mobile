@@ -1096,7 +1096,8 @@ final class SessionChatComposer {
             blocks: optimisticBlocks,
             modelProviderID: nil,
             modelID: nil,
-            contextInputTokens: nil
+            contextInputTokens: nil,
+            sentAtEpochMs: Int64(Date().timeIntervalSince1970 * 1_000)
         )
 
         let prepared = await messageRepository.prepareOptimisticUserMessage(id: optimistic.id, text: displayText)
@@ -1997,7 +1998,8 @@ final class SessionChatComposer {
             blocks: optimistic.blocks,
             modelProviderID: optimistic.modelProviderID,
             modelID: optimistic.modelID,
-            contextInputTokens: optimistic.contextInputTokens
+            contextInputTokens: optimistic.contextInputTokens,
+            sentAtEpochMs: optimistic.sentAtEpochMs
         )
     }
 

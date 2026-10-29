@@ -200,6 +200,7 @@ nonisolated enum SessionChatTimelineProjector {
            previous.modelProviderID == message.modelProviderID,
            previous.modelID == message.modelID,
            previous.contextInputTokens == message.contextInputTokens,
+           previous.sentAtEpochMs == message.sentAtEpochMs,
            previous.renderedMarkdown?.sourceHash == bridgeMarkdown?.sourceHash,
            previous.renderedMarkdown?.renderTreeVersion == bridgeMarkdown?.renderTreeVersion,
            previous.renderedMarkdown?.blocks.count == bridgeMarkdown?.blocks.count,
@@ -244,6 +245,7 @@ nonisolated enum SessionChatTimelineProjector {
             modelProviderID: message.modelProviderID,
             modelID: message.modelID,
             contextInputTokens: message.contextInputTokens,
+            sentAtEpochMs: message.sentAtEpochMs,
             contentRevision: contentRevision,
             layoutRevision: layoutRevision
         )
