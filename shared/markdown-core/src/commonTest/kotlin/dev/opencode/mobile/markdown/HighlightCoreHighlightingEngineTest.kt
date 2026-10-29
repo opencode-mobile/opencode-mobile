@@ -89,7 +89,7 @@ class HighlightCoreHighlightingEngineTest {
     }
 
     @Test
-    fun aCancelledCallReturnsNoSpansAndTheNextRequestStartsOver() {
+    fun aCancelledCallReturnsNoSpansAndKeepsTheSessionForTheNextRequest() {
         val engine = HighlightCoreHighlightingEngine()
         val source = samples.getValue("python")
         val cancelled = HighlightCancelFlag().also { it.cancel() }
@@ -97,11 +97,59 @@ class HighlightCoreHighlightingEngineTest {
         val result = engine.highlightNow(request("fence", "python", source), cancelled)
         assertEquals(TextMateParseOutcome.Cancelled, result.outcome)
         assertTrue(result.spans.isEmpty())
-        assertEquals(0, engine.sessionCount)
+        assertEquals(1, engine.sessionCount)
 
         val retried = engine.highlightReporting(request("fence", "python", source))
-        assertEquals("Open", retried.mode)
+        assertEquals("Continue", retried.mode)
         assertEquals(oneShot("python", source), retried.result.spans)
+    }
+
+    @Test
+    fun aCancelledEditKeepsTheLinesBeforeItAndTheNextRequestContinues() {
+        val engine = HighlightCoreHighlightingEngine()
+        val head = (1..40).joinToString("\n") { "val value$it = \"text\" // note" } + "\n"
+        engine.highlightNow(request("fence", "kotlin", head))
+        val cancelled = HighlightCancelFlag().also { it.cancel() }
+
+        val edit = engine.highlightReporting(request("fence", "kotlin", head + "fun main() {}"), cancelled)
+        assertEquals("Edit", edit.mode)
+        assertEquals(TextMateParseOutcome.Cancelled, edit.result.outcome)
+        assertEquals(1, engine.sessionCount)
+
+        val same = engine.highlightReporting(request("fence", "kotlin", head + "fun main() {}"))
+        assertEquals("Continue", same.mode)
+        assertEquals(40, same.reusedLines)
+        assertEquals(oneShot("kotlin", head + "fun main() {}"), same.result.spans)
+
+        // A cancelled edit followed by different text edits again instead of opening the fence.
+        engine.highlightNow(request("fence", "kotlin", head + "fun main() { run() }"), cancelled)
+        val next = engine.highlightReporting(request("fence", "kotlin", head + "fun main() { run(1) }"))
+        assertEquals("Edit", next.mode)
+        assertEquals(40, next.reusedLines)
+        assertEquals(oneShot("kotlin", head + "fun main() { run(1) }"), next.result.spans)
+    }
+
+    @Test
+    fun aFailedCallReportsAHighlighterFallbackAndDropsTheSession() {
+        val engine = HighlightCoreHighlightingEngine()
+        val throwing =
+            object : HighlightCancellation {
+                override val isCancelled: Boolean
+                    get() = throw IllegalStateException("lexer broke")
+            }
+
+        val failed = engine.highlightNow(request("fence", "kotlin", "val answer = 42"), throwing)
+
+        assertEquals(TextMateParseOutcome.Failed, failed.outcome)
+        assertTrue(failed.spans.isEmpty())
+        val diagnostic = failed.diagnostics.single()
+        assertEquals(MarkdownDiagnosticKind.HighlighterFallback, diagnostic.kind)
+        assertTrue(diagnostic.message.contains("lexer broke"), diagnostic.message)
+        assertEquals(0, engine.sessionCount)
+
+        val retried = engine.highlightReporting(request("fence", "kotlin", "val answer = 42"))
+        assertEquals("Open", retried.mode)
+        assertEquals(oneShot("kotlin", "val answer = 42"), retried.result.spans)
     }
 
     @Test
@@ -133,6 +181,45 @@ class HighlightCoreHighlightingEngineTest {
         var calls = 0
         while (call.partial && calls++ < 100_000) {
             call = engine.highlightReporting(request("fence", "json", source))
+            assertEquals("Continue", call.mode)
+        }
+        assertEquals(expected, call.result.spans)
+    }
+
+    @Test
+    fun newTextAfterAPartialCallEditsFromTheFirstPlainLine() {
+        val engine = HighlightCoreHighlightingEngine(deadlineMillis = 0.0)
+        val source = (1..5_000).joinToString("\n") { "  \"key$it\": [$it, true, null, \"value\"]," }
+        assertTrue(engine.highlightReporting(request("fence", "json", source)).partial)
+
+        val grown = source + "\n  \"tail\": 1"
+        var call = engine.highlightReporting(request("fence", "json", grown))
+        assertEquals("Edit", call.mode)
+        var calls = 0
+        while (call.partial && calls++ < 100_000) call = engine.highlightReporting(request("fence", "json", grown))
+        assertEquals(oneShot("json", grown), call.result.spans)
+    }
+
+    @Test
+    fun aConvergedEditOfAPartialFenceKeepsTheColoredLinesAfterIt() {
+        val engine = HighlightCoreHighlightingEngine(deadlineMillis = 0.0)
+        val lines = (1..5_000).map { "  \"key$it\": [$it, true, null, \"value\"]," }
+        val first = engine.highlightReporting(request("fence", "json", lines.joinToString("\n")))
+        assertTrue(first.partial)
+
+        val edited = lines.toMutableList().also { it[10] = "  \"renamed\": [false, 2.5]," }.joinToString("\n")
+        val expected = oneShot("json", edited)
+        val edit = engine.highlightReporting(request("fence", "json", edited))
+        assertEquals("Edit", edit.mode)
+        assertEquals(10, edit.reusedLines)
+        assertTrue(edit.suffixReusedLines > 0, "kept ${edit.suffixReusedLines} colored lines after the edit")
+        assertEquals(TextMateParseOutcome.Partial, edit.result.outcome)
+        assertEquals(expected.subList(0, edit.result.spans.size), edit.result.spans)
+
+        var call = edit
+        var calls = 0
+        while (call.partial && calls++ < 100_000) {
+            call = engine.highlightReporting(request("fence", "json", edited))
             assertEquals("Continue", call.mode)
         }
         assertEquals(expected, call.result.spans)

@@ -22,8 +22,10 @@ import dev.opencode.mobile.highlight.core.HighlightStatus
  *
  * Every call runs under [deadlineMillis]: past it the fence comes back with its highlighted
  * prefix and a plain rest, and the next request for the same text continues from there. A newer
- * revision of a key cancels an older one still running; a revision older than the one already
- * applied comes back [TextMateParseOutcome.Cancelled].
+ * revision of a key with different text cancels an older one still running, which keeps its
+ * session and the lines it had colored; a newer revision with the same text waits for the older
+ * one and reuses its result. A revision older than the one already applied comes back
+ * [TextMateParseOutcome.Cancelled].
  *
  * Calls may come from any thread; the sessions behind them run one call at a time.
  */
@@ -46,6 +48,7 @@ class HighlightCoreHighlightingEngine(
 
     private class InFlight(
         val revision: Long,
+        val source: String,
         val flag: HighlightCancelFlag,
     )
 
@@ -63,11 +66,14 @@ class HighlightCoreHighlightingEngine(
     // Insertion order is recency: a used entry is removed and put back at the end.
     private val sessions = LinkedHashMap<String, Entry>()
     private var retainedCharacters = 0
-    private val inFlight = mutableMapOf<String, InFlight>()
+    private val inFlight = mutableMapOf<String, MutableList<InFlight>>()
 
     /** Sessions held now, for tests and diagnostics. */
     val sessionCount: Int
         get() = sessionLock.withLock { sessions.size }
+
+    /** Calls for [key] started and not yet returned, for tests. */
+    internal fun callsInFlight(key: CodeBlockKey): Int = flagLock.withLock { inFlight[key.value]?.size ?: 0 }
 
     /** True when highlight-core handles [language]; anything else comes back unsupported. */
     fun supports(language: String?): Boolean = language != null && HighlightCore.supports(language)
@@ -98,8 +104,8 @@ class HighlightCoreHighlightingEngine(
 
     /**
      * The synchronous core of [highlight], on the caller's thread. [cancel] stops it early (with a
-     * coroutine, pass one that reads the job), as does a newer revision of the same key. An
-     * unsupported or missing language comes back [TextMateParseOutcome.Unsupported].
+     * coroutine, pass one that reads the job), as does a newer revision of the same key with
+     * different text. An unsupported or missing language comes back [TextMateParseOutcome.Unsupported].
      */
     fun highlightNow(
         request: HighlightRequest,
@@ -113,20 +119,25 @@ class HighlightCoreHighlightingEngine(
     ): Reported {
         val language = request.language?.let(HighlightCore::canonicalLanguage)
         if (language == null) return Reported(emptyResult(request, TextMateParseOutcome.Unsupported))
-        val flag = HighlightCancelFlag()
+        val call = InFlight(request.revision.value, request.source, HighlightCancelFlag())
         flagLock.withLock {
-            val running = inFlight[request.key.value]
-            if (running != null && running.revision < request.revision.value) running.flag.cancel()
-            if (running == null || running.revision <= request.revision.value) {
-                inFlight[request.key.value] = InFlight(request.revision.value, flag)
+            val running = inFlight.getOrPut(request.key.value) { mutableListOf() }
+            // Older calls for other text are wasted work; one for the same text is the result.
+            for (older in running) {
+                if (older.revision < call.revision && older.source != call.source) older.flag.cancel()
             }
+            running += call
         }
         return try {
-            val combined = if (cancel === HighlightCancellation.Never) flag else Either(flag, cancel)
+            val combined = if (cancel === HighlightCancellation.Never) call.flag else Either(call.flag, cancel)
             sessionLock.withLock { highlightLocked(request, language, combined) }
         } finally {
             flagLock.withLock {
-                if (inFlight[request.key.value]?.flag === flag) inFlight.remove(request.key.value)
+                val running = inFlight[request.key.value]
+                if (running != null) {
+                    running.remove(call)
+                    if (running.isEmpty()) inFlight.remove(request.key.value)
+                }
             }
         }
     }
@@ -152,15 +163,17 @@ class HighlightCoreHighlightingEngine(
         val oldSource = entry.source
         val oldSpans = entry.spans
         val session = entry.session
+        val wasComplete = entry.isComplete
+        // Old spans are valid before this offset: the old text's end once the entry is complete.
+        val oldColoredEnd = if (entry === existing) rangeStart(session, entry.coloredEndLine) else 0
         val mode: String
         val call: HighlightCallResult?
-        val prefix = commonPrefix(oldSource, source)
         when {
-            entry !== existing || (oldSource != source && !entry.isComplete) -> {
+            entry !== existing -> {
                 mode = MODE_OPEN
                 call = session.open(source, Int.MAX_VALUE, cancel, deadline)
             }
-            oldSource == source && entry.isComplete -> {
+            oldSource == source && wasComplete -> {
                 mode = MODE_REUSE
                 call = null
             }
@@ -170,24 +183,38 @@ class HighlightCoreHighlightingEngine(
             }
             else -> {
                 mode = MODE_EDIT
+                val prefix = commonPrefix(oldSource, source)
                 val suffix = commonSuffix(oldSource, source, prefix)
+                // An incomplete entry re-lexes from its first uncolored line, so nothing is left plain.
+                val start = minOf(prefix, oldColoredEnd)
                 call =
                     session.replace(
-                        prefix,
+                        start,
                         oldSource.length - suffix,
-                        source.substring(prefix, source.length - suffix),
+                        source.substring(start, source.length - suffix),
                         cancel,
                         deadline,
                     )
             }
         }
-        if (call != null && (call.status == HighlightStatus.Cancelled || call.status == HighlightStatus.Failed)) {
-            // Spans past the edit are unknown now; the next request opens the fence again.
-            val outcome =
-                if (call.status == HighlightStatus.Cancelled) TextMateParseOutcome.Cancelled else TextMateParseOutcome.Failed
-            val failed = emptyResult(request, outcome)
+        if (call != null && call.status == HighlightStatus.Failed) {
+            // The session's states past the failure are unknown; the next request opens the fence again.
+            val failed = emptyResult(request, TextMateParseOutcome.Failed)
             val failure = call.failure ?: return Reported(failed)
             return Reported(failed.copy(diagnostics = listOf(MarkdownDiagnostic(MarkdownDiagnosticKind.HighlighterFallback, failure))))
+        }
+        if (call != null && call.status == HighlightStatus.Cancelled) {
+            // The session holds the new text with consistent line states; only the lines before the
+            // call keep valid spans, and the next request continues from there.
+            val coloredEnd = if (mode == MODE_OPEN) 0 else call.startLine
+            val kept = SpanBuffer(oldSpans.size)
+            kept.addClipped(oldSpans, oldSpans.size, 0, rangeStart(session, coloredEnd), 0)
+            entry.spans = kept.toIntArray()
+            entry.coloredEndLine = coloredEnd
+            entry.revision = revision
+            entry.source = source
+            keep(key, entry)
+            return Reported(emptyResult(request, TextMateParseOutcome.Cancelled), mode = mode)
         }
         var reusedLines = 0
         var suffixLines = 0
@@ -200,13 +227,15 @@ class HighlightCoreHighlightingEngine(
             merged.addClipped(oldSpans, oldSpans.size, 0, keepBefore, 0)
             val fresh = call.spans.toIntArray()
             merged.addClipped(fresh, fresh.size, keepBefore, rangeStart(session, coloredEnd), 0)
-            if (complete && call.endLine < session.lineCount) {
-                // Converged edit: the lines after the result keep their spans, shifted by the edit.
-                val delta = source.length - oldSource.length
-                val oldResume = rangeStart(session, call.endLine) - delta
-                merged.addClipped(oldSpans, oldSpans.size, oldResume, Int.MAX_VALUE, delta)
-                suffixLines = session.lineCount - call.endLine
-                entry.coloredEndLine = session.lineCount
+            val delta = source.length - oldSource.length
+            val oldResume = rangeStart(session, coloredEnd) - delta
+            if (complete && call.endLine < session.lineCount && oldColoredEnd > oldResume) {
+                // Converged edit: the lines after the result keep their spans, shifted by the edit,
+                // as far as the old text was colored.
+                merged.addClipped(oldSpans, oldSpans.size, oldResume, oldColoredEnd, delta)
+                entry.coloredEndLine =
+                    if (wasComplete) session.lineCount else session.lineAt(oldColoredEnd + delta)
+                suffixLines = entry.coloredEndLine - call.endLine
             } else {
                 entry.coloredEndLine = coloredEnd
             }
@@ -216,7 +245,8 @@ class HighlightCoreHighlightingEngine(
         entry.source = source
         keep(key, entry)
         val spans = toCodeSpans(entry.spans)
-        val partial = call != null && call.status == HighlightStatus.Partial
+        // Past the deadline, or a converged edit of a fence whose old text was not all colored yet.
+        val partial = !entry.isComplete
         val outcome =
             when {
                 partial -> TextMateParseOutcome.Partial
@@ -302,7 +332,7 @@ class HighlightCoreHighlightingEngine(
 
     /**
      * One call's result and how it got there: [mode] is Open, Edit, Continue, or Reuse (null when
-     * the call returned before reaching a session), and [partial] means the deadline passed.
+     * the call returned before reaching a session), and [partial] means lines are still plain.
      */
     internal class Reported(
         val result: HighlightResult,
