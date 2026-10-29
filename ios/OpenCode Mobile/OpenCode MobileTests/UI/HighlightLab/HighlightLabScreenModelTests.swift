@@ -29,7 +29,8 @@ struct HighlightLabDataSetsModelTests {
         await model.start()
 
         #expect(model.state.rows.first?.characters == 2_000)
-        #expect(model.state.rows.first?.subtitle == "Typical code · 2,000 characters")
+        // The count follows the device locale ("2,000", "2.000", "2 000"), so build it the same way.
+        #expect(model.state.rows.first?.subtitle == "Typical code · \(HighlightLabFormat.count(2_000)) characters")
     }
 }
 

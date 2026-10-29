@@ -74,7 +74,7 @@ nonisolated struct HighlightLabTiming: Equatable, Sendable {
     /// The engine's outcome, for example "Highlighted"; nil when it never returned.
     let outcome: String?
     let spanCount: Int
-    /// The call ran on a fresh engine instance (grammar loading included).
+    /// The call ran on a fresh engine instance (lexer setup and first-call warm-up included).
     let cold: Bool
 
     /// Nil unless the call completed within its limit; a cancelled call did not highlight it all.
