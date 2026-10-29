@@ -169,11 +169,10 @@ areas, status column, fold, system bars, simulator pose control) lives in
   while work on the issue stays open, and switch to `Fixes` before marking the
   pull request ready once it finishes the issue.
 - A pull request that changes what users see carries screenshot evidence for
-  each affected platform, posted on GitHub: an `evidence/<issue>` branch
-  referenced from a pull request or issue comment, never a link to the
-  artifact server or another private host. Capture it while verifying, not
-  afterwards. A pull request with nothing visible says "No UI change" under
-  Checks.
+  each affected platform, attached on GitHub with `gh` (see Pull Request
+  Evidence), never a link to the artifact server or another private host, and
+  never a branch. Capture it while verifying, not afterwards. A pull request
+  with nothing visible says "No UI change" under Checks.
 
 ## Pull Request Evidence
 
@@ -188,10 +187,16 @@ areas, status column, fold, system bars, simulator pose control) lives in
     screenshots, a short GIF, or a request/event trace.
 - Cover both platforms. Name what was not checked under Risks / Follow-ups.
 - Save each verification screenshot as `ios-NN-<step>.png` /
-  `android-NN-<step>.png` as you go, publish the set with
-  `scripts/publish-evidence.sh <issue> <dir>`, and post the table it prints as
-  a pull request comment. Never commit evidence to a feature branch. If the
-  push fails, say so in the pull request instead.
+  `android-NN-<step>.png` as you go. Resize them to at most 1000 px with
+  `sips -Z 1000` first. Then attach them with a recent `gh` (2.102 or newer,
+  e.g. `$(brew --prefix)/bin/gh`; check `gh pr comment --help` lists
+  `--attach`): write a Markdown table in a scratch `--body-file` that
+  references the files as `![alt](./ios-NN-<step>.png)`, and run
+  `gh pr comment <pr> --body-file <file>`. `gh` uploads each referenced file
+  and rewrites the path to a GitHub `user-attachments` URL. Use
+  `gh issue comment` when there is no pull request yet. Never push an
+  `evidence/` branch or commit evidence to a feature branch. If the upload
+  fails, say so in the pull request instead.
 - Capture only harness or mock data: no real passwords or personal
   transcripts.
 

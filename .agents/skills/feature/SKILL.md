@@ -90,17 +90,21 @@ Fixes #<number>
    in the session scratchpad's `evidence/`); do not re-record. Capture only
    the steps that are missing. Then publish and comment:
 
-   ```bash
-   scripts/publish-evidence.sh <number> <scratchpad>/evidence > <scratchpad>/evidence.md
-   ```
+   Resize each PNG with `sips -Z 1000`, write a Markdown table in
+   `<scratchpad>/evidence/comment.md` that references the files as
+   `![alt](./ios-NN-<step>.png)` / `![alt](./android-NN-<step>.png)`, then
+   attach with a recent gh (2.102+, e.g. `$(brew --prefix)/bin/gh`; the
+   `gh` first on PATH may be older):
 
    ```bash
-   gh pr comment <pr> --body-file <scratchpad>/evidence.md
+   gh pr comment <pr> --body-file <scratchpad>/evidence/comment.md
    ```
 
-   Start the comment with one line naming the platforms, protocol, and data
-   source (harness or mocks) above the table. Keep captions short; an empty
-   platform cell is a gap to name under Risks / Follow-ups. With nothing
+   gh uploads the referenced images and rewrites the paths. Never push an
+   `evidence/` branch. Start the comment with one line naming the platforms,
+   protocol, and data source (harness or mocks) above the table. Keep captions
+   short; an empty platform cell is a gap to name under Risks / Follow-ups.
+   With nothing
    visible, skip this step and keep "No UI change" under Checks.
 
 Name the issue as `#<number>`. Write `Fixes #<number>` whenever the pull
