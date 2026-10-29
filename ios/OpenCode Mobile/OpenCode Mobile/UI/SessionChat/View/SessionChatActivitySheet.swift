@@ -5,6 +5,11 @@ extension View {
     /// resolved from `rows` on every render, so the sheet keeps updating while
     /// open and closes once the card is gone. With `detailStepID` the same
     /// sheet shows that step's detail under a back arrow instead of the list.
+    ///
+    /// Steps stay oldest first. A live list opens at its newest step and keeps
+    /// new steps in view while it is parked at the bottom (#879); a settled one
+    /// opens at its top. Back from a detail returns to that step, and settling
+    /// while open leaves the list where it is.
     func sessionChatActivitySheet(
         cardID: String?,
         detailStepID: String?,
@@ -19,6 +24,40 @@ extension View {
         onCloseStep: @escaping () -> Void,
         onDismiss: @escaping () -> Void
     ) -> some View {
+        modifier(
+            SessionChatActivitySheetModifier(
+                cardID: cardID,
+                detailStepID: detailStepID,
+                rows: rows,
+                liveCardID: liveCardID,
+                childActivities: childActivities,
+                supportsSessionMessageDiff: supportsSessionMessageDiff,
+                onChildSessionTap: onChildSessionTap,
+                onChangesReviewTap: onChangesReviewTap,
+                onOpenStep: onOpenStep,
+                onCloseStep: onCloseStep,
+                onDismiss: onDismiss
+            )
+        )
+    }
+}
+
+private struct SessionChatActivitySheetModifier: ViewModifier {
+    let cardID: String?
+    let detailStepID: String?
+    let rows: [SessionChatRow]
+    let liveCardID: String?
+    let childActivities: [String: SessionChatChildActivity]
+    let supportsSessionMessageDiff: Bool
+    let onChildSessionTap: (String, String) -> Void
+    let onChangesReviewTap: (String, String?) -> Void
+    let onOpenStep: (String) -> Void
+    let onCloseStep: () -> Void
+    let onDismiss: () -> Void
+    /// The step whose detail was last shown, so back returns the list to it.
+    @State private var returnStepID: String?
+
+    func body(content: Content) -> some View {
         let resolved = cardID.flatMap { SessionChatActivityCardPresentation.card(id: $0, in: rows) }
         let card = resolved.map { $0.card.withLive($0.card.id == liveCardID) }
         let detail = card.flatMap {
@@ -35,7 +74,7 @@ extension View {
         let titleState: OpenCodeBottomSheetTitleState = detail == nil && isLive
             ? .running(startedAtMs: ToolStartTime.normalizeEpochMs(card?.startedAtMs))
             : .plain
-        return openCodeBottomSheet(
+        return content.openCodeBottomSheet(
             isPresented: Binding(
                 get: { resolved != nil },
                 set: { presented in if !presented { onDismiss() } }
@@ -47,6 +86,8 @@ extension View {
                 accessibilityLabel: "Back to steps",
                 action: onCloseStep
             ),
+            scrollTargetID: detail == nil ? returnStepID : nil,
+            followsBottom: isLive && detail == nil,
             height: .half,
             pinnedTop: {
                 if let inspector {
@@ -80,6 +121,13 @@ extension View {
                 }
             }
         )
+        .onChange(of: detailStepID) { previous, next in
+            if next == nil, let previous { returnStepID = previous }
+        }
+        .onChange(of: cardID) { _, _ in
+            // A sheet opened again starts fresh, not on the step it last showed.
+            returnStepID = nil
+        }
     }
 }
 
@@ -102,6 +150,7 @@ struct SessionChatActivitySheetContent: View {
                     .modifier(SheetSectionLabelPadding())
                 ForEach(children) { step in
                     childRow(step)
+                        .id(step.id)
                     OpenCodeHairline()
                 }
             }
@@ -110,6 +159,7 @@ struct SessionChatActivitySheetContent: View {
                     .modifier(SheetSectionLabelPadding())
                 ForEach(tools) { step in
                     stepRow(step)
+                        .id(step.id)
                     if step.id != tools.last?.id {
                         OpenCodeHairline()
                     }

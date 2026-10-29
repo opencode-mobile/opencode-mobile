@@ -388,6 +388,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let trailingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
+    let followsBottom: Bool
     let height: OpenCodeBottomSheetHeight
     let keyboard: OpenCodeBottomSheetKeyboard
     let availableHeight: CGFloat
@@ -415,6 +416,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         leadingAction: OpenCodeBottomSheetHeaderAction?,
         trailingAction: OpenCodeBottomSheetHeaderAction?,
         scrollTargetID: String?,
+        followsBottom: Bool,
         height: OpenCodeBottomSheetHeight,
         keyboard: OpenCodeBottomSheetKeyboard,
         availableHeight: CGFloat,
@@ -435,6 +437,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
         self.leadingAction = leadingAction
         self.trailingAction = trailingAction
         self.scrollTargetID = scrollTargetID
+        self.followsBottom = followsBottom
         self.height = height
         self.keyboard = keyboard
         self.availableHeight = availableHeight
@@ -522,6 +525,7 @@ private struct OpenCodeBottomSheetSheetBody<PinnedTop: View, SheetContent: View,
             bottomClearance: bottomClearance,
             scrollAreaHeight: scrollAreaHeight,
             scrollTargetID: scrollTargetID,
+            followsBottom: followsBottom,
             contentHeight: contentHeight,
             pinnedBottomContentHeight: pinnedBottomContentHeight,
             pinnedTop: pinnedTop,
@@ -747,6 +751,7 @@ struct OpenCodeBottomSheet<PinnedTop: View, SheetContent: View, PinnedBottom: Vi
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let trailingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
+    let followsBottom: Bool
     let height: OpenCodeBottomSheetHeight
     let keyboard: OpenCodeBottomSheetKeyboard
     @ViewBuilder let pinnedTop: () -> PinnedTop
@@ -767,6 +772,7 @@ struct OpenCodeBottomSheet<PinnedTop: View, SheetContent: View, PinnedBottom: Vi
                     leadingAction: leadingAction,
                     trailingAction: trailingAction,
                     scrollTargetID: scrollTargetID,
+                    followsBottom: followsBottom,
                     height: height,
                     keyboard: keyboard,
                     onDismiss: { isPresented = false },
@@ -785,6 +791,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
     var leadingAction: OpenCodeBottomSheetHeaderAction?
     var trailingAction: OpenCodeBottomSheetHeaderAction?
     var scrollTargetID: String?
+    var followsBottom: Bool
     var height: OpenCodeBottomSheetHeight
     var keyboard: OpenCodeBottomSheetKeyboard
     var onDismiss: () -> Void
@@ -810,6 +817,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
             leadingAction: leadingAction,
             trailingAction: trailingAction,
             scrollTargetID: scrollTargetID,
+            followsBottom: followsBottom,
             height: height,
             keyboard: keyboard,
             onDismiss: onDismiss,
@@ -841,6 +849,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
             leadingAction: OpenCodeBottomSheetHeaderAction?,
             trailingAction: OpenCodeBottomSheetHeaderAction?,
             scrollTargetID: String?,
+            followsBottom: Bool,
             height: OpenCodeBottomSheetHeight,
             keyboard: OpenCodeBottomSheetKeyboard,
             onDismiss: @escaping () -> Void,
@@ -876,6 +885,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
                 leadingAction: leadingAction,
                 trailingAction: trailingAction,
                 scrollTargetID: scrollTargetID,
+                followsBottom: followsBottom,
                 height: height,
                 keyboard: keyboard,
                 displaySafeAreaTop: window.safeAreaInsets.top,
@@ -1012,6 +1022,7 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
     let leadingAction: OpenCodeBottomSheetHeaderAction?
     let trailingAction: OpenCodeBottomSheetHeaderAction?
     let scrollTargetID: String?
+    let followsBottom: Bool
     let height: OpenCodeBottomSheetHeight
     let keyboard: OpenCodeBottomSheetKeyboard
     let displaySafeAreaTop: CGFloat
@@ -1059,6 +1070,7 @@ private struct OpenCodeBottomSheetOverlayContent<PinnedTop: View, SheetContent: 
                     leadingAction: leadingAction,
                     trailingAction: trailingAction,
                     scrollTargetID: scrollTargetID,
+                    followsBottom: followsBottom,
                     height: height,
                     keyboard: keyboard,
                     availableHeight: availableHeight,
@@ -1267,6 +1279,7 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
     let bottomClearance: CGFloat
     let scrollAreaHeight: CGFloat
     let scrollTargetID: String?
+    let followsBottom: Bool
     let contentHeight: CGFloat
     let pinnedBottomContentHeight: CGFloat
     @ViewBuilder let pinnedTop: () -> PinnedTop
@@ -1276,6 +1289,8 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
     let onHeaderHeightChange: (CGFloat) -> Void
     let onPinnedTopHeightChange: (CGFloat) -> Void
     let onPinnedBottomContentHeightChange: (CGFloat) -> Void
+    /// Not observed: the body moves every scroll frame and none of it renders.
+    @State private var tracker = BottomSheetFollowTracker()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -1303,17 +1318,34 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
                 case .scrollable:
                     ScrollViewReader { proxy in
                         ScrollView {
-                            measuredContent
+                            VStack(spacing: 0) {
+                                measuredContent
+                                Color.clear
+                                    .frame(height: 0)
+                                    .id(BottomSheetBodyGeometry.bottomID)
+                            }
+                            .onGeometryChange(for: BottomSheetBodyGeometry.self) { geo in
+                                let frame = geo.frame(in: .named(BottomSheetBodyGeometry.coordinateSpace))
+                                return BottomSheetBodyGeometry(minY: frame.minY, height: frame.height)
+                            } action: { geometry in
+                                bodyGeometryChanged(geometry, proxy: proxy)
+                            }
                         }
+                        .coordinateSpace(.named(BottomSheetBodyGeometry.coordinateSpace))
                         .scrollBounceBehavior(.basedOnSize, axes: .vertical)
                         .frame(height: scrollAreaHeight)
                         .onAppear {
-                            scrollToTarget(with: proxy)
+                            paneChanged(proxy: proxy)
                         }
                         .onChange(of: scrollTargetID) { _, _ in
-                            scrollToTarget(with: proxy)
+                            paneChanged(proxy: proxy)
+                        }
+                        .onChange(of: followsBottom) { _, follows in
+                            // Settling leaves the body where it is; a new following pane starts over.
+                            if follows { paneChanged(proxy: proxy) }
                         }
                         .onChange(of: contentHeight) { _, _ in
+                            guard !tracker.tracks else { return }
                             scrollToTarget(with: proxy)
                         }
                     }
@@ -1450,6 +1482,69 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
             proxy.scrollTo(scrollTargetID, anchor: .center)
         }
     }
+
+    private func scrollToBottom(with proxy: ScrollViewProxy) {
+        Task { @MainActor in
+            await Task.yield()
+            proxy.scrollTo(BottomSheetBodyGeometry.bottomID, anchor: .bottom)
+        }
+    }
+
+    /// A new pane: a following one opens at its bottom unless it has a target.
+    private func paneChanged(proxy: ScrollViewProxy) {
+        if followsBottom { tracker.tracks = true }
+        guard tracker.tracks else {
+            scrollToTarget(with: proxy)
+            return
+        }
+        tracker.follow.paneChanged(follows: followsBottom, hasTarget: scrollTargetID != nil)
+        if scrollTargetID != nil {
+            scrollToTarget(with: proxy)
+        } else if tracker.follow.parked {
+            scrollToBottom(with: proxy)
+        }
+    }
+
+    /// A grown body follows its bottom while parked there; any move re-decides whether it is.
+    private func bodyGeometryChanged(_ geometry: BottomSheetBodyGeometry, proxy: ScrollViewProxy) {
+        let previous = tracker.geometry
+        tracker.geometry = geometry
+        guard tracker.tracks, let previous else { return }
+        if geometry.height != previous.height {
+            switch tracker.follow.contentChanged(follows: followsBottom) {
+            case .bottom: scrollToBottom(with: proxy)
+            case .target: scrollToTarget(with: proxy)
+            case .none: break
+            }
+        } else if geometry.minY != previous.minY {
+            tracker.follow.offsetChanged(
+                distanceFromBottom: geometry.distanceFromBottom(viewportHeight: scrollAreaHeight)
+            )
+        }
+    }
+}
+
+/// Follow state for one sheet body, kept outside SwiftUI observation.
+private final class BottomSheetFollowTracker {
+    /// Set once the body has followed its bottom, so it keeps tracking the
+    /// reader's position after it stops (a sheet that settled while open).
+    var tracks = false
+    var follow = OpenCodeBottomSheetFollow()
+    var geometry: BottomSheetBodyGeometry?
+}
+
+/// Where a sheet body sits in its scroll view: `minY` is minus the scroll offset.
+nonisolated struct BottomSheetBodyGeometry: Equatable, Sendable {
+    static let coordinateSpace = "OpenCodeBottomSheetBody"
+    static let bottomID = "OpenCodeBottomSheetBodyBottom"
+
+    let minY: CGFloat
+    let height: CGFloat
+
+    /// How much of the body is left below a viewport of `viewportHeight`.
+    func distanceFromBottom(viewportHeight: CGFloat) -> CGFloat {
+        minY + height - viewportHeight
+    }
 }
 
 private struct BottomSheetEntryDecoration: View {
@@ -1500,6 +1595,11 @@ extension View {
     /// - Parameters:
     ///   - height: resting height policy; see `OpenCodeBottomSheetHeight`.
     ///   - keyboard: software-keyboard policy; see `OpenCodeBottomSheetKeyboard`.
+    ///   - scrollTargetID: id of a body row to scroll to the center.
+    ///   - followsBottom: a body with no `scrollTargetID` opens at its bottom
+    ///     and keeps the bottom in view as it grows while the reader is parked
+    ///     there. Scrolling away stops following; scrolling back resumes it.
+    ///     Turning it off leaves the body where it is.
     ///   - pinnedTop: fixed under the header, laid out by the caller.
     ///   - content: the body; scrolls once the card is at a fixed height.
     ///   - pinnedBottom: footer, never scrolled, kept above the keyboard and the
@@ -1512,6 +1612,7 @@ extension View {
         leadingAction: OpenCodeBottomSheetHeaderAction? = nil,
         trailingAction: OpenCodeBottomSheetHeaderAction? = nil,
         scrollTargetID: String? = nil,
+        followsBottom: Bool = false,
         height: OpenCodeBottomSheetHeight = .fitContent,
         keyboard: OpenCodeBottomSheetKeyboard = .dismiss,
         @ViewBuilder pinnedTop: @escaping () -> PinnedTop,
@@ -1526,6 +1627,7 @@ extension View {
                 leadingAction: leadingAction,
                 trailingAction: trailingAction,
                 scrollTargetID: scrollTargetID,
+                followsBottom: followsBottom,
                 height: height,
                 keyboard: keyboard,
                 pinnedTop: pinnedTop,
