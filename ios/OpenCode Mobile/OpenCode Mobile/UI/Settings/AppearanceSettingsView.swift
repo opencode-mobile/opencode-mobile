@@ -237,7 +237,7 @@ private struct SyntaxPreviewCard: View {
 
     var body: some View {
         OpenCodeSelectableCard(title: preset.name, blurb: preset.blurb, selected: selected, action: action) {
-            OpenCodeCodeSnippet(syntaxSnippet(tokens), surface: .base)
+            OpenCodeCodeSnippet(syntaxSnippet(tokens), surface: .syntaxPreset(tokens))
         }
     }
 }
@@ -246,31 +246,45 @@ private func tokenColor(_ tokens: ResolvedTokens?, _ key: String) -> Color {
     Color(hex: tokens?.tokens[key] ?? "#888888")
 }
 
+/// A short sample with every colored role, drawn through the same role table as code in chat.
+private let syntaxSample: [(String, NativeCodeTokenRole)] = [
+    ("// refresh before the request\n", .comment),
+    ("async function ", .keyword),
+    ("read", .function),
+    ("(", .punctuation),
+    ("s", .variable),
+    (": ", .punctuation),
+    ("Store", .type),
+    (") {\n  ", .punctuation),
+    ("if ", .keyword),
+    ("(", .punctuation),
+    ("s", .variable),
+    (".", .punctuation),
+    ("expired", .function),
+    ("()) {\n    ", .punctuation),
+    ("await ", .keyword),
+    ("refresh", .function),
+    ("(", .punctuation),
+    ("\"access\"", .string),
+    (", ", .punctuation),
+    ("3", .number),
+    (");\n  }\n  ", .punctuation),
+    ("return ", .keyword),
+    ("s", .variable),
+    (".", .punctuation),
+    ("token", .property),
+    (";\n}", .punctuation),
+]
+
 private func syntaxSnippet(_ tokens: [String: String]) -> AttributedString {
-    func append(_ result: inout AttributedString, _ text: String, _ key: String) {
+    var result = AttributedString()
+    for (text, role) in syntaxSample {
         var part = AttributedString(text)
-        part.foregroundColor = Color(hex: tokens[key] ?? "#888888")
+        // Match theme previews carry only syntax tokens; plain text then uses the theme's own.
+        part.foregroundColor = OpenCodeCodeColors.hex(for: role, in: tokens).map(Color.init(hex:))
+            ?? OpenCodeColors.textStrong
         result.append(part)
     }
-    var result = AttributedString()
-    append(&result, "// refresh before the request\n", "syntax-comment")
-    append(&result, "async function ", "syntax-keyword")
-    append(&result, "readToken", "syntax-primitive")
-    append(&result, "() {\n", "syntax-punctuation")
-    append(&result, "  if ", "syntax-keyword")
-    append(&result, "(", "syntax-punctuation")
-    append(&result, "store", "syntax-variable")
-    append(&result, ".", "syntax-punctuation")
-    append(&result, "expired", "syntax-constant")
-    append(&result, "()) {\n", "syntax-punctuation")
-    append(&result, "    await ", "syntax-keyword")
-    append(&result, "refreshAccessToken", "syntax-primitive")
-    append(&result, "();\n  }\n  ", "syntax-punctuation")
-    append(&result, "return ", "syntax-keyword")
-    append(&result, "store", "syntax-variable")
-    append(&result, ".", "syntax-punctuation")
-    append(&result, "access", "syntax-type")
-    append(&result, ";\n}", "syntax-punctuation")
     return result
 }
 

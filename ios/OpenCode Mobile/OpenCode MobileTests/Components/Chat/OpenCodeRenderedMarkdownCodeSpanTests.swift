@@ -366,34 +366,28 @@ struct OpenCodeRenderedMarkdownCodeSpanTests {
         )
     }
 
-    @Test func codeSpanColorsUseWebAlignedSyntaxTokens() {
+    @Test func codeSpanColorsComeFromTheRoleTable() {
         let darkTraits = UITraitCollection(userInterfaceStyle: .dark)
-        let cases: [(NativeCodeTokenRole, String)] = [
-            (.plain, "text-strong"),
-            (.variable, "syntax-variable"),
-            (.keyword, "syntax-keyword"),
-            (.type, "syntax-type"),
-            (.function, "syntax-primitive"),
-            (.property, "syntax-constant"),
-            (.constant, "syntax-constant"),
-            (.number, "syntax-property"),
-            (.string, "syntax-string"),
-            (.operatorToken, "syntax-operator"),
-            (.punctuation, "syntax-punctuation"),
-        ]
+        let tokens = ThemeManager.shared.resolvedDark.tokens
 
-        for (role, token) in cases {
+        for role in NativeCodeTokenRole.allCases {
             let output = NativeMarkdownAttributedString.code(
                 "x",
                 spans: [NativeCodeSpan(start: 0, end: 1, role: role)]
             )
-            guard let rendered = output.runs.first?.foregroundColor else {
+            guard let rendered = output.runs.first?.foregroundColor,
+                  let expectedHex = OpenCodeCodeColors.hex(for: role, in: tokens)
+            else {
                 Issue.record("Missing foreground color for role \(role)")
                 continue
             }
-            let expectedHex = ThemeManager.shared.resolvedDark[token].lowercased()
             let renderedHex = hex(rendered, traits: darkTraits).lowercased()
-            #expect(renderedHex == expectedHex, "Expected role \(role) to resolve token \(token)")
+            #expect(renderedHex == String(expectedHex.prefix(7)).lowercased(), "role \(role)")
+        }
+
+        let plainHex = OpenCodeCodeColors.textHex(in: tokens) ?? ""
+        for role in [NativeCodeTokenRole.variable, .operatorToken, .punctuation] {
+            #expect(OpenCodeCodeColors.hex(for: role, in: tokens) == plainHex, "role \(role) is plain")
         }
     }
 

@@ -87,8 +87,14 @@ struct OpenCodeCodeFile: View {
         }
     }
 
-    @ViewBuilder
+    /// A syntax preset's editor background fills the file; otherwise the owner's background shows.
     private var scrollView: some View {
+        scrollContent
+            .background(OpenCodeColors.codeBackground(or: .clear))
+    }
+
+    @ViewBuilder
+    private var scrollContent: some View {
         if wrapsLines {
             ScrollView(.vertical) {
                 rows
@@ -152,7 +158,7 @@ struct OpenCodeCodeFile: View {
         } else {
             Text(line.isEmpty ? " " : line)
                 .font(OpenCodeTypography.code)
-                .foregroundStyle(OpenCodeColors.textStrong)
+                .foregroundStyle(OpenCodeColors.codeText)
         }
     }
 
@@ -160,7 +166,7 @@ struct OpenCodeCodeFile: View {
         var text: AttributedString
         if spans.isEmpty {
             text = AttributedString(line.isEmpty ? " " : line)
-            text.foregroundColor = OpenCodeColors.textStrong
+            text.foregroundColor = OpenCodeColors.codeText
         } else {
             text = NativeMarkdownAttributedString.code(line, spans: spans)
         }

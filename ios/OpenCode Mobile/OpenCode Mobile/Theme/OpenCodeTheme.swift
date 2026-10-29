@@ -56,7 +56,9 @@ enum OpenCodeColors {
     static var syntaxComment: Color { resolve("syntax-comment") }
     static var syntaxKeyword: Color { resolve("syntax-keyword") }
     static var syntaxString: Color { resolve("syntax-string") }
-    static var syntaxPrimitive: Color { resolve("syntax-primitive") }
+    static var syntaxFunction: Color { resolve("syntax-function") }
+    static var syntaxNumber: Color { resolve("syntax-number") }
+    static var syntaxAttribute: Color { resolve("syntax-attribute") }
     static var syntaxProperty: Color { resolve("syntax-property") }
     static var syntaxType: Color { resolve("syntax-type") }
     static var syntaxVariable: Color { resolve("syntax-variable") }
@@ -69,6 +71,32 @@ enum OpenCodeColors {
     static var syntaxCritical: Color { resolve("syntax-critical") }
     static var syntaxDiffDelete: Color { resolve("syntax-diff-delete") }
     static var syntaxDiffUnknown: Color { resolve("syntax-diff-unknown") }
+
+    // MARK: - Code surface
+
+    /// The color of a highlighted code role, from the one table in `OpenCodeCodeColors`.
+    static func code(_ role: NativeCodeTokenRole) -> Color {
+        resolveCode { OpenCodeCodeColors.hex(for: role, in: $0) }
+    }
+
+    /// Plain code text: the syntax preset's editor foreground, else the theme's strong text.
+    static var codeText: Color {
+        resolveCode { OpenCodeCodeColors.textHex(in: $0) }
+    }
+
+    /// Code surface fill: the syntax preset's editor background, else `fallback` (the
+    /// surface's own theme background, or clear where code sits on the page).
+    static func codeBackground(or fallback: Color) -> Color {
+        let fallback = UIColor(fallback)
+        return Color(
+            UIColor { traits in
+                guard let hex = OpenCodeCodeColors.backgroundHex(in: tokens(for: traits)) else {
+                    return fallback.resolvedColor(with: traits)
+                }
+                return UIColor(hex: hex)
+            }
+        )
+    }
 
     // MARK: - Markdown
 
@@ -107,6 +135,16 @@ enum OpenCodeColors {
     static let listItemLetterIndigoTint = dynamic(light: 0xB8C8FF, dark: 0xA8B8FF)
 
     // MARK: - Resolver
+
+    private static func tokens(for traits: UITraitCollection) -> [String: String] {
+        traits.userInterfaceStyle == .dark
+            ? ThemeManager.shared.resolvedDark.tokens
+            : ThemeManager.shared.resolvedLight.tokens
+    }
+
+    private static func resolveCode(_ hex: @escaping @Sendable ([String: String]) -> String?) -> Color {
+        Color(UIColor { traits in UIColor(hex: hex(tokens(for: traits)) ?? "#000000") })
+    }
 
     private static func resolve(_ token: String) -> Color {
         Color(

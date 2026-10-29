@@ -28,16 +28,20 @@ private let tokenNames = [
     "info",
     "diff-add",
     "diff-delete",
-    "syntax-comment",
+    "syntax-background",
+    "syntax-foreground",
     "syntax-keyword",
     "syntax-string",
-    "syntax-primitive",
-    "syntax-property",
+    "syntax-number",
+    "syntax-constant",
+    "syntax-comment",
     "syntax-type",
+    "syntax-function",
+    "syntax-property",
+    "syntax-attribute",
     "syntax-variable",
     "syntax-operator",
     "syntax-punctuation",
-    "syntax-constant",
     "syntax-critical",
     "syntax-diff-delete",
     "syntax-diff-unknown",
@@ -46,7 +50,7 @@ private let tokenNames = [
 struct ColorGalleryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Theme tokens (\(ThemeManager.shared.currentTheme.name))")
+            Text("Theme tokens (\(ThemeManager.shared.currentTheme.name), code: \(ThemeManager.shared.currentSyntaxPreset.name))")
                 .font(OpenCodeTypography.heading)
                 .foregroundStyle(OpenCodeColors.textStrong)
 
@@ -67,8 +71,8 @@ private struct ColorTokenRow: View {
                 .foregroundStyle(OpenCodeColors.textStrong)
 
             HStack(spacing: 8) {
-                let lightHex = ThemeManager.shared.resolvedLight[tokenName]
-                let darkHex = ThemeManager.shared.resolvedDark[tokenName]
+                let lightHex = ThemeManager.shared.resolvedLight.tokens[tokenName]
+                let darkHex = ThemeManager.shared.resolvedDark.tokens[tokenName]
                 ColorSwatch(label: "Light", hex: lightHex)
                 ColorSwatch(label: "Dark", hex: darkHex)
             }
@@ -79,14 +83,15 @@ private struct ColorTokenRow: View {
     }
 }
 
+/// `hex` is nil for a token the theme leaves unset, such as the code surface under Match theme.
 private struct ColorSwatch: View {
     let label: String
-    let hex: String
+    let hex: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color(hex: hex))
+                .fill(hex.map(Color.init(hex:)) ?? .clear)
                 .overlay {
                     RoundedRectangle(cornerRadius: 8)
                         .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
@@ -95,7 +100,7 @@ private struct ColorSwatch: View {
             Text(label)
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textBase)
-            Text(hex)
+            Text(hex ?? "Not set, surface keeps the theme")
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textStrong)
         }
