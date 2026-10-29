@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
@@ -34,6 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
@@ -207,7 +209,7 @@ fun OpenCodeCodeFile(
 
     // Code reads left to right regardless of the app's layout direction.
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        BoxWithConstraints(modifier = modifier.clipToBounds()) {
+        BoxWithConstraints(modifier = modifier.background(colors.surface(Color.Transparent)).clipToBounds()) {
             val codeViewportPx =
                 constraints.maxWidth - with(density) { (gutterWidth + CodeFileCodePadding * 2).toPx() }
             val maxOffset = if (wrapLines) 0f else (longestLine * charWidthPx - codeViewportPx).coerceAtLeast(0f)

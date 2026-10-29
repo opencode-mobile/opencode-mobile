@@ -16,6 +16,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.theme.OpenCodeSmallShape
@@ -90,6 +91,7 @@ fun CodeFileGalleryScreen(modifier: Modifier = Modifier) {
                 Modifier
                     .fillMaxWidth()
                     .height(240.dp)
+                    .clip(OpenCodeSmallShape)
                     .border(1.dp, openCodeColor("border-weaker-base"), OpenCodeSmallShape),
         )
     }

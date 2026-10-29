@@ -63,6 +63,15 @@ object RenderedMarkdownGalleryMocks {
           }
         }
         ```
+
+        ```kotlin
+        @JvmInline
+        value class Retry(val count: Int)
+
+        const val MAX_RETRIES = 3
+
+        fun backoff(retry: Retry): Long = retry.count * 250L + MAX_RETRIES // ms
+        ```
         """.trimIndent()
 
     private val languagesMarkdown =
