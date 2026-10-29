@@ -88,7 +88,7 @@ private const val BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD = 2_000
 
 /**
  * Format-always / color-later: never strip prepared spans while streaming.
- * Structure-only docs already have empty spans; semantic fallback keeps colors.
+ * Structure-only docs already have empty spans; highlight-core colors arrive later.
  */
 @Suppress("UNUSED_PARAMETER")
 internal fun forcePlainStreamingCode(

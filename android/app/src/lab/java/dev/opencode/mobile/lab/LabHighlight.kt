@@ -17,7 +17,7 @@ data class LabTiming(
     val outcome: String,
     val spanCount: Int,
     val status: HighlightBenchCallStatus,
-    /** The engine's first call in this process: grammar loading and regex compilation included. */
+    /** The engine's first call in this process: class loading and JIT warm-up included. */
     val cold: Boolean,
 ) {
     val timeLabel: String

@@ -115,6 +115,7 @@ class DisplayMessagePipeline(
             }
 
             suspend fun buildStructureFirstStreamingFrame(messages: List<Message>): List<DisplayMessage> {
+                streamingDocs.retainStillStreaming(messages)
                 val out = ArrayList<DisplayMessage>(messages.size)
                 for (message in messages) {
                     val previous = previousById[message.id]
@@ -582,6 +583,7 @@ class DisplayMessagePipeline(
                                 invalidateInFlightWork()
                                 pendingMessages = null
                                 isStreamingSession = false
+                                streamingDocs.retainStillStreaming(update.messages)
                                 val hadStreamingPrevious = previousById.values.any { it.isStreaming }
                                 if (hadStreamingPrevious) {
                                     scheduleFinalization(generation, update.messages)
@@ -657,6 +659,13 @@ class DisplayMessagePipeline(
 }
 
 private fun messageHasStreamingText(message: Message): Boolean = message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
+
+/** Drops the live documents of messages in [messages] that stopped streaming or are gone. */
+internal fun MutableMap<String, MarkdownDocument>.retainStillStreaming(messages: List<Message>) {
+    if (isEmpty()) return
+    val streaming = messages.filter(::messageHasStreamingText).mapTo(HashSet()) { it.id }
+    keys.retainAll(streaming)
+}
 
 internal data class StreamingDecorationTarget(
     val blockID: String,

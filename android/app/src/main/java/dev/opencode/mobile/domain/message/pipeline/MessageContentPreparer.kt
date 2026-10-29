@@ -3,7 +3,9 @@ package dev.opencode.mobile.domain.message
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.markdown.HighlightIntent
+import dev.opencode.mobile.markdown.HighlightResult
 import dev.opencode.mobile.markdown.HighlightRevision
+import dev.opencode.mobile.markdown.MarkdownCodeFence
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownHighlightAttachment
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
@@ -251,25 +253,32 @@ class MessageContentPreparer
                 )
             }
             val reused = reusableDocument(message, previous, mode)
+            val parsed =
+                if (reused == null && mode != MessagePreparationMode.FinalPlaceholder) {
+                    parseDocumentSafely(
+                        sessionKey = sessionKey,
+                        blockID = message.id,
+                        text = message.text,
+                        isStreaming = isStreaming,
+                        intent = mode.highlightIntent(),
+                    )
+                } else {
+                    null
+                }
             val document =
                 reused
                     ?: if (mode == MessagePreparationMode.FinalPlaceholder) {
                         previous?.renderedMarkdown
                     } else {
-                        parseDocumentSafely(
-                            sessionKey = sessionKey,
-                            blockID = message.id,
-                            text = message.text,
-                            isStreaming = isStreaming,
-                            intent = mode.highlightIntent(),
-                        )
+                        parsed?.document
                     }
             val awaitingTextMateUpgrade =
                 when {
                     mode == MessagePreparationMode.FinalPlaceholder && document != null ->
                         previous?.awaitingTextMateUpgrade == true || previous?.isStreaming == true
                     reused != null -> previous?.awaitingTextMateUpgrade == true
-                    else -> false
+                    // A fence that is still partial, cancelled, or failed for now gets another pass.
+                    else -> parsed?.settled == false
                 }
             return DisplayMessage(
                 message = message,
@@ -287,7 +296,7 @@ class MessageContentPreparer
             text: String,
             isStreaming: Boolean,
             intent: HighlightIntent,
-        ): MarkdownDocument? =
+        ): ParsedDocument? =
             try {
                 parseDocument(
                     sessionKey = sessionKey,
@@ -307,6 +316,9 @@ class MessageContentPreparer
          * Structure first, then each code fence through [textMateEngine] (highlight-core).
          * A still-streaming prepare keeps empty spans; the live path colors those fences
          * in [highlightStreamingTextBlock] after the structure frame.
+         *
+         * A fence past its deadline is asked again until it completes or stops making
+         * progress. Only a settled document, every fence colored for good, enters the LRU.
          */
         private suspend fun parseDocument(
             sessionKey: String,
@@ -314,7 +326,7 @@ class MessageContentPreparer
             text: String,
             isStreaming: Boolean,
             intent: HighlightIntent,
-        ): MarkdownDocument? {
+        ): ParsedDocument? {
             if (!OpenCodeMarkdownDetector.shouldRender(text)) {
                 return null
             }
@@ -328,38 +340,69 @@ class MessageContentPreparer
                     isStreaming = isStreaming,
                 )
             synchronized(cacheLock) {
-                cache[cacheKey]?.let { return it }
+                cache[cacheKey]?.let { return ParsedDocument(it, settled = true) }
             }
             val structure =
                 OpenCodeMarkdownParser.parse(
                     markdown = text,
                     codeHighlighter = OpenCodeStructureOnlyHighlighter,
                 )
-            val document =
-                if (isStreaming) {
-                    structure
-                } else {
-                    val revision = HighlightRevision(nextHighlightRevision.incrementAndGet())
-                    val fences =
-                        structure.codeFences(
-                            ownerKey = "${sessionKey.length}:$sessionKey:$blockID",
-                            revision = revision,
-                            policyEpoch = HIGHLIGHT_POLICY_EPOCH,
-                        )
-                    var upgraded = structure
-                    for (fence in fences) {
-                        coroutineContext.ensureActive()
-                        val result = textMateEngine.highlight(fence.request(intent = intent))
-                        when (val attachment = upgraded.attachTextMateResult(fence, result)) {
-                            is MarkdownHighlightAttachment.Attached -> upgraded = attachment.document
-                            is MarkdownHighlightAttachment.Rejected -> Unit
+            var document = structure
+            var settled = true
+            if (!isStreaming) {
+                val revision = HighlightRevision(nextHighlightRevision.incrementAndGet())
+                val fences =
+                    structure.codeFences(
+                        ownerKey = "${sessionKey.length}:$sessionKey:$blockID",
+                        revision = revision,
+                        policyEpoch = HIGHLIGHT_POLICY_EPOCH,
+                    )
+                for (fence in fences) {
+                    coroutineContext.ensureActive()
+                    val result = highlightUntilSettled(fence, intent)
+                    when (val attachment = document.attachTextMateResult(fence, result)) {
+                        is MarkdownHighlightAttachment.Attached -> {
+                            document = attachment.document
+                            if (result.outcome == TextMateParseOutcome.Partial) settled = false
                         }
+                        is MarkdownHighlightAttachment.Rejected ->
+                            // A failure with a diagnostic is the lexer's answer for this text; anything
+                            // else (cancelled, failed without a reason, stale) may color next time.
+                            if (result.outcome != TextMateParseOutcome.Failed || result.diagnostics.isEmpty()) {
+                                settled = false
+                            }
                     }
-                    upgraded
                 }
-            return synchronized(cacheLock) {
-                cache[cacheKey] ?: document.also { cache[cacheKey] = it }
             }
+            if (!settled) {
+                // Never cache a half-plain document; one a concurrent prepare settled is better.
+                return synchronized(cacheLock) { cache[cacheKey] }?.let { ParsedDocument(it, settled = true) }
+                    ?: ParsedDocument(document, settled = false)
+            }
+            synchronized(cacheLock) { cache[cacheKey] = document }
+            return ParsedDocument(document, settled = true)
+        }
+
+        /**
+         * Asks the engine for [fence] again (same key and revision) while it comes back
+         * [TextMateParseOutcome.Partial], so the session continues from its colored prefix.
+         * Gives up after two calls in a row add no spans.
+         */
+        private suspend fun highlightUntilSettled(
+            fence: MarkdownCodeFence,
+            intent: HighlightIntent,
+        ): HighlightResult {
+            var result = textMateEngine.highlight(fence.request(intent = intent))
+            var stalled = false
+            while (result.outcome == TextMateParseOutcome.Partial) {
+                coroutineContext.ensureActive()
+                val next = textMateEngine.highlight(fence.request(intent = intent))
+                val unchanged = next.outcome == TextMateParseOutcome.Partial && next.spans == result.spans
+                result = next
+                if (unchanged && stalled) break
+                stalled = unchanged
+            }
+            return result
         }
 
         private fun reusableDocument(
@@ -428,6 +471,12 @@ class MessageContentPreparer
             /** Character budget for the initial enrichment viewport batch. */
             const val HISTORY_ENRICH_VIEWPORT_CHARACTER_BUDGET = 12_000
         }
+
+        private class ParsedDocument(
+            val document: MarkdownDocument,
+            /** False while a fence is partial, cancelled, or failed without a reason. */
+            val settled: Boolean,
+        )
 
         private data class CacheKey(
             val sessionKey: String,

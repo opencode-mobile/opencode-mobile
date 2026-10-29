@@ -1,11 +1,16 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.markdown.CodeBlockKey
 import dev.opencode.mobile.markdown.CodeSpan
 import dev.opencode.mobile.markdown.CodeTokenRole
 import dev.opencode.mobile.markdown.HighlightCoreHighlightingEngine
+import dev.opencode.mobile.markdown.HighlightIntent
 import dev.opencode.mobile.markdown.HighlightRequest
 import dev.opencode.mobile.markdown.HighlightResult
+import dev.opencode.mobile.markdown.HighlightRevision
 import dev.opencode.mobile.markdown.MarkdownBlock
+import dev.opencode.mobile.markdown.MarkdownDiagnostic
+import dev.opencode.mobile.markdown.MarkdownDiagnosticKind
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownInline
 import dev.opencode.mobile.markdown.TextMateHighlightingEngine
@@ -19,6 +24,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
@@ -511,7 +517,141 @@ class MessageContentPreparerTest {
             assertTrue(code.spans.isEmpty())
         }
 
+    @Test
+    fun finalPrepareContinuesAFencePastItsDeadlineUntilItIsColored() =
+        runTest(testDispatcher) {
+            val preparer =
+                MessageContentPreparer(HighlightCoreHighlightingEngine(deadlineMillis = 0.0)).apply {
+                    computationDispatcher = testDispatcher
+                }
+            val code = (1..3_000).joinToString("\n") { "  \"key$it\": [$it, true, null, \"value\"]," }
+            val message = Message(id = "m1", role = MessageRole.Assistant, text = "```json\n$code\n```")
+
+            val final = preparer.prepareMessage(message)
+
+            val expected = HighlightCoreHighlightingEngine().highlightNow(jsonRequest(code)).spans
+            assertEquals(expected, final.renderedMarkdown!!.codeBlock().spans)
+            assertFalse(final.awaitingTextMateUpgrade)
+            assertSame(final.renderedMarkdown, preparer.prepareMessage(message).renderedMarkdown)
+        }
+
+    @Test
+    fun finalPrepareAsksAPartialFenceAgainWithTheSameKeyAndRevision() =
+        runTest(testDispatcher) {
+            val engine =
+                ScriptedEngine { request, call ->
+                    val colored = minOf(request.source.length, (call + 1) * 4)
+                    val outcome =
+                        if (colored < request.source.length) TextMateParseOutcome.Partial else TextMateParseOutcome.Highlighted
+                    emptyResult(request, outcome).copy(spans = listOf(CodeSpan(0, colored, CodeTokenRole.Keyword)))
+                }
+            val preparer = MessageContentPreparer(engine).apply { computationDispatcher = testDispatcher }
+            val message = Message(id = "m1", role = MessageRole.Assistant, text = "```kotlin\nval answer = 42\n```")
+
+            val final = preparer.prepareMessage(message)
+
+            assertEquals(listOf(CodeSpan(0, 15, CodeTokenRole.Keyword)), final.renderedMarkdown!!.codeBlock().spans)
+            assertEquals(4, engine.requests.size)
+            val first = engine.requests.first()
+            assertTrue(engine.requests.all { it.key == first.key && it.revision == first.revision })
+            preparer.prepareMessage(message)
+            assertEquals("a settled document is cached", 4, engine.requests.size)
+        }
+
+    @Test
+    fun aFenceThatStopsProgressingIsNeitherRetriedForeverNorCached() =
+        runTest(testDispatcher) {
+            val engine =
+                ScriptedEngine { request, _ ->
+                    emptyResult(request, TextMateParseOutcome.Partial).copy(spans = listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)))
+                }
+            val preparer = MessageContentPreparer(engine).apply { computationDispatcher = testDispatcher }
+            val message = Message(id = "m1", role = MessageRole.Assistant, text = "```kotlin\nval answer = 42\n```")
+
+            val final = preparer.prepareMessage(message)
+
+            assertEquals(3, engine.requests.size)
+            assertEquals(listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)), final.renderedMarkdown!!.codeBlock().spans)
+            assertTrue(final.awaitingTextMateUpgrade)
+            preparer.prepareMessage(message)
+            assertEquals("a partial document is not cached", 6, engine.requests.size)
+        }
+
+    @Test
+    fun aCancelledFenceIsNotCachedAndTheNextPrepareColorsIt() =
+        runTest(testDispatcher) {
+            val engine =
+                ScriptedEngine { request, call ->
+                    if (call == 0) {
+                        emptyResult(request, TextMateParseOutcome.Cancelled)
+                    } else {
+                        emptyResult(request, TextMateParseOutcome.Highlighted)
+                            .copy(spans = listOf(CodeSpan(0, request.source.length, CodeTokenRole.Keyword)))
+                    }
+                }
+            val preparer = MessageContentPreparer(engine).apply { computationDispatcher = testDispatcher }
+            val message = Message(id = "m1", role = MessageRole.Assistant, text = "```kotlin\nval answer = 42\n```")
+
+            val cancelled = preparer.prepareMessage(message)
+            val plain = cancelled.renderedMarkdown!!.codeBlock()
+            assertTrue(plain.spans.isEmpty())
+            assertTrue(cancelled.awaitingTextMateUpgrade)
+
+            // The previous display awaits an upgrade, so it is not reused either.
+            val colored = preparer.prepareMessage(message, previous = cancelled)
+            assertEquals(listOf(CodeSpan(0, 15, CodeTokenRole.Keyword)), colored.renderedMarkdown!!.codeBlock().spans)
+            assertFalse(colored.awaitingTextMateUpgrade)
+            assertEquals(2, engine.requests.size)
+            assertSame(colored.renderedMarkdown, preparer.prepareMessage(message).renderedMarkdown)
+            assertEquals(2, engine.requests.size)
+        }
+
+    @Test
+    fun aFailureWithAReasonIsCachedAndOneWithoutIsRetried() =
+        runTest(testDispatcher) {
+            val explained =
+                ScriptedEngine { request, _ ->
+                    emptyResult(request, TextMateParseOutcome.Failed)
+                        .copy(diagnostics = listOf(MarkdownDiagnostic(MarkdownDiagnosticKind.HighlighterFallback, "boom")))
+                }
+            val unexplained = ScriptedEngine { request, _ -> emptyResult(request, TextMateParseOutcome.Failed) }
+            val message = Message(id = "m1", role = MessageRole.Assistant, text = "```kotlin\nval answer = 42\n```")
+
+            for ((engine, cached) in listOf(explained to true, unexplained to false)) {
+                val preparer = MessageContentPreparer(engine).apply { computationDispatcher = testDispatcher }
+                val first = preparer.prepareMessage(message)
+                preparer.prepareMessage(message)
+                val code = first.renderedMarkdown!!.codeBlock()
+                assertTrue(code.spans.isEmpty())
+                assertEquals(!cached, first.awaitingTextMateUpgrade)
+                assertEquals(if (cached) 1 else 2, engine.requests.size)
+            }
+        }
+
+    private fun jsonRequest(source: String) =
+        HighlightRequest(
+            key = CodeBlockKey("one-shot"),
+            revision = HighlightRevision(1),
+            language = "json",
+            source = source,
+            intent = HighlightIntent.InteractiveFinal,
+            policyEpoch = 0,
+        )
+
     private fun MarkdownDocument.codeBlock(): MarkdownBlock.CodeBlock = blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single()
+
+    /** Answers its Nth call (from 0) with [respond] and records every request. */
+    private class ScriptedEngine(
+        private val respond: (HighlightRequest, Int) -> HighlightResult,
+    ) : TextMateHighlightingEngine {
+        val requests = mutableListOf<HighlightRequest>()
+
+        override suspend fun highlight(request: HighlightRequest): HighlightResult {
+            val call = requests.size
+            requests += request
+            return respond(request, call)
+        }
+    }
 
     /** Colors the whole fence as one keyword and records every request. */
     private class RecordingEngine : TextMateHighlightingEngine {
