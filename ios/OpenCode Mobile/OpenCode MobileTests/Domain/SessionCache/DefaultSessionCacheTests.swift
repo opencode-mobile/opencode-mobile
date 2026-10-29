@@ -28,6 +28,75 @@ import Testing
         #expect(seeded == sessions)
     }
 
+    @Test func projectResolutionRoundTripsPerConnection() async {
+        let store = InMemorySessionCacheStore()
+        let cache = DefaultSessionCache(store: store, connectionIdProvider: { connectionId })
+        let resolution = HomeProjectResolution(id: "prj_repo", canonical: "/repo", name: "Repo", isRepository: true)
+        cache.rememberProjectResolution(worktree: "/repo", resolution: resolution)
+
+        #expect(await seededResolution(cache, worktree: "/repo", connectionID: nil) { $0 == resolution } == resolution)
+        #expect(await cache.seedProjectResolution(worktree: "/repo", connectionID: connectionId) == resolution)
+        #expect(await cache.seedProjectResolution(worktree: "/repo", connectionID: "other") == nil)
+
+        await cache.purgeWorktree(serverBaseURL: "http://localhost:4096/", worktree: "/repo")
+        #expect(await cache.seedProjectResolution(worktree: "/repo", connectionID: nil) == nil)
+    }
+
+    @Test func projectResolutionKeepsTheProfileActiveWhenItWasRemembered() async {
+        let profile = ActiveProfileBox("profile-a")
+        let cache = DefaultSessionCache(store: InMemorySessionCacheStore(), connectionIdProvider: { profile.id })
+        let resolution = HomeProjectResolution(id: "prj_a", canonical: "/repo", name: nil, isRepository: true)
+        cache.rememberProjectResolution(worktree: "/repo", resolution: resolution)
+        profile.id = "profile-b"
+
+        #expect(await seededResolution(cache, worktree: "/repo", connectionID: "profile-a") { $0 != nil } == resolution)
+        #expect(await cache.seedProjectResolution(worktree: "/repo", connectionID: "profile-b") == nil)
+    }
+
+    @Test func purgeDropsAProjectResolutionStillQueued() async {
+        let cache = DefaultSessionCache(store: InMemorySessionCacheStore(), connectionIdProvider: { connectionId })
+        cache.rememberProjectResolution(
+            worktree: "/repo",
+            resolution: HomeProjectResolution(id: "prj_a", canonical: "/repo", name: nil, isRepository: false)
+        )
+        await cache.purgeWorktree(serverBaseURL: "http://localhost:4096/", worktree: "/repo")
+        try? await Task.sleep(for: .milliseconds(50))
+
+        #expect(await cache.seedProjectResolution(worktree: "/repo", connectionID: nil) == nil)
+    }
+
+    @Test func projectResolutionsLandInTheOrderTheyWereRemembered() async {
+        let store = FirstCommitGatedStore()
+        let cache = DefaultSessionCache(store: store, connectionIdProvider: { connectionId })
+        let older = HomeProjectResolution(id: "prj_old", canonical: "/repo", name: nil, isRepository: false)
+        let newer = HomeProjectResolution(id: "prj_new", canonical: "/repo", name: nil, isRepository: false)
+        cache.rememberProjectResolution(worktree: "/repo", resolution: older)
+        for _ in 0 ..< 200 where await store.commits == 0 {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        cache.rememberProjectResolution(worktree: "/repo", resolution: newer)
+        await store.open()
+
+        #expect(await seededResolution(cache, worktree: "/repo", connectionID: nil) { $0 == newer } == newer)
+        try? await Task.sleep(for: .milliseconds(50))
+        #expect(await cache.seedProjectResolution(worktree: "/repo", connectionID: nil) == newer)
+    }
+
+    /// Polls until `done` holds for the seeded resolution, or about two seconds pass.
+    private func seededResolution(
+        _ cache: DefaultSessionCache,
+        worktree: String,
+        connectionID: String?,
+        until done: (HomeProjectResolution?) -> Bool
+    ) async -> HomeProjectResolution? {
+        var seeded = await cache.seedProjectResolution(worktree: worktree, connectionID: connectionID)
+        for _ in 0 ..< 200 where !done(seeded) {
+            try? await Task.sleep(for: .milliseconds(10))
+            seeded = await cache.seedProjectResolution(worktree: worktree, connectionID: connectionID)
+        }
+        return seeded
+    }
+
     @Test func seedSessionsNoopsWithoutConnection() async {
         let cache = DefaultSessionCache(
             store: InMemorySessionCacheStore(),
@@ -322,4 +391,48 @@ import Testing
         let second = await store.load(key: key)
         #expect(first?.syncedAtEpochMs == second?.syncedAtEpochMs)
     }
+}
+
+private final class ActiveProfileBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: String
+
+    init(_ value: String) { self.value = value }
+
+    var id: String {
+        get { lock.withLock { value } }
+        set { lock.withLock { value = newValue } }
+    }
+}
+
+/// Holds the first commit until `open()`, so a newer write queues behind a slow one.
+private actor FirstCommitGatedStore: SessionCacheStore {
+    private let delegate = InMemorySessionCacheStore()
+    private var isOpen = false
+    private var gate: CheckedContinuation<Void, Never>?
+    private(set) var commits = 0
+
+    func open() {
+        isOpen = true
+        gate?.resume()
+        gate = nil
+    }
+
+    func load(key: SessionCacheKey) async -> SessionCacheRecord? { await delegate.load(key: key) }
+
+    func commit(key: SessionCacheKey, value: SessionCacheValue, meta: SessionCacheCommitMeta) async {
+        commits += 1
+        if commits == 1, !isOpen {
+            await withCheckedContinuation { gate = $0 }
+        }
+        await delegate.commit(key: key, value: value, meta: meta)
+    }
+
+    func retain(key: SessionCacheKey, reason: SessionCacheRetainReason, atEpochMs: Int64) async {
+        await delegate.retain(key: key, reason: reason, atEpochMs: atEpochMs)
+    }
+
+    func evict(_ selector: SessionCacheEvictSelector) async { await delegate.evict(selector) }
+
+    func report(_ selector: SessionCacheEvictSelector) async -> SessionCacheReport { await delegate.report(selector) }
 }

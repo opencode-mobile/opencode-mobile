@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.sessioncache
 
+import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
@@ -9,6 +10,7 @@ import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -28,6 +30,90 @@ class DefaultSessionCacheTest {
             ignoreUnknownKeys = true
             isLenient = true
             explicitNulls = false
+        }
+
+    @Test
+    fun projectResolutionRoundTripsPerConnection() =
+        runTest {
+            val connectionId = "http://localhost:4096/|opencode"
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { connectionId },
+                    scope = backgroundScope,
+                    json = json,
+                )
+            val resolution = ResolvedHomePath(projectId = "prj_repo", canonicalWorktree = "/repo", name = "Repo", isRepository = true)
+            cache.rememberProjectResolution("/repo", resolution)
+            runCurrent()
+
+            assertEquals(resolution, cache.seedProjectResolution("/repo"))
+            assertEquals(resolution, cache.seedProjectResolution("/repo", connectionId))
+            assertNull(cache.seedProjectResolution("/repo", "other"))
+
+            cache.purgeWorktree("http://localhost:4096/", "/repo")
+            assertNull(cache.seedProjectResolution("/repo"))
+        }
+
+    @Test
+    fun projectResolutionKeepsTheProfileActiveWhenItWasRemembered() =
+        runTest {
+            var connectionId = "profile-a"
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { connectionId },
+                    scope = backgroundScope,
+                    json = json,
+                )
+            val resolution = ResolvedHomePath(projectId = "prj_a", canonicalWorktree = "/repo", isRepository = true)
+            cache.rememberProjectResolution("/repo", resolution)
+            connectionId = "profile-b"
+            runCurrent()
+
+            assertEquals(resolution, cache.seedProjectResolution("/repo", "profile-a"))
+            assertNull(cache.seedProjectResolution("/repo", "profile-b"))
+        }
+
+    @Test
+    fun purgeDropsAProjectResolutionStillQueued() =
+        runTest {
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { "profile-a" },
+                    scope = backgroundScope,
+                    json = json,
+                )
+            cache.rememberProjectResolution("/repo", ResolvedHomePath(projectId = "prj_a", canonicalWorktree = "/repo"))
+            cache.purgeWorktree("http://localhost:4096/", "/repo")
+            runCurrent()
+
+            assertNull(cache.seedProjectResolution("/repo"))
+        }
+
+    @Test
+    fun projectResolutionsLandInTheOrderTheyWereRemembered() =
+        runTest {
+            val gate = CompletableDeferred<Unit>()
+            val store = FirstCommitGatedStore(gate)
+            val cache =
+                DefaultSessionCache(
+                    store = store,
+                    connectionIdProvider = { "profile-a" },
+                    scope = backgroundScope,
+                    json = json,
+                )
+            val older = ResolvedHomePath(projectId = "prj_old", canonicalWorktree = "/repo")
+            val newer = ResolvedHomePath(projectId = "prj_new", canonicalWorktree = "/repo")
+            cache.rememberProjectResolution("/repo", older)
+            runCurrent()
+            cache.rememberProjectResolution("/repo", newer)
+            runCurrent()
+            gate.complete(Unit)
+            runCurrent()
+
+            assertEquals(newer, cache.seedProjectResolution("/repo"))
         }
 
     @Test
@@ -468,4 +554,21 @@ private class CountingSessionCacheStore : SessionCacheStore {
     override suspend fun evict(selector: SessionCacheEvictSelector) = inner.evict(selector)
 
     override suspend fun report(selector: SessionCacheEvictSelector) = inner.report(selector)
+}
+
+/** Holds the first commit until [gate] opens, so a newer write queues behind a slow one. */
+private class FirstCommitGatedStore(
+    private val gate: CompletableDeferred<Unit>,
+    private val delegate: SessionCacheStore = InMemorySessionCacheStore(),
+) : SessionCacheStore by delegate {
+    private var commits = 0
+
+    override suspend fun commit(
+        key: SessionCacheKey,
+        value: SessionCacheValue,
+        meta: SessionCacheCommitMeta,
+    ) {
+        if (commits++ == 0) gate.await()
+        delegate.commit(key, value, meta)
+    }
 }

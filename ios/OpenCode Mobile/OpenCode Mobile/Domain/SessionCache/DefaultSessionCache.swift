@@ -10,6 +10,10 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
     private var pendingActivity: [String: [SessionActivityCacheEntry]] = [:]
     private var lastActivity: [String: [SessionActivityCacheEntry]] = [:]
     private var activityDebounceTasks: [String: Task<Void, Never>] = [:]
+    private let projectResolutionLock = NSLock()
+    private var pendingProjectResolutions: [SessionCacheKey: HomeProjectResolution] = [:]
+    /// The last queued write; each one waits for the one before, so writes land in call order.
+    private var projectResolutionWrites: Task<Void, Never>?
 
     init(
         store: any SessionCacheStore,
@@ -127,6 +131,59 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
         }
     }
 
+    /// `connectionID` reads another profile's entry (a switch before its server is bound).
+    func seedProjectResolution(worktree: String, connectionID: String?) async -> HomeProjectResolution? {
+        guard let connectionId = connectionID ?? connectionIdProvider() else { return nil }
+        let key = SessionCacheKey(connectionId: connectionId, worktree: worktree, kind: .projectResolution)
+        guard let record = await store.load(key: key) else { return nil }
+        return SessionCacheCodec.decodeProjectResolution(record.value.payloadJSON)
+    }
+
+    func rememberProjectResolution(worktree: String, resolution: HomeProjectResolution) {
+        guard let connectionId = connectionIdProvider() else { return }
+        let key = SessionCacheKey(connectionId: connectionId, worktree: worktree, kind: .projectResolution)
+        projectResolutionLock.lock()
+        pendingProjectResolutions[key] = resolution
+        let previous = projectResolutionWrites
+        projectResolutionWrites = Task { [weak self] in
+            await previous?.value
+            await self?.flushProjectResolutions()
+        }
+        projectResolutionLock.unlock()
+    }
+
+    /// Commits the newest queued resolution of each key; a write that finds the queue empty does nothing.
+    private func flushProjectResolutions() async {
+        projectResolutionLock.lock()
+        let queued = pendingProjectResolutions
+        pendingProjectResolutions = [:]
+        projectResolutionLock.unlock()
+        for (key, resolution) in queued {
+            do {
+                let payload = try SessionCacheCodec.encodeProjectResolution(resolution)
+                await store.commit(
+                    key: key,
+                    value: SessionCacheValue(payloadJSON: payload, schemaVersion: SessionCacheCodec.schemaVersion),
+                    meta: SessionCacheCommitMeta(syncedAtEpochMs: clock())
+                )
+            } catch {
+                DiagnosticLog.warning(.session, "encode/commit project resolution failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    /// Drops queued resolutions for `worktree`, or all when `nil`, then waits for a write in
+    /// flight so the purge that follows evicts its row.
+    private func dropPendingProjectResolutions(worktree: String?) async {
+        projectResolutionLock.lock()
+        pendingProjectResolutions = pendingProjectResolutions.filter { key, _ in
+            worktree != nil && key.worktree != worktree
+        }
+        let inFlight = projectResolutionWrites
+        projectResolutionLock.unlock()
+        await inFlight?.value
+    }
+
     func openMessages(sessionID: String, worktree: String) -> SessionMessageCacheHandle {
         DefaultSessionMessageCacheHandle(
             sessionID: sessionID,
@@ -140,6 +197,7 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
 
     func purgeWorktree(serverBaseURL: String, worktree: String) async {
         dropActivityMemory(directory: worktree)
+        await dropPendingProjectResolutions(worktree: worktree)
         if let connectionId = connectionIdProvider() {
             await store.evict(
                 .worktree(
@@ -162,6 +220,7 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
         // A pending activity flush would otherwise commit the removed server's activity
         // under whichever profile is active when the debounce fires.
         dropActivityMemory(directory: nil)
+        await dropPendingProjectResolutions(worktree: nil)
         if !profileID.isEmpty {
             await store.evict(.connection(connectionIdOrUrlPrefix: profileID, matchByUrlPrefix: false))
         }
@@ -175,6 +234,7 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
 
     func clearAll() async {
         dropActivityMemory(directory: nil)
+        await dropPendingProjectResolutions(worktree: nil)
         await store.evict(.all)
     }
 
