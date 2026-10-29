@@ -11,7 +11,7 @@ on:
         required: false
         type: string
       variant:
-        description: "release: the store-like build. lab: the Lab configuration with the Highlighting Lab and engine setting (#872)."
+        description: "release: the store-like build. lab: the Lab configuration with the Highlighting Lab (#872)."
         required: false
         type: choice
         options:
@@ -317,7 +317,7 @@ jobs:
             release_notes="Not from main: $distributed_ref"$'\n'"$release_notes"
           fi
           if [[ "$DISTRIBUTION_VARIANT" == "lab" ]]; then
-            release_notes="Lab build (#872): Highlighting Lab and engine setting, no Crashlytics"$'\n'"$release_notes"
+            release_notes="Lab build (#872): Highlighting Lab, no Crashlytics"$'\n'"$release_notes"
           fi
           if ! distribution_output="$(
             npx --yes "firebase-tools@$FIREBASE_TOOLS_VERSION" \

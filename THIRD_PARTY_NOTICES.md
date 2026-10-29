@@ -87,13 +87,14 @@ THE SOFTWARE.
 The code color values in `shared/syntax-presets/` (Nocturne, Citrus, Paper, and
 Neon dark) are derived from these editor themes by
 `scripts/generate-syntax-presets.mjs`, reading the theme files packaged in
-[@shikijs/themes](https://github.com/shikijs/textmate-grammars-themes) (MIT).
+[@shikijs/themes](https://github.com/shikijs/textmate-grammars-themes)
+(MIT, Copyright (c) 2021 Pine Wu, Copyright (c) 2023 Anthony Fu).
 
 | Preset | Theme | Source | Copyright |
 | --- | --- | --- | --- |
 | Nocturne dark | One Dark Pro | <https://github.com/Binaryify/OneDark-Pro> | Copyright (c) 2013-2022 Binaryify |
 | Nocturne light | One Light | <https://github.com/akamud/vscode-theme-onelight> | Copyright (c) 2015 Mahmoud Ali |
-| Citrus | Solarized Dark and Light | <https://github.com/microsoft/vscode> | Copyright (c) 2015 - present Microsoft Corporation |
+| Citrus | Solarized Dark and Light | <https://github.com/microsoft/vscode>, palette from <https://github.com/altercation/solarized> | Copyright (c) 2015 - present Microsoft Corporation; palette Copyright (c) 2011 Ethan Schoonover |
 | Paper | GitHub Dark Default and Light Default | <https://github.com/primer/github-vscode-theme> | Copyright (c) 2020 Primer |
 | Neon dark | Dracula | <https://github.com/dracula/visual-studio-code> | Copyright (c) 2016 Dracula Theme |
 

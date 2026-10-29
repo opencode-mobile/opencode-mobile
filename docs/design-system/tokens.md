@@ -170,45 +170,50 @@ Tables below show Porcelain, the default preset.
 | `syntax-comment` | `#8F8F8F` | `#707070` |
 | `syntax-keyword` | `#1456F7` | `#8BA8FF` |
 | `syntax-string` | `#087466` | `#4EC9B8` |
-| `syntax-primitive` | `#1456F7` | `#8BA8FF` |
-| `syntax-property` | `#5A5A8A` | `#C4B08A` |
+| `syntax-number` | `#D8119C` | `#7AD4E0` |
+| `syntax-constant` | `#D8119C` | `#7AD4E0` |
 | `syntax-type` | `#8A6508` | `#E0B04A` |
-| `syntax-constant` | `#1A7A80` | `#7AD4E0` |
+| `syntax-function` | `#0B8A0B` | `#3CEF3C` |
+| `syntax-property` | `#5A5A8A` | `#C4B08A` |
+| `syntax-attribute` | `#852743` | `#F045F0` |
 | `syntax-variable` | `#CB321C` | `#E06C75` |
 | `syntax-operator` | `#3A7A82` | `#56B6C2` |
-| `syntax-punctuation` | `text-strong` | `text-strong` |
+| `syntax-punctuation` | `#171717` | `#EDEDED` |
 | `syntax-critical` | resolved from `primary` | resolved from `primary` |
 | `syntax-diff-delete` | resolved from `primary` | resolved from `primary` |
 | `syntax-diff-unknown` | resolved from `info` | resolved from `info` |
 
+A code color preset (`shared/syntax-presets/`) replaces these values and may
+add `syntax-background` and `syntax-foreground`, the editor background and
+plain code text of the editor theme it comes from. Match theme keeps the UI
+theme's values and leaves both out.
+
 ### Syntax role mapping (code blocks)
 
-Rendered Markdown maps shared `CodeTokenRole` values to syntax tokens using the
-same buckets as the web client:
+Every code surface (chat code fences, tool results, the File Viewer, settings
+previews, and the Component Gallery) maps shared `CodeTokenRole` values through
+one table, `CodeRoleTokens` on Android and `OpenCodeCodeColors` on iOS:
 
-| `CodeTokenRole` | Syntax token | Web appearance |
-|---|---|---|
-| `Comment` | `syntax-comment` | Gray |
-| `Keyword` | `syntax-keyword` | Pink / magenta |
-| `Type` | `syntax-type` | Yellow / gold class names |
-| `Function` | `syntax-primitive` | Sky blue builtins (`Map`, `Object.entries`) |
-| `Property`, `Constant` | `syntax-constant` | Cyan / teal members, keys, `this` |
-| `String` | `syntax-string` | Mint / teal string literals |
-| `Number`, `Attribute` | `syntax-property` | Peach / orange numeric literals |
-| `Variable` | `syntax-variable` | Red / rose parameters and locals |
-| `Operator` | `syntax-operator` | Teal operators |
-| `Punctuation` | `syntax-punctuation` | Strong punctuation |
-| `Plain` | `text-primary` | Off-white fallback text |
-| `Tag` | `syntax-info` | Info accent |
-| `Inserted` | `diff-add` | Diff added lines |
-| `Deleted` | `diff-delete` | Diff deleted lines |
-| `Warning` | `syntax-diff-unknown` | Diff headers / unknown |
-| `Critical` | `syntax-critical` | Invalid / error emphasis |
+| `CodeTokenRole` | Syntax token |
+|---|---|
+| `Keyword`, `Tag` | `syntax-keyword` |
+| `String` | `syntax-string` |
+| `Number` | `syntax-number` |
+| `Constant` | `syntax-constant` |
+| `Comment` | `syntax-comment` |
+| `Type` | `syntax-type` |
+| `Function` | `syntax-function` |
+| `Property` | `syntax-property` |
+| `Attribute` | `syntax-attribute` |
+| `Variable`, `Operator`, `Punctuation`, `Plain` | plain code text: `syntax-foreground`, else `text-strong` |
+| `Inserted` | `diff-add` |
+| `Deleted` | `diff-delete` |
+| `Warning` | `syntax-diff-unknown` |
+| `Critical` | `syntax-critical` |
 
-Private field declarations (`#baseUrl;`) intentionally stay plain. Member access
-(`this.#baseUrl`) uses `Property` and renders with `syntax-constant`. JavaScript
-`this` and expression keywords such as `new` are normalized to web roles before
-rendering.
+Variables, operators, and punctuation stay plain, as in most editor themes, so
+the colored roles stand out. Code blocks draw on `syntax-background` when the
+preset has one, else on the surface's own background.
 
 ### Markdown (rendered markdown colors)
 

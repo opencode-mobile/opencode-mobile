@@ -9,7 +9,7 @@ enum class HighlightBenchTier {
     /** The six languages of the first baseline (seconds on a host), kept so runs stay comparable over time. */
     Quick,
 
-    /** Javascript and the 17 Basic languages, at quick depth (about a minute with TextMate on a host). */
+    /** Javascript and the 17 Basic languages, at quick depth (seconds on a host). */
     Basic,
 
     /** The Full milestone's 38 remaining languages ([HighlightBenchCorpus.fullLanguages]), at quick depth. */
