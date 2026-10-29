@@ -48,6 +48,9 @@ struct SessionChatView: View {
     @State private var finishedHoldTask: Task<Void, Never>?
     /// Measured floating composer chrome height (composer + optional pending-prompts strip).
     @State private var composerOverlayHeight: CGFloat = 0
+    /// A shown snackbar floats above the composer; the timeline lifts its
+    /// end-pinned last row over it so the row keeps the same end gap.
+    @State private var snackbarOverlayHeight: CGFloat = 0
     @State private var bottomSafeAreaInset: CGFloat = 0
     /// Keyboard overlap reported by `keyboardOverlapPadding`. Zero when hidden.
     @State private var keyboardOverlap: CGFloat = 0
@@ -317,9 +320,10 @@ struct SessionChatView: View {
                     hideFloatStack: showSessionTodosSheet,
                     hideLiveRetryFailures: viewModel.uiState.retryCard != nil,
                     hideRetryCountdown: viewModel.uiState.isRetrying,
-                    // Composer + 16 end-pin gap; Scroll to end uses this as-is
-                    // (no extra scrollToEndPillBottomPadding).
+                    // Composer (+ shown snackbar) + 16 end-pin gap; Scroll to end
+                    // uses this as-is (no extra scrollToEndPillBottomPadding).
                     bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight)
+                        + snackbarOverlayHeight
                         + composerHomeIndicatorLift
                         + keyboardOverlap,
                     onRefresh: { await viewModel.refreshMessages() },
@@ -436,6 +440,10 @@ struct SessionChatView: View {
                     case nil:
                         break
                     }
+                },
+                onHeightChange: { height in
+                    guard abs(snackbarOverlayHeight - height) > 0.5 else { return }
+                    snackbarOverlayHeight = height
                 }
             )
             // Sit just above the measured composer, like Android; 168 only
