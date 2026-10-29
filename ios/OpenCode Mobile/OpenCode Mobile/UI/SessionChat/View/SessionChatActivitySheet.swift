@@ -121,8 +121,10 @@ private struct SessionChatActivitySheetModifier: ViewModifier {
                 }
             }
         )
-        .onChange(of: detailStepID) { previous, next in
-            if next == nil, let previous { returnStepID = previous }
+        .onChange(of: detailStepID) { _, next in
+            // Kept from when the detail opens, so the render that closes it
+            // already scrolls back to the step instead of following the bottom.
+            if let next { returnStepID = next }
         }
         .onChange(of: cardID) { _, _ in
             // A sheet opened again starts fresh, not on the step it last showed.
