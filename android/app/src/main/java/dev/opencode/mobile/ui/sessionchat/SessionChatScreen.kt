@@ -9,6 +9,10 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,6 +67,9 @@ import dev.opencode.mobile.domain.connection.ExternalLinkPolicy
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.feedback.FeedbackScreen
+import dev.opencode.mobile.domain.message.AttachmentDropContext
+import dev.opencode.mobile.domain.message.AttachmentDropRouting
+import dev.opencode.mobile.domain.message.AttachmentDropSummary
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
@@ -74,18 +82,19 @@ import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.ComposerDictationCardModel
 import dev.opencode.mobile.ui.components.LocalOpenCodeAttachmentImageLoader
-import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
 import dev.opencode.mobile.ui.components.OpenCodeActionPill
 import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeActionTile
 import dev.opencode.mobile.ui.components.OpenCodeActionTileBadge
 import dev.opencode.mobile.ui.components.OpenCodeActionTileGrid
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
 import dev.opencode.mobile.ui.components.OpenCodeBottomFade
 import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
+import dev.opencode.mobile.ui.components.OpenCodeComposerPastedContent
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionItem
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionOverlay
 import dev.opencode.mobile.ui.components.OpenCodeDialog
@@ -93,6 +102,8 @@ import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
 import dev.opencode.mobile.ui.components.OpenCodeDictationCardVariant
 import dev.opencode.mobile.ui.components.OpenCodeDictationUnavailableReason
+import dev.opencode.mobile.ui.components.OpenCodeDropOverlay
+import dev.opencode.mobile.ui.components.OpenCodeDropOverlayVariant
 import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeVariant
 import dev.opencode.mobile.ui.components.OpenCodeLayout
@@ -332,6 +343,68 @@ private fun SessionChatScreenBody(
             viewModel.addAttachments(result.attachments)
             result.errors.firstOrNull()?.let(viewModel::reportAttachmentError)
         }
+    }
+
+    fun attachPasted(content: OpenCodeComposerPastedContent) {
+        val uploadAvailable = viewModel.attachmentUploadAvailable()
+        val names =
+            viewModel.uiState.value.composer.attachments
+                .map { it.filename }
+                .toMutableList()
+        coroutineScope.launch {
+            val (folders, result) =
+                try {
+                    withContext(Dispatchers.IO) {
+                        val (folders, uris) = content.uris.partition { context.contentResolver.isFolder(it) }
+                        folders to
+                            attachmentIngestion.ingest(uris, uploadAvailable) { mime ->
+                                // An unnamed pasted image is `Pasted image N.png`; other content keeps its URI name.
+                                if (mime?.startsWith("image/") != true) return@ingest null
+                                AttachmentDropRouting.pastedImageName(names).also { names += it }
+                            }
+                    }
+                } finally {
+                    content.release()
+                }
+            if (viewModel.addPastedOrDroppedAttachments(result, skippedFolders = folders.size)) {
+                logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_PASTE)
+            }
+        }
+    }
+
+    fun attachDropped(files: SessionChatDroppedFiles) {
+        val uploadAvailable = viewModel.attachmentUploadAvailable()
+        coroutineScope.launch {
+            val (folders, result) =
+                try {
+                    withContext(Dispatchers.IO) {
+                        val (folders, uris) = files.uris.partition { context.contentResolver.isFolder(it) }
+                        folders to attachmentIngestion.ingest(uris, uploadAvailable)
+                    }
+                } finally {
+                    files.release()
+                }
+            if (viewModel.addPastedOrDroppedAttachments(result, skippedFolders = folders.size)) {
+                logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_DROP)
+            }
+        }
+    }
+
+    var attachDropEnabled by remember { mutableStateOf(false) }
+    var attachDropSummary by remember { mutableStateOf<AttachmentDropSummary?>(null) }
+    LaunchedEffect(attachDropEnabled) {
+        if (!attachDropEnabled) attachDropSummary = null
+    }
+
+    fun attachmentDropContext(): AttachmentDropContext {
+        val composer = viewModel.uiState.value.composer
+        val option = composer.selectedModel?.option
+        return AttachmentDropContext(
+            imagesSupported = option?.supportsImageInput != false,
+            pdfSupported = option?.supportsPdfInput != false,
+            uploadAvailable = viewModel.attachmentUploadAvailable(),
+            draft = composer.attachments,
+        )
     }
 
     fun attachDiagnosticLog() {
@@ -643,7 +716,17 @@ private fun SessionChatScreenBody(
             ),
     )
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .sessionChatAttachmentDropTarget(
+                    enabled = attachDropEnabled,
+                    dropContext = ::attachmentDropContext,
+                    onSummaryChange = { attachDropSummary = it },
+                    onDrop = ::attachDropped,
+                ),
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBarOverflowHost(
                 expanded = menuExpanded,
@@ -1212,6 +1295,11 @@ private fun SessionChatScreenBody(
                                         sideQuestionMode = sideQuestionMode,
                                     )
                             }
+                        // Drops attach only where the Attach button would: a prompt composer that takes attachments.
+                        val promptAttachEnabled =
+                            (composerState as? OpenCodeSessionComposerState.Prompt)?.attachEnabled == true &&
+                                uiState.dictation == null
+                        SideEffect { attachDropEnabled = promptAttachEnabled }
                         val composerFocus = rememberOpenCodeSessionComposerFocus()
                         KeyboardShortcutHandler(
                             KeyboardShortcutAction.FocusComposer,
@@ -1268,6 +1356,7 @@ private fun SessionChatScreenBody(
                                         }
                                     }
                                     is OpenCodeSessionComposerAction.RemoveAttachment -> viewModel.removeAttachment(action.id)
+                                    is OpenCodeSessionComposerAction.PasteContent -> attachPasted(action.content)
                                     OpenCodeSessionComposerAction.CancelRevert -> viewModel.cancelRevert()
                                     OpenCodeSessionComposerAction.ExitShellMode -> viewModel.exitShellMode()
                                     OpenCodeSessionComposerAction.ExitSideQuestionMode -> viewModel.exitSideQuestionMode()
@@ -1619,6 +1708,24 @@ private fun SessionChatScreenBody(
             secondaryOption = OpenCodeDialogOption(title = "Stay here", onClick = viewModel::chooseForkStay),
             onDismissRequest = viewModel::chooseForkStay,
         )
+
+        AnimatedVisibility(
+            visible = attachDropSummary != null,
+            enter = fadeIn(tween(durationMillis = 120)),
+            exit = fadeOut(tween(durationMillis = 120)),
+        ) {
+            // Keeps the last summary while fading out.
+            val summary = remember { mutableStateOf<AttachmentDropSummary?>(null) }
+            attachDropSummary?.let { summary.value = it }
+            summary.value?.let { shown ->
+                OpenCodeDropOverlay(
+                    variant = if (shown.rejected) OpenCodeDropOverlayVariant.Reject else OpenCodeDropOverlayVariant.Accept,
+                    title = shown.title,
+                    subtitle = shown.subtitle,
+                    previews = shown.previews.map { it.toAttachmentVariant() },
+                )
+            }
+        }
     }
 }
 

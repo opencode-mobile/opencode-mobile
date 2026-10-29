@@ -23,6 +23,8 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.message.Attachment
 import dev.opencode.mobile.domain.message.AttachmentDestination
+import dev.opencode.mobile.domain.message.AttachmentDropRouting
+import dev.opencode.mobile.domain.message.AttachmentIngestionResult
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
@@ -913,6 +915,28 @@ class SessionChatComposer(
             staged.isNotEmpty() -> _state.update { it.copy(errorMessage = null) }
         }
         if (rejected.isNotEmpty()) discardStoredAttachments(rejected)
+    }
+
+    /**
+     * Pasted or dropped content (#870), already ingested: attached like files from the picker. An
+     * item that failed to ingest, or a skipped folder, shows its error only when adding the rest
+     * left nothing else to say. Returns whether a chip was added.
+     */
+    fun addPastedOrDroppedAttachments(
+        result: AttachmentIngestionResult,
+        skippedFolders: Int,
+    ): Boolean {
+        val before = _state.value.composer.attachments.size
+        val errorBefore = _state.value.errorMessage
+        addAttachments(result.attachments)
+        val errorAfter = _state.value.errorMessage
+        val quiet = errorAfter == null || errorAfter == errorBefore
+        val error = result.errors.firstOrNull()
+        when {
+            quiet && error != null -> reportAttachmentError(error)
+            quiet && skippedFolders > 0 -> reportAttachmentError(AttachmentDropRouting.FOLDER_ERROR)
+        }
+        return _state.value.composer.attachments.size > before
     }
 
     private fun uploadsAvailable(): Boolean = boundWorktree != null && attachmentUploads.isAvailable()

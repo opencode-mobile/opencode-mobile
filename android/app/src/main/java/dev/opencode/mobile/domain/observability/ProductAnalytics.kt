@@ -232,6 +232,8 @@ object ProductAnalytics {
         const val ATTACH_PICK_PHOTOS = "attach_pick_photos"
         const val ATTACH_PICK_FILES = "attach_pick_files"
         const val ATTACH_PICK_LOG_FILE = "attach_pick_log_file"
+        const val ATTACH_PASTE = "attach_paste"
+        const val ATTACH_DROP = "attach_drop"
         const val MODEL_PICKER_DISMISS = "model_picker_dismiss"
         const val MODEL_PICKER_SELECT_PROVIDER = "model_picker_select_provider"
         const val MODEL_PICKER_BACK_TO_PROVIDERS = "model_picker_back_to_providers"

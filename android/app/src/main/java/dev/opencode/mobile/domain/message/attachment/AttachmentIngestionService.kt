@@ -25,15 +25,18 @@ class AttachmentIngestionService private constructor(
      * [uploadAvailable]: the server takes streamed uploads, so a file is copied to the store with no
      * size cap and any type is accepted (unknown types are classified by [AttachmentMime]). Without
      * it, ingestion is the data-URL path unchanged: 20 MB cap, images, PDFs and text only.
+     * [nameWhenMissing] names content whose provider gives no display name, from its type (a pasted
+     * image becomes `Pasted image N.png`, #870); null keeps the URI's last path segment.
      */
     fun ingest(
         uris: List<Uri>,
         uploadAvailable: Boolean = false,
+        nameWhenMissing: (mime: String?) -> String? = { null },
     ): AttachmentIngestionResult {
         val attachments = mutableListOf<Attachment>()
         val errors = mutableListOf<String>()
         uris.forEach { uri ->
-            runCatching { if (uploadAvailable) ingestStreamed(uri) else ingest(uri) }
+            runCatching { if (uploadAvailable) ingestStreamed(uri, nameWhenMissing) else ingest(uri, nameWhenMissing) }
                 .onSuccess { attachments += it }
                 .onFailure { throwable ->
                     val message = throwable.message ?: READ_ERROR
@@ -48,9 +51,12 @@ class AttachmentIngestionService private constructor(
         return AttachmentIngestionResult(attachments, errors)
     }
 
-    private fun ingestStreamed(uri: Uri): Attachment {
+    private fun ingestStreamed(
+        uri: Uri,
+        nameWhenMissing: (String?) -> String?,
+    ): Attachment {
         val contentResolver = requireNotNull(contentResolver)
-        val metadata = metadata(uri)
+        val metadata = metadata(uri, nameWhenMissing)
         val declared = AttachmentMime.resolveDeclared(contentResolver.getType(uri), metadata.filename)
         val stored = newStoreFile(metadata.filename)
         val head = ByteArrayOutputStream()
@@ -84,9 +90,12 @@ class AttachmentIngestionService private constructor(
         )
     }
 
-    private fun ingest(uri: Uri): Attachment {
+    private fun ingest(
+        uri: Uri,
+        nameWhenMissing: (String?) -> String?,
+    ): Attachment {
         val contentResolver = requireNotNull(contentResolver)
-        val metadata = metadata(uri)
+        val metadata = metadata(uri, nameWhenMissing)
         if (metadata.size != null && metadata.size > AttachmentLimits.MAX_DECODED_BYTES) {
             throw IllegalArgumentException(AttachmentLimits.TOO_LARGE_ERROR)
         }
@@ -151,7 +160,10 @@ class AttachmentIngestionService private constructor(
         return File(directory, "${UUID.randomUUID()}-$safeName")
     }
 
-    private fun metadata(uri: Uri): AttachmentMetadata {
+    private fun metadata(
+        uri: Uri,
+        nameWhenMissing: (String?) -> String?,
+    ): AttachmentMetadata {
         val contentResolver = requireNotNull(contentResolver)
         var filename: String? = null
         var size: Long? = null
@@ -171,7 +183,11 @@ class AttachmentIngestionService private constructor(
                 }
             }
         return AttachmentMetadata(
-            filename = filename?.takeIf { it.isNotBlank() } ?: uri.lastPathSegment ?: "Attachment",
+            filename =
+                filename?.takeIf { it.isNotBlank() }
+                    ?: nameWhenMissing(contentResolver.getType(uri))
+                    ?: uri.lastPathSegment
+                    ?: "Attachment",
             size = size,
         )
     }
@@ -254,7 +270,7 @@ class AttachmentIngestionService private constructor(
         const val READ_ERROR = "The attachment could not be read."
         internal const val MAX_PREVIEW_BYTES = 128 * 1024
         private val IMAGE_MIMES = setOf("image/png", "image/jpeg", "image/gif", "image/webp")
-        private val TEXT_EXTENSIONS =
+        internal val TEXT_EXTENSIONS =
             setOf(
                 "txt",
                 "md",

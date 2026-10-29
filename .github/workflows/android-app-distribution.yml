@@ -1,22 +1,13 @@
 name: Android App Distribution
 
 on:
-  push:
-    branches:
-      - main
-    # Skip when the change cannot affect the Android app.
-    paths:
-      - "android/**"
-      - "shared/**"
-      - "VERSION"
-      - "scripts/read-app-version.sh"
-      - "scripts/ensure-android-platform.sh"
-      - ".github/scripts/**"
-      - ".github/workflows/android-app-distribution.yml"
+  schedule:
+    # Nightly at 02:00 UTC; skipped when main has no commits in the last 26 hours.
+    - cron: "0 2 * * *"
   workflow_dispatch:
     inputs:
       source_ref:
-        description: "Optional protected branch to check out (main). Leave empty to distribute the selected workflow branch."
+        description: "Optional main or full pull request head SHA to check out. Leave empty to distribute the selected workflow branch."
         required: false
         type: string
       variant:
@@ -30,16 +21,44 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
-# A newer merge to main supersedes a build still in progress; manual dispatches
-# run in their own group and are never cancelled.
+# Manual dispatches and nightly runs queue in separate groups; a running build is never cancelled, but GitHub keeps only the newest queued run per group.
 concurrency:
   group: android-app-distribution-${{ github.event_name }}
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  cancel-in-progress: false
 
 jobs:
+  changes:
+    if: github.repository == 'opencode-mobile/opencode-mobile'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      should_run: ${{ steps.check.outputs.should_run }}
+    steps:
+      - name: Check for new commits on main
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" != "schedule" ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          since="$(date -u -d '26 hours ago' +%Y-%m-%dT%H:%M:%SZ)"
+          count="$(gh api "repos/$GITHUB_REPOSITORY/commits?sha=main&since=$since&per_page=1" --jq 'length')"
+          if [[ "$count" -gt 0 ]]; then
+            echo "should_run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No commits on main since $since; skipping nightly distribution."
+            echo "should_run=false" >> "$GITHUB_OUTPUT"
+          fi
+
   distribute:
-    if: github.repository == 'opencode-mobile/opencode-mobile' && (github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main')
+    needs: changes
+    if: needs.changes.outputs.should_run == 'true'
     runs-on: [self-hosted, Linux, X64, android]
     environment: android-release
     defaults:
@@ -57,20 +76,30 @@ jobs:
       - name: Validate source ref
         working-directory: .
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [[ -z "${SOURCE_REF:-}" ]]; then
             exit 0
           fi
-          # Release secrets are attached to this job, so only protected branches may be
-          # checked out here (#755). Anything else is built and shared through a pull request.
+          # Release secrets are attached to this job, so only main or the head commit of an
+          # open same-repository pull request (sent by the /distribute comment) may be built (#755).
           case "$SOURCE_REF" in
-            main|refs/heads/main) ;;
-            *)
-              echo "source_ref must be a protected branch (main). Got: $SOURCE_REF" >&2
-              exit 1
-              ;;
+            main|refs/heads/main) exit 0 ;;
           esac
+          if [[ ! "$SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "source_ref must be main or a full pull request head SHA. Got: $SOURCE_REF" >&2
+            exit 1
+          fi
+          open_same_repo_prs="$(
+            gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_REF/pulls" \
+              --jq "[.[] | select(.state == \"open\" and .head.sha == \"$SOURCE_REF\" and .head.repo.full_name == \"$GITHUB_REPOSITORY\")] | length"
+          )"
+          if [[ "$open_same_repo_prs" -lt 1 ]]; then
+            echo "$SOURCE_REF is not the head of an open pull request from this repository." >&2
+            exit 1
+          fi
 
       - name: Checkout source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -195,7 +224,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             release_notes="Dispatch $short_sha: $subject"
           else
-            release_notes="Merge $short_sha: $subject"
+            release_notes="Nightly $short_sha: $subject"
           fi
           if [[ -n "$distributed_ref" && "$distributed_ref" != "main" ]]; then
             release_notes="Not from main: $distributed_ref"$'\n'"$release_notes"

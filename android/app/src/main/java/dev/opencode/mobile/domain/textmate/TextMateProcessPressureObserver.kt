@@ -25,6 +25,7 @@ class TextMateProcessPressureObserver
         private val engine: TextMateHighlightingEngine,
     ) : ComponentCallbacks2 {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        private val pressure = TextMatePressureForwarder(engine, scope)
         private var registered = false
 
         fun start() {
@@ -36,30 +37,42 @@ class TextMateProcessPressureObserver
         override fun onConfigurationChanged(newConfig: Configuration) = Unit
 
         override fun onLowMemory() {
-            scope.launch {
-                engine.trim(MemoryPressure.Critical)
-            }
+            pressure.onLowMemory()
         }
 
         override fun onTrimMemory(level: Int) {
-            val pressure = memoryPressureFor(level) ?: return
-            scope.launch {
-                engine.trim(pressure)
-            }
+            pressure.onTrimMemory(level)
         }
+    }
 
-        internal companion object {
-            /** The engine trim for a [ComponentCallbacks2] trim [level]; null for levels it ignores. */
-            fun memoryPressureFor(level: Int): MemoryPressure? =
-                when {
-                    level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE ||
-                        level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ->
-                        MemoryPressure.Critical
-                    level >= ComponentCallbacks2.TRIM_MEMORY_MODERATE ||
-                        level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
-                        level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND ->
-                        MemoryPressure.Moderate
-                    else -> null
-                }
-        }
+/** Turns process memory signals into engine trims. */
+internal class TextMatePressureForwarder(
+    private val engine: TextMateHighlightingEngine,
+    private val scope: CoroutineScope,
+) {
+    fun onLowMemory() {
+        scope.launch { engine.trim(MemoryPressure.Critical) }
+    }
+
+    /** Returns whether [level] was forwarded as a trim. */
+    fun onTrimMemory(level: Int): Boolean {
+        val pressure = memoryPressureForTrimLevel(level) ?: return false
+        scope.launch { engine.trim(pressure) }
+        return true
+    }
+}
+
+/**
+ * Trim levels are two ladders, not one scale: running levels (5, 10, 15) arrive while
+ * the app is visible, and UI_HIDDEN (20) and above arrive once it is not. Leaving the
+ * app is not critical pressure.
+ */
+@Suppress("DEPRECATION")
+internal fun memoryPressureForTrimLevel(level: Int): MemoryPressure? =
+    when {
+        level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE -> MemoryPressure.Critical
+        level >= ComponentCallbacks2.TRIM_MEMORY_UI_HIDDEN -> MemoryPressure.Moderate
+        level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL -> MemoryPressure.Critical
+        level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW -> MemoryPressure.Moderate
+        else -> null
     }

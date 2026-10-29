@@ -30,6 +30,7 @@ import dev.opencode.mobile.domain.live.QuestionLiveStore
 import dev.opencode.mobile.domain.live.SessionReadyStore
 import dev.opencode.mobile.domain.live.SessionViewReporter
 import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentIngestionResult
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
 import dev.opencode.mobile.domain.message.AttachmentUpload
@@ -7465,6 +7466,101 @@ class SessionChatViewModelTest {
             )
             assertEquals(
                 "This file has already been uploaded",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+        }
+
+    @Test
+    fun droppedFilesWithAFolder_attachTheFilesAndNameTheFolder() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val added =
+                viewModel.addPastedOrDroppedAttachments(
+                    AttachmentIngestionResult(listOf(testAttachment(id = "a")), errors = emptyList()),
+                    skippedFolders = 1,
+                )
+            runCurrent()
+
+            assertTrue(added)
+            assertEquals(
+                listOf("a"),
+                viewModel.uiState.value.composer.attachments
+                    .map { it.id },
+            )
+            assertEquals(
+                "Folders can't be attached.",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+        }
+
+    @Test
+    fun droppedFolderOnly_addsNothingAndSaysWhy() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val added =
+                viewModel.addPastedOrDroppedAttachments(AttachmentIngestionResult(emptyList(), emptyList()), skippedFolders = 1)
+            runCurrent()
+
+            assertFalse(added)
+            assertTrue(
+                viewModel.uiState.value.composer.attachments
+                    .isEmpty(),
+            )
+            assertEquals(
+                "Folders can't be attached.",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+        }
+
+    @Test
+    fun droppedDuplicate_keepsTheDuplicateMessageOverTheFolder() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            viewModel.addAttachments(listOf(testAttachment(id = "a")))
+
+            val added =
+                viewModel.addPastedOrDroppedAttachments(
+                    AttachmentIngestionResult(listOf(testAttachment(id = "b")), errors = emptyList()),
+                    skippedFolders = 1,
+                )
+            runCurrent()
+
+            assertFalse(added)
+            assertEquals(
+                "This file has already been uploaded",
+                viewModel.uiState.value.snackbar
+                    ?.message,
+            )
+        }
+
+    @Test
+    fun pastedUnreadableItem_showsTheIngestionError() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val added =
+                viewModel.addPastedOrDroppedAttachments(
+                    AttachmentIngestionResult(emptyList(), listOf("The attachment could not be read.")),
+                    skippedFolders = 0,
+                )
+            runCurrent()
+
+            assertFalse(added)
+            assertEquals(
+                "The attachment could not be read.",
                 viewModel.uiState.value.snackbar
                     ?.message,
             )

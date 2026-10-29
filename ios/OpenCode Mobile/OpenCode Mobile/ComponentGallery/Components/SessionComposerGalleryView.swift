@@ -431,6 +431,7 @@ private extension OpenCodeSessionComposerAction {
         case .attach: "Attach"
         case .openCommands: "Open commands"
         case .removeAttachment: "Remove attachment"
+        case .pasteAttachments: "Paste attachment"
         case .cancelRevert: "Cancel revert"
         case .exitShellMode: "Exit shell mode"
         case .exitSideQuestionMode: "Exit side question mode"

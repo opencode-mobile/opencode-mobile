@@ -577,6 +577,10 @@ final class SessionChatViewModel {
         await composer.addAttachmentFiles(urls)
     }
 
+    func addPastedOrDroppedFiles(_ urls: [URL], skippedFolders: Int, unreadable: Int) async -> Bool {
+        await composer.addPastedOrDroppedFiles(urls, skippedFolders: skippedFolders, unreadable: unreadable)
+    }
+
     func retryModelCatalog() async {
         logChatAction(ProductAnalytics.Action.composerRetryModelCatalog)
         await composer.loadCatalog(force: true)

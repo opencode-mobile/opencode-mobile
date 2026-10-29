@@ -33,6 +33,7 @@ import dev.opencode.mobile.domain.live.SessionViewReporter
 import dev.opencode.mobile.domain.mcp.McpRepository
 import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentIngestionResult
 import dev.opencode.mobile.domain.message.AttachmentUploadService
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
@@ -1005,6 +1006,11 @@ class SessionChatViewModel
         fun addAttachments(attachments: List<Attachment>) {
             composer.addAttachments(attachments)
         }
+
+        fun addPastedOrDroppedAttachments(
+            result: AttachmentIngestionResult,
+            skippedFolders: Int,
+        ): Boolean = composer.addPastedOrDroppedAttachments(result, skippedFolders)
 
         fun removeAttachment(id: String) {
             logAction(ProductAnalytics.Action.COMPOSER_REMOVE_ATTACHMENT)

@@ -1,0 +1,74 @@
+name: Distribute From PR Comment
+
+# Comment `/distribute`, `/distribute android`, or `/distribute ios` on a pull
+# request to send that PR's head commit to the Firebase tester groups. Only the
+# repository maintainer's comments are honoured.
+
+on:
+  issue_comment:
+    types:
+      - created
+
+permissions: {}
+
+jobs:
+  dispatch:
+    if: >-
+      github.repository == 'opencode-mobile/opencode-mobile' &&
+      github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/distribute') &&
+      github.event.comment.user.login == 'ivanfenenko'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      COMMENT_BODY: ${{ github.event.comment.body }}
+      COMMENT_ID: ${{ github.event.comment.id }}
+      PR_NUMBER: ${{ github.event.issue.number }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - name: Dispatch distribution workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          first_line="$(head -n 1 <<<"$COMMENT_BODY" | tr -d '\r')"
+          read -r command target _ <<<"$first_line"
+          if [[ "$command" != "/distribute" ]]; then
+            exit 0
+          fi
+          case "${target:-all}" in
+            all) platforms=(android ios) ;;
+            android) platforms=(android) ;;
+            ios) platforms=(ios) ;;
+            *)
+              gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+                --body "Unknown target \`$target\`. Use \`/distribute\`, \`/distribute android\`, or \`/distribute ios\`."
+              exit 0
+              ;;
+          esac
+
+          pr_json="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          head_repo="$(jq -r '.head.repo.full_name // ""' <<<"$pr_json")"
+          head_sha="$(jq -r '.head.sha' <<<"$pr_json")"
+          state="$(jq -r '.state' <<<"$pr_json")"
+          if [[ "$head_repo" != "$GITHUB_REPOSITORY" ]]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+              --body "Distribution only runs for branches in this repository, not forks."
+            exit 0
+          fi
+          if [[ "$state" != "open" ]]; then
+            gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --body "This pull request is not open."
+            exit 0
+          fi
+
+          gh api "repos/$GITHUB_REPOSITORY/issues/comments/$COMMENT_ID/reactions" -f content=rocket >/dev/null || true
+          for platform in "${platforms[@]}"; do
+            gh workflow run "$platform-app-distribution.yml" \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref "$DEFAULT_BRANCH" \
+              -f source_ref="$head_sha"
+          done
+          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+            --body "Distributing \`${head_sha:0:12}\` (${platforms[*]}). Progress: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions"
