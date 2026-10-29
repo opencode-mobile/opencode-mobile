@@ -29,13 +29,16 @@ Defaults: subject = assistant message; platforms = iOS and Android; frames =
      "$REPO/.snapshot-evidence/out" "UI snapshots"
    ```
 
-5. **Publish** the PNGs on GitHub, never the artifact server. Copy them to a
-   scratch directory as `ios-NN-<frame>-<appearance>.png` /
+5. **Publish** the PNGs on GitHub, never the artifact server and never a
+   branch. Copy them to a scratch directory as `ios-NN-<frame>-<appearance>.png` /
    `android-NN-<frame>-<appearance>.png` (same `NN` for the same frame on
-   both platforms), then run
-   `scripts/publish-evidence.sh <issue> <dir> > <dir>.md` and post the table
-   with `gh pr comment <pr> --body-file <dir>.md` (or `gh issue comment` when
-   there is no pull request yet). Paste the comment URL.
+   both platforms), resize to at most 1000 px with `sips -Z 1000`, and write
+   a Markdown table in `<dir>/comment.md` that references them as
+   `![alt](./ios-NN-...png)`. Post it with a recent gh (2.102+, e.g.
+   `$(brew --prefix)/bin/gh`):
+   `gh pr comment <pr> --body-file <dir>/comment.md` (or `gh issue comment`
+   when there is no pull request yet). gh uploads the images and rewrites
+   the paths. Paste the comment URL.
 
 Throwaway tests, PNGs, HTML, and Paparazzi goldens stay out of commits; commit
 durable mock or host changes only when asked. Remove the generated iOS test
