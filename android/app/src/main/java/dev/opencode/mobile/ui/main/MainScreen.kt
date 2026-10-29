@@ -1,5 +1,10 @@
 package dev.opencode.mobile.ui.main
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -413,7 +418,18 @@ internal fun MainScreen(
                     },
             )
 
-            when (uiState) {
+            val activeServerId = serversChrome.active?.id.orEmpty()
+            AnimatedContent(
+                targetState = activeServerId,
+                transitionSpec = {
+                    fadeIn(animationSpec = tween(180)) togetherWith ExitTransition.None
+                },
+                label = "serverSwitch",
+                modifier = Modifier.weight(1f).fillMaxSize(),
+            ) { contentServerId ->
+                // Only the new server's Home fades in. The outgoing one would draw the same new state.
+                if (contentServerId != activeServerId) return@AnimatedContent
+                when (uiState) {
                 is MainScreenUiState.Disconnected -> {
                     Box(
                         modifier = Modifier.fillMaxSize().navigationBarsPadding(),
@@ -492,8 +508,9 @@ internal fun MainScreen(
                         onSelectedFilterIdChange = { selectedFilterId = it },
                         selectedSessionId = selectedSessionId,
                         sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.fillMaxSize(),
                     )
+                }
                 }
             }
         }

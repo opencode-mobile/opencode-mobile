@@ -121,6 +121,46 @@ import Testing
         #expect(tokens.read() == nil)
     }
 
+    @Test @MainActor func saveProfile_reportsMovedWhenAnotherSavedAddressWins() async throws {
+        let lan = "http://192.168.1.2:4096/"
+        let tailscale = "http://100.64.0.3:4096/"
+        let store = CatalogConnectionProfileStore()
+        let manager = ActiveConnectionManager(connectionProbing: AnsweringProbe(), profileStore: store)
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: manager,
+            connectionProfileStore: store,
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore(),
+            hasActiveConnection: { manager.connection != nil }
+        )
+
+        try await coordinator.saveProfile(
+            ConnectionProfile(baseURL: lan, serverURLs: [lan, tailscale], username: "opencode", password: "", name: "Mac")
+        )
+
+        #expect(await eventually { coordinator.addressCheck.state == .moved })
+        #expect(coordinator.addressCheck.generation == coordinator.profileGeneration)
+        #expect(manager.connection?.baseURL.absoluteString == tailscale)
+    }
+
+    @Test @MainActor func saveProfile_reportsKeptWhenThereIsNoOtherAddress() async throws {
+        let lan = "http://192.168.1.2:4096/"
+        let store = CatalogConnectionProfileStore()
+        let manager = ActiveConnectionManager(connectionProbing: AnsweringProbe(), profileStore: store)
+        let coordinator = ConnectionSessionCoordinator(
+            activeConnectionManager: manager,
+            connectionProfileStore: store,
+            secureCredentialStore: InMemorySecureCredentialStore(),
+            sessionModelSelectionStore: InMemorySessionModelSelectionStore(),
+            hasActiveConnection: { manager.connection != nil }
+        )
+
+        try await coordinator.saveProfile(ConnectionProfile(baseURL: lan, username: "opencode", password: "", name: "Mac"))
+
+        #expect(coordinator.addressCheck == AddressCheck(generation: coordinator.profileGeneration, state: .kept))
+        #expect(manager.connection?.baseURL.absoluteString == lan)
+    }
+
     @Test @MainActor func applyProfileChange_ordersStopCachesRebindSignalStart() async throws {
         let log = TransactionLog()
         let store = CatalogConnectionProfileStore()
@@ -396,6 +436,19 @@ private final class CatalogConnectionProfileStore: ConnectionProfileStore, @unch
     func clearAll() async {
         catalog = ConnectionProfileCatalog()
     }
+}
+
+private struct AnsweringProbe: ConnectionProbing {
+    func probe(connection _: ServerConnection) async throws -> ServerProtocol { .v2 }
+}
+
+@MainActor
+private func eventually(_ condition: () -> Bool) async -> Bool {
+    for _ in 0 ..< 300 {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return condition()
 }
 
 private final class InMemoryConnectionProfileStore: ConnectionProfileStore, @unchecked Sendable {

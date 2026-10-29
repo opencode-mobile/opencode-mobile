@@ -286,8 +286,8 @@ struct ProjectListHomeView: View {
                                     letterAccent(for: profile.id.isEmpty ? profile.displayName : profile.id)
                                 ),
                                 action: {
-                                    Task {
-                                        await viewModel.switchProfile(id: profile.id)
+                                    withAnimation(.easeInOut(duration: 0.18)) {
+                                        viewModel.switchProfile(id: profile.id)
                                         homeRoutes = []
                                         selectedSession = nil
                                     }
@@ -657,6 +657,8 @@ struct ProjectListHomeView: View {
             )
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .id(viewModel.serversChrome.active?.id ?? "")
+                .transition(.opacity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

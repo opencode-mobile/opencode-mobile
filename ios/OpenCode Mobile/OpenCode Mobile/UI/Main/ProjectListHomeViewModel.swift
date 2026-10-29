@@ -457,6 +457,13 @@ final class ProjectListHomeViewModel {
     private var connectionStateObservationTask: Task<Void, Never>?
     private(set) var liveUpdatesConnectionStatus: SessionConnectionStatus = .offline
     private(set) var serversChrome = HomeServersChrome()
+    /// Server the user just picked. A late save from the previous server must not paint over it.
+    private var pendingSwitchID: String?
+    private var switchPaintGeneration = 0
+    /// Runs server switches one after another, so the last pick is where the app ends up.
+    @ObservationIgnored private var switchTask: Task<Void, Never>?
+    /// An empty Home failed its probe while other saved addresses were still being tried.
+    private var probeWaitsOnAddressCheck = false
     private var serverBaseURL: String {
         activeConnectionManager.connection?.baseURL.absoluteString ?? ""
     }
@@ -585,9 +592,42 @@ final class ProjectListHomeViewModel {
         sessionReadyStore.bindProfile(profileID: activeConnectionManager.currentProfile()?.id)
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
-                self?.clearProjectLoads()
-                self?.stopLiveObservations()
-                await self?.refresh()
+                guard let self else { return }
+                let completesSwitch = self.pendingSwitchID != nil
+                if let pending = self.pendingSwitchID {
+                    let active = await self.connectionProfileStore.activeProfile()
+                    guard active?.id == pending else { return }
+                    self.pendingSwitchID = nil
+                    self.switchPaintGeneration += 1
+                }
+                // A switch already painted its projects; their skeletons stay until sessions arrive.
+                if !completesSwitch {
+                    self.clearProjectLoads()
+                }
+                self.stopLiveObservations()
+                await self.refresh()
+            }
+        }
+        connectionSessionCoordinator.onAddressCheck { [weak self] check in
+            Task { @MainActor in
+                guard let self, self.pendingSwitchID == nil else { return }
+                switch check.state {
+                case .running:
+                    break
+                case .moved:
+                    self.probeWaitsOnAddressCheck = false
+                    if case .loaded = self.state {
+                        await self.sessionLiveStore.invalidate(directory: nil)
+                        await self.sessionStatusLiveStore.invalidate(directory: nil)
+                    } else {
+                        // Empty, unreachable, or still loading against the old address.
+                        await self.refresh()
+                    }
+                case .kept:
+                    guard self.probeWaitsOnAddressCheck else { return }
+                    self.probeWaitsOnAddressCheck = false
+                    await self.refresh()
+                }
             }
         }
         connectionSessionCoordinator.onProfileCleared { [weak self] in
@@ -678,9 +718,75 @@ final class ProjectListHomeViewModel {
         serversChrome.sheetVisible = false
     }
 
-    func switchProfile(id: String) async {
-        await connectionSessionCoordinator.switchProfile(id: id)
-        dismissServersSheet()
+    func switchProfile(id: String) {
+        guard let target = serversChrome.others.first(where: { $0.id == id }) else { return }
+        pendingSwitchID = id
+        switchPaintGeneration += 1
+        let generation = switchPaintGeneration
+        let previous = serversChrome.active
+        serversChrome = HomeServersChrome(
+            title: target.displayName,
+            isSwitcher: true,
+            active: target,
+            others: ([previous].compactMap { $0 } + serversChrome.others).filter { $0.id != id },
+            sheetVisible: false
+        )
+        // Drop the previous server's live updates immediately. Local projects paint next;
+        // the connection switch and session lists catch up in the background.
+        stopLiveObservations()
+        DiagnosticLog.info(.connection, "switch profile ui id=\(id)")
+        Task { [weak self] in
+            await self?.paintSwitchedServer(baseURL: target.baseURL, id: id, generation: generation)
+        }
+        let previousSwitch = switchTask
+        switchTask = Task { [weak self] in
+            await previousSwitch?.value
+            // A newer pick replaced this one before it started; only the newest one runs.
+            guard let self, self.pendingSwitchID == id else { return }
+            await self.connectionSessionCoordinator.switchProfile(id: id)
+            if await self.connectionProfileStore.activeProfile()?.id != id {
+                await self.abandonSwitch(id: id)
+            }
+        }
+    }
+
+    /// The switch to `id` did not stick. Drop the pending pick, so later saves are not ignored,
+    /// and reload Home and its title from the server that is actually active.
+    private func abandonSwitch(id: String) async {
+        guard pendingSwitchID == id else { return }
+        DiagnosticLog.warning(.connection, "switch profile did not apply id=\(id)")
+        pendingSwitchID = nil
+        switchPaintGeneration += 1
+        clearProjectLoads()
+        stopLiveObservations()
+        await refresh()
+    }
+
+    /// The target server's saved projects with their cached sessions, read by profile id because
+    /// the switch has not bound that server yet. A project with no cache shows the skeleton.
+    private func paintSwitchedServer(baseURL: String, id: String, generation: Int) async {
+        let worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: baseURL)
+        var sections: [ProjectSectionItem] = []
+        for worktree in worktrees {
+            sections.append(await sectionFromCache(worktree: worktree, connectionID: id))
+        }
+        guard generation == switchPaintGeneration, pendingSwitchID == id else { return }
+        clearProjectLoads()
+        clearHomeProjectInputs()
+        probeWaitsOnAddressCheck = false
+        if sections.isEmpty {
+            state = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: nil)
+            return
+        }
+        for section in sections where !section.sessionsFromCache {
+            beginProjectLoad(section.worktree, showImmediately: true)
+        }
+        state = .loaded(
+            sections: sections,
+            showAddProjectSheet: false,
+            addProjectSheet: nil,
+            projectSessionCreateError: nil
+        )
     }
 
     func refreshServersChrome() async {
@@ -1396,9 +1502,11 @@ final class ProjectListHomeViewModel {
             stopLiveObservations()
             state = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: nil)
             if !skipProbe {
+                let probedBaseURL = serverBaseURL
                 do {
                     try await projectRepository.probeServer()
                 } catch {
+                    guard probeFailureIsFinal(probedBaseURL: probedBaseURL) else { return }
                     state = .probeFailed(error.localizedDescription)
                 }
             }
@@ -1490,9 +1598,29 @@ final class ProjectListHomeViewModel {
         return sections
     }
 
-    private func sectionFromCache(worktree: String) async -> ProjectSectionItem {
-        let seeded = await sessionCache.seedSessions(worktree: worktree)
-        let cachedActivity = await sessionCache.seedActivity(directory: worktree) ?? []
+    /// False while another saved address may still answer: the address check's result reloads
+    /// Home. Also false when the address moved during the probe, since a newer load is running.
+    private func probeFailureIsFinal(probedBaseURL: String) -> Bool {
+        guard serverBaseURL == probedBaseURL else { return false }
+        if connectionSessionCoordinator.addressCheck.state == .running {
+            probeWaitsOnAddressCheck = true
+            return false
+        }
+        return true
+    }
+
+    /// `connectionID` reads another profile's cache (a switch before its server is bound); that
+    /// paint has no cached activity, which belongs to the bound profile.
+    private func sectionFromCache(worktree: String, connectionID: String? = nil) async -> ProjectSectionItem {
+        let seeded: [Session]?
+        let cachedActivity: [SessionActivityCacheEntry]
+        if let connectionID {
+            seeded = await sessionCache.seedSessions(worktree: worktree, connectionID: connectionID)
+            cachedActivity = []
+        } else {
+            seeded = await sessionCache.seedSessions(worktree: worktree)
+            cachedActivity = await sessionCache.seedActivity(directory: worktree) ?? []
+        }
         let activityByID = Dictionary(cachedActivity.map { ($0.sessionId, $0) }, uniquingKeysWith: { _, latest in latest })
         let sessions =
             (seeded ?? [])

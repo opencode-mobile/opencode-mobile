@@ -89,10 +89,12 @@ object SessionListHomeChrome {
         if (projects.size < 2) {
             return projectTabs
         }
+        val loading = projects.mapNotNull { it.load as? SessionListScopeLoad.Loading }
         return listOf(
             SessionListFilterTab.all(
                 projectCount = projects.size,
                 sessionCount = sessionCount,
+                load = loading.takeIf { it.isNotEmpty() }?.let { SessionListScopeLoad.Loading(isSlow = it.any { load -> load.isSlow }) },
             ),
         ) + projectTabs
     }

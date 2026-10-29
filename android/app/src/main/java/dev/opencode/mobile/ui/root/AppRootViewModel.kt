@@ -52,6 +52,12 @@ class AppRootViewModel
                 loadInitialState()
             }
             viewModelScope.launch {
+                // Leave the open session as soon as the user picks a server, before probes finish.
+                connectionSessionCoordinator.profileSwitching.collect {
+                    _homeResetGeneration.update { it + 1 }
+                }
+            }
+            viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
                     enterHome()
                     _homeResetGeneration.update { it + 1 }
