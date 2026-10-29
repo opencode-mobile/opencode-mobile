@@ -12,8 +12,9 @@ import OpenCodeMarkdownCore
 nonisolated final class HighlightCoreHighlightingEngine: TextMateHighlighting, @unchecked Sendable {
     static let shared = HighlightCoreHighlightingEngine()
 
-    /// Per-request deadline. A fence that misses it attaches as Partial: highlighted prefix, plain rest.
-    static let defaultDeadlineMilliseconds = 100.0
+    /// Per-request deadline (`HighlightCoreLimits`, shared with Android). A fence that misses it
+    /// attaches as Partial: highlighted prefix, plain rest; the next request continues it.
+    static let defaultDeadlineMilliseconds = HighlightCoreLimits.shared.CHAT_DEADLINE_MILLIS
 
     private let sessions: HighlightCoreFenceSessions
     private let deadlineMilliseconds: Double
@@ -59,7 +60,7 @@ nonisolated final class HighlightCoreHighlightingEngine: TextMateHighlighting, @
         }
     }
 
-    /// Moderate drops the older half of the sessions; critical drops all of them.
+    /// Moderate keeps the newer half of the sessions and of their text; critical drops all of them.
     func trim(_ level: TextMateMemoryPressure) async {
         let sessions = sessions
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
@@ -141,9 +142,12 @@ nonisolated struct HighlightCoreFenceUpdate: Sendable {
 /// recently used first out. Each keeps the spans of its colored prefix, so an edit only replaces
 /// the spans of the lines it re-lexed. Not thread-safe: the engine confines it to its queue.
 nonisolated final class HighlightCoreFenceSessions: @unchecked Sendable {
-    static let defaultMaxSessions = 48
+    /// Limits shared with Android (`HighlightCoreLimits`).
+    static let defaultMaxSessions = Int(HighlightCoreLimits.shared.CHAT_MAX_SESSIONS)
     /// UTF-16 code units across all sessions (each holds its text twice: Kotlin and Swift).
-    static let defaultMaxCharacters = 1_048_576
+    static let defaultMaxCharacters = Int(HighlightCoreLimits.shared.CHAT_MAX_CHARACTERS)
+    /// Moderate memory pressure keeps one part in this many, of sessions and of characters.
+    static let moderatePressureKeepDivisor = Int(HighlightCoreLimits.shared.MODERATE_PRESSURE_KEEP_DIVISOR)
 
     private final class Entry {
         let session: HighlightSession
@@ -237,15 +241,20 @@ nonisolated final class HighlightCoreFenceSessions: @unchecked Sendable {
         return update
     }
 
-    /// Moderate keeps the newer half; critical drops every session.
+    /// Moderate drops the least recently used sessions until both the session count and the
+    /// total text are at most their share (`moderatePressureKeepDivisor`) of what was held;
+    /// critical drops every session.
     func trim(_ level: TextMateMemoryPressure) {
         switch level {
         case .normal:
             return
         case .moderate:
-            let keep = entries.count / 2
-            let byAge = entries.sorted { $0.value.lastUse > $1.value.lastUse }
-            for (key, entry) in byAge.dropFirst(keep) {
+            let divisor = max(1, Self.moderatePressureKeepDivisor)
+            let sessionLimit = entries.count / divisor
+            let characterLimit = totalCharacters / divisor
+            let oldestFirst = entries.sorted { $0.value.lastUse < $1.value.lastUse }
+            for (key, entry) in oldestFirst {
+                guard entries.count > sessionLimit || totalCharacters > characterLimit else { break }
                 entries[key] = nil
                 totalCharacters -= entry.length
             }

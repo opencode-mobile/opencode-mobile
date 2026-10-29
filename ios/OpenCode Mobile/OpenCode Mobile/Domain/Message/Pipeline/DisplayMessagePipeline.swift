@@ -754,6 +754,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                             previousByID: [String: DisplayMessage]
                         ) in
                             sourceIsFromCache = isFromCache
+                            streamingDocs = streamingDocumentsStillStreaming(streamingDocs, in: messages)
                             if messagesContainStreamingText(messages) {
                                 // Coalesce streaming tokens into `pendingMessages`. Do not bump
                                 // generation on every delta — prepare stays generation-gated
@@ -950,6 +951,17 @@ nonisolated func hasCompletePreparedMarkdownCache(
 
 nonisolated private func messagesContainStreamingText(_ messages: [Message]) -> Bool {
     messages.contains(where: messageHasStreamingText)
+}
+
+/// The live streaming documents of the messages still streaming in `messages`: an entry goes
+/// once its message finalizes or leaves the list.
+nonisolated func streamingDocumentsStillStreaming(
+    _ documents: [String: NativeMarkdownDocument],
+    in messages: [Message]
+) -> [String: NativeMarkdownDocument] {
+    guard !documents.isEmpty else { return documents }
+    let streamingIDs = Set(messages.lazy.filter(messageHasStreamingText).map(\.id))
+    return documents.filter { streamingIDs.contains($0.key) }
 }
 
 nonisolated private func messageHasStreamingText(_ message: Message) -> Bool {

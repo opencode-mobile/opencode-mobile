@@ -383,34 +383,50 @@ nonisolated final class MessageContentPreparer: @unchecked Sendable {
         // Structure first. A still-streaming prepare keeps empty spans; the live path colors
         // those fences in highlightStreamingTextBlock after the structure frame.
         let structureDocument = OpenCodeRenderedMarkdownParser.parse(text, structureOnly: true)
-        let document: NativeMarkdownDocument
         if isStreaming {
-            document = structureDocument
-        } else {
-            let highlightRevision = highlightRevisions.next()
-            let fences = structureDocument.textMateFences(
-                ownerKey: "\(sessionKey.utf16.count):\(sessionKey):\(blockID)",
-                revision: highlightRevision,
-                policyEpoch: 0
-            )
-            var upgraded = structureDocument
-            for fence in fences {
-                guard !Task.isCancelled else { return structureDocument }
-                do {
-                    let result = try await textMateEngine.highlight(fence.request(intent: intent))
-                    if case .attached(let attached) = upgraded.attachingTextMate(
-                        fence: fence,
-                        result: result
-                    ) {
-                        upgraded = attached
-                    }
-                } catch {
-                    return structureDocument
-                }
-            }
-            document = upgraded
+            return documentCache.insertIfAbsent(structureDocument, for: cacheKey)
         }
-        return documentCache.insertIfAbsent(document, for: cacheKey)
+        let highlightRevision = highlightRevisions.next()
+        let fences = structureDocument.textMateFences(
+            ownerKey: "\(sessionKey.utf16.count):\(sessionKey):\(blockID)",
+            revision: highlightRevision,
+            policyEpoch: 0
+        )
+        var upgraded = structureDocument
+        var complete = true
+        for fence in fences {
+            guard !Task.isCancelled else { return structureDocument }
+            do {
+                let result = try await highlightToCompletion(fence, intent: intent, engine: textMateEngine)
+                if case .attached(let attached) = upgraded.attachingTextMate(fence: fence, result: result) {
+                    upgraded = attached
+                }
+                if !result.isFinal { complete = false }
+            } catch {
+                return structureDocument
+            }
+        }
+        // A fence left cancelled, failed, or partial is not cached, so the next prepare colors it again.
+        return complete ? documentCache.insertIfAbsent(upgraded, for: cacheKey) : upgraded
+    }
+
+    /// Calls the engine again while it returns Partial: each call continues from the line the
+    /// last one stopped at. Gives up when two calls in a row color nothing new.
+    nonisolated static func highlightToCompletion(
+        _ fence: TextMateMarkdownFence,
+        intent: TextMateHighlightIntent,
+        engine: any TextMateHighlighting
+    ) async throws -> TextMateHighlightResult {
+        var result = try await engine.highlight(fence.request(intent: intent))
+        var stalled = false
+        while result.outcome == "Partial", !Task.isCancelled {
+            let next = try await engine.highlight(fence.request(intent: intent))
+            let unchanged = next.outcome == "Partial" && next.spans == result.spans
+            result = next
+            if unchanged, stalled { break }
+            stalled = unchanged
+        }
+        return result
     }
 
     nonisolated private static func reusableDocument(
@@ -454,6 +470,13 @@ nonisolated final class MessageContentPreparer: @unchecked Sendable {
         return previousDocument.sourceHash == document.sourceHash
             && previous.text == display.text
             && previous.isStreaming == display.isStreaming
+    }
+}
+
+nonisolated extension TextMateHighlightResult {
+    /// The fence is colored for good: highlighted, no spans, or plain because unsupported.
+    var isFinal: Bool {
+        ["Highlighted", "NoSpans", "Unsupported"].contains(outcome)
     }
 }
 

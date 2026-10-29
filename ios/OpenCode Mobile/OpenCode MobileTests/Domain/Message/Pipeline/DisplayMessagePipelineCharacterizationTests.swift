@@ -1408,3 +1408,19 @@ private func waitUntil(
     }
     return condition()
 }
+
+struct StreamingDocumentPruningTests {
+    @Test func aStreamingDocumentGoesWhenItsMessageFinalizesOrLeaves() {
+        let document = NativeMarkdownDocument(sourceHash: 1, blocks: [.codeBlock(language: "swift", code: "let a = 1", spans: [])])
+        let documents = ["live": document, "settled": document, "gone": document]
+
+        let kept = streamingDocumentsStillStreaming(
+            documents,
+            in: [streamingAssistant(id: "live", text: "```swift\nlet a = 1"), finalAssistant(id: "settled", text: "done")]
+        )
+
+        #expect(Set(kept.keys) == ["live"])
+        #expect(streamingDocumentsStillStreaming(documents, in: []).isEmpty)
+        #expect(streamingDocumentsStillStreaming([:], in: [streamingAssistant(id: "live", text: "x")]).isEmpty)
+    }
+}

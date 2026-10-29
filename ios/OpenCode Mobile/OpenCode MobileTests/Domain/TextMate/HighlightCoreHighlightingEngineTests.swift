@@ -147,6 +147,36 @@ struct HighlightCoreHighlightingEngineTests {
         #expect(trimmed.totalCharacters == 0)
     }
 
+    @Test func chatLimitsComeFromTheSharedHighlightCoreLimits() {
+        #expect(HighlightCoreHighlightingEngine.defaultDeadlineMilliseconds == 50.0)
+        #expect(HighlightCoreFenceSessions.defaultMaxSessions == 64)
+        #expect(HighlightCoreFenceSessions.defaultMaxCharacters == 1_000_000)
+        #expect(HighlightCoreFenceSessions.moderatePressureKeepDivisor == 2)
+        let sessions = HighlightCoreFenceSessions()
+        #expect(sessions.maxSessions == Int(HighlightCoreLimits.shared.CHAT_MAX_SESSIONS))
+        #expect(sessions.maxCharacters == Int(HighlightCoreLimits.shared.CHAT_MAX_CHARACTERS))
+    }
+
+    @Test func moderateTrimHalvesTheTextAsWellAsTheSessions() {
+        let sessions = HighlightCoreFenceSessions(maxSessions: 10, maxCharacters: 10_000)
+        func touch(_ name: String, _ source: String) {
+            _ = sessions.update(key: TextMateCodeBlockKey(value: name), language: "json", source: source, cancel: HighlightCancelFlag(), deadline: .companion.never)
+        }
+        // Oldest first; "c" holds most of the text.
+        touch("a", String(repeating: "1", count: 10))
+        touch("b", String(repeating: "2", count: 10))
+        touch("c", String(repeating: "3", count: 100))
+        touch("d", String(repeating: "4", count: 10))
+        #expect(sessions.totalCharacters == 130)
+
+        sessions.trim(.moderate)
+
+        // Half the sessions would keep "c" and "d"; half the text (65) drops "c" too.
+        #expect(sessions.count == 1)
+        #expect(sessions.contains(TextMateCodeBlockKey(value: "d")))
+        #expect(sessions.totalCharacters == 10)
+    }
+
     @Test func roleCodesMapToTheAppRolesByName() {
         for (code, role) in HighlightCoreSpans.roles.enumerated() {
             #expect(HighlightRole.companion.ofCode(code: Int32(code)).name == role.rawValue)
