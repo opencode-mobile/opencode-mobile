@@ -289,6 +289,17 @@ class HighlightCoreHighlightingEngineTest {
     }
 
     @Test
+    fun moderateTrimHalvesWhatIsHeldNotTheLimits() {
+        val engine = HighlightCoreHighlightingEngine()
+        repeat(4) { index -> engine.highlightNow(request("k$index", "diff", "+ line $index")) }
+
+        runSuspend { engine.trim(MemoryPressure.Moderate) }
+
+        assertEquals(2, engine.sessionCount)
+        assertEquals("Reuse", engine.highlightReporting(request("k3", "diff", "+ line 3")).mode)
+    }
+
+    @Test
     fun rolesMapOneToOneByName() {
         assertEquals(HighlightRole.entries.map { it.name }, CodeTokenRole.entries.map { it.name })
         val engine = HighlightCoreHighlightingEngine()

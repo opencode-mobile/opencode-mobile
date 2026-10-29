@@ -84,15 +84,15 @@ class HighlightCoreHighlightingEngine(
         trimNow(level)
     }
 
-    /** Drops sessions for [level]: Moderate keeps the most recent half, Critical keeps none. */
+    /** Drops sessions for [level]: Moderate keeps the most recent half of what is held, Critical keeps none. */
     fun trimNow(level: MemoryPressure) {
         sessionLock.withLock {
             when (level) {
                 MemoryPressure.Normal -> Unit
                 MemoryPressure.Moderate ->
                     evict(
-                        maxSessions / HighlightCoreLimits.MODERATE_PRESSURE_KEEP_DIVISOR,
-                        maxCharacters / HighlightCoreLimits.MODERATE_PRESSURE_KEEP_DIVISOR,
+                        sessions.size / HighlightCoreLimits.MODERATE_PRESSURE_KEEP_DIVISOR,
+                        retainedCharacters / HighlightCoreLimits.MODERATE_PRESSURE_KEEP_DIVISOR,
                     )
                 MemoryPressure.Critical -> {
                     sessions.clear()
