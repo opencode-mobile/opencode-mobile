@@ -18,7 +18,29 @@ const QUESTION_CALLS = [
   { steps: [say("Got it. I'll go with that and fall back to `USD`.")] },
 ];
 
+// Read-only step N of a long turn, numbered so each sheet row is easy to tell apart.
+const longTurnStep = (n) =>
+  n % 2 === 0
+    ? { op: "tool", name: "grep", input: { pattern: `step ${n}|cents`, include: "*.ts" } }
+    : { op: "tool", name: "glob", input: { pattern: `src/**/step-${n}*.ts` } };
+
 export const P1 = [
+  {
+    id: "tool-long-turn",
+    priority: "P1",
+    title: "Long turn: 24 steps with no text between them",
+    category: "tools",
+    prompt: "Audit every money path in the project before changing anything.",
+    expect:
+      "Activity Card timeline style. One card counts up to Working 24, a step every ~1.5s. Open its sheet mid-turn: it opens on the newest step and keeps new ones in view; scroll up and it stays put, scroll back to the bottom and it follows again. Open a step and go back: the list returns to that step. Reopened after the turn ends, the sheet starts at the first step (issue 879).",
+    modelCalls: [
+      { steps: [say("I'll read through every money path first."), longTurnStep(1)] },
+      ...Array.from({ length: 23 }, (_, i) => ({
+        steps: [{ op: "wait", ms: 1500 }, longTurnStep(i + 2)],
+      })),
+      { steps: [say("Audit done: every path goes through `formatMoney` or `totalCents`.")] },
+    ],
+  },
   {
     id: "permission-reject-in-app",
     priority: "P1",
