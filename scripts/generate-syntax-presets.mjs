@@ -120,8 +120,6 @@ for (const [id, modes] of Object.entries(UPSTREAM)) {
       const keep = Object.fromEntries(Object.entries(preset[mode]).filter(([key]) => PLAIN_TOKENS.includes(key)));
       preset[mode] = { ...FALLBACK[id][mode], ...keep };
     }
-    // Retired: kept equal to the function color until neither app reads it.
-    preset[mode]["syntax-primitive"] = preset[mode]["syntax-function"];
   }
   writeFileSync(path, `${JSON.stringify(preset, null, 2)}\n`);
   console.log(`${id}: ${Object.entries(modes).map(([mode, theme]) => `${mode} <- ${theme ?? "fallback"}`).join(", ")}`);
