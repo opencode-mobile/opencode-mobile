@@ -141,4 +141,77 @@ struct FileTextDocumentTests {
         #expect(mapped[11] == [NativeCodeSpan(start: 0, end: 4, role: .comment)])
         #expect(mapped[12] == [NativeCodeSpan(start: 0, end: 4, role: .comment)])
     }
+
+    @Test func sourceSpansMoveRightByThreeColumnsPerTab() {
+        let text = "a\tb\t\tc\nplain"
+        let lines = FileTextDocument.displayLines(text)
+        #expect(lines == ["a    b        c", "plain"])
+        let spans = [
+            NativeCodeSpan(start: 0, end: 1, role: .keyword), // a
+            NativeCodeSpan(start: 1, end: 3, role: .string), // tab b
+            NativeCodeSpan(start: 5, end: 6, role: .number), // c
+            NativeCodeSpan(start: 7, end: 12, role: .comment), // plain
+        ]
+        let mapped = FileCodeHighlightMapper.displayLineSpans(
+            spans,
+            source: FileSourceLines(text: text),
+            displayLines: lines,
+            range: 0..<2
+        )
+        #expect(mapped[0] == [
+            NativeCodeSpan(start: 0, end: 1, role: .keyword),
+            NativeCodeSpan(start: 1, end: 6, role: .string),
+            NativeCodeSpan(start: 14, end: 15, role: .number),
+        ])
+        #expect(mapped[1] == [NativeCodeSpan(start: 0, end: 5, role: .comment)])
+    }
+
+    @Test func crLfIsNeverColoredAndASpanAcrossLinesSplits() {
+        let text = "/* a\r\nb */\r\nx"
+        let lines = FileTextDocument.displayLines(text)
+        #expect(lines == ["/* a", "b */", "x"])
+        let source = FileSourceLines(text: text)
+        #expect(source.starts == [0, 6, 12])
+        let mapped = FileCodeHighlightMapper.displayLineSpans(
+            [NativeCodeSpan(start: 0, end: 10, role: .comment), NativeCodeSpan(start: 12, end: 13, role: .variable)],
+            source: source,
+            displayLines: lines,
+            range: 1..<3
+        )
+        #expect(mapped[1] == [NativeCodeSpan(start: 0, end: 4, role: .comment)])
+        #expect(mapped[2] == [NativeCodeSpan(start: 0, end: 1, role: .variable)])
+        #expect(mapped[0] == nil)
+        // The whole comment, \r\n included, stays inside the first line's four columns.
+        let first = FileCodeHighlightMapper.displayLineSpans(
+            [NativeCodeSpan(start: 0, end: 10, role: .comment)],
+            source: source,
+            displayLines: lines,
+            range: 0..<1
+        )
+        #expect(first[0] == [NativeCodeSpan(start: 0, end: 4, role: .comment)])
+    }
+
+    @Test func aCutLineKeepsOnlySpansBeforeTheCut() {
+        let limit = FileTextDocument.maxDisplayLineLength
+        let text = "\t" + String(repeating: "x", count: limit) + "\nnext"
+        let lines = FileTextDocument.displayLines(text)
+        #expect(lines[0].utf16.count == limit + FileTextDocument.cutMarker.utf16.count)
+        #expect(lines[0].hasSuffix(FileTextDocument.cutMarker))
+        let mapped = FileCodeHighlightMapper.displayLineSpans(
+            [
+                NativeCodeSpan(start: 0, end: 1, role: .punctuation), // the tab
+                NativeCodeSpan(start: 1, end: limit - 1, role: .string), // crosses the cut
+                NativeCodeSpan(start: limit - 1, end: limit + 1, role: .keyword), // past it
+                NativeCodeSpan(start: limit + 2, end: limit + 6, role: .variable), // next line
+            ],
+            source: FileSourceLines(text: text),
+            displayLines: lines,
+            range: 0..<2
+        )
+        #expect(mapped[0] == [
+            NativeCodeSpan(start: 0, end: 4, role: .punctuation),
+            NativeCodeSpan(start: 4, end: limit, role: .string),
+        ])
+        #expect(mapped[1] == [NativeCodeSpan(start: 0, end: 4, role: .variable)])
+    }
 }

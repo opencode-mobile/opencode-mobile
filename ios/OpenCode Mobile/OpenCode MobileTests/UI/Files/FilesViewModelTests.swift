@@ -406,11 +406,56 @@ struct FilesViewModelTests {
         return viewModel
     }
 
-    /// The whole file colored in one highlight-core call, split per line.
+    /// The whole file's own text colored in one highlight-core call, mapped to the display lines.
     private func referenceLineSpans(_ source: String, language: String) -> [Int: [NativeCodeSpan]] {
         let lines = FileTextDocument.displayLines(source)
-        let spans = HighlightCoreHighlightingEngineTests.oneShot(language, lines.joined(separator: "\n"))
-        return FileCodeHighlightMapper.lineSpans(spans, lines: lines[...], firstLine: 0)
+        let spans = HighlightCoreHighlightingEngineTests.oneShot(language, source)
+        return FileCodeHighlightMapper.displayLineSpans(
+            spans,
+            source: FileSourceLines(text: source),
+            displayLines: lines,
+            range: 0..<lines.count
+        )
+    }
+
+    @Test func highlightCoreLexesTheFileTextAndMapsTabsAndCrLfToTheDisplay() async {
+        let text = "func f() {\r\n\treturn \"a\tb\"\r\n}\r\n"
+        let repository = FakeProjectFilesRepository()
+        repository.contents["tabs.swift"] = .text(text, isTruncated: false, totalBytes: text.utf8.count)
+        let viewModel = makeHighlightCoreViewModel(repository, holdsBackgroundFill: false)
+        viewModel.openFile("tabs.swift")
+        await waitUntil { viewModel.highlightCorePass("tabs.swift")?.isFinished == true }
+
+        let viewer = viewModel.state.viewers["tabs.swift"]
+        #expect(viewer?.textDocument?.lines == ["func f() {", "    return \"a    b\"", "}"])
+        let spans = viewer?.lineSpans ?? [:]
+        #expect(spans == referenceLineSpans(text, language: "swift"))
+        #expect(spans.count == 3)
+        #expect(spans[0]?.first == NativeCodeSpan(start: 0, end: 4, role: .keyword))
+        // The tab before `return` is four display columns; the tab inside the string widens it.
+        #expect(spans[1]?.contains(NativeCodeSpan(start: 4, end: 10, role: .keyword)) == true)
+        #expect(spans[1]?.contains(NativeCodeSpan(start: 11, end: 19, role: .string)) == true)
+        #expect(spans.values.allSatisfy { line in line.allSatisfy { $0.end <= 19 } })
+    }
+
+    @Test func aFinishedPassReleasesItsHighlightCoreSession() async {
+        let repository = FakeProjectFilesRepository()
+        let source = Self.longTypeScript
+        repository.contents["big.ts"] = .text(source, isTruncated: false, totalBytes: source.utf8.count)
+        let viewModel = makeHighlightCoreViewModel(repository, holdsBackgroundFill: true)
+        viewModel.openFile("big.ts")
+        await waitUntil { viewModel.state.viewers["big.ts"]?.lineSpans.count == 40 }
+        let pass = viewModel.highlightCorePass("big.ts")
+        weak var session = pass?.session
+        #expect(session != nil)
+
+        pass?.holdsBackgroundFill = false
+        await waitUntil(iterations: 1_000) { pass?.isFinished == true }
+        await waitUntil { pass?.session == nil }
+
+        #expect(session == nil)
+        // The tab keeps its colors.
+        #expect(viewModel.state.viewers["big.ts"]?.lineSpans.count == 3_000)
     }
 
     @Test func highlightCoreColorsTheFirstScreenFirstThenFillsTheRestInChunks() async {

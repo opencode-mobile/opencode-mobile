@@ -10,13 +10,17 @@ nonisolated struct FileHighlightChunk: Sendable {
     let lineSpans: [Int: [NativeCodeSpan]]
 }
 
-/// One open file's highlight-core session (#872): the display text, its line starts, and the
-/// end state of every line lexed so far. Calls run one at a time on the file's own queue, apart
-/// from chat's, so a large file never delays a chat fence.
+/// One open file's highlight-core session (#872): the file's own text, as Android lexes it, with
+/// spans mapped to the display lines (tabs expanded, long lines cut; see `FileTextDocument`).
+/// Calls run one at a time on the file's own queue, apart from chat's, so a large file never
+/// delays a chat fence.
 nonisolated final class HighlightCoreFileSession: @unchecked Sendable {
     let lineCount: Int
     private let session: HighlightSession
+    private let text: String
     private let lines: [String]
+    /// Built on the queue by `open`.
+    private var sourceLines = FileSourceLines(text: "")
     private let cancelFlag = HighlightCancelFlag()
     private let queue = DispatchQueue(label: "dev.opencode.mobile.highlight-core.file")
 
@@ -24,6 +28,7 @@ nonisolated final class HighlightCoreFileSession: @unchecked Sendable {
     init?(document: FileTextDocument, language: String) {
         guard HighlightCore.shared.supports(language: language), !document.lines.isEmpty else { return nil }
         session = HighlightSession(language: language, limits: HighlightLimits.companion.standard)
+        text = document.text
         lines = document.lines
         lineCount = document.lines.count
     }
@@ -33,10 +38,10 @@ nonisolated final class HighlightCoreFileSession: @unchecked Sendable {
         cancelFlag.cancel()
     }
 
-    /// Indexes the display text and colors lines `[0, endLine)`.
+    /// Indexes the file's text and colors lines `[0, endLine)`.
     func open(endLine: Int, deadlineMilliseconds: Double) async -> FileHighlightChunk {
         await run(qos: .userInitiated) { [self] in
-            let text = lines.joined(separator: "\n")
+            sourceLines = FileSourceLines(text: text)
             return chunk(
                 session.open(
                     text: text,
@@ -69,17 +74,19 @@ nonisolated final class HighlightCoreFileSession: @unchecked Sendable {
         }
     }
 
+    /// The session has one more line than the display when the text ends with a newline; the
+    /// settled range stops at the display's last line.
     private func chunk(_ result: HighlightCallResult) -> FileHighlightChunk {
-        let start = Int(result.startLine)
+        let start = min(Int(result.startLine), lineCount)
         let status: HighlightCoreFenceStatus
         let end: Int
         switch result.status {
         case .complete:
             status = .complete
-            end = Int(result.endLine)
+            end = min(Int(result.endLine), lineCount)
         case .partial:
             status = .partial
-            end = Int(result.highlightedEndLine)
+            end = min(Int(result.highlightedEndLine), lineCount)
         case .cancelled:
             return FileHighlightChunk(status: .cancelled, startLine: start, settledEndLine: start, lineSpans: [:])
         default:
@@ -88,13 +95,17 @@ nonisolated final class HighlightCoreFileSession: @unchecked Sendable {
         guard end > start else {
             return FileHighlightChunk(status: status, startLine: start, settledEndLine: start, lineSpans: [:])
         }
-        let base = Int(session.lineStart(line: Int32(start)))
-        let spans = HighlightCoreSpans.codeSpans(HighlightCoreSpans.packedInts(result.spans), offsetBy: -base)
+        let spans = HighlightCoreSpans.codeSpans(HighlightCoreSpans.packedInts(result.spans))
         return FileHighlightChunk(
             status: status,
             startLine: start,
             settledEndLine: end,
-            lineSpans: FileCodeHighlightMapper.lineSpans(spans, lines: lines[start..<end], firstLine: start)
+            lineSpans: FileCodeHighlightMapper.displayLineSpans(
+                spans,
+                source: sourceLines,
+                displayLines: lines,
+                range: start..<end
+            )
         )
     }
 }
@@ -129,7 +140,9 @@ final class FileHighlightCorePass {
         let settledEndLine: Int
     }
 
-    let session: HighlightCoreFileSession
+    /// Released when the pass ends (finished, failed, or cancelled), so a colored tab keeps no
+    /// highlight-core session.
+    private(set) var session: HighlightCoreFileSession?
     let configuration: Configuration
     private let apply: @MainActor ([Int: [NativeCodeSpan]]) -> Void
     private var colored = IndexSet()
@@ -165,11 +178,15 @@ final class FileHighlightCorePass {
     func start() {
         guard task == nil else { return }
         started = .now
-        task = Task { [weak self] in await self?.run() }
+        task = Task { [weak self] in
+            guard let self, let session = self.session else { return }
+            await self.run(session)
+            self.session = nil
+        }
     }
 
     func cancel() {
-        session.cancel()
+        session?.cancel()
         task?.cancel()
         wake()
     }
@@ -191,7 +208,7 @@ final class FileHighlightCorePass {
         idle = nil
     }
 
-    private func run() async {
+    private func run(_ session: HighlightCoreFileSession) async {
         let lineCount = session.lineCount
         let first = await session.open(
             endLine: configuration.firstScreenLines,
