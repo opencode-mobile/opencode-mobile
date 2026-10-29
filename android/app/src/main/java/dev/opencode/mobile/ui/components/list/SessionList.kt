@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -632,10 +632,10 @@ private fun SessionListFeedRows(
                         item(key = "header-${section.id}") {
                             OpenCodeSectionHeader(title = "Recent")
                         }
-                        itemsIndexed(
+                        items(
                             section.items,
-                            key = { _, session -> "${section.id}-${session.id}" },
-                        ) { _, session ->
+                            key = { session -> "${section.id}-${session.id}" },
+                        ) { session ->
                             SessionListRow(
                                 session = session,
                                 showStatusDot = true,
@@ -652,10 +652,10 @@ private fun SessionListFeedRows(
                         item(key = "header-${section.id}") {
                             OpenCodeSectionHeader(title = section.title)
                         }
-                        itemsIndexed(
+                        items(
                             section.items,
-                            key = { _, session -> "${section.id}-${session.id}" },
-                        ) { _, session ->
+                            key = { session -> "${section.id}-${session.id}" },
+                        ) { session ->
                             SessionListRow(
                                 session = session,
                                 showStatusDot = false,
@@ -953,4 +953,3 @@ private fun SessionListPreview() {
         )
     }
 }
-

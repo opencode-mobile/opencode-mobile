@@ -1199,4 +1199,3 @@ private struct SessionListRefreshableModifier: ViewModifier {
     .openCodeTheme()
 }
 #endif
-
