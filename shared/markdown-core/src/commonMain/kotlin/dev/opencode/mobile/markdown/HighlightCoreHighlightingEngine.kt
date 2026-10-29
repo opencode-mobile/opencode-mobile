@@ -83,7 +83,11 @@ class HighlightCoreHighlightingEngine(
         sessionLock.withLock {
             when (level) {
                 MemoryPressure.Normal -> Unit
-                MemoryPressure.Moderate -> evict(maxSessions / 2, maxCharacters / 2)
+                MemoryPressure.Moderate ->
+                    evict(
+                        maxSessions / HighlightCoreLimits.MODERATE_PRESSURE_KEEP_DIVISOR,
+                        maxCharacters / HighlightCoreLimits.MODERATE_PRESSURE_KEEP_DIVISOR,
+                    )
                 MemoryPressure.Critical -> {
                     sessions.clear()
                     retainedCharacters = 0
@@ -310,9 +314,9 @@ class HighlightCoreHighlightingEngine(
     )
 
     companion object {
-        const val DEFAULT_MAX_SESSIONS = 64
-        const val DEFAULT_MAX_CHARACTERS = 1_000_000
-        const val DEFAULT_DEADLINE_MILLIS = 50.0
+        const val DEFAULT_MAX_SESSIONS = HighlightCoreLimits.CHAT_MAX_SESSIONS
+        const val DEFAULT_MAX_CHARACTERS = HighlightCoreLimits.CHAT_MAX_CHARACTERS
+        const val DEFAULT_DEADLINE_MILLIS = HighlightCoreLimits.CHAT_DEADLINE_MILLIS
 
         private const val MODE_OPEN = "Open"
         private const val MODE_EDIT = "Edit"
