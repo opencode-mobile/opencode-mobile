@@ -1,6 +1,7 @@
 package dev.opencode.mobile.theme
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -41,6 +42,41 @@ class ThemeSupportTest {
         assertEquals("#56B6C2", dark["syntax-operator"])
         assertEquals(light["text-strong"], light["syntax-punctuation"])
         assertEquals(dark["text-strong"], dark["syntax-punctuation"])
+    }
+
+    @Test
+    fun resolverProvidesFunctionNumberAndAttributeDefaults() {
+        val theme = sampleTheme(id = "roles")
+
+        val light = ThemeResolver.resolve(theme.light, isDark = false)
+        val dark = ThemeResolver.resolve(theme.dark, isDark = true)
+
+        // Function takes the retired primitive formula: interactive, lightened in dark mode.
+        assertEquals(light["interactive"], light["syntax-function"])
+        assertEquals("#888888", dark["syntax-function"])
+        assertEquals(light["syntax-constant"], light["syntax-number"])
+        assertEquals(dark["syntax-constant"], dark["syntax-number"])
+        assertEquals(light["warning"], light["syntax-attribute"])
+        assertEquals(dark["warning"], dark["syntax-attribute"])
+        listOf(light, dark).forEach { tokens ->
+            assertFalse("syntax-primitive" in tokens.tokens)
+            assertFalse("syntax-background" in tokens.tokens)
+            assertFalse("syntax-foreground" in tokens.tokens)
+        }
+    }
+
+    @Test
+    fun overlaySyntax_addsPresetCodeSurfaceTokens() {
+        val base = ThemeResolver.resolve(sampleTheme(id = "surface").dark, isDark = true)
+        val overlaid =
+            ThemeResolver.overlaySyntax(
+                base,
+                mapOf("syntax-background" to "#282C34", "syntax-foreground" to "ABB2BF", "syntax-function" to "#61AFEF"),
+            )
+
+        assertEquals("#282C34", overlaid["syntax-background"])
+        assertEquals("#ABB2BF", overlaid["syntax-foreground"])
+        assertEquals("#61AFEF", overlaid["syntax-function"])
     }
 
     @Test

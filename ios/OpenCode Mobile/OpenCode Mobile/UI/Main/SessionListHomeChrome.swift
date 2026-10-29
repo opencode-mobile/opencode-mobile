@@ -49,7 +49,17 @@ enum SessionListHomeChrome {
         }
         var tabs: [SessionListFilterTab] = []
         if projects.count >= 2 {
-            tabs.append(.all(projectCount: projects.count, sessionCount: sessions.count))
+            let loading = projects.compactMap { project -> Bool? in
+                if case let .loading(isSlow) = loads[project.key] { return isSlow }
+                return nil
+            }
+            tabs.append(
+                .all(
+                    projectCount: projects.count,
+                    sessionCount: sessions.count,
+                    load: loading.isEmpty ? nil : .loading(isSlow: loading.contains(true))
+                )
+            )
         }
         for project in projects {
             tabs.append(

@@ -13,16 +13,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -51,6 +55,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
 
 /** File Viewer: header with Copy path / Wrap lines, then the content state for [viewer]. */
@@ -64,6 +69,10 @@ internal fun FilesViewerPane(
     onRetry: () -> Unit,
     onToggleMarkdownSource: () -> Unit,
     tabs: (@Composable () -> Unit)? = null,
+    /** Lab builds only: opens the loaded text in the Highlighting Lab. Null hides the action. */
+    onOpenInHighlightingLab: ((path: String, source: String) -> Unit)? = null,
+    /** The code lines on screen, first and last index, as the user scrolls. */
+    onVisibleLinesChange: (firstLine: Int, lastLine: Int) -> Unit = { _, _ -> },
 ) {
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     ProductRouteScreenViewEffect(screenId = ProductAnalytics.Screen.FILES_VIEWER)
@@ -91,7 +100,7 @@ internal fun FilesViewerPane(
                             onToggleWrap()
                         },
                     ),
-                ),
+                ) + highlightingLabEntries(viewer, onOpenInHighlightingLab) { menuExpanded = false },
         ) {
             OpenCodeTopBar(
                 title = viewer.name,
@@ -109,9 +118,28 @@ internal fun FilesViewerPane(
             )
         }
         Box(Modifier.weight(1f)) {
-            FilesViewerBody(viewer, wrapLines, onRetry, onToggleMarkdownSource)
+            FilesViewerBody(viewer, wrapLines, onRetry, onToggleMarkdownSource, onVisibleLinesChange)
         }
     }
+}
+
+private fun highlightingLabEntries(
+    viewer: FilesViewerState,
+    onOpen: ((path: String, source: String) -> Unit)?,
+    dismissMenu: () -> Unit,
+): List<OpenCodeOverflowMenuEntry> {
+    val text = viewer.content as? FilesViewerContent.Text ?: return emptyList()
+    if (onOpen == null) return emptyList()
+    return listOf(
+        OpenCodeOverflowMenuEntry(
+            title = "Open in Highlighting Lab",
+            icon = OpenCodeIcons.Code,
+            onClick = {
+                dismissMenu()
+                onOpen(viewer.path, text.source)
+            },
+        ),
+    )
 }
 
 @Composable
@@ -120,13 +148,14 @@ private fun FilesViewerBody(
     wrapLines: Boolean,
     onRetry: () -> Unit,
     onToggleMarkdownSource: () -> Unit,
+    onVisibleLinesChange: (firstLine: Int, lastLine: Int) -> Unit,
 ) {
     when (val content = viewer.content) {
         FilesViewerContent.Loading ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 OpenCodeStatusStack(title = "Opening file", style = OpenCodeStatusStackStyle.Spinner)
             }
-        is FilesViewerContent.Text -> TextContent(viewer, content, wrapLines, onToggleMarkdownSource)
+        is FilesViewerContent.Text -> TextContent(viewer, content, wrapLines, onToggleMarkdownSource, onVisibleLinesChange)
         is FilesViewerContent.Image -> ImageContent(content)
         is FilesViewerContent.Binary -> BinaryPlaceholder(content.mimeType)
         is FilesViewerContent.TooLarge ->
@@ -162,6 +191,7 @@ private fun TextContent(
     content: FilesViewerContent.Text,
     wrapLines: Boolean,
     onToggleMarkdownSource: () -> Unit,
+    onVisibleLinesChange: (firstLine: Int, lastLine: Int) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         if (content.isTruncated) {
@@ -183,7 +213,22 @@ private fun TextContent(
                     OpenCodeRenderedMarkdown(document = markdown, variant = OpenCodeRenderedMarkdownVariant.Standalone)
                 }
             } else {
-                OpenCodeCodeFile(lines = content.lines, wrapLines = wrapLines, modifier = Modifier.fillMaxSize())
+                val listState = rememberLazyListState()
+                val reportVisibleLines by rememberUpdatedState(onVisibleLinesChange)
+                // Keyed by path too: tabs share this list state, and a newly shown file needs its range.
+                LaunchedEffect(listState, viewer.path) {
+                    snapshotFlow {
+                        val visible = listState.layoutInfo.visibleItemsInfo
+                        (visible.firstOrNull()?.index ?: 0) to (visible.lastOrNull()?.index ?: 0)
+                    }.distinctUntilChanged()
+                        .collect { (first, last) -> reportVisibleLines(first, last) }
+                }
+                OpenCodeCodeFile(
+                    lines = content.lines,
+                    wrapLines = wrapLines,
+                    modifier = Modifier.fillMaxSize(),
+                    state = listState,
+                )
             }
         }
         Box(

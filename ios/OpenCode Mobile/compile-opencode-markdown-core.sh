@@ -28,9 +28,3 @@ if [ "${CODE_SIGNING_ALLOWED:-YES}" != "NO" ] && [ -d "$framework" ]; then
     /usr/bin/codesign --force --sign "$identity" --generate-entitlement-der "$framework"
   fi
 fi
-
-grammar_source="$SRCROOT/../../shared/markdown-core/src/commonMain/resources/textmate-grammars"
-grammar_dest="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/textmate-grammars"
-rm -rf "$grammar_dest"
-mkdir -p "$(dirname "$grammar_dest")"
-cp -R "$grammar_source" "$grammar_dest"

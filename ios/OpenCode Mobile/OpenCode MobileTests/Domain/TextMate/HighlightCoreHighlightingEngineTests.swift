@@ -1,0 +1,292 @@
+import Foundation
+import OpenCodeMarkdownCore
+import Testing
+@testable import OpenCode_Mobile
+
+@MainActor
+struct HighlightCoreHighlightingEngineTests {
+    private static let samples: [(language: String, source: String)] = [
+        ("typescript", "/** Docs */\nexport const greet = (name: string): string => `Hello ${name}!`;\nclass Box<T> { value?: T }\n"),
+        ("kotlin", "/* block\n comment */\nfun main() {\n    val text = \"\"\"raw\n${1 + 2}\"\"\"\n    println(text)\n}\n"),
+        ("swift", "struct Item: Codable {\n    let id: Int // id\n    var name = \"multi \\(id)\"\n}\n"),
+        ("python", "def f(x):\n    \"\"\"Doc\n    string\"\"\"\n    return f\"{x!r:>10}\" + 'y'\n"),
+        ("json", "{\n  \"key\": [1, 2.5e3, true, null],\n  \"nested\": {\"a\": \"b\"}\n}\n"),
+        ("diff", "--- a/x\n+++ b/x\n@@ -1,2 +1,2 @@ func\n-old\n+new\n context\n"),
+    ]
+
+    @Test func streamedRevisionsEqualOneShotForEveryMinimumLanguage() {
+        for sample in Self.samples {
+            let sessions = HighlightCoreFenceSessions()
+            let key = TextMateCodeBlockKey(value: "fence:\(sample.language)")
+            var update: HighlightCoreFenceUpdate?
+            var previous = ""
+            for revision in Self.revisions(of: sample.source, step: 5) {
+                let previousLines = previous.split(separator: "\n", omittingEmptySubsequences: false).count
+                update = sessions.update(key: key, language: sample.language, source: revision, cancel: HighlightCancelFlag(), deadline: .companion.never)
+                // An append re-lexes from the line the old text ended in, never from the top.
+                #expect(update?.relexedFromLine == (previous.isEmpty ? 0 : previousLines - 1), "\(sample.language)")
+                #expect(update?.spans == Self.oneShot(sample.language, revision), "\(sample.language) at \(revision.utf16.count)")
+                previous = revision
+            }
+            #expect(update?.status == .complete)
+            #expect(!(update?.spans.isEmpty ?? true), "\(sample.language)")
+        }
+    }
+
+    @Test func midTextEditRelexesFromTheChangedLineAndMatchesOneShot() {
+        let sessions = HighlightCoreFenceSessions()
+        let key = TextMateCodeBlockKey(value: "edit")
+        let lines = (0..<40).map { "let value\($0) = \($0) // note" }
+        let original = lines.joined(separator: "\n")
+        _ = sessions.update(key: key, language: "swift", source: original, cancel: HighlightCancelFlag(), deadline: .companion.never)
+        var edited = lines
+        edited[20] = "let changed = \"text\""
+        let source = edited.joined(separator: "\n")
+        let update = sessions.update(key: key, language: "swift", source: source, cancel: HighlightCancelFlag(), deadline: .companion.never)
+
+        #expect(update.relexedFromLine == 20)
+        #expect(update.spans == Self.oneShot("swift", source))
+        // Opening a block comment changes every later line.
+        edited[25] = "/* open"
+        let commented = edited.joined(separator: "\n")
+        let second = sessions.update(key: key, language: "swift", source: commented, cancel: HighlightCancelFlag(), deadline: .companion.never)
+        #expect(second.relexedFromLine == 25)
+        #expect(second.spans == Self.oneShot("swift", commented))
+        #expect(second.spans.last?.role == .comment)
+    }
+
+    @Test func utf16OffsetsStayExactWithEmojiCrLfAndSplitSurrogates() {
+        let sessions = HighlightCoreFenceSessions()
+        let key = TextMateCodeBlockKey(value: "utf16")
+        let revisions = [
+            "let a = \"😀\"",
+            "let a = \"😁\"\r",
+            "let a = \"😁\"\r\nlet 👨‍👩‍👧 = 1\r\n",
+            "let a = \"😁\"\r\nlet 👨‍👩‍👧 = 1\r\nlet b = \"é\" // ✓\r\n",
+        ]
+        for source in revisions {
+            let update = sessions.update(key: key, language: "swift", source: source, cancel: HighlightCancelFlag(), deadline: .companion.never)
+            #expect(update.spans == Self.oneShot("swift", source), "\(source.debugDescription)")
+        }
+        let final = revisions.last!
+        let spans = Self.oneShot("swift", final)
+        let ns = final as NSString
+        let strings = spans.filter { $0.role == .string }.map { ns.substring(with: NSRange(location: $0.start, length: $0.end - $0.start)) }
+        #expect(strings == ["\"😁\"", "\"é\""])
+        let comments = spans.filter { $0.role == .comment }.map { ns.substring(with: NSRange(location: $0.start, length: $0.end - $0.start)) }
+        #expect(comments == ["// ✓"])
+    }
+
+    @Test func commonPrefixNeverSplitsASurrogatePairOrCrLf() {
+        // 😀 and 😁 share their lead surrogate.
+        #expect(HighlightCoreFenceSessions.commonPrefixUTF16("a😀", "a😁") == 1)
+        #expect(HighlightCoreFenceSessions.suffix(of: "a😁", fromUTF16Offset: 1) == "😁")
+        #expect(HighlightCoreFenceSessions.commonPrefixUTF16("x\r", "x\r\ny") == 2)
+        #expect(HighlightCoreFenceSessions.suffix(of: "x\r\ny", fromUTF16Offset: 2) == "\ny")
+    }
+
+    @Test func cancelledUpdateLeavesTheSessionUsable() {
+        let sessions = HighlightCoreFenceSessions()
+        let key = TextMateCodeBlockKey(value: "cancel")
+        let source = Self.samples[0].source
+        let flag = HighlightCancelFlag()
+        flag.cancel()
+        let cancelled = sessions.update(key: key, language: "typescript", source: source, cancel: flag, deadline: .companion.never)
+        #expect(cancelled.status == .cancelled)
+        #expect(cancelled.spans.isEmpty)
+        let update = sessions.update(key: key, language: "typescript", source: source, cancel: HighlightCancelFlag(), deadline: .companion.never)
+        #expect(update.status == .complete)
+        #expect(update.spans == Self.oneShot("typescript", source))
+    }
+
+    @Test func passedDeadlineGivesPartialThenTheNextRevisionCompletes() {
+        let sessions = HighlightCoreFenceSessions()
+        let key = TextMateCodeBlockKey(value: "deadline")
+        let source = Array(repeating: "const x = { \"k\": [1, 2, 3] }; // more", count: 20_000).joined(separator: "\n")
+        let partial = sessions.update(key: key, language: "typescript", source: source, cancel: HighlightCancelFlag(), deadline: .companion.after(milliseconds: 0))
+        #expect(partial.status == .partial)
+        #expect(!partial.spans.isEmpty)
+        let reference = Self.oneShot("typescript", source)
+        #expect(Array(reference.prefix(partial.spans.count)) == partial.spans)
+
+        let grown = source + "\nlet tail = 1"
+        let complete = sessions.update(key: key, language: "typescript", source: grown, cancel: HighlightCancelFlag(), deadline: .companion.never)
+        #expect(complete.status == .complete)
+        #expect(complete.spans == Self.oneShot("typescript", grown))
+    }
+
+    @Test func leastRecentlyUsedSessionsAreEvictedAndTrimmed() {
+        let sessions = HighlightCoreFenceSessions(maxSessions: 2, maxCharacters: 1_000)
+        func touch(_ name: String, _ source: String = "let x = 1") {
+            _ = sessions.update(key: TextMateCodeBlockKey(value: name), language: "swift", source: source, cancel: HighlightCancelFlag(), deadline: .companion.never)
+        }
+        touch("a")
+        touch("b")
+        touch("a")
+        touch("c")
+        #expect(sessions.count == 2)
+        #expect(sessions.contains(TextMateCodeBlockKey(value: "a")))
+        #expect(!sessions.contains(TextMateCodeBlockKey(value: "b")))
+
+        // A fence over the character budget keeps only itself.
+        touch("big", String(repeating: "let y = 2\n", count: 150))
+        #expect(sessions.count == 1)
+        #expect(sessions.contains(TextMateCodeBlockKey(value: "big")))
+        #expect(sessions.totalCharacters == 1_500)
+
+        let trimmed = HighlightCoreFenceSessions(maxSessions: 10)
+        for index in 0..<6 {
+            _ = trimmed.update(key: TextMateCodeBlockKey(value: "\(index)"), language: "json", source: "[\(index)]", cancel: HighlightCancelFlag(), deadline: .companion.never)
+        }
+        trimmed.trim(.moderate)
+        #expect(trimmed.count == 3)
+        #expect(trimmed.contains(TextMateCodeBlockKey(value: "5")))
+        #expect(!trimmed.contains(TextMateCodeBlockKey(value: "0")))
+        trimmed.trim(.critical)
+        #expect(trimmed.count == 0)
+        #expect(trimmed.totalCharacters == 0)
+    }
+
+    @Test func chatLimitsComeFromTheSharedHighlightCoreLimits() {
+        #expect(HighlightCoreHighlightingEngine.defaultDeadlineMilliseconds == 50.0)
+        #expect(HighlightCoreFenceSessions.defaultMaxSessions == 64)
+        #expect(HighlightCoreFenceSessions.defaultMaxCharacters == 1_000_000)
+        #expect(HighlightCoreFenceSessions.moderatePressureKeepDivisor == 2)
+        let sessions = HighlightCoreFenceSessions()
+        #expect(sessions.maxSessions == Int(HighlightCoreLimits.shared.CHAT_MAX_SESSIONS))
+        #expect(sessions.maxCharacters == Int(HighlightCoreLimits.shared.CHAT_MAX_CHARACTERS))
+    }
+
+    @Test func moderateTrimHalvesTheTextAsWellAsTheSessions() {
+        let sessions = HighlightCoreFenceSessions(maxSessions: 10, maxCharacters: 10_000)
+        func touch(_ name: String, _ source: String) {
+            _ = sessions.update(key: TextMateCodeBlockKey(value: name), language: "json", source: source, cancel: HighlightCancelFlag(), deadline: .companion.never)
+        }
+        // Oldest first; "c" holds most of the text.
+        touch("a", String(repeating: "1", count: 10))
+        touch("b", String(repeating: "2", count: 10))
+        touch("c", String(repeating: "3", count: 100))
+        touch("d", String(repeating: "4", count: 10))
+        #expect(sessions.totalCharacters == 130)
+
+        sessions.trim(.moderate)
+
+        // Half the sessions would keep "c" and "d"; half the text (65) drops "c" too.
+        #expect(sessions.count == 1)
+        #expect(sessions.contains(TextMateCodeBlockKey(value: "d")))
+        #expect(sessions.totalCharacters == 10)
+    }
+
+    @Test func roleCodesMapToTheAppRolesByName() {
+        for (code, role) in HighlightCoreSpans.roles.enumerated() {
+            #expect(HighlightRole.companion.ofCode(code: Int32(code)).name == role.rawValue)
+        }
+        #expect(HighlightCoreSpans.role(code: 999) == .plain)
+    }
+
+    @Test func engineHighlightsSupportedFences() async throws {
+        let engine = HighlightCoreHighlightingEngine()
+        let source = "val answer = 42"
+        let result = try await engine.highlight(Self.request(language: "kt", source: source))
+        #expect(result.outcome == "Highlighted")
+        #expect(result.canonicalLanguage == "kotlin")
+        #expect(result.source == source)
+        #expect(result.policyEpoch == 7)
+        #expect(result.spans == Self.oneShot("kotlin", source))
+
+        // The result attaches to the fence.
+        let document = NativeMarkdownDocument(sourceHash: 1, blocks: [.codeBlock(language: "kotlin", code: source, spans: [])])
+        let fence = document.textMateFences(ownerKey: "m", revision: TextMateHighlightRevision(value: 1), policyEpoch: 7)[0]
+        let attached = try await engine.highlight(fence.request(intent: .interactiveFinal))
+        guard case .attached(let upgraded) = document.attachingTextMate(fence: fence, result: attached),
+              case .codeBlock(_, _, let spans) = upgraded.blocks[0]
+        else {
+            Issue.record("highlight-core result should attach")
+            return
+        }
+        #expect(spans == Self.oneShot("kotlin", source))
+
+        await engine.trim(.critical)
+        #expect(await engine.sessionStats().count == 0)
+    }
+
+    @Test func unsupportedOrMissingLanguageComesBackPlain() async throws {
+        let engine = HighlightCoreHighlightingEngine()
+        for language in ["brainfuck", nil] as [String?] {
+            let source = "++[>+<-]"
+            let result = try await engine.highlight(Self.request(language: language, source: source))
+            #expect(result.outcome == "Unsupported")
+            #expect(result.spans.isEmpty)
+            #expect(result.canonicalLanguage == nil)
+            #expect(result.source == source)
+            #expect(result.diagnostics.isEmpty)
+
+            // It attaches as plain text: a stale colored fence loses its spans.
+            let stale = [NativeCodeSpan(start: 0, end: 2, role: .keyword)]
+            let document = NativeMarkdownDocument(sourceHash: 1, blocks: [.codeBlock(language: language, code: source, spans: stale)])
+            let fence = document.textMateFences(ownerKey: "m", revision: TextMateHighlightRevision(value: 1), policyEpoch: 7)[0]
+            let plain = try await engine.highlight(fence.request(intent: .interactiveFinal))
+            guard case .attached(let upgraded) = document.attachingTextMate(fence: fence, result: plain),
+                  case .codeBlock(_, _, let spans) = upgraded.blocks[0]
+            else {
+                Issue.record("an unsupported result should attach as plain text")
+                return
+            }
+            #expect(spans.isEmpty)
+        }
+        #expect(await engine.sessionStats().count == 0)
+    }
+
+    @Test func engineHonorsTaskCancellation() async throws {
+        let engine = HighlightCoreHighlightingEngine()
+        let request = Self.request(language: "swift", source: "let a = 1")
+        let task = Task {
+            withUnsafeCurrentTask { $0?.cancel() }
+            return try await engine.highlight(request)
+        }
+        let result = try await task.value
+        #expect(result.outcome == "Cancelled")
+        #expect(result.spans.isEmpty)
+        let again = try await engine.highlight(request)
+        #expect(again.outcome == "Highlighted")
+    }
+
+    // MARK: Helpers
+
+    /// Growing prefixes of `source`, `step` scalars apart, ending with the whole text.
+    private static func revisions(of source: String, step: Int) -> [String] {
+        let scalars = Array(source.unicodeScalars)
+        var result: [String] = []
+        var end = step
+        while end < scalars.count {
+            var view = String.UnicodeScalarView()
+            view.append(contentsOf: scalars[0..<end])
+            result.append(String(view))
+            end += step
+        }
+        result.append(source)
+        return result
+    }
+
+    static func oneShot(_ language: String, _ source: String) -> [NativeCodeSpan] {
+        let result = HighlightCore.shared.highlight(
+            language: language,
+            text: source,
+            cancel: HighlightCancellationNever.shared,
+            deadline: .companion.never,
+            limits: .companion.standard
+        )
+        return HighlightCoreSpans.codeSpans(HighlightCoreSpans.packedInts(result.spans))
+    }
+
+    private static func request(language: String?, source: String) -> TextMateHighlightRequest {
+        TextMateHighlightRequest(
+            key: TextMateCodeBlockKey(value: "request:\(language ?? "none")"),
+            revision: TextMateHighlightRevision(value: 1),
+            language: language,
+            source: source,
+            intent: .interactiveFinal,
+            policyEpoch: 7
+        )
+    }
+}

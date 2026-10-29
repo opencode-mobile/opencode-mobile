@@ -1372,7 +1372,7 @@ private struct AssistantMessageBubble: View {
         .task(id: paintTaskID) {
             guard renderedMarkdown != nil, !paintMarkdown else { return }
             // Doc arrived after plain paint (enrich while visible). Let the open
-            // frame finish so scroll stays responsive before hosting TextMate trees.
+            // frame finish so scroll stays responsive before hosting highlighted trees.
             guard text.count >= Self.deferredMarkdownCharacterThreshold else {
                 paintMarkdown = true
                 return

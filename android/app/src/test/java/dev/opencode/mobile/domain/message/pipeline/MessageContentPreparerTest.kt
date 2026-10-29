@@ -1,16 +1,21 @@
 package dev.opencode.mobile.domain.message
 
-import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
-import dev.opencode.mobile.domain.textmate.TextMateLogbookRecorder
+import dev.opencode.mobile.markdown.CodeBlockKey
 import dev.opencode.mobile.markdown.CodeSpan
 import dev.opencode.mobile.markdown.CodeTokenRole
+import dev.opencode.mobile.markdown.HighlightCoreHighlightingEngine
+import dev.opencode.mobile.markdown.HighlightIntent
+import dev.opencode.mobile.markdown.HighlightRequest
+import dev.opencode.mobile.markdown.HighlightResult
+import dev.opencode.mobile.markdown.HighlightRevision
 import dev.opencode.mobile.markdown.MarkdownBlock
+import dev.opencode.mobile.markdown.MarkdownDiagnostic
+import dev.opencode.mobile.markdown.MarkdownDiagnosticKind
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownInline
-import dev.opencode.mobile.markdown.OpenCodeCodeHighlighter
-import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
-import dev.opencode.mobile.markdown.SyntaxHighlightResult
-import dev.opencode.mobile.markdown.TextMateParseObservation
+import dev.opencode.mobile.markdown.TextMateHighlightingEngine
+import dev.opencode.mobile.markdown.TextMateParseOutcome
+import dev.opencode.mobile.markdown.emptyResult
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -19,6 +24,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNotSame
 import org.junit.Assert.assertNull
@@ -32,7 +38,7 @@ class MessageContentPreparerTest {
     private val testDispatcher = StandardTestDispatcher()
 
     private fun createPreparer(): MessageContentPreparer =
-        MessageContentPreparer(OpenCodeTextMateHighlightingEngine(RecordingHighlighter())).apply {
+        MessageContentPreparer(RecordingEngine()).apply {
             computationDispatcher = testDispatcher
         }
 
@@ -65,12 +71,9 @@ class MessageContentPreparerTest {
             val preparer = createPreparer()
             val plain = "Here is the summary:\n\n| File | Lines | Status |\n|"
             val structureFirst = preparer.prepareStructureOnlyTextBlock(blockID = "b1", plain = plain)
-            val streaming = preparer.prepareTextBlock(blockID = "b1", plain = plain, isStreaming = true)
-            for (document in listOf(structureFirst, streaming)) {
-                val table = document!!.blocks.last() as MarkdownBlock.Table
-                assertEquals(3, table.header.cells.size)
-                assertTrue(table.rows.isEmpty())
-            }
+            val table = structureFirst!!.blocks.last() as MarkdownBlock.Table
+            assertEquals(3, table.header.cells.size)
+            assertTrue(table.rows.isEmpty())
         }
 
     @Test
@@ -151,7 +154,6 @@ class MessageContentPreparerTest {
                             parts = listOf(MessagePart.Text(text = "# Partial", isStreaming = true)),
                         ),
                     renderedMarkdown = previousDoc,
-                    highlightEpoch = MarkdownHighlightPreferences.epoch,
                 )
             val message =
                 Message(
@@ -177,7 +179,6 @@ class MessageContentPreparerTest {
                 DisplayMessage(
                     message = Message(id = "m1", role = MessageRole.Assistant, text = "# Heading"),
                     renderedMarkdown = document,
-                    highlightEpoch = MarkdownHighlightPreferences.epoch,
                 )
             val message = Message(id = "m1", role = MessageRole.Assistant, text = "# Heading")
             val prepared = preparer.prepareMessages(listOf(message), mapOf("m1" to previous))
@@ -233,7 +234,6 @@ class MessageContentPreparerTest {
                             parts = listOf(MessagePart.Text(text = "# Partial", isStreaming = true)),
                         ),
                     renderedMarkdown = previousDoc,
-                    highlightEpoch = MarkdownHighlightPreferences.epoch,
                 )
             val finalMessage =
                 Message(
@@ -252,98 +252,138 @@ class MessageContentPreparerTest {
         }
 
     @Test
-    fun prepareMessagesFinalAfterPlaceholderUpgradesToPreferredHighlighter() =
+    fun prepareMessagesFinalAfterPlaceholderAttachesEngineColors() =
         runTest(testDispatcher) {
-            val prior = MarkdownHighlightPreferences.textMateEnabled
-            MarkdownHighlightPreferences.updateTextMateEnabled(true)
-            try {
-                val highlighter = RecordingHighlighter()
-                val preparer =
-                    MessageContentPreparer(OpenCodeTextMateHighlightingEngine(highlighter)).apply {
-                        computationDispatcher = testDispatcher
-                    }
-                val markdown = "```kotlin\nval answer = 42\n```"
-                val streamingMessage =
-                    Message(
-                        id = "m1",
-                        role = MessageRole.Assistant,
-                        text = markdown,
-                        parts = listOf(MessagePart.Text(text = markdown, isStreaming = true)),
-                    )
-                val finalMessage =
-                    Message(
-                        id = "m1",
-                        role = MessageRole.Assistant,
-                        text = markdown,
-                        parts = listOf(MessagePart.Text(text = markdown, isStreaming = false)),
-                    )
+            val engine = RecordingEngine()
+            val preparer =
+                MessageContentPreparer(engine).apply {
+                    computationDispatcher = testDispatcher
+                }
+            val markdown = "```kotlin\nval answer = 42\n```"
+            val streamingMessage =
+                Message(
+                    id = "m1",
+                    role = MessageRole.Assistant,
+                    text = markdown,
+                    parts = listOf(MessagePart.Text(text = markdown, isStreaming = true)),
+                )
+            val finalMessage =
+                Message(
+                    id = "m1",
+                    role = MessageRole.Assistant,
+                    text = markdown,
+                    parts = listOf(MessagePart.Text(text = markdown, isStreaming = false)),
+                )
 
-                val streaming = preparer.prepareMessages(listOf(streamingMessage)).single()
-                assertEquals(0, highlighter.calls) // semantic fallback while streaming
-                assertNotNull(streaming.renderedMarkdown)
+            val streaming = preparer.prepareMessages(listOf(streamingMessage)).single()
+            // Structure only while streaming: the fence paints without colors.
+            assertTrue(engine.requests.isEmpty())
+            val streamingFence = streaming.renderedMarkdown!!.codeBlock()
+            assertTrue(streamingFence.spans.isEmpty())
 
-                val placeholder =
-                    preparer
-                        .prepareMessages(
-                            listOf(finalMessage),
-                            mapOf("m1" to streaming),
-                            mode = MessagePreparationMode.FinalPlaceholder,
-                        ).single()
-                assertSame(streaming.renderedMarkdown, placeholder.renderedMarkdown)
-                assertEquals(0, highlighter.calls)
-                assertTrue(placeholder.awaitingTextMateUpgrade)
+            val placeholder =
+                preparer
+                    .prepareMessages(
+                        listOf(finalMessage),
+                        mapOf("m1" to streaming),
+                        mode = MessagePreparationMode.FinalPlaceholder,
+                    ).single()
+            assertSame(streaming.renderedMarkdown, placeholder.renderedMarkdown)
+            assertTrue(engine.requests.isEmpty())
+            assertTrue(placeholder.awaitingTextMateUpgrade)
 
-                // Pipeline commits placeholder (isStreaming=false) then Final with that as previous.
-                val finalized =
-                    preparer
-                        .prepareMessages(
-                            listOf(finalMessage),
-                            mapOf("m1" to placeholder),
-                            mode = MessagePreparationMode.Final,
-                        ).single()
+            // Pipeline commits placeholder (isStreaming=false) then Final with that as previous.
+            val finalized =
+                preparer
+                    .prepareMessages(
+                        listOf(finalMessage),
+                        mapOf("m1" to placeholder),
+                        mode = MessagePreparationMode.Final,
+                    ).single()
 
-                assertEquals(1, highlighter.calls)
-                assertNotSame(streaming.renderedMarkdown, finalized.renderedMarkdown)
-                assertTrue(!finalized.awaitingTextMateUpgrade)
-            } finally {
-                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
-            }
+            assertEquals(listOf("kotlin"), engine.requests.map { it.language })
+            assertEquals("val answer = 42", engine.requests.single().source)
+            assertNotSame(streaming.renderedMarkdown, finalized.renderedMarkdown)
+            assertEquals(
+                listOf(CodeSpan(0, "val answer = 42".length, CodeTokenRole.Keyword)),
+                finalized.renderedMarkdown!!.codeBlock().spans,
+            )
+            assertTrue(!finalized.awaitingTextMateUpgrade)
         }
 
     @Test
-    fun finalTextMateCacheMissLogsOnceWhileStreamingAndCacheHitsStayQuiet() =
+    fun highlightStreamingTextBlockColorsFencesWithoutTheSizeGate() =
         runTest(testDispatcher) {
-            val prior = MarkdownHighlightPreferences.textMateEnabled
-            MarkdownHighlightPreferences.updateTextMateEnabled(true)
-            try {
-                val logbook = RecordingLogbook()
-                val preparer =
-                    MessageContentPreparer(OpenCodeTextMateHighlightingEngine(RecordingHighlighter()), logbook).apply {
-                        computationDispatcher = testDispatcher
-                    }
-                val markdown = "```kotlin\nval answer = 42\n```"
-                val streaming =
+            val engine = RecordingEngine()
+            val preparer =
+                MessageContentPreparer(engine).apply {
+                    computationDispatcher = testDispatcher
+                }
+            val markdown = "```kotlin\nval answer = 42\n```" + "x".repeat(MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD)
+            val highlighted = preparer.highlightStreamingTextBlock(blockID = "m1", plain = markdown)
+
+            assertEquals("kotlin", engine.requests.single().language)
+            assertEquals(
+                listOf(CodeSpan(0, engine.requests.single().source.length, CodeTokenRole.Keyword)),
+                highlighted!!.document.codeBlock().spans,
+            )
+            assertTrue(!highlighted.partial)
+
+            val streaming =
+                preparer.prepareMessage(
                     Message(
                         id = "m1",
                         role = MessageRole.Assistant,
                         text = markdown,
                         parts = listOf(MessagePart.Text(text = markdown, isStreaming = true)),
-                    )
-                val final = Message(id = "m1", role = MessageRole.Assistant, text = markdown)
+                    ),
+                    mode = MessagePreparationMode.Streaming,
+                )
+            assertNotNull(streaming.renderedMarkdown)
+        }
 
-                preparer.prepareMessage(streaming)
-                assertTrue(logbook.observations.isEmpty())
+    @Test
+    fun finalPrepareColorsFencesThroughHighlightCore() =
+        runTest(testDispatcher) {
+            val preparer =
+                MessageContentPreparer(HighlightCoreHighlightingEngine()).apply {
+                    computationDispatcher = testDispatcher
+                }
+            val markdown = "```kotlin\nval answer = 42\n```\n\n```brainfuck\n++[>+<-]\n```"
+            val final = preparer.prepareMessage(Message(id = "m1", role = MessageRole.Assistant, text = markdown))
 
-                preparer.prepareMessage(final)
-                preparer.prepareMessage(final)
+            val fences = final.renderedMarkdown!!.blocks.filterIsInstance<MarkdownBlock.CodeBlock>()
+            assertTrue(fences[0].spans.any { it.role == CodeTokenRole.Keyword })
+            // Unsupported languages attach as plain text.
+            assertTrue(fences[1].spans.isEmpty())
+        }
 
-                assertEquals(1, logbook.observations.size)
-                assertEquals("kotlin", logbook.observations.single().requestedLanguage)
-                assertEquals(markdown.length, logbook.observations.single().messageCharacters)
-                assertEquals("val answer = 42".length, logbook.observations.single().fenceCharacters)
-            } finally {
-                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
-            }
+    @Test
+    fun finalCacheMissHighlightsOnceAndCacheHitsSkipTheEngine() =
+        runTest(testDispatcher) {
+            val engine = RecordingEngine()
+            val preparer =
+                MessageContentPreparer(engine).apply {
+                    computationDispatcher = testDispatcher
+                }
+            val markdown = "```kotlin\nval answer = 42\n```"
+            val streaming =
+                Message(
+                    id = "m1",
+                    role = MessageRole.Assistant,
+                    text = markdown,
+                    parts = listOf(MessagePart.Text(text = markdown, isStreaming = true)),
+                )
+            val final = Message(id = "m1", role = MessageRole.Assistant, text = markdown)
+
+            preparer.prepareMessage(streaming)
+            assertTrue(engine.requests.isEmpty())
+
+            preparer.prepareMessage(final)
+            preparer.prepareMessage(final)
+
+            assertEquals(1, engine.requests.size)
+            assertEquals("kotlin", engine.requests.single().language)
         }
 
     @Test
@@ -360,75 +400,82 @@ class MessageContentPreparerTest {
     @Test
     fun prepareStreamingMessageDoesNotWaitForBlockedFinalHighlighter() =
         runBlocking {
-            val prior = MarkdownHighlightPreferences.textMateEnabled
-            MarkdownHighlightPreferences.updateTextMateEnabled(true)
+            val highlighter = BlockingEngine()
+            val preparer =
+                MessageContentPreparer(highlighter).apply {
+                    computationDispatcher = Dispatchers.Default
+                }
+            val finalPreparation =
+                async(Dispatchers.Default) {
+                    preparer.prepareMessage(
+                        Message(
+                            id = "history",
+                            role = MessageRole.Assistant,
+                            text = "```kotlin\nval history = true\n```",
+                        ),
+                    )
+                }
+
+            assertTrue(highlighter.entered.await(2, TimeUnit.SECONDS))
             try {
-                val highlighter = BlockingHighlighter()
-                val preparer =
-                    MessageContentPreparer(OpenCodeTextMateHighlightingEngine(highlighter)).apply {
-                        computationDispatcher = Dispatchers.Default
-                    }
-                val finalPreparation =
-                    async(Dispatchers.Default) {
+                val streamingMarkdown = "```kotlin\nval live = true\n```"
+                val streaming =
+                    withTimeout(2_000) {
                         preparer.prepareMessage(
                             Message(
-                                id = "history",
+                                id = "live",
                                 role = MessageRole.Assistant,
-                                text = "```kotlin\nval history = true\n```",
+                                text = streamingMarkdown,
+                                parts = listOf(MessagePart.Text(streamingMarkdown, isStreaming = true)),
                             ),
                         )
                     }
-
-                assertTrue(highlighter.entered.await(2, TimeUnit.SECONDS))
-                try {
-                    val streamingMarkdown = "```kotlin\nval live = true\n```"
-                    val streaming =
-                        withTimeout(2_000) {
-                            preparer.prepareMessage(
-                                Message(
-                                    id = "live",
-                                    role = MessageRole.Assistant,
-                                    text = streamingMarkdown,
-                                    parts = listOf(MessagePart.Text(streamingMarkdown, isStreaming = true)),
-                                ),
-                            )
-                        }
-                    assertNotNull(streaming.renderedMarkdown)
-                } finally {
-                    highlighter.release.countDown()
-                }
-                finalPreparation.await()
-                Unit
+                assertNotNull(streaming.renderedMarkdown)
             } finally {
-                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
+                highlighter.release.countDown()
             }
+            finalPreparation.await()
+            Unit
         }
 
     @Test
     fun prepareFinalPlaceholderDoesNotWaitForBlockedHighlighter() =
         runBlocking {
-            val prior = MarkdownHighlightPreferences.textMateEnabled
-            MarkdownHighlightPreferences.updateTextMateEnabled(true)
-            try {
-                val highlighter = BlockingHighlighter()
-                val preparer =
-                    MessageContentPreparer(OpenCodeTextMateHighlightingEngine(highlighter)).apply {
-                        computationDispatcher = Dispatchers.Default
-                    }
-                val markdown = "```kotlin\nval live = true\n```"
-                val streaming =
-                    preparer.prepareMessage(
-                        Message(
-                            id = "live",
-                            role = MessageRole.Assistant,
-                            text = markdown,
-                            parts = listOf(MessagePart.Text(markdown, isStreaming = true)),
-                        ),
-                    )
-                assertNotNull(streaming.renderedMarkdown)
+            val highlighter = BlockingEngine()
+            val preparer =
+                MessageContentPreparer(highlighter).apply {
+                    computationDispatcher = Dispatchers.Default
+                }
+            val markdown = "```kotlin\nval live = true\n```"
+            val streaming =
+                preparer.prepareMessage(
+                    Message(
+                        id = "live",
+                        role = MessageRole.Assistant,
+                        text = markdown,
+                        parts = listOf(MessagePart.Text(markdown, isStreaming = true)),
+                    ),
+                )
+            assertNotNull(streaming.renderedMarkdown)
 
-                val finalPreparation =
-                    async(Dispatchers.Default) {
+            val finalPreparation =
+                async(Dispatchers.Default) {
+                    preparer.prepareMessages(
+                        listOf(
+                            Message(
+                                id = "live",
+                                role = MessageRole.Assistant,
+                                text = markdown,
+                            ),
+                        ),
+                        mapOf("live" to streaming),
+                        MessagePreparationMode.Final,
+                    )
+                }
+            assertTrue(highlighter.entered.await(2, TimeUnit.SECONDS))
+            try {
+                val placeholder =
+                    withTimeout(2_000) {
                         preparer.prepareMessages(
                             listOf(
                                 Message(
@@ -438,125 +485,199 @@ class MessageContentPreparerTest {
                                 ),
                             ),
                             mapOf("live" to streaming),
-                            MessagePreparationMode.Final,
+                            MessagePreparationMode.FinalPlaceholder,
                         )
                     }
-                assertTrue(highlighter.entered.await(2, TimeUnit.SECONDS))
-                try {
-                    val placeholder =
-                        withTimeout(2_000) {
-                            preparer.prepareMessages(
-                                listOf(
-                                    Message(
-                                        id = "live",
-                                        role = MessageRole.Assistant,
-                                        text = markdown,
-                                    ),
-                                ),
-                                mapOf("live" to streaming),
-                                MessagePreparationMode.FinalPlaceholder,
-                            )
-                        }
-                    assertNotNull(placeholder.single().renderedMarkdown)
-                    assertTrue(placeholder.single().awaitingTextMateUpgrade)
-                } finally {
-                    highlighter.release.countDown()
-                }
-                finalPreparation.await()
-                Unit
+                assertNotNull(placeholder.single().renderedMarkdown)
+                assertTrue(placeholder.single().awaitingTextMateUpgrade)
             } finally {
-                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
+                highlighter.release.countDown()
             }
+            finalPreparation.await()
+            Unit
         }
 
     @Test
-    fun prepareTextBlock_highlighterThrow_fallsBackWithoutThrowing() =
+    fun failedEngineResultKeepsTheStructureDocument() =
         runTest(testDispatcher) {
-            val prior = MarkdownHighlightPreferences.textMateEnabled
-            MarkdownHighlightPreferences.updateTextMateEnabled(true)
-            try {
-                val preparer =
-                    MessageContentPreparer(OpenCodeTextMateHighlightingEngine(ThrowingHighlighter())).apply {
-                        computationDispatcher = testDispatcher
+            val preparer =
+                MessageContentPreparer(FailingEngine()).apply {
+                    computationDispatcher = testDispatcher
+                }
+            val fenced =
+                """
+                ```javascript
+                const x = 1
+                ```
+                """.trimIndent()
+            val display = preparer.prepareMessage(Message(id = "m1", role = MessageRole.Assistant, text = fenced))
+            // A failed fence is rejected, not attached: the code block stays plain.
+            val code = display.renderedMarkdown!!.codeBlock()
+            assertEquals("const x = 1", code.code)
+            assertTrue(code.spans.isEmpty())
+        }
+
+    @Test
+    fun finalPrepareContinuesAFencePastItsDeadlineUntilItIsColored() =
+        runTest(testDispatcher) {
+            val preparer =
+                MessageContentPreparer(HighlightCoreHighlightingEngine(deadlineMillis = 0.0)).apply {
+                    computationDispatcher = testDispatcher
+                }
+            val code = (1..3_000).joinToString("\n") { "  \"key$it\": [$it, true, null, \"value\"]," }
+            val message = Message(id = "m1", role = MessageRole.Assistant, text = "```json\n$code\n```")
+
+            val final = preparer.prepareMessage(message)
+
+            val expected = HighlightCoreHighlightingEngine().highlightNow(jsonRequest(code)).spans
+            assertEquals(expected, final.renderedMarkdown!!.codeBlock().spans)
+            assertFalse(final.awaitingTextMateUpgrade)
+            assertSame(final.renderedMarkdown, preparer.prepareMessage(message).renderedMarkdown)
+        }
+
+    @Test
+    fun finalPrepareAsksAPartialFenceAgainWithTheSameKeyAndRevision() =
+        runTest(testDispatcher) {
+            val engine =
+                ScriptedEngine { request, call ->
+                    val colored = minOf(request.source.length, (call + 1) * 4)
+                    val outcome =
+                        if (colored < request.source.length) TextMateParseOutcome.Partial else TextMateParseOutcome.Highlighted
+                    emptyResult(request, outcome).copy(spans = listOf(CodeSpan(0, colored, CodeTokenRole.Keyword)))
+                }
+            val preparer = MessageContentPreparer(engine).apply { computationDispatcher = testDispatcher }
+            val message = Message(id = "m1", role = MessageRole.Assistant, text = "```kotlin\nval answer = 42\n```")
+
+            val final = preparer.prepareMessage(message)
+
+            assertEquals(listOf(CodeSpan(0, 15, CodeTokenRole.Keyword)), final.renderedMarkdown!!.codeBlock().spans)
+            assertEquals(4, engine.requests.size)
+            val first = engine.requests.first()
+            assertTrue(engine.requests.all { it.key == first.key && it.revision == first.revision })
+            preparer.prepareMessage(message)
+            assertEquals("a settled document is cached", 4, engine.requests.size)
+        }
+
+    @Test
+    fun aFenceThatStopsProgressingIsNeitherRetriedForeverNorCached() =
+        runTest(testDispatcher) {
+            val engine =
+                ScriptedEngine { request, _ ->
+                    emptyResult(request, TextMateParseOutcome.Partial).copy(spans = listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)))
+                }
+            val preparer = MessageContentPreparer(engine).apply { computationDispatcher = testDispatcher }
+            val message = Message(id = "m1", role = MessageRole.Assistant, text = "```kotlin\nval answer = 42\n```")
+
+            val final = preparer.prepareMessage(message)
+
+            assertEquals(3, engine.requests.size)
+            assertEquals(listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)), final.renderedMarkdown!!.codeBlock().spans)
+            assertTrue(final.awaitingTextMateUpgrade)
+            preparer.prepareMessage(message)
+            assertEquals("a partial document is not cached", 6, engine.requests.size)
+        }
+
+    @Test
+    fun aCancelledFenceIsNotCachedAndTheNextPrepareColorsIt() =
+        runTest(testDispatcher) {
+            val engine =
+                ScriptedEngine { request, call ->
+                    if (call == 0) {
+                        emptyResult(request, TextMateParseOutcome.Cancelled)
+                    } else {
+                        emptyResult(request, TextMateParseOutcome.Highlighted)
+                            .copy(spans = listOf(CodeSpan(0, request.source.length, CodeTokenRole.Keyword)))
                     }
-                val fenced =
-                    """
-                    ```javascript
-                    const x = 1
-                    ```
-                    """.trimIndent()
-                val document =
-                    preparer.prepareTextBlock(
-                        blockID = "block-1",
-                        plain = fenced,
-                        isStreaming = false,
-                        sessionKey = "ses-1",
-                        mode = MessagePreparationMode.Final,
-                    )
-                // TextMate engine catches highlighter failures and keeps a semantic
-                // document rather than throwing into the pipeline.
-                assertNotNull(document)
-                assertTrue(document!!.blocks.any { it is MarkdownBlock.CodeBlock })
-                assertTrue(
-                    document.diagnostics.any { diagnostic ->
-                        diagnostic.message.contains("fallback", ignoreCase = true) ||
-                            diagnostic.kind.name.contains("Fallback", ignoreCase = true)
-                    },
-                )
-            } finally {
-                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
+                }
+            val preparer = MessageContentPreparer(engine).apply { computationDispatcher = testDispatcher }
+            val message = Message(id = "m1", role = MessageRole.Assistant, text = "```kotlin\nval answer = 42\n```")
+
+            val cancelled = preparer.prepareMessage(message)
+            val plain = cancelled.renderedMarkdown!!.codeBlock()
+            assertTrue(plain.spans.isEmpty())
+            assertTrue(cancelled.awaitingTextMateUpgrade)
+
+            // The previous display awaits an upgrade, so it is not reused either.
+            val colored = preparer.prepareMessage(message, previous = cancelled)
+            assertEquals(listOf(CodeSpan(0, 15, CodeTokenRole.Keyword)), colored.renderedMarkdown!!.codeBlock().spans)
+            assertFalse(colored.awaitingTextMateUpgrade)
+            assertEquals(2, engine.requests.size)
+            assertSame(colored.renderedMarkdown, preparer.prepareMessage(message).renderedMarkdown)
+            assertEquals(2, engine.requests.size)
+        }
+
+    @Test
+    fun aFailureWithAReasonIsCachedAndOneWithoutIsRetried() =
+        runTest(testDispatcher) {
+            val explained =
+                ScriptedEngine { request, _ ->
+                    emptyResult(request, TextMateParseOutcome.Failed)
+                        .copy(diagnostics = listOf(MarkdownDiagnostic(MarkdownDiagnosticKind.HighlighterFallback, "boom")))
+                }
+            val unexplained = ScriptedEngine { request, _ -> emptyResult(request, TextMateParseOutcome.Failed) }
+            val message = Message(id = "m1", role = MessageRole.Assistant, text = "```kotlin\nval answer = 42\n```")
+
+            for ((engine, cached) in listOf(explained to true, unexplained to false)) {
+                val preparer = MessageContentPreparer(engine).apply { computationDispatcher = testDispatcher }
+                val first = preparer.prepareMessage(message)
+                preparer.prepareMessage(message)
+                val code = first.renderedMarkdown!!.codeBlock()
+                assertTrue(code.spans.isEmpty())
+                assertEquals(!cached, first.awaitingTextMateUpgrade)
+                assertEquals(if (cached) 1 else 2, engine.requests.size)
             }
         }
 
-    private class ThrowingHighlighter : OpenCodeCodeHighlighter {
-        override fun supportsLanguage(languageOrAlias: String?): Boolean = true
+    private fun jsonRequest(source: String) =
+        HighlightRequest(
+            key = CodeBlockKey("one-shot"),
+            revision = HighlightRevision(1),
+            language = "json",
+            source = source,
+            intent = HighlightIntent.InteractiveFinal,
+            policyEpoch = 0,
+        )
 
-        override fun highlight(
-            languageOrAlias: String?,
-            code: String,
-        ): SyntaxHighlightResult {
-            error("injected highlighter failure")
+    private fun MarkdownDocument.codeBlock(): MarkdownBlock.CodeBlock = blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single()
+
+    /** Answers its Nth call (from 0) with [respond] and records every request. */
+    private class ScriptedEngine(
+        private val respond: (HighlightRequest, Int) -> HighlightResult,
+    ) : TextMateHighlightingEngine {
+        val requests = mutableListOf<HighlightRequest>()
+
+        override suspend fun highlight(request: HighlightRequest): HighlightResult {
+            val call = requests.size
+            requests += request
+            return respond(request, call)
         }
     }
 
-    private class RecordingHighlighter : OpenCodeCodeHighlighter {
-        var calls: Int = 0
+    /** Colors the whole fence as one keyword and records every request. */
+    private class RecordingEngine : TextMateHighlightingEngine {
+        val requests = mutableListOf<HighlightRequest>()
 
-        override fun supportsLanguage(languageOrAlias: String?): Boolean = true
-
-        override fun highlight(
-            languageOrAlias: String?,
-            code: String,
-        ): SyntaxHighlightResult {
-            calls += 1
-            return SyntaxHighlightResult(
-                spans = listOf(CodeSpan(0, code.length, CodeTokenRole.Keyword)),
-                diagnostics = emptyList(),
+        override suspend fun highlight(request: HighlightRequest): HighlightResult {
+            requests += request
+            return emptyResult(request, TextMateParseOutcome.Highlighted).copy(
+                canonicalLanguage = request.language,
+                spans = listOf(CodeSpan(0, request.source.length, CodeTokenRole.Keyword)),
             )
         }
     }
 
-    private class RecordingLogbook : TextMateLogbookRecorder {
-        val observations = mutableListOf<TextMateParseObservation>()
-
-        override fun submit(observations: List<TextMateParseObservation>) {
-            this.observations += observations
-        }
+    private class FailingEngine : TextMateHighlightingEngine {
+        override suspend fun highlight(request: HighlightRequest): HighlightResult = emptyResult(request, TextMateParseOutcome.Failed)
     }
 
-    private class BlockingHighlighter : OpenCodeCodeHighlighter {
+    private class BlockingEngine : TextMateHighlightingEngine {
         val entered = CountDownLatch(1)
         val release = CountDownLatch(1)
 
-        override fun supportsLanguage(languageOrAlias: String?): Boolean = true
-
-        override fun highlight(
-            languageOrAlias: String?,
-            code: String,
-        ): SyntaxHighlightResult {
+        override suspend fun highlight(request: HighlightRequest): HighlightResult {
             entered.countDown()
             check(release.await(5, TimeUnit.SECONDS)) { "Timed out waiting to release highlighter" }
-            return SyntaxHighlightResult(spans = emptyList(), diagnostics = emptyList())
+            return emptyResult(request, TextMateParseOutcome.NoSpans)
         }
     }
 }

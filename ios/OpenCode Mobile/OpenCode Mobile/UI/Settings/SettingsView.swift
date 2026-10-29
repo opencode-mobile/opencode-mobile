@@ -7,18 +7,23 @@ enum SettingsDetail: Hashable {
     case servers
     case appearance
     case componentGallery
-    case textMateLanguages
-    case textMateLogbook
     case featureFlags
     case diagnosticLogs
+    #if HIGHLIGHT_LAB
+    case highlightLab
+    #endif
 
     /// Whether the screen lives in the Developer Tools section that Clear All Data locks.
     var requiresDeveloperTools: Bool {
         switch self {
         case .servers, .appearance, .diagnosticLogs:
             false
-        case .componentGallery, .textMateLanguages, .textMateLogbook, .featureFlags:
+        case .componentGallery, .featureFlags:
             true
+        #if HIGHLIGHT_LAB
+        case .highlightLab:
+            true
+        #endif
         }
     }
 
@@ -40,10 +45,11 @@ struct SettingsView: View {
     /// Trailing-pane sub-screen in the regular-width split view. Unused on compact.
     @State private var selectedDetail: SettingsDetail = .servers
     @State private var showComponentGallery = false
-    @State private var showTextMateLogbook = false
     @State private var showDiagnosticLogs = false
-    @State private var showTextMateLanguages = false
     @State private var showFeatureFlags = false
+    #if HIGHLIGHT_LAB
+    @State private var showHighlightLab = false
+    #endif
     @State private var showClearConfirmation = false
     @State private var showClearSessionCacheConfirmation = false
     @State private var sessionCacheSizeLabel = "Empty"
@@ -54,7 +60,6 @@ struct SettingsView: View {
     @State private var showSessionRowsPicker = false
     @State private var themeManager = ThemeManager.shared
     @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
-    @State private var markdownHighlightPreferences = MarkdownHighlightPreferences.shared
     @State private var analyticsConsentPreferences = AnalyticsConsentPreferences.shared
     @State private var appLockPreferences = AppLockPreferences.shared
     private let appLockAuthenticator: any AppLockAuthenticating = LocalAuthenticationAppLockAuthenticator()
@@ -96,15 +101,14 @@ struct SettingsView: View {
         .navigationDestination(isPresented: $showComponentGallery) {
             ComponentGalleryHomeView()
         }
-        .navigationDestination(isPresented: $showTextMateLanguages) {
-            TextMateLanguagesView()
-        }
-        .navigationDestination(isPresented: $showTextMateLogbook) {
-            TextMateLogbookView()
-        }
         .navigationDestination(isPresented: $showFeatureFlags) {
             FeatureFlagsView()
         }
+        #if HIGHLIGHT_LAB
+        .navigationDestination(isPresented: $showHighlightLab) {
+            HighlightLabHomeView()
+        }
+        #endif
         .navigationDestination(isPresented: $showDiagnosticLogs) {
             DiagnosticLogsView()
         }
@@ -620,44 +624,18 @@ struct SettingsView: View {
                         )
                         .padding(.horizontal, 16)
 
+                        #if HIGHLIGHT_LAB
                         OpenCodeListItem(
-                            title: "TextMate Highlighting",
-                            subtitle: "On by default for all packaged languages; semantic fallback otherwise (can disable)",
+                            title: "Highlighting Lab",
+                            subtitle: "Data sets and on-device benchmarks",
+                            selected: isDetailSelected(.highlightLab),
                             style: .card,
-                            startDecorator: .icon(.description, accessibilityLabel: "TextMate Highlighting"),
-                            accessory: .toggle(
-                                isOn: Binding(
-                                    get: { markdownHighlightPreferences.textMateEnabled },
-                                    set: { newValue in
-                                        markdownHighlightPreferences.setTextMateEnabled(newValue)
-                                        MessageContentPreparer.shared.clearDocumentCache()
-                                        BlockDecorationCache.shared.clear()
-                                    }
-                                ),
-                                accessibilityLabel: "TextMate Highlighting"
-                            )
+                            startDecorator: .icon(.code, accessibilityLabel: "Highlighting Lab"),
+                            action: { open(.highlightLab) }
                         )
                         .padding(.horizontal, 16)
-
-                        OpenCodeListItem(
-                            title: "TextMate Languages",
-                            subtitle: "Opt out of any packaged language (all default on)",
-                            selected: isDetailSelected(.textMateLanguages),
-                            style: .card,
-                            startDecorator: .icon(.architecture, accessibilityLabel: "TextMate Languages"),
-                            action: { open(.textMateLanguages) }
-                        )
-                        .padding(.horizontal, 16)
-
-                        OpenCodeListItem(
-                            title: "TextMate Logbook",
-                            subtitle: "Persisted code-fence parsing measurements",
-                            selected: isDetailSelected(.textMateLogbook),
-                            style: .card,
-                            startDecorator: .icon(.description, accessibilityLabel: "TextMate Logbook"),
-                            action: { open(.textMateLogbook) }
-                        )
-                        .padding(.horizontal, 16)
+                        .accessibilityIdentifier("settings.highlightLab")
+                        #endif
 
                         OpenCodeListItem(
                             title: "Feature Flags",
@@ -720,10 +698,11 @@ struct SettingsView: View {
         case .servers: showServers = true
         case .appearance: showAppearance = true
         case .componentGallery: showComponentGallery = true
-        case .textMateLanguages: showTextMateLanguages = true
-        case .textMateLogbook: showTextMateLogbook = true
         case .featureFlags: showFeatureFlags = true
         case .diagnosticLogs: showDiagnosticLogs = true
+        #if HIGHLIGHT_LAB
+        case .highlightLab: showHighlightLab = true
+        #endif
         }
     }
 
@@ -752,14 +731,14 @@ struct SettingsView: View {
             AppearanceSettingsView(detailControl: control)
         case .componentGallery:
             ComponentGalleryHomeView(detailControl: control)
-        case .textMateLanguages:
-            TextMateLanguagesView(detailControl: control)
-        case .textMateLogbook:
-            TextMateLogbookView(detailControl: control)
         case .featureFlags:
             FeatureFlagsView(detailControl: control)
         case .diagnosticLogs:
             DiagnosticLogsView(detailControl: control)
+        #if HIGHLIGHT_LAB
+        case .highlightLab:
+            HighlightLabHomeView(detailControl: control)
+        #endif
         }
     }
 

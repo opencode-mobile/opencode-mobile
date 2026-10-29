@@ -104,7 +104,6 @@ enum StoreScreenshotSeeder {
         await Container.shared.sessionCache().clearAll()
         ThemeManager.shared.clearAll()
         HomeDisplayPreferences.shared.clear()
-        MarkdownHighlightPreferences.shared.clear()
         AnalyticsConsentPreferences.shared.clear()
         AppOnboardingPreferences.shared.clear()
         DeveloperToolsPreferences.shared.clear()
@@ -114,7 +113,7 @@ enum StoreScreenshotSeeder {
         FeatureFlags.shared.clearOverrides()
         MessageContentPreparer.shared.clearDocumentCache()
         BlockDecorationCache.shared.clear()
-        await TextMateLogbook.shared.clear()
+        await Container.codeHighlighter.trim(.critical)
         DiagnosticLogBuffer.shared.clear()
     }
 }

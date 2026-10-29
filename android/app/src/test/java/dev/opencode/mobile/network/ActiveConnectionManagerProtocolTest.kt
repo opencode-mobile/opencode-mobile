@@ -482,6 +482,70 @@ class ActiveConnectionManagerProtocolTest {
             assertEquals(listOf(lan, tailscale), manager.currentProfile()?.serverUrls)
             assertEquals("profile-1", manager.currentProfile()?.id)
         }
+
+    @Test
+    fun reloadFromStore_bindsStoredAddressWithoutWaitingForProbe() =
+        runTest {
+            val lan = "http://192.168.1.2:4096/"
+            val tailscale = "http://100.64.0.3:4096/"
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val store = FakeProfileStore()
+            store.saveProfile(
+                ConnectionProfile(
+                    id = "profile-1",
+                    baseUrl = lan,
+                    username = "opencode",
+                    password = "token",
+                    serverUrls = listOf(lan, tailscale),
+                ),
+            )
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing {
+                        started.complete(Unit)
+                        release.await()
+                        ServerProtocol.V2
+                    },
+                )
+
+            manager.reloadFromStore()
+
+            assertEquals(lan, manager.current()?.baseUrl)
+            assertTrue(!started.isCompleted)
+            release.complete(Unit)
+        }
+
+    @Test
+    fun resolveReachableAddress_rebindsWhenABetterHostWins() =
+        runTest {
+            val lan = "http://192.168.1.2:4096/"
+            val tailscale = "http://100.64.0.3:4096/"
+            val store = FakeProfileStore()
+            store.saveProfile(
+                ConnectionProfile(
+                    id = "profile-1",
+                    baseUrl = lan,
+                    username = "opencode",
+                    password = "token",
+                    serverUrls = listOf(lan, tailscale),
+                ),
+            )
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+
+            manager.reloadFromStore()
+            assertEquals(lan, manager.current()?.baseUrl)
+
+            assertTrue(manager.resolveReachableAddress(requireNotNull(store.activeProfile())))
+
+            assertEquals(tailscale, manager.current()?.baseUrl)
+            assertEquals("profile-1", manager.currentProfile()?.id)
+        }
 }
 
 private val sampleProfile =

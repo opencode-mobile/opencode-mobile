@@ -98,7 +98,7 @@ private const val BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD = 2_000
 
 /**
  * Format-always / color-later: never strip prepared spans while streaming.
- * Structure-only docs already have empty spans; semantic fallback keeps colors.
+ * Structure-only docs already have empty spans; highlight-core colors arrive later.
  */
 @Suppress("UNUSED_PARAMETER")
 internal fun forcePlainStreamingCode(
@@ -324,7 +324,7 @@ private fun CodeBlockView(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant, CodeBlockShape)
+                .background(colors.surface(MaterialTheme.colorScheme.surfaceVariant), CodeBlockShape)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CodeBlockShape)
                 .messageCodeBlockTapTarget(block.code, tapGate)
                 .horizontalScroll(scrollState)
@@ -333,6 +333,7 @@ private fun CodeBlockView(
         Text(
             text = annotated,
             modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
+            color = colors.plain,
             style = CodeTextStyle,
             softWrap = false,
         )
@@ -352,7 +353,7 @@ private fun DiffBlockView(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant, CodeBlockShape)
+                .background(colors.surface(MaterialTheme.colorScheme.surfaceVariant), CodeBlockShape)
                 .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CodeBlockShape)
                 .messageCodeBlockTapTarget(code, tapGate)
                 .horizontalScroll(scrollState)
@@ -377,6 +378,7 @@ private fun DiffBlockView(
                 Text(
                     text = annotated,
                     modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
+                    color = colors.plain,
                     style = CodeTextStyle,
                     softWrap = false,
                 )
@@ -846,7 +848,7 @@ internal fun buildCodeAnnotatedString(
                 val start = span.start.coerceIn(0, code.length)
                 val end = span.end.coerceIn(start, code.length)
                 if (start < end) {
-                    addStyle(SpanStyle(color = colors.colorForRole(span.role)), start, end)
+                    addStyle(SpanStyle(color = colors.colorFor(span.role)), start, end)
                 }
             }
     }
@@ -871,69 +873,6 @@ private fun CodeTokenRole.stylePriority(): Int =
         CodeTokenRole.Deleted -> 15
         CodeTokenRole.Warning -> 16
         CodeTokenRole.Critical -> 17
-    }
-
-internal data class CodeColors(
-    val plain: androidx.compose.ui.graphics.Color,
-    val comment: androidx.compose.ui.graphics.Color,
-    val keyword: androidx.compose.ui.graphics.Color,
-    val string: androidx.compose.ui.graphics.Color,
-    val constant: androidx.compose.ui.graphics.Color,
-    val type: androidx.compose.ui.graphics.Color,
-    val property: androidx.compose.ui.graphics.Color,
-    val primitive: androidx.compose.ui.graphics.Color,
-    val variable: androidx.compose.ui.graphics.Color,
-    val operator: androidx.compose.ui.graphics.Color,
-    val punctuation: androidx.compose.ui.graphics.Color,
-    val info: androidx.compose.ui.graphics.Color,
-    val inserted: androidx.compose.ui.graphics.Color,
-    val deleted: androidx.compose.ui.graphics.Color,
-    val warning: androidx.compose.ui.graphics.Color,
-    val critical: androidx.compose.ui.graphics.Color,
-)
-
-@Composable
-internal fun codeColors(): CodeColors =
-    CodeColors(
-        plain = MaterialTheme.colorScheme.onSurface,
-        comment = openCodeColor("syntax-comment"),
-        keyword = openCodeColor("syntax-keyword"),
-        string = openCodeColor("syntax-string"),
-        constant = openCodeColor("syntax-constant"),
-        type = openCodeColor("syntax-type"),
-        property = openCodeColor("syntax-property"),
-        primitive = openCodeColor("syntax-primitive"),
-        variable = openCodeColor("syntax-variable"),
-        operator = openCodeColor("syntax-operator"),
-        punctuation = openCodeColor("syntax-punctuation"),
-        info = openCodeColor("syntax-info"),
-        inserted = openCodeColor("diff-add"),
-        deleted = openCodeColor("diff-delete"),
-        warning = openCodeColor("syntax-diff-unknown"),
-        critical = openCodeColor("syntax-critical"),
-    )
-
-private fun CodeColors.colorForRole(role: CodeTokenRole): androidx.compose.ui.graphics.Color =
-    when (role) {
-        CodeTokenRole.Plain -> plain
-        CodeTokenRole.Comment -> comment
-        CodeTokenRole.Keyword -> keyword
-        CodeTokenRole.Type -> type
-        CodeTokenRole.Variable -> variable
-        CodeTokenRole.Property -> constant
-        CodeTokenRole.Constant -> constant
-        CodeTokenRole.Function -> primitive
-        CodeTokenRole.Number,
-        CodeTokenRole.Attribute,
-        -> property
-        CodeTokenRole.String -> string
-        CodeTokenRole.Operator -> operator
-        CodeTokenRole.Punctuation -> punctuation
-        CodeTokenRole.Tag -> info
-        CodeTokenRole.Inserted -> inserted
-        CodeTokenRole.Deleted -> deleted
-        CodeTokenRole.Warning -> warning
-        CodeTokenRole.Critical -> critical
     }
 
 @Composable

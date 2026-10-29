@@ -45,7 +45,10 @@ enum RenderedMarkdownGalleryMocks {
     ### Syntax language sweep
 
     ```kotlin
-    data class Session(val id: String, val active: Boolean)
+    @Serializable
+    data class Session(val id: String, val active: Boolean) {
+        fun label(max: Int = 12): String = if (active) id.take(max + 1) else "idle"
+    }
     ```
 
     ```swift

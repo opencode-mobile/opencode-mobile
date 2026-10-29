@@ -35,6 +35,13 @@ val releaseEnvironment =
         providers.environmentVariable(name).orNull?.takeIf(String::isNotBlank)
     }
 
+// A Highlighting Lab build (#872) for App Distribution is signed with the upload key when CI
+// provides it, so it installs over earlier distributed builds; locally it stays debug-signed.
+val benchmarkArtifactTaskRequested =
+    gradle.startParameter.taskNames.any { taskName -> taskName.contains("assembleBenchmark", ignoreCase = true) }
+val uploadSigningAvailable =
+    releaseEnvironmentNames.filter { it.startsWith("ANDROID_UPLOAD_") }.all { releaseEnvironment[it] != null }
+
 if (releaseArtifactTaskRequested) {
     val missingEnvironment = releaseEnvironment.filterValues { it == null }.keys
     if (missingEnvironment.isNotEmpty()) {
@@ -107,7 +114,7 @@ android {
     }
 
     signingConfigs {
-        if (releaseArtifactTaskRequested) {
+        if (releaseArtifactTaskRequested || (benchmarkArtifactTaskRequested && uploadSigningAvailable)) {
             create("release") {
                 storeFile = file(requireNotNull(releaseEnvironment.getValue("ANDROID_UPLOAD_KEYSTORE_PATH")))
                 storePassword = requireNotNull(releaseEnvironment.getValue("ANDROID_UPLOAD_STORE_PASSWORD"))
@@ -128,6 +135,19 @@ android {
             ndk {
                 // Function names for Play / Android Vitals native stacks without FULL size cost.
                 debugSymbolLevel = "SYMBOL_TABLE"
+            }
+        }
+        // Release-like build for on-device Highlighting Lab numbers (#872): R8 on, not
+        // debuggable, Firebase-free like debug, and signed with the debug key unless CI
+        // provides the upload key for App Distribution.
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            manifestPlaceholders["crashlyticsVerificationEnabled"] = false
+            proguardFiles("proguard-benchmark.pro")
+            ndk {
+                debugSymbolLevel = "NONE"
             }
         }
     }
@@ -152,6 +172,18 @@ android {
     }
 
     sourceSets {
+        // The Highlighting Lab ships in debug and benchmark only; release has a no-op seam.
+        getByName("debug") {
+            java.srcDir("src/lab/java")
+        }
+        getByName("benchmark") {
+            java.srcDir("src/lab/java")
+            // Debug's Firebase-free feedback and observability seams.
+            java.srcDir("src/debug/java")
+        }
+        getByName("testDebug") {
+            java.srcDir("src/testLab/java")
+        }
         getByName("test") {
             resources.srcDir("../../shared/sse-recovery")
             resources.srcDir("../../shared/feedback")

@@ -3,10 +3,6 @@ package dev.opencode.mobile.domain.textmate
 import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.res.Configuration
-import android.os.PowerManager
-import androidx.lifecycle.DefaultLifecycleObserver
-import androidx.lifecycle.LifecycleOwner
-import androidx.lifecycle.ProcessLifecycleOwner
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dev.opencode.mobile.markdown.MemoryPressure
 import dev.opencode.mobile.markdown.TextMateHighlightingEngine
@@ -18,7 +14,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Forwards process memory, foreground, and low-power hints into the TextMate engine owner.
+ * Forwards process memory pressure into the highlighting engine so it can drop cached sessions.
  * Registration is idempotent and owned by the singleton lifetime.
  */
 @Singleton
@@ -27,8 +23,7 @@ class TextMateProcessPressureObserver
     constructor(
         @ApplicationContext private val context: Context,
         private val engine: TextMateHighlightingEngine,
-    ) : ComponentCallbacks2,
-        DefaultLifecycleObserver {
+    ) : ComponentCallbacks2 {
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         private val pressure = TextMatePressureForwarder(engine, scope)
         private var registered = false
@@ -37,8 +32,6 @@ class TextMateProcessPressureObserver
             if (registered) return
             registered = true
             context.registerComponentCallbacks(this)
-            ProcessLifecycleOwner.get().lifecycle.addObserver(this)
-            publishPowerState()
         }
 
         override fun onConfigurationChanged(newConfig: Configuration) = Unit
@@ -48,29 +41,11 @@ class TextMateProcessPressureObserver
         }
 
         override fun onTrimMemory(level: Int) {
-            if (pressure.onTrimMemory(level)) publishPowerState()
-        }
-
-        override fun onStart(owner: LifecycleOwner) {
-            pressure.onForeground()
-            // Battery saver can toggle while cached without any trim, so re-read it here.
-            publishPowerState()
-        }
-
-        private fun publishPowerState() {
-            val power = context.getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
-            val lowPower = power.isPowerSaveMode
-            val androidEngine = engine as? AndroidTextMateHighlightingEngine ?: return
-            scope.launch {
-                androidEngine.setLowPowerOrThermal(lowPower)
-            }
+            pressure.onTrimMemory(level)
         }
     }
 
-/**
- * Turns process signals into scheduler trims. Android never reports that pressure is
- * over, so coming back to the foreground sends [MemoryPressure.Normal].
- */
+/** Turns process memory signals into engine trims. */
 internal class TextMatePressureForwarder(
     private val engine: TextMateHighlightingEngine,
     private val scope: CoroutineScope,
@@ -84,10 +59,6 @@ internal class TextMatePressureForwarder(
         val pressure = memoryPressureForTrimLevel(level) ?: return false
         scope.launch { engine.trim(pressure) }
         return true
-    }
-
-    fun onForeground() {
-        scope.launch { engine.trim(MemoryPressure.Normal) }
     }
 }
 

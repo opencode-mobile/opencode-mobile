@@ -264,13 +264,15 @@ private struct SourceBody: View {
             .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.leading, 12)
+        // Full-bleed source takes a syntax preset's editor background; otherwise the sheet's.
+        .background(OpenCodeColors.codeBackground(or: .clear))
         .task(id: source + (presentation.highlightLanguage ?? "")) {
             guard let language = presentation.highlightLanguage else {
                 spans = []
                 return
             }
             let highlighted = await Task.detached(priority: .userInitiated) {
-                FileFallbackCodeHighlighter.spans(language: language, source: source)
+                HighlightCoreOneShotHighlighter.spans(language: language, source: source)
             }.value
             spans = highlighted
         }
@@ -282,7 +284,7 @@ private struct SourceBody: View {
             if spans.isEmpty {
                 Text(line.text.isEmpty ? " " : line.text)
                     .font(OpenCodeTypography.code)
-                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .foregroundStyle(OpenCodeColors.codeText)
             } else {
                 Text(NativeMarkdownAttributedString.code(line.text, spans: spans))
                     .font(OpenCodeTypography.code)

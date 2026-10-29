@@ -5,7 +5,7 @@ package dev.opencode.mobile.domain.message
  * Replaces boolean flag combinations.
  */
 enum class MessagePreparationMode {
-    /** Live streaming prepare; plain text above the streaming size threshold. */
+    /** Live streaming prepare. No size skip; the pipeline colors fences after the structure frame. */
     Streaming,
 
     /** Usable cold history without starting missing markdown parses. */

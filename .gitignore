@@ -84,11 +84,6 @@ android/screenshot/src/test/snapshots/
 **/*SnapshotEvidence.swift
 **/*SnapshotEvidence.kt
 
-# markdown-core native Oniguruma build artifacts
-shared/markdown-core/native/build/
-shared/markdown-core/native/libs/
-shared/markdown-core/native/oniguruma-src/
-
 # Store screenshot capture output
 /store-screenshots/
 /launch-graphics/

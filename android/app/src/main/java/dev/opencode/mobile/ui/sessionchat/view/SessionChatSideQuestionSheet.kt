@@ -17,8 +17,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeButton
@@ -76,7 +76,7 @@ private fun SessionChatSideQuestionBody(answer: SessionChatSideQuestionAnswer) {
         value =
             withContext(Dispatchers.Default) {
                 runCatching {
-                    OpenCodeMarkdownParser.parse(answer.answer, codeHighlighter = OpenCodeSemanticFallbackHighlighter)
+                    OpenCodeMarkdownParser.parse(answer.answer, codeHighlighter = OpenCodeHighlightCoreCodeHighlighter)
                 }.getOrNull()
             }
     }

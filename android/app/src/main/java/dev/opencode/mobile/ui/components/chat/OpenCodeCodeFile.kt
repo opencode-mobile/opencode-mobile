@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
@@ -34,10 +35,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,11 +60,20 @@ private val CodeFileGutterPadding = 8.dp
 private val CodeFileCodePadding = 12.dp
 private val CodeFileLineMinHeight = 20.dp
 private const val CODE_FILE_MIN_GUTTER_DIGITS = 2
+private const val CODE_FILE_MARK_ALPHA = 0.28f
 
 /** One source line with syntax spans relative to [text]. */
 data class OpenCodeCodeLine(
     val text: String,
     val spans: List<CodeSpan> = emptyList(),
+    /** Ranges of [text] drawn on the marked background, such as where two highlighters disagree. */
+    val marks: List<OpenCodeCodeMark> = emptyList(),
+)
+
+/** A marked range of one [OpenCodeCodeLine], [start] inclusive and [end] exclusive. */
+data class OpenCodeCodeMark(
+    val start: Int,
+    val end: Int,
 )
 
 /** Splits a whole source plus whole-source spans into [OpenCodeCodeLine]s for [OpenCodeCodeFile]. */
@@ -178,6 +191,7 @@ fun OpenCodeCodeFile(
     state: LazyListState = rememberLazyListState(),
 ) {
     val colors = codeColors()
+    val markColor = openCodeColor("warning").copy(alpha = CODE_FILE_MARK_ALPHA)
     val lineNumberColor = openCodeColor("text-weaker")
     val gutterDivider = openCodeColor("border-weaker-base")
     val density = LocalDensity.current
@@ -195,7 +209,7 @@ fun OpenCodeCodeFile(
 
     // Code reads left to right regardless of the app's layout direction.
     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        BoxWithConstraints(modifier = modifier.clipToBounds()) {
+        BoxWithConstraints(modifier = modifier.background(colors.surface(Color.Transparent)).clipToBounds()) {
             val codeViewportPx =
                 constraints.maxWidth - with(density) { (gutterWidth + CodeFileCodePadding * 2).toPx() }
             val maxOffset = if (wrapLines) 0f else (longestLine * charWidthPx - codeViewportPx).coerceAtLeast(0f)
@@ -226,6 +240,7 @@ fun OpenCodeCodeFile(
                         number = index + 1,
                         line = line,
                         colors = colors,
+                        markColor = markColor,
                         gutterWidth = gutterWidth,
                         lineNumberColor = lineNumberColor,
                         gutterDivider = gutterDivider,
@@ -243,13 +258,30 @@ private fun CodeFileRow(
     number: Int,
     line: OpenCodeCodeLine,
     colors: CodeColors,
+    markColor: androidx.compose.ui.graphics.Color,
     gutterWidth: androidx.compose.ui.unit.Dp,
     lineNumberColor: androidx.compose.ui.graphics.Color,
     gutterDivider: androidx.compose.ui.graphics.Color,
     wrapLines: Boolean,
     horizontalOffset: () -> Float,
 ) {
-    val annotated = remember(line, colors) { buildCodeAnnotatedString(line.text, line.spans, colors) }
+    val annotated =
+        remember(line, colors, markColor) {
+            val highlighted = buildCodeAnnotatedString(line.text, line.spans, colors)
+            if (line.marks.isEmpty()) {
+                highlighted
+            } else {
+                AnnotatedString
+                    .Builder(highlighted)
+                    .apply {
+                        line.marks.forEach { mark ->
+                            val start = mark.start.coerceIn(0, line.text.length)
+                            val end = mark.end.coerceIn(start, line.text.length)
+                            if (start < end) addStyle(SpanStyle(background = markColor), start, end)
+                        }
+                    }.toAnnotatedString()
+            }
+        }
     Row(
         modifier =
             Modifier

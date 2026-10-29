@@ -56,6 +56,8 @@ class MainActivity : FragmentActivity() {
         // Rotation, theme, or locale recreation is not a return from the background.
         wasInBackground = savedInstanceState?.getBoolean(STATE_UNLOCKED_ACROSS_RECREATE) != true
         worldSignals.register()
+        // `--es labRun <plan>` in Lab builds: run the benchmark unattended, then finish.
+        if (HighlightingLabSeam.startHeadlessRun(this, intent)) return
 
         enableEdgeToEdge()
         // The task-manager thumbnail follows the App Lock setting: when on, recents shows

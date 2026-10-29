@@ -71,7 +71,7 @@ data class TimelineFrame(
 
     /**
      * Armed auto-follow key for inserts / non-decorate layout changes.
-     * Decorate-only frames return `0` so TextMate / slash collapse paint does not re-scroll.
+     * Decorate-only frames return `0` so code-color / slash collapse paint does not re-scroll.
      */
     fun structureAffectingRevision(): Long {
         val structureIds = insertedRowIDs + (layoutChangedRowIDs - decorateRowIDs)

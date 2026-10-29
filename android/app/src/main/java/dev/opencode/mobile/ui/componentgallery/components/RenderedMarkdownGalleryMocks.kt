@@ -1,8 +1,8 @@
 package dev.opencode.mobile.ui.componentgallery.components
 
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 
 data class RenderedMarkdownGalleryMock(
@@ -15,7 +15,7 @@ data class RenderedMarkdownGalleryMock(
 )
 
 object RenderedMarkdownGalleryMocks {
-    private val codeHighlighter = OpenCodeSemanticFallbackHighlighter
+    private val codeHighlighter = OpenCodeHighlightCoreCodeHighlighter
 
     private val assistantMarkdown =
         """
@@ -62,6 +62,15 @@ object RenderedMarkdownGalleryMocks {
             return url ?? "";
           }
         }
+        ```
+
+        ```kotlin
+        @JvmInline
+        value class Retry(val count: Int)
+
+        const val MAX_RETRIES = 3
+
+        fun backoff(retry: Retry): Long = retry.count * 250L + MAX_RETRIES // ms
         ```
         """.trimIndent()
 

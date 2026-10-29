@@ -4,6 +4,15 @@ import dev.opencode.mobile.markdown.MarkdownDocument
 import kotlinx.coroutines.flow.Flow
 
 /**
+ * A streaming fence pass. [partial] means the engine deadline stopped the call;
+ * the spans are a colored prefix and the next pass continues.
+ */
+data class StreamingHighlight(
+    val document: MarkdownDocument,
+    val partial: Boolean,
+)
+
+/**
  * Raw message snapshots that feed [DisplayMessagePipeline]. Production wires
  * [MessageSync]; tests use a controllable source so pacing and preparation can
  * be exercised without transport.
@@ -32,24 +41,28 @@ interface DisplayMessagePreparing {
         mode: MessagePreparationMode = MessagePreparationMode.Final,
     ): DisplayMessage
 
-    suspend fun prepareTextBlock(
-        blockID: String,
-        plain: String,
-        isStreaming: Boolean,
-        sessionKey: String = "",
-        mode: MessagePreparationMode = MessagePreparationMode.Streaming,
-    ): MarkdownDocument?
-
     /**
-     * Format-first streaming parse. TextMate on → empty code spans; TextMate off →
-     * semantic fallback. Does not touch the preparer LRU or TextMate. Returns null
-     * only when markdown is not detected (or parse fails).
+     * Format-first streaming parse with empty code spans. Does not touch the
+     * preparer LRU or the highlighting engine. Returns null only when markdown
+     * is not detected (or parse fails).
      */
     suspend fun prepareStructureOnlyTextBlock(
         blockID: String,
         plain: String,
         sessionKey: String = "",
     ): MarkdownDocument?
+
+    /**
+     * Colors the fences in a streaming block after the structure frame has
+     * published. Does not touch the preparer LRU. A newer token drops the
+     * result; the engine re-lexes from the last changed line and stops on its
+     * deadline. Returns null when markdown is not detected (or parse fails).
+     */
+    suspend fun highlightStreamingTextBlock(
+        blockID: String,
+        plain: String,
+        sessionKey: String = "",
+    ): StreamingHighlight?
 }
 
 fun MessageSync.asDisplayMessageSnapshotSource(): DisplayMessageSnapshotSource =
@@ -81,27 +94,23 @@ fun MessageContentPreparer.asDisplayMessagePreparing(): DisplayMessagePreparing 
                 mode,
             )
 
-        override suspend fun prepareTextBlock(
-            blockID: String,
-            plain: String,
-            isStreaming: Boolean,
-            sessionKey: String,
-            mode: MessagePreparationMode,
-        ): MarkdownDocument? =
-            this@asDisplayMessagePreparing.prepareTextBlock(
-                blockID = blockID,
-                plain = plain,
-                isStreaming = isStreaming,
-                sessionKey = sessionKey,
-                mode = mode,
-            )
-
         override suspend fun prepareStructureOnlyTextBlock(
             blockID: String,
             plain: String,
             sessionKey: String,
         ): MarkdownDocument? =
             this@asDisplayMessagePreparing.prepareStructureOnlyTextBlock(
+                blockID = blockID,
+                plain = plain,
+                sessionKey = sessionKey,
+            )
+
+        override suspend fun highlightStreamingTextBlock(
+            blockID: String,
+            plain: String,
+            sessionKey: String,
+        ): StreamingHighlight? =
+            this@asDisplayMessagePreparing.highlightStreamingTextBlock(
                 blockID = blockID,
                 plain = plain,
                 sessionKey = sessionKey,

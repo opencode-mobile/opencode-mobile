@@ -1,12 +1,12 @@
 package dev.opencode.mobile.domain.message
 
-import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.markdown.CodeSpan
+import dev.opencode.mobile.markdown.CodeTokenRole
 import dev.opencode.mobile.markdown.MarkdownBlock
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownInline
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import dev.opencode.mobile.markdown.OpenCodeStructureOnlyHighlighter
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -464,14 +464,13 @@ class DisplayMessagePipelineCharacterizationTest {
             val plain = harness.emissions.single() as DisplayMessageListUpdate.Messages
             assertEquals("# Hello", plain.messages.single().text)
             assertTrue(plain.messages.single().isStreaming)
-            // Structure-first paints markdown chrome without waiting on decoration.
+            // Structure-first paints markdown chrome without waiting on a held prepare.
             assertTrue(plain.messages.single().renderedMarkdown != null)
             assertTrue(harness.preparer.prepareStructureOnlyInvocations.isNotEmpty())
             assertTrue(
-                "decoration prepare may be held, but must not block structure-first text lane",
+                "a held prepare must not block the structure-first text lane",
                 harness.preparer.hasPendingPrepareMessagesHold() ||
-                    harness.preparer.prepareMessagesInvocations.isNotEmpty() ||
-                    harness.preparer.prepareTextBlockInvocations.isNotEmpty(),
+                    harness.preparer.prepareMessagesInvocations.isNotEmpty(),
             )
 
             harness.timeSource += STREAMING_PREPARE_MAX_BATCH_MS.milliseconds
@@ -488,81 +487,13 @@ class DisplayMessagePipelineCharacterizationTest {
             harness.preparer.releaseNextPrepareMessages()
             advanceUntilIdle()
 
-            // Stale decoration for "# Hello" must not erase newer plain text.
+            // A stale prepare for "# Hello" must not erase newer plain text.
             val afterRelease = harness.emissions.last() as DisplayMessageListUpdate.Messages
             assertEquals("# Hello world", afterRelease.messages.single().text)
         }
 
     @Test
-    fun failingPrepareTextBlock_keepsPublishedPlainStreamingText() =
-        runTest(testDispatcher) {
-            val harness = startHarness(holdDelays = true)
-
-            harness.source.emit(MessageListUpdate.Messages(listOf(plainAssistant("seed"))))
-            harness.emissions.clear()
-            harness.preparer.prepareTextBlockInvocations.clear()
-
-            harness.preparer.failNextPrepareTextBlock = true
-            harness.source.emit(
-                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "# Hello"))),
-            )
-            harness.delay.release()
-            advanceUntilIdle()
-
-            assertTrue(harness.emissions.isNotEmpty())
-            val plain = harness.emissions.last() as DisplayMessageListUpdate.Messages
-            assertEquals("# Hello", plain.messages.single().text)
-            assertTrue(plain.messages.single().isStreaming)
-
-            harness.timeSource += STREAMING_PREPARE_MAX_BATCH_MS.milliseconds
-            harness.source.emit(
-                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "# Hello world"))),
-            )
-            advanceUntilIdle()
-
-            val latest = harness.emissions.last() as DisplayMessageListUpdate.Messages
-            assertEquals("# Hello world", latest.messages.single().text)
-            assertTrue(harness.emissions.none { it is DisplayMessageListUpdate.LoadFailed })
-        }
-
-    @Test
-    fun decorationBacklogPressure_doesNotBlockPlainStreamingTextLane() =
-        runTest(testDispatcher) {
-            val harness = startHarness(holdDelays = true)
-            harness.preparer.minimumPrepareDelayMs = 5_000L
-
-            harness.source.emit(MessageListUpdate.Messages(listOf(plainAssistant("seed"))))
-            harness.emissions.clear()
-
-            // Hold decoration so backlog work piles up while text lane must still publish.
-            harness.preparer.holdNextPrepareMessages()
-            harness.source.emit(
-                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "# Stream"))),
-            )
-            harness.delay.release()
-            advanceUntilIdle()
-
-            assertTrue(harness.emissions.isNotEmpty())
-            val first = harness.emissions.last() as DisplayMessageListUpdate.Messages
-            assertEquals("# Stream", first.messages.single().text)
-
-            harness.timeSource += STREAMING_PREPARE_MAX_BATCH_MS.milliseconds
-            harness.source.emit(
-                MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", "# Stream more"))),
-            )
-            advanceUntilIdle()
-
-            val latest = harness.emissions.last() as DisplayMessageListUpdate.Messages
-            assertEquals("# Stream more", latest.messages.single().text)
-            assertTrue(harness.emissions.none { it is DisplayMessageListUpdate.LoadFailed })
-
-            harness.preparer.releaseNextPrepareMessages()
-            advanceUntilIdle()
-            assertEquals("# Stream more", (harness.emissions.last() as DisplayMessageListUpdate.Messages).messages.single().text)
-        }
-
-    @Test
-    fun structureFirstStreamingPublishesCodeBlockChromeBeforeDecoration() =
+    fun structureFirstStreamingPublishesCodeBlockChromeBeforeColors() =
         runTest(testDispatcher) {
             val harness = startHarness(holdDelays = true)
             val fenced =
@@ -592,132 +523,225 @@ class DisplayMessagePipelineCharacterizationTest {
             )
             val code = doc.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single()
             assertEquals("javascript", code.language)
-            // Format-always: TextMate default on → empty spans; colors on Final.
+            // Structure first: the first frame has empty spans. Colors attach after it.
             assertTrue(code.spans.isEmpty())
             assertTrue(harness.preparer.prepareStructureOnlyInvocations.isNotEmpty())
-            // Decoration may still be held; structure must already be visible.
-            assertTrue(
-                harness.preparer.prepareTextBlockInvocations.isEmpty() ||
-                    harness.preparer.hasPendingPrepareMessagesHold(),
-            )
         }
+
+    @Test
+    fun streamingHighlightAttachesColorsAfterTheStructureFrameAndDropsAStalePass() =
+        runTest(testDispatcher) {
+            val harness = startHarness(holdDelays = true)
+            val fenced =
+                """
+                ```kotlin
+                val answer = 42
+                ```
+                """.trimIndent()
+            val colored =
+                OpenCodeMarkdownParser.parse(
+                    markdown = fenced,
+                    codeHighlighter = OpenCodeStructureOnlyHighlighter,
+                ).let { structure ->
+                    val fence = structure.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single()
+                    structure.copy(
+                        blocks =
+                            listOf(
+                                fence.copy(spans = listOf(CodeSpan(0, 3, CodeTokenRole.Keyword))),
+                            ),
+                    )
+                }
+            harness.preparer.streamingHighlight = { plain ->
+                if (plain == fenced) StreamingHighlight(colored, partial = false) else null
+            }
+            harness.preparer.holdNextHighlight()
+
+            harness.source.emit(MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", fenced))))
+            harness.delay.release()
+            advanceUntilIdle()
+
+            val structureFrame = harness.emissions.single() as DisplayMessageListUpdate.Messages
+            assertTrue(structureFrame.messages.single().renderedMarkdown!!.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single().spans.isEmpty())
+
+            harness.preparer.releaseNextHighlight()
+            advanceUntilIdle()
+
+            val coloredFrame = harness.emissions.last() as DisplayMessageListUpdate.Messages
+            assertEquals(
+                listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)),
+                coloredFrame.messages.single().renderedMarkdown!!.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single().spans,
+            )
+
+            val marker =
+                colored.copy(
+                    blocks =
+                        listOf(
+                            (colored.blocks.single() as MarkdownBlock.CodeBlock).copy(
+                                spans = listOf(CodeSpan(0, 1, CodeTokenRole.String)),
+                            ),
+                        ),
+                )
+            harness.preparer.streamingHighlight = { plain ->
+                if (plain == fenced) StreamingHighlight(marker, partial = false) else null
+            }
+            harness.preparer.holdNextHighlight()
+            val longer = "$fenced\nmore"
+            harness.source.emit(MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", longer))))
+            harness.delay.release()
+            advanceUntilIdle()
+            // Releasing the cancelled pass must not paint its spans onto the newer text.
+            harness.preparer.releaseNextHighlight()
+            advanceUntilIdle()
+
+            val latest = harness.emissions.last() as DisplayMessageListUpdate.Messages
+            assertEquals(longer, latest.messages.single().text)
+            val spans = latest.messages.single().renderedMarkdown!!.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single().spans
+            assertTrue(spans.none { it.role == CodeTokenRole.String })
+        }
+
+    @Test
+    fun carryingCodeSpansKeepsColorsOnAGrowingFence() {
+        val first =
+            MarkdownDocument(
+                sourceHash = 1,
+                blocks =
+                    listOf(
+                        MarkdownBlock.CodeBlock(
+                            language = "kotlin",
+                            code = "val a",
+                            lines = listOf("val a"),
+                            spans = listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)),
+                        ),
+                    ),
+            )
+        val grown =
+            MarkdownDocument(
+                sourceHash = 2,
+                blocks =
+                    listOf(
+                        MarkdownBlock.CodeBlock(
+                            language = "kotlin",
+                            code = "val answer",
+                            lines = listOf("val answer"),
+                            spans = emptyList(),
+                        ),
+                    ),
+            )
+        val carried = grown.carryingCodeSpans(first)
+        assertEquals(listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)), carried.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single().spans)
+
+        val rewritten =
+            MarkdownDocument(
+                sourceHash = 3,
+                blocks =
+                    listOf(
+                        MarkdownBlock.CodeBlock(
+                            language = "kotlin",
+                            code = "fun answer",
+                            lines = listOf("fun answer"),
+                            spans = emptyList(),
+                        ),
+                    ),
+            )
+        assertTrue(rewritten.carryingCodeSpans(first).blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single().spans.isEmpty())
+    }
 
     @Test
     fun structureFirstStreamingPreservesSiblingAwaitingTextMateUpgrade() =
         runTest(testDispatcher) {
-            val prior = MarkdownHighlightPreferences.textMateEnabled
-            MarkdownHighlightPreferences.updateTextMateEnabled(true)
-            try {
-                val harness = startHarness(holdDelays = true)
-                val history =
-                    (1..5).map { index ->
-                        markdownAssistant(
-                            id = "hist-$index",
-                            text = "# Heading $index\n\n" + "Some prose with `code`. ".repeat(80),
-                        )
-                    }
-                require(
-                    history.sumOf { it.text.length } >=
-                        MessageContentPreparer.HISTORY_PLAIN_FIRST_MARKDOWN_CHARACTER_THRESHOLD,
-                )
-
-                harness.source.emit(MessageListUpdate.Messages(history))
-                advanceUntilIdle()
-
-                val formatFirst =
-                    harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>().last()
-                assertTrue(formatFirst.messages.all { it.awaitingTextMateUpgrade })
-                assertTrue(formatFirst.messages.all { it.renderedMarkdown != null })
-
-                harness.emissions.clear()
-                val fenced =
-                    """
-                    ```javascript
-                    const x = 1
-                    ```
-                    """.trimIndent()
-                harness.source.emit(
-                    MessageListUpdate.Messages(history + streamingAssistant("stream-1", fenced)),
-                )
-                advanceUntilIdle()
-                if (harness.delay.hasPending()) {
-                    harness.delay.release()
-                    advanceUntilIdle()
+            val harness = startHarness(holdDelays = true)
+            val history =
+                (1..5).map { index ->
+                    markdownAssistant(
+                        id = "hist-$index",
+                        text = "# Heading $index\n\n" + "Some prose with `code`. ".repeat(80),
+                    )
                 }
+            require(
+                history.sumOf { it.text.length } >=
+                    MessageContentPreparer.HISTORY_PLAIN_FIRST_MARKDOWN_CHARACTER_THRESHOLD,
+            )
 
-                val frame =
-                    harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>().last()
-                val siblings = frame.messages.filter { it.id.startsWith("hist-") }
-                assertEquals(5, siblings.size)
-                assertTrue(
-                    "structure-first must preserve awaitingTextMateUpgrade on non-streaming siblings",
-                    siblings.all { it.awaitingTextMateUpgrade && it.renderedMarkdown != null },
-                )
-                assertTrue(frame.messages.any { it.id == "stream-1" })
-            } finally {
-                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
+            harness.source.emit(MessageListUpdate.Messages(history))
+            advanceUntilIdle()
+
+            val formatFirst =
+                harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>().last()
+            assertTrue(formatFirst.messages.all { it.awaitingTextMateUpgrade })
+            assertTrue(formatFirst.messages.all { it.renderedMarkdown != null })
+
+            harness.emissions.clear()
+            val fenced =
+                """
+                ```javascript
+                const x = 1
+                ```
+                """.trimIndent()
+            harness.source.emit(
+                MessageListUpdate.Messages(history + streamingAssistant("stream-1", fenced)),
+            )
+            advanceUntilIdle()
+            if (harness.delay.hasPending()) {
+                harness.delay.release()
+                advanceUntilIdle()
             }
+
+            val frame =
+                harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>().last()
+            val siblings = frame.messages.filter { it.id.startsWith("hist-") }
+            assertEquals(5, siblings.size)
+            assertTrue(
+                "structure-first must preserve awaitingTextMateUpgrade on non-streaming siblings",
+                siblings.all { it.awaitingTextMateUpgrade && it.renderedMarkdown != null },
+            )
+            assertTrue(frame.messages.any { it.id == "stream-1" })
         }
 
     @Test
     fun largeStreamingStillFormatsMarkdownStructure() =
         runTest(testDispatcher) {
             val harness = startHarness()
-            val prior = MarkdownHighlightPreferences.textMateEnabled
-            MarkdownHighlightPreferences.updateTextMateEnabled(true)
-            try {
-                val largeText = "# " + "x".repeat(MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD)
+            val largeText = "# " + "x".repeat(MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD)
 
-                harness.source.emit(MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", largeText))))
-                advanceUntilIdle()
-                testScheduler.advanceTimeBy(100)
-                advanceUntilIdle()
+            harness.source.emit(MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", largeText))))
+            advanceUntilIdle()
+            testScheduler.advanceTimeBy(100)
+            advanceUntilIdle()
 
-                val streamingFrames = harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>()
-                assertTrue(streamingFrames.isNotEmpty())
-                assertTrue(
-                    streamingFrames.any { frame -> frame.messages.single().renderedMarkdown != null },
-                )
-                assertTrue(harness.preparer.prepareStructureOnlyInvocations.isNotEmpty())
-                assertTrue(harness.preparer.prepareTextBlockInvocations.isEmpty())
-            } finally {
-                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
-            }
+            val streamingFrames = harness.emissions.filterIsInstance<DisplayMessageListUpdate.Messages>()
+            assertTrue(streamingFrames.isNotEmpty())
+            assertTrue(
+                streamingFrames.any { frame -> frame.messages.single().renderedMarkdown != null },
+            )
+            assertTrue(harness.preparer.prepareStructureOnlyInvocations.isNotEmpty())
         }
 
     @Test
-    fun largeStreamingSkipsDecorationUntilFinalization() =
+    fun largeStreamingSkipsPreparesUntilFinalization() =
         runTest(testDispatcher) {
             val harness = startHarness()
-            val prior = MarkdownHighlightPreferences.textMateEnabled
-            MarkdownHighlightPreferences.updateTextMateEnabled(true)
-            try {
-                val largeText = "# " + "x".repeat(MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD)
+            val largeText = "# " + "x".repeat(MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD)
 
-                harness.source.emit(MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", largeText))))
-                advanceUntilIdle()
-                testScheduler.advanceTimeBy(100)
-                advanceUntilIdle()
+            harness.source.emit(MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", largeText))))
+            advanceUntilIdle()
+            testScheduler.advanceTimeBy(100)
+            advanceUntilIdle()
 
-                assertTrue(
-                    harness.preparer.prepareMessagesInvocations.none {
-                        it.mode == MessagePreparationMode.Streaming
-                    },
-                )
-                assertTrue(harness.preparer.prepareTextBlockInvocations.isEmpty())
+            assertTrue(
+                harness.preparer.prepareMessagesInvocations.none {
+                    it.mode == MessagePreparationMode.Streaming
+                },
+            )
 
-                harness.emissions.clear()
-                harness.preparer.prepareMessagesInvocations.clear()
-                harness.source.emit(MessageListUpdate.Messages(listOf(finalAssistant("msg-1", largeText))))
-                advanceUntilIdle()
+            harness.emissions.clear()
+            harness.preparer.prepareMessagesInvocations.clear()
+            harness.source.emit(MessageListUpdate.Messages(listOf(finalAssistant("msg-1", largeText))))
+            advanceUntilIdle()
 
-                assertEquals(
-                    listOf(MessagePreparationMode.FinalPlaceholder, MessagePreparationMode.Final),
-                    harness.preparer.prepareMessagesInvocations.map { it.mode },
-                )
-            } finally {
-                MarkdownHighlightPreferences.updateTextMateEnabled(prior)
-            }
+            assertEquals(
+                listOf(MessagePreparationMode.FinalPlaceholder, MessagePreparationMode.Final),
+                harness.preparer.prepareMessagesInvocations.map { it.mode },
+            )
         }
 
     @Test
@@ -864,7 +888,6 @@ class DisplayMessagePipelineCharacterizationTest {
         )
 
         val prepareMessagesInvocations = mutableListOf<PrepareMessagesInvocation>()
-        val prepareTextBlockInvocations = mutableListOf<PrepareTextBlockInvocation>()
         val prepareStructureOnlyInvocations = mutableListOf<PrepareStructureOnlyInvocation>()
         private var prepareMessagesHold: CompletableDeferred<Unit>? = null
         private var activePrepareMessagesHold: CompletableDeferred<Unit>? = null
@@ -872,17 +895,6 @@ class DisplayMessagePipelineCharacterizationTest {
         private var activePrepareMessageHold: CompletableDeferred<Unit>? = null
         private val documentSerial = AtomicInteger(1)
         var minimumPrepareDelayMs: Long? = null
-
-        @Volatile
-        var failNextPrepareTextBlock: Boolean = false
-
-        data class PrepareTextBlockInvocation(
-            val blockID: String,
-            val plain: String,
-            val isStreaming: Boolean,
-            val sessionKey: String,
-            val mode: MessagePreparationMode,
-        )
 
         data class PrepareStructureOnlyInvocation(
             val blockID: String,
@@ -959,49 +971,33 @@ class DisplayMessagePipelineCharacterizationTest {
             )
         }
 
-        override suspend fun prepareTextBlock(
+        var streamingHighlight: ((String) -> StreamingHighlight?)? = null
+        val highlightInvocations = mutableListOf<String>()
+        private var highlightHold: CompletableDeferred<Unit>? = null
+        private var activeHighlightHold: CompletableDeferred<Unit>? = null
+
+        fun holdNextHighlight() {
+            highlightHold = CompletableDeferred()
+        }
+
+        fun releaseNextHighlight() {
+            (activeHighlightHold ?: highlightHold)?.complete(Unit)
+        }
+
+        override suspend fun highlightStreamingTextBlock(
             blockID: String,
             plain: String,
-            isStreaming: Boolean,
             sessionKey: String,
-            mode: MessagePreparationMode,
-        ): MarkdownDocument? {
-            prepareTextBlockInvocations +=
-                PrepareTextBlockInvocation(
-                    blockID = blockID,
-                    plain = plain,
-                    isStreaming = isStreaming,
-                    sessionKey = sessionKey,
-                    mode = mode,
-                )
-            // Share the prepareMessages hold so characterization can block decoration
-            // without delaying the plain text lane.
-            val hold = prepareMessagesHold
-            prepareMessagesHold = null
+        ): StreamingHighlight? {
+            highlightInvocations += plain
+            val hold = highlightHold
+            highlightHold = null
             if (hold != null) {
-                activePrepareMessagesHold = hold
+                activeHighlightHold = hold
                 hold.await()
-                activePrepareMessagesHold = null
+                activeHighlightHold = null
             }
-            if (failNextPrepareTextBlock) {
-                failNextPrepareTextBlock = false
-                error("injected prepareTextBlock failure")
-            }
-            minimumPrepareDelayMs?.let { delay(it) }
-            if (mode == MessagePreparationMode.Streaming &&
-                plain.length >= MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD
-            ) {
-                return null
-            }
-            return MarkdownDocument(
-                sourceHash = documentSerial.getAndIncrement(),
-                blocks =
-                    listOf(
-                        MarkdownBlock.Paragraph(
-                            inlines = listOf(MarkdownInline.Text(plain)),
-                        ),
-                    ),
-            )
+            return streamingHighlight?.invoke(plain)
         }
 
         override suspend fun prepareStructureOnlyTextBlock(
@@ -1015,19 +1011,13 @@ class DisplayMessagePipelineCharacterizationTest {
                     plain = plain,
                     sessionKey = sessionKey,
                 )
-            // Must never share the decoration hold — format-first is text-lane work.
+            // Must never share the prepare hold — format-first is text-lane work.
             if (!OpenCodeMarkdownDetector.shouldRender(plain)) {
                 return null
             }
-            val highlighter =
-                if (MarkdownHighlightPreferences.textMateEnabled) {
-                    OpenCodeStructureOnlyHighlighter
-                } else {
-                    OpenCodeSemanticFallbackHighlighter
-                }
             return OpenCodeMarkdownParser.parse(
                 markdown = plain,
-                codeHighlighter = highlighter,
+                codeHighlighter = OpenCodeStructureOnlyHighlighter,
             )
         }
 
@@ -1040,21 +1030,15 @@ class DisplayMessagePipelineCharacterizationTest {
                 if (!OpenCodeMarkdownDetector.shouldRender(message.text)) {
                     return DisplayMessage(message = message, renderedMarkdown = null)
                 }
-                val highlighter =
-                    if (MarkdownHighlightPreferences.textMateEnabled) {
-                        OpenCodeStructureOnlyHighlighter
-                    } else {
-                        OpenCodeSemanticFallbackHighlighter
-                    }
                 val document =
                     OpenCodeMarkdownParser.parse(
                         markdown = message.text,
-                        codeHighlighter = highlighter,
+                        codeHighlighter = OpenCodeStructureOnlyHighlighter,
                     )
                 return DisplayMessage(
                     message = message,
                     renderedMarkdown = document,
-                    awaitingTextMateUpgrade = MarkdownHighlightPreferences.textMateEnabled,
+                    awaitingTextMateUpgrade = true,
                 )
             }
             if (mode == MessagePreparationMode.FinalPlaceholder && previous?.renderedMarkdown != null) {

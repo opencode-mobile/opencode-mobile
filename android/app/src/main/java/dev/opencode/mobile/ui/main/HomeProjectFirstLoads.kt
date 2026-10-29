@@ -72,11 +72,30 @@ internal class HomeProjectFirstLoads(
         private set
 
     fun start(worktree: String) {
-        clear(worktree)
+        // A project already loading from [awaitServer] keeps its skeleton, with no grace delay.
+        val showing = visible[worktree] is ProjectFirstLoad.Loading && worktree !in trackers
+        trackers.remove(worktree)?.cancel()
+        if (!showing) publish(visible - worktree)
         val tracker = Tracker(worktree)
         trackers[worktree] = tracker
-        tracker.begin(showImmediately = false)
+        tracker.begin(showImmediately = showing)
         tracker.observe()
+    }
+
+    /**
+     * Shows loading for [worktrees] at once, before their server is bound (a server switch).
+     * Nothing observes them yet; [startAwaiting] does once the switch has bound the server.
+     */
+    fun awaitServer(worktrees: Collection<String>) {
+        publish(visible + worktrees.associateWith { ProjectFirstLoad.Loading() })
+    }
+
+    /** Starts tracking every project [awaitServer] put in loading. */
+    fun startAwaiting() {
+        visible
+            .filter { (worktree, load) -> load is ProjectFirstLoad.Loading && worktree !in trackers }
+            .keys
+            .forEach(::start)
     }
 
     fun retry(worktree: String) {

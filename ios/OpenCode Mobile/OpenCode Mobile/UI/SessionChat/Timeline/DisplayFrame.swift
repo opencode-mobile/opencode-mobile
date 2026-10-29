@@ -192,8 +192,7 @@ nonisolated enum DisplayFrameBuilder {
             return DisplayMessage(
                 message: message,
                 renderedMarkdown: display.renderedMarkdown,
-                awaitingTextMateUpgrade: display.awaitingTextMateUpgrade,
-                highlightEpoch: display.highlightEpoch
+                awaitingTextMateUpgrade: display.awaitingTextMateUpgrade
             )
         }
     }

@@ -19,7 +19,7 @@ struct OpenCode_MobileApp: App {
 
     var body: some Scene {
         WindowGroup {
-            rootView
+            launchView
                 .openCodeWindowMetrics()
                 .openCodeTheme()
                 .background {
@@ -39,6 +39,22 @@ struct OpenCode_MobileApp: App {
         .backgroundTask(.urlSession(DurableJSONUploader.sessionIdentifier)) {
             await DurableJSONUploader.shared.waitForBackgroundEvents()
         }
+    }
+
+    /// A `-labRun` launch argument runs the Highlighting Lab headless instead of the app.
+    @ViewBuilder
+    private var launchView: some View {
+        #if HIGHLIGHT_LAB
+        if let labRun = HighlightLabHeadless.requestedValue {
+            HighlightLabHeadlessView(value: labRun)
+        } else if let screen = HighlightLabScreenLaunch.requested {
+            HighlightLabScreenLaunchView(screen: screen)
+        } else {
+            rootView
+        }
+        #else
+        rootView
+        #endif
     }
 
     @ViewBuilder

@@ -1,8 +1,8 @@
 package dev.opencode.mobile.markdown
 
 /**
- * Short critical sections around [TextMateRequestScheduler] state, so admits can
- * run on another thread while a highlight job executes and cancel it.
+ * Short critical sections around [HighlightCoreHighlightingEngine] state, so a newer revision
+ * can cancel a call still running on another thread.
  */
 internal interface TextMateSchedulerLock {
     fun <T> withLock(block: () -> T): T

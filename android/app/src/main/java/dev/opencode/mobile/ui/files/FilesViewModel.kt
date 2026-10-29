@@ -6,13 +6,17 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.filesystem.ProjectFileContent
+import dev.opencode.mobile.domain.filesystem.ProjectFileHighlightSession
 import dev.opencode.mobile.domain.filesystem.ProjectFileHighlighter
 import dev.opencode.mobile.domain.filesystem.ProjectFileLanguage
+import dev.opencode.mobile.domain.filesystem.ProjectFileLineSpans
 import dev.opencode.mobile.domain.filesystem.ProjectFileListingPolicy
 import dev.opencode.mobile.domain.filesystem.ProjectFilesException
 import dev.opencode.mobile.domain.filesystem.ProjectFilesRepository
+import dev.opencode.mobile.markdown.CodeSpan
+import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
+import dev.opencode.mobile.ui.components.OpenCodeCodeLine
 import dev.opencode.mobile.ui.components.OpenCodeCodeLines
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -25,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.yield
 import javax.inject.Inject
 
 /**
@@ -51,6 +56,7 @@ class FilesViewModel internal constructor(
     private val folderJobs = mutableMapOf<String, Job>()
     private val fileJobs = mutableMapOf<String, Job>()
     private var findJob: Job? = null
+    private val visibleLines = mutableMapOf<String, MutableStateFlow<IntRange>>()
 
     fun bind(worktree: String) {
         if (_uiState.value.worktree == worktree) return
@@ -59,6 +65,7 @@ class FilesViewModel internal constructor(
         findJob?.cancel()
         folderJobs.clear()
         fileJobs.clear()
+        visibleLines.clear()
         folders = emptyMap()
         expanded = emptySet()
         _uiState.value =
@@ -129,6 +136,7 @@ class FilesViewModel internal constructor(
     /** Closes a tab; closing the active one activates the last remaining tab. */
     fun closeTab(path: String) {
         fileJobs.remove(path)?.cancel()
+        visibleLines.remove(path)
         _uiState.update { state ->
             val tabs = state.tabs - path
             state.copy(
@@ -141,6 +149,15 @@ class FilesViewModel internal constructor(
 
     fun retryFile(path: String) {
         if (path in _uiState.value.tabs) loadFile(path)
+    }
+
+    /** The File Viewer's visible lines for [path]; progressive coloring colors them first. */
+    fun onVisibleLinesChange(
+        path: String,
+        firstLine: Int,
+        lastLine: Int,
+    ) {
+        visibleLinesOf(path).value = firstLine..maxOf(firstLine, lastLine)
     }
 
     fun toggleWrap() {
@@ -250,7 +267,7 @@ class FilesViewModel internal constructor(
                 val markdown =
                     if (language.isMarkdown) {
                         runCatching {
-                            OpenCodeMarkdownParser.parse(content.text, codeHighlighter = OpenCodeSemanticFallbackHighlighter)
+                            OpenCodeMarkdownParser.parse(content.text, codeHighlighter = OpenCodeHighlightCoreCodeHighlighter)
                         }.getOrNull()
                     } else {
                         null
@@ -260,27 +277,104 @@ class FilesViewModel internal constructor(
         val plain =
             FilesViewerContent.Text(
                 lines = lines,
+                source = content.text,
                 languageName = language.displayName,
                 isTruncated = content.isTruncated,
                 markdown = markdown,
             )
         updateViewer(path) { it.copy(content = plain) }
-        val grammar = language.grammar ?: return
-        val spans =
-            try {
-                highlighter.highlight(path, grammar, content.text)
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (error: Exception) {
-                DiagnosticLog.warning(DiagnosticLogArea.Connection, "files highlight failed", error)
-                return
-            }
-        if (spans.isEmpty()) return
-        val highlighted = withContext(workDispatcher) { OpenCodeCodeLines.split(content.text, spans) }
-        updateViewer(path) { viewer ->
-            if (viewer.content === plain) viewer.copy(content = plain.copy(lines = highlighted)) else viewer
+        highlightText(path, plain)
+    }
+
+    /** Colors [shown] (the content on screen) progressively through a session; files without a highlighter stay plain. */
+    private suspend fun highlightText(
+        path: String,
+        shown: FilesViewerContent.Text,
+    ) {
+        val grammar = ProjectFileLanguage.forPath(path).grammar ?: return
+        try {
+            val startedAt = System.nanoTime()
+            val session = withContext(workDispatcher) { highlighter.openSession(path, grammar, shown.source) } ?: return
+            colorProgressively(path, shown, session, startedAt)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            DiagnosticLog.warning(DiagnosticLogArea.Connection, "files highlight failed", error)
         }
     }
+
+    /**
+     * Colors the visible lines (plus a margin) first, then the rest from the top in chunks with a
+     * deadline each, publishing after every call. A scroll far down is picked up before the next
+     * chunk; the session computes the line states it needs to get there.
+     */
+    private suspend fun colorProgressively(
+        path: String,
+        shown: FilesViewerContent.Text,
+        session: ProjectFileHighlightSession,
+        startedAt: Long,
+    ) {
+        val source = shown.source
+        val lineCount = shown.lines.size
+        val starts = withContext(workDispatcher) { lineStarts(source, lineCount) }
+        val lines = ArrayList(shown.lines)
+        val colored = BooleanArray(lineCount)
+        val visible = visibleLinesOf(path)
+        var published = shown
+        var frontier = 0
+        var calls = 0
+        var firstColorNanos = -1L
+        while (true) {
+            val range = visible.value
+            val window = maxOf(0, range.first - VISIBLE_MARGIN_LINES)..minOf(lineCount - 1, range.last + VISIBLE_MARGIN_LINES)
+            val firstVisible = window.firstOrNull { !colored[it] }
+            val start: Int
+            val end: Int
+            val deadline: Double
+            if (firstVisible != null) {
+                start = firstVisible
+                end = window.last { !colored[it] } + 1
+                deadline = VISIBLE_DEADLINE_MILLIS
+            } else {
+                while (frontier < lineCount && colored[frontier]) frontier++
+                if (frontier >= lineCount) {
+                    DiagnosticLog.info(
+                        DiagnosticLogArea.Connection,
+                        "files progressive highlight lines=$lineCount calls=$calls " +
+                            "firstColorMs=${firstColorNanos / 1_000_000} fullMs=${(System.nanoTime() - startedAt) / 1_000_000}",
+                    )
+                    return
+                }
+                start = frontier
+                end = minOf(lineCount, frontier + CHUNK_LINES)
+                deadline = CHUNK_DEADLINE_MILLIS
+            }
+            val changed =
+                withContext(workDispatcher) {
+                    applyLineSpans(source, starts, session.highlight(start, end, deadline), lines, colored)
+                }
+            calls++
+            if (changed) {
+                val next = published.copy(lines = ArrayList(lines))
+                var current = false
+                updateViewer(path) { viewer ->
+                    if (viewer.content === published) {
+                        current = true
+                        viewer.copy(content = next)
+                    } else {
+                        viewer
+                    }
+                }
+                if (!current) return
+                published = next
+                if (firstColorNanos < 0) firstColorNanos = System.nanoTime() - startedAt
+            }
+            yield()
+        }
+    }
+
+    private fun visibleLinesOf(path: String): MutableStateFlow<IntRange> =
+        visibleLines.getOrPut(path) { MutableStateFlow(0 until INITIAL_VISIBLE_LINES) }
 
     private fun updateViewer(
         path: String,
@@ -313,6 +407,69 @@ class FilesViewModel internal constructor(
         const val ROOT = ""
 
         const val FIND_DEBOUNCE_MILLIS = 250L
+
+        /** Lines assumed visible until the viewer reports its range. */
+        internal const val INITIAL_VISIBLE_LINES = 80
+
+        /** Lines above and below the visible range colored with it. */
+        internal const val VISIBLE_MARGIN_LINES = 20
+
+        /** Lines per background call, each stopped by [CHUNK_DEADLINE_MILLIS]. */
+        internal const val CHUNK_LINES = 2_000
+
+        private const val VISIBLE_DEADLINE_MILLIS = 16.0
+        private const val CHUNK_DEADLINE_MILLIS = 8.0
+
+        /** Where each of the first [lineCount] lines of [source] starts. */
+        private fun lineStarts(
+            source: String,
+            lineCount: Int,
+        ): IntArray {
+            val starts = IntArray(lineCount)
+            var line = 1
+            var index = source.indexOf('\n')
+            while (index >= 0 && line < lineCount) {
+                starts[line++] = index + 1
+                index = source.indexOf('\n', index + 1)
+            }
+            return starts
+        }
+
+        /** Rebuilds the lines [result] covers with its spans and marks them colored; false when it covered none. */
+        private fun applyLineSpans(
+            source: String,
+            starts: IntArray,
+            result: ProjectFileLineSpans,
+            lines: MutableList<OpenCodeCodeLine>,
+            colored: BooleanArray,
+        ): Boolean {
+            val endLine = minOf(result.endLine, lines.size)
+            if (result.startLine >= endLine) return false
+            var span = 0
+            for (line in result.startLine until endLine) {
+                val start = starts[line]
+                var end =
+                    when {
+                        line + 1 < starts.size -> starts[line + 1] - 1
+                        source.endsWith('\n') -> source.length - 1
+                        else -> source.length
+                    }
+                if (end > start && source[end - 1] == '\r') end--
+                while (span < result.spans.size && result.spans[span].end <= start) span++
+                val lineSpans = ArrayList<CodeSpan>()
+                var index = span
+                while (index < result.spans.size && result.spans[index].start < end) {
+                    val each = result.spans[index]
+                    val from = maxOf(each.start, start)
+                    val to = minOf(each.end, end)
+                    if (from < to) lineSpans += CodeSpan(from - start, to - start, each.role)
+                    index++
+                }
+                lines[line] = OpenCodeCodeLines.split(source.substring(start, end), lineSpans).single()
+                colored[line] = true
+            }
+            return true
+        }
 
         internal fun buildTreeRows(
             folders: Map<String, FilesFolderState>,

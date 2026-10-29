@@ -6,13 +6,11 @@ data class DisplayMessage(
     val message: Message,
     val renderedMarkdown: MarkdownDocument? = null,
     /**
-     * True when [renderedMarkdown] is still a streaming (semantic-fallback) parse
-     * kept as a FinalPlaceholder. Final prepare must not settle-reuse these when
-     * TextMate is enabled.
+     * True when [renderedMarkdown] is still a structure-only parse (a streaming
+     * FinalPlaceholder or format-first history) whose code colors arrive with a
+     * later Final or HistoryEnrichment prepare. Final must not settle-reuse these.
      */
     val awaitingTextMateUpgrade: Boolean = false,
-    /** Matches [MarkdownHighlightPreferences.epoch] when this row was prepared. */
-    val highlightEpoch: Int = 0,
 ) {
     val id: String get() = message.id
     val text: String get() = message.text

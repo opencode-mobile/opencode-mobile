@@ -115,6 +115,43 @@ struct ProjectListHomeViewModelTests {
         }
     }
 
+    @Test func emptyHome_waitsOnTheAddressCheckBeforeShowingUnreachable() async throws {
+        let profile = ConnectionProfile(
+            baseURL: "http://127.0.0.1:4096/",
+            serverURLs: ["http://127.0.0.1:4096/", "http://192.168.1.2:4096/"],
+            username: "opencode",
+            password: ""
+        )
+        let probe = HeldProbe()
+        var coordinator: ConnectionSessionCoordinator?
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(shouldFailProbe: true),
+            connectionProfileStore: FakeConnectionProfileStore(activeProfile: profile),
+            connectionProbing: probe,
+            initialProfile: profile,
+            onCoordinator: { coordinator = $0 }
+        )
+        await viewModel.refresh()
+        guard case .probeFailed = viewModel.state else {
+            Issue.record("Expected probeFailed before the save")
+            return
+        }
+
+        probe.hold()
+        // A switch reloads Home before the saved addresses are checked; its probe fails meanwhile.
+        let switching = Task { await coordinator?.switchProfile(id: profile.id) }
+        #expect(await eventually { if case .empty = viewModel.state { true } else { false } })
+        try await Task.sleep(for: .milliseconds(100))
+        guard case .empty = viewModel.state else {
+            Issue.record("Expected empty while the address check runs, got \(viewModel.state)")
+            return
+        }
+
+        probe.release()
+        await switching.value
+        #expect(await eventually { if case .probeFailed = viewModel.state { true } else { false } })
+    }
+
     @Test func refresh_staysEmpty_whenNoAddedProjects() async {
         let store = FakeConnectionProfileStore()
         let viewModel = makeViewModel(
@@ -2335,20 +2372,25 @@ private func makeViewModel(
     projectLoadTiming: ProjectLoadTiming = .standard,
     worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
     branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)],
-    worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache()
+    worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
+    connectionProbing: (any ConnectionProbing)? = nil,
+    initialProfile: ConnectionProfile = ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
+    onCoordinator: (ConnectionSessionCoordinator) -> Void = { _ in }
 ) -> ProjectListHomeViewModel {
     let eventStream = eventStream ?? FakeForegroundEventStream()
     // Mutations (createSession) require Connected; default fakes start Idle.
     eventStream.setConnectionState(.connected)
-    let manager = ActiveConnectionManager()
-    manager.apply(
-        ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
-        serverProtocol: serverProtocol
+    // Saved-address checks need a probe and a store; tests without a probe keep neither.
+    let manager = ActiveConnectionManager(
+        connectionProbing: connectionProbing,
+        profileStore: connectionProbing == nil ? nil : connectionProfileStore
     )
+    manager.apply(initialProfile, serverProtocol: serverProtocol)
     let coordinator = ConnectionSessionCoordinator(
         activeConnectionManager: manager,
         connectionProfileStore: connectionProfileStore
     )
+    onCoordinator(coordinator)
     let sessionStatusLiveStore = sessionStatusLiveStoreOverride ?? DefaultSessionStatusLiveStore(
         sessionRepository: sessionRepository,
         eventStream: eventStream,
@@ -2553,13 +2595,18 @@ private func folder(_ path: String) -> DirectoryNode {
 
 private final class FakeConnectionProfileStore: ConnectionProfileStore, @unchecked Sendable {
     private var added: [String]
+    private let active: ConnectionProfile
 
-    init(initial: [String] = []) {
+    init(
+        initial: [String] = [],
+        activeProfile: ConnectionProfile = ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "")
+    ) {
         self.added = initial
+        self.active = activeProfile
     }
 
     func activeProfile() async -> ConnectionProfile? {
-        ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "")
+        active
     }
 
     func saveProfile(_ profile: ConnectionProfile) async {}
@@ -2582,6 +2629,44 @@ private final class FakeConnectionProfileStore: ConnectionProfileStore, @uncheck
     func clearAll() async {
         added.removeAll()
     }
+}
+
+/// Answers v2 for every address, but only once released while held.
+private final class HeldProbe: ConnectionProbing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var held = false
+
+    func hold() { setHeld(true) }
+
+    func release() { setHeld(false) }
+
+    private func setHeld(_ value: Bool) {
+        lock.lock()
+        held = value
+        lock.unlock()
+    }
+
+    private var isHeld: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return held
+    }
+
+    func probe(connection _: ServerConnection) async throws -> ServerProtocol {
+        while isHeld {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        return .v2
+    }
+}
+
+@MainActor
+private func eventually(_ condition: () -> Bool) async -> Bool {
+    for _ in 0 ..< 300 {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return condition()
 }
 
 private struct SlowFirstProjectRepository: ProjectRepository {

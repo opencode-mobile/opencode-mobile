@@ -58,16 +58,20 @@ private val TokenNames =
         "info",
         "diff-add",
         "diff-delete",
-        "syntax-comment",
         "syntax-keyword",
         "syntax-string",
-        "syntax-primitive",
-        "syntax-property",
-        "syntax-type",
+        "syntax-number",
         "syntax-constant",
+        "syntax-comment",
+        "syntax-type",
+        "syntax-function",
+        "syntax-property",
+        "syntax-attribute",
         "syntax-variable",
         "syntax-operator",
         "syntax-punctuation",
+        "syntax-background",
+        "syntax-foreground",
         "syntax-critical",
         "syntax-diff-delete",
         "syntax-diff-unknown",
@@ -77,10 +81,18 @@ private val TokenNames =
 fun ColorGalleryScreen(modifier: Modifier = Modifier) {
     val parse = { hex: String -> ThemeResolver.parseHexColor(hex) }
     val tokens =
-        TokenNames.map { name ->
-            val lightHex = ThemeManager.resolvedLight[name]
-            val darkHex = ThemeManager.resolvedDark[name]
-            ColorToken(name, parse(lightHex), lightHex, parse(darkHex), darkHex)
+        TokenNames.mapNotNull { name ->
+            val lightHex = ThemeManager.resolvedLight.tokens[name]
+            val darkHex = ThemeManager.resolvedDark.tokens[name]
+            // Syntax background and foreground exist only when the code highlight preset sets them.
+            if (lightHex == null && darkHex == null) return@mapNotNull null
+            ColorToken(
+                name = name,
+                light = lightHex?.let(parse) ?: Color.Transparent,
+                lightHex = lightHex ?: "Not set",
+                dark = darkHex?.let(parse) ?: Color.Transparent,
+                darkHex = darkHex ?: "Not set",
+            )
         }
 
     Column(
