@@ -329,7 +329,33 @@ class MainScreenViewModel
             stopLiveObservations()
             DiagnosticLog.info(DiagnosticLogArea.Connection, "switch profile ui id=$id")
             viewModelScope.launch { paintSwitchedServer(target.baseUrl, id, generation) }
-            viewModelScope.launch { connectionSessionCoordinator.switchProfile(id) }
+            viewModelScope.launch {
+                val landed =
+                    try {
+                        connectionSessionCoordinator.switchProfile(id)
+                        connectionProfileStore.activeProfile()?.id == id
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
+                    } catch (error: Exception) {
+                        DiagnosticLog.warning(DiagnosticLogArea.Connection, "switch profile failed id=$id", error)
+                        false
+                    }
+                if (!landed) abandonSwitch(id)
+            }
+        }
+
+        /**
+         * The switch to [id] failed or did not stick. Drop the pending pick, so later saves are
+         * not ignored, and reload Home and its title from the server that is actually active.
+         */
+        private fun abandonSwitch(id: String) {
+            if (pendingSwitchId != id) return
+            pendingSwitchId = null
+            switchPaintGeneration++
+            projectFirstLoads.clearAll()
+            pendingFirstServerSnapshots.clear()
+            resetHomeIndex()
+            refresh()
         }
 
         /**

@@ -98,6 +98,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainScreenViewModelTest {
@@ -177,6 +178,29 @@ class MainScreenViewModelTest {
             // The switch has bound the server by now; the uncached project still shows its skeleton.
             val current = viewModel.uiState.value as MainScreenUiState.Loaded
             assertTrue(current.projectLoads["/b/new"] is ProjectFirstLoad.Loading)
+        }
+
+    @Test
+    fun switchProfile_thatFailsReturnsHomeToTheActiveServer() =
+        runTest(testDispatcher) {
+            val store = SwitchingProfileStore()
+            store.add(ConnectionProfile(id = "a", baseUrl = serverUrl, username = "opencode", password = "", name = "A"), listOf("/a"))
+            store.add(
+                ConnectionProfile(id = "b", baseUrl = "http://192.0.2.2:4096/", username = "opencode", password = "", name = "B"),
+                listOf("/b"),
+            )
+            store.applyProfile("a")
+            store.failApply = true
+            val viewModel = createViewModel(connectionProfileStore = store, initialProfile = store.profile("a"))
+            advanceUntilIdle()
+
+            viewModel.switchProfile("b")
+            assertEquals("B", viewModel.serversChrome.value.title)
+            advanceUntilIdle()
+
+            assertEquals("A", viewModel.serversChrome.value.title)
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("/a"), loaded.sections.map { it.worktree })
         }
 
     @Test
@@ -3238,6 +3262,9 @@ private class SwitchingProfileStore : ConnectionProfileStore {
     private var catalog = ConnectionProfileCatalog()
     private val worktrees = mutableMapOf<String, List<String>>()
 
+    /** Makes [applyProfile] throw, like a failed preferences write. */
+    var failApply = false
+
     fun add(
         profile: ConnectionProfile,
         added: List<String>,
@@ -3257,6 +3284,7 @@ private class SwitchingProfileStore : ConnectionProfileStore {
     }
 
     override suspend fun applyProfile(id: String) {
+        if (failApply) throw IOException("write failed")
         catalog = catalog.apply(id)
     }
 

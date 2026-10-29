@@ -744,7 +744,22 @@ final class ProjectListHomeViewModel {
             // A newer pick replaced this one before it started; only the newest one runs.
             guard let self, self.pendingSwitchID == id else { return }
             await self.connectionSessionCoordinator.switchProfile(id: id)
+            if await self.connectionProfileStore.activeProfile()?.id != id {
+                await self.abandonSwitch(id: id)
+            }
         }
+    }
+
+    /// The switch to `id` did not stick. Drop the pending pick, so later saves are not ignored,
+    /// and reload Home and its title from the server that is actually active.
+    private func abandonSwitch(id: String) async {
+        guard pendingSwitchID == id else { return }
+        DiagnosticLog.warning(.connection, "switch profile did not apply id=\(id)")
+        pendingSwitchID = nil
+        switchPaintGeneration += 1
+        clearProjectLoads()
+        stopLiveObservations()
+        await refresh()
     }
 
     /// The target server's saved projects with their cached sessions, read by profile id because
