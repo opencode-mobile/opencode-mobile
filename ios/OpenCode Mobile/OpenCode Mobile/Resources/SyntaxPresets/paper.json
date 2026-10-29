@@ -16,8 +16,7 @@
     "syntax-operator": "#1F2328",
     "syntax-punctuation": "#1F2328",
     "syntax-background": "#FFFFFF",
-    "syntax-foreground": "#1F2328",
-    "syntax-primitive": "#8250DF"
+    "syntax-foreground": "#1F2328"
   },
   "dark": {
     "syntax-keyword": "#FF7B72",
@@ -33,7 +32,6 @@
     "syntax-operator": "#E6EDF3",
     "syntax-punctuation": "#E6EDF3",
     "syntax-background": "#0D1117",
-    "syntax-foreground": "#E6EDF3",
-    "syntax-primitive": "#D2A8FF"
+    "syntax-foreground": "#E6EDF3"
   }
 }
