@@ -80,6 +80,8 @@ data class HighlightResult(
 enum class TextMateParseOutcome {
     Highlighted,
     NoSpans,
+    /** Deadline passed: spans cover a prefix, the rest stays plain, and the next call continues. */
+    Partial,
     Unsupported,
     Failed,
     Cancelled,

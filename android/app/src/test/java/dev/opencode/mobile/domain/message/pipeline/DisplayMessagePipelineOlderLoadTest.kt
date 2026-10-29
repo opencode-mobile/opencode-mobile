@@ -107,5 +107,11 @@ class DisplayMessagePipelineOlderLoadTest {
             plain: String,
             sessionKey: String,
         ): MarkdownDocument? = null
+
+        override suspend fun highlightStreamingTextBlock(
+            blockID: String,
+            plain: String,
+            sessionKey: String,
+        ): StreamingHighlight? = null
     }
 }

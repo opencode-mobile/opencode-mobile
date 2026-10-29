@@ -84,8 +84,8 @@ nonisolated private final class MessageMarkdownDocumentCache: @unchecked Sendabl
 nonisolated final class MessageContentPreparer: @unchecked Sendable {
     static let shared = MessageContentPreparer(textMateEngine: Container.codeHighlighter)
 
-    /// Legacy size gate still used by disposable streaming decoration fixtures.
-    /// Format-first text-lane parse no longer skips on size.
+    /// Size used by characterization fixtures. Streaming no longer skips markdown
+    /// or highlighting on length.
     nonisolated static let streamingPlainTextCharacterThreshold = 8_000
 
     /// When opening a history whose markdown-candidate text exceeds this size,
@@ -194,8 +194,8 @@ nonisolated final class MessageContentPreparer: @unchecked Sendable {
     }
 
     /// Format-first streaming paint: block structure with empty code spans when markdown is
-    /// detected; highlight-core colors attach once the message is final. Never writes the
-    /// preparer LRU.
+    /// detected. Colors attach in `highlightStreamingTextBlock` after this frame publishes.
+    /// Never writes the preparer LRU.
     nonisolated func prepareStructureOnlyTextBlock(
         blockID: String,
         plain: String,
@@ -209,6 +209,44 @@ nonisolated final class MessageContentPreparer: @unchecked Sendable {
         }.value
     }
 
+    /// Colors one streaming block's fences. Does not write the preparer LRU; the
+    /// highlight-core session re-lexes a growing fence from its last changed line.
+    nonisolated func highlightStreamingTextBlock(
+        blockID: String,
+        plain: String,
+        sessionKey: String = ""
+    ) async -> StreamingHighlight? {
+        let textMateEngine = textMateEngine
+        let highlightRevisions = highlightRevisions
+        return await Task.detached(priority: .userInitiated) {
+            guard OpenCodeRenderedMarkdownDetector.shouldRender(plain) else { return nil }
+            let structure = OpenCodeRenderedMarkdownParser.parse(plain, structureOnly: true)
+            let revision = highlightRevisions.next()
+            let fences = structure.textMateFences(
+                ownerKey: "\(sessionKey.utf16.count):\(sessionKey):\(blockID)",
+                revision: revision,
+                policyEpoch: 0
+            )
+            var upgraded = structure
+            var partial = false
+            for fence in fences {
+                if Task.isCancelled { return nil }
+                do {
+                    let result = try await textMateEngine.highlight(fence.request(intent: .interactiveFinal))
+                    if result.outcome == "Partial" {
+                        partial = true
+                    }
+                    if case .attached(let attached) = upgraded.attachingTextMate(fence: fence, result: result) {
+                        upgraded = attached
+                    }
+                } catch {
+                    return StreamingHighlight(document: structure, partial: false)
+                }
+            }
+            return StreamingHighlight(document: upgraded, partial: partial)
+        }.value
+    }
+
     nonisolated private static func prepareMessageOnWorker(
         _ message: Message,
         previous: DisplayMessage?,
@@ -219,11 +257,6 @@ nonisolated final class MessageContentPreparer: @unchecked Sendable {
         highlightRevisions: TextMateHighlightRevisionSource
     ) async -> DisplayMessage {
         let isStreaming = messageIsStreaming(message)
-        if mode == .streaming,
-           message.text.count >= MessageContentPreparer.streamingPlainTextCharacterThreshold
-        {
-            return DisplayMessage(message: message, renderedMarkdown: nil)
-        }
         if mode == .historyPlainFirst {
             if let reusable = reusableDocument(
                 for: message,
@@ -347,7 +380,8 @@ nonisolated final class MessageContentPreparer: @unchecked Sendable {
         )
         if let cached = documentCache.value(for: cacheKey) { return cached }
 
-        // Structure first; highlight-core colors attach fence by fence once the text is final.
+        // Structure first. A still-streaming prepare keeps empty spans; the live path colors
+        // those fences in highlightStreamingTextBlock after the structure frame.
         let structureDocument = OpenCodeRenderedMarkdownParser.parse(text, structureOnly: true)
         let document: NativeMarkdownDocument
         if isStreaming {

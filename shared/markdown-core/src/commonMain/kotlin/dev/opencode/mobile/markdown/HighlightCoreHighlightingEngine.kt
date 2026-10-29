@@ -213,7 +213,12 @@ class HighlightCoreHighlightingEngine(
         keep(key, entry)
         val spans = toCodeSpans(entry.spans)
         val partial = call != null && call.status == HighlightStatus.Partial
-        val outcome = if (spans.isEmpty()) TextMateParseOutcome.NoSpans else TextMateParseOutcome.Highlighted
+        val outcome =
+            when {
+                partial -> TextMateParseOutcome.Partial
+                spans.isEmpty() -> TextMateParseOutcome.NoSpans
+                else -> TextMateParseOutcome.Highlighted
+            }
         return Reported(
             result =
                 HighlightResult(
