@@ -247,6 +247,7 @@ enum ProductAnalytics {
         static let messageActionsRevert = "message_actions_revert"
         static let messageActionsFork = "message_actions_fork"
         static let messageActionsCopy = "message_actions_copy"
+        static let messageActionsCopyCodeBlock = "message_actions_copy_code_block"
         static let chatSteerPendingPrompt = "chat_steer_pending_prompt"
         static let chatQueuePendingPrompt = "chat_queue_pending_prompt"
         static let chatCancelPendingPrompt = "chat_cancel_pending_prompt"

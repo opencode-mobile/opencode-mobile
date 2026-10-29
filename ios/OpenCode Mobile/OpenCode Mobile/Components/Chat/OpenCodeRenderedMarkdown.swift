@@ -14,6 +14,25 @@ enum OpenCodeRenderedMarkdownDetector: Sendable {
     }
 }
 
+/// What a tap on assistant text landed on.
+enum OpenCodeMessageTapTarget: Equatable {
+    case text
+    case codeBlock(String)
+}
+
+private struct MarkdownCodeBlockTapActionKey: EnvironmentKey {
+    static let defaultValue: ((String) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    /// Set by a message that offers actions: tapping or long-pressing a code
+    /// or diff block calls it with the block's text.
+    var markdownCodeBlockTapAction: ((String) -> Void)? {
+        get { self[MarkdownCodeBlockTapActionKey.self] }
+        set { self[MarkdownCodeBlockTapActionKey.self] = newValue }
+    }
+}
+
 struct OpenCodeRenderedMarkdown: View {
     let document: NativeMarkdownDocument
     let variant: OpenCodeRenderedMarkdownVariant
@@ -171,6 +190,7 @@ struct OpenCodeRenderedMarkdown: View {
             RoundedRectangle(cornerRadius: 6)
                 .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         )
+        .modifier(MarkdownCodeBlockTapTarget(code: code))
     }
 
     private func diffBlock(lines: [NativeDiffLine]) -> some View {
@@ -184,6 +204,7 @@ struct OpenCodeRenderedMarkdown: View {
             RoundedRectangle(cornerRadius: 6)
                 .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         )
+        .modifier(MarkdownCodeBlockTapTarget(code: lines.map(\.text).joined(separator: "\n")))
     }
 
     private func table(
@@ -638,6 +659,43 @@ private struct MarkdownTableLayout<Content: View>: View {
         guard total < available else { return preferred }
         let share = (available - total) / CGFloat(preferred.count)
         return preferred.map { $0 + share }
+    }
+}
+
+/// Makes a code or diff block its own tap target when the message offers
+/// actions: a tap or long-press flashes the block and passes its text on.
+/// Inner gestures win over the bubble's long-press, and the horizontal
+/// scroll still cancels a tap that turns into a swipe.
+private struct MarkdownCodeBlockTapTarget: ViewModifier {
+    let code: String
+
+    @Environment(\.markdownCodeBlockTapAction) private var tapAction
+    @State private var isHighlighted = false
+
+    func body(content: Content) -> some View {
+        if let tapAction {
+            content
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(OpenCodeColors.textStrong.opacity(isHighlighted ? 0.08 : 0))
+                        .allowsHitTesting(false)
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+                .onTapGesture { open(tapAction) }
+                .onLongPressGesture { open(tapAction) }
+                .accessibilityAction(named: "Code block actions") { open(tapAction) }
+        } else {
+            content
+        }
+    }
+
+    private func open(_ tapAction: (String) -> Void) {
+        isHighlighted = true
+        // Fade on the next turn so the highlighted frame is committed first.
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.3)) { isHighlighted = false }
+        }
+        tapAction(code)
     }
 }
 

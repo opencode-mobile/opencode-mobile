@@ -80,6 +80,8 @@ import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
+import dev.opencode.mobile.ui.components.LocalOpenCodeUserScrollInProgress
+import dev.opencode.mobile.ui.components.OpenCodeMessageTapTarget
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessagePresentation
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
 import dev.opencode.mobile.ui.components.OpenCodeMessageNote
@@ -371,6 +373,9 @@ private fun SessionChatTimelineReadyView(
     // isDecelerating / isUserScrolling only).
     val userScroll = rememberMessageListUserScroll(listState)
     val isUserScrollInProgress = userScroll.inProgress
+    // isScrollInProgress drops the moment a fling ends; userScroll filters out auto-follow.
+    val latestUserScroll = rememberUpdatedState(isUserScrollInProgress)
+    val userScrollProbe = remember(listState) { { listState.isScrollInProgress && latestUserScroll.value } }
 
     // Host-side latest-wins hold under user drag/fling (iOS pendingApply parity).
     // Required frames flush immediately; other kinds keep the committed snapshot.
@@ -497,72 +502,74 @@ private fun SessionChatTimelineReadyView(
             onRefresh = onRefresh,
             modifier = Modifier.fillMaxSize(),
         ) {
-            MessageListReversedTimelineColumn(
-                timeline = timeline,
-                items = committedMessages,
-                bottomAnchorKey = SESSION_CHAT_BOTTOM_ANCHOR_KEY,
-                modifier =
-                    Modifier.fillMaxSize(),
-                contentPadding =
-                    PaddingValues(
-                        start = 16.dp,
-                        end = 16.dp,
-                        top =
-                            MessageListTimelineDefaults.contentPadding.calculateTopPadding() +
-                                topOverlayInset,
-                        // reverseLayout: bottom padding is beforeContent (visual bottom).
-                        // Overlay inset is composer height + 16 end-pin gap — do not also
-                        // add the default 12 or the resting gap becomes 28.
-                        bottom = bottomOverlayInset,
-                    ),
-                // A server echo keeps the item slot of the optimistic row it replaced.
-                key = { message -> committedFrame?.listKey(message.id) ?: message.id },
-                statusIndicatorKey =
-                    if (committedWorkingLabel != null) {
-                        SESSION_CHAT_STATUS_INDICATOR_KEY
-                    } else {
-                        null
-                    },
-                statusIndicatorCollapsed = committedWorkingCollapsed,
-                statusIndicatorContent =
-                    committedWorkingLabel?.let { label ->
-                        {
-                            OpenCodeWorkingIndicator(
-                                label = label,
-                                state =
-                                    when {
-                                        committedWorkingCollapsed -> OpenCodeChatActivityState.Collapsed
-                                        WorkingTurnIndicator.showsIdleMark(label) -> OpenCodeChatActivityState.Idle
-                                        else -> OpenCodeChatActivityState.Working
-                                    },
-                                fading = committedWorkingFading,
-                            )
-                        }
-                    },
-            ) { message, isNewestMessage, onContentSizeSettled ->
-                SessionChatMessageRow(
-                    message = message,
-                    onMessageActionsTap = onMessageActionsTap,
-                    onToolDetailTap = onToolDetailTap,
-                    onToolGroupTap = onToolGroupTap,
-                    onSkillsTap = onSkillsTap,
-                    onChildSessionTap = onChildSessionTap,
-                    onChangesReviewTap = onChangesReviewTap,
-                    supportsSessionMessageDiff = supportsSessionMessageDiff,
-                    expandedStepParagraphs = expandedStepParagraphs,
-                    onExpandStepParagraph = onExpandStepParagraph,
-                    unfoldedStepRails = unfoldedStepRails,
-                    onToggleStepRailFold = onToggleStepRailFold,
-                    activityCardChildren = activityCardChildren,
-                    activityCardFooters = activityCardFooters,
-                    debouncedStepIds = debouncedStepIds,
-                    onOpenActivityCard = onOpenActivityCard,
-                    // Streaming height growth is GrowBottom + unanimated layout; do not
-                    // animateContentSize on production Session Chat (gallery may still demo it).
-                    animateSizeChanges = false,
-                    onContentSizeAnimationFinished = onContentSizeSettled,
-                    modifier = Modifier.messageListTimelineItemSpacing(isNewestMessage),
-                )
+            CompositionLocalProvider(LocalOpenCodeUserScrollInProgress provides userScrollProbe) {
+                MessageListReversedTimelineColumn(
+                    timeline = timeline,
+                    items = committedMessages,
+                    bottomAnchorKey = SESSION_CHAT_BOTTOM_ANCHOR_KEY,
+                    modifier =
+                        Modifier.fillMaxSize(),
+                    contentPadding =
+                        PaddingValues(
+                            start = 16.dp,
+                            end = 16.dp,
+                            top =
+                                MessageListTimelineDefaults.contentPadding.calculateTopPadding() +
+                                    topOverlayInset,
+                            // reverseLayout: bottom padding is beforeContent (visual bottom).
+                            // Overlay inset is composer height + 16 end-pin gap — do not also
+                            // add the default 12 or the resting gap becomes 28.
+                            bottom = bottomOverlayInset,
+                        ),
+                    // A server echo keeps the item slot of the optimistic row it replaced.
+                    key = { message -> committedFrame?.listKey(message.id) ?: message.id },
+                    statusIndicatorKey =
+                        if (committedWorkingLabel != null) {
+                            SESSION_CHAT_STATUS_INDICATOR_KEY
+                        } else {
+                            null
+                        },
+                    statusIndicatorCollapsed = committedWorkingCollapsed,
+                    statusIndicatorContent =
+                        committedWorkingLabel?.let { label ->
+                            {
+                                OpenCodeWorkingIndicator(
+                                    label = label,
+                                    state =
+                                        when {
+                                            committedWorkingCollapsed -> OpenCodeChatActivityState.Collapsed
+                                            WorkingTurnIndicator.showsIdleMark(label) -> OpenCodeChatActivityState.Idle
+                                            else -> OpenCodeChatActivityState.Working
+                                        },
+                                    fading = committedWorkingFading,
+                                )
+                            }
+                        },
+                ) { message, isNewestMessage, onContentSizeSettled ->
+                    SessionChatMessageRow(
+                        message = message,
+                        onMessageActionsTap = onMessageActionsTap,
+                        onToolDetailTap = onToolDetailTap,
+                        onToolGroupTap = onToolGroupTap,
+                        onSkillsTap = onSkillsTap,
+                        onChildSessionTap = onChildSessionTap,
+                        onChangesReviewTap = onChangesReviewTap,
+                        supportsSessionMessageDiff = supportsSessionMessageDiff,
+                        expandedStepParagraphs = expandedStepParagraphs,
+                        onExpandStepParagraph = onExpandStepParagraph,
+                        unfoldedStepRails = unfoldedStepRails,
+                        onToggleStepRailFold = onToggleStepRailFold,
+                        activityCardChildren = activityCardChildren,
+                        activityCardFooters = activityCardFooters,
+                        debouncedStepIds = debouncedStepIds,
+                        onOpenActivityCard = onOpenActivityCard,
+                        // Streaming height growth is GrowBottom + unanimated layout; do not
+                        // animateContentSize on production Session Chat (gallery may still demo it).
+                        animateSizeChanges = false,
+                        onContentSizeAnimationFinished = onContentSizeSettled,
+                        modifier = Modifier.messageListTimelineItemSpacing(isNewestMessage),
+                    )
+                }
             }
         }
 
@@ -672,12 +679,16 @@ private fun SessionChatMessageRow(
     onContentSizeAnimationFinished: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    fun openMessageActions(showsRevertMessage: Boolean) {
+    fun openMessageActions(
+        showsRevertMessage: Boolean,
+        codeBlock: String? = null,
+    ) {
         onMessageActionsTap(
             SessionChatMessageActionsTarget(
                 id = message.id,
                 text = message.text,
                 showsRevertMessage = showsRevertMessage,
+                codeBlock = codeBlock,
             ),
         )
     }
@@ -711,7 +722,12 @@ private fun SessionChatMessageRow(
             MessageRole.Assistant ->
                 AssistantMessageContent(
                     message = message,
-                    onOpenMessageActions = { openMessageActions(showsRevertMessage = false) },
+                    onOpenMessageActions = { target ->
+                        openMessageActions(
+                            showsRevertMessage = false,
+                            codeBlock = (target as? OpenCodeMessageTapTarget.CodeBlock)?.code,
+                        )
+                    },
                     onToolDetailTap = onToolDetailTap,
                     onToolGroupTap = onToolGroupTap,
                     onSkillsTap = onSkillsTap,
@@ -774,7 +790,7 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
 @Composable
 private fun AssistantMessageContent(
     message: SessionChatMessageItem,
-    onOpenMessageActions: () -> Unit,
+    onOpenMessageActions: (OpenCodeMessageTapTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
     onToolGroupTap: (SessionChatToolGroupTarget) -> Unit,
     onSkillsTap: (SessionChatSkillsTarget) -> Unit,
@@ -1365,7 +1381,7 @@ private fun StepParagraphBlock(
     block: SessionChatTimelineBlock.StepParagraph,
     renderedMarkdown: MarkdownDocument?,
     isStreaming: Boolean,
-    onOpenMessageActions: () -> Unit,
+    onOpenMessageActions: (OpenCodeMessageTapTarget) -> Unit,
     chipAction: (SessionChatTimelineBlock.ToolChip) -> (() -> Unit)?,
     exploreAction: (SessionChatTimelineBlock.ExploreSummary) -> Unit,
     expandedThrough: Int?,
@@ -1467,7 +1483,7 @@ private fun AssistantMessageBubble(
     text: String,
     renderedMarkdown: MarkdownDocument?,
     isStreaming: Boolean = false,
-    onTextTap: (() -> Unit)? = null,
+    onTextTap: ((OpenCodeMessageTapTarget) -> Unit)? = null,
     modifier: Modifier = Modifier,
     presentation: OpenCodeAssistantMessagePresentation = OpenCodeAssistantMessagePresentation.Bubble,
 ) {
