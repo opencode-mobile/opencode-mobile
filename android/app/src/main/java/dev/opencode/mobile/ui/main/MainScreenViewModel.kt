@@ -371,6 +371,8 @@ class MainScreenViewModel
             val sections = worktrees.map { worktree -> sectionFromCache(worktree, connectionId = id) }
             if (generation != switchPaintGeneration || pendingSwitchId != id) return
             resetHomeIndex()
+            seedProjectResolutions(worktrees, connectionId = id)
+            if (generation != switchPaintGeneration || pendingSwitchId != id) return
             projectFirstLoads.clearAll()
             pendingFirstServerSnapshots.clear()
             probeWaitsOnAddressCheck = false
@@ -1052,6 +1054,7 @@ class MainScreenViewModel
                     return
                 }
                 val sections = loadSectionsFromCache(worktrees)
+                seedProjectResolutions(worktrees)
                 _uiState.value =
                     MainScreenUiState.Loaded(sections = sections, projectLoads = projectFirstLoads.visible, home = homeIndex)
                 applyPendingFirstServerSnapshots()
@@ -1149,6 +1152,25 @@ class MainScreenViewModel
                 if (preserveContent) return
                 stopLiveObservations()
                 _uiState.value = MainScreenUiState.ProbeFailed(error.message ?: "Unable to load projects")
+            }
+        }
+
+        /**
+         * Cached projects for paths not resolved yet, so the cached paint groups (and keys its
+         * scopes) the way the live load will. A key that changes later reloads the whole list.
+         */
+        private suspend fun seedProjectResolutions(
+            worktrees: List<String>,
+            connectionId: String? = null,
+        ) {
+            val cached =
+                worktrees
+                    .filter { it !in homeIndex.resolutions }
+                    .mapNotNull { path ->
+                        runCatching { sessionCache.seedProjectResolution(path, connectionId) }.getOrNull()?.let { path to it }
+                    }
+            if (cached.isNotEmpty()) {
+                homeIndex = homeIndex.copy(resolutions = cached.toMap() + homeIndex.resolutions)
             }
         }
 
@@ -1564,9 +1586,18 @@ class MainScreenViewModel
         }
 
         private fun updateHomeIndex(transform: (HomeWorktreeIndex) -> HomeWorktreeIndex) {
-            val next = transform(homeIndex)
-            if (next == homeIndex) return
+            val previous = homeIndex
+            val next = transform(previous)
+            if (next == previous) return
             homeIndex = next
+            val changed = next.resolutions.filter { (path, resolution) -> previous.resolutions[path] != resolution }
+            if (changed.isNotEmpty()) {
+                viewModelScope.launch {
+                    changed.forEach { (path, resolution) ->
+                        runCatching { sessionCache.rememberProjectResolution(path, resolution) }
+                    }
+                }
+            }
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) state.copy(home = next) else state
             }

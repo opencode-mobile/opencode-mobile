@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.sessioncache
 
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -196,6 +197,38 @@ class DefaultSessionCache(
         dropActivityMemory(null)
         runCatching { store.evict(SessionCacheEvictSelector.All) }
             .onFailure { logSessionCacheIo("clear all", it) }
+    }
+
+    override suspend fun seedProjectResolution(
+        worktree: String,
+        connectionId: String?,
+    ): ResolvedHomePath? {
+        val id = connectionId ?: connectionIdProvider() ?: return null
+        val key = SessionCacheKey(connectionId = id, worktree = worktree, kind = SessionCacheKind.ProjectResolution)
+        val record =
+            runCatching { store.load(key) }
+                .onFailure { logSessionCacheIo("load project resolution", it) }
+                .getOrNull() ?: return null
+        return SessionCacheCodec.decodeProjectResolution(record.value.payloadJson, json)
+    }
+
+    override suspend fun rememberProjectResolution(
+        worktree: String,
+        resolution: ResolvedHomePath,
+    ) {
+        val connectionId = connectionIdProvider() ?: return
+        val key = SessionCacheKey(connectionId = connectionId, worktree = worktree, kind = SessionCacheKind.ProjectResolution)
+        val payload =
+            runCatching { SessionCacheCodec.encodeProjectResolution(resolution, json) }
+                .onFailure { logSessionCacheIo("encode project resolution", it) }
+                .getOrNull() ?: return
+        runCatching {
+            store.commit(
+                key = key,
+                value = SessionCacheValue(payloadJson = payload, schemaVersion = SessionCacheCodec.SCHEMA_VERSION),
+                meta = SessionCacheCommitMeta(syncedAtEpochMs = clock()),
+            )
+        }.onFailure { logSessionCacheIo("commit project resolution", it) }
     }
 
     override suspend fun estimatedSizeBytes(): Long =

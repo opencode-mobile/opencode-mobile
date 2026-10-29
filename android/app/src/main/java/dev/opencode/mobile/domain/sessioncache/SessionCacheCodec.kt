@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.sessioncache
 
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
 import dev.opencode.mobile.domain.message.Message
@@ -111,7 +112,47 @@ object SessionCacheCodec {
         }.onFailure { error ->
             DiagnosticLog.warning(DiagnosticLogArea.Session, "activity decode failed", error)
         }.getOrNull()
+
+    fun encodeProjectResolution(
+        resolution: ResolvedHomePath,
+        json: Json,
+    ): String =
+        json.encodeToString(
+            CachedProjectResolutionPayload(
+                schemaVersion = SCHEMA_VERSION,
+                projectId = resolution.projectId,
+                canonicalWorktree = resolution.canonicalWorktree,
+                name = resolution.name,
+                isRepository = resolution.isRepository,
+            ),
+        )
+
+    fun decodeProjectResolution(
+        raw: String,
+        json: Json,
+    ): ResolvedHomePath? =
+        runCatching {
+            val payload = json.decodeFromString<CachedProjectResolutionPayload>(raw)
+            if (payload.schemaVersion != SCHEMA_VERSION) return null
+            ResolvedHomePath(
+                projectId = payload.projectId,
+                canonicalWorktree = payload.canonicalWorktree,
+                name = payload.name,
+                isRepository = payload.isRepository,
+            )
+        }.onFailure { error ->
+            DiagnosticLog.warning(DiagnosticLogArea.Session, "project resolution decode failed", error)
+        }.getOrNull()
 }
+
+@Serializable
+internal data class CachedProjectResolutionPayload(
+    val schemaVersion: Int,
+    val projectId: String,
+    val canonicalWorktree: String,
+    val name: String? = null,
+    val isRepository: Boolean = false,
+)
 
 @Serializable
 internal data class CachedEnvelope(

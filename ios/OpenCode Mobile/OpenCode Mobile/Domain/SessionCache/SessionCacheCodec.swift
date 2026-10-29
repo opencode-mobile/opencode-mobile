@@ -112,6 +112,37 @@ nonisolated enum SessionCacheCodec {
             return nil
         }
     }
+
+    static func encodeProjectResolution(_ resolution: HomeProjectResolution) throws -> String {
+        let payload = CachedProjectResolutionPayload(
+            schemaVersion: schemaVersion,
+            id: resolution.id,
+            canonical: resolution.canonical,
+            name: resolution.name,
+            isRepository: resolution.isRepository
+        )
+        let data = try encoder.encode(payload)
+        guard let string = String(data: data, encoding: .utf8) else {
+            throw SessionCacheCodecError.utf8EncodingFailed
+        }
+        return string
+    }
+
+    static func decodeProjectResolution(_ raw: String) -> HomeProjectResolution? {
+        guard let data = raw.data(using: .utf8),
+              let payload = try? decoder.decode(CachedProjectResolutionPayload.self, from: data),
+              payload.schemaVersion == schemaVersion
+        else {
+            DiagnosticLog.warning(.session, "project resolution decode failed")
+            return nil
+        }
+        return HomeProjectResolution(
+            id: payload.id,
+            canonical: payload.canonical,
+            name: payload.name,
+            isRepository: payload.isRepository
+        )
+    }
 }
 
 nonisolated enum SessionCacheCodecError: Error {
@@ -125,6 +156,14 @@ nonisolated private struct CachedEnvelope: Codable, Sendable {
     let sessions: CachedSessionListPayload?
     let messages: CachedMessageListPayload?
     let activity: CachedActivityListPayload?
+}
+
+nonisolated private struct CachedProjectResolutionPayload: Codable, Sendable {
+    let schemaVersion: Int
+    let id: String
+    let canonical: String
+    let name: String?
+    let isRepository: Bool
 }
 
 nonisolated private struct CachedSessionListPayload: Codable, Sendable {

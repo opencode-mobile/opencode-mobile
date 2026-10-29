@@ -770,9 +770,11 @@ final class ProjectListHomeViewModel {
         for worktree in worktrees {
             sections.append(await sectionFromCache(worktree: worktree, connectionID: id))
         }
+        let resolutions = await cachedProjectResolutions(worktrees, connectionID: id)
         guard generation == switchPaintGeneration, pendingSwitchID == id else { return }
         clearProjectLoads()
         clearHomeProjectInputs()
+        projectResolutions = resolutions
         probeWaitsOnAddressCheck = false
         if sections.isEmpty {
             state = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: nil)
@@ -1480,6 +1482,7 @@ final class ProjectListHomeViewModel {
                 return
             }
             let sections = await loadSectionsFromCache(worktrees: worktrees)
+            await seedProjectResolutions(worktrees)
             state = .loaded(
                 sections: sections,
                 showAddProjectSheet: false,
@@ -1587,6 +1590,29 @@ final class ProjectListHomeViewModel {
             stopLiveObservations()
             state = .probeFailed(error.localizedDescription)
         }
+    }
+
+    /// Cached projects for paths not resolved yet, so the cached paint groups (and keys its
+    /// scopes) the way the live load will. A key that changes later reloads the whole list.
+    private func seedProjectResolutions(_ worktrees: [String]) async {
+        let missing = worktrees.filter { projectResolutions[$0] == nil }
+        for (path, resolution) in await cachedProjectResolutions(missing, connectionID: nil)
+            where projectResolutions[path] == nil {
+            projectResolutions[path] = resolution
+        }
+    }
+
+    private func cachedProjectResolutions(
+        _ worktrees: [String],
+        connectionID: String?
+    ) async -> [String: HomeProjectResolution] {
+        var resolutions: [String: HomeProjectResolution] = [:]
+        for worktree in worktrees {
+            if let resolution = await sessionCache.seedProjectResolution(worktree: worktree, connectionID: connectionID) {
+                resolutions[worktree] = resolution
+            }
+        }
+        return resolutions
     }
 
     private func loadSectionsFromCache(worktrees: [String]) async -> [ProjectSectionItem] {
@@ -1991,6 +2017,8 @@ final class ProjectListHomeViewModel {
         }
         if let resolution = update.resolution, projectResolutions[update.addedPath] != resolution {
             projectResolutions[update.addedPath] = resolution
+            let sessionCache = sessionCache
+            Task { await sessionCache.rememberProjectResolution(worktree: update.addedPath, resolution: resolution) }
         }
         // A failed reload keeps the worktrees Home already knows.
         if update.inventory != .failed, worktreeDirectories[update.addedPath] != update.directories {

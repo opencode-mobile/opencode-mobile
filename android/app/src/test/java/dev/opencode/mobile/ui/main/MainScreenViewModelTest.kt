@@ -55,6 +55,8 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.session.VcsInfo
+import dev.opencode.mobile.domain.sessioncache.DefaultSessionCache
+import dev.opencode.mobile.domain.sessioncache.InMemorySessionCacheStore
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
@@ -2554,6 +2556,47 @@ class MainScreenViewModelTest {
         advanceUntilIdle()
         return viewModel
     }
+
+    @Test
+    fun cachedPaint_keepsTheProjectKeyTheServerResolves() =
+        runTest(testDispatcher) {
+            // The project key is the single-project scope id; a key that changes when the server
+            // resolves the path swaps the whole list on the next launch.
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { "profile-1" },
+                    scope = backgroundScope,
+                    json = json,
+                    debounceMs = 0L,
+                    activityDebounceMs = 0L,
+                )
+            val live =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionsByWorktree = mapOf("/repo" to emptyList()),
+                    sessionCache = cache,
+                )
+            advanceUntilIdle()
+            assertEquals(listOf("proj"), (live.uiState.value as MainScreenUiState.Loaded).projects.map { it.key })
+            assertEquals("proj", cache.seedProjectResolution("/repo")?.projectId)
+            val cached = listOf(Session(id = "s1", title = "Cached", directory = "/repo", updatedAtEpochMs = 1L))
+            cache.rememberSessions("/repo", cached)
+
+            // Next launch: the server does not resolve the path (yet).
+            val cold =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(currentProjectError = IllegalStateException("not yet")),
+                    sessionsByWorktree = mapOf("/repo" to cached),
+                    sessionCache = cache,
+                )
+            advanceUntilIdle()
+            val painted = cold.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("proj"), painted.projects.map { it.key })
+            assertEquals(listOf("s1"), painted.homeSessions().map { it.id })
+        }
 
     @Test
     fun worktreesOfOneRepository_groupIntoOneProjectWithBranches() =

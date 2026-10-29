@@ -28,6 +28,20 @@ import Testing
         #expect(seeded == sessions)
     }
 
+    @Test func projectResolutionRoundTripsPerConnection() async {
+        let store = InMemorySessionCacheStore()
+        let cache = DefaultSessionCache(store: store, connectionIdProvider: { connectionId })
+        let resolution = HomeProjectResolution(id: "prj_repo", canonical: "/repo", name: "Repo", isRepository: true)
+        await cache.rememberProjectResolution(worktree: "/repo", resolution: resolution)
+
+        #expect(await cache.seedProjectResolution(worktree: "/repo", connectionID: nil) == resolution)
+        #expect(await cache.seedProjectResolution(worktree: "/repo", connectionID: connectionId) == resolution)
+        #expect(await cache.seedProjectResolution(worktree: "/repo", connectionID: "other") == nil)
+
+        await cache.purgeWorktree(serverBaseURL: "http://localhost:4096/", worktree: "/repo")
+        #expect(await cache.seedProjectResolution(worktree: "/repo", connectionID: nil) == nil)
+    }
+
     @Test func seedSessionsNoopsWithoutConnection() async {
         let cache = DefaultSessionCache(
             store: InMemorySessionCacheStore(),

@@ -382,6 +382,51 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.homeProjects.first?.worktrees.map(\.directory) == ["/repo", "/repo-wt"])
     }
 
+    @Test func cachedPaintKeepsTheProjectKeyTheServerResolves() async {
+        // The project key is the single-project scope id; a key that changes when the server
+        // resolves the path swaps the whole list on the next launch.
+        let cache = DefaultSessionCache(
+            store: InMemorySessionCacheStore(),
+            connectionIdProvider: { "profile-1" },
+            debounceMilliseconds: 0,
+            activityDebounceMilliseconds: 0
+        )
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let live = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            worktreeRepository: ScriptedWorktreeRepository(loads: [.loaded(directories: ["/repo"], listsSessions: false)]),
+            sessionCache: cache
+        )
+        await live.refresh()
+        #expect(await waitUntil { live.homeProjects.map(\.key) == ["prj_repo"] })
+        var remembered: HomeProjectResolution?
+        for _ in 0 ..< 100 where remembered == nil {
+            remembered = await cache.seedProjectResolution(worktree: "/repo", connectionID: nil)
+            if remembered == nil { try? await Task.sleep(for: .milliseconds(10)) }
+        }
+        #expect(remembered?.id == "prj_repo")
+        await cache.rememberSessions(worktree: "/repo", sessions: [
+            Session(id: "s1", title: "Cached", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ])
+
+        // Next launch: the server has not resolved the path yet.
+        let cold = makeViewModel(
+            projectRepository: FakeProjectRepository(failingDirectories: ["/repo"]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionCache: cache
+        )
+        await cold.refresh()
+        guard case let .loaded(sections, _, _, _) = cold.state else {
+            Issue.record("Expected the cached paint")
+            return
+        }
+        #expect(cold.homeProjects.map(\.key) == ["prj_repo"])
+        let rows = sections.crossProjectSessionListSessions(projects: cold.homeProjects)
+        #expect(rows.map(\.id) == ["s1"])
+        #expect(rows.map(\.worktree) == ["prj_repo"])
+    }
+
     @Test func branchesOfWorktreesFoundAfterTheRefreshShowWithoutAPullToRefresh() async {
         // v2: the first inventory knows only the main checkout; the next one (after
         // POST /api/worktree/refresh) adds two worktrees while branch loads are still in flight.
@@ -2374,6 +2419,7 @@ private func makeViewModel(
     branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)],
     worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
     connectionProbing: (any ConnectionProbing)? = nil,
+    sessionCache: any SessionCache = NoOpSessionCache.shared,
     initialProfile: ConnectionProfile = ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
     onCoordinator: (ConnectionSessionCoordinator) -> Void = { _ in }
 ) -> ProjectListHomeViewModel {
@@ -2417,6 +2463,7 @@ private func makeViewModel(
         sessionStatusLiveStore: sessionStatusLiveStore,
         sessionReadyStore: sessionReadyStore,
         connectionSessionCoordinator: coordinator,
+        sessionCache: sessionCache,
         addProjectListingDebounce: .zero,
         projectLoadTiming: projectLoadTiming,
         worktreeRepository: worktreeRepository,

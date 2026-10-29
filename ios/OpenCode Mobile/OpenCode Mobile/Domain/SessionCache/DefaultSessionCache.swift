@@ -127,6 +127,29 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
         }
     }
 
+    /// `connectionID` reads another profile's entry (a switch before its server is bound).
+    func seedProjectResolution(worktree: String, connectionID: String?) async -> HomeProjectResolution? {
+        guard let connectionId = connectionID ?? connectionIdProvider() else { return nil }
+        let key = SessionCacheKey(connectionId: connectionId, worktree: worktree, kind: .projectResolution)
+        guard let record = await store.load(key: key) else { return nil }
+        return SessionCacheCodec.decodeProjectResolution(record.value.payloadJSON)
+    }
+
+    func rememberProjectResolution(worktree: String, resolution: HomeProjectResolution) async {
+        guard let connectionId = connectionIdProvider() else { return }
+        let key = SessionCacheKey(connectionId: connectionId, worktree: worktree, kind: .projectResolution)
+        do {
+            let payload = try SessionCacheCodec.encodeProjectResolution(resolution)
+            await store.commit(
+                key: key,
+                value: SessionCacheValue(payloadJSON: payload, schemaVersion: SessionCacheCodec.schemaVersion),
+                meta: SessionCacheCommitMeta(syncedAtEpochMs: clock())
+            )
+        } catch {
+            DiagnosticLog.warning(.session, "encode/commit project resolution failed: \(error.localizedDescription)")
+        }
+    }
+
     func openMessages(sessionID: String, worktree: String) -> SessionMessageCacheHandle {
         DefaultSessionMessageCacheHandle(
             sessionID: sessionID,

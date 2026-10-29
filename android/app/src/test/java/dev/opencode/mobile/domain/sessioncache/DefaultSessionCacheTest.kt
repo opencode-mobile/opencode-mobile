@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.sessioncache
 
+import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
@@ -28,6 +29,28 @@ class DefaultSessionCacheTest {
             ignoreUnknownKeys = true
             isLenient = true
             explicitNulls = false
+        }
+
+    @Test
+    fun projectResolutionRoundTripsPerConnection() =
+        runTest {
+            val connectionId = "http://localhost:4096/|opencode"
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { connectionId },
+                    scope = backgroundScope,
+                    json = json,
+                )
+            val resolution = ResolvedHomePath(projectId = "prj_repo", canonicalWorktree = "/repo", name = "Repo", isRepository = true)
+            cache.rememberProjectResolution("/repo", resolution)
+
+            assertEquals(resolution, cache.seedProjectResolution("/repo"))
+            assertEquals(resolution, cache.seedProjectResolution("/repo", connectionId))
+            assertNull(cache.seedProjectResolution("/repo", "other"))
+
+            cache.purgeWorktree("http://localhost:4096/", "/repo")
+            assertNull(cache.seedProjectResolution("/repo"))
         }
 
     @Test

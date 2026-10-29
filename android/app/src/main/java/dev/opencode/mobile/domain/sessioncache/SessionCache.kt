@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.sessioncache
 
+import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -34,6 +35,20 @@ interface SessionCache {
         directory: String,
         entries: List<SessionActivityCacheEntry>,
     )
+
+    /**
+     * The server project [worktree] last resolved to, so a cold Home groups it as the live one
+     * will. [connectionId] reads another profile's entry (a switch before its server is bound).
+     */
+    suspend fun seedProjectResolution(
+        worktree: String,
+        connectionId: String? = null,
+    ): ResolvedHomePath? = null
+
+    suspend fun rememberProjectResolution(
+        worktree: String,
+        resolution: ResolvedHomePath,
+    ) = Unit
 
     fun openMessages(
         sessionId: String,
