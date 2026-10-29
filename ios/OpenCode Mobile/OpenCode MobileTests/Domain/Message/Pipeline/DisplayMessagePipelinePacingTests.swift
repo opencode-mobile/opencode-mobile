@@ -9,7 +9,7 @@ struct DisplayMessagePipelinePacingTests {
         #expect(streamingPrepareMaxBatchDuration == .milliseconds(160))
     }
 
-    @Test func largeStreamingMessagesSkipMarkdownPreparation() async {
+    @Test func largeStreamingMessagesStillFormatMarkdown() async {
         let text = String(repeating: "# Heading\n\nSome prose. ", count: 500)
         #expect(text.count >= MessageContentPreparer.streamingPlainTextCharacterThreshold)
 
@@ -25,7 +25,7 @@ struct DisplayMessagePipelinePacingTests {
 
         let preparer = MessageContentPreparer()
         let streaming = await preparer.prepareMessage(streamingMessage, mode: .streaming)
-        #expect(streaming.renderedMarkdown == nil)
+        #expect(streaming.renderedMarkdown != nil)
         #expect(streaming.isStreaming)
 
         let finalMessage = Message(

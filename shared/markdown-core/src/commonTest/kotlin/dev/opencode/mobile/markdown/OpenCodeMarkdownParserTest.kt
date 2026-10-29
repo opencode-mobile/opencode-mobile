@@ -279,47 +279,23 @@ class OpenCodeMarkdownParserTest {
     }
 
     @Test
-    fun openCodeCodeHighlighterForParseDefersTextMateWhileStreaming() {
-        val preferred =
-            object : OpenCodeCodeHighlighter {
-                override fun supportsLanguage(languageOrAlias: String?): Boolean = true
-
-                override fun highlight(
-                    languageOrAlias: String?,
-                    code: String,
-                ): SyntaxHighlightResult =
-                    SyntaxHighlightResult(
-                        spans = listOf(CodeSpan(0, code.length, CodeTokenRole.Keyword)),
-                        diagnostics = emptyList(),
-                    )
-            }
-
-        val streamingHighlighter =
-            openCodeCodeHighlighterForParse(preferred, isStreaming = true, textMateEnabled = true)
-        val finalHighlighter =
-            openCodeCodeHighlighterForParse(preferred, isStreaming = false, textMateEnabled = true)
-        val textMateDisabled =
-            openCodeCodeHighlighterForParse(preferred, isStreaming = false, textMateEnabled = false)
-
+    fun parseColorsFencesWithHighlightCoreByDefault() {
         val code = "val answer = 42"
-        val streamingResult = streamingHighlighter.highlight("kotlin", code)
-        val finalResult = finalHighlighter.highlight("kotlin", code)
-        val disabledResult = textMateDisabled.highlight("kotlin", code)
+        val document = OpenCodeMarkdownParser.parse("```kotlin\n$code\n```")
+        val block = assertIs<MarkdownBlock.CodeBlock>(document.blocks.single())
 
-        assertNotEquals(finalResult.spans, streamingResult.spans)
-        assertEquals(CodeTokenRole.Keyword, finalResult.spans.single().role)
-        assertEquals(streamingResult.spans, disabledResult.spans)
+        assertEquals(OpenCodeHighlightCoreCodeHighlighter.highlight("kotlin", code).spans, block.spans)
+        assertTrue(block.spans.any { it.role == CodeTokenRole.Keyword })
+        assertTrue(document.diagnostics.isEmpty())
+    }
 
-        val structureOnly =
-            openCodeCodeHighlighterForParse(
-                preferred,
-                isStreaming = true,
-                textMateEnabled = true,
-                structureOnly = true,
-            )
-        val structureResult = structureOnly.highlight("kotlin", code)
-        assertTrue(structureResult.spans.isEmpty())
-        assertEquals(SyntaxHighlightSource.StructureOnly, structureResult.source)
+    @Test
+    fun unsupportedFenceLanguageStaysPlainWithADiagnostic() {
+        val document = OpenCodeMarkdownParser.parse("```brainfuck\n++[>+<-].\n```")
+        val block = assertIs<MarkdownBlock.CodeBlock>(document.blocks.single())
+
+        assertTrue(block.spans.isEmpty())
+        assertEquals(listOf(MarkdownDiagnosticKind.UnsupportedLanguage), document.diagnostics.map { it.kind })
     }
 
     @Test
@@ -332,27 +308,36 @@ class OpenCodeMarkdownParserTest {
                     const x = 1
                     ```
                     """.trimIndent(),
-                structureOnly = true,
+                codeHighlighter = OpenCodeStructureOnlyHighlighter,
             )
         val code = document.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single()
         assertEquals("javascript", code.language)
         assertTrue(code.spans.isEmpty())
+        assertEquals(SyntaxHighlightSource.StructureOnly, OpenCodeStructureOnlyHighlighter.highlight("javascript", "const x = 1").source)
     }
 
     @Test
-    fun streamingJsonBoundaryUsesSemanticFallbackHighlighter() {
-        val requestJson =
-            OpenCodeMarkdownJson.json.encodeToString(
-                MarkdownParseRequest(
-                    markdown = "```kotlin\nval answer = 42\n```",
-                    isStreaming = true,
-                ),
-            )
+    fun jsonBoundaryColorsFencesUnlessStructureOnly() {
+        fun spans(structureOnly: Boolean): List<CodeSpan> {
+            val requestJson =
+                OpenCodeMarkdownJson.json.encodeToString(
+                    MarkdownParseRequest(markdown = "```kotlin\nval answer = 42\n```", structureOnly = structureOnly),
+                )
+            val document = OpenCodeMarkdownJson.json.decodeFromString<MarkdownDocument>(OpenCodeMarkdownJson.parseMarkdownJson(requestJson))
+            return assertIs<MarkdownBlock.CodeBlock>(document.blocks.single()).spans
+        }
 
-        val responseJson = OpenCodeMarkdownJson.parseMarkdownJson(requestJson)
-        val document = Json.parseToJsonElement(responseJson).jsonObject
+        assertEquals(OpenCodeHighlightCoreCodeHighlighter.highlight("kotlin", "val answer = 42").spans, spans(structureOnly = false))
+        assertTrue(spans(structureOnly = true).isEmpty())
+    }
 
-        assertEquals("codeBlock", document.getValue("blocks").jsonArray.single().jsonObject.getValue("type").jsonPrimitive.content)
+    @Test
+    fun jsonBoundaryIgnoresFieldsItNoLongerReads() {
+        // Older app builds still send these; they must not fail the parse.
+        val requestJson = """{"markdown":"```kotlin\nval a = 1\n```","isStreaming":true,"textMateEnabled":true}"""
+        val document = OpenCodeMarkdownJson.json.decodeFromString<MarkdownDocument>(OpenCodeMarkdownJson.parseMarkdownJson(requestJson))
+
+        assertIs<MarkdownBlock.CodeBlock>(document.blocks.single())
     }
 
     @Test

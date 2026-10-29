@@ -1,10 +1,10 @@
 package dev.opencode.mobile.domain.filesystem
 
 /**
- * File extension or well-known file name → TextMate grammar for the File Viewer. [grammar] is a
- * canonical language name from `shared/markdown-core/.../textmate-grammars/manifest.json`; null
- * means plain text. iOS implements the same table; both are tested against
- * `shared/file-languages/file-language-cases.json`, so change all three together.
+ * File extension or well-known file name → highlight-core language for the File Viewer. [grammar]
+ * is a canonical language id of `HighlightCore` (#872); null means plain text. iOS implements the
+ * same table; both are tested against `shared/file-languages/file-language-cases.json`, so change
+ * all three together.
  */
 data class ProjectFileLanguage(
     val grammar: String?,

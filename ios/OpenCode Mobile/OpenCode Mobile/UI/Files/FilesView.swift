@@ -39,6 +39,9 @@ struct FilesView: View {
         .overlay {
             OpenCodeSnackbarHost(message: viewModel.state.snackbar, onDismissed: viewModel.consumeSnackbar)
         }
+        #if HIGHLIGHT_LAB
+        .highlightLabLauncherSheet()
+        #endif
         .task {
             ProductAnalytics.logScreenView(
                 screenId: ProductAnalytics.Screen.files,

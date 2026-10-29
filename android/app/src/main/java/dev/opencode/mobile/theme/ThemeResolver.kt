@@ -68,13 +68,15 @@ object ThemeResolver {
         tokens["syntax-comment"] = mix(ink, neutral, 0.55f)
         tokens["syntax-keyword"] = info
         tokens["syntax-string"] = "#00CEB9"
-        tokens["syntax-primitive"] = if (isDark) mix(interactive, "#FFFFFF", 0.42f) else interactive
+        tokens["syntax-function"] = if (isDark) mix(interactive, "#FFFFFF", 0.42f) else interactive
         tokens["syntax-property"] = if (isDark) primary else info
         tokens["syntax-type"] = warning
         tokens["syntax-success"] = success
         tokens["syntax-warning"] = warning
         tokens["syntax-info"] = info
         tokens["syntax-constant"] = if (isDark) "#93E9F6" else "#007B80"
+        tokens["syntax-number"] = tokens.getValue("syntax-constant")
+        tokens["syntax-attribute"] = warning
         tokens["syntax-variable"] = if (isDark) "#E06C75" else "#D1383D"
         tokens["syntax-operator"] = if (isDark) "#56B6C2" else "#318795"
         tokens["syntax-punctuation"] = textStrong(ink, isDark)

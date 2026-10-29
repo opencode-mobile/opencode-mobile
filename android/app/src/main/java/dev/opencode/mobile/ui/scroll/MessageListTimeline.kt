@@ -165,7 +165,7 @@ internal fun rememberMessageListTimeline(
     )
 
     // Armed: declared-ID structure follow → await layout → exact end.
-    // Decorate-only (TextMate / slash collapse) uses layoutAffectingRevision for
+    // Decorate-only (code colors / slash collapse) uses layoutAffectingRevision for
     // unarmed restore only — not armed re-scroll.
     MessageListAutoFollowLayoutAffectingEffect(
         layoutAffectingRevision = structureAffectingRevision,

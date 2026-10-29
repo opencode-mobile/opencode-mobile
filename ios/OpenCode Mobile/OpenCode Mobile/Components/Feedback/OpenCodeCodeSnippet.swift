@@ -5,6 +5,9 @@ enum OpenCodeCodeSnippetSurface {
     case raised
     /// Base fill for a snippet sitting on a raised card.
     case base
+    /// Code surface of a syntax preset, given by its resolved syntax tokens: the editor
+    /// background when the preset has one, else the base fill.
+    case syntaxPreset([String: String])
 }
 
 /// Monospace command or code block. Syntax colors stay in an attributed string.
@@ -43,6 +46,8 @@ struct OpenCodeCodeSnippet: View {
             OpenCodeColors.surfaceRaisedBase
         case .base:
             OpenCodeColors.surfaceBase
+        case .syntaxPreset(let tokens):
+            OpenCodeCodeColors.backgroundHex(in: tokens).map(Color.init(hex:)) ?? OpenCodeColors.surfaceBase
         }
     }
 

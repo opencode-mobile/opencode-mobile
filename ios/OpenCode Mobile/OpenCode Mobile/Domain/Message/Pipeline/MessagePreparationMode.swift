@@ -3,7 +3,7 @@ import Foundation
 /// Closed preparation intent for `MessageContentPreparer` / `DisplayMessagePipeline`.
 /// Replaces boolean flag combinations.
 nonisolated enum MessagePreparationMode: String, Sendable {
-    /// Live streaming prepare; plain text above the streaming size threshold.
+    /// Live streaming prepare. No size skip; the pipeline colors fences after the structure frame.
     case streaming
     /// Usable cold history without starting missing markdown parses.
     case historyPlainFirst

@@ -54,7 +54,6 @@ import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
-import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.security.AppLockAvailability
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -163,9 +162,6 @@ import dev.opencode.mobile.ui.settings.SettingsDetail
 import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.SyntaxHighlightPickerScreen
-import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
-import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
-import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
 import dev.opencode.mobile.ui.settings.ThemePickerScreen
 import dev.opencode.mobile.ui.terminal.TerminalsCatalogScreen
 
@@ -296,27 +292,11 @@ fun MainNavigation() {
                         onNavigateBack = onNavigateBack,
                         detailControl = detailControl,
                     )
-                SettingsDetail.TextMateLanguages ->
-                    TextMateLanguagesRoute(
-                        onNavigateBack = onNavigateBack,
-                        detailControl = detailControl,
-                    )
                 SettingsDetail.FeatureFlags ->
                     FeatureFlagsRoute(
                         onNavigateBack = onNavigateBack,
                         detailControl = detailControl,
                     )
-                SettingsDetail.TextMateLogbook -> {
-                    val logbookViewModel: TextMateLogbookViewModel = hiltViewModel()
-                    val logbookState by logbookViewModel.state.collectAsStateWithLifecycle()
-                    TextMateLogbookScreen(
-                        state = logbookState,
-                        onNavigateBack = onNavigateBack,
-                        detailControl = detailControl,
-                        onRefresh = logbookViewModel::refresh,
-                        onClear = logbookViewModel::clear,
-                    )
-                }
                 SettingsDetail.DiagnosticLogs -> {
                     val diagnosticLogsViewModel: DiagnosticLogsViewModel = hiltViewModel()
                     val diagnosticLogsState by diagnosticLogsViewModel.state.collectAsStateWithLifecycle()
@@ -510,15 +490,12 @@ fun MainNavigation() {
                                                     onComponentGalleryClick = {
                                                         openSettingsDetail(SettingsDetail.ComponentGallery)
                                                     },
-                                                    onTextMateLanguagesClick = {
-                                                        openSettingsDetail(SettingsDetail.TextMateLanguages)
-                                                    },
                                                     onFeatureFlagsClick = {
                                                         openSettingsDetail(SettingsDetail.FeatureFlags)
                                                     },
-                                                    onTextMateLogbookClick = {
-                                                        openSettingsDetail(SettingsDetail.TextMateLogbook)
-                                                    },
+                                                    // A full-screen route, also on wide windows; null in release builds.
+                                                    onHighlightingLabClick =
+                                                        HighlightingLabSeam.homeRoute?.let { route -> { backStack.add(route) } },
                                                     onDiagnosticLogsClick = {
                                                         openSettingsDetail(SettingsDetail.DiagnosticLogs)
                                                     },
@@ -563,8 +540,6 @@ fun MainNavigation() {
                                                         settingsViewModel::setFollowUpDelivery,
                                                     supportsFollowUpDelivery =
                                                         settingsViewModel.supportsFollowUpDelivery(),
-                                                    textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
-                                                    onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
                                                     productAnalyticsConsented =
                                                         AnalyticsConsentPreferences.productAnalyticsConsented,
                                                     onProductAnalyticsConsentedChange =
@@ -676,23 +651,9 @@ fun MainNavigation() {
                                             )
                                         }
                                     }
-                                    entry<TextMateLanguagesHome> {
-                                        RouteSurface {
-                                            settingsDetailContent(SettingsDetail.TextMateLanguages, null) {
-                                                backStack.popRouteUnlessRoot()
-                                            }
-                                        }
-                                    }
                                     entry<FeatureFlagsHome> {
                                         RouteSurface {
                                             settingsDetailContent(SettingsDetail.FeatureFlags, null) {
-                                                backStack.popRouteUnlessRoot()
-                                            }
-                                        }
-                                    }
-                                    entry<TextMateLogbookHome> {
-                                        RouteSurface {
-                                            settingsDetailContent(SettingsDetail.TextMateLogbook, null) {
                                                 backStack.popRouteUnlessRoot()
                                             }
                                         }
@@ -911,8 +872,6 @@ private val SettingsDetail.route: NavKey
             SettingsDetail.Servers -> ServersHome
             SettingsDetail.Appearance -> AppearanceHome
             SettingsDetail.ComponentGallery -> ComponentGalleryHome
-            SettingsDetail.TextMateLanguages -> TextMateLanguagesHome
-            SettingsDetail.TextMateLogbook -> TextMateLogbookHome
             SettingsDetail.FeatureFlags -> FeatureFlagsHome
             SettingsDetail.DiagnosticLogs -> DiagnosticLogsHome
         }

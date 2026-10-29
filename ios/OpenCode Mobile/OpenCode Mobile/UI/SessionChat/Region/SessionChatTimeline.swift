@@ -1113,8 +1113,7 @@ final class SessionChatTimeline {
                     followUpDelivery: patch.delivery
                 ),
                 renderedMarkdown: display.renderedMarkdown,
-                awaitingTextMateUpgrade: display.awaitingTextMateUpgrade,
-                highlightEpoch: display.highlightEpoch
+                awaitingTextMateUpgrade: display.awaitingTextMateUpgrade
             )
         }
     }

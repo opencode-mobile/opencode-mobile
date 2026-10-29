@@ -36,7 +36,6 @@ import dev.opencode.mobile.domain.message.AttachmentLimits
 import dev.opencode.mobile.domain.message.AttachmentUpload
 import dev.opencode.mobile.domain.message.AttachmentUploadResult
 import dev.opencode.mobile.domain.message.AttachmentUploadService
-import dev.opencode.mobile.domain.message.UnavailableAttachmentUploadService
 import dev.opencode.mobile.domain.message.DisplayMessage
 import dev.opencode.mobile.domain.message.DisplayMessageListUpdate
 import dev.opencode.mobile.domain.message.Message
@@ -50,6 +49,7 @@ import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.domain.message.ShellCommandOptions
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.message.UnavailableAttachmentUploadService
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
@@ -86,11 +86,9 @@ import dev.opencode.mobile.domain.worktree.WorktreeInventory
 import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
-import dev.opencode.mobile.markdown.OpenCodeBundledJoniMarkdownHighlighter
+import dev.opencode.mobile.markdown.HighlightCoreHighlightingEngine
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
-import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -1232,18 +1230,17 @@ class SessionChatViewModelTest {
     fun benchmark_loadMessages_longMarkdownHistory() =
         runTest(testDispatcher) {
             val messages = longMarkdownHistory()
-            val highlighter = OpenCodeBundledJoniMarkdownHighlighter.default()
             val detectorMs = measureMs { messages.count { OpenCodeMarkdownDetector.shouldRender(it.text) } }
             val parserMs =
                 measureMs {
                     messages.forEach { message ->
                         if (OpenCodeMarkdownDetector.shouldRender(message.text)) {
-                            OpenCodeMarkdownParser.parse(message.text, highlighter)
+                            OpenCodeMarkdownParser.parse(message.text)
                         }
                     }
                 }
             val preparer =
-                MessageContentPreparer(OpenCodeTextMateHighlightingEngine(highlighter)).apply {
+                MessageContentPreparer(HighlightCoreHighlightingEngine()).apply {
                     computationDispatcher = testDispatcher
                 }
             val preparerMs =
@@ -8180,7 +8177,7 @@ private class FakeMessageRepository(
     private val echoSentPrompt: Boolean = false,
     private val holdSendUntil: CompletableDeferred<Unit>? = null,
     private val contentPreparer: MessageContentPreparer =
-        MessageContentPreparer(OpenCodeTextMateHighlightingEngine(OpenCodeSyntaxHighlighter.default)).apply {
+        MessageContentPreparer(HighlightCoreHighlightingEngine()).apply {
             computationDispatcher = Dispatchers.Unconfined
         },
 ) : MessageRepository {

@@ -1,7 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,14 +22,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
@@ -38,9 +39,9 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.markdown.CodeSpan
-import dev.opencode.mobile.markdown.CodeTokenRole
-import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
+import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.theme.CodeTextStyle
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
@@ -286,13 +287,20 @@ private fun SourceBody(presentation: ToolResultPresentation.Source) {
         value =
             withContext(Dispatchers.Default) {
                 runCatching {
-                    OpenCodeSemanticFallbackHighlighter.highlight(presentation.highlightLanguage, source).spans
+                    OpenCodeHighlightCoreCodeHighlighter.highlight(presentation.highlightLanguage, source).spans
                 }.getOrDefault(emptyList())
             }
     }
     val scroll = rememberScrollState()
     val colors = codeColors()
-    Column(modifier = Modifier.horizontalScroll(scroll)) {
+    Column(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(colors.surface(Color.Transparent), OpenCodeSmallShape)
+                .horizontalScroll(scroll)
+                .padding(vertical = if (colors.background != null) 8.dp else 0.dp),
+    ) {
         presentation.lines.forEach { line ->
             Row(verticalAlignment = Alignment.Top) {
                 Text(
@@ -306,6 +314,7 @@ private fun SourceBody(presentation: ToolResultPresentation.Source) {
                 )
                 Text(
                     text = highlighted(line.text, spansForLine(source, line, spans), colors),
+                    color = colors.plain,
                     style = CodeTextStyle,
                     maxLines = 1,
                     softWrap = false,
@@ -483,25 +492,3 @@ private fun highlighted(
         if (cursor < text.length) append(text.substring(cursor))
     }
 }
-
-private fun dev.opencode.mobile.ui.components.CodeColors.colorFor(role: CodeTokenRole) =
-    when (role) {
-        CodeTokenRole.Plain -> plain
-        CodeTokenRole.Comment -> comment
-        CodeTokenRole.Keyword -> keyword
-        CodeTokenRole.String -> string
-        CodeTokenRole.Number -> primitive
-        CodeTokenRole.Type -> type
-        CodeTokenRole.Function -> property
-        CodeTokenRole.Property -> property
-        CodeTokenRole.Variable -> variable
-        CodeTokenRole.Constant -> constant
-        CodeTokenRole.Operator -> operator
-        CodeTokenRole.Punctuation -> punctuation
-        CodeTokenRole.Tag -> keyword
-        CodeTokenRole.Attribute -> property
-        CodeTokenRole.Inserted -> inserted
-        CodeTokenRole.Deleted -> deleted
-        CodeTokenRole.Warning -> warning
-        CodeTokenRole.Critical -> critical
-    }

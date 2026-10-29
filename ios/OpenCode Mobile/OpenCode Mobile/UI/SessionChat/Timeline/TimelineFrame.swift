@@ -161,7 +161,7 @@ nonisolated struct TimelineFrame: Equatable, Sendable {
     }
 
     /// Armed follow targets: inserts and non-decorate layout changes.
-    /// Decorate-only (TextMate / slash collapse) should not re-pin.
+    /// Decorate-only (highlight-core colors / slash collapse) should not re-pin.
     var structureAffectingRowIDs: Set<String> {
         insertedRowIDs.union(layoutChangedRowIDs.subtracting(decorateRowIDs))
     }

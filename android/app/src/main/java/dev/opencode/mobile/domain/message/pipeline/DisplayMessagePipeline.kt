@@ -1,6 +1,8 @@
 package dev.opencode.mobile.domain.message
 
-import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
+import dev.opencode.mobile.markdown.CodeSpan
+import dev.opencode.mobile.markdown.MarkdownBlock
+import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
 import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
@@ -14,7 +16,6 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
-import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.TimeSource
 
 /** Open window that coalesces a burst of streaming tokens into one UI frame. */
@@ -55,13 +56,14 @@ class DisplayMessagePipeline(
             var currentGeneration = 0L
             var debounceJob: Job? = null
             var prepareJob: Job? = null
-            var decorationJob: Job? = null
             var enrichmentJob: Job? = null
+            var highlightJob: Job? = null
+            var highlightEpoch = 0L
+            val streamingDocs = mutableMapOf<String, MarkdownDocument>()
             var lastPublishedAt: kotlin.time.TimeMark? = null
             // True while coalescing a live streaming reply (including in-flight prepare).
             var isStreamingSession = false
             var sourceIsFromCache = false
-            val decorationBacklog = DecorationBacklog()
 
             var sourceHasOlder = false
 
@@ -80,11 +82,10 @@ class DisplayMessagePipeline(
                 debounceJob = null
                 prepareJob?.cancel()
                 prepareJob = null
-                decorationJob?.cancel()
-                decorationJob = null
                 enrichmentJob?.cancel()
                 enrichmentJob = null
-                decorationBacklog.clear()
+                highlightJob?.cancel()
+                highlightJob = null
             }
 
             fun nextGeneration(): Long {
@@ -114,6 +115,7 @@ class DisplayMessagePipeline(
             }
 
             suspend fun buildStructureFirstStreamingFrame(messages: List<Message>): List<DisplayMessage> {
+                streamingDocs.retainStillStreaming(messages)
                 val out = ArrayList<DisplayMessage>(messages.size)
                 for (message in messages) {
                     val previous = previousById[message.id]
@@ -131,7 +133,7 @@ class DisplayMessagePipeline(
                         continue
                     }
                     val target = resolveStreamingDecorationTarget(message)
-                    val structure =
+                    val parsed =
                         if (target != null && OpenCodeMarkdownDetector.shouldRender(target.plain)) {
                             contentPreparer.prepareStructureOnlyTextBlock(
                                 blockID = target.blockID,
@@ -141,6 +143,10 @@ class DisplayMessagePipeline(
                         } else {
                             null
                         }
+                    val structure = parsed?.carryingCodeSpans(streamingDocs[message.id])
+                    if (structure != null) {
+                        streamingDocs[message.id] = structure
+                    }
                     if (structure != null && target != null) {
                         BlockDecorationCache.put(
                             sessionKey = sessionId,
@@ -151,121 +157,101 @@ class DisplayMessagePipeline(
                             document = structure,
                         )
                     }
+                    val awaitingColors = structure?.hasUncoloredCodeFence() == true
                     out +=
                         DisplayMessage(
                             message = message,
                             renderedMarkdown = structure.takeIf { messageHasSoleTextBlock(message) },
+                            awaitingTextMateUpgrade = awaitingColors,
                         )
                 }
                 return out
             }
 
-            fun decorationIdentityMatches(job: DecorationJob): Boolean {
-                val messages = lastPublishedMessages ?: return false
-                return messages.any { message ->
-                    val target = resolveStreamingDecorationTarget(message) ?: return@any false
-                    target.blockID == job.blockID &&
-                        target.textHash == job.textHash &&
-                        target.textLength == job.textLength &&
-                        target.isStreaming == job.isStreaming
-                }
-            }
-
-            fun drainDecorationBacklog() {
-                if (decorationJob?.isActive == true) return
-                decorationJob =
-                    launch {
-                        while (isActive) {
-                            val job = decorationBacklog.poll() ?: break
-                            if (!isCurrent(job.generation) || !decorationIdentityMatches(job)) {
-                                continue
-                            }
-                            val targetMessage =
-                                job.messages.firstOrNull { message ->
-                                    resolveStreamingDecorationTarget(message)?.blockID == job.blockID
-                                } ?: continue
-                            val target =
-                                resolveStreamingDecorationTarget(targetMessage) ?: continue
-                            val document =
-                                try {
-                                    contentPreparer.prepareTextBlock(
-                                        blockID = job.blockID,
-                                        plain = target.plain,
-                                        isStreaming = job.isStreaming,
-                                        sessionKey = job.sessionKey,
-                                        mode = MessagePreparationMode.Streaming,
-                                    )
-                                } catch (cancelled: CancellationException) {
-                                    throw cancelled
-                                } catch (_: Exception) {
-                                    // Keep current plain text; disposable decoration may retry later.
-                                    continue
-                                }
-                            if (document == null) continue
-                            if (!isActive || !isCurrent(job.generation)) continue
-                            if (!decorationIdentityMatches(job)) continue
-                            // Generation + identity reject completed before cache mutation.
-                            BlockDecorationCache.put(
-                                sessionKey = job.sessionKey,
-                                blockID = job.blockID,
-                                textHash = job.textHash,
-                                textLength = job.textLength,
-                                isStreaming = job.isStreaming,
-                                document = document,
+            suspend fun applyStreamingColors(
+                messageId: String,
+                target: StreamingDecorationTarget,
+                document: MarkdownDocument,
+                partial: Boolean,
+            ) {
+                if (!isCurrent(currentGeneration)) return
+                streamingDocs[messageId] = document
+                BlockDecorationCache.put(
+                    sessionKey = sessionId,
+                    blockID = target.blockID,
+                    textHash = target.textHash,
+                    textLength = target.textLength,
+                    isStreaming = true,
+                    document = document,
+                )
+                val messages = lastPublishedMessages ?: return
+                val frame =
+                    messages.map { message ->
+                        if (message.id != messageId) {
+                            previousById[message.id]?.copy(message = message)
+                                ?: DisplayMessage(message = message, renderedMarkdown = null)
+                        } else {
+                            DisplayMessage(
+                                message = message,
+                                renderedMarkdown = document.takeIf { messageHasSoleTextBlock(message) },
+                                awaitingTextMateUpgrade = partial,
                             )
-                            val soleTextBridge = messageHasSoleTextBlock(targetMessage)
-                            var changed = false
-                            val merged =
-                                job.messages.map { message ->
-                                    val previous = previousById[message.id]
-                                    when {
-                                        message.id == targetMessage.id &&
-                                            (previous == null || previous.text == message.text) -> {
-                                            changed = true
-                                            DisplayMessage(
-                                                message = message,
-                                                renderedMarkdown =
-                                                    document.takeIf { soleTextBridge },
-                                            )
-                                        }
-                                        previous != null && previous.text == message.text -> previous
-                                        else -> DisplayMessage(message = message, renderedMarkdown = null)
-                                    }
-                                }
-                            if (!changed) continue
-                            if (!commitPrepared(job.generation, merged, MessagePreparationMode.Streaming)) {
-                                continue
-                            }
-                            emitDisplayMessages(merged)
                         }
-                        decorationJob = null
                     }
+                previousById = frame.associateBy { it.id }
+                emitDisplayMessages(frame)
             }
 
-            fun scheduleStreamingDecoration(
+            fun scheduleStreamingHighlight(
                 generation: Long,
                 messages: List<Message>,
             ) {
-                // TextMate on: keep structure-only until Final colors. Skip
-                // streaming semantic decoration so colors do not flash early.
-                if (MarkdownHighlightPreferences.textMateEnabled) return
-                val streamingMessage =
-                    messages.firstOrNull(::messageHasStreamingText) ?: return
-                val target = resolveStreamingDecorationTarget(streamingMessage) ?: return
-                if (!OpenCodeMarkdownDetector.shouldRender(target.plain)) return
-                val job =
-                    DecorationJob(
-                        generation = generation,
-                        sessionKey = sessionId,
-                        blockID = target.blockID,
-                        textHash = target.textHash,
-                        textLength = target.textLength,
-                        isStreaming = true,
-                        messages = messages,
-                        priority = 2,
-                    )
-                if (!decorationBacklog.replaceStreamingJob(job)) return
-                drainDecorationBacklog()
+                highlightJob?.cancel()
+                highlightEpoch += 1
+                val epoch = highlightEpoch
+                val targets =
+                    messages.mapNotNull { message ->
+                        if (!messageHasStreamingText(message)) return@mapNotNull null
+                        val target = resolveStreamingDecorationTarget(message) ?: return@mapNotNull null
+                        if (!OpenCodeMarkdownDetector.shouldRender(target.plain)) return@mapNotNull null
+                        if (streamingDocs[message.id]?.hasCodeFence() != true) return@mapNotNull null
+                        message.id to target
+                    }
+                if (targets.isEmpty()) return
+                highlightJob =
+                    launch {
+                        for ((messageId, target) in targets) {
+                            var partial = true
+                            var stalled = false
+                            while (partial) {
+                                ensureActive()
+                                if (!isCurrent(generation) || highlightEpoch != epoch) return@launch
+                                val highlighted =
+                                    contentPreparer.highlightStreamingTextBlock(
+                                        blockID = target.blockID,
+                                        plain = target.plain,
+                                        sessionKey = sessionId,
+                                    ) ?: break
+                                if (!isCurrent(generation) || highlightEpoch != epoch) return@launch
+                                val latest = lastPublishedMessages?.find { it.id == messageId }
+                                val currentPlain = latest?.let { resolveStreamingDecorationTarget(it)?.plain }
+                                if (currentPlain != target.plain) break
+                                val previous = streamingDocs[messageId]
+                                val unchanged = previous != null && previous.hasSameCodeSpans(highlighted.document)
+                                if (unchanged && (!highlighted.partial || stalled)) break
+                                stalled = unchanged
+                                if (!unchanged) {
+                                    applyStreamingColors(
+                                        messageId = messageId,
+                                        target = target,
+                                        document = highlighted.document,
+                                        partial = highlighted.partial,
+                                    )
+                                }
+                                partial = highlighted.partial
+                            }
+                        }
+                    }
             }
 
             suspend fun publishPlainStreamingFrame(
@@ -278,7 +264,7 @@ class DisplayMessagePipeline(
                 lastPublishedMessages = messages
                 lastPublishedAt = timeSource.markNow()
                 emitDisplayMessages(frame)
-                scheduleStreamingDecoration(generation, messages)
+                scheduleStreamingHighlight(generation, messages)
             }
 
             fun isDueForMaxBatch(): Boolean {
@@ -356,7 +342,7 @@ class DisplayMessagePipeline(
                 enrichmentJob =
                     launch {
                         val holdReady = MessageContentPreparer.HOLD_READY_UNTIL_NEWEST_MARKDOWN
-                        // Spinner is already up when holding Ready — start TextMate ASAP.
+                        // Spinner is already up when holding Ready — start highlighting ASAP.
                         if (!holdReady) {
                             delayMillis(48)
                         }
@@ -458,7 +444,7 @@ class DisplayMessagePipeline(
                         if (!commitPrepared(generation, prepared, mode)) return@launch
                         lastPublishedMessages = messages
                         // Format-first history is publishable; do not hold Ready on
-                        // unprocessed plain while TextMate enrichment catches up.
+                        // unprocessed plain while highlighting enrichment catches up.
                         emitDisplayMessages(prepared)
                         onCommitted?.invoke()
                     }
@@ -542,6 +528,7 @@ class DisplayMessagePipeline(
                             pendingMessages = null
                             lastPublishedMessages = null
                             isStreamingSession = false
+                            streamingDocs.clear()
                             BlockDecorationCache.clear()
                             send(DisplayMessageListUpdate.LoadFailed(update.error))
                         }
@@ -596,6 +583,7 @@ class DisplayMessagePipeline(
                                 invalidateInFlightWork()
                                 pendingMessages = null
                                 isStreamingSession = false
+                                streamingDocs.retainStillStreaming(update.messages)
                                 val hadStreamingPrevious = previousById.values.any { it.isStreaming }
                                 if (hadStreamingPrevious) {
                                     scheduleFinalization(generation, update.messages)
@@ -605,7 +593,7 @@ class DisplayMessagePipeline(
                                     // Newest-first HistoryPlainFirst: format the open
                                     // viewport (last message) before older history.
                                     // Skip null-markdown flash. REST identity-unchanged
-                                    // keeps TextMate enrich from being cancelled.
+                                    // keeps highlighting enrichment from being cancelled.
                                     schedulePlainFirstNewestFirst(
                                         generation = generation,
                                         messages = update.messages,
@@ -671,6 +659,13 @@ class DisplayMessagePipeline(
 }
 
 private fun messageHasStreamingText(message: Message): Boolean = message.parts.any { part -> part is MessagePart.Text && part.isStreaming }
+
+/** Drops the live documents of messages in [messages] that stopped streaming or are gone. */
+internal fun MutableMap<String, MarkdownDocument>.retainStillStreaming(messages: List<Message>) {
+    if (isEmpty()) return
+    val streaming = messages.filter(::messageHasStreamingText).mapTo(HashSet()) { it.id }
+    keys.retainAll(streaming)
+}
 
 internal data class StreamingDecorationTarget(
     val blockID: String,
@@ -748,6 +743,51 @@ internal fun resolveStreamingDecorationTarget(message: Message): StreamingDecora
 
 /** Mirrors [SessionChatTimelineBlocks] visibility used when flushing text runs. */
 private fun isVisibleToolForStreamingDecoration(tool: MessagePart.Tool): Boolean = ToolPartIdentity.isVisibleOnTimeline(tool)
+
+/** Copies stable fence colors onto a newly parsed structure so a growing stream does not flash plain. */
+internal fun MarkdownDocument.carryingCodeSpans(from: MarkdownDocument?): MarkdownDocument {
+    if (from == null) return this
+    val previous = from.blocks.filterIsInstance<MarkdownBlock.CodeBlock>()
+    if (previous.isEmpty()) return this
+    var fence = 0
+    var changed = false
+    val updated =
+        blocks.map { block ->
+            if (block !is MarkdownBlock.CodeBlock) return@map block
+            val old = previous.getOrNull(fence) ?: return@map block
+            fence += 1
+            val carried = carryCodeSpans(oldCode = old.code, oldSpans = old.spans, newCode = block.code)
+            if (carried.isEmpty() || carried == block.spans) return@map block
+            changed = true
+            block.copy(spans = carried)
+        }
+    return if (changed) copy(blocks = updated) else this
+}
+
+internal fun carryCodeSpans(
+    oldCode: String,
+    oldSpans: List<CodeSpan>,
+    newCode: String,
+): List<CodeSpan> {
+    if (oldSpans.isEmpty()) return emptyList()
+    if (newCode == oldCode) return oldSpans
+    if (!newCode.startsWith(oldCode)) return emptyList()
+    val limit = oldCode.length
+    return oldSpans.filter { span -> span.start >= 0 && span.end <= limit && span.start < span.end }
+}
+
+internal fun MarkdownDocument.hasCodeFence(): Boolean = blocks.any { it is MarkdownBlock.CodeBlock }
+
+/** A fence the streaming pass still needs to color. Carried spans do not count as uncolored. */
+internal fun MarkdownDocument.hasUncoloredCodeFence(): Boolean =
+    blocks.filterIsInstance<MarkdownBlock.CodeBlock>().any { block -> block.spans.isEmpty() && block.code.isNotEmpty() }
+
+internal fun MarkdownDocument.hasSameCodeSpans(other: MarkdownDocument): Boolean {
+    val left = blocks.filterIsInstance<MarkdownBlock.CodeBlock>()
+    val right = other.blocks.filterIsInstance<MarkdownBlock.CodeBlock>()
+    if (left.size != right.size) return false
+    return left.zip(right).all { (a, b) -> a.code == b.code && a.spans == b.spans }
+}
 
 private fun messageHasSoleTextBlock(message: Message): Boolean {
     val blocks =

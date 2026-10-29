@@ -824,6 +824,10 @@ extension Container {
         shared.terminalViewModel((worktree: worktree, ptyId: ptyId))
     }
 
+    /// Highlighter for Session Chat code fences: highlight-core (#872) in every build. The File
+    /// Viewer keeps its own highlight-core session per open file (`HighlightCoreFileSession`).
+    nonisolated static let codeHighlighter: any TextMateHighlighting = HighlightCoreHighlightingEngine.shared
+
     @MainActor
     static func makeFilesViewModel(worktree: String) -> FilesViewModel {
         FilesViewModel(worktree: worktree, repository: shared.projectFilesRepository())
@@ -841,7 +845,6 @@ extension Container {
             await shared.sessionCache().clearAll()
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()
-            MarkdownHighlightPreferences.shared.clear()
             AnalyticsConsentPreferences.shared.clear()
             // Apply the reset default to Crashlytics and Analytics collection now, not at next launch.
             OpenCodeReleaseObservability.setProductAnalyticsConsented(
@@ -851,6 +854,7 @@ extension Container {
             AppOnboardingPreferences.shared.clear()
             DeveloperToolsPreferences.shared.clear()
             PerformanceOverlayPreferences.shared.clear()
+            await codeHighlighter.trim(.critical)
             SessionChatDisplayPreferences.shared.clear()
             // A wipe is a fresh install: settle the timeline now so the update-only picker never shows.
             SessionChatDisplayPreferences.shared.resolveTimelineForInstall(existingInstall: false)
@@ -858,7 +862,6 @@ extension Container {
             FeatureFlags.shared.clearOverrides()
             MessageContentPreparer.shared.clearDocumentCache()
             BlockDecorationCache.shared.clear()
-            await TextMateLogbook.shared.clear()
             DiagnosticLogBuffer.shared.clear()
         }
     }

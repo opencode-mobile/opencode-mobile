@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,20 +23,21 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.markdown.CodeTokenRole
 import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
 import dev.opencode.mobile.theme.ResolvedTokens
 import dev.opencode.mobile.theme.SyntaxHighlightPreset
 import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.ThemePreset
 import dev.opencode.mobile.theme.ThemeResolver
-import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.components.CodeColors
 import dev.opencode.mobile.ui.components.OpenCodeCodeSnippet
 import dev.opencode.mobile.ui.components.OpenCodeCodeSnippetSurface
 import dev.opencode.mobile.ui.components.OpenCodeListItem
-import dev.opencode.mobile.ui.components.OpenCodeSelectableCard
 import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
+import dev.opencode.mobile.ui.components.OpenCodeSelectableCard
 import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
@@ -283,8 +285,15 @@ private fun SyntaxPreviewCard(
         onClick = onClick,
         modifier = modifier,
     ) {
+        val base = if (LocalOpenCodeDarkTheme.current) ThemeManager.resolvedDark else ThemeManager.resolvedLight
+        // The preset's syntax tokens over the UI theme's other tokens, as the preset would resolve.
+        val colors =
+            remember(base, tokens) {
+                CodeColors.from(base.tokens.filterKeys { !it.startsWith("syntax-") } + tokens)
+            }
         OpenCodeCodeSnippet(
-            code = syntaxSnippet(tokens),
+            code = remember(colors) { syntaxSnippet(colors) },
+            colors = colors,
             surface = OpenCodeCodeSnippetSurface.Base,
         )
     }
@@ -295,27 +304,45 @@ private fun tokenColor(
     key: String,
 ) = ThemeResolver.parseHexColor(tokens?.get(key) ?: "#888888")
 
-private fun syntaxSnippet(tokens: Map<String, String>) =
+private val SyntaxSnippetRuns =
+    listOf(
+        "// refresh before the request" to CodeTokenRole.Comment,
+        "\n" to CodeTokenRole.Plain,
+        "async function" to CodeTokenRole.Keyword,
+        " " to CodeTokenRole.Plain,
+        "readToken" to CodeTokenRole.Function,
+        "(" to CodeTokenRole.Punctuation,
+        "store" to CodeTokenRole.Variable,
+        ": " to CodeTokenRole.Punctuation,
+        "TokenStore" to CodeTokenRole.Type,
+        ") {\n  " to CodeTokenRole.Punctuation,
+        "if" to CodeTokenRole.Keyword,
+        " (" to CodeTokenRole.Punctuation,
+        "store" to CodeTokenRole.Variable,
+        "." to CodeTokenRole.Punctuation,
+        "expired" to CodeTokenRole.Function,
+        "(" to CodeTokenRole.Punctuation,
+        "60" to CodeTokenRole.Number,
+        ")) {\n    " to CodeTokenRole.Punctuation,
+        "await" to CodeTokenRole.Keyword,
+        " " to CodeTokenRole.Plain,
+        "refreshAccessToken" to CodeTokenRole.Function,
+        "(" to CodeTokenRole.Punctuation,
+        "\"api\"" to CodeTokenRole.String,
+        ");\n  }\n  " to CodeTokenRole.Punctuation,
+        "return" to CodeTokenRole.Keyword,
+        " " to CodeTokenRole.Plain,
+        "store" to CodeTokenRole.Variable,
+        "." to CodeTokenRole.Punctuation,
+        "access" to CodeTokenRole.Property,
+        ";\n}" to CodeTokenRole.Punctuation,
+    )
+
+private fun syntaxSnippet(colors: CodeColors) =
     buildAnnotatedString {
-        fun hex(key: String) = ThemeResolver.parseHexColor(tokens[key] ?: "#888888")
-        withStyle(SpanStyle(color = hex("syntax-comment"))) { append("// refresh before the request\n") }
-        withStyle(SpanStyle(color = hex("syntax-keyword"))) { append("async function ") }
-        withStyle(SpanStyle(color = hex("syntax-primitive"))) { append("readToken") }
-        withStyle(SpanStyle(color = hex("syntax-punctuation"))) { append("() {\n") }
-        withStyle(SpanStyle(color = hex("syntax-keyword"))) { append("  if ") }
-        withStyle(SpanStyle(color = hex("syntax-punctuation"))) { append("(") }
-        withStyle(SpanStyle(color = hex("syntax-variable"))) { append("store") }
-        withStyle(SpanStyle(color = hex("syntax-punctuation"))) { append(".") }
-        withStyle(SpanStyle(color = hex("syntax-constant"))) { append("expired") }
-        withStyle(SpanStyle(color = hex("syntax-punctuation"))) { append("()) {\n") }
-        withStyle(SpanStyle(color = hex("syntax-keyword"))) { append("    await ") }
-        withStyle(SpanStyle(color = hex("syntax-primitive"))) { append("refreshAccessToken") }
-        withStyle(SpanStyle(color = hex("syntax-punctuation"))) { append("();\n  }\n  ") }
-        withStyle(SpanStyle(color = hex("syntax-keyword"))) { append("return ") }
-        withStyle(SpanStyle(color = hex("syntax-variable"))) { append("store") }
-        withStyle(SpanStyle(color = hex("syntax-punctuation"))) { append(".") }
-        withStyle(SpanStyle(color = hex("syntax-type"))) { append("access") }
-        withStyle(SpanStyle(color = hex("syntax-punctuation"))) { append(";\n}") }
+        SyntaxSnippetRuns.forEach { (text, role) ->
+            withStyle(SpanStyle(color = colors.colorFor(role))) { append(text) }
+        }
     }
 
 private fun ThemePreset.displayBlurb(): String = blurb.ifBlank { themeBlurb(id) }

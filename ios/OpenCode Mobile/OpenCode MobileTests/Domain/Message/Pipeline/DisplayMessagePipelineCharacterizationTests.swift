@@ -432,7 +432,7 @@ struct DisplayMessagePipelineCharacterizationTests {
         #expect(plainPublished)
         #expect(collector.emissions[0].first?.text == "# Hello")
         #expect(collector.emissions[0].first?.isStreaming == true)
-        // Structure-first paints markdown chrome without waiting on decoration.
+        // Structure-first paints markdown chrome without waiting on highlighting.
         #expect(collector.emissions[0].first?.renderedMarkdown != nil)
 
         harness.clock.advance(by: streamingPrepareMaxBatchDuration)
@@ -453,39 +453,7 @@ struct DisplayMessagePipelineCharacterizationTests {
         _ = await waitUntil { collector.isFinished }
     }
 
-    @Test func failingPrepareTextBlock_keepsPublishedPlainStreamingText() async {
-        let harness = Harness(holdSleep: true)
-        let collector = CharacterizationDisplayCollector()
-        let task = Task {
-            await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
-        }
-
-        await harness.source.emit(.messages([plainAssistant("seed")], isFromCache: false))
-        _ = await waitUntil { collector.emissions.count == 1 }
-        collector.emissions.removeAll()
-
-        harness.preparer.setFailNextPrepareTextBlock()
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Hello")], isFromCache: false))
-        _ = await waitUntil { harness.clock.pendingSleep != nil }
-        harness.clock.releaseSleep()
-        let plainPublished = await waitUntil { collector.emissions.count >= 1 }
-        #expect(plainPublished)
-        #expect(collector.emissions.last?.first?.text == "# Hello")
-        #expect(collector.emissions.last?.first?.isStreaming == true)
-
-        harness.clock.advance(by: streamingPrepareMaxBatchDuration)
-        await harness.source.emit(.messages([streamingAssistant(id: "msg-1", text: "# Hello world")], isFromCache: false))
-        let secondPlain = await waitUntil {
-            collector.emissions.last?.first?.text == "# Hello world"
-        }
-        #expect(secondPlain)
-        #expect(collector.failures.isEmpty)
-
-        task.cancel()
-        _ = await waitUntil { collector.isFinished }
-    }
-
-    @Test func decorationBacklogPressure_doesNotBlockPlainStreamingTextLane() async {
+    @Test func slowPreparer_doesNotBlockStructureFirstStreamingLane() async {
         let harness = Harness(holdSleep: true)
         harness.preparer.minimumPrepareDelay = .seconds(5)
         let collector = CharacterizationDisplayCollector()
@@ -520,7 +488,7 @@ struct DisplayMessagePipelineCharacterizationTests {
         _ = await waitUntil { collector.isFinished }
     }
 
-    @Test func structureFirstStreamingPublishesCodeBlockChromeBeforeDecoration() async {
+    @Test func structureFirstStreamingPublishesCodeBlockChromeBeforeHighlighting() async {
         let harness = Harness(holdSleep: true)
         let collector = CharacterizationDisplayCollector()
         let task = Task {
@@ -560,10 +528,6 @@ struct DisplayMessagePipelineCharacterizationTests {
         let task = Task {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
-        let preferences = MarkdownHighlightPreferences.shared
-        let prior = preferences.textMateEnabled
-        preferences.setTextMateEnabled(true)
-        defer { preferences.setTextMateEnabled(prior) }
 
         let history = (1...5).map { index in
             markdownAssistant(
@@ -615,10 +579,6 @@ struct DisplayMessagePipelineCharacterizationTests {
         let task = Task {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
-        let preferences = MarkdownHighlightPreferences.shared
-        let prior = preferences.textMateEnabled
-        preferences.setTextMateEnabled(true)
-        defer { preferences.setTextMateEnabled(prior) }
 
         let largeText = "# " + String(
             repeating: "x",
@@ -641,10 +601,6 @@ struct DisplayMessagePipelineCharacterizationTests {
         let task = Task {
             await collector.collect(harness.pipeline.observeDisplayMessages(sessionID: "ses-1", directory: nil))
         }
-        let preferences = MarkdownHighlightPreferences.shared
-        let prior = preferences.textMateEnabled
-        preferences.setTextMateEnabled(true)
-        defer { preferences.setTextMateEnabled(prior) }
 
         let largeText = "# " + String(
             repeating: "x",
@@ -814,8 +770,6 @@ private final class Harness {
     let pipeline: DisplayMessagePipeline
 
     init(holdSleep: Bool = false) {
-        // Enrichment frames only publish when plain-first left rows awaiting TextMate.
-        MarkdownHighlightPreferences.shared.setTextMateEnabled(true)
         let clock = ControllablePipelineClock(holdSleep: holdSleep)
         self.clock = clock
         self.pipeline = DisplayMessagePipeline(
@@ -1026,7 +980,6 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
     private var prepareMessageHold: CheckedContinuation<Void, Never>?
     private var holdNextPrepareMessagesRequested = false
     private var holdNextPrepareMessageRequested = false
-    private var failNextPrepareTextBlock = false
     private var documentSerial = 1
     /// Wall-clock delay inside `prepareMessages` so dense intake can overlap prepares.
     var minimumPrepareDelay: Duration?
@@ -1059,12 +1012,6 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
     func holdNextPrepareMessages() {
         lock.lock()
         holdNextPrepareMessagesRequested = true
-        lock.unlock()
-    }
-
-    func setFailNextPrepareTextBlock() {
-        lock.lock()
-        failNextPrepareTextBlock = true
         lock.unlock()
     }
 
@@ -1152,56 +1099,12 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
         )
     }
 
-    func prepareTextBlock(
+    func highlightStreamingTextBlock(
         blockID: String,
         plain: String,
-        isStreaming: Bool,
-        sessionKey: String,
-        mode: MessagePreparationMode
-    ) async -> NativeMarkdownDocument? {
-        lock.lock()
-        _prepareMessagesInvocations.append(
-            PrepareMessagesInvocation(mode: mode)
-        )
-        // Share the prepareMessages hold so blocked-preparer characterization
-        // still covers disposable streaming decoration.
-        let shouldHold = holdNextPrepareMessagesRequested
-        holdNextPrepareMessagesRequested = false
-        lock.unlock()
-
-        if shouldHold {
-            await withCheckedContinuation { continuation in
-                lock.lock()
-                prepareMessagesHold = continuation
-                lock.unlock()
-            }
-        }
-
-        lock.lock()
-        let shouldFail = failNextPrepareTextBlock
-        failNextPrepareTextBlock = false
-        lock.unlock()
-        if shouldFail {
-            return nil
-        }
-
-        if let minimumPrepareDelay {
-            try? await Task.sleep(for: minimumPrepareDelay)
-        }
-
-        if mode == .streaming,
-           plain.count >= MessageContentPreparer.streamingPlainTextCharacterThreshold
-        {
-            return nil
-        }
-        lock.lock()
-        let hash = documentSerial
-        documentSerial += 1
-        lock.unlock()
-        return NativeMarkdownDocument(
-            sourceHash: hash,
-            blocks: [.paragraph([.text(plain)])]
-        )
+        sessionKey: String
+    ) async -> StreamingHighlight? {
+        nil
     }
 
     func prepareStructureOnlyTextBlock(
@@ -1209,17 +1112,11 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
         plain: String,
         sessionKey: String
     ) async -> NativeMarkdownDocument? {
-        // Must never share the decoration hold — format-first is text-lane work.
+        // Must never share the prepareMessages hold — format-first is text-lane work.
         guard OpenCodeRenderedMarkdownDetector.shouldRender(plain) else {
             return nil
         }
-        let textMateEnabled = MarkdownHighlightPreferences.currentTextMateEnabled()
-        return OpenCodeRenderedMarkdownParser.parse(
-            plain,
-            isStreaming: true,
-            textMateEnabled: false,
-            structureOnly: textMateEnabled
-        )
+        return OpenCodeRenderedMarkdownParser.parse(plain, structureOnly: true)
     }
 
     private func prepareMessageOnWorker(
@@ -1231,17 +1128,11 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
             guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else {
                 return DisplayMessage(message: message, renderedMarkdown: nil)
             }
-            let textMateEnabled = MarkdownHighlightPreferences.currentTextMateEnabled()
-            let document = OpenCodeRenderedMarkdownParser.parse(
-                message.text,
-                isStreaming: false,
-                textMateEnabled: false,
-                structureOnly: textMateEnabled
-            )
+            let document = OpenCodeRenderedMarkdownParser.parse(message.text, structureOnly: true)
             return DisplayMessage(
                 message: message,
                 renderedMarkdown: document,
-                awaitingTextMateUpgrade: textMateEnabled
+                awaitingTextMateUpgrade: true
             )
         }
         if mode == .finalPlaceholder, let previousDoc = previous?.renderedMarkdown {
@@ -1516,4 +1407,20 @@ private func waitUntil(
         try? await Task.sleep(for: poll)
     }
     return condition()
+}
+
+struct StreamingDocumentPruningTests {
+    @Test func aStreamingDocumentGoesWhenItsMessageFinalizesOrLeaves() {
+        let document = NativeMarkdownDocument(sourceHash: 1, blocks: [.codeBlock(language: "swift", code: "let a = 1", spans: [])])
+        let documents = ["live": document, "settled": document, "gone": document]
+
+        let kept = streamingDocumentsStillStreaming(
+            documents,
+            in: [streamingAssistant(id: "live", text: "```swift\nlet a = 1"), finalAssistant(id: "settled", text: "done")]
+        )
+
+        #expect(Set(kept.keys) == ["live"])
+        #expect(streamingDocumentsStillStreaming(documents, in: []).isEmpty)
+        #expect(streamingDocumentsStillStreaming([:], in: [streamingAssistant(id: "live", text: "x")]).isEmpty)
+    }
 }

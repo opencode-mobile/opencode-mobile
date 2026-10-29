@@ -5,8 +5,6 @@ enum class SettingsDetail {
     Servers,
     Appearance,
     ComponentGallery,
-    TextMateLanguages,
-    TextMateLogbook,
     FeatureFlags,
     DiagnosticLogs,
     ;
@@ -20,8 +18,6 @@ enum class SettingsDetail {
                 DiagnosticLogs,
                 -> false
                 ComponentGallery,
-                TextMateLanguages,
-                TextMateLogbook,
                 FeatureFlags,
                 -> true
             }

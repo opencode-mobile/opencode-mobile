@@ -19,11 +19,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object SyntaxPickerHome : NavKey
 
-@Serializable data object TextMateLogbookHome : NavKey
-
 @Serializable data object DiagnosticLogsHome : NavKey
-
-@Serializable data object TextMateLanguagesHome : NavKey
 
 @Serializable data object FeatureFlagsHome : NavKey
 

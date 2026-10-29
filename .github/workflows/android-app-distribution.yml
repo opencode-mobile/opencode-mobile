@@ -10,6 +10,14 @@ on:
         description: "Optional main or full pull request head SHA to check out. Leave empty to distribute the selected workflow branch."
         required: false
         type: string
+      variant:
+        description: "release: the store-like build. lab: the benchmark build with the Highlighting Lab (#872)."
+        required: false
+        type: choice
+        options:
+          - release
+          - lab
+        default: release
 
 permissions:
   contents: read
@@ -62,6 +70,7 @@ jobs:
       FIREBASE_TOOLS_VERSION: 15.24.0
       EXPECTED_UPLOAD_CERT_SHA256: 9E:FB:99:19:6B:2D:F6:56:FD:FA:1D:88:3D:33:00:7E:0F:E0:DA:28:AB:FF:A6:F8:BC:C3:3D:42:0F:CA:E1:37
       SOURCE_REF: ${{ github.event.inputs.source_ref }}
+      DISTRIBUTION_VARIANT: ${{ github.event.inputs.variant || 'release' }}
 
     steps:
       - name: Validate source ref
@@ -129,8 +138,17 @@ jobs:
             exit 1
           fi
           marketing_version="$(../scripts/read-app-version.sh)"
-          echo "ANDROID_VERSION_CODE=$version_code" >> "$GITHUB_ENV"
-          echo "ANDROID_VERSION_NAME=${marketing_version}-merge.$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          case "$DISTRIBUTION_VARIANT" in
+            release) build_label=merge; gradle_task=":app:assembleRelease"; apk_path="app/build/outputs/apk/release/app-release.apk" ;;
+            lab) build_label=lab; gradle_task=":app:assembleBenchmark"; apk_path="app/build/outputs/apk/benchmark/app-benchmark.apk" ;;
+            *) echo "variant must be release or lab. Got: $DISTRIBUTION_VARIANT" >&2; exit 1 ;;
+          esac
+          {
+            echo "ANDROID_VERSION_CODE=$version_code"
+            echo "ANDROID_VERSION_NAME=${marketing_version}-${build_label}.$GITHUB_RUN_NUMBER"
+            echo "ANDROID_GRADLE_TASK=$gradle_task"
+            echo "ANDROID_APK_PATH=$apk_path"
+          } >> "$GITHUB_ENV"
 
       - name: Set up JDK 17
         uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
@@ -184,13 +202,13 @@ jobs:
           ANDROID_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_UPLOAD_STORE_PASSWORD }}
           ANDROID_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_UPLOAD_KEY_ALIAS }}
           ANDROID_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_UPLOAD_KEY_PASSWORD }}
-        run: ./gradlew :app:assembleRelease --stacktrace
+        run: ./gradlew "$ANDROID_GRADLE_TASK" --stacktrace
 
       - name: Verify APK signature
         working-directory: .
         run: |
           .github/scripts/verify-android-apk-signature.sh \
-            android/app/build/outputs/apk/release/app-release.apk \
+            "android/$ANDROID_APK_PATH" \
             "$EXPECTED_UPLOAD_CERT_SHA256"
 
       - name: Distribute to Firebase tester group
@@ -211,10 +229,13 @@ jobs:
           if [[ -n "$distributed_ref" && "$distributed_ref" != "main" ]]; then
             release_notes="Not from main: $distributed_ref"$'\n'"$release_notes"
           fi
+          if [[ "$DISTRIBUTION_VARIANT" == "lab" ]]; then
+            release_notes="Lab build (#872): Highlighting Lab, no Crashlytics"$'\n'"$release_notes"
+          fi
           if ! distribution_output="$(
             npx --yes "firebase-tools@$FIREBASE_TOOLS_VERSION" \
               appdistribution:distribute \
-              app/build/outputs/apk/release/app-release.apk \
+              "$ANDROID_APK_PATH" \
               --app "$FIREBASE_APP_ID" \
               --groups "$FIREBASE_TESTER_GROUP" \
               --release-notes "$release_notes" \
@@ -240,6 +261,7 @@ jobs:
               echo "- **Not from main:** \`$distributed_ref\`"
             fi
             echo "- Commit: \`$distributed_sha\`"
+            echo "- Variant: \`$DISTRIBUTION_VARIANT\`"
             if [[ -n "${SOURCE_REF:-}" ]]; then
               echo "- Source ref: \`$SOURCE_REF\`"
             fi
