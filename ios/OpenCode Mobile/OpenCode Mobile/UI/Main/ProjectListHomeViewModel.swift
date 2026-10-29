@@ -2017,8 +2017,7 @@ final class ProjectListHomeViewModel {
         }
         if let resolution = update.resolution, projectResolutions[update.addedPath] != resolution {
             projectResolutions[update.addedPath] = resolution
-            let sessionCache = sessionCache
-            Task { await sessionCache.rememberProjectResolution(worktree: update.addedPath, resolution: resolution) }
+            sessionCache.rememberProjectResolution(worktree: update.addedPath, resolution: resolution)
         }
         // A failed reload keeps the worktrees Home already knows.
         if update.inventory != .failed, worktreeDirectories[update.addedPath] != update.directories {

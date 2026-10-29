@@ -33,6 +33,10 @@ class DefaultSessionCache(
     @Volatile
     private var activityGeneration = 0
 
+    /** Commits hold this, so a purge waits for one in flight and then evicts its row. */
+    private val projectResolutionMutex = Mutex()
+    private val pendingProjectResolutions = LinkedHashMap<SessionCacheKey, ResolvedHomePath>()
+
     override suspend fun seedSessions(worktree: String): List<Session>? {
         val connectionId = connectionIdProvider() ?: return null
         return seedSessions(worktree, connectionId)
@@ -151,6 +155,7 @@ class DefaultSessionCache(
         worktree: String,
     ) {
         dropActivityMemory(worktree)
+        dropPendingProjectResolutions(worktree)
         val connectionId = connectionIdProvider()
         if (connectionId != null) {
             runCatching {
@@ -179,6 +184,7 @@ class DefaultSessionCache(
         serverBaseUrl: String,
     ) {
         dropActivityMemory(null)
+        dropPendingProjectResolutions(null)
         if (profileId.isNotBlank()) {
             runCatching { store.evict(SessionCacheEvictSelector.Connection(connectionIdOrUrlPrefix = profileId)) }
                 .onFailure { logSessionCacheIo("purge connection by profile", it) }
@@ -195,6 +201,7 @@ class DefaultSessionCache(
 
     override suspend fun clearAll() {
         dropActivityMemory(null)
+        dropPendingProjectResolutions(null)
         runCatching { store.evict(SessionCacheEvictSelector.All) }
             .onFailure { logSessionCacheIo("clear all", it) }
     }
@@ -212,23 +219,46 @@ class DefaultSessionCache(
         return SessionCacheCodec.decodeProjectResolution(record.value.payloadJson, json)
     }
 
-    override suspend fun rememberProjectResolution(
+    override fun rememberProjectResolution(
         worktree: String,
         resolution: ResolvedHomePath,
     ) {
         val connectionId = connectionIdProvider() ?: return
         val key = SessionCacheKey(connectionId = connectionId, worktree = worktree, kind = SessionCacheKind.ProjectResolution)
-        val payload =
-            runCatching { SessionCacheCodec.encodeProjectResolution(resolution, json) }
-                .onFailure { logSessionCacheIo("encode project resolution", it) }
-                .getOrNull() ?: return
-        runCatching {
-            store.commit(
-                key = key,
-                value = SessionCacheValue(payloadJson = payload, schemaVersion = SessionCacheCodec.SCHEMA_VERSION),
-                meta = SessionCacheCommitMeta(syncedAtEpochMs = clock()),
-            )
-        }.onFailure { logSessionCacheIo("commit project resolution", it) }
+        synchronized(pendingProjectResolutions) { pendingProjectResolutions[key] = resolution }
+        scope.launch { flushProjectResolutions() }
+    }
+
+    /** Commits the newest queued resolution of each key; a flush that finds the queue empty does nothing. */
+    private suspend fun flushProjectResolutions() {
+        projectResolutionMutex.withLock {
+            val queued =
+                synchronized(pendingProjectResolutions) {
+                    pendingProjectResolutions.toMap().also { pendingProjectResolutions.clear() }
+                }
+            queued.forEach { (key, resolution) ->
+                val payload =
+                    runCatching { SessionCacheCodec.encodeProjectResolution(resolution, json) }
+                        .onFailure { logSessionCacheIo("encode project resolution", it) }
+                        .getOrNull() ?: return@forEach
+                runCatching {
+                    store.commit(
+                        key = key,
+                        value = SessionCacheValue(payloadJson = payload, schemaVersion = SessionCacheCodec.SCHEMA_VERSION),
+                        meta = SessionCacheCommitMeta(syncedAtEpochMs = clock()),
+                    )
+                }.onFailure { logSessionCacheIo("commit project resolution", it) }
+            }
+        }
+    }
+
+    /** Drops queued resolutions for [worktree], or all when `null`, after any commit in flight. */
+    private suspend fun dropPendingProjectResolutions(worktree: String?) {
+        projectResolutionMutex.withLock {
+            synchronized(pendingProjectResolutions) {
+                pendingProjectResolutions.keys.removeAll { worktree == null || it.worktree == worktree }
+            }
+        }
     }
 
     override suspend fun estimatedSizeBytes(): Long =

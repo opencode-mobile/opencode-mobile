@@ -45,7 +45,11 @@ interface SessionCache {
         connectionId: String? = null,
     ): ResolvedHomePath? = null
 
-    suspend fun rememberProjectResolution(
+    /**
+     * Queues the write under the connection active now and returns; writes land in call order,
+     * and a purge of the worktree or connection drops one still queued.
+     */
+    fun rememberProjectResolution(
         worktree: String,
         resolution: ResolvedHomePath,
     ) = Unit

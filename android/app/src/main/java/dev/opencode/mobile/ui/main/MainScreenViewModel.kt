@@ -1591,13 +1591,7 @@ class MainScreenViewModel
             if (next == previous) return
             homeIndex = next
             val changed = next.resolutions.filter { (path, resolution) -> previous.resolutions[path] != resolution }
-            if (changed.isNotEmpty()) {
-                viewModelScope.launch {
-                    changed.forEach { (path, resolution) ->
-                        runCatching { sessionCache.rememberProjectResolution(path, resolution) }
-                    }
-                }
-            }
+            changed.forEach { (path, resolution) -> sessionCache.rememberProjectResolution(path, resolution) }
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) state.copy(home = next) else state
             }

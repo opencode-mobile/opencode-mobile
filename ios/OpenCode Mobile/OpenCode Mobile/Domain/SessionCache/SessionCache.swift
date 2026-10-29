@@ -11,7 +11,9 @@ nonisolated protocol SessionCache: AnyObject, Sendable {
     func rememberActivity(directory: String, entries: [SessionActivityCacheEntry]) async
     /// The server project `worktree` last resolved to, so a cold Home groups it as the live one will.
     func seedProjectResolution(worktree: String, connectionID: String?) async -> HomeProjectResolution?
-    func rememberProjectResolution(worktree: String, resolution: HomeProjectResolution) async
+    /// Queues the write under the connection active now and returns; writes land in call order,
+    /// and a purge of the worktree or connection drops one still queued.
+    func rememberProjectResolution(worktree: String, resolution: HomeProjectResolution)
     func openMessages(sessionID: String, worktree: String) -> SessionMessageCacheHandle
     func purgeWorktree(serverBaseURL: String, worktree: String) async
     /// Everything cached for one removed Connection Profile, under its id and under its URL.
@@ -25,7 +27,7 @@ extension SessionCache {
     func seedActivity(directory: String) async -> [SessionActivityCacheEntry]? { nil }
     func rememberActivity(directory: String, entries: [SessionActivityCacheEntry]) async {}
     func seedProjectResolution(worktree: String, connectionID: String?) async -> HomeProjectResolution? { nil }
-    func rememberProjectResolution(worktree: String, resolution: HomeProjectResolution) async {}
+    func rememberProjectResolution(worktree: String, resolution: HomeProjectResolution) {}
     func purgeConnection(profileID: String, serverBaseURL: String) async {}
 }
 
