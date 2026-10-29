@@ -686,12 +686,13 @@ private struct SessionChatMessageRow: View {
     let onToggleStepRailFold: (String) -> Void
     let onOpenActivityCard: (String) -> Void
 
-    private func openMessageActions(showsRevertMessage: Bool) {
+    private func openMessageActions(showsRevertMessage: Bool, codeBlock: String? = nil) {
         onMessageActionsTap(
             SessionChatMessageActionsTarget(
                 id: message.id,
                 text: message.text,
-                showsRevertMessage: showsRevertMessage
+                showsRevertMessage: showsRevertMessage,
+                codeBlock: codeBlock
             )
         )
     }
@@ -719,7 +720,14 @@ private struct SessionChatMessageRow: View {
             case .assistant:
                 AssistantMessageContent(
                     message: message,
-                    onOpenMessageActions: { openMessageActions(showsRevertMessage: false) },
+                    onOpenMessageActions: { target in
+                        switch target {
+                        case .text:
+                            openMessageActions(showsRevertMessage: false)
+                        case .codeBlock(let code):
+                            openMessageActions(showsRevertMessage: false, codeBlock: code)
+                        }
+                    },
                     onToolDetailTap: onToolDetailTap,
                     onToolGroupTap: onToolGroupTap,
                     onSkillsTap: onSkillsTap,
@@ -768,17 +776,18 @@ private extension SessionChatRow {
 private struct SessionChatMessageActionsGestureModifier: ViewModifier {
     let renderedMarkdown: NativeMarkdownDocument?
     let accessibilityLabel: String
-    let onOpenMessageActions: () -> Void
+    let onOpenMessageActions: (OpenCodeMessageTapTarget) -> Void
 
     func body(content: Content) -> some View {
         if renderedMarkdown != nil {
             content
-                .onLongPressGesture(perform: onOpenMessageActions)
+                .environment(\.markdownCodeBlockTapAction) { code in onOpenMessageActions(.codeBlock(code)) }
+                .onLongPressGesture { onOpenMessageActions(.text) }
                 .accessibilityLabel(accessibilityLabel)
                 .accessibilityHint("Long press to show message actions")
         } else {
             content
-                .onTapGesture(perform: onOpenMessageActions)
+                .onTapGesture { onOpenMessageActions(.text) }
                 .accessibilityLabel(accessibilityLabel)
                 .accessibilityHint("Shows message actions")
         }
@@ -787,7 +796,7 @@ private struct SessionChatMessageActionsGestureModifier: ViewModifier {
 
 private struct AssistantMessageContent: View {
     let message: SessionChatRow
-    let onOpenMessageActions: () -> Void
+    let onOpenMessageActions: (OpenCodeMessageTapTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
     @Environment(\.hideLiveRetryFailures) private var hideLiveRetryFailures
     @Environment(\.retryCountdownBlockID) private var retryCountdownBlockID
@@ -1149,7 +1158,7 @@ private struct StepParagraphBlock: View {
     let renderedMarkdown: NativeMarkdownDocument?
     let isStreaming: Bool
     let expandedThrough: Int?
-    let onOpenMessageActions: () -> Void
+    let onOpenMessageActions: (OpenCodeMessageTapTarget) -> Void
     let onExpand: () -> Void
     let chipAction: (SessionChatToolChipBlock) -> (() -> Void)?
     let exploreAction: (SessionChatExploreSummaryBlock) -> Void

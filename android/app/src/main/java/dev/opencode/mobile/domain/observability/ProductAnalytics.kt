@@ -257,6 +257,7 @@ object ProductAnalytics {
         const val MESSAGE_ACTIONS_REVERT = "message_actions_revert"
         const val MESSAGE_ACTIONS_FORK = "message_actions_fork"
         const val MESSAGE_ACTIONS_COPY = "message_actions_copy"
+        const val MESSAGE_ACTIONS_COPY_CODE_BLOCK = "message_actions_copy_code_block"
         const val CHAT_STEER_PENDING_PROMPT = "chat_steer_pending_prompt"
         const val CHAT_QUEUE_PENDING_PROMPT = "chat_queue_pending_prompt"
         const val CHAT_CANCEL_PENDING_PROMPT = "chat_cancel_pending_prompt"
