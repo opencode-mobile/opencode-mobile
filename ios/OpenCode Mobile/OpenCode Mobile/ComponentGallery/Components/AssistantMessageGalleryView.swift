@@ -1,12 +1,15 @@
 import SwiftUI
 
 private enum AssistantMessageSample: String, CaseIterable {
+    case compact = "Compact"
     case short = "Short"
     case long = "Long"
     case empty = "Empty"
 
     var text: String {
         switch self {
+        case .compact:
+            "Done."
         case .short:
             "The Alleskoenner is the right class for that parcel."
         case .long:
@@ -25,7 +28,7 @@ struct AssistantMessageGalleryView: View {
             Text("Interactive")
                 .font(OpenCodeTypography.heading)
                 .foregroundStyle(OpenCodeColors.textStrong)
-            Text("Switch samples to review short, long, and empty assistant messages.")
+            Text("Switch samples to review compact, short, long, and empty assistant messages. Messages wider than 80% of the row fill it.")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
 
