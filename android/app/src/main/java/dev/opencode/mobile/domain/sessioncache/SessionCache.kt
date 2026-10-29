@@ -17,6 +17,12 @@ data class SessionActivityCacheEntry(
 interface SessionCache {
     suspend fun seedSessions(worktree: String): List<Session>?
 
+    /** Cached list for [worktree] under [connectionId] (a Connection Profile id), bound or not. */
+    suspend fun seedSessions(
+        worktree: String,
+        connectionId: String,
+    ): List<Session>? = null
+
     suspend fun rememberSessions(
         worktree: String,
         sessions: List<Session>,

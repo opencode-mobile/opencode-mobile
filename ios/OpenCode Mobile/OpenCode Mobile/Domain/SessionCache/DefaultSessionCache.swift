@@ -29,7 +29,11 @@ nonisolated final class DefaultSessionCache: SessionCache, @unchecked Sendable {
 
     func seedSessions(worktree: String) async -> [Session]? {
         guard let connectionId = connectionIdProvider() else { return nil }
-        let key = SessionCacheKey(connectionId: connectionId, worktree: worktree, kind: .sessionList)
+        return await seedSessions(worktree: worktree, connectionID: connectionId)
+    }
+
+    func seedSessions(worktree: String, connectionID: String) async -> [Session]? {
+        let key = SessionCacheKey(connectionId: connectionID, worktree: worktree, kind: .sessionList)
         guard let record = await store.load(key: key) else { return nil }
         return SessionCacheCodec.decodeSessions(record.value.payloadJSON)
     }

@@ -460,6 +460,10 @@ final class ProjectListHomeViewModel {
     /// Server the user just picked. A late save from the previous server must not paint over it.
     private var pendingSwitchID: String?
     private var switchPaintGeneration = 0
+    /// Runs server switches one after another, so the last pick is where the app ends up.
+    @ObservationIgnored private var switchTask: Task<Void, Never>?
+    /// An empty Home failed its probe while other saved addresses were still being tried.
+    private var probeWaitsOnAddressCheck = false
     private var serverBaseURL: String {
         activeConnectionManager.connection?.baseURL.absoluteString ?? ""
     }
@@ -589,22 +593,41 @@ final class ProjectListHomeViewModel {
         connectionSessionCoordinator.onProfileSaved { [weak self] in
             Task { @MainActor in
                 guard let self else { return }
+                let completesSwitch = self.pendingSwitchID != nil
                 if let pending = self.pendingSwitchID {
                     let active = await self.connectionProfileStore.activeProfile()
                     guard active?.id == pending else { return }
                     self.pendingSwitchID = nil
                     self.switchPaintGeneration += 1
                 }
-                self.clearProjectLoads()
+                // A switch already painted its projects; their skeletons stay until sessions arrive.
+                if !completesSwitch {
+                    self.clearProjectLoads()
+                }
                 self.stopLiveObservations()
                 await self.refresh()
             }
         }
-        connectionSessionCoordinator.onConnectionRetargeted { [weak self] in
+        connectionSessionCoordinator.onAddressCheck { [weak self] check in
             Task { @MainActor in
                 guard let self, self.pendingSwitchID == nil else { return }
-                await self.sessionLiveStore.invalidate(directory: nil)
-                await self.sessionStatusLiveStore.invalidate(directory: nil)
+                switch check.state {
+                case .running:
+                    break
+                case .moved:
+                    self.probeWaitsOnAddressCheck = false
+                    if case .loaded = self.state {
+                        await self.sessionLiveStore.invalidate(directory: nil)
+                        await self.sessionStatusLiveStore.invalidate(directory: nil)
+                    } else {
+                        // Empty, unreachable, or still loading against the old address.
+                        await self.refresh()
+                    }
+                case .kept:
+                    guard self.probeWaitsOnAddressCheck else { return }
+                    self.probeWaitsOnAddressCheck = false
+                    await self.refresh()
+                }
             }
         }
         connectionSessionCoordinator.onProfileCleared { [weak self] in
@@ -715,41 +738,39 @@ final class ProjectListHomeViewModel {
         Task { [weak self] in
             await self?.paintSwitchedServer(baseURL: target.baseURL, id: id, generation: generation)
         }
-        Task { [weak self] in
-            await self?.connectionSessionCoordinator.switchProfile(id: id)
+        let previousSwitch = switchTask
+        switchTask = Task { [weak self] in
+            await previousSwitch?.value
+            // A newer pick replaced this one before it started; only the newest one runs.
+            guard let self, self.pendingSwitchID == id else { return }
+            await self.connectionSessionCoordinator.switchProfile(id: id)
         }
     }
 
-    /// Projects already saved for the target server, with no sessions yet. Network fills those in.
+    /// The target server's saved projects with their cached sessions, read by profile id because
+    /// the switch has not bound that server yet. A project with no cache shows the skeleton.
     private func paintSwitchedServer(baseURL: String, id: String, generation: Int) async {
         let worktrees = await connectionProfileStore.addedWorktrees(serverBaseURL: baseURL)
+        var sections: [ProjectSectionItem] = []
+        for worktree in worktrees {
+            sections.append(await sectionFromCache(worktree: worktree, connectionID: id))
+        }
         guard generation == switchPaintGeneration, pendingSwitchID == id else { return }
         clearProjectLoads()
         clearHomeProjectInputs()
-        if worktrees.isEmpty {
+        probeWaitsOnAddressCheck = false
+        if sections.isEmpty {
             state = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: nil)
-        } else {
-            state = .loaded(
-                sections: worktrees.map(placeholderSection),
-                showAddProjectSheet: false,
-                addProjectSheet: nil,
-                projectSessionCreateError: nil
-            )
+            return
         }
-    }
-
-    private func placeholderSection(worktree: String) -> ProjectSectionItem {
-        let name = ProjectDomainAdapter.displayName(from: worktree)
-        return ProjectSectionItem(
-            id: worktree,
-            worktree: worktree,
-            displayName: name,
-            pathSubtitle: worktree,
-            letter: letterCharacter(for: name),
-            letterAccent: letterAccent(for: worktree),
-            allSessions: [],
-            loadError: nil,
-            sessionsFromCache: false
+        for section in sections where !section.sessionsFromCache {
+            beginProjectLoad(section.worktree, showImmediately: true)
+        }
+        state = .loaded(
+            sections: sections,
+            showAddProjectSheet: false,
+            addProjectSheet: nil,
+            projectSessionCreateError: nil
         )
     }
 
@@ -1466,9 +1487,11 @@ final class ProjectListHomeViewModel {
             stopLiveObservations()
             state = .empty(showAddProjectSheet: false, addProjectSheet: nil, projectSessionCreateError: nil)
             if !skipProbe {
+                let probedBaseURL = serverBaseURL
                 do {
                     try await projectRepository.probeServer()
                 } catch {
+                    guard probeFailureIsFinal(probedBaseURL: probedBaseURL) else { return }
                     state = .probeFailed(error.localizedDescription)
                 }
             }
@@ -1560,9 +1583,29 @@ final class ProjectListHomeViewModel {
         return sections
     }
 
-    private func sectionFromCache(worktree: String) async -> ProjectSectionItem {
-        let seeded = await sessionCache.seedSessions(worktree: worktree)
-        let cachedActivity = await sessionCache.seedActivity(directory: worktree) ?? []
+    /// False while another saved address may still answer: the address check's result reloads
+    /// Home. Also false when the address moved during the probe, since a newer load is running.
+    private func probeFailureIsFinal(probedBaseURL: String) -> Bool {
+        guard serverBaseURL == probedBaseURL else { return false }
+        if connectionSessionCoordinator.addressCheck.state == .running {
+            probeWaitsOnAddressCheck = true
+            return false
+        }
+        return true
+    }
+
+    /// `connectionID` reads another profile's cache (a switch before its server is bound); that
+    /// paint has no cached activity, which belongs to the bound profile.
+    private func sectionFromCache(worktree: String, connectionID: String? = nil) async -> ProjectSectionItem {
+        let seeded: [Session]?
+        let cachedActivity: [SessionActivityCacheEntry]
+        if let connectionID {
+            seeded = await sessionCache.seedSessions(worktree: worktree, connectionID: connectionID)
+            cachedActivity = []
+        } else {
+            seeded = await sessionCache.seedSessions(worktree: worktree)
+            cachedActivity = await sessionCache.seedActivity(directory: worktree) ?? []
+        }
         let activityByID = Dictionary(cachedActivity.map { ($0.sessionId, $0) }, uniquingKeysWith: { _, latest in latest })
         let sessions =
             (seeded ?? [])

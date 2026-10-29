@@ -14,17 +14,23 @@ import dev.opencode.mobile.domain.sync.SyncCoordinator
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,6 +48,26 @@ sealed class ProfileChange {
     ) : ProfileChange()
 
     data object Cleared : ProfileChange()
+}
+
+/**
+ * The background check of a profile's saved addresses after it became active. [generation] is
+ * the profile change it belongs to, so two changes in a row are told apart.
+ */
+data class AddressCheck(
+    val generation: Long,
+    val state: State,
+) {
+    enum class State {
+        /** Still probing; a failed call on the stored address is not final yet. */
+        Running,
+
+        /** Another saved address won and is now bound. */
+        Moved,
+
+        /** The bound address stays. */
+        Kept,
+    }
 }
 
 @Singleton
@@ -65,21 +91,21 @@ class ConnectionSessionCoordinator
         private val mutex = Mutex()
         private val switchGeneration = AtomicLong(0)
         private val retargetScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-        private var retargetJob: Job? = null
+        private val retargetJob = AtomicReference<Job?>(null)
 
         val profileGeneration: Long
             get() = switchGeneration.get()
 
-        private val profileSwitchingEvents = MutableSharedFlow<String>(replay = 1, extraBufferCapacity = 1)
+        private val profileSwitchingEvents = MutableSharedFlow<String>(extraBufferCapacity = 1)
         val profileSwitching: SharedFlow<String> = profileSwitchingEvents.asSharedFlow()
 
         private val profileSavedEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         val profileSaved: SharedFlow<Unit> = profileSavedEvents.asSharedFlow()
 
-        private val connectionRetargetedEvents = MutableSharedFlow<Unit>(replay = 1, extraBufferCapacity = 1)
+        private val addressCheckState = MutableStateFlow(AddressCheck(0, AddressCheck.State.Kept))
 
-        /** The bound address changed after a background probe. Home should refresh in place. */
-        val connectionRetargeted: SharedFlow<Unit> = connectionRetargetedEvents.asSharedFlow()
+        /** Home refreshes in place when another address wins, and waits on it before showing unreachable. */
+        val addressCheck: StateFlow<AddressCheck> = addressCheckState.asStateFlow()
 
         private val profileClearedEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         val profileCleared: SharedFlow<Unit> = profileClearedEvents.asSharedFlow()
@@ -107,7 +133,7 @@ class ConnectionSessionCoordinator
                     applyProfileChangeLocked(ProfileChange.Saved(stamped))
                     switchGeneration.get()
                 }
-            // Setup waits for the winning address. A switch does not: that probe runs after the UI moves.
+            // Home paints the stored address, which setup just verified; a better one rebinds after.
             if (generation != null) retargetReachableAddress(generation)
         }
 
@@ -115,16 +141,15 @@ class ConnectionSessionCoordinator
             // Tell the UI before any stop, probe, or list fetch. The sheet and home move now;
             // this function keeps going in the background.
             profileSwitchingEvents.tryEmit(id)
-            retargetJob?.cancel()
+            retargetJob.getAndSet(null)?.cancel()
             val generation =
                 mutex.withLock {
                     applyProfileChangeLocked(ProfileChange.Switch(id))
                     switchGeneration.get()
                 }
-            retargetJob =
-                retargetScope.launch {
-                    retargetReachableAddress(generation)
-                }
+            val job = retargetScope.launch(start = CoroutineStart.LAZY) { retargetReachableAddress(generation) }
+            retargetJob.getAndSet(job)?.cancel()
+            job.start()
         }
 
         suspend fun removeProfile(id: String) {
@@ -133,9 +158,7 @@ class ConnectionSessionCoordinator
                     applyProfileChangeLocked(ProfileChange.Removed(id))
                     switchGeneration.get()
                 }
-            if (activeConnectionManager.current() != null) {
-                retargetReachableAddress(generation)
-            }
+            retargetReachableAddress(generation)
         }
 
         suspend fun clearConnectionData() {
@@ -145,12 +168,23 @@ class ConnectionSessionCoordinator
         }
 
         private suspend fun retargetReachableAddress(generation: Long) {
-            val profile = activeConnectionManager.currentProfile() ?: return
             if (switchGeneration.get() != generation) return
+            val profile = activeConnectionManager.currentProfile()
             val changed =
-                runCatching { activeConnectionManager.resolveReachableAddress(profile) }
-                    .getOrDefault(false)
-            if (!changed || switchGeneration.get() != generation) return
+                profile != null &&
+                    try {
+                        activeConnectionManager.resolveReachableAddress(profile)
+                    } catch (cancellation: CancellationException) {
+                        // A newer switch took over; it reports its own check.
+                        throw cancellation
+                    } catch (_: Exception) {
+                        false
+                    }
+            if (switchGeneration.get() != generation) return
+            if (!changed) {
+                finishAddressCheck(generation, AddressCheck.State.Kept)
+                return
+            }
             mutex.withLock {
                 if (switchGeneration.get() != generation) return
                 eventStream.stop()
@@ -163,7 +197,14 @@ class ConnectionSessionCoordinator
                     eventStream.start()
                 }
             }
-            connectionRetargetedEvents.emit(Unit)
+            finishAddressCheck(generation, AddressCheck.State.Moved)
+        }
+
+        private fun finishAddressCheck(
+            generation: Long,
+            state: AddressCheck.State,
+        ) {
+            addressCheckState.compareAndSet(AddressCheck(generation, AddressCheck.State.Running), AddressCheck(generation, state))
         }
 
         private suspend fun applyProfileChangeLocked(target: ProfileChange) {
@@ -225,6 +266,8 @@ class ConnectionSessionCoordinator
             if (active == null) {
                 profileClearedEvents.emit(Unit)
             } else {
+                // Every caller checks the saved addresses next; Home must see that before it loads.
+                addressCheckState.value = AddressCheck(generation, AddressCheck.State.Running)
                 profileSavedEvents.emit(Unit)
             }
         }

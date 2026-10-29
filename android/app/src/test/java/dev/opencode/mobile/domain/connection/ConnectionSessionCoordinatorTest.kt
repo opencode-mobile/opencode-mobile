@@ -45,6 +45,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
@@ -437,6 +438,53 @@ class ConnectionSessionCoordinatorTest {
             releaseStop.complete(Unit)
             switch.await()
         }
+
+    @Test
+    fun saveProfile_reportsMovedWhenAnotherSavedAddressWins() =
+        runTest {
+            val lan = "http://192.168.1.2:4096/"
+            val tailscale = "http://100.64.0.3:4096/"
+            val coordinator = addressCheckCoordinator()
+            val checks = CopyOnWriteArrayList<AddressCheck.State>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                coordinator.addressCheck.collect { checks += it.state }
+            }
+
+            coordinator.saveProfile(
+                ConnectionProfile(baseUrl = lan, username = "opencode", password = "", serverUrls = listOf(lan, tailscale)),
+            )
+
+            assertEquals(listOf(AddressCheck.State.Kept, AddressCheck.State.Running, AddressCheck.State.Moved), checks.toList())
+            assertEquals(coordinator.profileGeneration, coordinator.addressCheck.value.generation)
+            assertEquals(tailscale, coordinator.currentProfile()?.baseUrl)
+        }
+
+    @Test
+    fun saveProfile_reportsKeptWhenTheStoredAddressStays() =
+        runTest {
+            val lan = "http://192.168.1.2:4096/"
+            val coordinator = addressCheckCoordinator()
+
+            coordinator.saveProfile(ConnectionProfile(baseUrl = lan, username = "opencode", password = "", serverUrls = listOf(lan)))
+
+            assertEquals(AddressCheck(coordinator.profileGeneration, AddressCheck.State.Kept), coordinator.addressCheck.value)
+            assertEquals(lan, coordinator.currentProfile()?.baseUrl)
+        }
+
+    private fun addressCheckCoordinator(): ConnectionSessionCoordinator {
+        val store = CatalogConnectionProfileStore()
+        val manager = ActiveConnectionManager(store, ConnectionProbing { ServerProtocol.V2 })
+        val json = Json { ignoreUnknownKeys = true }
+        return testConnectionSessionCoordinator(
+            activeConnectionManager = manager,
+            connectionProfileStore = store,
+            secureCredentialStore = FakeSecureCredentialStore(),
+            sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+            composerDraftStore = InMemoryComposerDraftStore(),
+            httpClient = OpencodeHttpClient(json, manager),
+            sseHttpClient = OpencodeSseHttpClient(json, manager),
+        )
+    }
 
     @Test
     fun concurrentSwitch_isSerializedAndEndsOnLastProfile() =

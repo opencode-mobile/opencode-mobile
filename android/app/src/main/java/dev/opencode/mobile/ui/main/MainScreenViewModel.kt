@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.connection.AddressCheck
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
@@ -137,6 +138,9 @@ class MainScreenViewModel
         /** Server the user just picked. A late save from the previous server must not paint over it. */
         private var pendingSwitchId: String? = null
         private var switchPaintGeneration = 0
+
+        /** An empty Home failed its probe while other saved addresses were still being tried. */
+        private var probeWaitsOnAddressCheck = false
         val liveUpdatesConnectionStatus: StateFlow<SessionConnectionStatus> =
             liveUpdates.chrome
                 .map { it.label.toSessionConnectionStatus() }
@@ -245,17 +249,34 @@ class MainScreenViewModel
                     switchPaintGeneration++
                     worktreeCreate.dismiss()
                     stopLiveObservations()
-                    projectFirstLoads.clearAll()
+                    // A switch already painted its projects; their skeletons stay until sessions arrive.
+                    if (pending == null) projectFirstLoads.clearAll()
                     pendingFirstServerSnapshots.clear()
                     resetHomeIndex()
                     refresh()
                 }
             }
             viewModelScope.launch {
-                connectionSessionCoordinator.connectionRetargeted.collect {
+                connectionSessionCoordinator.addressCheck.collect { check ->
                     if (pendingSwitchId != null) return@collect
-                    sessionLiveStore.invalidate(null)
-                    sessionStatusLiveStore.invalidate(null)
+                    when (check.state) {
+                        AddressCheck.State.Running -> Unit
+                        AddressCheck.State.Moved -> {
+                            probeWaitsOnAddressCheck = false
+                            if (_uiState.value is MainScreenUiState.Loaded) {
+                                sessionLiveStore.invalidate(null)
+                                sessionStatusLiveStore.invalidate(null)
+                            } else {
+                                // Empty, unreachable, or still loading against the old address.
+                                refresh()
+                            }
+                        }
+                        AddressCheck.State.Kept ->
+                            if (probeWaitsOnAddressCheck) {
+                                probeWaitsOnAddressCheck = false
+                                refresh()
+                            }
+                    }
                 }
             }
             viewModelScope.launch {
@@ -311,39 +332,33 @@ class MainScreenViewModel
             viewModelScope.launch { connectionSessionCoordinator.switchProfile(id) }
         }
 
-        /** Projects already saved for the target server, with no sessions yet. Network fills those in. */
+        /**
+         * The target server's saved projects with their cached sessions, read by profile id because
+         * the switch has not bound that server yet. A project with no cache shows the skeleton.
+         */
         private suspend fun paintSwitchedServer(
             baseUrl: String,
             id: String,
             generation: Int,
         ) {
             val worktrees = connectionProfileStore.addedWorktrees(baseUrl)
+            val sections = worktrees.map { worktree -> sectionFromCache(worktree, connectionId = id) }
             if (generation != switchPaintGeneration || pendingSwitchId != id) return
             resetHomeIndex()
             projectFirstLoads.clearAll()
             pendingFirstServerSnapshots.clear()
+            probeWaitsOnAddressCheck = false
+            if (sections.isEmpty()) {
+                _uiState.value = MainScreenUiState.Empty()
+                return
+            }
+            projectFirstLoads.awaitServer(sections.filterNot { it.sessionsFromCache }.map { it.worktree })
             _uiState.value =
-                if (worktrees.isEmpty()) {
-                    MainScreenUiState.Empty()
-                } else {
-                    MainScreenUiState.Loaded(
-                        sections = worktrees.map(::placeholderSection),
-                        projectLoads = projectFirstLoads.visible,
-                        home = homeIndex,
-                    )
-                }
-        }
-
-        private fun placeholderSection(worktree: String): ProjectSectionUi {
-            val displayName = ProjectDomainAdapter.displayNameFromWorktree(worktree)
-            return ProjectSectionUi(
-                worktree = worktree,
-                displayName = displayName,
-                pathSubtitle = worktree,
-                letter = letterCharacterForProject(displayName),
-                letterAccent = letterAccentForWorktree(worktree),
-                allSessions = emptyList(),
-            )
+                MainScreenUiState.Loaded(
+                    sections = sections,
+                    projectLoads = projectFirstLoads.visible,
+                    home = homeIndex,
+                )
         }
 
         private suspend fun refreshServersChrome() {
@@ -1021,6 +1036,7 @@ class MainScreenViewModel
                         }
                 }
                 startLiveObservations(worktrees)
+                projectFirstLoads.startAwaiting()
                 reloadWorktreeMarks(worktrees)
                 return
             }
@@ -1029,8 +1045,10 @@ class MainScreenViewModel
                 stopLiveObservations()
                 _uiState.value = MainScreenUiState.Empty()
                 if (!skipProbe) {
+                    val probedBaseUrl = serverBaseUrl
                     runCatching { projectRepository.probeServer() }
                         .onFailure { error ->
+                            if (!probeFailureIsFinal(probedBaseUrl)) return@onFailure
                             _uiState.value =
                                 MainScreenUiState.ProbeFailed(
                                     when (error) {
@@ -1111,8 +1129,18 @@ class MainScreenViewModel
         private suspend fun loadSectionsFromCache(worktrees: List<String>): List<ProjectSectionUi> =
             worktrees.map { worktree -> sectionFromCache(worktree) }
 
-        private suspend fun sectionFromCache(worktree: String): ProjectSectionUi {
-            val seeded = runCatching { sessionCache.seedSessions(worktree) }.getOrNull()
+        private suspend fun sectionFromCache(
+            worktree: String,
+            connectionId: String? = null,
+        ): ProjectSectionUi {
+            val seeded =
+                runCatching {
+                    if (connectionId != null) {
+                        sessionCache.seedSessions(worktree, connectionId)
+                    } else {
+                        sessionCache.seedSessions(worktree)
+                    }
+                }.getOrNull()
             val sessions =
                 seeded
                     ?.activeSessions()
@@ -1132,6 +1160,19 @@ class MainScreenViewModel
                 loadError = null,
                 sessionsFromCache = seeded != null,
             )
+        }
+
+        /**
+         * False while another saved address may still answer: the address check's result reloads
+         * Home. Also false when the address moved during the probe, since a newer load is running.
+         */
+        private fun probeFailureIsFinal(probedBaseUrl: String): Boolean {
+            if (serverBaseUrl != probedBaseUrl) return false
+            if (connectionSessionCoordinator.addressCheck.value.state == AddressCheck.State.Running) {
+                probeWaitsOnAddressCheck = true
+                return false
+            }
+            return true
         }
 
         private suspend fun loadProjectSections(worktrees: List<String>): List<ProjectSectionUi> =

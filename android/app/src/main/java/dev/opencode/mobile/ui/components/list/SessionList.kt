@@ -189,15 +189,18 @@ data class SessionListFilterTab(
         const val ALL_TITLE = "All"
         const val PICKER_ALL_TITLE = "All projects"
 
+        /** [load] is loading while any project's first list is outstanding (a server switch). */
         fun all(
             projectCount: Int,
             sessionCount: Int,
+            load: SessionListScopeLoad.Loading? = null,
         ): SessionListFilterTab =
             SessionListFilterTab(
                 id = ALL_ID,
                 title = ALL_TITLE,
                 count = sessionCount,
                 subtitle = if (projectCount == 1) "1 project" else "$projectCount projects",
+                load = load,
             )
 
         fun project(

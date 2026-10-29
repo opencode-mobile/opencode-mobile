@@ -4,6 +4,8 @@ import Foundation
 /// Data, and remove-project. Persistence details stay behind ``SessionCacheStore``.
 nonisolated protocol SessionCache: AnyObject, Sendable {
     func seedSessions(worktree: String) async -> [Session]?
+    /// Cached list for `worktree` under `connectionID` (a Connection Profile id), bound or not.
+    func seedSessions(worktree: String, connectionID: String) async -> [Session]?
     func rememberSessions(worktree: String, sessions: [Session]) async
     func seedActivity(directory: String) async -> [SessionActivityCacheEntry]?
     func rememberActivity(directory: String, entries: [SessionActivityCacheEntry]) async
@@ -16,6 +18,7 @@ nonisolated protocol SessionCache: AnyObject, Sendable {
 }
 
 extension SessionCache {
+    func seedSessions(worktree: String, connectionID: String) async -> [Session]? { nil }
     func seedActivity(directory: String) async -> [SessionActivityCacheEntry]? { nil }
     func rememberActivity(directory: String, entries: [SessionActivityCacheEntry]) async {}
     func purgeConnection(profileID: String, serverBaseURL: String) async {}

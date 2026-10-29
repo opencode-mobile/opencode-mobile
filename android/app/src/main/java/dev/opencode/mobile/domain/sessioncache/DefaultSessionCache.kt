@@ -34,6 +34,13 @@ class DefaultSessionCache(
 
     override suspend fun seedSessions(worktree: String): List<Session>? {
         val connectionId = connectionIdProvider() ?: return null
+        return seedSessions(worktree, connectionId)
+    }
+
+    override suspend fun seedSessions(
+        worktree: String,
+        connectionId: String,
+    ): List<Session>? {
         val key =
             SessionCacheKey(
                 connectionId = connectionId,

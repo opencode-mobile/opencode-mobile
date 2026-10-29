@@ -198,12 +198,14 @@ struct SessionListFilterTab: Identifiable, Hashable {
         self.pickerSubtitleOverride = pickerSubtitle
     }
 
-    static func all(projectCount: Int, sessionCount: Int) -> SessionListFilterTab {
+    /// `load` is loading while any project's first list is outstanding (a server switch).
+    static func all(projectCount: Int, sessionCount: Int, load: SessionListScopeLoad? = nil) -> SessionListFilterTab {
         SessionListFilterTab(
             id: allId,
             title: allTitle,
             count: sessionCount,
-            subtitle: projectCount == 1 ? "1 project" : "\(projectCount) projects"
+            subtitle: projectCount == 1 ? "1 project" : "\(projectCount) projects",
+            load: load
         )
     }
 
