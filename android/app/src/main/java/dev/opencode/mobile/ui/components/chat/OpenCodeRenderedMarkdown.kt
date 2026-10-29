@@ -41,10 +41,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.positionChangeIgnoreConsumed
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.LocalDensity
@@ -607,8 +605,8 @@ private class MessageTapGate {
 /**
  * A short tap opens message actions. The pointer is not consumed, so a
  * long-press still starts text selection and a drag still scrolls. A touch
- * that moves past touch slop, has its movement taken by a scroll, or lands
- * while the list is scrolling is not a tap. A link marks
+ * that moves past touch slop or lands while the list is scrolling is not a
+ * tap. A link marks
  * [MessageTapGate.handled] and a code block sets [MessageTapGate.codeBlock]
  * before this sees the release.
  */
@@ -646,8 +644,9 @@ private fun Modifier.opensMessageActionsOnTextTap(
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                 val dx = change.position.x - down.position.x
                 val dy = change.position.y - down.position.y
-                val scrollTookMovement = change.isConsumed && change.positionChangeIgnoreConsumed() != Offset.Zero
-                if (scrollTookMovement || dx * dx + dy * dy > slopSquared) {
+                // A scroll only takes movement past this same slop, and positions are
+                // local, so a list or code block scroll also shows up here.
+                if (dx * dx + dy * dy > slopSquared) {
                     moved = true
                     break
                 }

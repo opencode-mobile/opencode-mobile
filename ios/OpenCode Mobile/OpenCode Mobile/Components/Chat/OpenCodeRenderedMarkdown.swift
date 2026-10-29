@@ -734,7 +734,7 @@ private struct MarkdownCodeBlockTapTarget: ViewModifier {
                 .contentShape(RoundedRectangle(cornerRadius: 6))
                 .onTapGesture { open(tapAction) }
                 .onLongPressGesture { open(tapAction) }
-                .accessibilityAction(named: "Copy code block") { open(tapAction) }
+                .accessibilityAction(named: "Code block actions") { open(tapAction) }
         } else {
             content
         }
@@ -742,7 +742,10 @@ private struct MarkdownCodeBlockTapTarget: ViewModifier {
 
     private func open(_ tapAction: (String) -> Void) {
         isHighlighted = true
-        withAnimation(.easeOut(duration: 0.3)) { isHighlighted = false }
+        // Fade on the next turn so the highlighted frame is committed first.
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.3)) { isHighlighted = false }
+        }
         tapAction(code)
     }
 }
