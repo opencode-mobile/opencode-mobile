@@ -82,6 +82,43 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
+## Code color presets from editor themes
+
+The code color values in `shared/syntax-presets/` (Nocturne, Citrus, Paper, and
+Neon dark) are derived from these editor themes by
+`scripts/generate-syntax-presets.mjs`, reading the theme files packaged in
+[@shikijs/themes](https://github.com/shikijs/textmate-grammars-themes) (MIT).
+
+| Preset | Theme | Source | Copyright |
+| --- | --- | --- | --- |
+| Nocturne dark | One Dark Pro | <https://github.com/Binaryify/OneDark-Pro> | Copyright (c) 2013-2022 Binaryify |
+| Nocturne light | One Light | <https://github.com/akamud/vscode-theme-onelight> | Copyright (c) 2015 Mahmoud Ali |
+| Citrus | Solarized Dark and Light | <https://github.com/microsoft/vscode> | Copyright (c) 2015 - present Microsoft Corporation |
+| Paper | GitHub Dark Default and Light Default | <https://github.com/primer/github-vscode-theme> | Copyright (c) 2020 Primer |
+| Neon dark | Dracula | <https://github.com/dracula/visual-studio-code> | Copyright (c) 2016 Dracula Theme |
+
+Each is distributed under the MIT License:
+
+```text
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## Libraries resolved by Gradle and Swift Package Manager
 
 Android and iOS dependencies, including the Firebase SDKs, are fetched at

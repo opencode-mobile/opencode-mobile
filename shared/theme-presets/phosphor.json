@@ -41,18 +41,21 @@
       "diff-delete": "#C40020",
       "syntax-comment": "#3A7A40",
       "syntax-keyword": "#007020",
-      "syntax-string": "#008F2A",
-      "syntax-primitive": "#008F2A",
-      "syntax-property": "#00A060",
-      "syntax-type": "#C48400",
-      "syntax-constant": "#008F2A",
+      "syntax-string": "#008A29",
+      "syntax-primitive": "#0C0C92",
+      "syntax-property": "#008651",
+      "syntax-type": "#A06C00",
+      "syntax-constant": "#0E6DAD",
       "syntax-variable": "#C40020",
       "syntax-operator": "#007020",
       "syntax-punctuation": "#141814",
       "markdown-h2": "#141814",
       "markdown-link-text": "#007020",
       "markdown-code-bg": "#008F2A1F",
-      "markdown-list-marker": "#4A5248"
+      "markdown-list-marker": "#4A5248",
+      "syntax-number": "#0E6DAD",
+      "syntax-function": "#0C0C92",
+      "syntax-attribute": "#912A72"
     }
   },
   "dark": {
@@ -97,16 +100,19 @@
       "syntax-keyword": "#39FF14",
       "syntax-string": "#6AFFC0",
       "syntax-primitive": "#7CFF6B",
-      "syntax-property": "#6AFFC0",
+      "syntax-property": "#FF3A3A",
       "syntax-type": "#FFB000",
-      "syntax-constant": "#39FF14",
+      "syntax-constant": "#C82EEE",
       "syntax-variable": "#FF3A3A",
       "syntax-operator": "#39FF14",
       "syntax-punctuation": "#E8EDE8",
       "markdown-h2": "#E8EDE8",
       "markdown-link-text": "#39FF14",
       "markdown-code-bg": "#39FF1428",
-      "markdown-list-marker": "#A8B4A8"
+      "markdown-list-marker": "#A8B4A8",
+      "syntax-number": "#C82EEE",
+      "syntax-function": "#7CFF6B",
+      "syntax-attribute": "#3F7EDD"
     }
   }
 }

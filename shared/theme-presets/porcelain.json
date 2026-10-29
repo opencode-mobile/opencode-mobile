@@ -42,17 +42,20 @@
       "syntax-comment": "#8F8F8F",
       "syntax-keyword": "#1456F7",
       "syntax-string": "#087466",
-      "syntax-primitive": "#1456F7",
+      "syntax-primitive": "#0B8A0B",
       "syntax-property": "#5A5A8A",
       "syntax-type": "#8A6508",
-      "syntax-constant": "#1A7A80",
+      "syntax-constant": "#D8119C",
       "syntax-variable": "#CB321C",
       "syntax-operator": "#3A7A82",
       "syntax-punctuation": "#171717",
       "markdown-h2": "#171717",
       "markdown-link-text": "#171717",
       "markdown-code-bg": "#00000014",
-      "markdown-list-marker": "#6F6F6F"
+      "markdown-list-marker": "#6F6F6F",
+      "syntax-number": "#D8119C",
+      "syntax-function": "#0B8A0B",
+      "syntax-attribute": "#852743"
     }
   },
   "dark": {
@@ -96,7 +99,7 @@
       "syntax-comment": "#707070",
       "syntax-keyword": "#8BA8FF",
       "syntax-string": "#4EC9B8",
-      "syntax-primitive": "#8BA8FF",
+      "syntax-primitive": "#3CEF3C",
       "syntax-property": "#C4B08A",
       "syntax-type": "#E0B04A",
       "syntax-constant": "#7AD4E0",
@@ -106,7 +109,10 @@
       "markdown-h2": "#EDEDED",
       "markdown-link-text": "#EDEDED",
       "markdown-code-bg": "#FFFFFF14",
-      "markdown-list-marker": "#A0A0A0"
+      "markdown-list-marker": "#A0A0A0",
+      "syntax-number": "#7AD4E0",
+      "syntax-function": "#3CEF3C",
+      "syntax-attribute": "#F045F0"
     }
   }
 }
