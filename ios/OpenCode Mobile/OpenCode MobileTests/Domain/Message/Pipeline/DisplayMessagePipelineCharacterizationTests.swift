@@ -1099,6 +1099,14 @@ private final class ControllableDisplayMessagePreparing: DisplayMessagePreparing
         )
     }
 
+    func highlightStreamingTextBlock(
+        blockID: String,
+        plain: String,
+        sessionKey: String
+    ) async -> StreamingHighlight? {
+        nil
+    }
+
     func prepareStructureOnlyTextBlock(
         blockID: String,
         plain: String,

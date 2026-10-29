@@ -124,6 +124,9 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                 var debounceTask: Task<Void, Never>?
                 var prepareTask: Task<Void, Never>?
                 var enrichmentTask: Task<Void, Never>?
+                var highlightTask: Task<Void, Never>?
+                var highlightEpoch: UInt64 = 0
+                var streamingDocs: [String: NativeMarkdownDocument] = [:]
                 var lastPublishedAt: Duration?
                 /// True while coalescing a live streaming reply (including in-flight prepare).
                 var isStreamingSession = false
@@ -153,6 +156,8 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                         prepareTask = nil
                         enrichmentTask?.cancel()
                         enrichmentTask = nil
+                        highlightTask?.cancel()
+                        highlightTask = nil
                     }
                 }
 
@@ -217,16 +222,21 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                             continue
                         }
                         let target = StreamingTextBlockIdentity.resolveStreaming(message: message)
-                        let structure: NativeMarkdownDocument?
+                        let parsed: NativeMarkdownDocument?
                         if let target,
                            OpenCodeRenderedMarkdownDetector.shouldRender(target.plain) {
-                            structure = await contentPreparer.prepareStructureOnlyTextBlock(
+                            parsed = await contentPreparer.prepareStructureOnlyTextBlock(
                                 blockID: target.blockID,
                                 plain: target.plain,
                                 sessionKey: sessionID
                             )
                         } else {
-                            structure = nil
+                            parsed = nil
+                        }
+                        let previousDoc = synced { streamingDocs[message.id] }
+                        let structure = parsed?.carryingCodeSpans(from: previousDoc)
+                        if let structure {
+                            synced { streamingDocs[message.id] = structure }
                         }
                         if let structure, let target {
                             decorationCache.put(
@@ -241,7 +251,13 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                             StreamingTextBlockIdentity.isSoleTextBlock(message: message)
                             ? structure
                             : nil
-                        out.append(DisplayMessage(message: message, renderedMarkdown: bridge))
+                        out.append(
+                            DisplayMessage(
+                                message: message,
+                                renderedMarkdown: bridge,
+                                awaitingTextMateUpgrade: structure?.hasUncoloredCodeFence() == true
+                            )
+                        )
                     }
                     return out
                 }
@@ -265,6 +281,117 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                         "displayPublish reason=streaming-structure-first chars=\(streamingMessageCharCount(messages)) generation=\(generation)"
                     )
                     emitDisplayMessages(frame)
+                    scheduleStreamingHighlight(generation: generation, messages: messages)
+                }
+
+                func scheduleStreamingHighlight(generation: UInt64, messages: [Message]) {
+                    let epoch: UInt64 = synced {
+                        highlightTask?.cancel()
+                        highlightEpoch &+= 1
+                        return highlightEpoch
+                    }
+                    let targets: [(id: String, blockID: String, plain: String)] = synced {
+                        messages.compactMap { message in
+                            guard messageHasStreamingText(message),
+                                  let target = StreamingTextBlockIdentity.resolveStreaming(message: message),
+                                  OpenCodeRenderedMarkdownDetector.shouldRender(target.plain),
+                                  streamingDocs[message.id]?.hasCodeFence() == true
+                            else {
+                                return nil
+                            }
+                            return (message.id, target.blockID, target.plain)
+                        }
+                    }
+                    guard !targets.isEmpty else { return }
+                    let task = Task {
+                        for target in targets {
+                            var partial = true
+                            var stalled = false
+                            while partial && !Task.isCancelled && isCurrent(generation) && synced({ highlightEpoch == epoch }) {
+                                guard let highlighted = await contentPreparer.highlightStreamingTextBlock(
+                                    blockID: target.blockID,
+                                    plain: target.plain,
+                                    sessionKey: sessionID
+                                ) else {
+                                    break
+                                }
+                                if Task.isCancelled || !isCurrent(generation) || synced({ highlightEpoch != epoch }) {
+                                    return
+                                }
+                                let currentPlain = synced { () -> String? in
+                                    guard let message = lastPublishedMessages?.first(where: { $0.id == target.id }) else {
+                                        return nil
+                                    }
+                                    return StreamingTextBlockIdentity.resolveStreaming(message: message)?.plain
+                                }
+                                guard currentPlain == target.plain else { break }
+                                let unchanged = synced {
+                                    streamingDocs[target.id]?.hasSameCodeSpans(as: highlighted.document) == true
+                                }
+                                if unchanged, !highlighted.partial || stalled {
+                                    break
+                                }
+                                stalled = unchanged
+                                if !unchanged {
+                                    applyStreamingColors(
+                                        messageID: target.id,
+                                        blockID: target.blockID,
+                                        plain: target.plain,
+                                        document: highlighted.document,
+                                        partial: highlighted.partial
+                                    )
+                                }
+                                partial = highlighted.partial
+                            }
+                        }
+                    }
+                    synced {
+                        if highlightEpoch == epoch {
+                            highlightTask = task
+                        } else {
+                            task.cancel()
+                        }
+                    }
+                }
+
+                func applyStreamingColors(
+                    messageID: String,
+                    blockID: String,
+                    plain: String,
+                    document: NativeMarkdownDocument,
+                    partial: Bool
+                ) {
+                    let frame: [DisplayMessage]? = synced {
+                        guard isCurrent(currentGeneration),
+                              let messages = lastPublishedMessages
+                        else {
+                            return nil
+                        }
+                        streamingDocs[messageID] = document
+                        decorationCache.put(
+                            sessionKey: sessionID,
+                            blockID: blockID,
+                            contentRevision: ContentRevision.of(plain),
+                            isStreaming: true,
+                            document: document
+                        )
+                        for message in messages {
+                            if message.id == messageID {
+                                let sole = StreamingTextBlockIdentity.isSoleTextBlock(message: message)
+                                previousByID[message.id] = DisplayMessage(
+                                    message: message,
+                                    renderedMarkdown: sole ? document : nil,
+                                    awaitingTextMateUpgrade: partial
+                                )
+                            }
+                        }
+                        return messages.map { message in
+                            previousByID[message.id] ?? DisplayMessage(message: message, renderedMarkdown: nil)
+                        }
+                    }
+                    if let frame {
+                        emitDisplayMessages(frame)
+                    }
                 }
 
                 func scheduleStreamingPublish(generation: UInt64) {
@@ -594,6 +721,7 @@ nonisolated final class DisplayMessagePipeline: @unchecked Sendable {
                             pendingMessages = nil
                             lastPublishedMessages = nil
                             isStreamingSession = false
+                            streamingDocs.removeAll()
                         }
                         continuation.yield(.loadFailed(error))
                     case .messages(let messages, let isFromCache):
@@ -838,4 +966,74 @@ nonisolated private func streamingMessageCharCount(_ messages: [Message]) -> Int
         guard messageHasStreamingText(message) else { return partial }
         return max(partial, message.text.count)
     }
+}
+
+extension NativeMarkdownDocument {
+    /// Copies stable fence colors onto a newly parsed structure so a growing stream does not flash plain.
+    func carryingCodeSpans(from previous: NativeMarkdownDocument?) -> NativeMarkdownDocument {
+        guard let previous else { return self }
+        let oldFences = previous.blocks.compactMap { block -> (code: String, spans: [NativeCodeSpan])? in
+            guard case .codeBlock(_, let code, let spans) = block else { return nil }
+            return (code, spans)
+        }
+        guard !oldFences.isEmpty else { return self }
+        var fence = 0
+        var changed = false
+        let updated = blocks.map { block -> NativeMarkdownBlock in
+            guard case .codeBlock(let language, let code, let spans) = block else { return block }
+            guard fence < oldFences.count else { return block }
+            let old = oldFences[fence]
+            fence += 1
+            let carried = carryCodeSpans(oldCode: old.code, oldSpans: old.spans, newCode: code)
+            guard !carried.isEmpty, carried != spans else { return block }
+            changed = true
+            return .codeBlock(language: language, code: code, spans: carried)
+        }
+        guard changed else { return self }
+        return NativeMarkdownDocument(
+            renderTreeVersion: renderTreeVersion,
+            sourceHash: sourceHash,
+            blocks: updated,
+            diagnostics: diagnostics
+        )
+    }
+
+    func hasCodeFence() -> Bool {
+        blocks.contains { block in
+            if case .codeBlock = block { return true }
+            return false
+        }
+    }
+
+    func hasUncoloredCodeFence() -> Bool {
+        blocks.contains { block in
+            guard case .codeBlock(_, let code, let spans) = block else { return false }
+            return spans.isEmpty && !code.isEmpty
+        }
+    }
+
+    func hasSameCodeSpans(as other: NativeMarkdownDocument) -> Bool {
+        let left = blocks.compactMap { block -> (String, [NativeCodeSpan])? in
+            guard case .codeBlock(_, let code, let spans) = block else { return nil }
+            return (code, spans)
+        }
+        let right = other.blocks.compactMap { block -> (String, [NativeCodeSpan])? in
+            guard case .codeBlock(_, let code, let spans) = block else { return nil }
+            return (code, spans)
+        }
+        guard left.count == right.count else { return false }
+        return zip(left, right).allSatisfy { $0.0 == $1.0 && $0.1 == $1.1 }
+    }
+}
+
+private func carryCodeSpans(
+    oldCode: String,
+    oldSpans: [NativeCodeSpan],
+    newCode: String
+) -> [NativeCodeSpan] {
+    guard !oldSpans.isEmpty else { return [] }
+    if newCode == oldCode { return oldSpans }
+    guard newCode.hasPrefix(oldCode) else { return [] }
+    let limit = oldCode.utf16.count
+    return oldSpans.filter { $0.start >= 0 && $0.end <= limit && $0.start < $0.end }
 }

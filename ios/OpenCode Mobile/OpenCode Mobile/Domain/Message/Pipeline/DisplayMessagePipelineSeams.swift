@@ -22,13 +22,27 @@ protocol DisplayMessagePreparing: AnyObject, Sendable {
         mode: MessagePreparationMode
     ) async -> DisplayMessage
 
-    /// Format-first streaming parse with empty code spans; highlight-core colors attach
-    /// once the message is final. Does not touch the preparer LRU or the highlighter.
+    /// Format-first streaming parse with empty code spans. Does not touch the
+    /// preparer LRU or the highlighter.
     func prepareStructureOnlyTextBlock(
         blockID: String,
         plain: String,
         sessionKey: String
     ) async -> NativeMarkdownDocument?
+
+    /// Colors the fences in a streaming block after the structure frame has published.
+    /// Does not touch the preparer LRU. A newer token drops the result.
+    func highlightStreamingTextBlock(
+        blockID: String,
+        plain: String,
+        sessionKey: String
+    ) async -> StreamingHighlight?
+}
+
+/// A streaming fence pass. `partial` means the engine deadline stopped the call.
+nonisolated struct StreamingHighlight: Sendable {
+    let document: NativeMarkdownDocument
+    let partial: Bool
 }
 
 /// Monotonic clock and sleep used for streaming quiet-window / max-batch pacing.

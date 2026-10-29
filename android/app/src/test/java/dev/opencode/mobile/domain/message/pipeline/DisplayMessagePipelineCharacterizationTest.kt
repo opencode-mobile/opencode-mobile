@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.markdown.CodeSpan
+import dev.opencode.mobile.markdown.CodeTokenRole
 import dev.opencode.mobile.markdown.MarkdownBlock
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.MarkdownInline
@@ -521,10 +523,128 @@ class DisplayMessagePipelineCharacterizationTest {
             )
             val code = doc.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single()
             assertEquals("javascript", code.language)
-            // Structure first: empty spans while streaming; colors arrive on Final.
+            // Structure first: the first frame has empty spans. Colors attach after it.
             assertTrue(code.spans.isEmpty())
             assertTrue(harness.preparer.prepareStructureOnlyInvocations.isNotEmpty())
         }
+
+    @Test
+    fun streamingHighlightAttachesColorsAfterTheStructureFrameAndDropsAStalePass() =
+        runTest(testDispatcher) {
+            val harness = startHarness(holdDelays = true)
+            val fenced =
+                """
+                ```kotlin
+                val answer = 42
+                ```
+                """.trimIndent()
+            val colored =
+                OpenCodeMarkdownParser.parse(
+                    markdown = fenced,
+                    codeHighlighter = OpenCodeStructureOnlyHighlighter,
+                ).let { structure ->
+                    val fence = structure.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single()
+                    structure.copy(
+                        blocks =
+                            listOf(
+                                fence.copy(spans = listOf(CodeSpan(0, 3, CodeTokenRole.Keyword))),
+                            ),
+                    )
+                }
+            harness.preparer.streamingHighlight = { plain ->
+                if (plain == fenced) StreamingHighlight(colored, partial = false) else null
+            }
+            harness.preparer.holdNextHighlight()
+
+            harness.source.emit(MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", fenced))))
+            harness.delay.release()
+            advanceUntilIdle()
+
+            val structureFrame = harness.emissions.single() as DisplayMessageListUpdate.Messages
+            assertTrue(structureFrame.messages.single().renderedMarkdown!!.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single().spans.isEmpty())
+
+            harness.preparer.releaseNextHighlight()
+            advanceUntilIdle()
+
+            val coloredFrame = harness.emissions.last() as DisplayMessageListUpdate.Messages
+            assertEquals(
+                listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)),
+                coloredFrame.messages.single().renderedMarkdown!!.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single().spans,
+            )
+
+            val marker =
+                colored.copy(
+                    blocks =
+                        listOf(
+                            (colored.blocks.single() as MarkdownBlock.CodeBlock).copy(
+                                spans = listOf(CodeSpan(0, 1, CodeTokenRole.String)),
+                            ),
+                        ),
+                )
+            harness.preparer.streamingHighlight = { plain ->
+                if (plain == fenced) StreamingHighlight(marker, partial = false) else null
+            }
+            harness.preparer.holdNextHighlight()
+            val longer = "$fenced\nmore"
+            harness.source.emit(MessageListUpdate.Messages(listOf(streamingAssistant("msg-1", longer))))
+            harness.delay.release()
+            advanceUntilIdle()
+            // Releasing the cancelled pass must not paint its spans onto the newer text.
+            harness.preparer.releaseNextHighlight()
+            advanceUntilIdle()
+
+            val latest = harness.emissions.last() as DisplayMessageListUpdate.Messages
+            assertEquals(longer, latest.messages.single().text)
+            val spans = latest.messages.single().renderedMarkdown!!.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single().spans
+            assertTrue(spans.none { it.role == CodeTokenRole.String })
+        }
+
+    @Test
+    fun carryingCodeSpansKeepsColorsOnAGrowingFence() {
+        val first =
+            MarkdownDocument(
+                sourceHash = 1,
+                blocks =
+                    listOf(
+                        MarkdownBlock.CodeBlock(
+                            language = "kotlin",
+                            code = "val a",
+                            lines = listOf("val a"),
+                            spans = listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)),
+                        ),
+                    ),
+            )
+        val grown =
+            MarkdownDocument(
+                sourceHash = 2,
+                blocks =
+                    listOf(
+                        MarkdownBlock.CodeBlock(
+                            language = "kotlin",
+                            code = "val answer",
+                            lines = listOf("val answer"),
+                            spans = emptyList(),
+                        ),
+                    ),
+            )
+        val carried = grown.carryingCodeSpans(first)
+        assertEquals(listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)), carried.blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single().spans)
+
+        val rewritten =
+            MarkdownDocument(
+                sourceHash = 3,
+                blocks =
+                    listOf(
+                        MarkdownBlock.CodeBlock(
+                            language = "kotlin",
+                            code = "fun answer",
+                            lines = listOf("fun answer"),
+                            spans = emptyList(),
+                        ),
+                    ),
+            )
+        assertTrue(rewritten.carryingCodeSpans(first).blocks.filterIsInstance<MarkdownBlock.CodeBlock>().single().spans.isEmpty())
+    }
 
     @Test
     fun structureFirstStreamingPreservesSiblingAwaitingTextMateUpgrade() =
@@ -849,6 +969,35 @@ class DisplayMessagePipelineCharacterizationTest {
                 previous = previous,
                 mode = mode,
             )
+        }
+
+        var streamingHighlight: ((String) -> StreamingHighlight?)? = null
+        val highlightInvocations = mutableListOf<String>()
+        private var highlightHold: CompletableDeferred<Unit>? = null
+        private var activeHighlightHold: CompletableDeferred<Unit>? = null
+
+        fun holdNextHighlight() {
+            highlightHold = CompletableDeferred()
+        }
+
+        fun releaseNextHighlight() {
+            (activeHighlightHold ?: highlightHold)?.complete(Unit)
+        }
+
+        override suspend fun highlightStreamingTextBlock(
+            blockID: String,
+            plain: String,
+            sessionKey: String,
+        ): StreamingHighlight? {
+            highlightInvocations += plain
+            val hold = highlightHold
+            highlightHold = null
+            if (hold != null) {
+                activeHighlightHold = hold
+                hold.await()
+                activeHighlightHold = null
+            }
+            return streamingHighlight?.invoke(plain)
         }
 
         override suspend fun prepareStructureOnlyTextBlock(

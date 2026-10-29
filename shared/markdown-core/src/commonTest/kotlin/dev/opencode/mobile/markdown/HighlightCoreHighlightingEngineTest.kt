@@ -125,7 +125,7 @@ class HighlightCoreHighlightingEngineTest {
 
         val first = engine.highlightReporting(request("fence", "json", source))
         assertTrue(first.partial)
-        assertEquals(TextMateParseOutcome.Highlighted, first.result.outcome)
+        assertEquals(TextMateParseOutcome.Partial, first.result.outcome)
         assertTrue(first.result.spans.size < expected.size)
         assertEquals(expected.subList(0, first.result.spans.size), first.result.spans)
 

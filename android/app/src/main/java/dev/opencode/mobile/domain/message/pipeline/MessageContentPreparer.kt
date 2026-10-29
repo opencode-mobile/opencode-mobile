@@ -10,6 +10,7 @@ import dev.opencode.mobile.markdown.OpenCodeMarkdownDetector
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.markdown.OpenCodeStructureOnlyHighlighter
 import dev.opencode.mobile.markdown.TextMateHighlightingEngine
+import dev.opencode.mobile.markdown.TextMateParseOutcome
 import dev.opencode.mobile.markdown.attachTextMateResult
 import dev.opencode.mobile.markdown.codeFences
 import dev.opencode.mobile.markdown.stableMarkdownSourceHash
@@ -120,7 +121,8 @@ class MessageContentPreparer
 
         /**
          * Format-first streaming paint: always structure when markdown is detected, with
-         * empty code spans (colors arrive with the Final prepare). Never writes the preparer LRU.
+         * empty code spans. Colors attach in [highlightStreamingTextBlock] after this
+         * frame publishes. Never writes the preparer LRU.
          */
         suspend fun prepareStructureOnlyTextBlock(
             blockID: String,
@@ -147,6 +149,58 @@ class MessageContentPreparer
                 }
             }
 
+        /**
+         * Colors one streaming block's fences. Does not write the preparer LRU; the
+         * highlight-core session is the cache, keyed so a growing fence re-lexes from
+         * its last changed line. A deadline comes back [StreamingHighlight.partial].
+         */
+        suspend fun highlightStreamingTextBlock(
+            blockID: String,
+            plain: String,
+            sessionKey: String = "",
+        ): StreamingHighlight? =
+            withContext(computationDispatcher) {
+                if (!OpenCodeMarkdownDetector.shouldRender(plain)) {
+                    return@withContext null
+                }
+                try {
+                    val structure =
+                        OpenCodeMarkdownParser.parse(
+                            markdown = plain,
+                            codeHighlighter = OpenCodeStructureOnlyHighlighter,
+                        )
+                    val revision = HighlightRevision(nextHighlightRevision.incrementAndGet())
+                    val fences =
+                        structure.codeFences(
+                            ownerKey = "${sessionKey.length}:$sessionKey:$blockID",
+                            revision = revision,
+                            policyEpoch = HIGHLIGHT_POLICY_EPOCH,
+                        )
+                    var upgraded = structure
+                    var partial = false
+                    for (fence in fences) {
+                        coroutineContext.ensureActive()
+                        val result = textMateEngine.highlight(fence.request(intent = HighlightIntent.InteractiveFinal))
+                        if (result.outcome == TextMateParseOutcome.Partial) {
+                            partial = true
+                        }
+                        when (val attachment = upgraded.attachTextMateResult(fence, result)) {
+                            is MarkdownHighlightAttachment.Attached -> upgraded = attachment.document
+                            is MarkdownHighlightAttachment.Rejected -> Unit
+                        }
+                    }
+                    StreamingHighlight(document = upgraded, partial = partial)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    logI(
+                        "highlightStreamingFallback blockIdHash=${blockID.hashCode()} " +
+                            "sessionKeyHash=${sessionKey.hashCode()} reason=${error.javaClass.simpleName}",
+                    )
+                    null
+                }
+            }
+
         private suspend fun prepareMessageOnWorker(
             message: Message,
             previous: DisplayMessage?,
@@ -154,14 +208,6 @@ class MessageContentPreparer
             sessionKey: String = "",
         ): DisplayMessage {
             val isStreaming = messageIsStreaming(message)
-            if (mode == MessagePreparationMode.Streaming &&
-                message.text.length >= STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD
-            ) {
-                return DisplayMessage(
-                    message = message,
-                    renderedMarkdown = null,
-                )
-            }
             if (mode == MessagePreparationMode.HistoryPlainFirst) {
                 reusableDocument(message, previous, mode)?.let { reusable ->
                     return DisplayMessage(
@@ -258,8 +304,9 @@ class MessageContentPreparer
             }
 
         /**
-         * Structure first, then each code fence through [textMateEngine] (highlight-core) unless
-         * the text is still streaming; streaming documents keep empty code spans until Final.
+         * Structure first, then each code fence through [textMateEngine] (highlight-core).
+         * A still-streaming prepare keeps empty spans; the live path colors those fences
+         * in [highlightStreamingTextBlock] after the structure frame.
          */
         private suspend fun parseDocument(
             sessionKey: String,
@@ -361,9 +408,8 @@ class MessageContentPreparer
             private const val HIGHLIGHT_POLICY_EPOCH = 0L
 
             /**
-             * Legacy size gate still used by Streaming-mode prepares and some
-             * characterization fixtures. Format-first text-lane parse no
-             * longer skips on size — markdown-bearing content always formats.
+             * Size used by characterization fixtures. Streaming no longer skips
+             * markdown or highlighting on length.
              */
             const val STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD = 8_000
 

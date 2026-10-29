@@ -306,6 +306,37 @@ class MessageContentPreparerTest {
         }
 
     @Test
+    fun highlightStreamingTextBlockColorsFencesWithoutTheSizeGate() =
+        runTest(testDispatcher) {
+            val engine = RecordingEngine()
+            val preparer =
+                MessageContentPreparer(engine).apply {
+                    computationDispatcher = testDispatcher
+                }
+            val markdown = "```kotlin\nval answer = 42\n```" + "x".repeat(MessageContentPreparer.STREAMING_PLAIN_TEXT_CHARACTER_THRESHOLD)
+            val highlighted = preparer.highlightStreamingTextBlock(blockID = "m1", plain = markdown)
+
+            assertEquals("kotlin", engine.requests.single().language)
+            assertEquals(
+                listOf(CodeSpan(0, engine.requests.single().source.length, CodeTokenRole.Keyword)),
+                highlighted!!.document.codeBlock().spans,
+            )
+            assertTrue(!highlighted.partial)
+
+            val streaming =
+                preparer.prepareMessage(
+                    Message(
+                        id = "m1",
+                        role = MessageRole.Assistant,
+                        text = markdown,
+                        parts = listOf(MessagePart.Text(text = markdown, isStreaming = true)),
+                    ),
+                    mode = MessagePreparationMode.Streaming,
+                )
+            assertNotNull(streaming.renderedMarkdown)
+        }
+
+    @Test
     fun finalPrepareColorsFencesThroughHighlightCore() =
         runTest(testDispatcher) {
             val preparer =
