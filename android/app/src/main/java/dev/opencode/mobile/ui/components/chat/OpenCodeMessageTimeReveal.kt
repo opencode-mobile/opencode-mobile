@@ -199,18 +199,23 @@ fun OpenCodeTimeReveal(
                         val leftEdge = gestureInsets.getLeft(this@pointerInput, layoutDirection)
                         val rightEdge = gestureInsets.getRight(this@pointerInput, layoutDirection)
                         if (downX < leftEdge || downX > windowWidth - rightEdge) return@awaitEachGesture
+                        // Lock only after the platform touch slop, so a sideways scroller inside
+                        // the content (a code block) claims the drag first; its consumption hands
+                        // the gesture over, even after the reveal has started.
+                        val lockSlop = viewConfiguration.touchSlop
                         var total = Offset.Zero
                         var lockX: Float? = null
                         while (true) {
                             val event = awaitPointerEvent()
                             val change = event.changes.firstOrNull { it.id == down.id } ?: break
-                            if (!change.pressed) break
+                            if (!change.pressed || change.isConsumed) break
                             total += change.positionChange()
                             if (lockX == null) {
                                 val direction =
                                     OpenCodeTimeRevealDrag.direction(total.x.toDp().value, total.y.toDp().value)
                                         ?: continue
                                 if (direction != OpenCodeTimeRevealDrag.Direction.Reveal) break
+                                if (abs(total.x) <= lockSlop) continue
                                 lockX = total.x
                             }
                             change.consume()
