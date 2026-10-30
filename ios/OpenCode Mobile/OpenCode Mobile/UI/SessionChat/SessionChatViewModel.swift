@@ -167,7 +167,8 @@ final class SessionChatViewModel {
             sessionID: sessionID,
             worktree: worktree,
             messageRepository: messageRepository,
-            listChildSessions: { id in try await sessionRepository.listChildSessions(id: id) }
+            listChildSessions: { id in try await sessionRepository.listChildSessions(id: id) },
+            derivesChangeNotices: { !activeConnectionManager.capabilities.recordsTimelineChangeNotices }
         )
         self.composer = SessionChatComposer(
             sessionID: sessionID,

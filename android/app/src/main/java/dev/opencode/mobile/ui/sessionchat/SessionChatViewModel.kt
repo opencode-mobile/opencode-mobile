@@ -180,6 +180,7 @@ class SessionChatViewModel
                 messageRepository = messageRepository,
                 scope = viewModelScope,
                 listChildSessions = { id -> sessionRepository.listChildSessions(id) },
+                derivesChangeNotices = { !activeConnectionManager.currentCapabilities().recordsTimelineChangeNotices },
             )
         private val composer =
             SessionChatComposer(

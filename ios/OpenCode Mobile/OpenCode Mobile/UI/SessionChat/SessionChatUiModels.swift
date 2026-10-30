@@ -13,6 +13,8 @@ struct SessionChatRow: Identifiable, Equatable {
     let modelProviderID: String?
     let modelID: String?
     let contextInputTokens: Int64?
+    /// When the message was sent; user bubbles reveal it on a drag.
+    let sentAtEpochMs: Int64?
     /// Working-row only: reserved list identity collapsed after the Idle hold.
     let isLayoutCollapsed: Bool
 
@@ -29,6 +31,7 @@ struct SessionChatRow: Identifiable, Equatable {
         modelProviderID: String? = nil,
         modelID: String? = nil,
         contextInputTokens: Int64? = nil,
+        sentAtEpochMs: Int64? = nil,
         isLayoutCollapsed: Bool = false
     ) {
         self.id = id
@@ -43,6 +46,7 @@ struct SessionChatRow: Identifiable, Equatable {
         self.modelProviderID = modelProviderID
         self.modelID = modelID
         self.contextInputTokens = contextInputTokens
+        self.sentAtEpochMs = sentAtEpochMs
         self.isLayoutCollapsed = isLayoutCollapsed
     }
 
@@ -59,6 +63,7 @@ struct SessionChatRow: Identifiable, Equatable {
               lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count,
               lhs.text.count == rhs.text.count,
               lhs.metadataLabel == rhs.metadataLabel,
+              lhs.sentAtEpochMs == rhs.sentAtEpochMs,
               lhs.pendingDelivery == rhs.pendingDelivery,
               lhs.isLayoutCollapsed == rhs.isLayoutCollapsed,
               lhs.blocks.count == rhs.blocks.count
@@ -1045,7 +1050,8 @@ extension SessionChatRow {
             blocks: blocks,
             modelProviderID: modelProviderID,
             modelID: modelID,
-            contextInputTokens: contextInputTokens
+            contextInputTokens: contextInputTokens,
+            sentAtEpochMs: sentAtEpochMs
         )
     }
 }

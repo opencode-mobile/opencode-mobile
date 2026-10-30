@@ -910,6 +910,8 @@ data class SessionChatMessageItem(
     val modelProviderId: String? = null,
     val modelId: String? = null,
     val contextInputTokens: Long? = null,
+    /** When the message was sent; user bubbles reveal it on a drag. */
+    val sentAtEpochMs: Long? = null,
 )
 
 data class SessionChatAttachmentItem(

@@ -705,6 +705,7 @@ private struct SessionChatMessageRow: View {
                     content: message.outgoingContent,
                     renderedMarkdown: message.renderedMarkdown,
                     metadataLabel: message.metadataLabel,
+                    sentAt: message.sentAtEpochMs.map { Date(timeIntervalSince1970: TimeInterval($0) / 1_000) },
                     onTap: {
                         if message.renderedMarkdown == nil {
                             return { openMessageActions(showsRevertMessage: true) }

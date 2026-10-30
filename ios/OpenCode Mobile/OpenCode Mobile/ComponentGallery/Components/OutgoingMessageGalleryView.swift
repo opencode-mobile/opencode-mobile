@@ -46,6 +46,7 @@ struct OutgoingMessageGalleryView: View {
                     .init(id: "text", filename: "notes.md", variant: .text),
                 ] : [],
                 metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM",
+                sentAt: Date().addingTimeInterval(-26 * 60 * 60),
                 onTap: {}
             )
         }

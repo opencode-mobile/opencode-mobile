@@ -24,6 +24,7 @@ data class TimelineRow(
     val modelProviderId: String? = null,
     val modelId: String? = null,
     val contextInputTokens: Long? = null,
+    val sentAtEpochMs: Long? = null,
     val contentRevision: ContentRevision,
     val layoutRevision: Long,
 )
@@ -200,6 +201,7 @@ object TimelineProjector {
                 modelProviderId = item.modelProviderId,
                 modelId = item.modelId,
                 contextInputTokens = item.contextInputTokens,
+                sentAtEpochMs = item.sentAtEpochMs,
                 contentRevision = contentRevision,
                 layoutRevision = 0L,
             )
@@ -226,6 +228,7 @@ object TimelineProjector {
             modelProviderId = row.modelProviderId,
             modelId = row.modelId,
             contextInputTokens = row.contextInputTokens,
+            sentAtEpochMs = row.sentAtEpochMs,
         )
     }
 
@@ -302,6 +305,7 @@ object TimelineProjector {
                 modelProviderId = message.modelProviderId,
                 modelId = message.modelId,
                 contextInputTokens = message.contextInputTokens,
+                sentAtEpochMs = message.sentAtEpochMs,
                 contentRevision = ContentRevision.of(displayText),
                 layoutRevision = 0L,
             )
@@ -340,6 +344,7 @@ object TimelineProjector {
             left.modelProviderId == right.modelProviderId &&
             left.modelId == right.modelId &&
             left.contextInputTokens == right.contextInputTokens &&
+            left.sentAtEpochMs == right.sentAtEpochMs &&
             left.contentRevision == right.contentRevision
 
     private fun layoutKey(row: TimelineRow): LayoutKey =

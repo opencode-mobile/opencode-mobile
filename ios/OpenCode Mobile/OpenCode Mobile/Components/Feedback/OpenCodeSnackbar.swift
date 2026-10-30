@@ -41,10 +41,14 @@ private enum OpenCodeSnackbarMetrics {
 /// Host for one-shot auto-dismissing snackbars. When `message` becomes non-nil,
 /// presents it and calls `onDismissed` after auto-dismiss or tap so the caller
 /// can clear presentation state. Tapping a message's action calls `onAction`, then dismisses.
+/// `onHeightChange` reports how far the shown snackbar reaches above the host's
+/// bottom edge (card plus its bottom margin), or 0 when none is shown, so a list
+/// behind it can keep its last row clear.
 struct OpenCodeSnackbarHost: View {
     let message: OpenCodeSnackbarMessage?
     let onDismissed: () -> Void
     var onAction: (OpenCodeSnackbarMessage) -> Void = { _ in }
+    var onHeightChange: (CGFloat) -> Void = { _ in }
 
     @State private var presented: OpenCodeSnackbarMessage?
     @State private var dismissTask: Task<Void, Never>?
@@ -56,6 +60,7 @@ struct OpenCodeSnackbarHost: View {
                 snackbarBody(presented)
                     .padding(.horizontal, OpenCodeSnackbarMetrics.screenMarginHorizontal)
                     .padding(.bottom, OpenCodeSnackbarMetrics.screenMarginBottom)
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { onHeightChange($0) }
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
@@ -65,12 +70,16 @@ struct OpenCodeSnackbarHost: View {
         .onChange(of: message?.id) { _, _ in
             present(message)
         }
+        .onChange(of: presented == nil) { _, hidden in
+            if hidden { onHeightChange(0) }
+        }
         .onAppear {
             present(message)
         }
         .onDisappear {
             dismissTask?.cancel()
             dismissTask = nil
+            onHeightChange(0)
         }
         .accessibilityElement(children: .contain)
     }

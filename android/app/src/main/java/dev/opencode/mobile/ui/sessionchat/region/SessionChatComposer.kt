@@ -1230,6 +1230,7 @@ class SessionChatComposer(
                             role = dev.opencode.mobile.domain.message.MessageRole.User,
                             text = display.text,
                             metadataLabel = composerMetadataLabel(composer),
+                            sentAtEpochMs = System.currentTimeMillis(),
                             pendingDelivery =
                                 composer.followUpDelivery.takeIf { supportsFollowUp && isSessionBusy },
                             isPending = true,

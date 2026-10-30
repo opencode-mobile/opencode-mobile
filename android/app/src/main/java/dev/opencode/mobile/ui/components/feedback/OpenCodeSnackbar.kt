@@ -20,10 +20,16 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeRadius
@@ -54,6 +60,10 @@ data class OpenCodeSnackbarMessage(
  * non-null value, presents it and calls [onDismissed] after auto-dismiss or
  * user swipe-away so the caller can clear presentation state. Tapping a message's
  * action calls [onAction], then dismisses.
+ *
+ * [onHeightChange] reports how far the shown snackbar reaches above the host's
+ * bottom edge (card plus its bottom margin), or 0 when none is shown, so a list
+ * behind it can keep its last row clear.
  */
 @Composable
 fun OpenCodeSnackbarHost(
@@ -61,8 +71,23 @@ fun OpenCodeSnackbarHost(
     onDismissed: () -> Unit,
     modifier: Modifier = Modifier,
     onAction: (OpenCodeSnackbarMessage) -> Unit = {},
+    onHeightChange: (Dp) -> Unit = {},
 ) {
     val hostState = remember { SnackbarHostState() }
+    val density = LocalDensity.current
+    var measuredHeightPx by remember { mutableIntStateOf(0) }
+    val shown = hostState.currentSnackbarData != null
+    LaunchedEffect(shown, measuredHeightPx) {
+        onHeightChange(
+            if (shown && measuredHeightPx > 0) {
+                // The measured box includes Material's outer inset on both edges.
+                with(density) { measuredHeightPx.toDp() } + OpenCodeSnackbarScreenMarginBottom -
+                    OpenCodeSnackbarMaterialOuterInset * 2
+            } else {
+                0.dp
+            },
+        )
+    }
 
     LaunchedEffect(message?.id) {
         val current = message ?: return@LaunchedEffect
@@ -88,36 +113,38 @@ fun OpenCodeSnackbarHost(
                     bottom = OpenCodeSnackbarScreenMarginBottom - OpenCodeSnackbarMaterialOuterInset,
                 ),
     ) { data ->
-        val variant = message?.variant ?: OpenCodeSnackbarVariant.Default
-        val containerColor =
-            when (variant) {
-                OpenCodeSnackbarVariant.Default -> MaterialTheme.colorScheme.surfaceVariant
-                OpenCodeSnackbarVariant.Error -> MaterialTheme.colorScheme.error
+        Box(modifier = Modifier.onSizeChanged { measuredHeightPx = it.height }) {
+            val variant = message?.variant ?: OpenCodeSnackbarVariant.Default
+            val containerColor =
+                when (variant) {
+                    OpenCodeSnackbarVariant.Default -> MaterialTheme.colorScheme.surfaceVariant
+                    OpenCodeSnackbarVariant.Error -> MaterialTheme.colorScheme.error
+                }
+            val contentColor =
+                when (variant) {
+                    OpenCodeSnackbarVariant.Default -> MaterialTheme.colorScheme.onSurface
+                    OpenCodeSnackbarVariant.Error -> MaterialTheme.colorScheme.onError
+                }
+            val actionLabel = data.visuals.actionLabel
+            if (actionLabel == null) {
+                Snackbar(
+                    snackbarData = data,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(OpenCodeSnackbarCornerRadius),
+                    containerColor = containerColor,
+                    contentColor = contentColor,
+                    actionContentColor = contentColor,
+                    dismissActionContentColor = contentColor,
+                )
+            } else {
+                OpenCodeActionSnackbar(
+                    message = data.visuals.message,
+                    actionLabel = actionLabel,
+                    containerColor = containerColor,
+                    contentColor = contentColor,
+                    onAction = data::performAction,
+                )
             }
-        val contentColor =
-            when (variant) {
-                OpenCodeSnackbarVariant.Default -> MaterialTheme.colorScheme.onSurface
-                OpenCodeSnackbarVariant.Error -> MaterialTheme.colorScheme.onError
-            }
-        val actionLabel = data.visuals.actionLabel
-        if (actionLabel == null) {
-            Snackbar(
-                snackbarData = data,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(OpenCodeSnackbarCornerRadius),
-                containerColor = containerColor,
-                contentColor = contentColor,
-                actionContentColor = contentColor,
-                dismissActionContentColor = contentColor,
-            )
-        } else {
-            OpenCodeActionSnackbar(
-                message = data.visuals.message,
-                actionLabel = actionLabel,
-                containerColor = containerColor,
-                contentColor = contentColor,
-                onAction = data::performAction,
-            )
         }
     }
 }

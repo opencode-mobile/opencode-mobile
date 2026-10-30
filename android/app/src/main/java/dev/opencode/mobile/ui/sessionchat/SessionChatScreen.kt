@@ -10,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -294,6 +295,14 @@ private fun SessionChatScreenBody(
         } else {
             0.dp
         }
+    // A shown snackbar floats above the composer; lift the end-pinned last row
+    // over it so the row keeps the same end gap instead of sitting under the card.
+    var snackbarOverlayHeight by remember { mutableStateOf(0.dp) }
+    val animatedSnackbarOverlayHeight by animateDpAsState(
+        targetValue = snackbarOverlayHeight,
+        animationSpec = tween(durationMillis = 200),
+        label = "sessionChatSnackbarInset",
+    )
     val sessionCreated = !OptimisticSessionCreate.isPlaceholder(uiState.sessionId)
     val lifecycleActionsEnabled = sessionCreated && !uiState.isLifecycleActionInFlight
     var showAttachmentSource by rememberSaveable { mutableStateOf(false) }
@@ -939,9 +948,9 @@ private fun SessionChatScreenBody(
                             hideLiveRetryFailures = uiState.retryCard != null,
                             hideRetryCountdown = uiState.isRetrying,
                             noticeModelNames = noticeModelNames,
-                            // Composer + 16 end-pin gap; Scroll to end uses this as-is
-                            // (no extra scrollToEndPillBottomPadding).
-                            bottomOverlayInset = timelineBottomInset,
+                            // Composer (+ shown snackbar) + 16 end-pin gap; Scroll to end
+                            // uses this as-is (no extra scrollToEndPillBottomPadding).
+                            bottomOverlayInset = timelineBottomInset + animatedSnackbarOverlayHeight,
                             onRefresh = viewModel::refreshMessages,
                             onRetry = viewModel::retryFailedTimeline,
                             onLoadOlder = viewModel::loadOlderMessages,
@@ -1051,6 +1060,7 @@ private fun SessionChatScreenBody(
                         Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = composerOverlayHeight),
+                    onHeightChange = { snackbarOverlayHeight = it },
                 )
 
                 Column(

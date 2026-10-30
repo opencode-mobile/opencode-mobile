@@ -43,6 +43,8 @@ final class SessionChatTimeline {
     /// Children of this session that subagent parts without a child id link to (#648).
     private(set) var childSessions: [SessionChatChildSessionCandidate] = []
     private let listChildSessions: (@MainActor (String) async throws -> [Session])?
+    /// True when the server records no agent/model notices (v1), so the timeline derives them.
+    private let derivesChangeNotices: @MainActor () -> Bool
     /// Unlinked subagent parts already covered by a child-session lookup.
     private var childSessionLookupPartIDs: Set<String> = []
     private var childSessionLookupTask: Task<Void, Never>?
@@ -67,12 +69,14 @@ final class SessionChatTimeline {
         sessionID: String,
         worktree: String,
         messageRepository: any MessageRepository,
-        listChildSessions: (@MainActor (String) async throws -> [Session])? = nil
+        listChildSessions: (@MainActor (String) async throws -> [Session])? = nil,
+        derivesChangeNotices: @escaping @MainActor () -> Bool = { false }
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
         self.messageRepository = messageRepository
         self.listChildSessions = listChildSessions
+        self.derivesChangeNotices = derivesChangeNotices
     }
 
     func updateServerCommands(_ commands: [ServerCommand]) {
@@ -430,7 +434,8 @@ final class SessionChatTimeline {
             chipTimeline: chipTimeline,
             stepRail: stepRailTimeline,
             activityCard: activityCardTimeline,
-            childSessions: childSessions
+            childSessions: childSessions,
+            derivesChangeNotices: derivesChangeNotices()
         )
         let stamped = SessionChatTimelineProjector.project(
             frame: frame,
@@ -848,6 +853,7 @@ final class SessionChatTimeline {
 
         // Match Android: structural DisplayFrame + TimelineFrame conversion off main.
         let previewCandidates = Self.previewWarmCandidates(visibleDisplayMessages)
+        let derivesNotices = derivesChangeNotices()
         let projected = await Task.detached(priority: .userInitiated) {
             AttachmentPreviewCache.shared.warm(previewCandidates)
             let frame = DisplayFrameBuilder.build(
@@ -860,7 +866,8 @@ final class SessionChatTimeline {
                 chipTimeline: chips,
                 stepRail: stepRail,
                 activityCard: activityCard,
-                childSessions: children
+                childSessions: children,
+                derivesChangeNotices: derivesNotices
             )
             return SessionChatTimelineProjector.project(
                 frame: frame,
