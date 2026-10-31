@@ -15,6 +15,8 @@ struct SessionChatRow: Identifiable, Equatable {
     let contextInputTokens: Int64?
     /// When the message was sent; user bubbles reveal it on a drag.
     let sentAtEpochMs: Int64?
+    /// Set on a prompt steered into a running turn, pending or delivered.
+    let steer: SessionChatSteer?
     /// Working-row only: reserved list identity collapsed after the Idle hold.
     let isLayoutCollapsed: Bool
 
@@ -32,6 +34,7 @@ struct SessionChatRow: Identifiable, Equatable {
         modelID: String? = nil,
         contextInputTokens: Int64? = nil,
         sentAtEpochMs: Int64? = nil,
+        steer: SessionChatSteer? = nil,
         isLayoutCollapsed: Bool = false
     ) {
         self.id = id
@@ -47,6 +50,7 @@ struct SessionChatRow: Identifiable, Equatable {
         self.modelID = modelID
         self.contextInputTokens = contextInputTokens
         self.sentAtEpochMs = sentAtEpochMs
+        self.steer = steer
         self.isLayoutCollapsed = isLayoutCollapsed
     }
 
@@ -64,6 +68,7 @@ struct SessionChatRow: Identifiable, Equatable {
               lhs.text.count == rhs.text.count,
               lhs.metadataLabel == rhs.metadataLabel,
               lhs.sentAtEpochMs == rhs.sentAtEpochMs,
+              lhs.steer == rhs.steer,
               lhs.pendingDelivery == rhs.pendingDelivery,
               lhs.isLayoutCollapsed == rhs.isLayoutCollapsed,
               lhs.blocks.count == rhs.blocks.count
@@ -1037,6 +1042,27 @@ struct PendingPrompt: Equatable, Identifiable, Sendable {
 }
 
 extension SessionChatRow {
+    func withSteer(_ steer: SessionChatSteer?) -> SessionChatRow {
+        guard steer != self.steer else { return self }
+        return SessionChatRow(
+            id: id,
+            role: role,
+            text: text,
+            metadataLabel: metadataLabel,
+            pendingDelivery: pendingDelivery,
+            isPending: isPending,
+            isStreaming: isStreaming,
+            renderedMarkdown: renderedMarkdown,
+            blocks: blocks,
+            modelProviderID: modelProviderID,
+            modelID: modelID,
+            contextInputTokens: contextInputTokens,
+            sentAtEpochMs: sentAtEpochMs,
+            steer: steer,
+            isLayoutCollapsed: isLayoutCollapsed
+        )
+    }
+
     func withRenderedMarkdown(_ document: NativeMarkdownDocument?) -> SessionChatRow {
         SessionChatRow(
             id: id,
@@ -1051,7 +1077,8 @@ extension SessionChatRow {
             modelProviderID: modelProviderID,
             modelID: modelID,
             contextInputTokens: contextInputTokens,
-            sentAtEpochMs: sentAtEpochMs
+            sentAtEpochMs: sentAtEpochMs,
+            steer: steer
         )
     }
 }

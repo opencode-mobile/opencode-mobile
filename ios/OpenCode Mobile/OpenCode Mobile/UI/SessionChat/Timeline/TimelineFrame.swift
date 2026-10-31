@@ -16,6 +16,8 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
     let modelID: String?
     let contextInputTokens: Int64?
     let sentAtEpochMs: Int64?
+    /// Set on a prompt steered into a running turn, pending or delivered.
+    let steer: SessionChatSteer?
     /// Aggregate content revision of plain text (hash + length).
     let contentRevision: ContentRevision
     /// Advances on height-affecting changes (text, blocks, markdown presence, streaming).
@@ -35,6 +37,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
         modelID: String? = nil,
         contextInputTokens: Int64? = nil,
         sentAtEpochMs: Int64? = nil,
+        steer: SessionChatSteer? = nil,
         contentRevision: ContentRevision,
         layoutRevision: UInt64
     ) {
@@ -51,6 +54,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
         self.modelID = modelID
         self.contextInputTokens = contextInputTokens
         self.sentAtEpochMs = sentAtEpochMs
+        self.steer = steer
         self.contentRevision = contentRevision
         self.layoutRevision = layoutRevision
     }
@@ -74,8 +78,31 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
             modelID: modelID,
             contextInputTokens: contextInputTokens,
             sentAtEpochMs: sentAtEpochMs,
+            steer: steer,
             contentRevision: contentRevision,
             layoutRevision: layoutRevision
+        )
+    }
+
+    /// Height changes when the steering label or pending caption comes or goes.
+    func withSteer(_ steer: SessionChatSteer?) -> TimelineRow {
+        TimelineRow(
+            id: id,
+            role: role,
+            text: text,
+            metadataLabel: metadataLabel,
+            pendingDelivery: pendingDelivery,
+            isPending: isPending,
+            isStreaming: isStreaming,
+            renderedMarkdown: renderedMarkdown,
+            blocks: blocks,
+            modelProviderID: modelProviderID,
+            modelID: modelID,
+            contextInputTokens: contextInputTokens,
+            sentAtEpochMs: sentAtEpochMs,
+            steer: steer,
+            contentRevision: contentRevision,
+            layoutRevision: self.steer == steer ? layoutRevision : layoutRevision &+ 1
         )
     }
 
@@ -101,6 +128,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
             modelID: modelID,
             contextInputTokens: contextInputTokens,
             sentAtEpochMs: sentAtEpochMs,
+            steer: steer,
             contentRevision: contentRevision,
             layoutRevision: layoutRevision &+ 1
         )
@@ -122,6 +150,7 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
               lhs.text.count == rhs.text.count,
               lhs.metadataLabel == rhs.metadataLabel,
               lhs.sentAtEpochMs == rhs.sentAtEpochMs,
+              lhs.steer == rhs.steer,
               lhs.pendingDelivery == rhs.pendingDelivery,
               lhs.blocks.count == rhs.blocks.count
         else { return false }
@@ -587,7 +616,8 @@ extension TimelineRow {
             modelProviderID: modelProviderID,
             modelID: modelID,
             contextInputTokens: contextInputTokens,
-            sentAtEpochMs: sentAtEpochMs
+            sentAtEpochMs: sentAtEpochMs,
+            steer: steer
         )
     }
 
@@ -606,6 +636,7 @@ extension TimelineRow {
             modelID: row.modelID,
             contextInputTokens: row.contextInputTokens,
             sentAtEpochMs: row.sentAtEpochMs,
+            steer: row.steer,
             contentRevision: ContentRevision.of(row.text),
             layoutRevision: layoutRevision
         )

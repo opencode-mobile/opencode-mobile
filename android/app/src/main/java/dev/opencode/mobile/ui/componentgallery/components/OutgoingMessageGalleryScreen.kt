@@ -17,6 +17,7 @@ import dev.opencode.mobile.ui.components.OpenCodeAttachmentPresentation
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
+import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageSteering
 
 private enum class OutgoingMessageSample(
     val label: String,
@@ -75,6 +76,26 @@ fun OutgoingMessageGalleryScreen(modifier: Modifier = Modifier) {
             attachments = sample.attachments,
             modifier = Modifier.fillMaxWidth(),
             onClick = {},
+        )
+
+        Text(text = "Steering", style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = "A delivered steer keeps the label; a pending one is dimmed and outlined until the next step.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OpenCodeOutgoingMessage(
+            text = "Use the staging bucket instead.",
+            metadataLabel = "Build · DeepSeek V4 Flash · 9:06 PM",
+            steering = OpenCodeOutgoingMessageSteering.Delivered(showsLabel = true),
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {},
+        )
+        OpenCodeOutgoingMessage(
+            text = "And skip the migration step.",
+            metadataLabel = "Build · DeepSeek V4 Flash · 9:07 PM",
+            steering = OpenCodeOutgoingMessageSteering.Pending(showsLabel = true),
+            modifier = Modifier.fillMaxWidth(),
         )
     }
 }
