@@ -63,6 +63,11 @@ function v1Config(modelURL) {
       webfetch: "allow",
       external_directory: "ask",
     },
+    // Built-in subagents deny the question tool; question-in-parallel-subagents needs it.
+    agent: {
+      general: { permission: { question: "allow" } },
+      explore: { permission: { question: "allow" } },
+    },
   };
 }
 
@@ -92,6 +97,11 @@ function v2Config(modelURL) {
       },
     },
     permissions: [{ action: "shell", resource: "*", effect: "ask" }],
+    // Built-in subagents deny the question tool; question-in-parallel-subagents needs it.
+    agents: {
+      general: { permissions: [{ action: "question", resource: "*", effect: "allow" }] },
+      explore: { permissions: [{ action: "question", resource: "*", effect: "allow" }] },
+    },
   };
 }
 

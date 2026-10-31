@@ -13,6 +13,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     case permission
     case permissionEdit
     case queued
+    case subagentPermission
     case submitting
     case error
     case question
@@ -22,6 +23,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     case custom
     case questionSubmitting
     case questionError
+    case subagentQuestion
 
     var id: String { rawValue }
 
@@ -39,6 +41,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
         case .permission: "Permission"
         case .permissionEdit: "Edit"
         case .queued: "Queued"
+        case .subagentPermission: "Subagent"
         case .submitting: "Submitting"
         case .error: "Error"
         case .question: "Question"
@@ -48,6 +51,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
         case .custom: "Custom"
         case .questionSubmitting: "Q Submit"
         case .questionError: "Q Error"
+        case .subagentQuestion: "Q Subagent"
         }
     }
 }
@@ -177,6 +181,16 @@ struct SessionComposerGalleryView: View {
             permissionState(edit: true)
         case .queued:
             permissionState(queueCount: 3)
+        case .subagentPermission:
+            permissionState(
+                queuePosition: 2,
+                queueCount: 3,
+                attribution: .init(
+                    sessionID: "session-gallery-child",
+                    letter: "G",
+                    summary: "general · subagent wants to run: npm test"
+                )
+            )
         case .submitting:
             permissionState(submitting: true)
         case .error:
@@ -249,6 +263,16 @@ struct SessionComposerGalleryView: View {
                 submitEnabled: true,
                 errorMessage: "The question response failed. Try again."
             )
+        case .subagentQuestion:
+            questionState(
+                questionIndex: 0,
+                questionCount: 1,
+                selectedLabels: selectedLabels,
+                submitEnabled: questionAnswered,
+                requestPosition: 1,
+                requestCount: 2,
+                attribution: .init(sessionID: "session-gallery-child", letter: "E", summary: "explore · subagent asks")
+            )
         }
     }
 
@@ -284,7 +308,9 @@ struct SessionComposerGalleryView: View {
     }
 
     private func permissionState(
+        queuePosition: Int = 1,
         queueCount: Int = 1,
+        attribution: OpenCodeSessionComposerState.RequestAttribution? = nil,
         submitting: Bool = false,
         errorMessage: String? = nil,
         edit: Bool = false
@@ -302,7 +328,9 @@ struct SessionComposerGalleryView: View {
                     ]
                     : [],
                 alwaysPatterns: edit ? ["*"] : ["git status *", "git diff *"],
+                queuePosition: queuePosition,
                 queueCount: queueCount,
+                attribution: attribution,
                 submitting: submitting,
                 errorMessage: errorMessage
             )
@@ -324,7 +352,10 @@ struct SessionComposerGalleryView: View {
         nextEnabled: Bool = false,
         submitEnabled: Bool = false,
         submitting: Bool = false,
-        errorMessage: String? = nil
+        errorMessage: String? = nil,
+        requestPosition: Int = 1,
+        requestCount: Int = 1,
+        attribution: OpenCodeSessionComposerState.RequestAttribution? = nil
     ) -> OpenCodeSessionComposerState {
         .question(
             .init(
@@ -345,7 +376,10 @@ struct SessionComposerGalleryView: View {
                 nextEnabled: nextEnabled,
                 submitEnabled: submitEnabled,
                 submitting: submitting,
-                errorMessage: errorMessage
+                errorMessage: errorMessage,
+                requestPosition: requestPosition,
+                requestCount: requestCount,
+                attribution: attribution
             )
         )
     }
@@ -442,6 +476,9 @@ private extension OpenCodeSessionComposerAction {
         case .denyPermission: "Deny"
         case .alwaysAllowPermission: "Always"
         case .hidePermission: "Hide permission"
+        case .hideQuestion: "Hide question"
+        case let .pageRequest(delta): delta < 0 ? "Previous request" : "Next request"
+        case .openRequestSession: "Open subagent session"
         case .toggleQuestionOption: "Toggle option"
         case .toggleQuestionCustom: "Toggle custom"
         case .questionCustomTextChanged: "Custom text changed"

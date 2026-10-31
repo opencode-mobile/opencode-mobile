@@ -29,6 +29,8 @@ data class V2SessionDto(
     val revert: SessionRevertDto? = null,
     /** `succeeded` | `failed` | `interrupted`; kept raw so unknown values never fail decoding. */
     val outcome: String? = null,
+    /** The agent a subagent session runs (`general`, `explore`). */
+    val agent: String? = null,
 )
 
 @Serializable

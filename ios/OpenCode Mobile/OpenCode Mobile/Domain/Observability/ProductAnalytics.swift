@@ -200,6 +200,9 @@ enum ProductAnalytics {
         static let questionNext = "question_next"
         static let questionSubmit = "question_submit"
         static let questionDismiss = "question_dismiss"
+        static let questionHide = "question_hide"
+        static let questionShow = "question_show"
+        static let inboxRequestPage = "inbox_request_page"
 
         static let commandsDismiss = "commands_dismiss"
         static let commandsNew = "commands_new"

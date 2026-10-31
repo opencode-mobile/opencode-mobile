@@ -48,6 +48,7 @@ private enum class SessionComposerGalleryScenario(
     Permission("Permission"),
     PermissionEdit("Edit"),
     Queued("Queued"),
+    SubagentPermission("Subagent"),
     Submitting("Submitting"),
     Error("Error"),
     Question("Question"),
@@ -57,6 +58,7 @@ private enum class SessionComposerGalleryScenario(
     Custom("Custom"),
     QuestionSubmitting("Q Submit"),
     QuestionError("Q Error"),
+    SubagentQuestion("Q Subagent"),
 }
 
 private const val MentionGalleryText = "Ask @explore about this"
@@ -151,6 +153,17 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
             SessionComposerGalleryScenario.Permission -> permissionState()
             SessionComposerGalleryScenario.PermissionEdit -> permissionState(edit = true)
             SessionComposerGalleryScenario.Queued -> permissionState(queueCount = 3)
+            SessionComposerGalleryScenario.SubagentPermission ->
+                permissionState(
+                    queuePosition = 2,
+                    queueCount = 3,
+                    attribution =
+                        OpenCodeSessionComposerState.RequestAttribution(
+                            sessionId = "session-gallery-child",
+                            letter = "G",
+                            summary = "general · subagent wants to run: npm test",
+                        ),
+                )
             SessionComposerGalleryScenario.Submitting -> permissionState(submitting = true)
             SessionComposerGalleryScenario.Error -> permissionState(errorMessage = "The permission response failed. Try again.")
             SessionComposerGalleryScenario.Question ->
@@ -223,6 +236,21 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                     selectedLabels = listOf("Minimal patch"),
                     submitEnabled = true,
                     errorMessage = "The question response failed. Try again.",
+                )
+            SessionComposerGalleryScenario.SubagentQuestion ->
+                questionState(
+                    questionIndex = 0,
+                    questionCount = 1,
+                    selectedLabels = selectedLabels,
+                    submitEnabled = questionAnswered,
+                    requestPosition = 1,
+                    requestCount = 2,
+                    attribution =
+                        OpenCodeSessionComposerState.RequestAttribution(
+                            sessionId = "session-gallery-child",
+                            letter = "E",
+                            summary = "explore · subagent asks",
+                        ),
                 )
         }
 
@@ -372,7 +400,9 @@ private fun promptState(
 )
 
 private fun permissionState(
+    queuePosition: Int = 1,
     queueCount: Int = 1,
+    attribution: OpenCodeSessionComposerState.RequestAttribution? = null,
     submitting: Boolean = false,
     errorMessage: String? = null,
     edit: Boolean = false,
@@ -391,7 +421,9 @@ private fun permissionState(
             emptyList()
         },
     alwaysPatterns = if (edit) listOf("*") else listOf("git status *", "git diff *"),
+    queuePosition = queuePosition,
     queueCount = queueCount,
+    attribution = attribution,
     submitting = submitting,
     errorMessage = errorMessage,
 )
@@ -412,6 +444,9 @@ private fun questionState(
     submitEnabled: Boolean = false,
     submitting: Boolean = false,
     errorMessage: String? = null,
+    requestPosition: Int = 1,
+    requestCount: Int = 1,
+    attribution: OpenCodeSessionComposerState.RequestAttribution? = null,
 ) = OpenCodeSessionComposerState.Question(
     requestId = "question-gallery",
     sessionId = "session-gallery",
@@ -431,6 +466,9 @@ private fun questionState(
     submitEnabled = submitEnabled,
     submitting = submitting,
     errorMessage = errorMessage,
+    requestPosition = requestPosition,
+    requestCount = requestCount,
+    attribution = attribution,
 )
 
 private val OpenCodeSessionComposerAction.label: String
@@ -454,6 +492,9 @@ private val OpenCodeSessionComposerAction.label: String
             is OpenCodeSessionComposerAction.DenyPermission -> "Deny"
             is OpenCodeSessionComposerAction.AlwaysAllowPermission -> "Always"
             is OpenCodeSessionComposerAction.HidePermission -> "Hide permission"
+            is OpenCodeSessionComposerAction.HideQuestion -> "Hide question"
+            is OpenCodeSessionComposerAction.PageRequest -> if (delta < 0) "Previous request" else "Next request"
+            is OpenCodeSessionComposerAction.OpenRequestSession -> "Open subagent session"
             is OpenCodeSessionComposerAction.ToggleQuestionOption -> "Toggle option"
             is OpenCodeSessionComposerAction.ToggleQuestionCustom -> "Toggle custom"
             is OpenCodeSessionComposerAction.QuestionCustomTextChanged -> "Custom text changed"
