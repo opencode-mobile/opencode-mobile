@@ -912,6 +912,8 @@ data class SessionChatMessageItem(
     val contextInputTokens: Long? = null,
     /** When the message was sent; user bubbles reveal it on a drag. */
     val sentAtEpochMs: Long? = null,
+    /** Set on a prompt steered into a running turn, pending or delivered. */
+    val steer: SessionChatSteer? = null,
 )
 
 data class SessionChatAttachmentItem(

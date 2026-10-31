@@ -14,9 +14,18 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -36,6 +45,30 @@ private const val OUTGOING_MESSAGE_MAX_WIDTH_FRACTION = 0.80f
 private val OutgoingMessageShape = OpenCodeSmallShape
 private val OutgoingMessagePaddingHorizontal = 12.dp
 private val OutgoingMessagePaddingVertical = 8.dp
+private val OutgoingMessageCornerRadius = dev.opencode.mobile.theme.OpenCodeRadius.small
+private const val PENDING_STEER_ALPHA = 0.6f
+
+/**
+ * A prompt steered into a running turn. Pending: dimmed with a dashed outline and a
+ * caption until the next step delivers it. Either way the first of a run of steers
+ * carries the "Steering" label.
+ */
+sealed interface OpenCodeOutgoingMessageSteering {
+    val showsLabel: Boolean
+
+    data class Pending(
+        override val showsLabel: Boolean,
+    ) : OpenCodeOutgoingMessageSteering
+
+    data class Delivered(
+        override val showsLabel: Boolean,
+    ) : OpenCodeOutgoingMessageSteering
+
+    companion object {
+        const val LABEL = "↱ Steering"
+        const val PENDING_CAPTION = "Pending · sends at the next step"
+    }
+}
 
 sealed interface OpenCodeOutgoingMessageContent {
     data class Text(
@@ -61,6 +94,7 @@ fun OpenCodeOutgoingMessage(
     renderedMarkdown: MarkdownDocument? = null,
     attachments: List<OpenCodeAttachmentPresentation> = emptyList(),
     content: List<OpenCodeOutgoingMessageContent>? = null,
+    steering: OpenCodeOutgoingMessageSteering? = null,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
 ) {
@@ -78,6 +112,9 @@ fun OpenCodeOutgoingMessage(
         val bubbleTextColor = openCodeColor("text-strong")
         val time = rememberOpenCodeMessageTime(sentAtEpochMs)
         val accessibilityValue = outgoingMessageAccessibilityValue(metadataLabel, time)
+        val isPending = steering is OpenCodeOutgoingMessageSteering.Pending
+        val captionColor = openCodeColor("text-weak")
+        val dashColor = openCodeColor("text-weaker")
 
         OpenCodeTimeReveal(time = time) {
             Column(
@@ -85,6 +122,14 @@ fun OpenCodeOutgoingMessage(
                 horizontalAlignment = Alignment.End,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                if (steering?.showsLabel == true) {
+                    Text(
+                        text = OpenCodeOutgoingMessageSteering.LABEL,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = captionColor,
+                        modifier = Modifier.semantics { heading() },
+                    )
+                }
                 resolvedContent.forEach { part ->
                     when (part) {
                         is OpenCodeOutgoingMessageContent.Text ->
@@ -92,6 +137,9 @@ fun OpenCodeOutgoingMessage(
                                 modifier =
                                     Modifier
                                         .widthIn(max = maxBubbleWidth)
+                                        .then(if (isPending) Modifier.pendingSteerOutline(dashColor) else Modifier)
+                                        // Dims the whole bubble (fill, plain text and markdown); the outline stays full.
+                                        .alpha(if (isPending) PENDING_STEER_ALPHA else 1f)
                                         .clip(OutgoingMessageShape)
                                         .then(
                                             outgoingMessageInteractionModifier(
@@ -149,14 +197,43 @@ fun OpenCodeOutgoingMessage(
                         is OpenCodeOutgoingMessageContent.Attachment ->
                             OpenCodeMessageAttachment(
                                 attachment = part.presentation,
-                                modifier = Modifier.widthIn(max = maxBubbleWidth),
+                                modifier =
+                                    Modifier
+                                        .widthIn(max = maxBubbleWidth)
+                                        .alpha(if (isPending) PENDING_STEER_ALPHA else 1f),
                             )
                     }
+                }
+                if (isPending) {
+                    Text(
+                        text = OpenCodeOutgoingMessageSteering.PENDING_CAPTION,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = captionColor,
+                    )
                 }
             }
         }
     }
 }
+
+/** Dashed outline drawn over the bubble edge. */
+private fun Modifier.pendingSteerOutline(color: Color): Modifier =
+    drawWithContent {
+        drawContent()
+        val strokeWidth = 1.dp.toPx()
+        val inset = strokeWidth / 2
+        drawRoundRect(
+            color = color,
+            topLeft = Offset(inset, inset),
+            size = Size(size.width - strokeWidth, size.height - strokeWidth),
+            cornerRadius = CornerRadius(OutgoingMessageCornerRadius.toPx()),
+            style =
+                Stroke(
+                    width = strokeWidth,
+                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())),
+                ),
+        )
+    }
 
 /**
  * The agent, model and time the drag reveal hides from TalkBack, plus the day when
@@ -222,6 +299,25 @@ private fun OpenCodeOutgoingMessageLongPreview() {
             text = OutgoingMessageLongPreviewText,
             metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
         )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeOutgoingMessageSteeringPreview() {
+    OpenCodeTheme(darkTheme = false) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            OpenCodeOutgoingMessage(
+                text = "Use the staging bucket instead.",
+                metadataLabel = "Build · DeepSeek V4 Flash · 9:05 PM",
+                steering = OpenCodeOutgoingMessageSteering.Delivered(showsLabel = true),
+            )
+            OpenCodeOutgoingMessage(
+                text = "And skip the migration step.",
+                metadataLabel = "Build · DeepSeek V4 Flash · 9:06 PM",
+                steering = OpenCodeOutgoingMessageSteering.Pending(showsLabel = false),
+            )
+        }
     }
 }
 
