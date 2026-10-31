@@ -380,6 +380,8 @@ struct SessionChatUiState: Equatable {
     var activityCardFooters: [String: SessionChatActivityFooter] = [:]
     /// In-flight steps not rendered yet: seen running for less than the entry debounce (#779).
     var debouncedStepIDs: Set<String> = []
+    /// The image viewer open over a gallery: its images and the shown page (#898).
+    var imageViewer: SessionChatImageViewerState?
     /// One-time Chip timeline intro sheet (OPE-270).
     var chipTimelineIntroVisible = false
     /// One-time Timeline Style picker for updated installs (#805).
@@ -394,6 +396,7 @@ struct SessionChatUiState: Equatable {
             || questionRequest != nil
             || commandsSheetVisible
             || presentedActivityCard != nil
+            || imageViewer != nil
             || mcpPageVisible
             || forkDialogVisible
             || forkResultVisible
@@ -676,6 +679,12 @@ struct ChildSessionNavigationTarget: Hashable {
     }
 }
 
+/// The image viewer over one gallery: every image of the group and the page shown.
+struct SessionChatImageViewerState: Equatable {
+    let images: [FilePart]
+    var index: Int
+}
+
 struct SessionChatTimelineRegionState: Equatable {
     var timeline: SessionChatTimelineState = .loading
     var messages: [SessionChatRow] = []
@@ -697,6 +706,8 @@ struct SessionChatTimelineRegionState: Equatable {
     var activityCardFooters: [String: SessionChatActivityFooter] = [:]
     /// In-flight steps not rendered yet: seen running for less than the entry debounce (#779).
     var debouncedStepIDs: Set<String> = []
+    /// The image viewer open over a gallery (#898).
+    var imageViewer: SessionChatImageViewerState?
 
     var knownChildSessionIDs: Set<String> {
         Set(

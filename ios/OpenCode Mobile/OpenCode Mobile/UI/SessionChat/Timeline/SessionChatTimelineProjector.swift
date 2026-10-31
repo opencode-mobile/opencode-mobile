@@ -397,10 +397,7 @@ nonisolated enum SessionChatTimelineProjector {
                 next = next.withMetadataLabel(pending.metadataLabel)
             }
             if !row.hasAttachments, pending.hasAttachments {
-                let attachments = pending.blocks.filter { block in
-                    if case .attachment = block { return true }
-                    return false
-                }
+                let attachments = pending.blocks.filter(\.isAttachmentContent)
                 next = next.withBlocks(next.blocks + attachments)
             }
             return next
@@ -467,6 +464,8 @@ nonisolated enum SessionChatTimelineProjector {
                 "f:\(id):\(body != nil):\(neutral):\(action != nil):\(retryAt != nil)"
             case .notice(let id, let notice):
                 "o:\(id):\(String(describing: notice.kind).hashValue)"
+            case .imageGallery(let id, let gallery):
+                "ig:\(id):\(gallery.images.count):\(gallery.images.filter { $0.previewData != nil }.count)"
             }
         }.joined(separator: "|")
         return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(row.pendingDelivery == nil ? "0" : "1"):\(blockKey)"
@@ -482,8 +481,11 @@ nonisolated enum SessionChatTimelineProjector {
 
     private static func structureFingerprint(_ row: TimelineRow) -> String {
         let attachments = row.blocks.compactMap { block -> String? in
-            if case .attachment(let id, let file) = block { return "a:\(id):\(file.id)" }
-            return nil
+            switch block {
+            case .attachment(let id, let file): "a:\(id):\(file.id)"
+            case .imageGallery(let id, let gallery): "ig:\(id):\(gallery.images.map(\.id).joined(separator: ","))"
+            default: nil
+            }
         }.joined(separator: "|")
         let blocks = row.blocks.map { block -> String in
             switch block {
@@ -511,6 +513,8 @@ nonisolated enum SessionChatTimelineProjector {
                 "f:\(id):\(body != nil)"
             case .notice(let id, _):
                 "o:\(id)"
+            case .imageGallery(let id, let gallery):
+                "ig:\(id):\(gallery.images.count)"
             }
         }.joined(separator: "|")
         return "\(row.blocks.count)|\(attachments)|\(blocks)"

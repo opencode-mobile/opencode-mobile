@@ -686,6 +686,10 @@ private struct SessionChatMessageRow: View {
     let onToggleStepRailFold: (String) -> Void
     let onOpenActivityCard: (String) -> Void
 
+    @Environment(\.attachmentImageLoading) private var imageLoader
+    @Environment(\.attachmentImageDirectory) private var imageDirectory
+    @Environment(\.openImageViewer) private var openImageViewer
+
     private func openMessageActions(showsRevertMessage: Bool, codeBlock: String? = nil) {
         onMessageActionsTap(
             SessionChatMessageActionsTarget(
@@ -702,7 +706,7 @@ private struct SessionChatMessageRow: View {
             switch message.role {
             case .user:
                 OpenCodeOutgoingMessage(
-                    content: message.outgoingContent,
+                    content: outgoingContent,
                     renderedMarkdown: message.renderedMarkdown,
                     metadataLabel: message.metadataLabel,
                     sentAt: message.sentAtEpochMs.map { Date(timeIntervalSince1970: TimeInterval($0) / 1_000) },
@@ -754,23 +758,39 @@ private struct SessionChatMessageRow: View {
     }
 }
 
-private extension SessionChatRow {
+private extension SessionChatMessageRow {
+    /// Attachments and image galleries sit above the text in the bubble.
     var outgoingContent: [OpenCodeOutgoingMessageContent] {
-        let content = blocks.compactMap { block -> OpenCodeOutgoingMessageContent? in
+        var media: [OpenCodeOutgoingMessageContent] = []
+        var texts: [OpenCodeOutgoingMessageContent] = []
+        for block in message.blocks {
             switch block {
             case .text(let blockID, let text, _):
-                .text(id: blockID, text: text)
-            case .attachment(_, let file):
-                .attachment(file.attachmentPresentation)
+                texts.append(.text(id: blockID, text: text))
+            case .attachment(let blockID, let file):
+                media.append(
+                    file.isViewableImage ? images(id: blockID, [file]) : .attachment(file.attachmentPresentation)
+                )
+            case .imageGallery(let blockID, let gallery):
+                media.append(images(id: blockID, gallery.images))
             case .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepParagraph, .stepRail, .activityCard, .stopNote,
                  .failureLine,
                  .notice:
-                nil
+                break
             }
         }
+        let content = media + texts
         return content.isEmpty
-            ? [.text(id: PresentationBlockId.messageFallback(id), text: text)]
+            ? [.text(id: PresentationBlockId.messageFallback(message.id), text: message.text)]
             : content
+    }
+
+    private func images(id: String, _ files: [FilePart]) -> OpenCodeOutgoingMessageContent {
+        .images(
+            id: id,
+            items: files.map { $0.galleryItem(loader: imageLoader, directory: imageDirectory) },
+            onOpen: openImageViewer.map { open in { index in open(files, index: index) } }
+        )
     }
 }
 
@@ -865,7 +885,13 @@ private struct AssistantMessageContent: View {
                         )
                     )
                 case .attachment(_, let file):
-                    OpenCodeMessageAttachment(attachment: file.attachmentPresentation)
+                    if file.isViewableImage {
+                        SessionChatImageGalleryView(images: [file])
+                    } else {
+                        OpenCodeMessageAttachment(attachment: file.attachmentPresentation)
+                    }
+                case .imageGallery(_, let gallery):
+                    SessionChatImageGalleryView(images: gallery.images)
                 case .toolCard(_, let card):
                     OpenCodeToolCallCard(
                         status: card.status.toolCallCardStatus(interrupted: card.isInterrupted),

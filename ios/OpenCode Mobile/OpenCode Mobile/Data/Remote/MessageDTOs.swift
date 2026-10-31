@@ -114,6 +114,17 @@ nonisolated struct MessageToolStateDTO: Codable, Sendable {
     var interrupted: Bool? = nil
     /// Set when the server closed the call without running it (`executed: false`).
     var malformed: Bool? = nil
+    /// Files the completed tool returned (v1 `attachments`); the v2 live projection fills it
+    /// from `content` file items.
+    var attachments: [MessageToolAttachmentDTO]? = nil
+}
+
+/// A v1 tool attachment: a file part whose `url` is normally a `data:` URL.
+nonisolated struct MessageToolAttachmentDTO: Codable, Sendable {
+    let id: String?
+    let mime: String?
+    let filename: String?
+    let url: String?
 }
 
 nonisolated struct MessageToolTimeDTO: Codable, Sendable {

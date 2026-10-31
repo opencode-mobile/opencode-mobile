@@ -98,6 +98,10 @@ struct ComponentGalleryDetailView: View {
             KeyValueRowGalleryView()
         case .attachment:
             AttachmentGalleryView()
+        case .imageGallery:
+            ImageGalleryGalleryView()
+        case .imageViewer:
+            ImageViewerGalleryView()
         case .outgoingMessage:
             OutgoingMessageGalleryView()
         case .pendingPromptsStrip:

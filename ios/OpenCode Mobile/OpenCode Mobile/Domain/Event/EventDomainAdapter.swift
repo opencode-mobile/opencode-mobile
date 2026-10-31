@@ -614,12 +614,15 @@ nonisolated struct EventDomainAdapter: Sendable {
         let callID = string(in: properties, key: "callID")
         let partID = string(in: properties, key: "id") ?? callID
         var output = string(in: properties, key: "output")
-        if output == nil, let content = properties["content"] as? [[String: Any]] {
+        let content = properties["content"] as? [[String: Any]]
+        if output == nil, let content {
             let texts = content.compactMap { $0["text"] as? String }
             if !texts.isEmpty {
                 output = texts.joined()
             }
         }
+        // v2 tool files arrive whole with the result; carried in the v1 `attachments` shape.
+        let attachments = content.map(toolFileAttachments) ?? []
         let errorObject = properties["error"] as? [String: Any]
         let unwrapped = SessionFailure.unwrap(errorObject?["message"] as? String)
         let error = unwrapped.isEmpty ? nil : unwrapped
@@ -644,8 +647,22 @@ nonisolated struct EventDomainAdapter: Sendable {
             metadata: metadata,
             title: title,
             interrupted: interrupted,
-            malformed: malformed
+            malformed: malformed,
+            attachments: attachments
         )
+    }
+
+    /// v2 `content` items of type `file` as v1 tool attachments (`url` is the item's `uri`).
+    /// Every file item is kept, so a file's position matches the REST projection.
+    private func toolFileAttachments(_ content: [[String: Any]]) -> [[String: Any]] {
+        content.compactMap { item in
+            guard item["type"] as? String == "file" else { return nil }
+            var attachment: [String: Any] = ["type": "file"]
+            if let uri = item["uri"] as? String { attachment["url"] = uri }
+            if let mime = item["mime"] as? String { attachment["mime"] = mime }
+            if let name = item["name"] as? String { attachment["filename"] = name }
+            return attachment
+        }
     }
 
     /// v2 tool events carry tool-reported metadata (a subagent's `sessionID`
@@ -936,9 +953,11 @@ nonisolated struct EventDomainAdapter: Sendable {
         metadata: [String: Any]? = nil,
         title: String? = nil,
         interrupted: Bool = false,
-        malformed: Bool = false
+        malformed: Bool = false,
+        attachments: [[String: Any]] = []
     ) -> OpencodeEvent {
         var state: [String: Any] = ["status": status]
+        if !attachments.isEmpty { state["attachments"] = attachments }
         if interrupted { state["interrupted"] = true }
         if malformed { state["malformed"] = true }
         if let title { state["title"] = title }

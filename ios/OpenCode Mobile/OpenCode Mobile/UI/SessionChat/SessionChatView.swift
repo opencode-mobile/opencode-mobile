@@ -211,8 +211,18 @@ struct SessionChatView: View {
                 if !enabled { attachmentDropSummary = nil }
             }
             .feedbackSheet(model: $feedbackModel)
+            .sessionChatImageViewer(
+                state: viewModel.uiState.imageViewer,
+                loader: viewModel.attachmentImageLoader,
+                directory: boundSession.directory ?? boundSession.worktree,
+                onIndexChange: { viewModel.showImageViewerPage($0) },
+                onDismiss: { viewModel.closeImageViewer() }
+            )
             .environment(\.attachmentImageLoading, viewModel.attachmentImageLoader)
             .environment(\.attachmentImageDirectory, boundSession.directory ?? boundSession.worktree)
+            .environment(\.openImageViewer, SessionChatOpenImageViewerAction { images, index in
+                viewModel.openImageViewer(images: images, index: index)
+            })
     }
 
     private var sessionChatLayout: some View {
