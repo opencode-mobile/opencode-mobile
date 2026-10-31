@@ -99,6 +99,8 @@ struct OpenCodeChildSessionRow: View {
                         .accessibilityHidden(true)
                 }
             }
+            // Status and time stay whole; the subtitle truncates first.
+            .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.horizontal, Self.paddingHorizontal)
         .padding(.vertical, Self.paddingVertical)
