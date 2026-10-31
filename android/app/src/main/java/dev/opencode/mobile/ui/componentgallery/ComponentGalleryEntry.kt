@@ -58,6 +58,7 @@ enum class ComponentGalleryEntryId {
     ActionTile,
     SyncingPill,
     SideQuestionPill,
+    FloatingPill,
     ComposerSuggestionOverlay,
     ReviewChangesPill,
     SessionTodosPill,
@@ -172,6 +173,14 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.SideQuestionPill,
             title = "Side Question Pill",
             description = "Floating /btw status above the composer: running, answer ready, or failed with Retry.",
+            category = ComponentGalleryCategory.Controls,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.FloatingPill,
+            title = "Floating Pill",
+            description =
+                "Shared Session Chat pill: icon + label, icon only, live counter, or label with close, " +
+                    "in live, ready, needs attention, error, and done.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(
