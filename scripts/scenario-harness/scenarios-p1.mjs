@@ -13,6 +13,16 @@ const PATCH = `*** Begin Patch
 *** Delete File: src/legacy-format.js
 *** End Patch`;
 
+const IMAGE_READS = [
+  "invoice-chart",
+  "receipt-scan",
+  "dashboard",
+  "logo-mark",
+  "aging-report",
+  "ledger-page",
+  "totals-pie",
+].map((name) => ({ op: "tool", name: "read", input: path(`assets/${name}.png`) }));
+
 const QUESTION_CALLS = [
   { steps: [say("Before I change the API, one question:"), { op: "tool", name: "question", input: { questions: [CURRENCY_QUESTION] } }] },
   { steps: [say("Got it. I'll go with that and fall back to `USD`.")] },
@@ -355,6 +365,50 @@ export const P1 = [
       "compaction-fails": {
         automation: [{ at: 4000, do: "compact", session: "A" }],
         summary: [{ op: "httpError", status: 500, body: { error: { message: "summarizer unavailable", type: "server_error" } } }],
+      },
+    },
+  },
+  {
+    id: "tool-image-gallery",
+    priority: "P1",
+    title: "Tool results with images (read of image files)",
+    category: "tools",
+    prompt: "Show me the invoice chart.",
+    expect: "Chat: the read row carries the image as an inline tile under the tool card (one image: a single tile). Variants: pair (2 images), trio (3), quad (4, a full 2x2 grid without +N), many (7 images: the gallery shows a +N tile for the rest), omitted (a valid image and a corrupt one: v1 drops the corrupt file from the result and notes the omission in the row text; v2 reads it as plain text; either way only the valid image shows and the apps never receive a broken image). Tapping a tile opens the viewer on it; swiping moves between the images of the same card.",
+    modelCalls: [
+      { steps: [say("Let me look at the chart."), { op: "tool", name: "read", input: path("assets/invoice-chart.png") }] },
+      { steps: [say("That is the invoice totals chart.")] },
+    ],
+    variants: {
+      pair: {
+        modelCalls: [
+          { steps: [say("Opening both files."), ...IMAGE_READS.slice(0, 2)] },
+          { steps: [say("Those are the chart and the receipt scan.")] },
+        ],
+      },
+      trio: {
+        modelCalls: [
+          { steps: [say("Opening three files."), ...IMAGE_READS.slice(0, 3)] },
+          { steps: [say("Those are the chart, the receipt scan and the dashboard.")] },
+        ],
+      },
+      quad: {
+        modelCalls: [
+          { steps: [say("Opening four files."), ...IMAGE_READS.slice(0, 4)] },
+          { steps: [say("Those are the chart, scan, dashboard and logo.")] },
+        ],
+      },
+      many: {
+        modelCalls: [
+          { steps: [say("Opening every report image."), ...IMAGE_READS] },
+          { steps: [say("Seven images opened.")] },
+        ],
+      },
+      omitted: {
+        modelCalls: [
+          { steps: [say("Opening the chart and the scan."), IMAGE_READS[0], { op: "tool", name: "read", input: path("assets/broken-scan.png") }] },
+          { steps: [say("The scan could not be read.")] },
+        ],
       },
     },
   },
