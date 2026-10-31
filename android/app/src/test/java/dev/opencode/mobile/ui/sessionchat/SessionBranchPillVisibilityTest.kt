@@ -2,9 +2,8 @@ package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.VcsFileStatus
-import dev.opencode.mobile.ui.components.sessionBranchPillAccessibilityLabel
-import dev.opencode.mobile.ui.components.sessionBranchPillAdditionLabel
-import dev.opencode.mobile.ui.components.sessionBranchPillDeletionLabel
+import dev.opencode.mobile.ui.components.OpenCodeSessionBranchChangedFile
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -13,14 +12,16 @@ import org.junit.Test
 
 class SessionBranchPillVisibilityTest {
     @Test
-    fun showsForKnownBranch() {
+    fun showsIconOnlyPillForCleanKnownBranch() {
         val pill =
             SessionChatRepoStripRegionState(
                 isAvailable = true,
                 branch = "feature/pill",
             ).toSessionBranchPill()
 
-        assertEquals(SessionBranchPillUiState("feature/pill", 0, 0), pill)
+        assertEquals("feature/pill", pill?.branch)
+        assertEquals(0, pill?.additions)
+        assertNull(pill?.summary?.changeLabel)
         assertTrue(SessionBranchPillVisibility.shouldShow(pill, hideFloatStack = false))
     }
 
@@ -31,18 +32,19 @@ class SessionBranchPillVisibilityTest {
         assertFalse(SessionBranchPillVisibility.shouldShow(null, hideFloatStack = false))
         assertFalse(
             SessionBranchPillVisibility.shouldShow(
-                SessionBranchPillUiState("main", 1, 2),
+                SessionChatRepoStripRegionState(isAvailable = true, branch = "main").toSessionBranchPill(),
                 hideFloatStack = true,
             ),
         )
     }
 
     @Test
-    fun countsOnlyWhenPositive() {
+    fun carriesFilesBaseAndSums() {
         val pill =
             SessionChatRepoStripRegionState(
                 isAvailable = true,
-                branch = "main",
+                branch = "fix/probe",
+                defaultBranch = "main",
                 files =
                     listOf(
                         VcsFileStatus("a.kt", FileDiffStatus.Modified, 4, 1),
@@ -51,17 +53,27 @@ class SessionBranchPillVisibilityTest {
                     ),
             ).toSessionBranchPill()
 
-        assertEquals(SessionBranchPillUiState("main", 6, 4), pill)
-        assertEquals("+6", sessionBranchPillAdditionLabel(6))
-        assertNull(sessionBranchPillAdditionLabel(0))
-        assertEquals("−4", sessionBranchPillDeletionLabel(4))
-        assertNull(sessionBranchPillDeletionLabel(0))
-        assertEquals("Branch main", sessionBranchPillAccessibilityLabel("main", 0, 0))
-        assertEquals("Branch main, 1 addition", sessionBranchPillAccessibilityLabel("main", 1, 0))
-        assertEquals("Branch main, 2 deletions", sessionBranchPillAccessibilityLabel("main", 0, 2))
+        assertEquals(6, pill?.additions)
+        assertEquals(4, pill?.deletions)
+        assertEquals("main", pill?.summary?.visibleBaseBranch)
         assertEquals(
-            "Branch feature/x, 4 additions, 1 deletion",
-            sessionBranchPillAccessibilityLabel("feature/x", 4, 1),
+            listOf(
+                OpenCodeSessionBranchChangedFile("a.kt", 4, 1),
+                OpenCodeSessionBranchChangedFile("b.kt", 2, 0),
+                OpenCodeSessionBranchChangedFile("c.kt", 0, 3),
+            ),
+            pill?.summary?.files,
         )
+        assertFalse(pill?.summary?.isWorktree ?: true)
+    }
+
+    @Test
+    fun worktreeCheckoutMarksTheSummary() {
+        val pill =
+            SessionChatRepoStripRegionState(isAvailable = true, branch = "fix/probe")
+                .toSessionBranchPill(isWorktree = true)
+
+        assertTrue(pill?.summary?.isWorktree == true)
+        assertEquals(OpenCodeIcons.CallSplit, pill?.summary?.icon)
     }
 }

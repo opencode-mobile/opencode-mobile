@@ -47,6 +47,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case plug = "lucide_plug"
     case code = "lucide_code"
     case lock = "lucide_lock"
+    case gitBranch = "lucide_git_branch"
 
     var accessibilityIdentifier: String { rawValue }
 }

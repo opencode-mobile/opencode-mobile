@@ -55,6 +55,7 @@ private var _mic: ImageVector? = null
 private var _plug: ImageVector? = null
 private var _code: ImageVector? = null
 private var _lock: ImageVector? = null
+private var _git_branch: ImageVector? = null
 
   val Add: ImageVector
     get() {
@@ -1759,5 +1760,46 @@ private var _lock: ImageVector? = null
     )
       }.build()
       return _lock!!
+    }
+
+  val GitBranch: ImageVector
+    get() {
+      if (_git_branch != null) return _git_branch!!
+      _git_branch = ImageVector.Builder(
+        name = "GitBranch",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M15 6a9 9 0 0 0-9 9V3").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M 15 6 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M 3 18 a 3 3 0 1 0 6 0 a 3 3 0 1 0 -6 0").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _git_branch!!
     }
 }

@@ -1,155 +1,311 @@
 import SwiftUI
+import UIKit
 
-enum SessionBranchPillPreviewCase: CaseIterable {
-    case mixedDirtyLight
-    case additionsOnlyLight
-    case deletionsOnlyDark
-    case cleanLight
-    case longBranchDark
-    case disabledLight
-
-    private var configuration: (branch: String, additions: Int, deletions: Int, enabled: Bool, colorScheme: ColorScheme) {
-        switch self {
-        case .mixedDirtyLight: ("fix/probe", 12, 3, true, .light)
-        case .additionsOnlyLight: ("fix/probe", 12, 0, true, .light)
-        case .deletionsOnlyDark: ("fix/probe", 0, 3, true, .dark)
-        case .cleanLight: ("main", 0, 0, true, .light)
-        case .longBranchDark: (Self.longBranch, 4, 1, true, .dark)
-        case .disabledLight: ("fix/probe", 12, 3, false, .light)
-        }
-    }
-
-    var branch: String { configuration.branch }
-    var additions: Int { configuration.additions }
-    var deletions: Int { configuration.deletions }
-    var enabled: Bool { configuration.enabled }
-    var colorScheme: ColorScheme { configuration.colorScheme }
-
-    static let longBranch = "feature/ope-48-session-branch-pill-with-a-very-long-name"
-}
-
-struct OpenCodeSessionBranchPill: View {
-    let branch: String
+/// One uncommitted file change on the session's branch.
+struct OpenCodeSessionBranchChangedFile: Equatable, Hashable {
+    let path: String
     let additions: Int
     let deletions: Int
-    let enabled: Bool
-    let action: () -> Void
 
-    init(
-        branch: String,
-        additions: Int,
-        deletions: Int,
-        enabled: Bool = true,
-        action: @escaping () -> Void
-    ) {
-        precondition(!branch.isEmpty, "Session Branch Pill requires a non-empty branch")
-        precondition(additions >= 0, "Session Branch Pill requires nonnegative additions")
-        precondition(deletions >= 0, "Session Branch Pill requires nonnegative deletions")
+    var linesChanged: Int { additions + deletions }
+}
+
+/// What the Session Branch Pill and its popover show: the session's branch, its base,
+/// whether it is a worktree checkout, and the uncommitted file changes.
+struct OpenCodeSessionBranchSummary: Equatable {
+    let branch: String
+    let baseBranch: String?
+    let isWorktree: Bool
+    let files: [OpenCodeSessionBranchChangedFile]
+
+    init(branch: String, baseBranch: String? = nil, isWorktree: Bool = false, files: [OpenCodeSessionBranchChangedFile] = []) {
         self.branch = branch
-        self.additions = additions
-        self.deletions = deletions
-        self.enabled = enabled
-        self.action = action
+        self.baseBranch = baseBranch
+        self.isWorktree = isWorktree
+        self.files = files
     }
 
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: Self.contentSpacing) {
-                OpenCodeIconImage(icon: .callSplit, size: Self.iconSize)
-                    .foregroundStyle(enabled ? OpenCodeColors.iconBase : OpenCodeColors.textBase)
-                    .fixedSize()
-                Text(branch)
-                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textBase)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(minWidth: 0, alignment: .leading)
-                if Self.additionLabel(additions: additions) != nil {
-                    OpenCodeDiffStat(additions: additions, enabled: enabled, style: .button)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-                if Self.deletionLabel(deletions: deletions) != nil {
-                    OpenCodeDiffStat(deletions: deletions, enabled: enabled, style: .button)
-                        .fixedSize(horizontal: true, vertical: false)
-                }
-            }
-            .padding(.horizontal, Self.paddingHorizontal)
-            .padding(.vertical, Self.paddingVertical)
-            .frame(minHeight: Self.minHeight)
-            .frame(maxWidth: Self.maxWidth, alignment: .center)
-            .fixedSize(horizontal: true, vertical: false)
-            .contentShape(Capsule())
+    /// The popover lists at most this many files.
+    static let topFileLimit = 3
+
+    var additions: Int { max(0, files.reduce(0) { $0 + $1.additions }) }
+    var deletions: Int { max(0, files.reduce(0) { $0 + $1.deletions }) }
+    var hasChanges: Bool { !files.isEmpty }
+
+    /// Worktree checkouts use the worktree icon from Home and Settings; other sessions the branch icon.
+    var icon: OpenCodeIcon { isWorktree ? .callSplit : .gitBranch }
+
+    /// "+128 −14" with zero sides left out, or "2 files" when the changes have no line counts.
+    /// Nil without changes: the pill shows its icon only.
+    var changeLabel: String? {
+        guard hasChanges else { return nil }
+        var parts: [String] = []
+        if additions > 0 { parts.append("+\(additions)") }
+        if deletions > 0 { parts.append("−\(deletions)") }
+        return parts.isEmpty ? Self.fileCount(files.count, suffix: "") : parts.joined(separator: " ")
+    }
+
+    var pillLayout: OpenCodeFloatingPillLayout {
+        if let changeLabel {
+            return .iconLabel(icon: icon, label: changeLabel)
         }
-        .buttonStyle(OpenCodeFloatingPillPressStyle())
-        .openCodeFloatingPillChrome(enabled: enabled)
-        .disabled(!enabled)
-        .accessibilityLabel(Self.accessibilityLabel(branch: branch, additions: additions, deletions: deletions))
+        return .iconOnly(icon: icon, accessibilityLabel: accessibilityLabel)
     }
 
-    static func additionLabel(additions: Int) -> String? {
-        additions > 0 ? "+\(additions)" : nil
-    }
-
-    static func deletionLabel(deletions: Int) -> String? {
-        deletions > 0 ? "−\(deletions)" : nil
-    }
-
-    static func accessibilityLabel(branch: String, additions: Int, deletions: Int) -> String {
-        var parts = ["Branch \(branch)"]
-        if additions > 0 {
-            parts.append("\(additions) \(additions == 1 ? "addition" : "additions")")
-        }
-        if deletions > 0 {
-            parts.append("\(deletions) \(deletions == 1 ? "deletion" : "deletions")")
-        }
+    /// "Branch feature-x, 128 added, 14 removed" or "Branch feature-x, no changes".
+    var accessibilityLabel: String {
+        let name = "\(isWorktree ? "Worktree branch" : "Branch") \(branch)"
+        guard hasChanges else { return "\(name), no changes" }
+        var parts = [name]
+        if additions > 0 { parts.append("\(additions) added") }
+        if deletions > 0 { parts.append("\(deletions) removed") }
+        if parts.count == 1 { parts.append(Self.fileCount(files.count, suffix: " changed")) }
         return parts.joined(separator: ", ")
     }
 
-    private static let minHeight: CGFloat = 36
-    private static let paddingHorizontal: CGFloat = 14
-    private static let paddingVertical: CGFloat = 8
-    private static let contentSpacing: CGFloat = 6
-    private static let iconSize: CGFloat = 14
-    private static let maxWidth: CGFloat = 360
-}
+    /// The base branch when the server reports one that differs from the branch itself.
+    var visibleBaseBranch: String? {
+        guard let baseBranch, !baseBranch.isEmpty, baseBranch != branch else { return nil }
+        return baseBranch
+    }
 
-private struct SessionBranchPillPreview: View {
-    let previewCase: SessionBranchPillPreviewCase
+    /// "3 files changed"; nil without changes.
+    var fileCountLabel: String? {
+        hasChanges ? Self.fileCount(files.count, suffix: " changed") : nil
+    }
 
-    var body: some View {
-        OpenCodeSessionBranchPill(
-            branch: previewCase.branch,
-            additions: previewCase.additions,
-            deletions: previewCase.deletions,
-            enabled: previewCase.enabled,
-            action: {}
+    /// The most-changed files by lines added plus removed, ties by path.
+    var topFiles: [OpenCodeSessionBranchChangedFile] {
+        Array(
+            files.sorted { lhs, rhs in
+                lhs.linesChanged != rhs.linesChanged ? lhs.linesChanged > rhs.linesChanged : lhs.path < rhs.path
+            }
+            .prefix(Self.topFileLimit)
         )
-        .padding()
-        .openCodeTheme()
-        .preferredColorScheme(previewCase.colorScheme)
+    }
+
+    private static func fileCount(_ count: Int, suffix: String) -> String {
+        "\(count) \(count == 1 ? "file" : "files")\(suffix)"
     }
 }
 
-#Preview("Mixed Dirty Light") {
-    SessionBranchPillPreview(previewCase: .mixedDirtyLight)
+/// Session Chat context pill for the session's branch: an icon and the line counts, or the
+/// icon alone with no changes. Tapping it opens a popover with the branch details, the
+/// most-changed files, View all changes and Copy branch name. Placement is up to the caller.
+struct OpenCodeSessionBranchPill: View {
+    let summary: OpenCodeSessionBranchSummary
+    let onViewAllChanges: () -> Void
+    /// Called after the branch name is on the pasteboard, so the host can confirm it.
+    let onBranchNameCopied: () -> Void
+
+    @State private var isPopoverPresented = false
+
+    init(
+        summary: OpenCodeSessionBranchSummary,
+        onViewAllChanges: @escaping () -> Void,
+        onBranchNameCopied: @escaping () -> Void = {}
+    ) {
+        precondition(!summary.branch.isEmpty, "Session Branch Pill requires a non-empty branch")
+        self.summary = summary
+        self.onViewAllChanges = onViewAllChanges
+        self.onBranchNameCopied = onBranchNameCopied
+    }
+
+    var body: some View {
+        OpenCodeFloatingPill(
+            layout: summary.pillLayout,
+            state: .ready,
+            accessibilityLabel: summary.accessibilityLabel,
+            action: { isPopoverPresented = true }
+        )
+        .accessibilityHint("Shows branch details")
+        .popover(isPresented: $isPopoverPresented) {
+            OpenCodeSessionBranchPopoverContent(
+                summary: summary,
+                onViewAllChanges: {
+                    isPopoverPresented = false
+                    onViewAllChanges()
+                },
+                onCopyBranchName: {
+                    isPopoverPresented = false
+                    UIPasteboard.general.string = summary.branch
+                    onBranchNameCopied()
+                }
+            )
+            .presentationCompactAdaptation(.popover)
+            .presentationBackground(OpenCodeColors.surfaceRaisedBase)
+        }
+    }
 }
 
-#Preview("Additions Only Light") {
-    SessionBranchPillPreview(previewCase: .additionsOnlyLight)
+/// Body of the branch popover. Public so the Component Gallery can show it open.
+struct OpenCodeSessionBranchPopoverContent: View {
+    let summary: OpenCodeSessionBranchSummary
+    let onViewAllChanges: () -> Void
+    let onCopyBranchName: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+                .padding(.horizontal, Self.paddingHorizontal)
+                .padding(.vertical, Self.sectionPaddingVertical)
+            if summary.hasChanges {
+                divider
+                changes
+                    .padding(.horizontal, Self.paddingHorizontal)
+                    .padding(.vertical, Self.sectionPaddingVertical)
+            }
+            divider
+            VStack(alignment: .leading, spacing: 0) {
+                if summary.hasChanges {
+                    actionRow(title: "View all changes", icon: .description, action: onViewAllChanges)
+                }
+                actionRow(title: "Copy branch name", icon: .contentCopy, action: onCopyBranchName)
+            }
+            .padding(.vertical, Self.actionsPaddingVertical)
+        }
+        .frame(width: Self.width, alignment: .leading)
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: Self.iconSpacing) {
+            OpenCodeIconImage(icon: summary.icon, size: Self.iconSize)
+                .foregroundStyle(OpenCodeColors.iconStrongBase)
+                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(summary.branch)
+                    .font(OpenCodeTypography.code)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .textSelection(.enabled)
+                if let base = summary.visibleBaseBranch {
+                    Text("Based on \(base)")
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.textWeak)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var changes: some View {
+        VStack(alignment: .leading, spacing: Self.fileRowSpacing) {
+            if let fileCountLabel = summary.fileCountLabel {
+                HStack(spacing: 8) {
+                    Text(fileCountLabel)
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.textWeak)
+                    Spacer(minLength: 8)
+                    OpenCodeDiffStat(additions: summary.additions, deletions: summary.deletions, style: .caption)
+                }
+                .accessibilityElement(children: .combine)
+            }
+            ForEach(summary.topFiles, id: \.path) { file in
+                HStack(spacing: 8) {
+                    Text(file.path)
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.textStrong)
+                        .lineLimit(1)
+                        .truncationMode(.head)
+                    Spacer(minLength: 8)
+                    OpenCodeDiffStat(additions: file.additions, deletions: file.deletions, style: .caption)
+                        .fixedSize()
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(file.path), \(file.additions) added, \(file.deletions) removed")
+            }
+        }
+    }
+
+    private var divider: some View {
+        Rectangle()
+            .fill(OpenCodeColors.borderWeakBase)
+            .frame(height: 1)
+    }
+
+    private func actionRow(title: String, icon: OpenCodeIcon, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: Self.iconSpacing) {
+                OpenCodeIconImage(icon: icon, size: Self.iconSize)
+                    .foregroundStyle(OpenCodeColors.iconStrongBase)
+                Text(title)
+                    .font(OpenCodeTypography.bodySecondary)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, Self.paddingHorizontal)
+            .frame(minHeight: Self.actionMinHeight)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private static let width: CGFloat = 288
+    private static let paddingHorizontal: CGFloat = 16
+    private static let sectionPaddingVertical: CGFloat = 12
+    private static let actionsPaddingVertical: CGFloat = 4
+    private static let actionMinHeight: CGFloat = 44
+    private static let fileRowSpacing: CGFloat = 8
+    private static let iconSize: CGFloat = 16
+    private static let iconSpacing: CGFloat = 10
 }
 
-#Preview("Deletions Only Dark") {
-    SessionBranchPillPreview(previewCase: .deletionsOnlyDark)
+enum SessionBranchPillPreviewCase: CaseIterable {
+    case changes
+    case noChanges
+    case worktree
+    case manyFiles
+
+    var summary: OpenCodeSessionBranchSummary {
+        switch self {
+        case .changes:
+            OpenCodeSessionBranchSummary(branch: "feature/session-branch", baseBranch: "main", files: Self.sampleFiles)
+        case .noChanges:
+            OpenCodeSessionBranchSummary(branch: "feature/session-branch", baseBranch: "main")
+        case .worktree:
+            OpenCodeSessionBranchSummary(
+                branch: "feature/worktree-checkout",
+                baseBranch: "main",
+                isWorktree: true,
+                files: Array(Self.sampleFiles.prefix(2))
+            )
+        case .manyFiles:
+            OpenCodeSessionBranchSummary(
+                branch: "feature/ope-48-session-branch-pill-with-a-very-long-name",
+                baseBranch: "main",
+                files: Self.sampleFiles + [
+                    .init(path: "README.md", additions: 3, deletions: 0),
+                    .init(path: "docs/notes.md", additions: 0, deletions: 4),
+                ]
+            )
+        }
+    }
+
+    static let sampleFiles: [OpenCodeSessionBranchChangedFile] = [
+        .init(path: "Sources/App/Session/BranchPill.swift", additions: 96, deletions: 4),
+        .init(path: "Sources/App/Session/BranchPopover.swift", additions: 24, deletions: 2),
+        .init(path: "Tests/BranchPillTests.swift", additions: 8, deletions: 8),
+    ]
 }
 
-#Preview("Clean Light") {
-    SessionBranchPillPreview(previewCase: .cleanLight)
+#Preview("Pills") {
+    VStack(alignment: .leading, spacing: 12) {
+        ForEach(SessionBranchPillPreviewCase.allCases, id: \.self) { previewCase in
+            OpenCodeSessionBranchPill(summary: previewCase.summary, onViewAllChanges: {})
+        }
+    }
+    .padding()
+    .openCodeTheme()
 }
 
-#Preview("Long Branch Dark") {
-    SessionBranchPillPreview(previewCase: .longBranchDark)
-}
-
-#Preview("Disabled Light") {
-    SessionBranchPillPreview(previewCase: .disabledLight)
+#Preview("Popover") {
+    VStack(spacing: 16) {
+        OpenCodeSessionBranchPopoverContent(summary: SessionBranchPillPreviewCase.changes.summary, onViewAllChanges: {}, onCopyBranchName: {})
+        OpenCodeSessionBranchPopoverContent(summary: SessionBranchPillPreviewCase.noChanges.summary, onViewAllChanges: {}, onCopyBranchName: {})
+    }
+    .padding()
+    .openCodeTheme()
 }

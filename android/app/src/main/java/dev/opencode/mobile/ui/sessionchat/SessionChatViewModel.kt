@@ -314,6 +314,7 @@ class SessionChatViewModel
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
         private var turnDiffNotice: String? = null
+        private var branchCopiedNotice: String? = null
 
         // Chip-timeline paragraphs the user expanded past `+N more`, keyed by
         // expansion id with the chip count at tap time; reset per session.
@@ -517,6 +518,7 @@ class SessionChatViewModel
             suppressedSnackbarKey = null
             snackbarSequence = 0L
             turnDiffNotice = null
+            branchCopiedNotice = null
             expandedStepParagraphs = emptyMap()
             unfoldedStepRails = emptySet()
             imageViewer.dismiss()
@@ -612,6 +614,7 @@ class SessionChatViewModel
             suppressedSnackbarKey = null
             snackbarSequence = 0L
             turnDiffNotice = null
+            branchCopiedNotice = null
             expandedStepParagraphs = emptyMap()
             unfoldedStepRails = emptySet()
             imageViewer.dismiss()
@@ -1446,10 +1449,20 @@ class SessionChatViewModel
             publishUiState()
         }
 
+        /** The branch pill copied the branch name; confirm it with a snackbar. */
+        fun branchNameCopied() {
+            branchCopiedNotice = BRANCH_COPIED_MESSAGE
+            // A repeat copy shows the snackbar again even if the last one was dismissed.
+            lastSnackbarKey = null
+            suppressedSnackbarKey = null
+            publishUiState()
+        }
+
         fun consumeSnackbar() {
             logAction(ProductAnalytics.Action.CHAT_DISMISS_SNACKBAR)
             suppressedSnackbarKey = lastSnackbarKey
             turnDiffNotice = null
+            branchCopiedNotice = null
             chipTimelineIntroNotice = null
             commands.clearActionFeedback()
             sideQuestions.clearNotice()
@@ -2065,6 +2078,7 @@ class SessionChatViewModel
                     composerState.followUpNotice
                         ?: worktreeMove.state.value.notice
                         ?: commandsState.actionSuccessMessage
+                        ?: branchCopiedNotice
                         ?: chipTimelineIntroNotice,
                 )
             val sessionStatusLabel =
@@ -2251,7 +2265,8 @@ class SessionChatViewModel
                 projectLetter = projectIdentity.letter,
                 projectLetterAccent = projectIdentity.accent,
                 worktreeCheckout = projectIdentity.isWorktreeCheckout,
-                sessionBranchPill = repoStrip.state.value.toSessionBranchPill(),
+                sessionBranchPill =
+                    repoStrip.state.value.toSessionBranchPill(isWorktree = projectIdentity.isWorktreeCheckout),
                 worktree = boundWorktree.orEmpty(),
                 dictation = dictation,
                 sideQuestions =
@@ -2602,6 +2617,7 @@ class SessionChatViewModel
             const val PENDING_SEND_TIMEOUT_MS = 8_000L
             const val PENDING_PROMPT_FAILURE = "Couldn't update pending prompt"
             const val CHIP_TIMELINE_INTRO_ENABLED_NOTICE = "Chip timeline is on. Turn it off in Settings."
+            const val BRANCH_COPIED_MESSAGE = "Branch name copied"
 
             /** Pause after the first history load before the Timeline Style picker rises (#805). */
             const val TIMELINE_STYLE_PICKER_DELAY_MILLIS = 600L
