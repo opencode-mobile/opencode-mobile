@@ -11,10 +11,12 @@ enum OpenCodeFloatingPillLayout: Equatable {
     case counter(label: String, waiting: Bool = false)
     /// Label with a trailing close ✕ that calls `onClose`.
     case closable(label: String)
+    /// Plain short label with no mark and no close, e.g. a "+3" overflow button.
+    case label(String)
 
     var label: String {
         switch self {
-        case let .iconLabel(_, label), let .counter(label, _), let .closable(label): label
+        case let .iconLabel(_, label), let .counter(label, _), let .closable(label), let .label(label): label
         case let .iconOnly(_, accessibilityLabel): accessibilityLabel
         }
     }
@@ -52,6 +54,8 @@ enum OpenCodeFloatingPillLeading: Equatable {
     case spinner
     case pulsingDot
     case doneCheck
+    /// Compact fallback for layouts without a mark: a small dot in the state's tone.
+    case stateDot
 }
 
 /// Semantic colour role of a floating pill's text and icon.
@@ -75,9 +79,27 @@ enum OpenCodeFloatingPillStyle {
             case .needsAttention: return waiting ? .pulsingDot : .spinner
             case .ready, .error, .done: return .none
             }
-        case .closable:
+        case .closable, .label:
             return .none
         }
+    }
+
+    /// Mark a compact pill draws in its round body: the regular mark, or a state dot when there is none.
+    static func compactLeading(layout: OpenCodeFloatingPillLayout, state: OpenCodeFloatingPillState) -> OpenCodeFloatingPillLeading {
+        let mark = leading(layout: layout, state: state)
+        return mark == .none ? .stateDot : mark
+    }
+
+    /// Whether the pill shows its ✕: closable layouts with a close action, and never when compact.
+    static func showsClose(layout: OpenCodeFloatingPillLayout, compact: Bool, hasCloseAction: Bool) -> Bool {
+        guard case .closable = layout else { return false }
+        return hasCloseAction && !compact
+    }
+
+    /// Live and waiting counters tell assistive tech their text changes often. Other pills stay quiet.
+    static func announcesUpdates(layout: OpenCodeFloatingPillLayout, state: OpenCodeFloatingPillState) -> Bool {
+        guard case .counter = layout else { return false }
+        return state == .live || state == .needsAttention
     }
 
     static func tone(_ state: OpenCodeFloatingPillState) -> OpenCodeFloatingPillTone {
@@ -93,31 +115,44 @@ enum OpenCodeFloatingPillStyle {
         state == .needsAttention
     }
 
-    static func accessibilityLabel(layout: OpenCodeFloatingPillLayout, state: OpenCodeFloatingPillState) -> String {
-        "\(layout.label), \(state.spokenName)"
+    /// What the pill speaks: the caller's override, or "label, state".
+    static func accessibilityLabel(
+        layout: OpenCodeFloatingPillLayout,
+        state: OpenCodeFloatingPillState,
+        override: String? = nil
+    ) -> String {
+        override ?? "\(layout.label), \(state.spokenName)"
     }
 
-    static func closeAccessibilityLabel(layout: OpenCodeFloatingPillLayout) -> String {
-        "Dismiss \(layout.label)"
+    static func closeAccessibilityLabel(layout: OpenCodeFloatingPillLayout, override: String? = nil) -> String {
+        "Dismiss \(override ?? layout.label)"
     }
 }
 
-/// Shared floating pill for Session Chat: one look, four layouts, five states.
-/// Without `action` the pill is a status, not a button.
+/// Shared floating pill for Session Chat: one look, five layouts, five states.
+/// Without `action` the pill is a status, not a button. `compact` shrinks it to its
+/// round mark (icon, spinner, dot or check) and hides the text and ✕, still speaking
+/// the full label. `accessibilityLabel` replaces the default "label, state" speech.
 struct OpenCodeFloatingPill: View {
     let layout: OpenCodeFloatingPillLayout
     let state: OpenCodeFloatingPillState
+    let compact: Bool
+    let accessibilityLabelOverride: String?
     let action: (() -> Void)?
     let onClose: (() -> Void)?
 
     init(
         layout: OpenCodeFloatingPillLayout,
         state: OpenCodeFloatingPillState,
+        compact: Bool = false,
+        accessibilityLabel: String? = nil,
         action: (() -> Void)? = nil,
         onClose: (() -> Void)? = nil
     ) {
         self.layout = layout
         self.state = state
+        self.compact = compact
+        self.accessibilityLabelOverride = accessibilityLabel
         self.action = action
         self.onClose = onClose
     }
@@ -128,22 +163,28 @@ struct OpenCodeFloatingPill: View {
                 Button(action: action) { content }
                     .buttonStyle(OpenCodeFloatingPillPressStyle())
                     .accessibilityLabel(accessibilityLabel)
+                    .accessibilityAddTraits(updateTraits)
             } else {
                 content
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(accessibilityLabel)
-                    .accessibilityAddTraits(state == .live ? .updatesFrequently : [])
+                    .accessibilityAddTraits(updateTraits)
             }
-            if case .closable = layout, let onClose {
+            if OpenCodeFloatingPillStyle.showsClose(layout: layout, compact: compact, hasCloseAction: onClose != nil),
+               let onClose {
                 Button(action: onClose) {
                     OpenCodeIconImage(icon: .close, size: Self.iconSize)
                         .foregroundStyle(OpenCodeColors.iconBase)
-                        .frame(width: Self.minHeight, height: Self.minHeight)
+                        .frame(width: Self.closeTouchTarget, height: Self.closeTouchTarget)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(OpenCodeFloatingPillPressStyle())
+                // 44 pt hit area that lays out as the 36 pt visual square.
+                .padding(-(Self.closeTouchTarget - Self.minHeight) / 2)
                 .padding(.leading, -Self.paddingHorizontal / 2)
-                .accessibilityLabel(OpenCodeFloatingPillStyle.closeAccessibilityLabel(layout: layout))
+                .accessibilityLabel(
+                    OpenCodeFloatingPillStyle.closeAccessibilityLabel(layout: layout, override: accessibilityLabelOverride)
+                )
             }
         }
         .openCodeFloatingPillChrome(enabled: true)
@@ -158,7 +199,7 @@ struct OpenCodeFloatingPill: View {
 
     @ViewBuilder
     private var content: some View {
-        if case .iconOnly = layout {
+        if compact || isIconOnly {
             leadingMark
                 .foregroundStyle(contentColor)
                 .frame(width: Self.minHeight, height: Self.minHeight)
@@ -178,9 +219,21 @@ struct OpenCodeFloatingPill: View {
         }
     }
 
+    private var isIconOnly: Bool {
+        if case .iconOnly = layout { return true }
+        return false
+    }
+
+    private var updateTraits: AccessibilityTraits {
+        OpenCodeFloatingPillStyle.announcesUpdates(layout: layout, state: state) ? .updatesFrequently : []
+    }
+
     @ViewBuilder
     private var leadingMark: some View {
-        switch OpenCodeFloatingPillStyle.leading(layout: layout, state: state) {
+        let mark = compact
+            ? OpenCodeFloatingPillStyle.compactLeading(layout: layout, state: state)
+            : OpenCodeFloatingPillStyle.leading(layout: layout, state: state)
+        switch mark {
         case .none:
             EmptyView()
         case let .icon(icon):
@@ -192,6 +245,11 @@ struct OpenCodeFloatingPill: View {
         case .doneCheck:
             OpenCodeIconImage(icon: .check, size: Self.iconSize)
                 .foregroundStyle(OpenCodeColors.success)
+        case .stateDot:
+            Circle()
+                .fill(contentColor)
+                .frame(width: Self.dotSize, height: Self.dotSize)
+                .frame(width: Self.iconSize, height: Self.iconSize)
         }
     }
 
@@ -205,7 +263,7 @@ struct OpenCodeFloatingPill: View {
     }
 
     private var accessibilityLabel: String {
-        OpenCodeFloatingPillStyle.accessibilityLabel(layout: layout, state: state)
+        OpenCodeFloatingPillStyle.accessibilityLabel(layout: layout, state: state, override: accessibilityLabelOverride)
     }
 
     static let minHeight: CGFloat = 36
@@ -214,6 +272,8 @@ struct OpenCodeFloatingPill: View {
     private static let iconSize: CGFloat = 16
     private static let iconSpacing: CGFloat = 6
     private static let ringWidth: CGFloat = 1
+    fileprivate static let dotSize: CGFloat = 8
+    private static let closeTouchTarget: CGFloat = 44
 }
 
 /// The btw pill spinner; a still arc when Reduce Motion is on.
@@ -245,7 +305,7 @@ private struct OpenCodeFloatingPillPulsingDot: View {
     var body: some View {
         Circle()
             .fill(OpenCodeColors.warning)
-            .frame(width: 8, height: 8)
+            .frame(width: OpenCodeFloatingPill.dotSize, height: OpenCodeFloatingPill.dotSize)
             .opacity(reduceMotion ? 1 : (dim ? 0.35 : 1))
             .frame(width: 16, height: 16)
             .onAppear {

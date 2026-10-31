@@ -9,11 +9,12 @@ struct FloatingPillGalleryView: View {
         ("Live counter", .counter(label: "1 subagent · 2 shells")),
         ("Live counter, waiting item", .counter(label: "general needs input · 2 running", waiting: true)),
         ("Label + close", .closable(label: "Request failed")),
+        ("Label only", .label("+3")),
     ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Every layout in every state. Needs attention adds an amber ring; a waiting counter swaps its spinner for a pulsing dot; done shows a green check.")
+            Text("Every layout in every state, then compact. Needs attention adds an amber ring; a waiting counter swaps its spinner for a pulsing dot; done shows a green check.")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .fixedSize(horizontal: false, vertical: true)
@@ -35,6 +36,34 @@ struct FloatingPillGalleryView: View {
                                 action: { log = "Tapped \(entry.layout.label), \(state.spokenName)" },
                                 onClose: { log = "Dismissed \(entry.layout.label)" }
                             )
+                        }
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Compact (keyboard up)")
+                    .font(OpenCodeTypography.heading)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                Text("Each layout above, left to right, shrunk to its mark. Layouts without one show a dot in the state's colour.")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(OpenCodeFloatingPillState.allCases, id: \.self) { state in
+                    HStack(spacing: 12) {
+                        Text(state.spokenName)
+                            .font(OpenCodeTypography.caption)
+                            .foregroundStyle(OpenCodeColors.textWeak)
+                            .frame(width: 96, alignment: .leading)
+                        HStack(spacing: 6) {
+                            ForEach(Self.layouts, id: \.title) { entry in
+                                OpenCodeFloatingPill(
+                                    layout: entry.layout,
+                                    state: state,
+                                    compact: true,
+                                    action: { log = "Tapped compact \(entry.layout.label), \(state.spokenName)" }
+                                )
+                            }
                         }
                     }
                 }

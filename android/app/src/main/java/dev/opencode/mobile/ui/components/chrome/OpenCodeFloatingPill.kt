@@ -1,6 +1,10 @@
 package dev.opencode.mobile.ui.components
 
+import android.content.ContentResolver
 import android.content.res.Configuration
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -15,30 +19,42 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -53,6 +69,11 @@ private val FloatingPillSpinnerSize = 14.dp
 private val FloatingPillDotSize = 8.dp
 private val FloatingPillIconSpacing = 6.dp
 private val FloatingPillShadowElevation = 4.dp
+private val FloatingPillCloseSlotWidth = 28.dp
+private val FloatingPillCloseTouchTarget = 48.dp
+
+// Centring the 16 dp icon in the 28 dp slot puts it 6 dp in; the btw pill draws it 2 dp in.
+private val FloatingPillCloseIconShift = 4.dp
 
 /** What a floating pill shows. Every layout shares the btw pill height, type and chrome. */
 sealed interface OpenCodeFloatingPillLayout {
@@ -82,6 +103,11 @@ sealed interface OpenCodeFloatingPillLayout {
 
     /** Label with a trailing close ✕ that calls `onClose`. */
     data class Closable(
+        override val label: String,
+    ) : OpenCodeFloatingPillLayout
+
+    /** Plain short label with no mark and no close, e.g. a "+3" overflow button. */
+    data class Label(
         override val label: String,
     ) : OpenCodeFloatingPillLayout
 }
@@ -120,6 +146,9 @@ internal sealed interface OpenCodeFloatingPillLeading {
     data object PulsingDot : OpenCodeFloatingPillLeading
 
     data object DoneCheck : OpenCodeFloatingPillLeading
+
+    /** Compact fallback for layouts without a mark: a small dot in the state's tone. */
+    data object StateDot : OpenCodeFloatingPillLeading
 }
 
 /** Semantic colour role of a floating pill's text and icon. */
@@ -140,9 +169,32 @@ internal fun floatingPillLeading(
                     if (layout.waiting) OpenCodeFloatingPillLeading.PulsingDot else OpenCodeFloatingPillLeading.Spinner
                 else -> OpenCodeFloatingPillLeading.None
             }
-        is OpenCodeFloatingPillLayout.Closable -> OpenCodeFloatingPillLeading.None
+        is OpenCodeFloatingPillLayout.Closable, is OpenCodeFloatingPillLayout.Label -> OpenCodeFloatingPillLeading.None
     }
 }
+
+/** Mark a compact pill draws in its round body: the regular mark, or a state dot when there is none. */
+internal fun floatingPillCompactLeading(
+    layout: OpenCodeFloatingPillLayout,
+    state: OpenCodeFloatingPillState,
+): OpenCodeFloatingPillLeading =
+    floatingPillLeading(layout, state).takeUnless { it == OpenCodeFloatingPillLeading.None }
+        ?: OpenCodeFloatingPillLeading.StateDot
+
+/** Whether the pill shows its ✕: closable layouts with a close action, and never when compact. */
+internal fun floatingPillShowsClose(
+    layout: OpenCodeFloatingPillLayout,
+    compact: Boolean,
+    hasCloseAction: Boolean,
+): Boolean = layout is OpenCodeFloatingPillLayout.Closable && hasCloseAction && !compact
+
+/** Live and waiting counters are a polite live region. Other pills stay quiet. */
+internal fun floatingPillAnnouncesUpdates(
+    layout: OpenCodeFloatingPillLayout,
+    state: OpenCodeFloatingPillState,
+): Boolean =
+    layout is OpenCodeFloatingPillLayout.Counter &&
+        (state == OpenCodeFloatingPillState.Live || state == OpenCodeFloatingPillState.NeedsAttention)
 
 internal fun floatingPillTone(state: OpenCodeFloatingPillState): OpenCodeFloatingPillTone =
     when (state) {
@@ -154,22 +206,31 @@ internal fun floatingPillTone(state: OpenCodeFloatingPillState): OpenCodeFloatin
 
 internal fun floatingPillHasRing(state: OpenCodeFloatingPillState): Boolean = state == OpenCodeFloatingPillState.NeedsAttention
 
+/** What the pill speaks: the caller's [override], or "label, state". */
 internal fun floatingPillDescription(
     layout: OpenCodeFloatingPillLayout,
     state: OpenCodeFloatingPillState,
-): String = "${layout.label}, ${state.spokenName}"
+    override: String? = null,
+): String = override ?: "${layout.label}, ${state.spokenName}"
 
-internal fun floatingPillCloseDescription(layout: OpenCodeFloatingPillLayout): String = "Dismiss ${layout.label}"
+internal fun floatingPillCloseDescription(
+    layout: OpenCodeFloatingPillLayout,
+    override: String? = null,
+): String = "Dismiss ${override ?: layout.label}"
 
 /**
- * Shared floating pill for Session Chat: one look, four layouts, five states.
- * Without [onClick] the pill is a status, not a button.
+ * Shared floating pill for Session Chat: one look, five layouts, five states.
+ * Without [onClick] the pill is a status, not a button. [compact] shrinks it to its round
+ * mark (icon, spinner, dot or check) and hides the text and ✕, still speaking the full
+ * label. [accessibilityLabel] replaces the default "label, state" speech.
  */
 @Composable
 fun OpenCodeFloatingPill(
     layout: OpenCodeFloatingPillLayout,
     state: OpenCodeFloatingPillState,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
+    accessibilityLabel: String? = null,
     onClick: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
 ) {
@@ -181,61 +242,109 @@ fun OpenCodeFloatingPill(
             OpenCodeFloatingPillTone.Error -> MaterialTheme.colorScheme.error
         }
     val borderColor = if (floatingPillHasRing(state)) openCodeColor("warning") else openCodeColor("border-weaker-base")
-    val description = floatingPillDescription(layout, state)
-    val iconOnly = layout is OpenCodeFloatingPillLayout.IconOnly
+    val description = floatingPillDescription(layout, state, accessibilityLabel)
+    val announcesUpdates = floatingPillAnnouncesUpdates(layout, state)
+    val round = compact || layout is OpenCodeFloatingPillLayout.IconOnly
+    val leading = if (compact) floatingPillCompactLeading(layout, state) else floatingPillLeading(layout, state)
 
-    Surface(
-        modifier = modifier.defaultMinSize(minWidth = if (iconOnly) FloatingPillMinHeight else 0.dp, minHeight = FloatingPillMinHeight),
-        shape = FloatingPillShape,
-        color = openCodeColor("surface-raised-base").copy(alpha = 0.95f),
-        contentColor = contentColor,
-        border = BorderStroke(1.dp, borderColor),
-        tonalElevation = 2.dp,
-        shadowElevation = FloatingPillShadowElevation,
+    // The surface sits behind the content instead of wrapping it, so its clip doesn't cut
+    // the ✕'s 48 dp touch target down to the 36 dp pill.
+    Box(
+        modifier = modifier.defaultMinSize(minWidth = if (round) FloatingPillMinHeight else 0.dp, minHeight = FloatingPillMinHeight),
+        contentAlignment = Alignment.Center,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Row(
-                modifier =
-                    Modifier
-                        .clip(FloatingPillShape)
-                        .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
-                        .semantics(mergeDescendants = true) { contentDescription = description }
-                        .then(
-                            if (iconOnly) {
-                                Modifier.size(FloatingPillMinHeight)
-                            } else {
-                                Modifier.padding(horizontal = FloatingPillPaddingHorizontal, vertical = FloatingPillPaddingVertical)
-                            },
-                        ),
-                horizontalArrangement = Arrangement.spacedBy(FloatingPillIconSpacing, Alignment.CenterHorizontally),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                FloatingPillLeadingMark(floatingPillLeading(layout, state), contentColor)
-                if (!iconOnly) {
-                    Text(
-                        text = layout.label,
-                        style = MaterialTheme.typography.labelLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            if (layout is OpenCodeFloatingPillLayout.Closable && onClose != null) {
-                Icon(
-                    OpenCodeIcons.Close,
-                    contentDescription = floatingPillCloseDescription(layout),
-                    tint = openCodeColor("icon-base"),
+        Surface(
+            modifier = Modifier.matchParentSize(),
+            shape = FloatingPillShape,
+            color = openCodeColor("surface-raised-base").copy(alpha = 0.95f),
+            border = BorderStroke(1.dp, borderColor),
+            tonalElevation = 2.dp,
+            shadowElevation = FloatingPillShadowElevation,
+        ) {}
+        CompositionLocalProvider(LocalContentColor provides contentColor) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
                     modifier =
                         Modifier
                             .clip(FloatingPillShape)
-                            .clickable(role = Role.Button, onClick = onClose)
-                            .padding(end = 10.dp, top = 10.dp, bottom = 10.dp, start = 2.dp)
-                            .size(FloatingPillIconSize),
-                )
+                            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+                            .semantics(mergeDescendants = true) {
+                                contentDescription = description
+                                if (announcesUpdates) liveRegion = LiveRegionMode.Polite
+                            }.then(
+                                if (round) {
+                                    Modifier.size(FloatingPillMinHeight)
+                                } else {
+                                    Modifier.padding(horizontal = FloatingPillPaddingHorizontal, vertical = FloatingPillPaddingVertical)
+                                },
+                            ),
+                    horizontalArrangement = Arrangement.spacedBy(FloatingPillIconSpacing, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    FloatingPillLeadingMark(leading, contentColor)
+                    if (!round) {
+                        Text(
+                            text = layout.label,
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+                if (onClose != null && floatingPillShowsClose(layout, compact, hasCloseAction = true)) {
+                    FloatingPillClose(
+                        description = floatingPillCloseDescription(layout, accessibilityLabel),
+                        onClose = onClose,
+                    )
+                }
             }
         }
     }
 }
+
+/** The ✕: drawn in a 28 × 36 dp slot, tappable across a 48 dp square centred on it. */
+@Composable
+private fun FloatingPillClose(
+    description: String,
+    onClose: () -> Unit,
+) {
+    Box(
+        modifier =
+            Modifier
+                .floatingPillTouchTarget(FloatingPillCloseSlotWidth, FloatingPillMinHeight, FloatingPillCloseTouchTarget)
+                .clickable(
+                    interactionSource = null,
+                    indication = ripple(bounded = false, radius = FloatingPillMinHeight / 2),
+                    role = Role.Button,
+                    onClick = onClose,
+                ).semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            OpenCodeIcons.Close,
+            contentDescription = null,
+            tint = openCodeColor("icon-base"),
+            // Same spot as the btw pill's ✕: 2 dp in from the slot's start, 10 dp from its end.
+            modifier = Modifier.offset(x = -FloatingPillCloseIconShift).size(FloatingPillIconSize),
+        )
+    }
+}
+
+/** Measures at [target] × [target] but lays out as [width] × [height], centred, so the touch area outgrows the visual slot. */
+private fun Modifier.floatingPillTouchTarget(
+    width: Dp,
+    height: Dp,
+    target: Dp,
+): Modifier =
+    layout { measurable, _ ->
+        val size = target.roundToPx()
+        val placeable = measurable.measure(Constraints.fixed(size, size))
+        val slotWidth = width.roundToPx()
+        val slotHeight = height.roundToPx()
+        layout(slotWidth, slotHeight) {
+            placeable.place((slotWidth - size) / 2, (slotHeight - size) / 2)
+        }
+    }
 
 @Composable
 private fun FloatingPillLeadingMark(
@@ -255,6 +364,10 @@ private fun FloatingPillLeadingMark(
                 tint = openCodeColor("success"),
                 modifier = Modifier.size(FloatingPillIconSize),
             )
+        OpenCodeFloatingPillLeading.StateDot ->
+            Box(modifier = Modifier.size(FloatingPillIconSize), contentAlignment = Alignment.Center) {
+                Box(modifier = Modifier.size(FloatingPillDotSize).background(contentColor, CircleShape))
+            }
     }
 }
 
@@ -305,14 +418,26 @@ private fun FloatingPillPulsingDot() {
     }
 }
 
-/** False with the system animator scale at 0 (Remove animations). */
+/** False with the system animator scale at 0 (Remove animations); follows the setting while shown. */
 @Composable
 private fun rememberFloatingPillAnimationsOn(): Boolean {
-    val context = LocalContext.current
-    return remember(context) {
-        Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f
+    val resolver = LocalContext.current.contentResolver
+    var animationsOn by remember(resolver) { mutableStateOf(floatingPillAnimationsOn(resolver)) }
+    DisposableEffect(resolver) {
+        val observer =
+            object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean) {
+                    animationsOn = floatingPillAnimationsOn(resolver)
+                }
+            }
+        resolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, observer)
+        onDispose { resolver.unregisterContentObserver(observer) }
     }
+    return animationsOn
 }
+
+private fun floatingPillAnimationsOn(resolver: ContentResolver): Boolean =
+    Settings.Global.getFloat(resolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) != 0f
 
 @Preview(showBackground = true, name = "Floating Pill")
 @Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES, name = "Floating Pill Dark")

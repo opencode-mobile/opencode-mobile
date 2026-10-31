@@ -27,6 +27,7 @@ private val floatingPillGalleryLayouts =
         "Live counter" to OpenCodeFloatingPillLayout.Counter("1 subagent · 2 shells"),
         "Live counter, waiting item" to OpenCodeFloatingPillLayout.Counter("general needs input · 2 running", waiting = true),
         "Label + close" to OpenCodeFloatingPillLayout.Closable("Request failed"),
+        "Label only" to OpenCodeFloatingPillLayout.Label("+3"),
     )
 
 @Composable
@@ -35,7 +36,7 @@ fun FloatingPillGalleryScreen(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         Text(
             text =
-                "Every layout in every state. Needs attention adds an amber ring; a waiting counter swaps its " +
+                "Every layout in every state, then compact. Needs attention adds an amber ring; a waiting counter swaps its " +
                     "spinner for a pulsing dot; done shows a green check.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -57,6 +58,34 @@ fun FloatingPillGalleryScreen(modifier: Modifier = Modifier) {
                             onClick = { log = "Tapped ${layout.label}, ${state.spokenName}" },
                             onClose = { log = "Dismissed ${layout.label}" },
                         )
+                    }
+                }
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text(text = "Compact (keyboard up)", style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = "Each layout above, left to right, shrunk to its mark. Layouts without one show a dot in the state's colour.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            OpenCodeFloatingPillState.entries.forEach { state ->
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = state.spokenName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.width(96.dp),
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        floatingPillGalleryLayouts.forEach { (_, layout) ->
+                            OpenCodeFloatingPill(
+                                layout = layout,
+                                state = state,
+                                compact = true,
+                                onClick = { log = "Tapped compact ${layout.label}, ${state.spokenName}" },
+                            )
+                        }
                     }
                 }
             }
