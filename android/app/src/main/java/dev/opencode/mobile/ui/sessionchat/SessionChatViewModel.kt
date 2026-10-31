@@ -75,6 +75,7 @@ import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatImageViewer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionNotice
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestions
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatInbox
@@ -320,6 +321,7 @@ class SessionChatViewModel
 
         // Step rails the user unfolded past `N earlier steps`, keyed by rail id; reset per session.
         private var unfoldedStepRails: Set<String> = emptySet()
+        private val imageViewer = SessionChatImageViewer()
 
         // Activity card whose sheet is open, by block id; reset per session (#779).
         private var presentedActivityCard: String? = null
@@ -517,6 +519,7 @@ class SessionChatViewModel
             turnDiffNotice = null
             expandedStepParagraphs = emptyMap()
             unfoldedStepRails = emptySet()
+            imageViewer.dismiss()
             resetActivityCards()
             resetChipTimelineIntro()
             resetWorkingFooter()
@@ -611,6 +614,7 @@ class SessionChatViewModel
             turnDiffNotice = null
             expandedStepParagraphs = emptyMap()
             unfoldedStepRails = emptySet()
+            imageViewer.dismiss()
             resetActivityCards()
             resetChipTimelineIntro()
             resetWorkingFooter()
@@ -1949,7 +1953,12 @@ class SessionChatViewModel
                     inboxState,
                 )
             syncStepTiming(merged.messages, nowMs())
-            _uiState.value = merged.copy(activityCardFooters = activityCardFooters, debouncedStepIds = debouncedStepIds)
+            _uiState.value =
+                merged.copy(
+                    activityCardFooters = activityCardFooters,
+                    debouncedStepIds = debouncedStepIds,
+                    imageViewer = imageViewer.reconcile(merged.messages),
+                )
             syncActivityChildren(_uiState.value.messages)
         }
 
@@ -2244,6 +2253,30 @@ class SessionChatViewModel
             liveRailActive = isTurnActive
             liveRailMarked = marked
             return marked
+        }
+
+        /** Opens the full-screen viewer on image [index] of timeline gallery [galleryId] (#898). */
+        fun openImageViewer(
+            galleryId: String,
+            index: Int,
+        ) {
+            imageViewer.open(galleryId, index)
+            publishImageViewer()
+        }
+
+        fun showImageViewerPage(index: Int) {
+            imageViewer.showPage(index)
+            publishImageViewer()
+        }
+
+        fun dismissImageViewer() {
+            imageViewer.dismiss()
+            publishImageViewer()
+        }
+
+        private fun publishImageViewer() {
+            val viewer = imageViewer.reconcile(_uiState.value.messages)
+            if (viewer != _uiState.value.imageViewer) _uiState.value = _uiState.value.copy(imageViewer = viewer)
         }
 
         /** Shows every step of a folded step rail, or folds it again. */

@@ -84,6 +84,12 @@ import dev.opencode.mobile.ui.components.LocalOpenCodeUserScrollInProgress
 import dev.opencode.mobile.ui.components.OpenCodeMessageTapTarget
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessagePresentation
 import dev.opencode.mobile.ui.components.OpenCodeMessageAttachment
+import dev.opencode.mobile.ui.components.OpenCodeImageGallery
+import dev.opencode.mobile.ui.components.LocalOpenCodeAttachmentImageLoader
+import dev.opencode.mobile.ui.components.LocalOpenCodeGalleryImageLoader
+import dev.opencode.mobile.ui.sessionchat.SessionChatGalleryImageLoader
+import dev.opencode.mobile.ui.sessionchat.SessionChatImageGalleries
+import dev.opencode.mobile.ui.sessionchat.SessionChatImageViewerState
 import dev.opencode.mobile.ui.components.OpenCodeMessageNote
 import dev.opencode.mobile.ui.components.OpenCodeMessageNoteVariant
 import dev.opencode.mobile.ui.components.OpenCodeChatActivityState
@@ -160,6 +166,9 @@ private val LocalHideLiveRetryFailures = staticCompositionLocalOf { false }
 private val LocalRetryCountdownBlockId = staticCompositionLocalOf<String?> { null }
 private val LocalNoticeModelNames = staticCompositionLocalOf { SessionChatNoticeModelNames() }
 
+/** Opens the image viewer on a timeline gallery block and page; null in previews without a host. */
+private val LocalOpenImageViewer = staticCompositionLocalOf<((galleryId: String, index: Int) -> Unit)?> { null }
+
 internal data class SessionChatTimelineViewProps(
     val timeline: SessionChatTimelineState,
     val messages: List<SessionChatMessageItem>,
@@ -219,6 +228,11 @@ internal data class SessionChatTimelineViewProps(
     val activityCardDetailStepId: String? = null,
     val onOpenActivityCardStep: (stepId: String) -> Unit = {},
     val onCloseActivityCardStep: () -> Unit = {},
+    /** Gallery open in the full-screen image viewer, and its page; owned by the Session Chat screen model. */
+    val imageViewer: SessionChatImageViewerState? = null,
+    val onOpenImageViewer: (galleryId: String, index: Int) -> Unit = { _, _ -> },
+    val onImageViewerPageChange: (index: Int) -> Unit = {},
+    val onDismissImageViewer: () -> Unit = {},
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -275,10 +289,16 @@ internal fun SessionChatTimelineView(
                 remember(props.messages, props.hideRetryCountdown) {
                     if (props.hideRetryCountdown) null else SessionChatTimelineBlocks.retryCountdownBlockId(props.messages)
                 }
+            val serverImageLoader = LocalOpenCodeAttachmentImageLoader.current
+            val galleryLoader = remember(serverImageLoader) { SessionChatGalleryImageLoader(serverImageLoader) }
+            // Swaps what the loader can resolve without recomposing the timeline for it.
+            galleryLoader.update(props.messages)
             CompositionLocalProvider(
                 LocalHideLiveRetryFailures provides props.hideLiveRetryFailures,
                 LocalRetryCountdownBlockId provides retryCountdownBlockId,
                 LocalNoticeModelNames provides props.noticeModelNames,
+                LocalOpenCodeGalleryImageLoader provides galleryLoader,
+                LocalOpenImageViewer provides props.onOpenImageViewer,
             ) {
             SessionChatTimelineReadyView(
                 messages = props.messages,
@@ -319,6 +339,13 @@ internal fun SessionChatTimelineView(
                 modifier = modifier,
             )
             ActivityCardSheet(props = props)
+            SessionChatImageViewerHost(
+                state = props.imageViewer,
+                images = props.imageViewer?.let { SessionChatImageGalleries.images(props.messages, it.galleryId) },
+                loader = galleryLoader,
+                onPageChange = props.onImageViewerPageChange,
+                onDismiss = props.onDismissImageViewer,
+            )
             }
         }
     }
@@ -718,6 +745,7 @@ private fun SessionChatMessageRow(
                     content = message.outgoingContent(),
                     modifier = Modifier.fillMaxWidth(),
                     onClick = { openMessageActions(showsRevertMessage = true) },
+                    onImageClick = LocalOpenImageViewer.current,
                 )
 
             MessageRole.Assistant ->
@@ -763,7 +791,10 @@ private fun SessionChatMessageRow(
 
 private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessageContent> {
     val textBlockCount = blocks.count { it is SessionChatTimelineBlock.Text }
-    return blocks.mapNotNull { block ->
+    // A gallery of sent images sits above the text it came with.
+    val (galleries, rest) = blocks.partition { it is SessionChatTimelineBlock.ImageGallery }
+    val ordered = galleries + rest
+    return ordered.mapNotNull { block ->
         when (block) {
             is SessionChatTimelineBlock.Text ->
                 OpenCodeOutgoingMessageContent.Text(
@@ -773,7 +804,12 @@ private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessa
                             ?: renderedMarkdown.takeIf { textBlockCount == 1 },
                 )
             is SessionChatTimelineBlock.Attachment ->
-                OpenCodeOutgoingMessageContent.Attachment(AttachmentPresentationMapper.from(block.attachment))
+                OpenCodeOutgoingMessageContent.Attachment(AttachmentPresentationMapper.from(block.attachment), id = block.blockID)
+            is SessionChatTimelineBlock.ImageGallery ->
+                OpenCodeOutgoingMessageContent.ImageGallery(
+                    id = block.blockID,
+                    images = block.images.map(SessionChatImageGalleries::galleryImage),
+                )
             is SessionChatTimelineBlock.ToolCard, is SessionChatTimelineBlock.ToolGroup,
             is SessionChatTimelineBlock.ChildSessionRow,
             is SessionChatTimelineBlock.Reasoning,
@@ -850,8 +886,20 @@ private fun AssistantMessageContent(
                             onTextTap = onOpenMessageActions,
                         )
                     }
-                    is SessionChatTimelineBlock.Attachment ->
-                        OpenCodeMessageAttachment(AttachmentPresentationMapper.from(block.attachment))
+                    is SessionChatTimelineBlock.Attachment -> {
+                        val openViewer = LocalOpenImageViewer.current
+                        OpenCodeMessageAttachment(
+                            AttachmentPresentationMapper.from(block.attachment),
+                            onOpenImage = openViewer?.let { open -> { open(block.blockID, 0) } },
+                        )
+                    }
+                    is SessionChatTimelineBlock.ImageGallery -> {
+                        val openViewer = LocalOpenImageViewer.current
+                        OpenCodeImageGallery(
+                            images = block.images.map(SessionChatImageGalleries::galleryImage),
+                            onImageClick = { index -> openViewer?.invoke(block.blockID, index) },
+                        )
+                    }
                     is SessionChatTimelineBlock.ToolCard ->
                         OpenCodeToolCallCard(
                             status = block.status.toToolCallCardStatus(interrupted = block.isInterrupted),

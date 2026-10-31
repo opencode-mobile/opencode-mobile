@@ -1084,6 +1084,8 @@ class InMemoryMessageStore
                             timeStartEpochMs = incoming.timeStartEpochMs ?: existing.timeStartEpochMs,
                             isInterrupted = incoming.isInterrupted,
                             isMalformed = incoming.isMalformed || existing.isMalformed,
+                            // Only the terminal update carries files; a later bare update keeps them.
+                            images = incoming.images.ifEmpty { existing.images },
                         )
                     }
                     existing is MessagePart.Text && incoming is MessagePart.Text -> {

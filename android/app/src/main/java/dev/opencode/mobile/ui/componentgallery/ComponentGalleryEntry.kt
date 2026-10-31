@@ -26,6 +26,7 @@ enum class ComponentGalleryEntryId {
     Tag,
     KeyValueRow,
     Attachment,
+    ImageGallery,
     OutgoingMessage,
     PendingPromptsStrip,
     AssistantMessage,
@@ -340,6 +341,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.Attachment,
             title = "Attachment",
             description = "Pending attachment chips and sent-message attachment rows.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ImageGallery,
+            title = "Image Gallery",
+            description = "Inline image mosaic by count with +N overflow, and the paged full-screen viewer.",
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(

@@ -185,6 +185,11 @@ sealed class MessagePart {
         val isInterrupted: Boolean = false,
         /** The model emitted a tool call the server could not run (`executed: false`). */
         val isMalformed: Boolean = false,
+        /**
+         * Images the tool returned (v1 `attachments`, v2 `content[type=file]`), in order. Only
+         * images the app can show; other returned files are dropped. Each carries its data URL.
+         */
+        val images: List<File> = emptyList(),
     ) : MessagePart()
 
     data class File(
