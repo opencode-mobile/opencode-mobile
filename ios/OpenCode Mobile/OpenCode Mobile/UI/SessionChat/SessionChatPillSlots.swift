@@ -132,13 +132,11 @@ enum SessionChatPillSlots {
         .min()
     }
 
-    /// Top left: todos, then the branch, at most two. Hidden with the keyboard up.
+    /// Top left: todos, then the branch, at most two.
     static func context(
         todos: (completed: Int, total: Int)?,
-        branch: SessionChatBranchPillUiState?,
-        keyboardVisible: Bool
+        branch: SessionChatBranchPillUiState?
     ) -> [SessionChatContextItem] {
-        guard !keyboardVisible else { return [] }
         var items: [SessionChatContextItem] = []
         if let todos, todos.total > 0 {
             items.append(.todos(completed: min(max(todos.completed, 0), todos.total), total: todos.total))
@@ -147,6 +145,12 @@ enum SessionChatPillSlots {
             items.append(.branch(branch))
         }
         return Array(items.prefix(maxContextPills))
+    }
+
+    /// The keyboard hides the top-left pills. Their row keeps its place, so the timeline's
+    /// top inset does not change and content never slides under the top bar.
+    static func showsContext(keyboardVisible: Bool) -> Bool {
+        !keyboardVisible
     }
 
     /// Bottom right: empty at the end of the chat and with the keyboard up.

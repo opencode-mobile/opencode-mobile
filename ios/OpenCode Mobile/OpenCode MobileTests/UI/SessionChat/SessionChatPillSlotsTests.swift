@@ -94,7 +94,10 @@ struct SessionChatPillSlotsTests {
 
     @Test func keyboardHidesContextAndNavigation() {
         let branch = SessionChatBranchPillUiState(branch: "main", additions: 1, deletions: 2)
-        #expect(SessionChatPillSlots.context(todos: (1, 3), branch: branch, keyboardVisible: true).isEmpty)
+        #expect(!SessionChatPillSlots.showsContext(keyboardVisible: true))
+        #expect(SessionChatPillSlots.showsContext(keyboardVisible: false))
+        // The items stay, so the top row keeps its measured inset while hidden.
+        #expect(SessionChatPillSlots.context(todos: (1, 3), branch: branch).count == 2)
         #expect(SessionChatPillSlots.navigation(awayFromEnd: true, newCount: 2, keyboardVisible: true) == nil)
     }
 
@@ -139,12 +142,12 @@ struct SessionChatPillSlotsTests {
     @Test func contextShowsTodosThenBranchAtMostTwo() {
         let branch = SessionChatBranchPillUiState(branch: "main", additions: 1, deletions: 2)
 
-        #expect(SessionChatPillSlots.context(todos: (2, 5), branch: branch, keyboardVisible: false) == [
+        #expect(SessionChatPillSlots.context(todos: (2, 5), branch: branch) == [
             .todos(completed: 2, total: 5),
             .branch(branch),
         ])
-        #expect(SessionChatPillSlots.context(todos: (0, 0), branch: branch, keyboardVisible: false) == [.branch(branch)])
-        #expect(SessionChatPillSlots.context(todos: nil, branch: nil, keyboardVisible: false).isEmpty)
+        #expect(SessionChatPillSlots.context(todos: (0, 0), branch: branch) == [.branch(branch)])
+        #expect(SessionChatPillSlots.context(todos: nil, branch: nil).isEmpty)
         #expect(SessionChatPillSlots.maxContextPills == 2)
     }
 

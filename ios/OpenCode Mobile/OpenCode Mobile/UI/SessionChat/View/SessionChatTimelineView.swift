@@ -292,8 +292,7 @@ private struct SessionChatTimelineReadyView: View {
             todos: props.sessionTodosVisible
                 ? (props.sessionTodoCompletedCount, props.sessionTodoTotalCount)
                 : nil,
-            branch: props.sessionBranchPill,
-            keyboardVisible: props.keyboardVisible
+            branch: props.sessionBranchPill
         )
     }
 
@@ -491,6 +490,10 @@ private struct SessionChatTimelineReadyView: View {
             .overlay(alignment: .topLeading) {
                 if showTopOverlayStack {
                     topOverlayContent
+                        // Hidden, not removed, with the keyboard up: the measured top inset stays.
+                        .opacity(SessionChatPillSlots.showsContext(keyboardVisible: props.keyboardVisible) ? 1 : 0)
+                        .allowsHitTesting(SessionChatPillSlots.showsContext(keyboardVisible: props.keyboardVisible))
+                        .accessibilityHidden(!SessionChatPillSlots.showsContext(keyboardVisible: props.keyboardVisible))
                         .padding(.horizontal, SessionChatCornerSlotsLayout.horizontalPadding)
                         .padding(.top, 10)
                         .background {
@@ -516,8 +519,11 @@ private struct SessionChatTimelineReadyView: View {
                 }
             }
 
-            bottomSlots
         }
+        // An overlay, not a ZStack child: the row's bottom padding (composer + keyboard)
+        // must not set a minimum height, or the keyboard-shrunk timeline overflows under
+        // the top bar.
+        .overlay(alignment: .bottom) { bottomSlots }
         .onChange(of: showScrollToEnd, initial: true) { _, away in
             newMessagesBaselineID = away ? props.messages.last?.id : nil
         }

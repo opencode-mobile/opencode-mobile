@@ -243,11 +243,48 @@ internal data class SessionChatTimelineViewProps(
     val onDismissImageViewer: () -> Unit = {},
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SessionChatTimelineView(
     props: SessionChatTimelineViewProps,
     modifier: Modifier = Modifier,
+) {
+    if (props.timeline == SessionChatTimelineState.Ready) {
+        SessionChatTimelineStateContent(props = props, modifier = modifier)
+        return
+    }
+    // Loading, empty and failed timelines still show live activity: a collapsed
+    // request or queued prompts must stay reachable.
+    Box(modifier = modifier) {
+        SessionChatTimelineStateContent(props = props, modifier = Modifier.fillMaxSize())
+        SessionChatTimelineActivityOnlySlot(props = props, modifier = Modifier.align(Alignment.BottomStart))
+    }
+}
+
+/** Activity slot for timelines that are not ready yet (loading, empty, failed): no scroll, no failure pill. */
+@Composable
+private fun SessionChatTimelineActivityOnlySlot(
+    props: SessionChatTimelineViewProps,
+    modifier: Modifier = Modifier,
+) {
+    var stackOpen by remember { mutableStateOf(false) }
+    SessionChatActivitySlotView(
+        slot = SessionChatPillSlots.activity(props.activityItems, props.keyboardVisible, System.currentTimeMillis()),
+        stackOpen = stackOpen,
+        onStackOpenChange = { stackOpen = it },
+        onClick = props.onActivityClick,
+        onClose = props.onActivityClose,
+        modifier =
+            modifier
+                .padding(horizontal = SessionChatCornerSlotsLayout.HorizontalPadding)
+                .padding(bottom = SessionChatCornerSlotsLayout.rowBottom(props.bottomOverlayInset)),
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SessionChatTimelineStateContent(
+    props: SessionChatTimelineViewProps,
+    modifier: Modifier,
 ) {
     when (props.timeline) {
         SessionChatTimelineState.Creating ->
@@ -434,8 +471,11 @@ private fun SessionChatTimelineReadyView(
         delay((fadeAt - System.currentTimeMillis()).coerceAtLeast(0L))
         activityClockMs = System.currentTimeMillis()
     }
-    val listBottomInset =
-        bottomOverlayInset + SessionChatCornerSlotsLayout.reservedHeight(hasActivity = activitySlot.primary != null)
+    // Whether the list reserves the activity pill row. It follows the pill only at the end
+    // of the chat: with reverseLayout the reserve is before-content padding, so changing it
+    // while scrolled away would move every visible row.
+    var reservesActivityRow by remember { mutableStateOf(activitySlot.primary != null) }
+    val listBottomInset = bottomOverlayInset + SessionChatCornerSlotsLayout.reservedHeight(hasActivity = reservesActivityRow)
     // Only user drag/fling holds applies — not programmatic auto-follow
     // (listState.isScrollInProgress is true for both; iOS holds on isDragging /
     // isDecelerating / isUserScrolling only).
@@ -502,6 +542,15 @@ private fun SessionChatTimelineReadyView(
             listState = listState,
             userScroll = userScroll,
         )
+
+    LaunchedEffect(activitySlot.primary != null, timeline.isPinnedToEnd) {
+        reservesActivityRow =
+            SessionChatPillSlots.reservesActivityRow(
+                reserved = reservesActivityRow,
+                hasActivity = activitySlot.primary != null,
+                pinnedToEnd = timeline.isPinnedToEnd,
+            )
+    }
 
     LaunchedEffect(timeline.showScrollToEnd) {
         newMessagesBaselineId = if (timeline.showScrollToEnd) messages.lastOrNull()?.id else null
@@ -619,7 +668,12 @@ private fun SessionChatTimelineReadyView(
                             }
                         },
                 ) { message, isNewestMessage, onContentSizeSettled ->
-                    val revealAlpha = rememberREVEAL_HIGHLIGHT_ALPHA(revealed?.takeIf { it.messageId == message.id }?.token)
+                    val revealAlpha =
+                        rememberRevealHighlightAlpha(
+                            token = revealed?.takeIf { it.messageId == message.id }?.token,
+                            // Flash once: a row scrolled back into view must not flash again.
+                            onFinished = { token -> if (revealed?.token == token) revealed = null },
+                        )
                     val revealColor = openCodeColor("error")
                     SessionChatMessageRow(
                         message = message,
@@ -667,7 +721,6 @@ private fun SessionChatTimelineReadyView(
                     todosCompleted = sessionTodoCompletedCount.takeIf { sessionTodosVisible },
                     todosTotal = sessionTodoTotalCount.takeIf { sessionTodosVisible },
                     branch = sessionBranchPill,
-                    keyboardVisible = keyboardVisible,
                 )
             }
         LaunchedEffect(contextItems.isEmpty()) {
@@ -675,7 +728,8 @@ private fun SessionChatTimelineReadyView(
                 topOverlayInsetPx = 0
             }
         }
-        if (contextItems.isNotEmpty()) {
+        // Hidden, not removed, with the keyboard up: topOverlayInsetPx keeps its last height.
+        if (contextItems.isNotEmpty() && SessionChatPillSlots.showsContext(keyboardVisible)) {
             SessionChatContextSlotView(
                 items = contextItems,
                 todosActivePreview = sessionTodoActivePreview,
@@ -774,10 +828,14 @@ private data class SessionChatReveal(
 
 private const val REVEAL_HIGHLIGHT_ALPHA = 0.12f
 
-/** Fades a revealed row's tint in, holds it, and fades it out. */
+/** Fades a revealed row's tint in, holds it, fades it out, then reports [onFinished] with its token. */
 @Composable
-private fun rememberREVEAL_HIGHLIGHT_ALPHA(token: Int?): Animatable<Float, AnimationVector1D> {
+private fun rememberRevealHighlightAlpha(
+    token: Int?,
+    onFinished: (token: Int) -> Unit,
+): Animatable<Float, AnimationVector1D> {
     val alpha = remember { Animatable(0f) }
+    val latestOnFinished by rememberUpdatedState(onFinished)
     LaunchedEffect(token) {
         if (token == null) {
             alpha.snapTo(0f)
@@ -786,6 +844,7 @@ private fun rememberREVEAL_HIGHLIGHT_ALPHA(token: Int?): Animatable<Float, Anima
         alpha.animateTo(1f, tween(durationMillis = 200))
         delay(900)
         alpha.animateTo(0f, tween(durationMillis = 800))
+        latestOnFinished(token)
     }
     return alpha
 }

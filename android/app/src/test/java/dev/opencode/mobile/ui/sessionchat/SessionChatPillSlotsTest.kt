@@ -118,7 +118,10 @@ class SessionChatPillSlotsTest {
     @Test
     fun keyboardHidesContextAndNavigation() {
         val branch = SessionBranchPillUiState("main", 1, 2)
-        assertTrue(SessionChatPillSlots.context(1, 3, branch, keyboardVisible = true).isEmpty())
+        assertFalse(SessionChatPillSlots.showsContext(keyboardVisible = true))
+        assertTrue(SessionChatPillSlots.showsContext(keyboardVisible = false))
+        // The items stay, so the top row keeps its measured inset while hidden.
+        assertEquals(2, SessionChatPillSlots.context(1, 3, branch).size)
         assertNull(SessionChatPillSlots.navigation(awayFromEnd = true, newCount = 2, keyboardVisible = true))
     }
 
@@ -171,13 +174,13 @@ class SessionChatPillSlotsTest {
 
         assertEquals(
             listOf(SessionChatContextItem.Todos(2, 5), SessionChatContextItem.Branch(branch)),
-            SessionChatPillSlots.context(2, 5, branch, keyboardVisible = false),
+            SessionChatPillSlots.context(2, 5, branch),
         )
         assertEquals(
             listOf(SessionChatContextItem.Branch(branch)),
-            SessionChatPillSlots.context(0, 0, branch, keyboardVisible = false),
+            SessionChatPillSlots.context(0, 0, branch),
         )
-        assertTrue(SessionChatPillSlots.context(null, null, null, keyboardVisible = false).isEmpty())
+        assertTrue(SessionChatPillSlots.context(null, null, null).isEmpty())
         assertEquals(2, SessionChatPillSlots.MAX_CONTEXT_PILLS)
     }
 
@@ -203,6 +206,17 @@ class SessionChatPillSlotsTest {
         assertEquals(0, SessionChatPillSlots.newMessageCount(listOf("x", "a", "b"), "b"))
         assertEquals(0, SessionChatPillSlots.newMessageCount(listOf("a"), null))
         assertEquals(0, SessionChatPillSlots.newMessageCount(listOf("a"), "gone"))
+    }
+
+    // Reserved pill row
+
+    @Test
+    fun reservedRowFollowsThePillOnlyAtTheEnd() {
+        assertTrue(SessionChatPillSlots.reservesActivityRow(reserved = false, hasActivity = true, pinnedToEnd = true))
+        assertFalse(SessionChatPillSlots.reservesActivityRow(reserved = true, hasActivity = false, pinnedToEnd = true))
+        // Scrolled away: a pill coming or going keeps the reserve, so visible rows do not move.
+        assertFalse(SessionChatPillSlots.reservesActivityRow(reserved = false, hasActivity = true, pinnedToEnd = false))
+        assertTrue(SessionChatPillSlots.reservesActivityRow(reserved = true, hasActivity = false, pinnedToEnd = false))
     }
 
     // Request failed

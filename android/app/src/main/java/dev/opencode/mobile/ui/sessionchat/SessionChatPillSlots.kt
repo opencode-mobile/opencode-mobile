@@ -165,14 +165,12 @@ object SessionChatPillSlots {
             .filter { it > nowEpochMs }
             .minOrNull()
 
-    /** Top left: todos, then the branch, at most two. Hidden with the keyboard up. */
+    /** Top left: todos, then the branch, at most two. */
     fun context(
         todosCompleted: Int?,
         todosTotal: Int?,
         branch: SessionBranchPillUiState?,
-        keyboardVisible: Boolean,
     ): List<SessionChatContextItem> {
-        if (keyboardVisible) return emptyList()
         val items = mutableListOf<SessionChatContextItem>()
         if (todosTotal != null && todosTotal > 0) {
             items += SessionChatContextItem.Todos((todosCompleted ?: 0).coerceIn(0, todosTotal), todosTotal)
@@ -182,6 +180,23 @@ object SessionChatPillSlots {
         }
         return items.take(MAX_CONTEXT_PILLS)
     }
+
+    /**
+     * The keyboard hides the top-left pills. Their measured inset stays, so the timeline's
+     * top padding does not change while the keyboard is up.
+     */
+    fun showsContext(keyboardVisible: Boolean): Boolean = !keyboardVisible
+
+    /**
+     * Whether the timeline reserves the activity pill row. At the end of the chat it follows
+     * the pill; away from the end it keeps [reserved], so a pill coming or going (Syncing)
+     * never moves the rows the reader is looking at.
+     */
+    fun reservesActivityRow(
+        reserved: Boolean,
+        hasActivity: Boolean,
+        pinnedToEnd: Boolean,
+    ): Boolean = if (pinnedToEnd) hasActivity else reserved
 
     /** Bottom right: empty at the end of the chat and with the keyboard up. */
     fun navigation(
