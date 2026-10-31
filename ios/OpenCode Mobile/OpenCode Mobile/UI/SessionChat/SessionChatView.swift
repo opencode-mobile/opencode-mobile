@@ -336,6 +336,10 @@ struct SessionChatView: View {
                         + snackbarOverlayHeight
                         + composerHomeIndicatorLift
                         + keyboardOverlap,
+                    activityItems: sessionChatActivityItems,
+                    keyboardVisible: keyboardOverlap > 0,
+                    onActivityTap: handleActivityTap,
+                    onActivityClose: handleActivityClose,
                     onRefresh: { await viewModel.refreshMessages() },
                     onRetry: { await viewModel.retryFailedTimeline() },
                     onLoadOlder: { Task { await viewModel.loadOlderMessages() } },
@@ -503,42 +507,12 @@ struct SessionChatView: View {
                     }
                 }
                 VStack(spacing: 0) {
-                    // Suggestions float above this stack. Keep the pending strip
-                    // in the measured height so the timeline inset does not jump.
-                    if viewModel.uiState.permissionDockHidden {
-                        OpenCodeActionPill(variant: .reviewPermission) {
-                            viewModel.showPermissionDock()
-                        }
-                        .padding(.bottom, 6)
-                    }
-                    if viewModel.uiState.questionDockHidden {
-                        OpenCodeActionPill(variant: .answerQuestion) {
-                            viewModel.showQuestionDock()
-                        }
-                        .padding(.bottom, 6)
-                    }
-                    sideQuestionRow
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 6)
-                    if SessionChatComposerKind.resolve(
-                        isChildSession: session.parentID != nil,
-                        hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
-                        hasQuestion: viewModel.uiState.questionRequest != nil && !viewModel.uiState.questionDockHidden
-                    ) == .prompt,
-                        !viewModel.uiState.pendingPrompts.isEmpty {
-                        OpenCodePendingPromptsStrip(
-                            prompts: viewModel.uiState.pendingPrompts,
-                            onTap: {
-                                ProductAnalytics.logScreenView(
-                                    screenId: ProductAnalytics.Screen.sessionPendingPrompts,
-                                    presentation: ProductAnalytics.Presentation.sheet,
-                                    trigger: ProductAnalytics.Trigger.present
-                                )
-                                showPendingPromptsSheet = true
-                            }
-                        )
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 6)
+                    // Suggestions float above this stack. Corner pills float over the
+                    // timeline, which reserves their row (`SessionChatCornerSlotsLayout`).
+                    if let notice = viewModel.uiState.sideQuestions.unsupportedNotice {
+                        OpenCodeInlineNotice(message: notice, variant: .banner)
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 6)
                     }
                     composer
                 }
@@ -560,37 +534,60 @@ struct SessionChatView: View {
         }
     }
 
-    /// `/btw` chips and the notice for a `/btw` this server cannot answer, above the composer.
-    @ViewBuilder
-    private var sideQuestionRow: some View {
-        let sideQuestions = viewModel.uiState.sideQuestions
-        if let notice = sideQuestions.unsupportedNotice {
-            OpenCodeInlineNotice(message: notice, variant: .banner)
+    /// Bottom-left activity the screen owns: collapsed requests, `/btw` side questions and queued prompts.
+    private var sessionChatActivityItems: [SessionChatActivityItem] {
+        var items: [SessionChatActivityItem] = []
+        if viewModel.uiState.permissionDockHidden {
+            items.append(.reviewPermission)
         }
-        if sideQuestions.pendingCount > 0 || sideQuestions.readyCount > 0 || sideQuestions.failedCount > 0 {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    if sideQuestions.pendingCount > 0 {
-                        OpenCodeSideQuestionPill(variant: .pending(count: sideQuestions.pendingCount))
-                    }
-                    if sideQuestions.readyCount > 0 {
-                        OpenCodeSideQuestionPill(variant: .answerReady(count: sideQuestions.readyCount)) {
-                            viewModel.openSideQuestionAnswer()
-                        }
-                    }
-                    if sideQuestions.failedCount > 0 {
-                        OpenCodeSideQuestionPill(
-                            variant: .failed(count: sideQuestions.failedCount),
-                            action: { viewModel.retrySideQuestions() },
-                            onDismiss: { viewModel.dismissFailedSideQuestions() }
-                        )
-                    }
-                }
-                .padding(.vertical, 4)
-            }
-            // The pills' floating shadow would otherwise be cut off at the row's bounds.
-            .scrollClipDisabled()
-            .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        if viewModel.uiState.questionDockHidden {
+            items.append(.answerQuestion)
+        }
+        let sideQuestions = viewModel.uiState.sideQuestions
+        if sideQuestions.failedCount > 0 {
+            items.append(.sideQuestionsFailed(count: sideQuestions.failedCount))
+        }
+        if sideQuestions.readyCount > 0 {
+            items.append(.sideQuestionsReady(count: sideQuestions.readyCount))
+        }
+        if sideQuestions.pendingCount > 0 {
+            items.append(.sideQuestionsRunning(count: sideQuestions.pendingCount))
+        }
+        if SessionChatComposerKind.resolve(
+            isChildSession: session.parentID != nil,
+            hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
+            hasQuestion: viewModel.uiState.questionRequest != nil && !viewModel.uiState.questionDockHidden
+        ) == .prompt, !viewModel.uiState.pendingPrompts.isEmpty {
+            items.append(.queued(count: viewModel.uiState.pendingPrompts.count))
+        }
+        return items
+    }
+
+    private func handleActivityTap(_ item: SessionChatActivityItem) {
+        switch item {
+        case .reviewPermission:
+            viewModel.showPermissionDock()
+        case .answerQuestion:
+            viewModel.showQuestionDock()
+        case .sideQuestionsFailed:
+            viewModel.retrySideQuestions()
+        case .sideQuestionsReady:
+            viewModel.openSideQuestionAnswer()
+        case .queued:
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.sessionPendingPrompts,
+                presentation: ProductAnalytics.Presentation.sheet,
+                trigger: ProductAnalytics.Trigger.present
+            )
+            showPendingPromptsSheet = true
+        case .requestFailed, .sideQuestionsRunning, .syncing, .finished:
+            break
+        }
+    }
+
+    private func handleActivityClose(_ item: SessionChatActivityItem) {
+        if case .sideQuestionsFailed = item {
+            viewModel.dismissFailedSideQuestions()
         }
     }
 

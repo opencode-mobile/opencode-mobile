@@ -4,6 +4,12 @@ import Foundation
 @MainActor
 protocol TimelineScrollPerforming: AnyObject {
     func performScrollToEnd(animated: Bool)
+    /// Scroll a row into view and flash it.
+    func performRevealItem(id: String)
+}
+
+extension TimelineScrollPerforming {
+    func performRevealItem(id: String) {}
 }
 
 @Observable
@@ -114,6 +120,23 @@ final class TimelineScrollController {
         userUnpinnedContentOffsetY = nil
         autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: true)
         requestScrollToEnd(animated: true)
+    }
+
+    /// Scroll to a row (a failure the activity pill points at) and flash it.
+    /// Follow stops until the reveal settles, then holds that place like a user scroll.
+    func revealItem(id: String) {
+        scrollGeneration += 1
+        isProgrammaticScrolling = false
+        programmaticPinRetryCount = 0
+        autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: false)
+        refreshDerivedState()
+        performer?.performRevealItem(id: id)
+    }
+
+    /// A reveal came to rest at `contentOffsetY`: hold it unless it landed at the end.
+    func noteRevealSettled(contentOffsetY: CGFloat) {
+        userUnpinnedContentOffsetY = isPinnedToEnd ? nil : contentOffsetY
+        autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: isPinnedToEnd)
     }
 
     func requestScrollToEnd(animated: Bool) {

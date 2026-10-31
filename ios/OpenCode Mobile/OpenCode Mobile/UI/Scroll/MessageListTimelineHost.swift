@@ -780,6 +780,43 @@ where Item.ID == String {
         }
     }
 
+    func performRevealItem(id: String) {
+        guard let index = orderedIDs.firstIndex(of: id),
+              collectionView.numberOfSections > 0,
+              collectionView.numberOfItems(inSection: 0) > index
+        else { return }
+        let indexPath = IndexPath(item: index, section: 0)
+        preservedOffsetY = nil
+        collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { [weak self] in
+            guard let self else { return }
+            self.reportGeometry()
+            self.scrollController?.noteRevealSettled(contentOffsetY: self.collectionView.contentOffset.y)
+            self.flashItem(at: indexPath)
+        }
+    }
+
+    /// Brief tint behind a revealed row so the eye finds it.
+    private func flashItem(at indexPath: IndexPath) {
+        guard let cell = collectionView.cellForItem(at: indexPath) else { return }
+        let flash = UIView(frame: cell.contentView.bounds)
+        flash.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        flash.backgroundColor = UIColor(OpenCodeColors.error).withAlphaComponent(0.12)
+        flash.layer.cornerRadius = 12
+        flash.isUserInteractionEnabled = false
+        flash.alpha = 0
+        cell.contentView.insertSubview(flash, at: 0)
+        UIView.animate(withDuration: 0.2) {
+            flash.alpha = 1
+        } completion: { _ in
+            UIView.animate(withDuration: 0.8, delay: 0.9) {
+                flash.alpha = 0
+            } completion: { _ in
+                flash.removeFromSuperview()
+            }
+        }
+    }
+
     private func armRepinOnAdjustedInsetChange() {
         repinOnAdjustedInsetChange = true
         repinOnAdjustedInsetGeneration &+= 1

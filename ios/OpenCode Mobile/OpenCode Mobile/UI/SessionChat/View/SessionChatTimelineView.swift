@@ -29,6 +29,12 @@ struct SessionChatTimelineViewProps {
     let hideRetryCountdown: Bool
     /// Extra bottom inset so the timeline can scroll under a floating composer.
     let bottomOverlayInset: CGFloat
+    /// Bottom-left live activity from the screen (btw, queued). The timeline adds syncing and request failed.
+    let activityItems: [SessionChatActivityItem]
+    /// The keyboard is up: the activity pill goes compact and the other corners hide.
+    let keyboardVisible: Bool
+    let onActivityTap: (SessionChatActivityItem) -> Void
+    let onActivityClose: (SessionChatActivityItem) -> Void
     let onRefresh: () async -> Void
     let onRetry: () async -> Void
     let onLoadOlder: () -> Void
@@ -89,6 +95,10 @@ struct SessionChatTimelineViewProps {
         hideLiveRetryFailures: Bool = false,
         hideRetryCountdown: Bool = false,
         bottomOverlayInset: CGFloat = 0,
+        activityItems: [SessionChatActivityItem] = [],
+        keyboardVisible: Bool = false,
+        onActivityTap: @escaping (SessionChatActivityItem) -> Void = { _ in },
+        onActivityClose: @escaping (SessionChatActivityItem) -> Void = { _ in },
         onRefresh: @escaping () async -> Void,
         onRetry: @escaping () async -> Void = {},
         onLoadOlder: @escaping () -> Void = {},
@@ -139,6 +149,10 @@ struct SessionChatTimelineViewProps {
         self.hideLiveRetryFailures = hideLiveRetryFailures
         self.hideRetryCountdown = hideRetryCountdown
         self.bottomOverlayInset = bottomOverlayInset
+        self.activityItems = activityItems
+        self.keyboardVisible = keyboardVisible
+        self.onActivityTap = onActivityTap
+        self.onActivityClose = onActivityClose
         self.onRefresh = onRefresh
         self.onRetry = onRetry
         self.onLoadOlder = onLoadOlder
@@ -211,6 +225,11 @@ struct SessionChatTimelineView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.bottom, props.timeline == .ready ? 0 : props.bottomOverlayInset)
+        .overlay(alignment: .bottomLeading) {
+            if props.timeline != .ready {
+                SessionChatTimelineActivityOnlySlot(props: props)
+            }
+        }
         .environment(\.hideLiveRetryFailures, props.hideLiveRetryFailures)
         .environment(
             \.retryCountdownBlockID,
@@ -243,19 +262,22 @@ private struct SessionChatTimelineReadyView: View {
     let props: SessionChatTimelineViewProps
 
     @State private var scrollController = TimelineScrollController()
-    /// Last positive pill values. Kept so a sudden totalCount=0
-    /// cannot rebuild the pill with an invalid contract if exit animation is added.
-    @State private var sessionTodosPillCompletedCount = 0
-    @State private var sessionTodosPillTotalCount = 1
-    @State private var sessionTodosPillActivePreview: String?
+    /// The "+N" stack of the bottom-left activity slot is open.
+    @State private var activityStackOpen = false
+    /// Request-failed pills the user closed, by failure block id.
+    @State private var dismissedFailureBlockIDs: Set<String> = []
+    /// Newest row when the reader left the end; rows after it count as "N new".
+    @State private var newMessagesBaselineID: String?
+    /// Bumped when a finished activity item fades, so the slot resolves again.
+    @State private var activityClock = Date()
     @State private var previousMountedWorkingLabel: String?
     @State private var previousWorkingIndicatorFading = false
     @State private var previousExpandedStepParagraphs: [String: Int] = [:]
     @State private var previousStepRailState: SessionChatStepRailViewState = .empty
     @State private var previousNoticeModelNames: TimelineNoticeModelNames = .empty
     @State private var topOverlayInset: CGFloat = 0
-    /// Syncing label the top pill slot shows, lagging the prop by the show delay
-    /// and minimum visible time in `SessionChatTopPill`.
+    /// Syncing label the activity slot shows, lagging the prop by the show delay
+    /// and minimum visible time in `SessionChatSyncingPillTiming`.
     @State private var displayedSyncingLabel: String?
     @State private var syncingShownAt: ContinuousClock.Instant?
     @State private var syncingPillTask: Task<Void, Never>?
@@ -264,18 +286,56 @@ private struct SessionChatTimelineReadyView: View {
         scrollController.shouldShowScrollToEnd
     }
 
-    private var topPill: SessionChatTopPill? {
-        SessionChatTopPill.resolve(
-            syncingLabel: displayedSyncingLabel,
-            todosVisible: props.sessionTodosVisible,
-            todoTotalCount: props.sessionTodoTotalCount,
-            branchPill: props.sessionBranchPill,
-            hideFloatStack: props.hideFloatStack
+    private var contextItems: [SessionChatContextItem] {
+        guard !props.hideFloatStack else { return [] }
+        return SessionChatPillSlots.context(
+            todos: props.sessionTodosVisible
+                ? (props.sessionTodoCompletedCount, props.sessionTodoTotalCount)
+                : nil,
+            branch: props.sessionBranchPill,
+            keyboardVisible: props.keyboardVisible
         )
     }
 
     private var showTopOverlayStack: Bool {
-        topPill != nil
+        !contextItems.isEmpty
+    }
+
+    private var latestFailure: (rowID: String, blockID: String)? {
+        SessionChatPillSlots.latestFailure(in: props.messages, isRetrying: props.hideRetryCountdown)
+    }
+
+    private var activityItems: [SessionChatActivityItem] {
+        var items: [SessionChatActivityItem] = []
+        if let failure = latestFailure, !dismissedFailureBlockIDs.contains(failure.blockID) {
+            items.append(.requestFailed(rowID: failure.rowID, blockID: failure.blockID))
+        }
+        items.append(contentsOf: props.activityItems)
+        if let displayedSyncingLabel {
+            items.append(.syncing(label: displayedSyncingLabel))
+        }
+        return items
+    }
+
+    private var activitySlot: SessionChatActivitySlot {
+        SessionChatPillSlots.activity(items: activityItems, keyboardVisible: props.keyboardVisible, now: activityClock)
+    }
+
+    private var navigationPill: SessionChatNavigationPill? {
+        guard !props.hideFloatStack else { return nil }
+        return SessionChatPillSlots.navigation(
+            awayFromEnd: showScrollToEnd,
+            newCount: SessionChatPillSlots.newMessageCount(
+                rowIDs: props.messages.map(\.id),
+                baselineLastID: newMessagesBaselineID
+            ),
+            keyboardVisible: props.keyboardVisible
+        )
+    }
+
+    /// Scroll clearance under the composer plus the bottom pill row, so no pill covers the last message.
+    private var listBottomInset: CGFloat {
+        props.bottomOverlayInset + SessionChatCornerSlotsLayout.reservedHeight(hasActivity: activitySlot.primary != nil)
     }
 
     /// The step rail or activity card that carries live status. While one
@@ -399,7 +459,7 @@ private struct SessionChatTimelineReadyView: View {
                 canLoadOlder: props.hasOlder && !props.isLoadingOlder,
                 onNearOldestVisible: props.onLoadOlder,
                 bottomContentPadding: 0,
-                bottomOverlayInset: props.bottomOverlayInset,
+                bottomOverlayInset: listBottomInset,
                 topOverlayInset: topOverlayInset
             ) { item in
                 SessionChatTimelineHostRow(
@@ -428,9 +488,10 @@ private struct SessionChatTimelineReadyView: View {
                     OpenCodeStatusStack(spinner: "Refreshing messages")
                 }
             }
-            .overlay(alignment: .top) {
+            .overlay(alignment: .topLeading) {
                 if showTopOverlayStack {
                     topOverlayContent
+                        .padding(.horizontal, SessionChatCornerSlotsLayout.horizontalPadding)
                         .padding(.top, 10)
                         .background {
                             GeometryReader { geometry in
@@ -455,26 +516,16 @@ private struct SessionChatTimelineReadyView: View {
                 }
             }
 
-            if !props.hideFloatStack, showScrollToEnd {
-                OpenCodeActionPill(variant: .scrollToEnd) {
-                    logScroll("pill-click count=\(props.messages.count)")
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.sessionChat,
-                        actionId: ProductAnalytics.Action.chatScrollToEnd
-                    )
-                    scrollController.scrollToEndAnimated()
-                }
-                .padding(.bottom, props.bottomOverlayInset)
-            }
+            bottomSlots
         }
-        .onChange(of: props.sessionTodoTotalCount) { _, total in
-            refreshSessionTodosPillSnapshot(totalCount: total)
+        .onChange(of: showScrollToEnd, initial: true) { _, away in
+            newMessagesBaselineID = away ? props.messages.last?.id : nil
         }
-        .onChange(of: props.sessionTodoCompletedCount) { _, _ in
-            refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
-        }
-        .onChange(of: props.sessionTodoActivePreview) { _, _ in
-            refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
+        .task(id: SessionChatPillSlots.nextFade(items: activityItems, now: activityClock)) {
+            guard let fade = SessionChatPillSlots.nextFade(items: activityItems, now: activityClock) else { return }
+            try? await Task.sleep(for: .seconds(max(fade.timeIntervalSinceNow, 0)))
+            guard !Task.isCancelled else { return }
+            activityClock = Date()
         }
         .onAppear {
             previousMountedWorkingLabel = mountedWorkingLabel
@@ -482,7 +533,6 @@ private struct SessionChatTimelineReadyView: View {
             previousExpandedStepParagraphs = props.expandedStepParagraphs
             previousStepRailState = stepRailState
             previousNoticeModelNames = props.noticeModelNames
-            refreshSessionTodosPillSnapshot(totalCount: props.sessionTodoTotalCount)
             updateDisplayedSyncingLabel(props.syncingIndicatorLabel)
             scrollController.autoFollowEnabled = true
             logScroll("appear count=\(props.messages.count) pinned=\(scrollController.isPinnedToEnd)")
@@ -519,49 +569,68 @@ private struct SessionChatTimelineReadyView: View {
 
     @ViewBuilder
     private var topOverlayContent: some View {
-        let pill = ZStack {
-            switch topPill {
-            case let .syncing(label):
-                OpenCodeSyncingPill(label: label)
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
-            case .todos:
-                OpenCodeSessionTodosPill(
-                    completedCount: sessionTodosPillCompletedCount,
-                    totalCount: sessionTodosPillTotalCount,
-                    activePreview: sessionTodosPillActivePreview,
-                    action: props.onSessionTodosTap
-                )
-                .transition(.opacity)
-            case let .branch(branchPill):
-                OpenCodeSessionBranchPill(
-                    branch: branchPill.branch,
-                    additions: branchPill.additions,
-                    deletions: branchPill.deletions,
-                    action: props.onSessionBranchTap
-                )
-                .padding(.horizontal, 16)
-                .transition(.opacity)
-            case nil:
-                EmptyView()
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: topPill?.kind)
+        let pills = SessionChatContextSlotView(
+            items: contextItems,
+            todosAccessibilityLabel: OpenCodeSessionTodosPill.accessibilityLabel(
+                completedCount: props.sessionTodoCompletedCount,
+                totalCount: props.sessionTodoTotalCount,
+                activePreview: props.sessionTodoActivePreview
+            ),
+            onTodosTap: props.onSessionTodosTap,
+            onBranchTap: props.onSessionBranchTap
+        )
 
         if #available(iOS 26, *) {
             GlassEffectContainer {
-                pill
+                pills
             }
         } else {
-            pill
+            pills
         }
     }
 
-    private func refreshSessionTodosPillSnapshot(totalCount: Int) {
-        guard totalCount > 0 else { return }
-        sessionTodosPillCompletedCount = props.sessionTodoCompletedCount
-        sessionTodosPillTotalCount = totalCount
-        sessionTodosPillActivePreview = props.sessionTodoActivePreview
+    /// Bottom left live activity and bottom right navigation, just above the composer.
+    private var bottomSlots: some View {
+        HStack(alignment: .bottom, spacing: SessionChatActivitySlotView.spacing) {
+            SessionChatActivitySlotView(
+                slot: activitySlot,
+                stackOpen: $activityStackOpen,
+                onTap: handleActivityTap,
+                onClose: handleActivityClose
+            )
+            Spacer(minLength: 0)
+            if let navigationPill {
+                SessionChatNavigationSlotView(pill: navigationPill) {
+                    logScroll("pill-click count=\(props.messages.count)")
+                    ProductAnalytics.logUserAction(
+                        screenId: ProductAnalytics.Screen.sessionChat,
+                        actionId: ProductAnalytics.Action.chatScrollToEnd
+                    )
+                    scrollController.scrollToEndAnimated()
+                }
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: navigationPill)
+        .padding(.horizontal, SessionChatCornerSlotsLayout.horizontalPadding)
+        .padding(.bottom, SessionChatCornerSlotsLayout.rowBottom(overlayInset: props.bottomOverlayInset))
+    }
+
+    private func handleActivityTap(_ item: SessionChatActivityItem) {
+        if case let .requestFailed(rowID, _) = item {
+            let listID = props.timelineFrame.listIDAliases[rowID] ?? rowID
+            scrollController.revealItem(id: listID)
+            return
+        }
+        props.onActivityTap(item)
+    }
+
+    private func handleActivityClose(_ item: SessionChatActivityItem) {
+        if case let .requestFailed(_, blockID) = item {
+            dismissedFailureBlockIDs.insert(blockID)
+            return
+        }
+        props.onActivityClose(item)
     }
 
     private func updateDisplayedSyncingLabel(_ label: String?) {
@@ -573,7 +642,7 @@ private struct SessionChatTimelineReadyView: View {
                 return
             }
             syncingPillTask = Task { @MainActor in
-                try? await Task.sleep(for: SessionChatTopPill.syncingShowDelay)
+                try? await Task.sleep(for: SessionChatSyncingPillTiming.showDelay)
                 guard !Task.isCancelled else { return }
                 displayedSyncingLabel = label
                 syncingShownAt = .now
@@ -581,8 +650,8 @@ private struct SessionChatTimelineReadyView: View {
             return
         }
         guard displayedSyncingLabel != nil else { return }
-        let remaining = SessionChatTopPill.syncingMinimumVisible
-            - (syncingShownAt.map { ContinuousClock.now - $0 } ?? SessionChatTopPill.syncingMinimumVisible)
+        let remaining = SessionChatSyncingPillTiming.minimumVisible
+            - (syncingShownAt.map { ContinuousClock.now - $0 } ?? SessionChatSyncingPillTiming.minimumVisible)
         guard remaining > .zero else {
             displayedSyncingLabel = nil
             return

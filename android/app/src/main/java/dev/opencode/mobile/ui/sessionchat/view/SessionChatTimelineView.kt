@@ -2,7 +2,9 @@ package dev.opencode.mobile.ui.sessionchat.view
 
 import android.os.SystemClock
 import android.util.Log
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -12,7 +14,6 @@ import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +57,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -75,8 +78,6 @@ import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.components.OpenCodeActionPill
-import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeAssistantMessage
@@ -96,8 +97,6 @@ import dev.opencode.mobile.ui.components.OpenCodeMessageNoteVariant
 import dev.opencode.mobile.ui.components.OpenCodeChatActivityState
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageContent
-import dev.opencode.mobile.ui.components.OpenCodeSessionBranchPill
-import dev.opencode.mobile.ui.components.OpenCodeSessionTodosPill
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeActivityAgentRow
 import dev.opencode.mobile.ui.components.OpenCodeActivityCard
@@ -113,7 +112,6 @@ import dev.opencode.mobile.ui.components.OpenCodeActivityStatus
 import dev.opencode.mobile.ui.components.OpenCodeStepRail
 import dev.opencode.mobile.ui.components.OpenCodeStepRailItem
 import dev.opencode.mobile.ui.components.OpenCodeStepRailStatus
-import dev.opencode.mobile.ui.components.OpenCodeSyncingPill
 import dev.opencode.mobile.ui.components.OpenCodeTimelineNotice
 import dev.opencode.mobile.ui.components.OpenCodeTimelineNoticeState
 import dev.opencode.mobile.ui.components.OpenCodeTimelineNoticeVariant
@@ -141,18 +139,21 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatNoticeCopy
 import dev.opencode.mobile.ui.sessionchat.SessionChatNoticeModelNames
 import dev.opencode.mobile.ui.sessionchat.SessionChatActivityCard
 import dev.opencode.mobile.ui.sessionchat.SessionChatActivityFooter
+import dev.opencode.mobile.ui.sessionchat.SessionChatActivityItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatActivitySheetContent
 import dev.opencode.mobile.ui.sessionchat.SessionChatChildActivity
+import dev.opencode.mobile.ui.sessionchat.SessionChatNavigationPill
+import dev.opencode.mobile.ui.sessionchat.SessionChatPillSlots
 import dev.opencode.mobile.ui.sessionchat.SessionChatStep
 import dev.opencode.mobile.ui.sessionchat.SessionChatStepFamily
 import dev.opencode.mobile.ui.sessionchat.SessionChatStepKind
 import dev.opencode.mobile.ui.sessionchat.SessionChatStepRail
 import dev.opencode.mobile.ui.sessionchat.SessionChatStepStatus
+import dev.opencode.mobile.ui.sessionchat.SessionChatSyncingPillTiming
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.ToolResultInspector
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
-import dev.opencode.mobile.ui.sessionchat.SessionChatTopPill
 import dev.opencode.mobile.ui.sessionchat.StepParagraphChips
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineFrame
@@ -196,6 +197,12 @@ internal data class SessionChatTimelineViewProps(
     val noticeModelNames: SessionChatNoticeModelNames = SessionChatNoticeModelNames(),
     /** Extra bottom inset so the timeline can scroll under a floating composer. */
     val bottomOverlayInset: Dp = 0.dp,
+    /** Bottom-left live activity from the screen (requests, btw, queued). The timeline adds syncing and request failed. */
+    val activityItems: List<SessionChatActivityItem> = emptyList(),
+    /** The keyboard is up: the activity pill goes compact and the other corners hide. */
+    val keyboardVisible: Boolean = false,
+    val onActivityClick: (SessionChatActivityItem) -> Unit = {},
+    val onActivityClose: (SessionChatActivityItem) -> Unit = {},
     val onRefresh: () -> Unit,
     val onRetry: () -> Unit = {},
     val onLoadOlder: () -> Unit = {},
@@ -318,6 +325,11 @@ internal fun SessionChatTimelineView(
                 sessionTodoActivePreview = props.sessionTodoActivePreview,
                 hideFloatStack = props.hideFloatStack,
                 bottomOverlayInset = props.bottomOverlayInset,
+                activityItems = props.activityItems,
+                keyboardVisible = props.keyboardVisible,
+                isRetrying = props.hideRetryCountdown,
+                onActivityClick = props.onActivityClick,
+                onActivityClose = props.onActivityClose,
                 onRefresh = props.onRefresh,
                 onLoadOlder = props.onLoadOlder,
                 onSessionBranchClick = props.onSessionBranchClick,
@@ -371,6 +383,11 @@ private fun SessionChatTimelineReadyView(
     sessionTodoActivePreview: String?,
     hideFloatStack: Boolean,
     bottomOverlayInset: Dp,
+    activityItems: List<SessionChatActivityItem>,
+    keyboardVisible: Boolean,
+    isRetrying: Boolean,
+    onActivityClick: (SessionChatActivityItem) -> Unit,
+    onActivityClose: (SessionChatActivityItem) -> Unit,
     onRefresh: () -> Unit,
     onLoadOlder: () -> Unit,
     onSessionBranchClick: () -> Unit,
@@ -396,6 +413,29 @@ private fun SessionChatTimelineReadyView(
     val density = LocalDensity.current
     var topOverlayInsetPx by remember { mutableIntStateOf(0) }
     val topOverlayInset = with(density) { topOverlayInsetPx.toDp() }
+    // Corner slots: "+N" stack, closed failure pills, the reader's place for "N new", the revealed row.
+    var activityStackOpen by remember { mutableStateOf(false) }
+    var dismissedFailureBlockIds by remember { mutableStateOf(emptySet<String>()) }
+    var newMessagesBaselineId by remember { mutableStateOf<String?>(null) }
+    var revealed by remember { mutableStateOf<SessionChatReveal?>(null) }
+    var activityClockMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    val displayedSyncingLabel = rememberDisplayedSyncingLabel(syncingIndicatorLabel)
+    val latestFailure = remember(messages, isRetrying) { SessionChatPillSlots.latestFailure(messages, isRetrying) }
+    val allActivityItems =
+        buildList {
+            latestFailure?.takeIf { it.blockId !in dismissedFailureBlockIds }?.let(::add)
+            addAll(activityItems)
+            displayedSyncingLabel?.let { add(SessionChatActivityItem.Syncing(it)) }
+        }
+    val activitySlot = SessionChatPillSlots.activity(allActivityItems, keyboardVisible, activityClockMs)
+    val nextFadeMs = SessionChatPillSlots.nextFadeEpochMs(allActivityItems, activityClockMs)
+    LaunchedEffect(nextFadeMs) {
+        val fadeAt = nextFadeMs ?: return@LaunchedEffect
+        delay((fadeAt - System.currentTimeMillis()).coerceAtLeast(0L))
+        activityClockMs = System.currentTimeMillis()
+    }
+    val listBottomInset =
+        bottomOverlayInset + SessionChatCornerSlotsLayout.reservedHeight(hasActivity = activitySlot.primary != null)
     // Only user drag/fling holds applies — not programmatic auto-follow
     // (listState.isScrollInProgress is true for both; iOS holds on isDragging /
     // isDecelerating / isUserScrolling only).
@@ -462,6 +502,10 @@ private fun SessionChatTimelineReadyView(
             listState = listState,
             userScroll = userScroll,
         )
+
+    LaunchedEffect(timeline.showScrollToEnd) {
+        newMessagesBaselineId = if (timeline.showScrollToEnd) messages.lastOrNull()?.id else null
+    }
 
     val oldestMessageId = committedMessages.firstOrNull()?.id
     val oldestMessageKey = oldestMessageId?.let { committedFrame?.listKey(it) ?: it }
@@ -546,8 +590,9 @@ private fun SessionChatTimelineReadyView(
                                     topOverlayInset,
                             // reverseLayout: bottom padding is beforeContent (visual bottom).
                             // Overlay inset is composer height + 16 end-pin gap — do not also
-                            // add the default 12 or the resting gap becomes 28.
-                            bottom = bottomOverlayInset,
+                            // add the default 12 or the resting gap becomes 28. The activity
+                            // pill row adds its own clearance so it never covers the last message.
+                            bottom = listBottomInset,
                         ),
                     // A server echo keeps the item slot of the optimistic row it replaced.
                     key = { message -> committedFrame?.listKey(message.id) ?: message.id },
@@ -574,6 +619,8 @@ private fun SessionChatTimelineReadyView(
                             }
                         },
                 ) { message, isNewestMessage, onContentSizeSettled ->
+                    val revealAlpha = rememberREVEAL_HIGHLIGHT_ALPHA(revealed?.takeIf { it.messageId == message.id }?.token)
+                    val revealColor = openCodeColor("error")
                     SessionChatMessageRow(
                         message = message,
                         onMessageActionsTap = onMessageActionsTap,
@@ -595,94 +642,152 @@ private fun SessionChatTimelineReadyView(
                         // animateContentSize on production Session Chat (gallery may still demo it).
                         animateSizeChanges = false,
                         onContentSizeAnimationFinished = onContentSizeSettled,
-                        modifier = Modifier.messageListTimelineItemSpacing(isNewestMessage),
+                        modifier =
+                            Modifier
+                                .messageListTimelineItemSpacing(isNewestMessage)
+                                .drawBehind {
+                                    val alpha = revealAlpha.value
+                                    if (alpha > 0f) {
+                                        drawRoundRect(
+                                            color = revealColor.copy(alpha = REVEAL_HIGHLIGHT_ALPHA * alpha),
+                                            cornerRadius = CornerRadius(12.dp.toPx()),
+                                        )
+                                    }
+                                },
                     )
                 }
             }
         }
 
-        val showScrollToEnd = !hideFloatStack && timeline.showScrollToEnd
-        val displayedSyncingLabel = rememberDisplayedSyncingLabel(syncingIndicatorLabel)
-        val topPill =
-            SessionChatTopPill.resolve(
-                syncingLabel = displayedSyncingLabel,
-                todosVisible = sessionTodosVisible,
-                todoTotalCount = sessionTodoTotalCount,
-                branchPill = sessionBranchPill,
-                hideFloatStack = hideFloatStack,
-                todoCompletedCount = sessionTodoCompletedCount,
-                todoActivePreview = sessionTodoActivePreview,
-            )
-        val showTopOverlayStack = topPill != null
-        LaunchedEffect(showTopOverlayStack) {
-            if (!showTopOverlayStack) {
+        val contextItems =
+            if (hideFloatStack) {
+                emptyList()
+            } else {
+                SessionChatPillSlots.context(
+                    todosCompleted = sessionTodoCompletedCount.takeIf { sessionTodosVisible },
+                    todosTotal = sessionTodoTotalCount.takeIf { sessionTodosVisible },
+                    branch = sessionBranchPill,
+                    keyboardVisible = keyboardVisible,
+                )
+            }
+        LaunchedEffect(contextItems.isEmpty()) {
+            if (contextItems.isEmpty()) {
                 topOverlayInsetPx = 0
             }
         }
-        if (topPill != null) {
-            AnimatedContent(
-                targetState = topPill,
+        if (contextItems.isNotEmpty()) {
+            SessionChatContextSlotView(
+                items = contextItems,
+                todosActivePreview = sessionTodoActivePreview,
+                onTodosClick = onSessionTodosClick,
+                onBranchClick = onSessionBranchClick,
                 modifier =
                     Modifier
-                        .align(Alignment.TopCenter)
+                        .align(Alignment.TopStart)
                         .onGloballyPositioned { coordinates ->
                             val height = coordinates.size.height
                             if (height != topOverlayInsetPx) {
                                 topOverlayInsetPx = height
                             }
-                        }.padding(top = 10.dp),
-                transitionSpec = {
-                    fadeIn(tween(durationMillis = 200)) togetherWith fadeOut(tween(durationMillis = 200))
-                },
-                contentAlignment = Alignment.Center,
-                label = "sessionChatTopPill",
-                // Swap only between pill kinds; label or count updates stay in place.
-                contentKey = { it::class },
-            ) { pill ->
-                Box(contentAlignment = Alignment.Center) {
-                    when (pill) {
-                        is SessionChatTopPill.Syncing -> OpenCodeSyncingPill(label = pill.label)
-                        is SessionChatTopPill.Todos ->
-                            OpenCodeSessionTodosPill(
-                                completedCount = pill.completedCount,
-                                totalCount = pill.totalCount,
-                                activePreview = pill.activePreview,
-                                onClick = onSessionTodosClick,
-                            )
-                        is SessionChatTopPill.Branch ->
-                            OpenCodeSessionBranchPill(
-                                branch = pill.pill.branch,
-                                additions = pill.pill.additions,
-                                deletions = pill.pill.deletions,
-                                onClick = onSessionBranchClick,
-                            )
-                    }
-                }
-            }
-        }
-
-        if (showScrollToEnd) {
-            OpenCodeActionPill(
-                variant = OpenCodeActionPillVariant.ScrollToEnd,
-                onClick = {
-                    ProductAnalytics.logUserAction(
-                        screenId = ProductAnalytics.Screen.SESSION_CHAT,
-                        actionId = ProductAnalytics.Action.CHAT_SCROLL_TO_END,
-                    )
-                    timeline.scrollController.animateToEnd(
-                        messageCount = timeline.messageCount,
-                        tolerancePx = timeline.autoFollowTolerancePx,
-                        bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
-                        autoFollowEnabled = true,
-                    )
-                },
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = bottomOverlayInset),
+                        }.padding(top = 10.dp)
+                        .padding(horizontal = SessionChatCornerSlotsLayout.HorizontalPadding),
             )
         }
+
+        val navigationPill =
+            if (hideFloatStack) {
+                null
+            } else {
+                SessionChatPillSlots.navigation(
+                    awayFromEnd = timeline.showScrollToEnd,
+                    newCount = SessionChatPillSlots.newMessageCount(messages.map { it.id }, newMessagesBaselineId),
+                    keyboardVisible = keyboardVisible,
+                )
+            }
+        Row(
+            modifier =
+                Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = SessionChatCornerSlotsLayout.HorizontalPadding)
+                    .padding(bottom = SessionChatCornerSlotsLayout.rowBottom(bottomOverlayInset)),
+            horizontalArrangement = Arrangement.spacedBy(SessionChatCornerSlotsLayout.Spacing),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            SessionChatActivitySlotView(
+                slot = activitySlot,
+                stackOpen = activityStackOpen,
+                onStackOpenChange = { activityStackOpen = it },
+                onClick = { item ->
+                    if (item is SessionChatActivityItem.RequestFailed) {
+                        val chronological = committedMessages.indexOfFirst { it.id == item.messageId }
+                        if (chronological >= 0) {
+                            // Lazy order: bottom anchor, optional status row, then messages newest first.
+                            val statusRows = if (committedWorkingLabel != null) 1 else 0
+                            timeline.scrollController.revealItem(
+                                index = 1 + statusRows + (committedMessages.size - 1 - chronological),
+                                messageCount = timeline.messageCount,
+                                tolerancePx = timeline.autoFollowTolerancePx,
+                                bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
+                            )
+                            revealed = SessionChatReveal(item.messageId, (revealed?.token ?: 0) + 1)
+                        }
+                    } else {
+                        onActivityClick(item)
+                    }
+                },
+                onClose = { item ->
+                    if (item is SessionChatActivityItem.RequestFailed) {
+                        dismissedFailureBlockIds = dismissedFailureBlockIds + item.blockId
+                    } else {
+                        onActivityClose(item)
+                    }
+                },
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            AnimatedVisibility(visible = navigationPill != null, enter = fadeIn(), exit = fadeOut()) {
+                SessionChatNavigationSlotView(
+                    pill = navigationPill ?: SessionChatNavigationPill(0),
+                    onClick = {
+                        ProductAnalytics.logUserAction(
+                            screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                            actionId = ProductAnalytics.Action.CHAT_SCROLL_TO_END,
+                        )
+                        timeline.scrollController.animateToEnd(
+                            messageCount = timeline.messageCount,
+                            tolerancePx = timeline.autoFollowTolerancePx,
+                            bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
+                            autoFollowEnabled = true,
+                        )
+                    },
+                )
+            }
+        }
     }
+}
+
+/** A row the activity pill scrolled to; [token] restarts the flash on a repeat tap. */
+private data class SessionChatReveal(
+    val messageId: String,
+    val token: Int,
+)
+
+private const val REVEAL_HIGHLIGHT_ALPHA = 0.12f
+
+/** Fades a revealed row's tint in, holds it, and fades it out. */
+@Composable
+private fun rememberREVEAL_HIGHLIGHT_ALPHA(token: Int?): Animatable<Float, AnimationVector1D> {
+    val alpha = remember { Animatable(0f) }
+    LaunchedEffect(token) {
+        if (token == null) {
+            alpha.snapTo(0f)
+            return@LaunchedEffect
+        }
+        alpha.animateTo(1f, tween(durationMillis = 200))
+        delay(900)
+        alpha.animateTo(0f, tween(durationMillis = 800))
+    }
+    return alpha
 }
 
 @Composable
@@ -1646,9 +1751,9 @@ private fun FallbackMessageBubble(
 }
 
 /**
- * Syncing label the top pill slot shows, lagging [label] by
- * [SessionChatTopPill.SYNCING_SHOW_DELAY_MS] and held for
- * [SessionChatTopPill.SYNCING_MINIMUM_VISIBLE_MS] once shown.
+ * Syncing label the activity slot shows, lagging [label] by
+ * [SessionChatSyncingPillTiming.SHOW_DELAY_MS] and held for
+ * [SessionChatSyncingPillTiming.MINIMUM_VISIBLE_MS] once shown.
  */
 @Composable
 private fun rememberDisplayedSyncingLabel(label: String?): String? {
@@ -1657,13 +1762,13 @@ private fun rememberDisplayedSyncingLabel(label: String?): String? {
     LaunchedEffect(label) {
         if (label != null) {
             if (displayed == null) {
-                delay(SessionChatTopPill.SYNCING_SHOW_DELAY_MS)
+                delay(SessionChatSyncingPillTiming.SHOW_DELAY_MS)
                 shownAtMs = SystemClock.uptimeMillis()
             }
             displayed = label
         } else if (displayed != null) {
             val shownForMs = SystemClock.uptimeMillis() - shownAtMs
-            delay((SessionChatTopPill.SYNCING_MINIMUM_VISIBLE_MS - shownForMs).coerceAtLeast(0L))
+            delay((SessionChatSyncingPillTiming.MINIMUM_VISIBLE_MS - shownForMs).coerceAtLeast(0L))
             displayed = null
         }
     }
