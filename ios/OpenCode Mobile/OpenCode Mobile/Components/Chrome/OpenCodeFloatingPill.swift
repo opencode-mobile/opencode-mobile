@@ -1,0 +1,274 @@
+import SwiftUI
+
+/// What a floating pill shows. Every layout shares the btw pill height, type and chrome.
+enum OpenCodeFloatingPillLayout: Equatable {
+    /// Leading icon and a label, e.g. a branch or todos pill.
+    case iconLabel(icon: OpenCodeIcon, label: String)
+    /// Round, icon only. `accessibilityLabel` is what VoiceOver speaks.
+    case iconOnly(icon: OpenCodeIcon, accessibilityLabel: String)
+    /// Live counter such as "3 subagents". Shows a spinner while live; with
+    /// `waiting`, needs attention swaps it for a pulsing dot.
+    case counter(label: String, waiting: Bool = false)
+    /// Label with a trailing close ✕ that calls `onClose`.
+    case closable(label: String)
+
+    var label: String {
+        switch self {
+        case let .iconLabel(_, label), let .counter(label, _), let .closable(label): label
+        case let .iconOnly(_, accessibilityLabel): accessibilityLabel
+        }
+    }
+}
+
+/// Where the thing a floating pill stands for is.
+enum OpenCodeFloatingPillState: CaseIterable, Equatable {
+    /// Work is running.
+    case live
+    /// Something is ready to open.
+    case ready
+    /// Waiting on the user: amber text and a thin amber ring.
+    case needsAttention
+    /// Something failed.
+    case error
+    /// Finished: a green check.
+    case done
+
+    /// Spoken after the label.
+    var spokenName: String {
+        switch self {
+        case .live: "In progress"
+        case .ready: "Ready"
+        case .needsAttention: "Needs attention"
+        case .error: "Error"
+        case .done: "Done"
+        }
+    }
+}
+
+/// Leading mark of a floating pill, resolved from layout and state.
+enum OpenCodeFloatingPillLeading: Equatable {
+    case none
+    case icon(OpenCodeIcon)
+    case spinner
+    case pulsingDot
+    case doneCheck
+}
+
+/// Semantic colour role of a floating pill's text and icon.
+enum OpenCodeFloatingPillTone: Equatable {
+    case base
+    case strong
+    case warning
+    case error
+}
+
+/// Pure mapping from layout and state to what the pill draws and speaks.
+enum OpenCodeFloatingPillStyle {
+    static func leading(layout: OpenCodeFloatingPillLayout, state: OpenCodeFloatingPillState) -> OpenCodeFloatingPillLeading {
+        if state == .done { return .doneCheck }
+        switch layout {
+        case let .iconLabel(icon, _), let .iconOnly(icon, _):
+            return .icon(icon)
+        case let .counter(_, waiting):
+            switch state {
+            case .live: return .spinner
+            case .needsAttention: return waiting ? .pulsingDot : .spinner
+            case .ready, .error, .done: return .none
+            }
+        case .closable:
+            return .none
+        }
+    }
+
+    static func tone(_ state: OpenCodeFloatingPillState) -> OpenCodeFloatingPillTone {
+        switch state {
+        case .live: .base
+        case .ready, .done: .strong
+        case .needsAttention: .warning
+        case .error: .error
+        }
+    }
+
+    static func hasRing(_ state: OpenCodeFloatingPillState) -> Bool {
+        state == .needsAttention
+    }
+
+    static func accessibilityLabel(layout: OpenCodeFloatingPillLayout, state: OpenCodeFloatingPillState) -> String {
+        "\(layout.label), \(state.spokenName)"
+    }
+
+    static func closeAccessibilityLabel(layout: OpenCodeFloatingPillLayout) -> String {
+        "Dismiss \(layout.label)"
+    }
+}
+
+/// Shared floating pill for Session Chat: one look, four layouts, five states.
+/// Without `action` the pill is a status, not a button.
+struct OpenCodeFloatingPill: View {
+    let layout: OpenCodeFloatingPillLayout
+    let state: OpenCodeFloatingPillState
+    let action: (() -> Void)?
+    let onClose: (() -> Void)?
+
+    init(
+        layout: OpenCodeFloatingPillLayout,
+        state: OpenCodeFloatingPillState,
+        action: (() -> Void)? = nil,
+        onClose: (() -> Void)? = nil
+    ) {
+        self.layout = layout
+        self.state = state
+        self.action = action
+        self.onClose = onClose
+    }
+
+    var body: some View {
+        HStack(spacing: 0) {
+            if let action {
+                Button(action: action) { content }
+                    .buttonStyle(OpenCodeFloatingPillPressStyle())
+                    .accessibilityLabel(accessibilityLabel)
+            } else {
+                content
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(accessibilityLabel)
+                    .accessibilityAddTraits(state == .live ? .updatesFrequently : [])
+            }
+            if case .closable = layout, let onClose {
+                Button(action: onClose) {
+                    OpenCodeIconImage(icon: .close, size: Self.iconSize)
+                        .foregroundStyle(OpenCodeColors.iconBase)
+                        .frame(width: Self.minHeight, height: Self.minHeight)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(OpenCodeFloatingPillPressStyle())
+                .padding(.leading, -Self.paddingHorizontal / 2)
+                .accessibilityLabel(OpenCodeFloatingPillStyle.closeAccessibilityLabel(layout: layout))
+            }
+        }
+        .openCodeFloatingPillChrome(enabled: true)
+        .overlay {
+            if OpenCodeFloatingPillStyle.hasRing(state) {
+                Capsule()
+                    .strokeBorder(OpenCodeColors.warning, lineWidth: Self.ringWidth)
+                    .allowsHitTesting(false)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if case .iconOnly = layout {
+            leadingMark
+                .foregroundStyle(contentColor)
+                .frame(width: Self.minHeight, height: Self.minHeight)
+                .contentShape(Circle())
+        } else {
+            HStack(spacing: Self.iconSpacing) {
+                leadingMark
+                Text(layout.label)
+                    .font(OpenCodeTypography.button)
+                    .lineLimit(1)
+            }
+            .foregroundStyle(contentColor)
+            .padding(.horizontal, Self.paddingHorizontal)
+            .padding(.vertical, Self.paddingVertical)
+            .frame(minHeight: Self.minHeight)
+            .contentShape(Capsule())
+        }
+    }
+
+    @ViewBuilder
+    private var leadingMark: some View {
+        switch OpenCodeFloatingPillStyle.leading(layout: layout, state: state) {
+        case .none:
+            EmptyView()
+        case let .icon(icon):
+            OpenCodeIconImage(icon: icon, size: Self.iconSize)
+        case .spinner:
+            OpenCodeFloatingPillSpinner(color: contentColor)
+        case .pulsingDot:
+            OpenCodeFloatingPillPulsingDot()
+        case .doneCheck:
+            OpenCodeIconImage(icon: .check, size: Self.iconSize)
+                .foregroundStyle(OpenCodeColors.success)
+        }
+    }
+
+    private var contentColor: Color {
+        switch OpenCodeFloatingPillStyle.tone(state) {
+        case .base: OpenCodeColors.textBase
+        case .strong: OpenCodeColors.textStrong
+        case .warning: OpenCodeColors.warning
+        case .error: OpenCodeColors.error
+        }
+    }
+
+    private var accessibilityLabel: String {
+        OpenCodeFloatingPillStyle.accessibilityLabel(layout: layout, state: state)
+    }
+
+    static let minHeight: CGFloat = 36
+    private static let paddingHorizontal: CGFloat = 14
+    private static let paddingVertical: CGFloat = 8
+    private static let iconSize: CGFloat = 16
+    private static let iconSpacing: CGFloat = 6
+    private static let ringWidth: CGFloat = 1
+}
+
+/// The btw pill spinner; a still arc when Reduce Motion is on.
+private struct OpenCodeFloatingPillSpinner: View {
+    let color: Color
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        if reduceMotion {
+            Circle()
+                .trim(from: 0, to: 0.75)
+                .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .frame(width: 14, height: 14)
+                .frame(width: 16, height: 16)
+        } else {
+            ProgressView()
+                .controlSize(.small)
+                .tint(color)
+        }
+    }
+}
+
+/// Amber dot that pulses while an item waits for the user; still under Reduce Motion.
+private struct OpenCodeFloatingPillPulsingDot: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var dim = false
+
+    var body: some View {
+        Circle()
+            .fill(OpenCodeColors.warning)
+            .frame(width: 8, height: 8)
+            .opacity(reduceMotion ? 1 : (dim ? 0.35 : 1))
+            .frame(width: 16, height: 16)
+            .onAppear {
+                guard !reduceMotion else { return }
+                withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
+                    dim = true
+                }
+            }
+    }
+}
+
+#if DEBUG
+#Preview("States") {
+    VStack(alignment: .leading, spacing: 12) {
+        ForEach(OpenCodeFloatingPillState.allCases, id: \.self) { state in
+            HStack(spacing: 8) {
+                OpenCodeFloatingPill(layout: .iconLabel(icon: .callSplit, label: "+128 −14"), state: state, action: {})
+                OpenCodeFloatingPill(layout: .iconOnly(icon: .arrowDownward, accessibilityLabel: "Scroll to end"), state: state, action: {})
+                OpenCodeFloatingPill(layout: .counter(label: "3 subagents", waiting: true), state: state)
+            }
+        }
+    }
+    .padding()
+    .openCodeTheme()
+}
+#endif
