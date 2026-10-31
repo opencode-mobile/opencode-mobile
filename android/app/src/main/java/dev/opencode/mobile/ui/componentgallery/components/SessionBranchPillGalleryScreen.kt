@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -18,6 +17,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodeMediumShape
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchPill
@@ -65,7 +65,7 @@ fun SessionBranchPillGalleryScreen(modifier: Modifier = Modifier) {
 
         Text(text = "Popover open", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
         Surface(
-            shape = RoundedCornerShape(12.dp),
+            shape = OpenCodeMediumShape,
             color = openCodeColor("surface-raised-base"),
             border = BorderStroke(1.dp, openCodeColor("border-weak-base")),
         ) {

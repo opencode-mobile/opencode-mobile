@@ -69,7 +69,7 @@ class OpenCodeSessionBranchSummaryTest {
         assertEquals("−3", removed.changeLabel)
         assertEquals('−', removed.changeLabel!!.first())
         assertEquals("2 files", binary.changeLabel)
-        assertEquals("Branch x, 2 files changed", binary.accessibilityLabel)
+        assertEquals("Branch x, 2 uncommitted files", binary.accessibilityLabel)
     }
 
     @Test
@@ -86,7 +86,7 @@ class OpenCodeSessionBranchSummaryTest {
             )
 
         assertEquals(listOf("b.kt", "big.kt", "a.kt"), summary.topFiles.map { it.path })
-        assertEquals("5 files changed", summary.fileCountLabel)
+        assertEquals("5 uncommitted files", summary.fileCountLabel)
     }
 
     @Test
@@ -98,9 +98,9 @@ class OpenCodeSessionBranchSummaryTest {
             )
 
         assertEquals(listOf("y", "z"), summary.topFiles.map { it.path })
-        assertEquals("2 files changed", summary.fileCountLabel)
+        assertEquals("2 uncommitted files", summary.fileCountLabel)
         assertEquals(
-            "1 file changed",
+            "1 uncommitted file",
             OpenCodeSessionBranchSummary("x", files = listOf(OpenCodeSessionBranchChangedFile("a", 1, 0))).fileCountLabel,
         )
     }
@@ -111,5 +111,38 @@ class OpenCodeSessionBranchSummaryTest {
         assertNull(OpenCodeSessionBranchSummary("main", baseBranch = "main").visibleBaseBranch)
         assertNull(OpenCodeSessionBranchSummary("feature-x", baseBranch = null).visibleBaseBranch)
         assertNull(OpenCodeSessionBranchSummary("feature-x", baseBranch = "").visibleBaseBranch)
+    }
+
+    @Test
+    fun popover_hidesZeroSidesAndNeverSpeaksZero() {
+        val deletionOnly = OpenCodeSessionBranchChangedFile("src/old.ts", 0, 42)
+        val binary = OpenCodeSessionBranchChangedFile("assets/logo.png", 0, 0)
+        val summary = OpenCodeSessionBranchSummary("x", files = listOf(deletionOnly, binary))
+
+        assertNull(deletionOnly.visibleAdditions)
+        assertEquals(42, deletionOnly.visibleDeletions)
+        assertEquals("src/old.ts, 42 removed", deletionOnly.accessibilityLabel)
+        assertNull(binary.visibleAdditions)
+        assertNull(binary.visibleDeletions)
+        assertEquals("assets/logo.png", binary.accessibilityLabel)
+        assertNull(summary.visibleAdditions)
+        assertEquals(42, summary.visibleDeletions)
+        assertEquals("2 uncommitted files, 42 removed", summary.fileCountAccessibilityLabel)
+        assertEquals(listOf("src/old.ts", "assets/logo.png"), summary.topFiles.map { it.path })
+        listOf(deletionOnly.accessibilityLabel, binary.accessibilityLabel, summary.fileCountAccessibilityLabel!!, summary.accessibilityLabel)
+            .forEach {
+                assertFalse(it.contains("0 added"))
+                assertFalse(it.contains("0 removed"))
+            }
+    }
+
+    @Test
+    fun popover_totalsSpeakBothSidesWhenPresent() {
+        val summary = OpenCodeSessionBranchSummary("x", files = files)
+
+        assertEquals(128, summary.visibleAdditions)
+        assertEquals(14, summary.visibleDeletions)
+        assertEquals("3 uncommitted files, 128 added, 14 removed", summary.fileCountAccessibilityLabel)
+        assertEquals("b.kt, 100 added, 2 removed", files[0].accessibilityLabel)
     }
 }

@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -33,16 +32,16 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.CodeTextStyle
+import dev.opencode.mobile.theme.OpenCodeMediumShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val BranchPopoverWidth = 288.dp
-private val BranchPopoverShape = RoundedCornerShape(12.dp)
 private val BranchPopoverPaddingHorizontal = 16.dp
 private val BranchPopoverSectionPaddingVertical = 12.dp
 private val BranchPopoverIconSize = 16.dp
@@ -56,6 +55,14 @@ data class OpenCodeSessionBranchChangedFile(
     val deletions: Int,
 ) {
     val linesChanged: Int get() = additions + deletions
+
+    /** Counts to draw: a zero side is null, so a binary or rename-only file shows none. */
+    val visibleAdditions: Int? get() = additions.takeIf { it > 0 }
+    val visibleDeletions: Int? get() = deletions.takeIf { it > 0 }
+
+    /** "src/a.kt, 61 added"; a file without line counts reads its path only. */
+    val accessibilityLabel: String
+        get() = OpenCodeSessionBranchSummary.spokenCounts(path, additions, deletions)
 }
 
 /**
@@ -87,7 +94,7 @@ data class OpenCodeSessionBranchSummary(
                     if (additions > 0) add("+$additions")
                     if (deletions > 0) add("−$deletions")
                 }
-            return if (parts.isEmpty()) fileCount(files.size, "") else parts.joinToString(" ")
+            return if (parts.isEmpty()) fileCount(files.size) else parts.joinToString(" ")
         }
 
     val pillLayout: OpenCodeFloatingPillLayout
@@ -100,23 +107,25 @@ data class OpenCodeSessionBranchSummary(
         get() {
             val name = "${if (isWorktree) "Worktree branch" else "Branch"} $branch"
             if (!hasChanges) return "$name, no changes"
-            val parts =
-                buildList {
-                    add(name)
-                    if (additions > 0) add("$additions added")
-                    if (deletions > 0) add("$deletions removed")
-                    if (size == 1) add(fileCount(files.size, " changed"))
-                }
-            return parts.joinToString(", ")
+            if (additions == 0 && deletions == 0) return "$name, ${uncommittedFileCount(files.size)}"
+            return spokenCounts(name, additions, deletions)
         }
 
     /** The base branch when the server reports one that differs from the branch itself. */
     val visibleBaseBranch: String?
         get() = baseBranch?.takeIf { it.isNotEmpty() && it != branch }
 
-    /** "3 files changed"; null without changes. */
+    /** "3 uncommitted files"; null without changes. Worded so it does not read as a diff against the base. */
     val fileCountLabel: String?
-        get() = if (hasChanges) fileCount(files.size, " changed") else null
+        get() = if (hasChanges) uncommittedFileCount(files.size) else null
+
+    /** Popover totals: a zero side is null, as on the pill. */
+    val visibleAdditions: Int? get() = additions.takeIf { it > 0 }
+    val visibleDeletions: Int? get() = deletions.takeIf { it > 0 }
+
+    /** "3 uncommitted files, 106 added"; null without changes. */
+    val fileCountAccessibilityLabel: String?
+        get() = fileCountLabel?.let { spokenCounts(it, additions, deletions) }
 
     /** The most-changed files by lines added plus removed, ties by path. */
     val topFiles: List<OpenCodeSessionBranchChangedFile>
@@ -129,10 +138,21 @@ data class OpenCodeSessionBranchSummary(
         /** The popover lists at most this many files. */
         const val TOP_FILE_LIMIT = 3
 
-        private fun fileCount(
-            count: Int,
-            suffix: String,
-        ): String = "$count ${if (count == 1) "file" else "files"}$suffix"
+        private fun fileCount(count: Int): String = "$count ${if (count == 1) "file" else "files"}"
+
+        private fun uncommittedFileCount(count: Int): String = "$count uncommitted ${if (count == 1) "file" else "files"}"
+
+        /** "prefix, 128 added, 14 removed" with zero sides left out. */
+        fun spokenCounts(
+            prefix: String,
+            additions: Int,
+            deletions: Int,
+        ): String =
+            buildList {
+                add(prefix)
+                if (additions > 0) add("$additions added")
+                if (deletions > 0) add("$deletions removed")
+            }.joinToString(", ")
     }
 }
 
@@ -164,7 +184,7 @@ fun OpenCodeSessionBranchPill(
         DropdownMenu(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            shape = BranchPopoverShape,
+            shape = OpenCodeMediumShape,
             containerColor = openCodeColor("surface-raised-base"),
             border = BorderStroke(1.dp, openCodeColor("border-weak-base")),
         ) {
@@ -215,9 +235,9 @@ fun OpenCodeSessionBranchPopoverContent(
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
                     text = summary.branch,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                    style = CodeTextStyle,
                     color = textStrong,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.MiddleEllipsis,
                 )
                 summary.visibleBaseBranch?.let { base ->
@@ -243,19 +263,22 @@ fun OpenCodeSessionBranchPopoverContent(
             ) {
                 summary.fileCountLabel?.let { label ->
                     Row(
-                        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {},
+                        modifier =
+                            Modifier.fillMaxWidth().clearAndSetSemantics {
+                                contentDescription = summary.fileCountAccessibilityLabel ?: label
+                            },
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(label, style = MaterialTheme.typography.bodySmall, color = textWeak)
                         Spacer(Modifier.weight(1f))
-                        OpenCodeDiffStat(additions = summary.additions, deletions = summary.deletions)
+                        OpenCodeDiffStat(additions = summary.visibleAdditions, deletions = summary.visibleDeletions)
                     }
                 }
                 summary.topFiles.forEach { file ->
                     Row(
                         modifier =
                             Modifier.fillMaxWidth().clearAndSetSemantics {
-                                contentDescription = "${file.path}, ${file.additions} added, ${file.deletions} removed"
+                                contentDescription = file.accessibilityLabel
                             },
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -268,7 +291,7 @@ fun OpenCodeSessionBranchPopoverContent(
                             overflow = TextOverflow.StartEllipsis,
                             modifier = Modifier.weight(1f),
                         )
-                        OpenCodeDiffStat(additions = file.additions, deletions = file.deletions)
+                        OpenCodeDiffStat(additions = file.visibleAdditions, deletions = file.visibleDeletions)
                     }
                 }
             }
@@ -338,6 +361,8 @@ private val SessionBranchPillSampleFiles =
         OpenCodeSessionBranchChangedFile("app/src/main/session/BranchPill.kt", 96, 4),
         OpenCodeSessionBranchChangedFile("app/src/main/session/BranchPopover.kt", 24, 2),
         OpenCodeSessionBranchChangedFile("app/src/test/BranchPillTest.kt", 8, 8),
+        OpenCodeSessionBranchChangedFile("app/src/main/legacy/OldBranchRow.kt", 0, 6),
+        OpenCodeSessionBranchChangedFile("app/src/main/res/drawable/branch_icon.png", 0, 0),
     )
 
 @Composable

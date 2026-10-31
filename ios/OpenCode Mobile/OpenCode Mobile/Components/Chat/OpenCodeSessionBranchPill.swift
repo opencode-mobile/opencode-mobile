@@ -8,6 +8,15 @@ struct OpenCodeSessionBranchChangedFile: Equatable, Hashable {
     let deletions: Int
 
     var linesChanged: Int { additions + deletions }
+
+    /// Counts to draw: a zero side is nil, so a binary or rename-only file shows none.
+    var visibleAdditions: Int? { additions > 0 ? additions : nil }
+    var visibleDeletions: Int? { deletions > 0 ? deletions : nil }
+
+    /// "src/a.swift, 61 added"; a file without line counts reads its path only.
+    var accessibilityLabel: String {
+        OpenCodeSessionBranchSummary.spokenCounts(prefix: path, additions: additions, deletions: deletions)
+    }
 }
 
 /// What the Session Branch Pill and its popover show: the session's branch, its base,
@@ -42,7 +51,7 @@ struct OpenCodeSessionBranchSummary: Equatable {
         var parts: [String] = []
         if additions > 0 { parts.append("+\(additions)") }
         if deletions > 0 { parts.append("−\(deletions)") }
-        return parts.isEmpty ? Self.fileCount(files.count, suffix: "") : parts.joined(separator: " ")
+        return parts.isEmpty ? Self.fileCount(files.count) : parts.joined(separator: " ")
     }
 
     var pillLayout: OpenCodeFloatingPillLayout {
@@ -56,11 +65,8 @@ struct OpenCodeSessionBranchSummary: Equatable {
     var accessibilityLabel: String {
         let name = "\(isWorktree ? "Worktree branch" : "Branch") \(branch)"
         guard hasChanges else { return "\(name), no changes" }
-        var parts = [name]
-        if additions > 0 { parts.append("\(additions) added") }
-        if deletions > 0 { parts.append("\(deletions) removed") }
-        if parts.count == 1 { parts.append(Self.fileCount(files.count, suffix: " changed")) }
-        return parts.joined(separator: ", ")
+        guard additions > 0 || deletions > 0 else { return "\(name), \(Self.uncommittedFileCount(files.count))" }
+        return Self.spokenCounts(prefix: name, additions: additions, deletions: deletions)
     }
 
     /// The base branch when the server reports one that differs from the branch itself.
@@ -69,9 +75,18 @@ struct OpenCodeSessionBranchSummary: Equatable {
         return baseBranch
     }
 
-    /// "3 files changed"; nil without changes.
+    /// "3 uncommitted files"; nil without changes. Worded so it does not read as a diff against the base.
     var fileCountLabel: String? {
-        hasChanges ? Self.fileCount(files.count, suffix: " changed") : nil
+        hasChanges ? Self.uncommittedFileCount(files.count) : nil
+    }
+
+    /// Popover totals: a zero side is nil, as on the pill.
+    var visibleAdditions: Int? { additions > 0 ? additions : nil }
+    var visibleDeletions: Int? { deletions > 0 ? deletions : nil }
+
+    /// "3 uncommitted files, 106 added"; nil without changes.
+    var fileCountAccessibilityLabel: String? {
+        fileCountLabel.map { Self.spokenCounts(prefix: $0, additions: additions, deletions: deletions) }
     }
 
     /// The most-changed files by lines added plus removed, ties by path.
@@ -84,8 +99,20 @@ struct OpenCodeSessionBranchSummary: Equatable {
         )
     }
 
-    private static func fileCount(_ count: Int, suffix: String) -> String {
-        "\(count) \(count == 1 ? "file" : "files")\(suffix)"
+    private static func fileCount(_ count: Int) -> String {
+        "\(count) \(count == 1 ? "file" : "files")"
+    }
+
+    private static func uncommittedFileCount(_ count: Int) -> String {
+        "\(count) uncommitted \(count == 1 ? "file" : "files")"
+    }
+
+    /// "prefix, 128 added, 14 removed" with zero sides left out.
+    static func spokenCounts(prefix: String, additions: Int, deletions: Int) -> String {
+        var parts = [prefix]
+        if additions > 0 { parts.append("\(additions) added") }
+        if deletions > 0 { parts.append("\(deletions) removed") }
+        return parts.joined(separator: ", ")
     }
 }
 
@@ -176,7 +203,7 @@ struct OpenCodeSessionBranchPopoverContent: View {
                 Text(summary.branch)
                     .font(OpenCodeTypography.code)
                     .foregroundStyle(OpenCodeColors.textStrong)
-                    .lineLimit(2)
+                    .lineLimit(1)
                     .truncationMode(.middle)
                     .textSelection(.enabled)
                 if let base = summary.visibleBaseBranch {
@@ -199,9 +226,10 @@ struct OpenCodeSessionBranchPopoverContent: View {
                         .font(OpenCodeTypography.caption)
                         .foregroundStyle(OpenCodeColors.textWeak)
                     Spacer(minLength: 8)
-                    OpenCodeDiffStat(additions: summary.additions, deletions: summary.deletions, style: .caption)
+                    OpenCodeDiffStat(additions: summary.visibleAdditions, deletions: summary.visibleDeletions, style: .caption)
                 }
-                .accessibilityElement(children: .combine)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(summary.fileCountAccessibilityLabel ?? fileCountLabel)
             }
             ForEach(summary.topFiles, id: \.path) { file in
                 HStack(spacing: 8) {
@@ -211,11 +239,11 @@ struct OpenCodeSessionBranchPopoverContent: View {
                         .lineLimit(1)
                         .truncationMode(.head)
                     Spacer(minLength: 8)
-                    OpenCodeDiffStat(additions: file.additions, deletions: file.deletions, style: .caption)
+                    OpenCodeDiffStat(additions: file.visibleAdditions, deletions: file.visibleDeletions, style: .caption)
                         .fixedSize()
                 }
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(file.path), \(file.additions) added, \(file.deletions) removed")
+                .accessibilityLabel(file.accessibilityLabel)
             }
         }
     }
@@ -288,6 +316,8 @@ enum SessionBranchPillPreviewCase: CaseIterable {
         .init(path: "Sources/App/Session/BranchPill.swift", additions: 96, deletions: 4),
         .init(path: "Sources/App/Session/BranchPopover.swift", additions: 24, deletions: 2),
         .init(path: "Tests/BranchPillTests.swift", additions: 8, deletions: 8),
+        .init(path: "Sources/App/Legacy/OldBranchRow.swift", additions: 0, deletions: 6),
+        .init(path: "Resources/branch-icon.png", additions: 0, deletions: 0),
     ]
 }
 

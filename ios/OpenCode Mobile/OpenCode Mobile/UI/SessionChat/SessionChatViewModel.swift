@@ -236,6 +236,7 @@ final class SessionChatViewModel {
         suppressedSnackbarKey = nil
         snackbarSequence = 0
         turnDiffNotice = nil
+        branchCopiedNotice = nil
         OpenCodeLog.sessionChat.info("bind session=\(sessionID) worktree=\(worktree) title=\(sessionTitle)")
         sessionInfo.bind(sessionID: sessionID, sessionTitle: sessionTitle)
         timeline.onChange = { [weak self] in self?.publishUiState() }

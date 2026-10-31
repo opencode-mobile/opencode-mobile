@@ -50,8 +50,8 @@ struct SessionBranchPillGalleryView: View {
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .padding(.top, 8)
             OpenCodeSessionBranchPopoverContent(summary: sample.summary, onViewAllChanges: {}, onCopyBranchName: {})
-                .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 12))
-                .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(OpenCodeColors.borderWeakBase))
+                .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: OpenCodeRadius.medium))
+                .overlay(RoundedRectangle(cornerRadius: OpenCodeRadius.medium).strokeBorder(OpenCodeColors.borderWeakBase))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

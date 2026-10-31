@@ -53,7 +53,7 @@ struct SessionBranchPillLabelTests {
         #expect(removed.changeLabel == "−3")
         #expect(removed.changeLabel?.unicodeScalars.first == Unicode.Scalar(0x2212))
         #expect(binary.changeLabel == "2 files")
-        #expect(binary.accessibilityLabel == "Branch x, 2 files changed")
+        #expect(binary.accessibilityLabel == "Branch x, 2 uncommitted files")
     }
 
     @Test func topFilesAreTheThreeMostChangedByLines() {
@@ -63,7 +63,7 @@ struct SessionBranchPillLabelTests {
         ])
 
         #expect(summary.topFiles.map(\.path) == ["b.swift", "big.kt", "a.swift"])
-        #expect(summary.fileCountLabel == "5 files changed")
+        #expect(summary.fileCountLabel == "5 uncommitted files")
     }
 
     @Test func topFileTiesSortByPath() {
@@ -73,9 +73,9 @@ struct SessionBranchPillLabelTests {
         ])
 
         #expect(summary.topFiles.map(\.path) == ["y", "z"])
-        #expect(summary.fileCountLabel == "2 files changed")
+        #expect(summary.fileCountLabel == "2 uncommitted files")
         #expect(OpenCodeSessionBranchSummary(branch: "x", files: [.init(path: "a", additions: 1, deletions: 0)])
-            .fileCountLabel == "1 file changed")
+            .fileCountLabel == "1 uncommitted file")
     }
 
     @Test func baseBranchShowsOnlyWhenKnownAndDifferent() {
@@ -83,5 +83,34 @@ struct SessionBranchPillLabelTests {
         #expect(OpenCodeSessionBranchSummary(branch: "main", baseBranch: "main").visibleBaseBranch == nil)
         #expect(OpenCodeSessionBranchSummary(branch: "feature-x", baseBranch: nil).visibleBaseBranch == nil)
         #expect(OpenCodeSessionBranchSummary(branch: "feature-x", baseBranch: "").visibleBaseBranch == nil)
+    }
+
+    @Test func popoverHidesZeroSidesAndNeverSpeaksZero() {
+        let deletionOnly = OpenCodeSessionBranchChangedFile(path: "src/old.ts", additions: 0, deletions: 42)
+        let binary = OpenCodeSessionBranchChangedFile(path: "assets/logo.png", additions: 0, deletions: 0)
+        let summary = OpenCodeSessionBranchSummary(branch: "x", files: [deletionOnly, binary])
+
+        #expect(deletionOnly.visibleAdditions == nil)
+        #expect(deletionOnly.visibleDeletions == 42)
+        #expect(deletionOnly.accessibilityLabel == "src/old.ts, 42 removed")
+        #expect(binary.visibleAdditions == nil)
+        #expect(binary.visibleDeletions == nil)
+        #expect(binary.accessibilityLabel == "assets/logo.png")
+        #expect(summary.visibleAdditions == nil)
+        #expect(summary.visibleDeletions == 42)
+        #expect(summary.fileCountAccessibilityLabel == "2 uncommitted files, 42 removed")
+        #expect(summary.topFiles.map(\.path) == ["src/old.ts", "assets/logo.png"])
+        for label in [deletionOnly.accessibilityLabel, binary.accessibilityLabel, summary.fileCountAccessibilityLabel ?? "", summary.accessibilityLabel] {
+            #expect(!label.contains("0 added"))
+            #expect(!label.contains("0 removed"))
+        }
+    }
+
+    @Test func popoverTotalsSpeakBothSidesWhenPresent() {
+        let summary = OpenCodeSessionBranchSummary(branch: "x", files: files)
+        #expect(summary.visibleAdditions == 128)
+        #expect(summary.visibleDeletions == 14)
+        #expect(summary.fileCountAccessibilityLabel == "3 uncommitted files, 128 added, 14 removed")
+        #expect(files[0].accessibilityLabel == "b.swift, 100 added, 2 removed")
     }
 }
