@@ -19,6 +19,7 @@ import dev.opencode.mobile.ui.sessionchat.dropOrphanQuestionRequests
 import dev.opencode.mobile.ui.sessionchat.isQuestionAnswerValid
 import dev.opencode.mobile.ui.sessionchat.orderedPermissionRequests
 import dev.opencode.mobile.ui.sessionchat.orderedQuestionRequests
+import dev.opencode.mobile.ui.sessionchat.syncedQuestionDrafts
 import dev.opencode.mobile.ui.sessionchat.toggledQuestionSelection
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -46,10 +47,6 @@ class SessionChatInbox(
 
     private var boundSessionId: String? = null
     private var boundWorktree: String? = null
-    private var questionDraftRequestId: String? = null
-
-    /** Wizard progress of question requests paged away from, restored when paged back. */
-    private var parkedQuestionDrafts: Map<String, Pair<Int, Map<Int, QuestionAnswerDraft>>> = emptyMap()
     private var permissionObservationJob: Job? = null
     private var questionObservationJob: Job? = null
     private var todoObservationJob: Job? = null
@@ -66,8 +63,6 @@ class SessionChatInbox(
         stop()
         boundSessionId = sessionId
         boundWorktree = worktree
-        questionDraftRequestId = null
-        parkedQuestionDrafts = emptyMap()
         lastTodoLive = null
         _state.value = SessionChatInboxRegionState(rootSessionId = sessionId)
         observe(sessionId, worktree)
@@ -132,7 +127,7 @@ class SessionChatInbox(
                     questionSubmittingId = if (submittingCleared) null else current.questionSubmittingId,
                     questionError = if (submittingCleared) null else current.questionError,
                 )
-            syncQuestionDrafts(next)
+            syncedQuestionDrafts(next)
         }
     }
 
@@ -179,7 +174,7 @@ class SessionChatInbox(
             InboxRequestPaging.pagedId(current.questionRequests.map { it.id }, current.questionSelectedId, delta)
                 ?: return
         if (target == current.selectedQuestionRequest?.id) return
-        _state.update { syncQuestionDrafts(it.copy(questionSelectedId = target, questionError = null)) }
+        _state.update { syncedQuestionDrafts(it.copy(questionSelectedId = target, questionError = null)) }
     }
 
     fun hideQuestionDock(requestId: String) {
@@ -478,7 +473,7 @@ class SessionChatInbox(
                     questionSubmittingId = if (submittingCleared) null else current.questionSubmittingId,
                     questionError = if (submittingCleared) null else current.questionError,
                 )
-            syncQuestionDrafts(next)
+            syncedQuestionDrafts(next)
         }
         val visibleId = _state.value.selectedQuestionRequest?.id
         if (visibleId != previousVisibleId) {
@@ -527,31 +522,6 @@ class SessionChatInbox(
         }
     }
 
-    private fun syncQuestionDrafts(current: SessionChatInboxRegionState): SessionChatInboxRegionState {
-        val pendingIds = current.questionRequests.mapTo(mutableSetOf()) { it.id }
-        parkedQuestionDrafts = parkedQuestionDrafts.filterKeys { it in pendingIds }
-        val visible = current.selectedQuestionRequest
-        if (visible == null) {
-            questionDraftRequestId = null
-            return current.copy(questionWizardIndex = 0, questionDrafts = emptyMap())
-        }
-        if (questionDraftRequestId != visible.id) {
-            val previous = questionDraftRequestId
-            if (previous != null && previous in pendingIds) {
-                parkedQuestionDrafts = parkedQuestionDrafts + (previous to (current.questionWizardIndex to current.questionDrafts))
-            }
-            questionDraftRequestId = visible.id
-            val parked = parkedQuestionDrafts[visible.id]
-            parkedQuestionDrafts = parkedQuestionDrafts - visible.id
-            return current.copy(
-                questionWizardIndex = (parked?.first ?: 0).coerceIn(0, (visible.questions.size - 1).coerceAtLeast(0)),
-                questionDrafts = parked?.second.orEmpty(),
-            )
-        }
-        return current.copy(
-            questionWizardIndex = current.questionWizardIndex.coerceIn(0, (visible.questions.size - 1).coerceAtLeast(0)),
-        )
-    }
 
     private fun logI(message: String) {
         DiagnosticLog.info(DiagnosticLogArea.Chat, message)

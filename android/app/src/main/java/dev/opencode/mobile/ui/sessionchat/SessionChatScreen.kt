@@ -1135,22 +1135,15 @@ private fun SessionChatScreenBody(
                     ) {
                         // Suggestions float above this column. Keep the pending strip
                         // in the measured height so the timeline inset does not jump.
-                        if (overlayComposerKind == SessionChatComposerKind.Prompt &&
-                            uiState.permissionDockHidden
-                        ) {
+                        hiddenRequestPillVariant(uiState.permissionDockHidden, uiState.questionDockHidden)?.let { variant ->
                             OpenCodeActionPill(
-                                variant = OpenCodeActionPillVariant.ReviewPermission,
-                                onClick = viewModel::showPermissionDock,
-                                modifier =
-                                    Modifier
-                                        .align(Alignment.CenterHorizontally)
-                                        .padding(bottom = 6.dp),
-                            )
-                        }
-                        if (overlayComposerKind == SessionChatComposerKind.Prompt && uiState.questionDockHidden) {
-                            OpenCodeActionPill(
-                                variant = OpenCodeActionPillVariant.AnswerQuestion,
-                                onClick = viewModel::showQuestionDock,
+                                variant = variant,
+                                onClick =
+                                    if (variant == OpenCodeActionPillVariant.ReviewPermission) {
+                                        viewModel::showPermissionDock
+                                    } else {
+                                        viewModel::showQuestionDock
+                                    },
                                 modifier =
                                     Modifier
                                         .align(Alignment.CenterHorizontally)
@@ -2056,3 +2049,17 @@ private fun SessionChatSideQuestionRow(
 
 private fun InboxRequestAttribution.toComposerAttribution(summary: String) =
     OpenCodeSessionComposerState.RequestAttribution(sessionId = sessionId, letter = letter, summary = summary)
+
+/**
+ * The pill that reopens a collapsed permission or question panel. It shows whatever the composer
+ * shows, so a child session's lockout cannot strand a hidden request.
+ */
+internal fun hiddenRequestPillVariant(
+    permissionDockHidden: Boolean,
+    questionDockHidden: Boolean,
+): OpenCodeActionPillVariant? =
+    when {
+        permissionDockHidden -> OpenCodeActionPillVariant.ReviewPermission
+        questionDockHidden -> OpenCodeActionPillVariant.AnswerQuestion
+        else -> null
+    }

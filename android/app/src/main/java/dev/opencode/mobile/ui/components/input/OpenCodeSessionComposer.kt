@@ -68,6 +68,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -1208,7 +1209,9 @@ private fun RequestAttributionRow(
             modifier =
                 Modifier
                     .size(22.dp)
-                    .background(openCodeColor("warning").copy(alpha = 0.28f), CircleShape),
+                    .background(openCodeColor("warning").copy(alpha = 0.28f), CircleShape)
+                    // The summary already names the agent; the letter is decoration.
+                    .clearAndSetSemantics {},
             contentAlignment = Alignment.Center,
         ) {
             Text(

@@ -782,6 +782,10 @@ data class SessionChatInboxRegionState(
     val questionSessions: List<Session> = emptyList(),
     val questionWizardIndex: Int = 0,
     val questionDrafts: Map<Int, QuestionAnswerDraft> = emptyMap(),
+    /** The question request [questionWizardIndex] and [questionDrafts] belong to. */
+    val questionDraftRequestId: String? = null,
+    /** Answers of question requests paged away from, restored when paged back. */
+    val keptQuestionDrafts: Map<String, KeptQuestionDraft> = emptyMap(),
     val sessionTodos: List<SessionTodo> = emptyList(),
 ) {
     val permissionPageIndex: Int
@@ -822,6 +826,50 @@ data class SessionChatInboxRegionState(
 
     val questionDraft: QuestionAnswerDraft
         get() = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
+}
+
+data class KeptQuestionDraft(
+    val wizardIndex: Int,
+    val drafts: Map<Int, QuestionAnswerDraft>,
+)
+
+/**
+ * Points the question wizard at the selected question request: keeps the answers of the request
+ * paged away from and restores the selected one's. Pure, so a `MutableStateFlow.update` that
+ * re-runs it on a concurrent write cannot mix two requests' answers.
+ */
+internal fun syncedQuestionDrafts(current: SessionChatInboxRegionState): SessionChatInboxRegionState {
+    val pendingIds = current.questionRequests.mapTo(mutableSetOf()) { it.id }
+    val kept = current.keptQuestionDrafts.filterKeys { it in pendingIds }
+    val visible =
+        current.selectedQuestionRequest
+            ?: return current.copy(
+                questionWizardIndex = 0,
+                questionDrafts = emptyMap(),
+                questionDraftRequestId = null,
+                keptQuestionDrafts = kept,
+            )
+    val lastIndex = (visible.questions.size - 1).coerceAtLeast(0)
+    if (current.questionDraftRequestId == visible.id) {
+        return current.copy(
+            questionWizardIndex = current.questionWizardIndex.coerceIn(0, lastIndex),
+            keptQuestionDrafts = kept,
+        )
+    }
+    val previous = current.questionDraftRequestId
+    val withPrevious =
+        if (previous != null && previous in pendingIds) {
+            kept + (previous to KeptQuestionDraft(current.questionWizardIndex, current.questionDrafts))
+        } else {
+            kept
+        }
+    val restored = withPrevious[visible.id]
+    return current.copy(
+        questionWizardIndex = (restored?.wizardIndex ?: 0).coerceIn(0, lastIndex),
+        questionDrafts = restored?.drafts.orEmpty(),
+        questionDraftRequestId = visible.id,
+        keptQuestionDrafts = withPrevious - visible.id,
+    )
 }
 
 data class SessionChatCommandsRegionState(
