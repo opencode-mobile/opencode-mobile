@@ -45,12 +45,24 @@ private val ChildSessionRowTextStackSpacing = 2.dp
 private val ChildSessionRowTrailingSpacing = 6.dp
 private val ChildSessionRowChevronSize = 16.dp
 
+/** Where a child session row's subagent is, shown beside the elapsed time. */
+enum class OpenCodeChildSessionRowStatus(
+    val label: String,
+) {
+    Running("running"),
+
+    /** Amber: the subagent waits on a permission or question. */
+    WaitingForInput("waiting for input"),
+    Done("done"),
+}
+
 @Composable
 fun OpenCodeChildSessionRow(
     title: String,
     caption: String? = null,
     subtitle: String? = null,
     elapsed: String? = null,
+    status: OpenCodeChildSessionRowStatus? = null,
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
@@ -60,6 +72,7 @@ fun OpenCodeChildSessionRow(
             caption = caption,
             subtitle = subtitle,
             elapsed = elapsed,
+            status = status?.label,
         )
     val shape = RoundedCornerShape(ChildSessionRowCornerRadius)
 
@@ -147,6 +160,19 @@ fun OpenCodeChildSessionRow(
                 }
             }
 
+            if (status != null) {
+                Text(
+                    text = status.label,
+                    style = MaterialTheme.typography.bodySmall,
+                    color =
+                        if (status == OpenCodeChildSessionRowStatus.WaitingForInput) {
+                            openCodeColor("warning")
+                        } else {
+                            openCodeColor("text-weaker")
+                        },
+                    maxLines = 1,
+                )
+            }
             if (!elapsed.isNullOrEmpty()) {
                 Text(
                     text = elapsed,
@@ -177,11 +203,13 @@ internal fun buildChildSessionRowAccessibilityLabel(
     caption: String?,
     subtitle: String?,
     elapsed: String?,
+    status: String? = null,
 ): String =
     buildList {
         add(title)
         if (!caption.isNullOrEmpty()) add(caption)
         if (!subtitle.isNullOrEmpty()) add(subtitle)
+        if (!status.isNullOrEmpty()) add(status)
         if (!elapsed.isNullOrEmpty()) add(elapsed)
     }.joinToString(", ")
 

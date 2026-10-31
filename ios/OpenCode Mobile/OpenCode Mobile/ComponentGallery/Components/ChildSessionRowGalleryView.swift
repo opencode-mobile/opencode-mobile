@@ -5,6 +5,7 @@ struct ChildSessionRowGalleryView: View {
     @State private var showSubtitle = true
     @State private var showElapsed = true
     @State private var tappable = true
+    @State private var status: OpenCodeChildSessionRowStatus?
 
     private var caption: String? {
         showCaption ? "background" : nil
@@ -44,6 +45,22 @@ struct ChildSessionRowGalleryView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
+                Text("Status")
+                    .font(OpenCodeTypography.button)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                HStack(spacing: 8) {
+                    OpenCodeChoiceBadge(label: "None", selected: status == nil, action: { status = nil })
+                    ForEach(OpenCodeChildSessionRowStatus.allCases, id: \.self) { option in
+                        OpenCodeChoiceBadge(
+                            label: option.label.capitalized,
+                            selected: status == option,
+                            action: { status = option }
+                        )
+                    }
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
                 Text("Interaction")
                     .font(OpenCodeTypography.button)
                     .foregroundStyle(OpenCodeColors.textStrong)
@@ -59,6 +76,7 @@ struct ChildSessionRowGalleryView: View {
                 caption: caption,
                 subtitle: subtitle,
                 elapsed: elapsed,
+                status: status,
                 action: tappable ? {} : nil
             )
         }

@@ -60,6 +60,7 @@ enum class ComponentGalleryEntryId {
     SyncingPill,
     SideQuestionPill,
     FloatingPill,
+    BackgroundWorkPill,
     ComposerSuggestionOverlay,
     ReviewChangesPill,
     SessionTodosPill,
@@ -506,6 +507,14 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.SessionTodosPill,
             title = "Session Todos Pill",
             description = "Floating live Session Todo List progress and active preview.",
+            category = ComponentGalleryCategory.Session,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.BackgroundWorkPill,
+            title = "Background Work Pill",
+            description =
+                "Session Chat subagent counter on the floating pill, amber when a subagent needs input, " +
+                    "and the Subagents panel with live timers.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(

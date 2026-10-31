@@ -56,6 +56,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case syncingPill
     case sideQuestionPill
     case floatingPill
+    case backgroundWorkPill
     case reviewChangesPill
     case sessionTodosPill
     case sessionTodoItem
@@ -182,6 +183,12 @@ let componentGalleryEntries = [
         title: "Floating Pill",
         description: "Shared Session Chat pill: icon + label, icon only, live counter, or label with close, in live, ready, needs attention, error, and done.",
         category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .backgroundWorkPill,
+        title: "Background Work Pill",
+        description: "Session Chat subagent counter on the floating pill, amber when a subagent needs input, and the Subagents panel with live timers.",
+        category: .session
     ),
     ComponentGalleryEntry(
         id: .button,

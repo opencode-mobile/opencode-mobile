@@ -71,6 +71,7 @@ enum ProductAnalytics {
         static let sessionChipTimelineIntro = "session_chip_timeline_intro"
         static let sessionTimelineStylePicker = "session_timeline_style_picker"
         static let sessionTodos = "session_todos"
+        static let sessionSubagents = "session_subagents"
         static let sessionContext = "session_context"
         static let changes = "changes"
         static let changesFileViewer = "changes_file_viewer"
@@ -159,6 +160,7 @@ enum ProductAnalytics {
         static let chatOpenChangesFromTool = "chat_open_changes_from_tool"
         static let chatOpenChildSession = "chat_open_child_session"
         static let chatOpenTodos = "chat_open_todos"
+        static let chatOpenSubagents = "chat_open_subagents"
         static let chatScrollToEnd = "chat_scroll_to_end"
         static let chatOpenMessageActions = "chat_open_message_actions"
         static let chatOpenToolDetail = "chat_open_tool_detail"
@@ -268,6 +270,7 @@ enum ProductAnalytics {
         static let timelineStylePickerDismiss = "timeline_style_picker_dismiss"
         static let sessionToolGroupBack = "session_tool_group_back"
         static let todosDismiss = "todos_dismiss"
+        static let subagentsDismiss = "subagents_dismiss"
 
         static let sessionContextBack = "session_context_back"
         static let sessionContextRefresh = "session_context_refresh"

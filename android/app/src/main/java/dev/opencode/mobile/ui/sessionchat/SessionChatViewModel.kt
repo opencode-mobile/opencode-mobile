@@ -339,6 +339,9 @@ class SessionChatViewModel
         private val activityFooterHolds = mutableMapOf<String, SessionChatActivityFooterHold>()
         private var stepEntryDebounce = SessionChatStepEntryDebounce()
         private var activityCardFooters: Map<String, SessionChatActivityFooter> = emptyMap()
+
+        /** When subagents seen working finished, keyed by tool part id, for their frozen run time. */
+        private var subagentFinishTimes: Map<String, Long> = emptyMap()
         private var debouncedStepIds: Set<String> = emptySet()
         private var stepTimingJob: Job? = null
         private var liveRailSource: List<SessionChatMessageItem>? = null
@@ -1996,6 +1999,40 @@ class SessionChatViewModel
             syncActivityChildren(_uiState.value.messages)
         }
 
+        /**
+         * Subagent rows from the linked timeline, live session activity and the pending
+         * requests of the session tree; remembers when rows seen working finish.
+         */
+        private fun resolveSubagents(
+            inboxState: SessionChatInboxRegionState,
+            infoState: SessionInfoRegionState,
+        ): List<SessionChatSubagent> {
+            val messages = SessionChatChildSessionLinker.link(timeline.loadedMessages(), timeline.childSessions)
+            val sessions = inboxState.permissionSessions + inboxState.questionSessions
+            val requestSessionIds =
+                inboxState.permissionRequests.map { it.sessionId } + inboxState.questionRequests.map { it.sessionId }
+
+            fun rows(finishTimes: Map<String, Long>) =
+                SessionChatBackgroundWork.subagents(
+                    messages = messages,
+                    sessions = sessions,
+                    busySessionIds = infoState.busySessionIds,
+                    requestSessionIds = requestSessionIds,
+                    finishedAtMs = finishTimes,
+                )
+            val current = rows(subagentFinishTimes)
+            val finishTimes =
+                SessionChatBackgroundWork.finishTimes(
+                    previous = _uiState.value.subagents,
+                    current = current,
+                    known = subagentFinishTimes,
+                    nowMs = nowMs(),
+                )
+            if (finishTimes == subagentFinishTimes) return current
+            subagentFinishTimes = finishTimes
+            return rows(finishTimes)
+        }
+
         private fun mergeUiState(
             timelineState: SessionChatTimelineRegionState,
             composerState: SessionChatComposerRegionState,
@@ -2152,6 +2189,7 @@ class SessionChatViewModel
                     nowMs = nowMs(),
                 )
             schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
+            val subagents = resolveSubagents(inboxSnapshot, infoState)
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
                 sessionTitle = infoState.sessionTitle,
@@ -2183,6 +2221,8 @@ class SessionChatViewModel
                 sessionTodoActivePreview = SessionTodoList.activePreview(inboxSnapshot.sessionTodos),
                 sessionTodoCompletedCount = SessionTodoList.completedCount(inboxSnapshot.sessionTodos),
                 sessionTodoTotalCount = inboxSnapshot.sessionTodos.size,
+                subagents = subagents,
+                backgroundWorkPill = SessionChatBackgroundWork.pill(subagents),
                 connectionStatus = infoState.connectionStatus,
                 canMutate = infoState.canMutate,
                 composerEnabled = infoState.composerEnabled,

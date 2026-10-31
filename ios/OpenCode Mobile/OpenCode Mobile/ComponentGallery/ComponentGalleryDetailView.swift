@@ -168,6 +168,8 @@ struct ComponentGalleryDetailView: View {
             SideQuestionPillGalleryView()
         case .floatingPill:
             FloatingPillGalleryView()
+        case .backgroundWorkPill:
+            BackgroundWorkPillGalleryView()
         case .reviewChangesPill:
             ReviewChangesPillGalleryView()
         case .sessionTodosPill:

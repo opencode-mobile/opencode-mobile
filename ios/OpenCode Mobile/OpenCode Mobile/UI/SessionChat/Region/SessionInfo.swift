@@ -291,6 +291,7 @@ final class SessionInfo {
                     retryCard: card,
                     isRetrying: isRetrying
                 )
+                state.busySessionIDs = Set(snapshot.entries.keys.filter { snapshot.isBusy(for: $0) })
                 notifyChange()
             }
             if Task.isCancelled { return }
