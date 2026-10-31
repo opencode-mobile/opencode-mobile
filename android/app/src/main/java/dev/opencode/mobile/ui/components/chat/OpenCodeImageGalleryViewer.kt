@@ -138,11 +138,12 @@ fun OpenCodeImageGalleryViewer(
                     onZoomChange = { zoomed -> if (page == pagerState.currentPage) pageZoomed = zoomed },
                 )
             }
+            val chromePage = pagerState.currentPage.coerceIn(0, count - 1)
             ViewerChrome(
-                title = "${pagerState.currentPage + 1} of $count",
-                name = images[pagerState.currentPage].name,
+                title = "${chromePage + 1} of $count",
+                name = images[chromePage].name,
                 onDismiss = onDismiss,
-                onShare = onShare?.let { share -> { share(pagerState.currentPage) } },
+                onShare = onShare?.let { share -> { share(chromePage) } },
             )
         }
     }

@@ -241,7 +241,8 @@ private fun GalleryTile(
     // The overflow tile opens the viewer even before its own picture loads.
     val clickable = current is GalleryBitmap.Ready || overflow > 0
     TileFrame(
-        label = if (overflow > 0) "$label, $overflow more" else label,
+        // The tile is itself one of the "+N" images, so only N - 1 others stay hidden.
+        label = if (overflow > 1) "$label, ${overflow - 1} more" else label,
         onClick = if (clickable) onClick else null,
         modifier = modifier,
     ) {

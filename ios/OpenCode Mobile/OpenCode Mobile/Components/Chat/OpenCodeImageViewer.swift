@@ -270,6 +270,12 @@ final class OpenCodeZoomingImageScrollView: UIScrollView, UIScrollViewDelegate, 
     }
 
     func setImage(_ image: UIImage) {
+        // A sharper version of the picture already on screen (preview, then the decoded full image)
+        // swaps in place, so a pinch or double tap made while it loaded keeps its zoom and offset.
+        if zoomScale > minimumZoomScale, let previous = imageView.image, Self.sameAspect(previous.size, image.size) {
+            imageView.image = image
+            return
+        }
         imageView.image = image
         zoomScale = 1
         fittedBoundsSize = .zero
@@ -285,6 +291,11 @@ final class OpenCodeZoomingImageScrollView: UIScrollView, UIScrollViewDelegate, 
             contentSize = fitted
         }
         centerImage()
+    }
+
+    static func sameAspect(_ lhs: CGSize, _ rhs: CGSize) -> Bool {
+        guard lhs.width > 0, lhs.height > 0, rhs.width > 0, rhs.height > 0 else { return false }
+        return abs(lhs.width / lhs.height - rhs.width / rhs.height) < 0.01
     }
 
     static func fittedSize(_ size: CGSize, in bounds: CGSize) -> CGSize {

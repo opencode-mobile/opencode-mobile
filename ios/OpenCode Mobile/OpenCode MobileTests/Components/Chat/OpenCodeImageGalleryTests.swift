@@ -1,8 +1,42 @@
 import CoreGraphics
 import Testing
+import UIKit
 @testable import OpenCode_Mobile
 
 struct OpenCodeImageGalleryTests {
+    @Test @MainActor func zoomedViewerKeepsItsZoomWhenASharperPictureOfTheSameImageArrives() {
+        let view = OpenCodeZoomingImageScrollView()
+        view.frame = CGRect(x: 0, y: 0, width: 300, height: 600)
+        view.setImage(solidImage(size: CGSize(width: 40, height: 20)))
+        view.layoutIfNeeded()
+        view.setZoomScale(2.5, animated: false)
+
+        let sharper = solidImage(size: CGSize(width: 400, height: 200))
+        view.setImage(sharper)
+
+        #expect(view.zoomScale == 2.5)
+        #expect(view.imageView.image === sharper)
+    }
+
+    @Test @MainActor func viewerResetsZoomWhenADifferentShapedPictureArrives() {
+        let view = OpenCodeZoomingImageScrollView()
+        view.frame = CGRect(x: 0, y: 0, width: 300, height: 600)
+        view.setImage(solidImage(size: CGSize(width: 40, height: 20)))
+        view.layoutIfNeeded()
+        view.setZoomScale(2.5, animated: false)
+
+        view.setImage(solidImage(size: CGSize(width: 20, height: 40)))
+
+        #expect(view.zoomScale == 1)
+    }
+
+    private func solidImage(size: CGSize) -> UIImage {
+        UIGraphicsImageRenderer(size: size).image { context in
+            UIColor.red.setFill()
+            context.fill(CGRect(origin: .zero, size: size))
+        }
+    }
+
     @Test func layoutBySelectsTheArrangementForTheCount() {
         #expect(OpenCodeImageGalleryLayout(count: 1) == .single)
         #expect(OpenCodeImageGalleryLayout(count: 2) == .pair)
