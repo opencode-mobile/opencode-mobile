@@ -138,6 +138,8 @@ fun OpenCodeOutgoingMessage(
                                     Modifier
                                         .widthIn(max = maxBubbleWidth)
                                         .then(if (isPending) Modifier.pendingSteerOutline(dashColor) else Modifier)
+                                        // Dims the whole bubble (fill, plain text and markdown); the outline stays full.
+                                        .alpha(if (isPending) PENDING_STEER_ALPHA else 1f)
                                         .clip(OutgoingMessageShape)
                                         .then(
                                             outgoingMessageInteractionModifier(
@@ -147,7 +149,7 @@ fun OpenCodeOutgoingMessage(
                                             ),
                                         ),
                                 shape = OutgoingMessageShape,
-                                color = if (isPending) bubbleColor.copy(alpha = bubbleColor.alpha * PENDING_STEER_ALPHA) else bubbleColor,
+                                color = bubbleColor,
                                 contentColor = bubbleTextColor,
                             ) {
                                 Column(
@@ -184,7 +186,7 @@ fun OpenCodeOutgoingMessage(
                                                     }
                                                 },
                                             style = MaterialTheme.typography.bodyLarge,
-                                            color = if (isPending) bubbleTextColor.copy(alpha = PENDING_STEER_ALPHA) else bubbleTextColor,
+                                            color = bubbleTextColor,
                                             overflow = TextOverflow.Clip,
                                             modifier = Modifier.widthIn(max = maxBubbleWidth - OutgoingMessagePaddingHorizontal * 2),
                                         )

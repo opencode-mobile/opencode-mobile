@@ -543,14 +543,16 @@ object TimelineProjector {
         pendingToKeep: List<TimelineRow>,
     ): List<TimelineRow> {
         if (pendingToKeep.isEmpty()) return serverRows
+        // A steer belongs after the step it steers, so only plain sends move above the reply.
+        val (steers, sends) = pendingToKeep.partition { it.pendingDelivery != null }
         val index = serverRows.indexOfFirst { it.role == MessageRole.Assistant && it.isStreaming }
-        if (index >= 0) {
+        if (sends.isNotEmpty() && index >= 0) {
             val precededByUser = index > 0 && serverRows[index - 1].role == MessageRole.User
             if (!precededByUser) {
-                return serverRows.take(index) + pendingToKeep + serverRows.drop(index)
+                return serverRows.take(index) + sends + serverRows.drop(index) + steers
             }
         }
-        return serverRows + pendingToKeep
+        return serverRows + sends + steers
     }
 
     private fun applyPendingMetadata(
@@ -565,7 +567,8 @@ object TimelineProjector {
                 val pending =
                     dropped.firstOrNull { candidate -> isNewServerEchoOf(row, candidate, baselineIds) }
                         ?: return@map row
-                if (!isHiddenPendingPrompt(row) && pending.id !in echoes.values) {
+                // A shown waiting steer keeps the optimistic row's list key; a hidden queued echo does not.
+                if (!isQueuedPrompt(row) && pending.id !in echoes.values) {
                     echoes[row.id] = pending.id
                 }
                 val metadata =

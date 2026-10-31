@@ -146,6 +146,49 @@ struct SessionChatTimelineSteerTests {
         #expect(delivered.rows[2].steer == SessionChatSteer(isPending: false, showsLabel: true))
     }
 
+    @Test func multiStepRun_optimisticSteerStaysAfterStreamingStepThroughHandoff() {
+        // u1, a1 done, a2 streaming: the steer belongs after a2, before and after its echo.
+        let id = "msg_19a1b2c3d4e5AbCdEfGhIjKlMn"
+        let optimistic = OptimisticInputs(
+            pendingRows: [optimisticRow(id, "Use staging", .steer)],
+            baselineIDs: ["u1", "a1", "a2"],
+            mergePending: true
+        )
+        let base = [prompt("u1", "Start"), done("a1"), streaming("a2")]
+        let beforeSend = project(base)
+
+        let sent = project(base, optimistic: optimistic, previous: beforeSend)
+        #expect(sent.rows.map(\.id) == ["u1", "a1", "a2", id])
+
+        let echoed = project(base + [waiting(id, "Use staging", .steer)], optimistic: optimistic, previous: sent)
+        #expect(echoed.rows.map(\.id) == ["u1", "a1", "a2", id])
+        #expect(echoed.insertedRowIDs.isEmpty)
+        #expect(echoed.removedRowIDs.isEmpty)
+        #expect(echoed.rows.last?.steer == SessionChatSteer(isPending: true, showsLabel: true))
+
+        let delivered = project(
+            [prompt("u1", "Start"), done("a1"), done("a2"), prompt(id, "Use staging"), streaming("a3")],
+            optimistic: optimistic,
+            previous: echoed
+        )
+        #expect(delivered.rows.map(\.id) == ["u1", "a1", "a2", id, "a3"])
+        #expect(!delivered.insertedRowIDs.contains(id) && !delivered.removedRowIDs.contains(id))
+        #expect(delivered.rows[3].steer == SessionChatSteer(isPending: false, showsLabel: true))
+    }
+
+    @Test func multiStepRun_plainSendStillMovesAboveStreamingReply() {
+        let id = "msg_19a1b2c3d4e5AbCdEfGhIjKlMn"
+        let optimistic = OptimisticInputs(
+            pendingRows: [optimisticRow(id, "Hello", nil)],
+            baselineIDs: ["u1", "a1", "a2"],
+            mergePending: true
+        )
+
+        let sent = project([prompt("u1", "Start"), done("a1"), streaming("a2")], optimistic: optimistic)
+
+        #expect(sent.rows.map(\.id) == ["u1", "a1", id, "a2"])
+    }
+
     @Test func optimisticIdleSend_waitingSteerEchoDoesNotDuplicate() {
         let id = "msg_19a1b2c3d4e5AbCdEfGhIjKlMn"
         let optimisticRow = TimelineRow(
@@ -233,6 +276,32 @@ struct SessionChatTimelineSteerTests {
 
     private func waiting(_ id: String, _ text: String, _ delivery: FollowUpDelivery) -> Message {
         prompt(id, text).withPickupState(isWaitingForPickup: true, followUpDelivery: delivery)
+    }
+
+    private func optimisticRow(_ id: String, _ text: String, _ delivery: FollowUpDelivery?) -> TimelineRow {
+        TimelineRow(
+            id: id,
+            role: .user,
+            text: text,
+            metadataLabel: "",
+            pendingDelivery: delivery,
+            isPending: true,
+            blocks: [.text(blockID: PresentationBlockId.direct(id), text: text, renderedMarkdown: nil)],
+            contentRevision: ContentRevision.of(text),
+            layoutRevision: 1
+        )
+    }
+
+    private func streaming(_ id: String) -> Message {
+        Message(
+            id: id,
+            role: .assistant,
+            text: "Working",
+            parts: [.text(TextPart(id: "\(id):text", text: "Working", isStreaming: true))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: nil
+        )
     }
 
     private func running(_ id: String) -> Message {

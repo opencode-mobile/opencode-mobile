@@ -185,6 +185,73 @@ class TimelineSteerTest {
     }
 
     @Test
+    fun multiStepRun_optimisticSteerStaysAfterStreamingStepThroughHandoff() {
+        // u1, a1 done, a2 streaming: the steer belongs after a2, before and after its echo.
+        val optimistic =
+            OptimisticInputs(
+                pendingRows = listOf(optimisticRow(CLIENT_ID, "Use staging", FollowUpDelivery.Steer)),
+                baselineIds = setOf("u1", "a1", "a2"),
+            )
+        val base = listOf(prompt("u1", "Start"), done("a1"), streaming("a2"))
+        val beforeSend = project(base)
+
+        val sent = project(base, optimistic = optimistic, previous = beforeSend)
+        assertEquals(listOf("u1", "a1", "a2", CLIENT_ID), sent.rows.map { it.id })
+
+        val echoed = project(base + waiting(CLIENT_ID, "Use staging", FollowUpDelivery.Steer), optimistic = optimistic, previous = sent)
+        assertEquals(listOf("u1", "a1", "a2", CLIENT_ID), echoed.rows.map { it.id })
+        assertTrue(echoed.insertedRowIDs.isEmpty())
+        assertTrue(echoed.removedRowIDs.isEmpty())
+        assertEquals(SessionChatSteer(isPending = true, showsLabel = true), echoed.rows.last().steer)
+
+        val delivered =
+            project(
+                listOf(prompt("u1", "Start"), done("a1"), done("a2"), prompt(CLIENT_ID, "Use staging"), streaming("a3")),
+                optimistic = optimistic,
+                previous = echoed,
+            )
+        assertEquals(listOf("u1", "a1", "a2", CLIENT_ID, "a3"), delivered.rows.map { it.id })
+        assertFalse(CLIENT_ID in delivered.insertedRowIDs || CLIENT_ID in delivered.removedRowIDs)
+        assertEquals(SessionChatSteer(isPending = false, showsLabel = true), delivered.rows[3].steer)
+    }
+
+    @Test
+    fun multiStepRun_plainSendStillMovesAboveStreamingReply() {
+        val optimistic =
+            OptimisticInputs(
+                pendingRows = listOf(optimisticRow(CLIENT_ID, "Hello", null)),
+                baselineIds = setOf("u1", "a1", "a2"),
+            )
+
+        val sent = project(listOf(prompt("u1", "Start"), done("a1"), streaming("a2")), optimistic = optimistic)
+
+        assertEquals(listOf("u1", "a1", CLIENT_ID, "a2"), sent.rows.map { it.id })
+    }
+
+    @Test
+    fun commandSteerWithLocalId_keepsListKeyThroughWaitingEcho() {
+        // A v2 command keeps a local id; its waiting echo arrives under the server's id.
+        val localId = "pending-command"
+        val optimistic =
+            OptimisticInputs(
+                pendingRows = listOf(optimisticRow(localId, "[/review] the diff", FollowUpDelivery.Steer)),
+                baselineIds = setOf("u1", "a1"),
+            )
+        val base = listOf(prompt("u1", "Start"), running("a1"))
+
+        val sent = project(base, optimistic = optimistic)
+        val echoed =
+            project(base + waiting("msg-echo", "Review the staged diff.", FollowUpDelivery.Steer), optimistic = optimistic, previous = sent)
+
+        assertEquals(listOf("u1", "a1", "msg-echo"), echoed.rows.map { it.id })
+        assertEquals(localId, echoed.listKey("msg-echo"))
+        val sentKeys = sent.rows.map { sent.listKey(it.id) }
+        val echoedKeys = echoed.rows.map { echoed.listKey(it.id) }
+        assertEquals(sentKeys, echoedKeys)
+        assertEquals(SessionChatSteer(isPending = true, showsLabel = true), echoed.rows.last().steer)
+    }
+
+    @Test
     fun optimisticIdleSend_waitingSteerEchoDoesNotDuplicate() {
         val optimistic = OptimisticInputs(pendingRows = listOf(optimisticRow(CLIENT_ID, "Hello", null)))
 
@@ -266,6 +333,14 @@ class TimelineSteerTest {
     ): Message = prompt(id, text).copy(isWaitingForPickup = true, followUpDelivery = delivery)
 
     private fun running(id: String): Message = assistant(id, completedAtEpochMs = null)
+
+    private fun streaming(id: String): Message =
+        Message(
+            id = id,
+            role = MessageRole.Assistant,
+            text = "Working",
+            parts = listOf(MessagePart.Text("Working", isStreaming = true, id = "$id:text")),
+        )
 
     private fun done(id: String): Message = assistant(id, completedAtEpochMs = 2L)
 

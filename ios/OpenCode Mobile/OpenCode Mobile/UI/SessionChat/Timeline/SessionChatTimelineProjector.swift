@@ -438,13 +438,16 @@ nonisolated enum SessionChatTimelineProjector {
         pendingToKeep: [TimelineRow]
     ) -> [TimelineRow] {
         guard !pendingToKeep.isEmpty else { return serverRows }
-        if let index = serverRows.firstIndex(where: { $0.role == .assistant && $0.isStreaming }) {
+        // A steer belongs after the step it steers, so only plain sends move above the reply.
+        let steers = pendingToKeep.filter { $0.pendingDelivery != nil }
+        let sends = pendingToKeep.filter { $0.pendingDelivery == nil }
+        if !sends.isEmpty, let index = serverRows.firstIndex(where: { $0.role == .assistant && $0.isStreaming }) {
             let precededByUser = index > 0 && serverRows[index - 1].role == .user
             if !precededByUser {
-                return Array(serverRows[..<index]) + pendingToKeep + Array(serverRows[index...])
+                return Array(serverRows[..<index]) + sends + Array(serverRows[index...]) + steers
             }
         }
-        return serverRows + pendingToKeep
+        return serverRows + sends + steers
     }
 
     private static func applyPendingChrome(
