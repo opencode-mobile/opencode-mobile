@@ -554,7 +554,7 @@ final class SessionChatCommands {
 
     private func hasRevertibleContent(_ message: SessionChatRow) -> Bool {
         !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || message.blocks.contains { if case .attachment = $0 { true } else { false } }
+            || message.blocks.contains(where: \.isAttachmentContent)
     }
 
     private func revert(

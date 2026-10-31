@@ -20,8 +20,6 @@ struct OpenCodeAttachmentPresentation: Identifiable {
     let detail: String?
     /// Fraction (0...1) of an upload in flight. The chip shows it as its detail line and a hairline.
     let uploadFraction: Double?
-    /// The attachment behind a timeline image, so the inline image can load its full picture.
-    let imageFile: FilePart?
 
     init(
         id: String,
@@ -29,8 +27,7 @@ struct OpenCodeAttachmentPresentation: Identifiable {
         variant: OpenCodeAttachmentVariant,
         image: UIImage? = nil,
         detail: String? = nil,
-        uploadFraction: Double? = nil,
-        imageFile: FilePart? = nil
+        uploadFraction: Double? = nil
     ) {
         self.id = id
         self.filename = filename
@@ -38,7 +35,6 @@ struct OpenCodeAttachmentPresentation: Identifiable {
         self.image = image
         self.detail = detail
         self.uploadFraction = uploadFraction
-        self.imageFile = imageFile
     }
 
     var detailLabel: String {
@@ -145,19 +141,11 @@ struct OpenCodeAttachmentChip: View {
     }
 }
 
+/// A sent attachment as a read-only card. Timeline images use `OpenCodeImageGallery` instead.
 struct OpenCodeMessageAttachment: View {
     let attachment: OpenCodeAttachmentPresentation
 
-    @ViewBuilder
     var body: some View {
-        if attachment.variant == .image, attachment.imageFile != nil {
-            OpenCodeMessageImage(attachment: attachment)
-        } else {
-            chip
-        }
-    }
-
-    var chip: some View {
         HStack(spacing: 10) {
             if let image = attachment.image, attachment.variant == .image {
                 Image(uiImage: image)

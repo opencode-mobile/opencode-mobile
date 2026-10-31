@@ -4,6 +4,8 @@ enum SnapshotEvidenceRole: Sendable {
     case user
     case assistant
     case childSession
+    /// A completed tool card; its `imageCount` images show as a gallery under it.
+    case tool
 }
 
 struct SnapshotEvidenceChildSession: Sendable {
@@ -27,19 +29,23 @@ struct SnapshotEvidenceMessage: Identifiable, Sendable {
     let text: String
     let metadataLabel: String?
     let childSession: SnapshotEvidenceChildSession?
+    /// Drawn sample images (`SnapshotEvidenceImageMocks`) shown as a gallery with the message.
+    let imageCount: Int
 
     init(
         id: String,
         role: SnapshotEvidenceRole,
         text: String,
         metadataLabel: String? = nil,
-        childSession: SnapshotEvidenceChildSession? = nil
+        childSession: SnapshotEvidenceChildSession? = nil,
+        imageCount: Int = 0
     ) {
         self.id = id
         self.role = role
         self.text = text
         self.metadataLabel = metadataLabel
         self.childSession = childSession
+        self.imageCount = imageCount
     }
 }
 
@@ -121,6 +127,28 @@ enum SnapshotEvidenceMocks {
     static let childLockoutConversation: [SnapshotEvidenceMessage] = [
         childSessionUserPrompt,
         childLockoutAssistantReply,
+    ]
+
+    /// Image galleries: two attached screenshots, a tool that returned five, and the reply.
+    static let imageConversation: [SnapshotEvidenceMessage] = [
+        SnapshotEvidenceMessage(
+            id: "snapshot-images-user-1",
+            role: .user,
+            text: "The login button clips on small phones. Can you fix it?",
+            metadataLabel: userMetadata,
+            imageCount: 2
+        ),
+        SnapshotEvidenceMessage(
+            id: "snapshot-images-tool-1",
+            role: .tool,
+            text: "Screenshot simulators",
+            imageCount: 5
+        ),
+        SnapshotEvidenceMessage(
+            id: "snapshot-images-assistant-1",
+            role: .assistant,
+            text: "The button now fits on every size. The captures above show each phone after the fix."
+        ),
     ]
 
     static var childLockoutComposer: OpenCodeSessionComposerState {

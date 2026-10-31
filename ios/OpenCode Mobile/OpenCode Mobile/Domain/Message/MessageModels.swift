@@ -614,6 +614,9 @@ nonisolated struct ToolPart: Equatable, Sendable {
     let isInterrupted: Bool
     /// The model emitted a tool call the server could not run (`executed: false`).
     let isMalformed: Bool
+    /// Images the tool returned (v1 `attachments`, v2 `content` files), as inline data URLs.
+    /// Only kinds the app can show; other returned files are dropped.
+    let images: [FilePart]
 
     init(
         id: String? = nil,
@@ -627,7 +630,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
         metadata: [String: AnyCodable]? = nil,
         timeStartEpochMs: Int64? = nil,
         isInterrupted: Bool = false,
-        isMalformed: Bool = false
+        isMalformed: Bool = false,
+        images: [FilePart] = []
     ) {
         self.id = id
         self.toolName = toolName
@@ -641,6 +645,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
         self.timeStartEpochMs = timeStartEpochMs
         self.isInterrupted = isInterrupted
         self.isMalformed = isMalformed
+        self.images = images
     }
 
     func withTimeStart(_ timeStartEpochMs: Int64?) -> ToolPart {
@@ -656,7 +661,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
             metadata: metadata,
             timeStartEpochMs: timeStartEpochMs,
             isInterrupted: isInterrupted,
-            isMalformed: isMalformed
+            isMalformed: isMalformed,
+            images: images
         )
     }
 
@@ -675,7 +681,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
             metadata: metadata,
             timeStartEpochMs: timeStartEpochMs,
             isInterrupted: isInterrupted,
-            isMalformed: isMalformed
+            isMalformed: isMalformed,
+            images: images
         )
     }
 }

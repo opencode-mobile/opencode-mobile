@@ -8,11 +8,14 @@ private let outgoingMessageMaxWidthFraction: CGFloat = 0.8
 enum OpenCodeOutgoingMessageContent: Identifiable {
     case text(id: String, text: String)
     case attachment(OpenCodeAttachmentPresentation)
+    /// Attached images as one gallery; `onOpen` receives the tapped index.
+    case images(id: String, items: [OpenCodeImageGalleryItem], onOpen: ((Int) -> Void)?)
 
     var id: String {
         switch self {
         case .text(let id, _): "text-\(id)"
         case .attachment(let attachment): "attachment-\(attachment.id)"
+        case .images(let id, _, _): "images-\(id)"
         }
     }
 }
@@ -139,6 +142,9 @@ struct OpenCodeOutgoingMessage: View {
                         }
                     case .attachment(let attachment):
                         OpenCodeMessageAttachment(attachment: attachment)
+                            .opacity(isPending ? pendingOpacity : 1)
+                    case .images(_, let items, let onOpen):
+                        OpenCodeImageGallery(items: items, onOpen: onOpen)
                             .opacity(isPending ? pendingOpacity : 1)
                     }
                 }

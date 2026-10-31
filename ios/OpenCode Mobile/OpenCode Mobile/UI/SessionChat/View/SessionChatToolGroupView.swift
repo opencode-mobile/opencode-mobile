@@ -61,6 +61,9 @@ struct SessionChatToolGroupView: View {
                             errorText: card.errorText,
                             action: toolCardAction(for: card)
                         )
+                        if !card.images.isEmpty {
+                            SessionChatImageGalleryView(images: card.images)
+                        }
                     }
                 }
                 .padding(.horizontal, 16)

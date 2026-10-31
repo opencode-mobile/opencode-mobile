@@ -200,6 +200,29 @@ final class SessionChatTimeline {
         notifyChange()
     }
 
+    /// Gallery: open the viewer over `images` at `index`. Ignored when the index is out of range.
+    func openImageViewer(images: [FilePart], index: Int) {
+        guard images.indices.contains(index) else { return }
+        let viewer = SessionChatImageViewerState(images: images, index: index)
+        guard state.imageViewer != viewer else { return }
+        state.imageViewer = viewer
+        notifyChange()
+    }
+
+    /// Viewer: the user paged to `index`.
+    func showImageViewerPage(_ index: Int) {
+        guard var viewer = state.imageViewer, viewer.index != index, viewer.images.indices.contains(index) else { return }
+        viewer.index = index
+        state.imageViewer = viewer
+        notifyChange()
+    }
+
+    func closeImageViewer() {
+        guard state.imageViewer != nil else { return }
+        state.imageViewer = nil
+        notifyChange()
+    }
+
     /// Step rail: show or fold the earlier settled steps of one rail. Fold
     /// state is presentation, keyed by the rail's stable id; blocks never change.
     func toggleStepRailFold(_ railID: String) {

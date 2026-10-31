@@ -179,8 +179,26 @@ class MessageDomainAdapter(
                 status == ToolStatus.Error &&
                     (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error)),
             isMalformed = state?.malformed == true,
+            images = v1ToolImages(state?.attachments, partId = id ?: callId),
         )
     }
+
+    /** v1 tool `attachments` (file parts); the v2 live projection writes the same shape. */
+    private fun v1ToolImages(
+        attachments: List<MessagePartDto>?,
+        partId: String?,
+    ): List<MessagePart.File> =
+        attachments
+            .orEmpty()
+            .filter { it.type == "file" }
+            .mapIndexedNotNull { index, file ->
+                ToolResultImages.image(
+                    id = file.id ?: ToolResultImages.id(partId, index),
+                    dataUrl = file.url,
+                    mime = file.mime,
+                    name = file.filename,
+                )
+            }
 
     fun toToolStatus(raw: String?): ToolStatus =
         when (raw) {
@@ -839,10 +857,29 @@ class MessageDomainAdapter(
                             type = state?.error?.type,
                             executed = state?.executed,
                         ),
+                    images = v2ToolImages(state, partId = content.id ?: fallbackId),
                 )
             }
             else -> null
         }
+
+    /** v2 tool `content[]` files; live `tool.success` projects the same ids ([ToolResultImages.id]). */
+    private fun v2ToolImages(
+        state: V2ToolStateDto?,
+        partId: String,
+    ): List<MessagePart.File> =
+        state
+            ?.content
+            .orEmpty()
+            .filter { it.type == "file" }
+            .mapIndexedNotNull { index, item ->
+                ToolResultImages.image(
+                    id = ToolResultImages.id(partId, index),
+                    dataUrl = item.uri,
+                    mime = item.mime,
+                    name = item.name,
+                )
+            }
 
     /** `metadata.attachments` of a v2 prompt: files the client uploaded and named in the text. */
     private fun uploadedFileParts(dto: V2SessionMessageDto): List<MessagePart.File> = uploadedFileParts(dto.id, dto.metadata)

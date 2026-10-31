@@ -605,7 +605,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     metadata: tool.metadata,
                     timeStartEpochMs: tool.timeStartEpochMs,
                     isInterrupted: tool.isInterrupted,
-                    isMalformed: tool.isMalformed
+                    isMalformed: tool.isMalformed,
+                    images: tool.images
                 )
             )
             return SessionChangeSet(
@@ -1169,7 +1170,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                         metadata: tool.metadata,
                         timeStartEpochMs: tool.timeStartEpochMs,
                         isInterrupted: tool.isInterrupted,
-                        isMalformed: tool.isMalformed
+                        isMalformed: tool.isMalformed,
+                        images: tool.images
                     )
                 )
             }
@@ -1196,7 +1198,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                         metadata: mergeDict(prior.metadata, next.metadata),
                         timeStartEpochMs: prior.timeStartEpochMs ?? next.timeStartEpochMs,
                         isInterrupted: prior.isInterrupted,
-                        isMalformed: prior.isMalformed
+                        isMalformed: prior.isMalformed,
+                        images: prior.images
                     )
                 )
                 break
@@ -1217,7 +1220,9 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     metadata: mergeDict(prior.metadata, next.metadata),
                     timeStartEpochMs: next.timeStartEpochMs ?? prior.timeStartEpochMs,
                     isInterrupted: next.isInterrupted,
-                    isMalformed: next.isMalformed || prior.isMalformed
+                    isMalformed: next.isMalformed || prior.isMalformed,
+                    // Images arrive once, with the settled call; a later update without them keeps them.
+                    images: next.images.isEmpty ? prior.images : next.images
                 )
             )
         case (.text(let prior), .text(let next)):

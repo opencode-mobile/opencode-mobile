@@ -19,8 +19,7 @@ enum AttachmentPresentationMapper {
             id: file.id,
             filename: file.filename,
             variant: variant(for: file.kind),
-            image: previewImage(previewData: file.previewData, dataURL: file.dataURL, mime: file.mime, kind: file.kind),
-            imageFile: file.kind == .image ? file : nil
+            image: previewImage(previewData: file.previewData, dataURL: file.dataURL, mime: file.mime, kind: file.kind)
         )
     }
 

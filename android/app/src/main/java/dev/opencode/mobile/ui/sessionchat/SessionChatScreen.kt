@@ -152,6 +152,7 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroModal
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
+import dev.opencode.mobile.ui.sessionchat.view.SessionToolGroupImages
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingPromptsSheet
@@ -978,6 +979,7 @@ private fun SessionChatScreenBody(
                             },
                             onToolGroupTap = { target ->
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_GROUP)
+                                SessionToolGroupImages.put(sessionId, target)
                                 onToolGroupClick(
                                     target.toRoute(
                                         sessionId = sessionId,
@@ -1035,6 +1037,10 @@ private fun SessionChatScreenBody(
                                 viewModel.openActivityCardStep(stepId)
                             },
                             onCloseActivityCardStep = viewModel::closeActivityCardStep,
+                            imageViewer = uiState.imageViewer,
+                            onOpenImageViewer = viewModel::openImageViewer,
+                            onImageViewerPageChange = viewModel::showImageViewerPage,
+                            onDismissImageViewer = viewModel::dismissImageViewer,
                         ),
                     modifier = Modifier.fillMaxSize(),
                 )

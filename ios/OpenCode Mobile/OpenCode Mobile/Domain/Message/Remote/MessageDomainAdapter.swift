@@ -198,7 +198,45 @@ nonisolated struct MessageDomainAdapter: Sendable {
             timeStartEpochMs: state?.time?.start,
             isInterrupted: status == .error
                 && (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error)),
-            isMalformed: state?.malformed == true
+            isMalformed: state?.malformed == true,
+            images: toolImages(state?.attachments, ownerID: id ?? callID)
+        )
+    }
+
+    /// v1 tool `attachments` (and v2 live `content` files projected into the same shape) that
+    /// the timeline can show as images.
+    private func toolImages(_ attachments: [MessageToolAttachmentDTO]?, ownerID: String?) -> [FilePart] {
+        guard let attachments, !attachments.isEmpty else { return [] }
+        return attachments.enumerated().compactMap { index, attachment in
+            toolImage(
+                id: attachment.id?.nilIfEmpty ?? Self.toolImageID(ownerID: ownerID, index: index),
+                filename: attachment.filename,
+                mime: attachment.mime,
+                url: attachment.url
+            )
+        }
+    }
+
+    /// Id for a tool-returned file that carries none (v2 content items): the tool part id and
+    /// the file's position, so a live result and its REST copy agree.
+    static func toolImageID(ownerID: String?, index: Int) -> String {
+        "\(ownerID ?? "tool"):file:\(index)"
+    }
+
+    /// A tool-returned file kept only when it is an image the app can show, carried as a data URL.
+    /// The file name stays empty when the tool gave none.
+    private func toolImage(id: String, filename: String?, mime: String?, url: String?) -> FilePart? {
+        let dataURL = url?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !dataURL.isEmpty,
+              case .file(let file)? = resolvedFilePart(id: id, filename: filename, mime: mime, dataURL: dataURL),
+              file.kind == .image
+        else { return nil }
+        return FilePart(
+            id: file.id,
+            filename: filename?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            mime: file.mime,
+            kind: file.kind,
+            dataURL: file.dataURL
         )
     }
 
@@ -764,7 +802,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     metadata: metadata,
                     timeStartEpochMs: content.time?.created,
                     isInterrupted: status == .error && ToolInterruption.isAbortedType(state?.error?.type),
-                    isMalformed: SessionFailure.isMalformedTool(type: state?.error?.type, executed: state?.executed)
+                    isMalformed: SessionFailure.isMalformedTool(type: state?.error?.type, executed: state?.executed),
+                    images: v2ToolImages(state, ownerID: content.id ?? fallbackID)
                 )
             )
         default:
@@ -864,6 +903,25 @@ nonisolated struct MessageDomainAdapter: Sendable {
               case let .string(raw)? = state?.input
         else { return nil }
         return [ToolArgumentsPreview.inputKey: .string(raw)]
+    }
+
+    /// v2 tool `content` items of type `file` that the timeline can show as images.
+    private func v2ToolImages(_ state: V2ToolStateDTO?, ownerID: String) -> [FilePart] {
+        guard let content = state?.content, !content.isEmpty else { return [] }
+        var images: [FilePart] = []
+        var fileIndex = 0
+        for item in content where item.type == "file" {
+            defer { fileIndex += 1 }
+            if let image = toolImage(
+                id: Self.toolImageID(ownerID: ownerID, index: fileIndex),
+                filename: item.name,
+                mime: item.mime,
+                url: item.uri
+            ) {
+                images.append(image)
+            }
+        }
+        return images
     }
 
     private func toolOutput(_ state: V2ToolStateDTO?) -> String? {

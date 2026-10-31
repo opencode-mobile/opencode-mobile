@@ -68,6 +68,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ActionTileGalleryScree
 import dev.opencode.mobile.ui.componentgallery.components.ActivityCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AssistantMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AttachmentGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ImageGalleryGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomFadeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
@@ -699,6 +700,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.Tag -> TagGalleryScreen()
                                                         ComponentGalleryEntryId.KeyValueRow -> KeyValueRowGalleryScreen()
                                                         ComponentGalleryEntryId.Attachment -> AttachmentGalleryScreen()
+                                                        ComponentGalleryEntryId.ImageGallery -> ImageGalleryGalleryScreen()
                                                         ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
                                                         ComponentGalleryEntryId.PendingPromptsStrip ->
                                                             PendingPromptsStripGalleryScreen()

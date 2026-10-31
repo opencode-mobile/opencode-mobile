@@ -22,6 +22,8 @@ enum ComponentGalleryEntryID: String, Hashable {
     case tag
     case keyValueRow
     case attachment
+    case imageGallery
+    case imageViewer
     case outgoingMessage
     case pendingPromptsStrip
     case assistantMessage
@@ -323,6 +325,18 @@ let componentGalleryEntries = [
         id: .attachment,
         title: "Attachment",
         description: "Pending attachment chips and sent image, PDF, and text rows.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .imageGallery,
+        title: "Image Gallery",
+        description: "Inline images by count: one at its own shape, a pair, one large plus two, or four tiles with +N; loading and failed tiles.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .imageViewer,
+        title: "Image Viewer",
+        description: "Full-screen pager over a group: index label, pinch and double-tap zoom, swipe down to close, share.",
         category: .chat
     ),
     ComponentGalleryEntry(

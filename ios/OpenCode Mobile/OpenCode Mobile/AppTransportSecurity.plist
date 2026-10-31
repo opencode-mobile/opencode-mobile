@@ -20,6 +20,8 @@
 	<string>OpenCode Mobile uses the camera to scan an OpenCode 2 pairing QR from your computer.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>OpenCode Mobile uses the microphone for on-device composer dictation. Audio stays on this device.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>OpenCode Mobile saves images from a session to your photo library when you choose Save Image.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>OpenCode Mobile uses on-device speech recognition to insert text into the composer. Audio stays on this device.</string>
 	<key>NSAppTransportSecurity</key>

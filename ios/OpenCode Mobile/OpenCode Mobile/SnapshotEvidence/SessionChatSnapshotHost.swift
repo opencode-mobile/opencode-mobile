@@ -34,13 +34,26 @@ struct SessionChatSnapshotHost: View {
         switch message.role {
         case .user:
             OpenCodeOutgoingMessage(
-                text: message.text,
+                content: (message.imageCount > 0
+                    ? [.images(id: message.id, items: images(message), onOpen: nil)]
+                    : []) + [.text(id: message.id, text: message.text)],
                 metadataLabel: message.metadataLabel ?? ""
             )
             .frame(maxWidth: .infinity, alignment: .trailing)
         case .assistant:
-            OpenCodeAssistantMessage(text: message.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(alignment: .leading, spacing: 8) {
+                OpenCodeAssistantMessage(text: message.text)
+                if message.imageCount > 0 {
+                    OpenCodeImageGallery(items: images(message))
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        case .tool:
+            VStack(alignment: .leading, spacing: 8) {
+                OpenCodeToolCallCard(status: .completed, title: message.text, subtitle: nil, action: {})
+                OpenCodeImageGallery(items: images(message))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         case .childSession:
             if let childSession = message.childSession {
                 SnapshotEvidenceChildSessionRow(mock: childSession)
@@ -48,6 +61,10 @@ struct SessionChatSnapshotHost: View {
             }
         }
     }
+}
+
+private func images(_ message: SnapshotEvidenceMessage) -> [OpenCodeImageGalleryItem] {
+    SnapshotEvidenceImageMocks.items(message.imageCount, prefix: message.id)
 }
 
 struct SnapshotEvidenceChildSessionRow: View {

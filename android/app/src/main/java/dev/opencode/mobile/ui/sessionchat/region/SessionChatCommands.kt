@@ -24,9 +24,9 @@ import dev.opencode.mobile.ui.sessionchat.ChildSessionNavigationTarget
 import dev.opencode.mobile.ui.sessionchat.PendingTerminalOpen
 import dev.opencode.mobile.ui.sessionchat.SessionChatCommandsRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
-import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionCompactChrome
 import dev.opencode.mobile.ui.sessionchat.SessionCompactionPresence
+import dev.opencode.mobile.ui.sessionchat.TimelineProjector
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -612,7 +612,7 @@ class SessionChatCommands(
     private fun hasRevertibleContent(message: SessionChatMessageItem): Boolean =
         message.text.isNotBlank() ||
             message.attachments.isNotEmpty() ||
-            message.blocks.any { it is SessionChatTimelineBlock.Attachment }
+            message.blocks.any { TimelineProjector.messageAttachments(it).isNotEmpty() }
 
     private fun revert(
         target: SessionChatMessageItem,

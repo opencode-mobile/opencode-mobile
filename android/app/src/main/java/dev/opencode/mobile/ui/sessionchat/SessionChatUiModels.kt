@@ -313,6 +313,8 @@ data class SessionChatUiState(
     val expandedStepParagraphs: Map<String, Int> = emptyMap(),
     /** Step rails unfolded past their `N earlier steps` row, by rail id (#779). */
     val unfoldedStepRails: Set<String> = emptySet(),
+    /** Timeline gallery open in the full-screen image viewer, and its page (#898). */
+    val imageViewer: SessionChatImageViewerState? = null,
     /** Activity card whose live sheet is open, by block id (#779). */
     val presentedActivityCard: String? = null,
     /** Step of [presentedActivityCard] whose detail the sheet shows in place of its list (#779). */
@@ -1024,6 +1026,10 @@ data class SessionChatAttachmentItem(
     val imageBytes: ByteArray? = null,
     val imageSource: OpenCodeAttachmentImageSource? = null,
 ) {
+    /** An image the timeline can draw (it has a preview or a source), so it can join a gallery. */
+    val isGalleryImage: Boolean
+        get() = variant == OpenCodeAttachmentVariant.Image && (imageBytes != null || imageSource != null)
+
     override fun equals(other: Any?): Boolean =
         other is SessionChatAttachmentItem &&
             id == other.id &&

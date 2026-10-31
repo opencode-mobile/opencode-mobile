@@ -1135,6 +1135,19 @@ final class SessionChatViewModel {
         timeline.toggleStepRailFold(railID)
     }
 
+    /// Gallery: open the image viewer over a group at the tapped image.
+    func openImageViewer(images: [FilePart], index: Int) {
+        timeline.openImageViewer(images: images, index: index)
+    }
+
+    func showImageViewerPage(_ index: Int) {
+        timeline.showImageViewerPage(index)
+    }
+
+    func closeImageViewer() {
+        timeline.closeImageViewer()
+    }
+
     func toggleFollowUp() {
         guard activeConnectionManager.capabilities.supportsFollowUpDelivery else { return }
         composer.toggleFollowUp()
@@ -2015,6 +2028,7 @@ final class SessionChatViewModel {
             childActivities: timelineState.childActivities,
             activityCardFooters: timelineState.activityCardFooters,
             debouncedStepIDs: timelineState.debouncedStepIDs,
+            imageViewer: timelineState.imageViewer,
             chipTimelineIntroVisible: chipTimelineIntroVisible,
             timelineStylePickerVisible: timelineStylePickerVisible,
             dictation: dictation,

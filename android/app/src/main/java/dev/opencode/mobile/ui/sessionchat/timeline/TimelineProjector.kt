@@ -270,6 +270,14 @@ object TimelineProjector {
             }
         }
 
+    /** Files the message itself carries (attachments and their galleries), not tool results. */
+    internal fun messageAttachments(block: SessionChatTimelineBlock): List<SessionChatAttachmentItem> =
+        when (block) {
+            is SessionChatTimelineBlock.Attachment -> listOf(block.attachment)
+            is SessionChatTimelineBlock.ImageGallery -> if (block.fromTool) emptyList() else block.images
+            else -> emptyList()
+        }
+
     fun metadataLabel(message: Message): String {
         val timeLabel = message.sentAtEpochMs?.let(::formatSentTime)
         return listOfNotNull(
@@ -288,8 +296,7 @@ object TimelineProjector {
     ): TimelineRow? {
         val message = body.message
         if (body.blocks.isEmpty()) return null
-        val attachments =
-            body.blocks.mapNotNull { (it as? SessionChatTimelineBlock.Attachment)?.attachment }
+        val attachments = body.blocks.flatMap(::messageAttachments)
         // Prefer sole narration copy so slash-command collapse is what chat shows
         // and copies, not the server-expanded template still on Message.text.
         // A chip-merged run spans messages; Message.text only covers the first.
@@ -384,6 +391,8 @@ object TimelineProjector {
                 "t:${block.blockID}:${block.renderedMarkdown != null}"
             is SessionChatTimelineBlock.Attachment ->
                 "a:${block.blockID}:${block.attachment.filename}"
+            is SessionChatTimelineBlock.ImageGallery ->
+                "ig:${block.blockID}:${block.images.size}"
             is SessionChatTimelineBlock.ToolCard ->
                 "c:${block.blockID}:${block.errorText != null}:${block.additions}:${block.deletions}"
             is SessionChatTimelineBlock.ToolGroup ->
@@ -581,7 +590,7 @@ object TimelineProjector {
                 val attachments = if (copyAttachments) pending.attachments else row.attachments
                 val blocks =
                     if (copyAttachments) {
-                        row.blocks + pending.blocks.filterIsInstance<SessionChatTimelineBlock.Attachment>()
+                        row.blocks + pending.blocks.filter { messageAttachments(it).isNotEmpty() }
                     } else {
                         row.blocks
                     }
@@ -684,6 +693,8 @@ object TimelineProjector {
             is SessionChatTimelineBlock.Text -> "t:${block.blockID}"
             is SessionChatTimelineBlock.Attachment ->
                 "a:${block.blockID}:${block.attachment.filename}"
+            is SessionChatTimelineBlock.ImageGallery ->
+                "ig:${block.blockID}:${block.images.size}"
             is SessionChatTimelineBlock.ToolCard ->
                 "c:${block.blockID}:${block.errorText != null}:${block.additions}:${block.deletions}"
             is SessionChatTimelineBlock.ToolGroup ->
