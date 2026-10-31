@@ -308,7 +308,11 @@ private struct OpenCodeFloatingPillPulsingDot: View {
             .frame(width: OpenCodeFloatingPill.dotSize, height: OpenCodeFloatingPill.dotSize)
             .opacity(reduceMotion ? 1 : (dim ? 0.35 : 1))
             .frame(width: 16, height: 16)
-            .onAppear {
+            .task(id: reduceMotion) {
+                // Re-runs when Reduce Motion flips while the pill stays on screen.
+                var reset = Transaction()
+                reset.disablesAnimations = true
+                withTransaction(reset) { dim = false }
                 guard !reduceMotion else { return }
                 withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
                     dim = true
