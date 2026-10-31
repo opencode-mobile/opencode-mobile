@@ -706,14 +706,16 @@ private struct SessionChatMessageRow: View {
                     renderedMarkdown: message.renderedMarkdown,
                     metadataLabel: message.metadataLabel,
                     sentAt: message.sentAtEpochMs.map { Date(timeIntervalSince1970: TimeInterval($0) / 1_000) },
+                    steering: message.outgoingSteering,
+                    // A pending steer has no message actions; the Up next sheet owns it.
                     onTap: {
-                        if message.renderedMarkdown == nil {
+                        if message.renderedMarkdown == nil, message.steer?.isPending != true {
                             return { openMessageActions(showsRevertMessage: true) }
                         }
                         return nil
                     }(),
                     onLongPress: {
-                        guard message.renderedMarkdown != nil else { return nil }
+                        guard message.renderedMarkdown != nil, message.steer?.isPending != true else { return nil }
                         return { openMessageActions(showsRevertMessage: true) }
                     }()
                 )
@@ -755,6 +757,11 @@ private struct SessionChatMessageRow: View {
 }
 
 private extension SessionChatRow {
+    var outgoingSteering: OpenCodeOutgoingMessageSteering? {
+        guard let steer else { return nil }
+        return steer.isPending ? .pending(showsLabel: steer.showsLabel) : .delivered(showsLabel: steer.showsLabel)
+    }
+
     var outgoingContent: [OpenCodeOutgoingMessageContent] {
         let content = blocks.compactMap { block -> OpenCodeOutgoingMessageContent? in
             switch block {

@@ -1423,7 +1423,7 @@ class TimelineProjectorTest {
     }
 
     @Test
-    fun project_excludesOptimisticPendingUserMessage() {
+    fun project_showsOptimisticSteerAsPendingSteer() {
         val pending =
             TimelineProjector.rowFromMessageItem(
                 SessionChatMessageItem(
@@ -1453,18 +1453,21 @@ class TimelineProjectorTest {
                     ),
                 optimisticInputs = OptimisticInputs(pendingRows = listOf(pending)),
             )
-        assertTrue(frame.rows.isEmpty())
+        assertEquals(listOf("optimistic-1"), frame.rows.map { it.id })
+        assertEquals(SessionChatSteer(isPending = true, showsLabel = true), frame.rows.single().steer)
     }
 
     @Test
-    fun project_excludesSteerPendingUserMessage() {
+    fun project_waitingSteerWithNoRunningTurn_showsAsPlainPrompt() {
+        // v2 enqueues an idle prompt as a steer too; with no turn running it is not steering.
         val frame =
             projectUser(
                 text = "Waiting to steer",
                 isWaitingForPickup = true,
                 followUpDelivery = FollowUpDelivery.Steer,
             )
-        assertTrue(frame.rows.isEmpty())
+        assertEquals(1, frame.rows.size)
+        assertEquals(null, frame.rows.single().steer)
     }
 
     @Test
@@ -1763,14 +1766,14 @@ class TimelineProjectorTest {
     }
 
     @Test
-    fun displayedOptimisticSendItems_excludesHiddenPendingRows() {
+    fun displayedOptimisticSendItems_excludesQueuedRows() {
         val hidden =
             SessionChatMessageItem(
                 id = "pending-1",
                 role = MessageRole.User,
                 text = "Hold this",
                 metadataLabel = "",
-                pendingDelivery = FollowUpDelivery.Steer,
+                pendingDelivery = FollowUpDelivery.Queue,
                 isPending = true,
             )
         val visible =

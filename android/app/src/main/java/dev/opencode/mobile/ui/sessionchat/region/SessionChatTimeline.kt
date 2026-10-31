@@ -401,9 +401,14 @@ class SessionChatTimeline(
         mergePendingWhileSending = true
         pendingOptimisticRows = enrichedRows
         pendingBaselineIds = lastLoadedServerRows().mapTo(HashSet()) { it.id }
-        val displayedItems = TimelineProjector.displayedOptimisticSendItems(enrichedRows)
-        val displayedRows = displayedItems.map(TimelineProjector::rowFromMessageItem)
         val previous = lastTimelineFrame
+        // A busy steer send shows as a pending steer from the first frame, before any echo.
+        val displayedItems =
+            TimelineProjector.markOptimisticSteers(
+                TimelineProjector.displayedOptimisticSendItems(enrichedRows),
+                after = previous,
+            )
+        val displayedRows = displayedItems.map(TimelineProjector::rowFromMessageItem)
         val hadPriorRows = _state.value.messages.isNotEmpty() || !previous?.rows.isNullOrEmpty()
         val markReady =
             TimelineProjector.shouldMarkTimelineReadyAfterOptimisticSend(
