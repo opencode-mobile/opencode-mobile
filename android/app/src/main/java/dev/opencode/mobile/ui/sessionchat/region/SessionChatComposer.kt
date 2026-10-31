@@ -62,6 +62,7 @@ import dev.opencode.mobile.ui.sessionchat.LatestModelHint
 import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistoryHints
 import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistorySource
 import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
@@ -1248,14 +1249,7 @@ class SessionChatComposer(
                                             ),
                                         )
                                     }
-                                    attachmentItems.forEach { item ->
-                                        add(
-                                            SessionChatTimelineBlock.Attachment(
-                                                blockID = PresentationBlockId.direct(item.id),
-                                                attachment = item,
-                                            ),
-                                        )
-                                    }
+                                    addAll(SessionChatTimelineBlocks.attachmentBlocks(attachmentItems))
                                 },
                         ),
                     )

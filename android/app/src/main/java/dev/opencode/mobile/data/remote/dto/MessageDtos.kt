@@ -132,6 +132,8 @@ data class MessageToolStateDto(
     val interrupted: Boolean? = null,
     /** Set when the server closed the call without running it (`executed: false`). */
     val malformed: Boolean? = null,
+    /** v1 completed-state files the tool returned (`url` is a `data:` URL); the v2 live projection fills it too. */
+    val attachments: List<MessagePartDto>? = null,
 )
 
 @Serializable

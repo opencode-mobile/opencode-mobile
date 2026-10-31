@@ -43,8 +43,16 @@ sealed interface OpenCodeOutgoingMessageContent {
         val renderedMarkdown: MarkdownDocument? = null,
     ) : OpenCodeOutgoingMessageContent
 
+    /** [id] names this attachment to [OpenCodeOutgoingMessage]'s `onImageClick`. */
     data class Attachment(
         val presentation: OpenCodeAttachmentPresentation,
+        val id: String = presentation.id,
+    ) : OpenCodeOutgoingMessageContent
+
+    /** Two or more images sent together, drawn as an [OpenCodeImageGallery]. */
+    data class ImageGallery(
+        val id: String,
+        val images: List<OpenCodeGalleryImage>,
     ) : OpenCodeOutgoingMessageContent
 }
 
@@ -63,6 +71,11 @@ fun OpenCodeOutgoingMessage(
     content: List<OpenCodeOutgoingMessageContent>? = null,
     onClick: (() -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
+    /**
+     * Opens the viewer on image [index] of content [contentId] (an [OpenCodeOutgoingMessageContent.ImageGallery]
+     * or an image [OpenCodeOutgoingMessageContent.Attachment]). Null: single images open their own viewer.
+     */
+    onImageClick: ((contentId: String, index: Int) -> Unit)? = null,
 ) {
     BoxWithConstraints(
         modifier = modifier.fillMaxWidth(),
@@ -149,6 +162,14 @@ fun OpenCodeOutgoingMessage(
                         is OpenCodeOutgoingMessageContent.Attachment ->
                             OpenCodeMessageAttachment(
                                 attachment = part.presentation,
+                                modifier = Modifier.widthIn(max = maxBubbleWidth),
+                                onOpenImage = onImageClick?.let { open -> { open(part.id, 0) } },
+                            )
+
+                        is OpenCodeOutgoingMessageContent.ImageGallery ->
+                            OpenCodeImageGallery(
+                                images = part.images,
+                                onImageClick = { index -> onImageClick?.invoke(part.id, index) },
                                 modifier = Modifier.widthIn(max = maxBubbleWidth),
                             )
                     }

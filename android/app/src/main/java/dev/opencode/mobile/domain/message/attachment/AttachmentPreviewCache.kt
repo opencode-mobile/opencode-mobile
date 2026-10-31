@@ -32,10 +32,17 @@ class AttachmentPreviewCache(
     fun warm(messages: List<Message>) {
         messages.forEach { message ->
             message.parts.forEach { part ->
-                val file = part as? MessagePart.File ?: return@forEach
-                val key = key(file) ?: return@forEach
-                val cached = synchronized(entries) { entries.containsKey(key) }
-                if (!cached) decodeAndStore(file, key)
+                val files =
+                    when (part) {
+                        is MessagePart.File -> listOf(part)
+                        is MessagePart.Tool -> part.images
+                        else -> return@forEach
+                    }
+                files.forEach { file ->
+                    val key = key(file) ?: return@forEach
+                    val cached = synchronized(entries) { entries.containsKey(key) }
+                    if (!cached) decodeAndStore(file, key)
+                }
             }
         }
     }

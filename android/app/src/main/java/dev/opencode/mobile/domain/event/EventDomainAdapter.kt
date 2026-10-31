@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.message.UploadedAttachments
 import dev.opencode.mobile.domain.message.ToolArgumentsPreview
 import dev.opencode.mobile.domain.message.ToolInterruption
 import dev.opencode.mobile.domain.message.ToolPartIdentity
+import dev.opencode.mobile.domain.message.ToolResultImages
 import dev.opencode.mobile.domain.message.V2ContentPartId
 import dev.opencode.mobile.domain.message.V2TimelineNotices
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -21,6 +22,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
@@ -696,6 +698,7 @@ class EventDomainAdapter(
             properties = properties,
             messageId = properties.string("assistantMessageID"),
             partId = partId,
+            attachments = toolFileAttachments(properties["content"], partId),
             toolName = name,
             status = status,
             callId = callId,
@@ -708,6 +711,35 @@ class EventDomainAdapter(
             title = metadata?.string("title")?.takeIf { it.isNotEmpty() },
             interrupted = interrupted,
         )
+    }
+
+    /**
+     * `tool.success` (and `tool.failed`) `content[]` files, written as the v1 completed-state
+     * `attachments` so one adapter path keeps them. Ids match the REST projection.
+     */
+    private fun toolFileAttachments(
+        content: JsonElement?,
+        partId: String?,
+    ): JsonArray? {
+        val files =
+            (content as? JsonArray)
+                ?.mapNotNull { it as? JsonObject }
+                ?.filter { it.string("type") == "file" }
+                .orEmpty()
+        if (files.isEmpty()) return null
+        return buildJsonArray {
+            files.forEachIndexed { index, file ->
+                add(
+                    buildJsonObject {
+                        put("id", ToolResultImages.id(partId, index))
+                        put("type", "file")
+                        file.string("uri")?.let { put("url", it) }
+                        file.string("mime")?.let { put("mime", it) }
+                        file.string("name")?.let { put("filename", it) }
+                    },
+                )
+            }
+        }
     }
 
     /**
@@ -985,11 +1017,13 @@ class EventDomainAdapter(
         title: String? = null,
         interrupted: Boolean = false,
         malformed: Boolean = false,
+        attachments: JsonArray? = null,
     ): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
         val state =
             buildJsonObject {
                 put("status", status)
+                attachments?.let { put("attachments", it) }
                 if (interrupted) put("interrupted", true)
                 if (malformed) put("malformed", true)
                 title?.let { put("title", it) }

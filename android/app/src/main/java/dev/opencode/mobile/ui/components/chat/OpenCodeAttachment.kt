@@ -156,16 +156,18 @@ private fun uploadDetail(upload: OpenCodeAttachmentUploadState.InProgress): Stri
 /**
  * A sent attachment in the timeline. Images show inline at their own aspect ratio, capped in
  * height ([OpenCodeMessageImage]); everything else, and any image that cannot load, is a chip.
+ * [onOpenImage], when set, is how a tap on the image opens the owner's viewer.
  */
 @Composable
 fun OpenCodeMessageAttachment(
     attachment: OpenCodeAttachmentPresentation,
     modifier: Modifier = Modifier,
+    onOpenImage: (() -> Unit)? = null,
 ) {
     if (attachment.variant == OpenCodeAttachmentVariant.Image &&
         (attachment.imageBytes != null || attachment.imageSource != null)
     ) {
-        OpenCodeMessageImage(attachment, modifier) { OpenCodeMessageAttachmentChip(attachment, modifier) }
+        OpenCodeMessageImage(attachment, modifier, onOpen = onOpenImage) { OpenCodeMessageAttachmentChip(attachment, modifier) }
     } else {
         OpenCodeMessageAttachmentChip(attachment, modifier)
     }

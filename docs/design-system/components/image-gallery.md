@@ -68,7 +68,8 @@ component inputs.
   zoom, and `UIActivityViewController` for share. The share control uses the
   native share glyph until the icon catalog has a share icon.
 - Android: Compose layout and a Material 3 full-screen pager with the same
-  states, labels, and actions.
+  states, labels, and actions. The share control is a text button until the
+  icon catalog has a share icon.
 
 ## Review Surfaces
 

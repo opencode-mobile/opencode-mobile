@@ -45,6 +45,9 @@ object PresentationBlockId {
         return "g:" + orderedMemberIds.joinToString(SEP)
     }
 
+    /** Image gallery placed under [sourceBlockId] (a tool card, a group's first member, or a message's first image). */
+    fun imageGallery(sourceBlockId: String): String = "img:$sourceBlockId"
+
     /** Unstructured fallback when displayable parts lack stable IDs. */
     fun messageFallback(messageId: String): String = "m:$messageId"
 }
