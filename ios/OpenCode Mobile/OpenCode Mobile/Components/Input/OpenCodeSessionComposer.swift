@@ -71,6 +71,14 @@ enum OpenCodeSessionComposerState {
         }
     }
 
+    /// The descendant subagent session asking a permission or question; Open shows that session.
+    struct RequestAttribution: Equatable {
+        let sessionID: String
+        let letter: String
+        /// "general · subagent wants to run: npm test" or "explore · subagent asks".
+        let summary: String
+    }
+
     /// A file an edit/write permission would change, with its diff size.
     struct PermissionFile: Hashable {
         let path: String
@@ -89,6 +97,7 @@ enum OpenCodeSessionComposerState {
         let alwaysPatterns: [String]
         let queuePosition: Int
         let queueCount: Int
+        let attribution: RequestAttribution?
         let submitting: Bool
         let actionsEnabled: Bool
         let errorMessage: String?
@@ -102,6 +111,7 @@ enum OpenCodeSessionComposerState {
             alwaysPatterns: [String] = [],
             queuePosition: Int = 1,
             queueCount: Int = 1,
+            attribution: RequestAttribution? = nil,
             submitting: Bool = false,
             actionsEnabled: Bool = true,
             errorMessage: String? = nil
@@ -114,6 +124,7 @@ enum OpenCodeSessionComposerState {
             self.alwaysPatterns = alwaysPatterns
             self.queuePosition = queuePosition
             self.queueCount = queueCount
+            self.attribution = attribution
             self.submitting = submitting
             self.actionsEnabled = actionsEnabled
             self.errorMessage = errorMessage
@@ -148,6 +159,10 @@ enum OpenCodeSessionComposerState {
         let submitEnabled: Bool
         let submitting: Bool
         let errorMessage: String?
+        /// 1-based position of this request among the waiting question requests.
+        let requestPosition: Int
+        let requestCount: Int
+        let attribution: RequestAttribution?
 
         init(
             requestID: String,
@@ -168,7 +183,10 @@ enum OpenCodeSessionComposerState {
             nextEnabled: Bool = false,
             submitEnabled: Bool = false,
             submitting: Bool = false,
-            errorMessage: String? = nil
+            errorMessage: String? = nil,
+            requestPosition: Int = 1,
+            requestCount: Int = 1,
+            attribution: RequestAttribution? = nil
         ) {
             self.requestID = requestID
             self.sessionID = sessionID
@@ -189,6 +207,9 @@ enum OpenCodeSessionComposerState {
             self.submitEnabled = submitEnabled
             self.submitting = submitting
             self.errorMessage = errorMessage
+            self.requestPosition = requestPosition
+            self.requestCount = requestCount
+            self.attribution = attribution
         }
     }
 
@@ -235,6 +256,12 @@ enum OpenCodeSessionComposerAction {
     case alwaysAllowPermission(requestID: String, sessionID: String)
     /// Collapse the permission dock without answering it.
     case hidePermission(requestID: String)
+    /// Collapse the question panel without answering or dismissing it.
+    case hideQuestion(requestID: String)
+    /// Page the permission or question panel to another waiting request; `delta` is +1 or -1.
+    case pageRequest(delta: Int)
+    /// Open the subagent session a request comes from.
+    case openRequestSession(sessionID: String)
     case toggleQuestionOption(requestID: String, sessionID: String, label: String)
     case toggleQuestionCustom(requestID: String, sessionID: String)
     case questionCustomTextChanged(requestID: String, sessionID: String, text: String)
@@ -321,6 +348,8 @@ struct OpenCodeSessionComposer: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
+            .contentShape(Rectangle())
+            .simultaneousGesture(requestPageSwipe, including: pagesRequests ? .all : .subviews)
         }
         .clipShape(RoundedRectangle(cornerRadius: Self.shellCornerRadius, style: .continuous))
         .openCodeFloatingChrome(cornerRadius: Self.shellCornerRadius)
@@ -659,14 +688,19 @@ struct OpenCodeSessionComposer: View {
     @ViewBuilder
     private func permissionApprovalContent(_ permission: OpenCodeSessionComposerState.Permission) -> some View {
         let actionsEnabled = permission.actionsEnabled && !permission.submitting
+        if let attribution = permission.attribution {
+            requestAttributionRow(attribution)
+        }
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Permission requested").font(OpenCodeTypography.heading)
                 Spacer()
-                if permission.queueCount > 1 {
-                    Text("\(permission.queuePosition) of \(permission.queueCount)")
-                        .font(OpenCodeTypography.caption)
-                }
+                requestPager(
+                    position: permission.queuePosition,
+                    count: permission.queueCount,
+                    enabled: !permission.submitting,
+                    noun: "permission request"
+                )
                 OpenCodeButton(
                     variant: .iconCircle(.keyboardArrowDown, accessibilityLabel: "Hide permission request"),
                     contrast: .low,
@@ -730,6 +764,82 @@ struct OpenCodeSessionComposer: View {
                 }
             )
         }
+        requestPageDots(position: permission.queuePosition, count: permission.queueCount)
+    }
+
+    /// Light amber row naming the subagent that asks, with Open to show its session.
+    private func requestAttributionRow(_ attribution: OpenCodeSessionComposerState.RequestAttribution) -> some View {
+        HStack(spacing: 8) {
+            Text(attribution.letter)
+                .font(OpenCodeTypography.caption.weight(.semibold))
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(OpenCodeColors.warning.opacity(0.28)))
+                .accessibilityHidden(true)
+            Text(attribution.summary)
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 4)
+            OpenCodeButton(
+                variant: .compactText(title: "Open"),
+                contrast: .low,
+                action: { onAction(.openRequestSession(sessionID: attribution.sessionID)) }
+            )
+            .accessibilityLabel("Open subagent session")
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 4)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(OpenCodeColors.warning.opacity(0.12))
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("sessionChatRequestAttribution")
+    }
+
+    /// "‹ 1 of 2 ›" beside the panel title while more than one request waits.
+    @ViewBuilder
+    private func requestPager(position: Int, count: Int, enabled: Bool, noun: String) -> some View {
+        if count > 1 {
+            HStack(spacing: 2) {
+                OpenCodeButton(
+                    variant: .iconCircle(.arrowBack, accessibilityLabel: "Previous \(noun)"),
+                    enabled: enabled && position > 1,
+                    contrast: .low,
+                    action: { onAction(.pageRequest(delta: -1)) }
+                )
+                Text("\(position) of \(count)")
+                    .font(OpenCodeTypography.caption)
+                    .monospacedDigit()
+                OpenCodeButton(
+                    variant: .iconCircle(.arrowForward, accessibilityLabel: "Next \(noun)"),
+                    enabled: enabled && position < count,
+                    contrast: .low,
+                    action: { onAction(.pageRequest(delta: 1)) }
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func requestPageDots(position: Int, count: Int) -> some View {
+        if count > 1 {
+            OpenCodePageIndicator(pageCount: count, currentPage: min(max(position - 1, 0), count - 1))
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// Horizontal swipe on a request panel pages between waiting requests.
+    private var requestPageSwipe: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                let dx = value.translation.width
+                guard abs(dx) > 60, abs(dx) > abs(value.translation.height) * 1.5 else { return }
+                onAction(.pageRequest(delta: dx < 0 ? 1 : -1))
+            }
     }
 
     private func permissionFileLine(_ file: OpenCodeSessionComposerState.PermissionFile) -> some View {
@@ -756,15 +866,30 @@ struct OpenCodeSessionComposer: View {
             maxSelections: question.maxSelections
         )
 
+        if let attribution = question.attribution {
+            requestAttributionRow(attribution)
+        }
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(question.header.isEmpty ? "Question" : question.header)
                     .font(OpenCodeTypography.heading)
                 Spacer()
                 if question.questionCount > 1 {
-                    Text("\(question.questionIndex + 1) of \(question.questionCount)")
+                    // With a request pager beside it, name this counter so the two read apart.
+                    Text("\(question.requestCount > 1 ? "Step " : "")\(question.questionIndex + 1) of \(question.questionCount)")
                         .font(OpenCodeTypography.caption)
                 }
+                requestPager(
+                    position: question.requestPosition,
+                    count: question.requestCount,
+                    enabled: !question.submitting,
+                    noun: "question"
+                )
+                OpenCodeButton(
+                    variant: .iconCircle(.keyboardArrowDown, accessibilityLabel: "Hide question"),
+                    contrast: .low,
+                    action: { onAction(.hideQuestion(requestID: question.requestID)) }
+                )
             }
             Text(question.question)
                 .font(OpenCodeTypography.bodySecondary)
@@ -885,6 +1010,15 @@ struct OpenCodeSessionComposer: View {
             }
         }
         .accessibilityElement(children: .contain)
+        requestPageDots(position: question.requestPosition, count: question.requestCount)
+    }
+
+    private var pagesRequests: Bool {
+        switch state {
+        case let .permission(permission): permission.queueCount > 1
+        case let .question(question): question.requestCount > 1
+        case .prompt, .childLockout: false
+        }
     }
 
     private var outlineColor: Color? {

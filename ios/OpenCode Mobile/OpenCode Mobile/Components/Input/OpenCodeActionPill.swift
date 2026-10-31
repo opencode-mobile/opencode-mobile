@@ -4,6 +4,8 @@ enum OpenCodeActionPillVariant: CaseIterable {
     case scrollToEnd
     /// A hidden permission dock waiting above the composer.
     case reviewPermission
+    /// A collapsed question panel waiting above the composer.
+    case answerQuestion
 }
 
 struct OpenCodeActionPill: View {
@@ -52,6 +54,8 @@ struct OpenCodeActionPill: View {
             "Scroll to end"
         case .reviewPermission:
             "Review permission request"
+        case .answerQuestion:
+            "Answer question"
         }
     }
 
@@ -59,7 +63,7 @@ struct OpenCodeActionPill: View {
         switch variant {
         case .scrollToEnd:
             .arrowDownward
-        case .reviewPermission:
+        case .reviewPermission, .answerQuestion:
             .arrowUpward
         }
     }

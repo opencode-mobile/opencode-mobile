@@ -166,6 +166,8 @@ struct ComponentGalleryDetailView: View {
             SyncingPillGalleryView()
         case .sideQuestionPill:
             SideQuestionPillGalleryView()
+        case .floatingPill:
+            FloatingPillGalleryView()
         case .reviewChangesPill:
             ReviewChangesPillGalleryView()
         case .sessionTodosPill:

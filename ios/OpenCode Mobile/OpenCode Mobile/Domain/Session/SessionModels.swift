@@ -19,6 +19,8 @@ struct Session: Sendable, Equatable {
     var viewedAtEpochMs: Int64? = nil
     /// v2 only: how the latest run ended.
     var idleOutcome: SessionIdleOutcome? = nil
+    /// v2 only: the agent a subagent session runs (`general`, `explore`).
+    var agentName: String? = nil
 
     var isArchived: Bool { archivedAtEpochMs != nil }
 

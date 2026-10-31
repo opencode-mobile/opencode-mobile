@@ -25,6 +25,8 @@ data class TimelineRow(
     val modelId: String? = null,
     val contextInputTokens: Long? = null,
     val sentAtEpochMs: Long? = null,
+    /** Set on a prompt steered into a running turn, pending or delivered. */
+    val steer: SessionChatSteer? = null,
     val contentRevision: ContentRevision,
     val layoutRevision: Long,
 )
@@ -109,9 +111,9 @@ object TimelineProjector {
                 projectRow(body, previousById[body.message.id])
             }
         val merged = mergeWithPending(authoritative, optimisticInputs)
-        val rows = merged.rows.filterNot(::isHiddenPendingPrompt)
+        val visibleRows = merged.rows.filterNot { isQueuedPrompt(it) || it.id in merged.hiddenEchoIds }
         val previousIds = previousById.keys
-        val currentIds = rows.mapTo(HashSet()) { it.id }
+        val currentIds = visibleRows.mapTo(HashSet()) { it.id }
         // Alias only an echo that replaces its optimistic row in this frame. A server
         // row the list already shows under its own id keeps that key.
         val listIdAliases =
@@ -119,6 +121,13 @@ object TimelineProjector {
                 merged.echoes.filter { (serverId, pendingId) ->
                     pendingId in previousIds && serverId !in previousIds && serverId in currentIds
                 }
+        val rows =
+            markSteers(
+                rows = visibleRows,
+                previousById = previousById,
+                listIdAliases = listIdAliases,
+                runIsActive = runIsActive(frame),
+            )
         return diffFrame(
             frameRevision = frame.frameRevision,
             rows = rows,
@@ -132,8 +141,12 @@ object TimelineProjector {
 
     fun isHiddenPendingPrompt(item: SessionChatMessageItem): Boolean = item.role == MessageRole.User && item.pendingDelivery != null
 
+    /**
+     * Optimistic send rows the timeline shows: everything but a queued prompt, which only
+     * the queued strip shows. A steer shows as a pending bubble.
+     */
     fun displayedOptimisticSendItems(items: List<SessionChatMessageItem>): List<SessionChatMessageItem> =
-        items.filterNot(::isHiddenPendingPrompt)
+        items.filterNot { it.role == MessageRole.User && it.pendingDelivery == FollowUpDelivery.Queue }
 
     fun shouldMarkTimelineReadyAfterOptimisticSend(
         displayedItems: List<SessionChatMessageItem>,
@@ -202,6 +215,7 @@ object TimelineProjector {
                 modelId = item.modelId,
                 contextInputTokens = item.contextInputTokens,
                 sentAtEpochMs = item.sentAtEpochMs,
+                steer = item.steer,
                 contentRevision = contentRevision,
                 layoutRevision = 0L,
             )
@@ -229,6 +243,7 @@ object TimelineProjector {
             modelId = row.modelId,
             contextInputTokens = row.contextInputTokens,
             sentAtEpochMs = row.sentAtEpochMs,
+            steer = row.steer,
         )
     }
 
@@ -313,6 +328,8 @@ object TimelineProjector {
                 modelId = message.modelId,
                 contextInputTokens = message.contextInputTokens,
                 sentAtEpochMs = message.sentAtEpochMs,
+                // Carried so an unchanged row stays the same instance; [markSteers] decides.
+                steer = previous?.steer,
                 contentRevision = ContentRevision.of(displayText),
                 layoutRevision = 0L,
             )
@@ -352,6 +369,7 @@ object TimelineProjector {
             left.modelId == right.modelId &&
             left.contextInputTokens == right.contextInputTokens &&
             left.sentAtEpochMs == right.sentAtEpochMs &&
+            left.steer == right.steer &&
             left.contentRevision == right.contentRevision
 
     private fun layoutKey(row: TimelineRow): LayoutKey =
@@ -361,6 +379,7 @@ object TimelineProjector {
             isStreaming = row.isStreaming,
             hasMetadata = row.metadataLabel.isNotEmpty(),
             hasWaiting = row.pendingDelivery != null,
+            steer = row.steer,
             attachmentSignatures = row.attachments.map { "${it.id}\u0000${it.signature}" },
             blockLayoutFingerprints = row.blocks.map(::blockLayoutFingerprint),
         )
@@ -417,21 +436,84 @@ object TimelineProjector {
         val isStreaming: Boolean,
         val hasMetadata: Boolean,
         val hasWaiting: Boolean,
+        val steer: SessionChatSteer?,
         val attachmentSignatures: List<String>,
         val blockLayoutFingerprints: List<String>,
     )
 
     /**
-     * Pending-prompt rows stay in [mergeWithPending] so a server echo can replace a
-     * matching optimistic row, then leave the displayed set. The timeline shows
-     * delivered history only — Steer and Queue, including optimistic rows.
+     * A user row with a pending delivery (steer or queue), including optimistic
+     * `isPending` rows. Any server echo retires such an optimistic row.
      */
     fun isHiddenPendingPrompt(row: TimelineRow): Boolean = row.role == MessageRole.User && row.pendingDelivery != null
 
-    /** Merged rows plus, for each dropped optimistic row matched to its echo, `serverId → pendingId`. */
+    /** A queued prompt: the queued strip is its only surface until it is delivered. */
+    fun isQueuedPrompt(row: TimelineRow): Boolean = row.role == MessageRole.User && row.pendingDelivery == FollowUpDelivery.Queue
+
+    /**
+     * The newest assistant message has not finished, so the session is mid-run.
+     * v2 also enqueues an idle prompt as a steer; this keeps that one unlabelled.
+     */
+    fun runIsActive(frame: DisplayFrame): Boolean {
+        val assistant = frame.messages.lastOrNull { it.message.role == MessageRole.Assistant }?.message ?: return false
+        return assistant.completedAtEpochMs == null && assistant.failure == null
+    }
+
+    /**
+     * Marks prompts steered into a running turn. A waiting steer is pending; a row that
+     * was a steer in the previous frame keeps its mark once delivered, so the server's
+     * copy replaces the pending bubble in place and keeps the label. Consecutive steers
+     * share one label, on the first.
+     */
+    fun markSteers(
+        rows: List<TimelineRow>,
+        previousById: Map<String, TimelineRow>,
+        listIdAliases: Map<String, String>,
+        runIsActive: Boolean,
+    ): List<TimelineRow> {
+        var previousWasSteer = false
+        return rows.map { row ->
+            // A notice line (agent or model change) between steers does not split them.
+            if (row.role == MessageRole.Notice) return@map row
+            val isUser = row.role == MessageRole.User
+            val isPending = isUser && row.pendingDelivery == FollowUpDelivery.Steer
+            val wasSteer =
+                previousById[row.id]?.steer != null ||
+                    listIdAliases[row.id]?.let { previousById[it]?.steer } != null
+            // `isPending` optimistic rows only carry a steer delivery for a busy send.
+            val isSteer = isUser && (wasSteer || (isPending && (row.isPending || runIsActive)))
+            val steer = if (isSteer) SessionChatSteer(isPending = isPending, showsLabel = !previousWasSteer) else null
+            previousWasSteer = isSteer
+            if (row.steer == steer) row else row.copy(steer = steer, layoutRevision = row.layoutRevision + 1)
+        }
+    }
+
+    /** Marks optimistic send items placed after [after]'s rows, as [markSteers] would. */
+    fun markOptimisticSteers(
+        items: List<SessionChatMessageItem>,
+        after: TimelineFrame?,
+    ): List<SessionChatMessageItem> {
+        if (items.isEmpty()) return items
+        val previousRows = after?.rows.orEmpty()
+        val marked =
+            markSteers(
+                rows = previousRows + items.map(::rowFromMessageItem),
+                previousById = previousRows.associateBy { it.id },
+                listIdAliases = after?.listIdAliases.orEmpty(),
+                runIsActive = false,
+            ).takeLast(items.size)
+        return items.zip(marked) { item, row -> if (item.steer == row.steer) item else item.copy(steer = row.steer) }
+    }
+
+    /**
+     * Merged rows; for each dropped optimistic row matched to its echo, `serverId → pendingId`;
+     * and waiting-steer echoes of a still-shown optimistic row, hidden so the prompt never
+     * shows twice.
+     */
     private data class PendingMerge(
         val rows: List<TimelineRow>,
         val echoes: Map<String, String> = emptyMap(),
+        val hiddenEchoIds: Set<String> = emptySet(),
     )
 
     private fun mergeWithPending(
@@ -449,9 +531,19 @@ object TimelineProjector {
             )
         val dropped = pendingRows.filter { pending -> pendingToKeep.none { it.id == pending.id } }
         val withMetadata = applyPendingMetadata(serverRows, dropped, baselineIds)
+        val keptShown = pendingToKeep.filterNot(::isHiddenPendingPrompt)
+        val hiddenEchoIds =
+            serverRows
+                .filter { server ->
+                    server.pendingDelivery == FollowUpDelivery.Steer &&
+                        keptShown.any { isNewServerEchoOf(server, it, baselineIds) }
+                }.mapTo(HashSet()) { it.id }
+        val keptIds = pendingToKeep.mapTo(HashSet()) { it.id }
+        // A same-id waiting echo is dropped here so the optimistic row stays.
         return PendingMerge(
-            rows = splicePending(withMetadata.rows, pendingToKeep),
+            rows = splicePending(withMetadata.rows.filterNot { it.id in hiddenEchoIds }, pendingToKeep),
             echoes = withMetadata.echoes,
+            hiddenEchoIds = hiddenEchoIds - keptIds,
         )
     }
 
@@ -460,14 +552,16 @@ object TimelineProjector {
         pendingToKeep: List<TimelineRow>,
     ): List<TimelineRow> {
         if (pendingToKeep.isEmpty()) return serverRows
+        // A steer belongs after the step it steers, so only plain sends move above the reply.
+        val (steers, sends) = pendingToKeep.partition { it.pendingDelivery != null }
         val index = serverRows.indexOfFirst { it.role == MessageRole.Assistant && it.isStreaming }
-        if (index >= 0) {
+        if (sends.isNotEmpty() && index >= 0) {
             val precededByUser = index > 0 && serverRows[index - 1].role == MessageRole.User
             if (!precededByUser) {
-                return serverRows.take(index) + pendingToKeep + serverRows.drop(index)
+                return serverRows.take(index) + sends + serverRows.drop(index) + steers
             }
         }
-        return serverRows + pendingToKeep
+        return serverRows + sends + steers
     }
 
     private fun applyPendingMetadata(
@@ -482,7 +576,8 @@ object TimelineProjector {
                 val pending =
                     dropped.firstOrNull { candidate -> isNewServerEchoOf(row, candidate, baselineIds) }
                         ?: return@map row
-                if (!isHiddenPendingPrompt(row) && pending.id !in echoes.values) {
+                // A shown waiting steer keeps the optimistic row's list key; a hidden queued echo does not.
+                if (!isQueuedPrompt(row) && pending.id !in echoes.values) {
                     echoes[row.id] = pending.id
                 }
                 val metadata =

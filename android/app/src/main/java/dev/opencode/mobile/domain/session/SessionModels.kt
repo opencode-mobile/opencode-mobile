@@ -21,6 +21,8 @@ data class Session(
     val viewedAtEpochMs: Long? = null,
     /** v2 only: how the latest run ended. */
     val idleOutcome: SessionIdleOutcome? = null,
+    /** v2 only: the agent a subagent session runs (`general`, `explore`). */
+    val agentName: String? = null,
 ) {
     val isArchived: Boolean
         get() = archivedAtEpochMs != null

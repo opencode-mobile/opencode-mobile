@@ -209,6 +209,9 @@ object ProductAnalytics {
         const val QUESTION_NEXT = "question_next"
         const val QUESTION_SUBMIT = "question_submit"
         const val QUESTION_DISMISS = "question_dismiss"
+        const val QUESTION_HIDE = "question_hide"
+        const val QUESTION_SHOW = "question_show"
+        const val INBOX_REQUEST_PAGE = "inbox_request_page"
 
         // Commands / pickers / dialogs
         const val COMMANDS_DISMISS = "commands_dismiss"

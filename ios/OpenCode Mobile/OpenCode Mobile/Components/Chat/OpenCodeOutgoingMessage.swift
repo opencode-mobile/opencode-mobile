@@ -20,6 +20,28 @@ enum OpenCodeOutgoingMessageContent: Identifiable {
     }
 }
 
+/// A prompt steered into a running turn. Pending: dimmed with a dashed outline and
+/// a caption until the next step delivers it. Either way the first of a run of
+/// steers carries the "Steering" label.
+enum OpenCodeOutgoingMessageSteering: Equatable {
+    case pending(showsLabel: Bool)
+    case delivered(showsLabel: Bool)
+
+    static let label = "↱ Steering"
+    static let pendingCaption = "Pending · sends at the next step"
+
+    var isPending: Bool {
+        if case .pending = self { return true }
+        return false
+    }
+
+    var showsLabel: Bool {
+        switch self {
+        case .pending(let showsLabel), .delivered(let showsLabel): showsLabel
+        }
+    }
+}
+
 private struct OutgoingMessageTrailingMaxWidthLayout: Layout {
     let maxWidthFraction: CGFloat
 
@@ -60,6 +82,7 @@ struct OpenCodeOutgoingMessage: View {
     let metadataLabel: String
     /// Revealed by dragging the message left. Nil: no reveal.
     let sentAt: Date?
+    let steering: OpenCodeOutgoingMessageSteering?
     let onTap: (() -> Void)?
     let onLongPress: (() -> Void)?
 
@@ -69,6 +92,7 @@ struct OpenCodeOutgoingMessage: View {
         attachments: [OpenCodeAttachmentPresentation] = [],
         metadataLabel: String,
         sentAt: Date? = nil,
+        steering: OpenCodeOutgoingMessageSteering? = nil,
         onTap: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil
     ) {
@@ -78,6 +102,7 @@ struct OpenCodeOutgoingMessage: View {
         self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
         self.sentAt = sentAt
+        self.steering = steering
         self.onTap = onTap
         self.onLongPress = onLongPress
     }
@@ -87,6 +112,7 @@ struct OpenCodeOutgoingMessage: View {
         renderedMarkdown: NativeMarkdownDocument? = nil,
         metadataLabel: String,
         sentAt: Date? = nil,
+        steering: OpenCodeOutgoingMessageSteering? = nil,
         onTap: (() -> Void)? = nil,
         onLongPress: (() -> Void)? = nil
     ) {
@@ -94,6 +120,7 @@ struct OpenCodeOutgoingMessage: View {
         self.renderedMarkdown = renderedMarkdown
         self.metadataLabel = metadataLabel
         self.sentAt = sentAt
+        self.steering = steering
         self.onTap = onTap
         self.onLongPress = onLongPress
     }
@@ -101,6 +128,12 @@ struct OpenCodeOutgoingMessage: View {
     var body: some View {
         OutgoingMessageTrailingMaxWidthLayout(maxWidthFraction: outgoingMessageMaxWidthFraction) {
             VStack(alignment: .trailing, spacing: 4) {
+                if steering?.showsLabel == true {
+                    Text(OpenCodeOutgoingMessageSteering.label)
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.textWeak)
+                        .accessibilityAddTraits(.isHeader)
+                }
                 ForEach(content) { item in
                     switch item {
                     case .text(_, let text):
@@ -109,9 +142,17 @@ struct OpenCodeOutgoingMessage: View {
                         }
                     case .attachment(let attachment):
                         OpenCodeMessageAttachment(attachment: attachment)
+                            .opacity(isPending ? pendingOpacity : 1)
                     case .images(_, let items, let onOpen):
                         OpenCodeImageGallery(items: items, onOpen: onOpen)
+                            .opacity(isPending ? pendingOpacity : 1)
                     }
+                }
+                if isPending {
+                    Text(OpenCodeOutgoingMessageSteering.pendingCaption)
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(OpenCodeColors.textWeak)
+                        .multilineTextAlignment(.trailing)
                 }
             }
             .openCodeTimeReveal(time)
@@ -133,6 +174,10 @@ struct OpenCodeOutgoingMessage: View {
         Self.accessibilityValue(metadataLabel: metadataLabel, time: time)
     }
 
+    private var isPending: Bool { steering?.isPending == true }
+
+    private var pendingOpacity: Double { 0.6 }
+
     private func textPill(text: String) -> some View {
         pillContent(text: text)
             .padding(.horizontal, outgoingMessagePaddingHorizontal)
@@ -142,6 +187,16 @@ struct OpenCodeOutgoingMessage: View {
                 in: RoundedRectangle(cornerRadius: 8)
             )
             .clipShape(RoundedRectangle(cornerRadius: 8))
+            .opacity(isPending ? pendingOpacity : 1)
+            .overlay {
+                if isPending {
+                    RoundedRectangle(cornerRadius: 8)
+                        .strokeBorder(
+                            OpenCodeColors.textWeaker,
+                            style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                        )
+                }
+            }
     }
 
     @ViewBuilder
@@ -225,6 +280,23 @@ private func attributedCommandDisplayText(_ text: String) -> AttributedString {
         .padding()
         .openCodeTheme()
         .preferredColorScheme(.dark)
+}
+
+#Preview("Steering") {
+    VStack(spacing: 12) {
+        OpenCodeOutgoingMessage(
+            text: "Use the staging bucket instead.",
+            metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM",
+            steering: .delivered(showsLabel: true)
+        )
+        OpenCodeOutgoingMessage(
+            text: "And skip the migration step.",
+            metadataLabel: "Build · DeepSeek V4 Flash · 9:06 PM",
+            steering: .pending(showsLabel: false)
+        )
+    }
+    .padding()
+    .openCodeTheme()
 }
 
 private let outgoingMessageLongPreviewText = """

@@ -292,6 +292,87 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.responseSessionID == "child")
     }
 
+    @Test func permissionPaging_movesBetweenRequestsAndNamesTheSubagent() async throws {
+        let sessionRepository = FakeChatSessionRepository(
+            sessions: [
+                Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil),
+                Session(
+                    id: "child", title: "Run tests (@general subagent)", slug: nil, projectID: nil,
+                    directory: "/repo", parentID: "ses-1", updatedAtEpochMs: nil
+                ),
+            ]
+        )
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            permissionLiveStore: FakePermissionLiveStore(requests: [
+                permissionRequest(id: "permission-root", sessionID: "ses-1"),
+                permissionRequest(id: "permission-child", sessionID: "child"),
+            ])
+        )
+        defer { viewModel.stopObserving() }
+
+        try #require(await waitUntil { viewModel.uiState.permissionQueueCount == 2 })
+        #expect(viewModel.uiState.permissionRequest?.id == "permission-root")
+        #expect(viewModel.uiState.permissionQueuePosition == 1)
+        #expect(viewModel.uiState.permissionAttribution == nil)
+
+        viewModel.pagePermission(by: 1)
+        #expect(viewModel.uiState.permissionRequest?.id == "permission-child")
+        #expect(viewModel.uiState.permissionQueuePosition == 2)
+        #expect(viewModel.uiState.permissionAttribution?.agentName == "general")
+        #expect(viewModel.uiState.permissionAttribution?.sessionID == "child")
+
+        viewModel.pagePermission(by: 1)
+        #expect(viewModel.uiState.permissionQueuePosition == 2)
+
+        viewModel.hidePermissionDock(requestID: "permission-child")
+        #expect(viewModel.uiState.permissionDockHidden)
+        viewModel.pagePermission(by: -1)
+        #expect(viewModel.uiState.permissionRequest?.id == "permission-root")
+        #expect(!viewModel.uiState.permissionDockHidden)
+    }
+
+    @Test func questionPaging_keepsEachRequestsAnswersAndCollapses() async throws {
+        let sessionRepository = FakeChatSessionRepository(
+            sessions: [
+                Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil),
+                Session(
+                    id: "child", title: "Look around (@explore subagent)", slug: nil, projectID: nil,
+                    directory: "/repo", parentID: "ses-1", updatedAtEpochMs: nil
+                ),
+            ]
+        )
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            questionLiveStore: FakeQuestionLiveStore(requests: [
+                questionRequest(id: "question-root", sessionID: "ses-1"),
+                questionRequest(id: "question-child", sessionID: "child"),
+            ])
+        )
+        defer { viewModel.stopObserving() }
+
+        try #require(await waitUntil { viewModel.uiState.questionQueueCount == 2 })
+        #expect(viewModel.uiState.questionRequest?.id == "question-root")
+        #expect(viewModel.uiState.questionAttribution == nil)
+        viewModel.toggleQuestionOption(requestID: "question-root", sessionID: "ses-1", label: "A")
+        #expect(viewModel.uiState.questionSelectedLabels == ["A"])
+
+        viewModel.pageQuestion(by: 1)
+        #expect(viewModel.uiState.questionRequest?.id == "question-child")
+        #expect(viewModel.uiState.questionQueuePosition == 2)
+        #expect(viewModel.uiState.questionAttribution?.questionSummary == "explore · subagent asks")
+        #expect(viewModel.uiState.questionSelectedLabels.isEmpty)
+
+        viewModel.pageQuestion(by: -1)
+        #expect(viewModel.uiState.questionRequest?.id == "question-root")
+        #expect(viewModel.uiState.questionSelectedLabels == ["A"])
+
+        viewModel.hideQuestionDock(requestID: "question-root")
+        #expect(viewModel.uiState.questionDockHidden)
+        viewModel.showQuestionDock()
+        #expect(!viewModel.uiState.questionDockHidden)
+    }
+
     @Test func permissionTopologyFailure_isReported() async {
         let sessionRepository = FakeChatSessionRepository(
             listSessionsError: .transport("offline")

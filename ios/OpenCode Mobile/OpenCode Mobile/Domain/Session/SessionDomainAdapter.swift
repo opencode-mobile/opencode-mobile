@@ -38,7 +38,8 @@ nonisolated struct SessionDomainAdapter: Sendable {
             revert: dto.revert.map(sessionRevert),
             idleAtEpochMs: dto.time?.idle,
             viewedAtEpochMs: dto.time?.viewed,
-            idleOutcome: SessionIdleOutcome(wireValue: dto.outcome)
+            idleOutcome: SessionIdleOutcome(wireValue: dto.outcome),
+            agentName: dto.agent.flatMap { $0.isEmpty ? nil : $0 }
         )
     }
 

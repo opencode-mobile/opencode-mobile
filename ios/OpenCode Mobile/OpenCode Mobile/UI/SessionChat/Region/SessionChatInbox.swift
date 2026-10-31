@@ -15,9 +15,9 @@ final class SessionChatInbox {
     private let canMutate: () -> Bool
     private let loadedMessages: () -> [Message]
 
-    private var permissionSessions: [Session] = []
-    private var questionSessions: [Session] = []
     private var questionDraftRequestID: String?
+    /// Wizard progress of question requests paged away from, restored when paged back.
+    private var parkedQuestionDrafts: [String: (index: Int, drafts: [Int: QuestionAnswerDraft])] = [:]
     private var permissionTask: Task<Void, Never>?
     private var questionTask: Task<Void, Never>?
     private var todoTask: Task<Void, Never>?
@@ -41,6 +41,7 @@ final class SessionChatInbox {
         self.sessionTodoLiveStore = sessionTodoLiveStore
         self.canMutate = canMutate
         self.loadedMessages = loadedMessages
+        state.rootSessionID = sessionID
     }
 
     func bind(sessionID: String) {
@@ -50,11 +51,10 @@ final class SessionChatInbox {
         }
         stop()
         self.sessionID = sessionID
-        permissionSessions = []
-        questionSessions = []
         questionDraftRequestID = nil
+        parkedQuestionDrafts = [:]
         lastTodoLive = nil
-        state = SessionChatInboxRegionState()
+        state = SessionChatInboxRegionState(rootSessionID: sessionID)
         startObserving()
         notifyChange()
     }
@@ -135,6 +135,44 @@ final class SessionChatInbox {
 
     func showPermissionDock() {
         state.permissionHiddenID = nil
+        notifyChange()
+    }
+
+    /// Pages the permission panel `delta` requests forward (negative goes back), clamped to the ends.
+    func pagePermission(by delta: Int) {
+        guard state.permissionSubmittingID == nil,
+              let target = InboxRequestPaging.pagedID(
+                  ids: state.permissionRequests.map(\.id), selectedID: state.permissionSelectedID, delta: delta
+              ),
+              target != state.visiblePermissionRequest?.id
+        else { return }
+        state.permissionSelectedID = target
+        state.permissionError = nil
+        notifyChange()
+    }
+
+    /// Pages the question panel `delta` requests forward; each request keeps its own answers.
+    func pageQuestion(by delta: Int) {
+        guard state.questionSubmittingID == nil,
+              let target = InboxRequestPaging.pagedID(
+                  ids: state.questionRequests.map(\.id), selectedID: state.questionSelectedID, delta: delta
+              ),
+              target != state.selectedQuestionRequest?.id
+        else { return }
+        state.questionSelectedID = target
+        state.questionError = nil
+        syncQuestionDraftState()
+        notifyChange()
+    }
+
+    func hideQuestionDock(requestID: String) {
+        guard state.visibleQuestionRequest?.id == requestID else { return }
+        state.questionHiddenID = requestID
+        notifyChange()
+    }
+
+    func showQuestionDock() {
+        state.questionHiddenID = nil
         notifyChange()
     }
 
@@ -304,14 +342,14 @@ final class SessionChatInbox {
     private func applyPermissionSnapshot(_ requests: [PermissionRequest]) async {
         let needsSessionFetch = requests.contains { request in
             request.sessionID != sessionID
-                && !permissionSessions.contains { $0.id == request.sessionID }
+                && !state.permissionSessions.contains { $0.id == request.sessionID }
         }
         if needsSessionFetch {
             do {
-                permissionSessions = try await sessionRepository.listSessions(directory: worktree)
+                state.permissionSessions = try await sessionRepository.listSessions(directory: worktree)
                 state.permissionTopologyError = nil
             } catch {
-                permissionSessions = []
+                state.permissionSessions = []
                 state.permissionTopologyError = "Unable to refresh permission session tree"
             }
         } else {
@@ -319,7 +357,7 @@ final class SessionChatInbox {
         }
         state.permissionRequests = SessionChatViewModel.orderedPermissionRequests(
             rootSessionID: sessionID,
-            sessions: permissionSessions,
+            sessions: state.permissionSessions,
             requests: requests
         )
         if let submitting = state.permissionSubmittingID,
@@ -333,22 +371,22 @@ final class SessionChatInbox {
     private func applyQuestionSnapshot(_ requests: [QuestionRequest]) async {
         let needsSessionFetch = requests.contains { request in
             request.sessionID != sessionID
-                && !questionSessions.contains { $0.id == request.sessionID }
+                && !state.questionSessions.contains { $0.id == request.sessionID }
         }
         if needsSessionFetch {
             do {
-                questionSessions = try await sessionRepository.listSessions(directory: worktree)
+                state.questionSessions = try await sessionRepository.listSessions(directory: worktree)
                 state.questionTopologyError = nil
             } catch {
-                questionSessions = []
+                state.questionSessions = []
                 state.questionTopologyError = "Unable to refresh question session tree"
             }
         } else {
             state.questionTopologyError = nil
         }
-        let previousVisibleID = state.questionRequests.first?.id
+        let previousVisibleID = state.selectedQuestionRequest?.id
         state.questionRequests = dropOrphanQuestionRequests(
-            orderedQuestionRequests(rootSessionID: sessionID, sessions: questionSessions, requests: requests),
+            orderedQuestionRequests(rootSessionID: sessionID, sessions: state.questionSessions, requests: requests),
             messages: loadedMessages()
         )
         syncQuestionDraftState()
@@ -357,7 +395,7 @@ final class SessionChatInbox {
             state.questionSubmittingID = nil
             state.questionError = nil
         }
-        let visibleID = state.questionRequests.first?.id
+        let visibleID = state.selectedQuestionRequest?.id
         if visibleID != previousVisibleID {
             OpenCodeLog.sessionChat.info("question visible=\(visibleID ?? "none") queue=\(self.state.questionRequests.count)")
         }
@@ -390,16 +428,22 @@ final class SessionChatInbox {
     }
 
     private func syncQuestionDraftState() {
-        guard let visible = state.questionRequests.first else {
+        let pendingIDs = Set(state.questionRequests.map(\.id))
+        parkedQuestionDrafts = parkedQuestionDrafts.filter { pendingIDs.contains($0.key) }
+        guard let visible = state.selectedQuestionRequest else {
             questionDraftRequestID = nil
             state.questionWizardIndex = 0
             state.questionDrafts.removeAll()
             return
         }
         if questionDraftRequestID != visible.id {
+            if let previous = questionDraftRequestID, pendingIDs.contains(previous) {
+                parkedQuestionDrafts[previous] = (state.questionWizardIndex, state.questionDrafts)
+            }
             questionDraftRequestID = visible.id
-            state.questionWizardIndex = 0
-            state.questionDrafts.removeAll()
+            let parked = parkedQuestionDrafts.removeValue(forKey: visible.id)
+            state.questionWizardIndex = min(parked?.index ?? 0, max(0, visible.questions.count - 1))
+            state.questionDrafts = parked?.drafts ?? [:]
         } else {
             state.questionWizardIndex = min(max(state.questionWizardIndex, 0), max(0, visible.questions.count - 1))
         }

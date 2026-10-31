@@ -12,6 +12,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -44,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,10 +62,13 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -85,7 +91,9 @@ import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.components.OpenCodePageIndicator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import kotlin.math.abs
 
 sealed interface OpenCodeSessionComposerState {
     data class Prompt(
@@ -120,6 +128,14 @@ sealed interface OpenCodeSessionComposerState {
         val sideQuestionMode: Boolean = false,
     ) : OpenCodeSessionComposerState
 
+    /** The descendant subagent session asking a permission or question; Open shows that session. */
+    data class RequestAttribution(
+        val sessionId: String,
+        val letter: String,
+        /** "general · subagent wants to run: npm test" or "explore · subagent asks". */
+        val summary: String,
+    )
+
     /** A file an edit/write permission would change, with its diff size. */
     data class PermissionFile(
         val path: String,
@@ -138,6 +154,7 @@ sealed interface OpenCodeSessionComposerState {
         val alwaysPatterns: List<String> = emptyList(),
         val queuePosition: Int = 1,
         val queueCount: Int = 1,
+        val attribution: RequestAttribution? = null,
         val submitting: Boolean = false,
         val actionsEnabled: Boolean = true,
         val errorMessage: String? = null,
@@ -169,6 +186,10 @@ sealed interface OpenCodeSessionComposerState {
         val submitEnabled: Boolean = false,
         val submitting: Boolean = false,
         val errorMessage: String? = null,
+        /** 1-based position of this request among the waiting question requests. */
+        val requestPosition: Int = 1,
+        val requestCount: Int = 1,
+        val attribution: RequestAttribution? = null,
     ) : OpenCodeSessionComposerState
 
     data class ChildLockout(
@@ -236,6 +257,21 @@ sealed interface OpenCodeSessionComposerAction {
     /** Collapse the permission dock without answering it. */
     data class HidePermission(
         val requestId: String,
+    ) : OpenCodeSessionComposerAction
+
+    /** Collapse the question panel without answering or dismissing it. */
+    data class HideQuestion(
+        val requestId: String,
+    ) : OpenCodeSessionComposerAction
+
+    /** Page the permission or question panel to another waiting request; [delta] is +1 or -1. */
+    data class PageRequest(
+        val delta: Int,
+    ) : OpenCodeSessionComposerAction
+
+    /** Open the subagent session a request comes from. */
+    data class OpenRequestSession(
+        val sessionId: String,
     ) : OpenCodeSessionComposerAction
 
     data class ToggleQuestionOption(
@@ -374,6 +410,8 @@ fun OpenCodeSessionComposer(
     val announceBlocking =
         state is OpenCodeSessionComposerState.Permission || state is OpenCodeSessionComposerState.Question
     val shellShape = RoundedCornerShape(OpenCodeFloatingChromeCornerRadius)
+    val currentOnAction by rememberUpdatedState(onAction)
+    val onSwipePage = remember { { delta: Int -> currentOnAction(OpenCodeSessionComposerAction.PageRequest(delta)) } }
     Column(
         modifier =
             modifier
@@ -398,6 +436,7 @@ fun OpenCodeSessionComposer(
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 12.dp)
+                            .requestPageSwipe(enabled = state.pagesRequests, onPage = onSwipePage)
                         .then(
                             if (announceBlocking) {
                                 Modifier.semantics { liveRegion = LiveRegionMode.Polite }
@@ -1039,15 +1078,20 @@ private fun PermissionApprovalContent(
     onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
     val actionsEnabled = state.actionsEnabled && !state.submitting
+    state.attribution?.let { RequestAttributionRow(it, onAction) }
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Permission requested", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            if (state.queueCount > 1) {
-                Text("${state.queuePosition} of ${state.queueCount}", style = MaterialTheme.typography.bodySmall)
-            }
+            RequestPager(
+                position = state.queuePosition,
+                count = state.queueCount,
+                enabled = !state.submitting,
+                noun = "permission request",
+                onAction = onAction,
+            )
             OpenCodeButton(
                 variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.KeyboardArrowDown, "Hide permission request"),
                 contrast = OpenCodeButtonContrast.Low,
@@ -1110,6 +1154,125 @@ private fun PermissionApprovalContent(
             enabled = actionsEnabled,
         )
     }
+    RequestPageDots(position = state.queuePosition, count = state.queueCount)
+}
+
+private val OpenCodeSessionComposerState.pagesRequests: Boolean
+    get() =
+        when (this) {
+            is OpenCodeSessionComposerState.Permission -> queueCount > 1
+            is OpenCodeSessionComposerState.Question -> requestCount > 1
+            is OpenCodeSessionComposerState.Prompt,
+            is OpenCodeSessionComposerState.ChildLockout,
+            -> false
+        }
+
+/** Horizontal swipe on a request panel pages between waiting requests. */
+private fun Modifier.requestPageSwipe(
+    enabled: Boolean,
+    onPage: (delta: Int) -> Unit,
+): Modifier {
+    if (!enabled) return this
+    return pointerInput(onPage) {
+        var dragX = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { dragX = 0f },
+            onDragEnd = {
+                if (abs(dragX) > RequestPageSwipeThresholdPx * density) {
+                    onPage(if (dragX < 0) 1 else -1)
+                }
+            },
+            onHorizontalDrag = { _, amount -> dragX += amount },
+        )
+    }
+}
+
+private const val RequestPageSwipeThresholdPx = 60f
+
+/** Light amber row naming the subagent that asks, with Open to show its session. */
+@Composable
+private fun RequestAttributionRow(
+    attribution: OpenCodeSessionComposerState.RequestAttribution,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(openCodeColor("warning").copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                .padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                .testTag("sessionChatRequestAttribution"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(22.dp)
+                    .background(openCodeColor("warning").copy(alpha = 0.28f), CircleShape)
+                    // The summary already names the agent; the letter is decoration.
+                    .clearAndSetSemantics {},
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                attribution.letter,
+                style = MaterialTheme.typography.labelMedium,
+                color = openCodeColor("text-strong"),
+            )
+        }
+        Text(
+            attribution.summary,
+            style = MaterialTheme.typography.bodySmall,
+            color = openCodeColor("text-strong"),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.CompactText("Open"),
+            contrast = OpenCodeButtonContrast.Low,
+            onClick = { onAction(OpenCodeSessionComposerAction.OpenRequestSession(attribution.sessionId)) },
+            modifier = Modifier.semantics { contentDescription = "Open subagent session" },
+        )
+    }
+}
+
+/** "‹ 1 of 2 ›" beside the panel title while more than one request waits. */
+@Composable
+private fun RequestPager(
+    position: Int,
+    count: Int,
+    enabled: Boolean,
+    noun: String,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
+) {
+    if (count <= 1) return
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowBack, "Previous $noun"),
+            enabled = enabled && position > 1,
+            contrast = OpenCodeButtonContrast.Low,
+            onClick = { onAction(OpenCodeSessionComposerAction.PageRequest(-1)) },
+        )
+        Text("$position of $count", style = MaterialTheme.typography.bodySmall)
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowForward, "Next $noun"),
+            enabled = enabled && position < count,
+            contrast = OpenCodeButtonContrast.Low,
+            onClick = { onAction(OpenCodeSessionComposerAction.PageRequest(1)) },
+        )
+    }
+}
+
+@Composable
+private fun RequestPageDots(
+    position: Int,
+    count: Int,
+) {
+    if (count <= 1) return
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        OpenCodePageIndicator(pageCount = count, currentPage = (position - 1).coerceIn(0, count - 1))
+    }
 }
 
 /** Commands and paths read as code (iOS: `OpenCodeTypography.code`). */
@@ -1145,6 +1308,7 @@ private fun QuestionRequestContent(
             minSelections = state.minSelections,
             maxSelections = state.maxSelections,
         )
+    state.attribution?.let { RequestAttributionRow(it, onAction) }
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -1156,11 +1320,24 @@ private fun QuestionRequestContent(
                 modifier = Modifier.weight(1f),
             )
             if (state.questionCount > 1) {
+                // With a request pager beside it, name this counter so the two read apart.
                 Text(
-                    "${state.questionIndex + 1} of ${state.questionCount}",
+                    "${if (state.requestCount > 1) "Step " else ""}${state.questionIndex + 1} of ${state.questionCount}",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
+            RequestPager(
+                position = state.requestPosition,
+                count = state.requestCount,
+                enabled = !state.submitting,
+                noun = "question",
+                onAction = onAction,
+            )
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.KeyboardArrowDown, "Hide question"),
+                contrast = OpenCodeButtonContrast.Low,
+                onClick = { onAction(OpenCodeSessionComposerAction.HideQuestion(state.requestId)) },
+            )
         }
         Text(state.question, style = MaterialTheme.typography.bodyMedium)
         Text(
@@ -1284,6 +1461,7 @@ private fun QuestionRequestContent(
             }
         }
     }
+    RequestPageDots(position = state.requestPosition, count = state.requestCount)
 }
 
 private fun questionSelectionDecorator(selected: Boolean): StartDecorator =

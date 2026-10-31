@@ -1371,6 +1371,27 @@ final class SessionChatViewModel {
         inbox.showPermissionDock()
     }
 
+    func pagePermission(by delta: Int) {
+        logChatAction(ProductAnalytics.Action.inboxRequestPage)
+        inbox.pagePermission(by: delta)
+    }
+
+    func pageQuestion(by delta: Int) {
+        logChatAction(ProductAnalytics.Action.inboxRequestPage)
+        inbox.pageQuestion(by: delta)
+    }
+
+    /// Collapse the question panel so the composer is reachable; the question stays pending.
+    func hideQuestionDock(requestID: String) {
+        logChatAction(ProductAnalytics.Action.questionHide)
+        inbox.hideQuestionDock(requestID: requestID)
+    }
+
+    func showQuestionDock() {
+        logChatAction(ProductAnalytics.Action.questionShow)
+        inbox.showQuestionDock()
+    }
+
     func denyPermission(requestID: String, sessionID: String) async {
         logChatAction(
             ProductAnalytics.Action.permissionDeny,
@@ -1950,12 +1971,18 @@ final class SessionChatViewModel {
             snackbar: snackbar,
             isLifecycleActionInFlight: infoState.isLifecycleActionInFlight,
             shouldLeaveSession: infoState.shouldLeaveSession,
-            permissionRequest: inboxState.permissionRequests.first,
+            permissionRequest: inboxState.visiblePermissionRequest,
+            permissionQueuePosition: inboxState.permissionPageIndex + 1,
             permissionQueueCount: inboxState.permissionRequests.count,
+            permissionAttribution: inboxState.visiblePermissionAttribution,
             permissionDockHidden: inboxState.isPermissionDockHidden,
             permissionSubmitting: inboxState.permissionSubmittingID != nil,
             permissionErrorMessage: inboxState.permissionError ?? inboxState.permissionTopologyError,
             questionRequest: visibleQuestion,
+            questionQueuePosition: inboxState.questionPageIndex + 1,
+            questionQueueCount: inboxState.questionRequests.count,
+            questionAttribution: inboxState.visibleQuestionAttribution,
+            questionDockHidden: inboxState.isQuestionDockHidden,
             questionWizardIndex: inboxState.questionWizardIndex,
             questionSelectedLabels: inboxState.questionDraft.selectedLabels,
             questionCustomText: inboxState.questionDraft.customText,

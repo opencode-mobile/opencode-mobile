@@ -666,7 +666,7 @@ final class SessionChatTimeline {
             notifyChange()
             return
         }
-        state.messages.append(contentsOf: displayed)
+        state.messages.append(contentsOf: Self.markingOptimisticSteers(displayed, after: timelineFrame))
         state.timeline = .ready
         state.errorMessage = nil
         let inserted = Set(displayed.map(\.id))
@@ -678,6 +678,18 @@ final class SessionChatTimeline {
             layoutChangedRowIDs: inserted
         )
         notifyChange()
+    }
+
+    /// A busy steer send shows as a pending steer from the first frame, before any echo.
+    static func markingOptimisticSteers(_ rows: [SessionChatRow], after frame: TimelineFrame) -> [SessionChatRow] {
+        let previousByID = Dictionary(frame.rows.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+        let marked = SessionChatTimelineProjector.markSteers(
+            frame.rows + rows.map { TimelineRow.fromSessionChatRow($0) },
+            previousByID: previousByID,
+            listIDAliases: frame.listIDAliases,
+            runIsActive: false
+        ).suffix(rows.count)
+        return zip(rows, marked).map { row, timelineRow in row.withSteer(timelineRow.steer) }
     }
 
     func failOptimisticSend(optimisticID: String, error: String) {

@@ -1714,6 +1714,27 @@ class SessionChatViewModel
             inbox.showPermissionDock()
         }
 
+        fun pagePermission(delta: Int) {
+            logAction(ProductAnalytics.Action.INBOX_REQUEST_PAGE)
+            inbox.pagePermission(delta)
+        }
+
+        fun pageQuestion(delta: Int) {
+            logAction(ProductAnalytics.Action.INBOX_REQUEST_PAGE)
+            inbox.pageQuestion(delta)
+        }
+
+        /** Collapse the question panel so the composer is reachable; the question stays pending. */
+        fun hideQuestionDock(requestId: String) {
+            logAction(ProductAnalytics.Action.QUESTION_HIDE)
+            inbox.hideQuestionDock(requestId)
+        }
+
+        fun showQuestionDock() {
+            logAction(ProductAnalytics.Action.QUESTION_SHOW)
+            inbox.showQuestionDock()
+        }
+
         fun denyPermission(
             requestId: String,
             sessionId: String,
@@ -2163,12 +2184,18 @@ class SessionChatViewModel
                 snackbar = snackbar,
                 isLifecycleActionInFlight = infoState.isLifecycleActionInFlight,
                 shouldLeaveSession = infoState.shouldLeaveSession,
-                permissionRequest = inboxSnapshot.permissionRequests.firstOrNull(),
+                permissionRequest = inboxSnapshot.visiblePermissionRequest,
+                permissionQueuePosition = inboxSnapshot.permissionPageIndex + 1,
                 permissionQueueCount = inboxSnapshot.permissionRequests.size,
+                permissionAttribution = inboxSnapshot.visiblePermissionAttribution,
                 permissionDockHidden = inboxSnapshot.isPermissionDockHidden,
                 permissionSubmitting = inboxSnapshot.permissionSubmittingId != null,
                 permissionErrorMessage = inboxSnapshot.permissionError ?: inboxSnapshot.permissionTopologyError,
                 questionRequest = visibleQuestion,
+                questionQueuePosition = inboxSnapshot.questionPageIndex + 1,
+                questionQueueCount = inboxSnapshot.questionRequests.size,
+                questionAttribution = inboxSnapshot.visibleQuestionAttribution,
+                questionDockHidden = inboxSnapshot.isQuestionDockHidden,
                 questionWizardIndex = inboxSnapshot.questionWizardIndex,
                 questionSelectedLabels = questionDraft.selectedLabels,
                 questionCustomText = questionDraft.customText,

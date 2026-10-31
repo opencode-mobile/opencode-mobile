@@ -124,6 +124,86 @@ export const P1 = [
     ],
   },
   {
+    id: "permission-in-parallel-subagents",
+    priority: "P1",
+    title: "Permissions from the session and two subagents at once",
+    category: "permission",
+    prompt: "Clean the build and run the tests and lint with subagents.",
+    expect: "The permission panel says 1 of 3 with arrows and dots. The session's own `rm -rf dist` has no subagent row; paging (arrows or swipe) shows \"general · subagent wants to run: npm test\" and \"explore · subagent wants to run: npm run lint\" rows with Open, which opens that subagent's session. Allow each one.",
+    modelCalls: [
+      {
+        steps: [
+          run("rm -rf dist", "Remove stale build output"),
+          { op: "tool", name: subagentTool, child: "tests", input: subagent("Run the tests", "Run npm test and summarise failures.") },
+          {
+            op: "tool",
+            name: subagentTool,
+            child: "lint",
+            input: {
+              v1: { description: "Run the linter", prompt: "Run npm run lint.", subagent_type: "explore" },
+              v2: { description: "Run the linter", prompt: "Run npm run lint.", agent: "explore" },
+            },
+          },
+        ],
+      },
+      { child: "tests", steps: [run("npm test", "Run tests")] },
+      { child: "tests", steps: [say("All 3 tests pass.", 12)] },
+      { child: "lint", steps: [run("npm run lint", "Run the linter")] },
+      { child: "lint", steps: [say("Lint is clean.", 12)] },
+      { steps: [say("Build cleaned, tests and lint are green.", 12)] },
+    ],
+  },
+  {
+    id: "question-in-parallel-subagents",
+    priority: "P1",
+    title: "Two subagents ask questions at once",
+    category: "question",
+    prompt: "Ask two subagents to plan the currency change.",
+    expect: "The question panel says 1 of 2 with arrows and dots and an \"explore · subagent asks\" or \"general · subagent asks\" row with Open. Paging keeps each answer. The chevron collapses it to an Answer question pill. Answer both.",
+    modelCalls: [
+      {
+        steps: [
+          {
+            op: "tool",
+            name: subagentTool,
+            child: "plan",
+            input: {
+              v1: { description: "Plan the currency source", prompt: "Ask where the currency comes from.", subagent_type: "explore" },
+              v2: { description: "Plan the currency source", prompt: "Ask where the currency comes from.", agent: "explore" },
+            },
+          },
+          { op: "tool", name: subagentTool, child: "rounding", input: subagent("Plan the rounding", "Ask how to round.") },
+        ],
+      },
+      { child: "plan", steps: [{ op: "tool", name: "question", input: { questions: [CURRENCY_QUESTION] } }] },
+      { child: "plan", steps: [say("Noted the currency source.", 12)] },
+      {
+        child: "rounding",
+        steps: [
+          {
+            op: "tool",
+            name: "question",
+            input: {
+              questions: [
+                {
+                  header: "Rounding",
+                  question: "How should half cents round?",
+                  multiple: false,
+                  options: [
+                    { label: "Half up", description: "1.005 becomes 1.01" },
+                    { label: "Half even", description: "Banker's rounding" },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+      { child: "rounding", steps: [say("Noted the rounding rule.", 12)] },
+      { steps: [say("Both subagents have their answers.", 12)] },
+    ],
+  },
+  {
     id: "provider-free-limit-retry-after",
     priority: "P1",
     title: "Free usage limit with retry-after",

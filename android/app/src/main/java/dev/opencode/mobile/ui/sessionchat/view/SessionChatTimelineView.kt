@@ -91,6 +91,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatGalleryImageLoader
 import dev.opencode.mobile.ui.sessionchat.SessionChatImageGalleries
 import dev.opencode.mobile.ui.sessionchat.SessionChatImageViewerState
 import dev.opencode.mobile.ui.components.OpenCodeMessageNote
+import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessageSteering
 import dev.opencode.mobile.ui.components.OpenCodeMessageNoteVariant
 import dev.opencode.mobile.ui.components.OpenCodeChatActivityState
 import dev.opencode.mobile.ui.components.OpenCodeOutgoingMessage
@@ -743,8 +744,15 @@ private fun SessionChatMessageRow(
                     metadataLabel = message.metadataLabel,
                     sentAtEpochMs = message.sentAtEpochMs,
                     content = message.outgoingContent(),
+                    steering = message.outgoingSteering(),
                     modifier = Modifier.fillMaxWidth(),
-                    onClick = { openMessageActions(showsRevertMessage = true) },
+                    // A pending steer has no message actions; the Up next sheet owns it.
+                    onClick =
+                        if (message.steer?.isPending == true) {
+                            null
+                        } else {
+                            { openMessageActions(showsRevertMessage = true) }
+                        },
                     onImageClick = LocalOpenImageViewer.current,
                 )
 
@@ -788,6 +796,15 @@ private fun SessionChatMessageRow(
         }
     }
 }
+
+private fun SessionChatMessageItem.outgoingSteering(): OpenCodeOutgoingMessageSteering? =
+    steer?.let { mark ->
+        if (mark.isPending) {
+            OpenCodeOutgoingMessageSteering.Pending(showsLabel = mark.showsLabel)
+        } else {
+            OpenCodeOutgoingMessageSteering.Delivered(showsLabel = mark.showsLabel)
+        }
+    }
 
 private fun SessionChatMessageItem.outgoingContent(): List<OpenCodeOutgoingMessageContent> {
     val textBlockCount = blocks.count { it is SessionChatTimelineBlock.Text }

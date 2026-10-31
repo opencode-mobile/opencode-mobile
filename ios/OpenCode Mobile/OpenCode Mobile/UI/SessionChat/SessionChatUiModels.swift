@@ -15,6 +15,8 @@ struct SessionChatRow: Identifiable, Equatable {
     let contextInputTokens: Int64?
     /// When the message was sent; user bubbles reveal it on a drag.
     let sentAtEpochMs: Int64?
+    /// Set on a prompt steered into a running turn, pending or delivered.
+    let steer: SessionChatSteer?
     /// Working-row only: reserved list identity collapsed after the Idle hold.
     let isLayoutCollapsed: Bool
 
@@ -32,6 +34,7 @@ struct SessionChatRow: Identifiable, Equatable {
         modelID: String? = nil,
         contextInputTokens: Int64? = nil,
         sentAtEpochMs: Int64? = nil,
+        steer: SessionChatSteer? = nil,
         isLayoutCollapsed: Bool = false
     ) {
         self.id = id
@@ -47,6 +50,7 @@ struct SessionChatRow: Identifiable, Equatable {
         self.modelID = modelID
         self.contextInputTokens = contextInputTokens
         self.sentAtEpochMs = sentAtEpochMs
+        self.steer = steer
         self.isLayoutCollapsed = isLayoutCollapsed
     }
 
@@ -64,6 +68,7 @@ struct SessionChatRow: Identifiable, Equatable {
               lhs.text.count == rhs.text.count,
               lhs.metadataLabel == rhs.metadataLabel,
               lhs.sentAtEpochMs == rhs.sentAtEpochMs,
+              lhs.steer == rhs.steer,
               lhs.pendingDelivery == rhs.pendingDelivery,
               lhs.isLayoutCollapsed == rhs.isLayoutCollapsed,
               lhs.blocks.count == rhs.blocks.count
@@ -321,12 +326,23 @@ struct SessionChatUiState: Equatable {
     var isLifecycleActionInFlight: Bool = false
     var shouldLeaveSession: Bool = false
     var permissionRequest: PermissionRequest?
+    /// 1-based position of `permissionRequest` among the waiting permissions.
+    var permissionQueuePosition: Int = 1
     var permissionQueueCount: Int = 0
+    /// The subagent asking for `permissionRequest`; nil for the session's own requests.
+    var permissionAttribution: InboxRequestAttribution?
     /// The permission dock is collapsed to a "Review permission" pill above the composer.
     var permissionDockHidden: Bool = false
     var permissionSubmitting: Bool = false
     var permissionErrorMessage: String?
     var questionRequest: QuestionRequest?
+    /// 1-based position of `questionRequest` among the waiting question requests.
+    var questionQueuePosition: Int = 1
+    var questionQueueCount: Int = 0
+    /// The subagent asking `questionRequest`; nil for the session's own questions.
+    var questionAttribution: InboxRequestAttribution?
+    /// The question panel is collapsed to an "Answer question" pill above the composer.
+    var questionDockHidden: Bool = false
     var questionWizardIndex: Int = 0
     var questionSelectedLabels: [String] = []
     var questionCustomText = ""
@@ -887,27 +903,77 @@ struct PendingSend: Equatable {
 }
 
 struct SessionChatInboxRegionState: Equatable {
+    /// The session the inbox is bound to; requests from any other session are a subagent's.
+    var rootSessionID = ""
     var permissionRequests: [PermissionRequest] = []
+    /// The permission request the panel pages to; nil or gone means the first one.
+    var permissionSelectedID: String?
     /// The pending permission the user tucked away to reach the composer (never rejects it).
     var permissionHiddenID: String?
     var permissionSubmittingID: String?
     var permissionError: String?
     var permissionTopologyError: String?
+    /// Sessions loaded to place descendant permission requests; also names the asking subagent.
+    var permissionSessions: [Session] = []
     var questionRequests: [QuestionRequest] = []
+    /// The question request the panel pages to; nil or gone means the first one.
+    var questionSelectedID: String?
+    /// The pending question the user collapsed to an "Answer question" pill (never dismisses it).
+    var questionHiddenID: String?
     var questionSubmittingID: String?
     var questionError: String?
     var questionTopologyError: String?
+    var questionSessions: [Session] = []
     var questionWizardIndex = 0
     var questionDrafts: [Int: QuestionAnswerDraft] = [:]
     var sessionTodos: [SessionTodo] = []
 
-    var visibleQuestionRequest: QuestionRequest? {
-        permissionRequests.isEmpty ? questionRequests.first : nil
+    var permissionPageIndex: Int {
+        InboxRequestPaging.index(ids: permissionRequests.map(\.id), selectedID: permissionSelectedID)
     }
 
-    /// True while the first pending permission is the one the user hid; a new request shows again.
+    var visiblePermissionRequest: PermissionRequest? {
+        permissionRequests.isEmpty ? nil : permissionRequests[permissionPageIndex]
+    }
+
+    /// The question request the panel pages to, regardless of a waiting permission.
+    var selectedQuestionRequest: QuestionRequest? {
+        guard !questionRequests.isEmpty else { return nil }
+        return questionRequests[questionPageIndex]
+    }
+
+    var questionPageIndex: Int {
+        InboxRequestPaging.index(ids: questionRequests.map(\.id), selectedID: questionSelectedID)
+    }
+
+    var visibleQuestionRequest: QuestionRequest? {
+        permissionRequests.isEmpty ? selectedQuestionRequest : nil
+    }
+
+    /// True while the shown permission is the one the user hid; paging or a new request shows again.
     var isPermissionDockHidden: Bool {
-        permissionHiddenID != nil && permissionRequests.first?.id == permissionHiddenID
+        permissionHiddenID != nil && visiblePermissionRequest?.id == permissionHiddenID
+    }
+
+    /// True while the shown question is the one the user collapsed.
+    var isQuestionDockHidden: Bool {
+        questionHiddenID != nil && visibleQuestionRequest?.id == questionHiddenID
+    }
+
+    var visiblePermissionAttribution: InboxRequestAttribution? {
+        visiblePermissionRequest.flatMap {
+            InboxRequestAttribution.resolve(
+                requestSessionID: $0.sessionID, rootSessionID: rootSessionID, sessions: permissionSessions
+            )
+        }
+    }
+
+    var visibleQuestionAttribution: InboxRequestAttribution? {
+        visibleQuestionRequest.flatMap {
+            InboxRequestAttribution.resolve(
+                requestSessionID: $0.sessionID, rootSessionID: rootSessionID, sessions: questionSessions
+            )
+        }
     }
 
     var questionDraft: QuestionAnswerDraft {
@@ -1048,6 +1114,27 @@ struct PendingPrompt: Equatable, Identifiable, Sendable {
 }
 
 extension SessionChatRow {
+    func withSteer(_ steer: SessionChatSteer?) -> SessionChatRow {
+        guard steer != self.steer else { return self }
+        return SessionChatRow(
+            id: id,
+            role: role,
+            text: text,
+            metadataLabel: metadataLabel,
+            pendingDelivery: pendingDelivery,
+            isPending: isPending,
+            isStreaming: isStreaming,
+            renderedMarkdown: renderedMarkdown,
+            blocks: blocks,
+            modelProviderID: modelProviderID,
+            modelID: modelID,
+            contextInputTokens: contextInputTokens,
+            sentAtEpochMs: sentAtEpochMs,
+            steer: steer,
+            isLayoutCollapsed: isLayoutCollapsed
+        )
+    }
+
     func withRenderedMarkdown(_ document: NativeMarkdownDocument?) -> SessionChatRow {
         SessionChatRow(
             id: id,
@@ -1062,7 +1149,8 @@ extension SessionChatRow {
             modelProviderID: modelProviderID,
             modelID: modelID,
             contextInputTokens: contextInputTokens,
-            sentAtEpochMs: sentAtEpochMs
+            sentAtEpochMs: sentAtEpochMs,
+            steer: steer
         )
     }
 }
