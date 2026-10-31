@@ -35,8 +35,13 @@ final class SessionChatViewModel {
     private var lastWorkingLamp: String?
     private var workingChrome = WorkingTurnIndicator.Chrome.unmounted
     private var workingHold: WorkingTurnIndicator.Hold?
-    /// When subagents seen working finished, keyed by tool part id, for their frozen run time.
+    /// When subagents seen working finished live, keyed by tool part id, for rows with no server time.
     private var subagentFinishTimes: [String: Int64] = [:]
+    /// When the connection last became live; nil while it is not. Rows published before it
+    /// were seen before a gap, so a finish found after it is not stamped locally.
+    private var subagentLiveSinceMs: Int64?
+    /// When the published subagent rows were computed.
+    private var subagentsSeenAtMs: Int64?
     private var workingHoldTask: Task<Void, Never>?
     private var pendingPromptsGate = PendingPromptsStripGate()
     private var pendingPromptsWakeTask: Task<Void, Never>?
@@ -1466,6 +1471,16 @@ final class SessionChatViewModel {
         inboxState: SessionChatInboxRegionState,
         infoState: SessionInfoRegionState
     ) -> [SessionChatSubagent] {
+        let nowMs = clock.nowMs()
+        let isLive = infoState.connectionStatus == .live
+        if !isLive {
+            subagentLiveSinceMs = nil
+        } else if subagentLiveSinceMs == nil {
+            subagentLiveSinceMs = nowMs
+        }
+        let seenLive = isLive
+            && subagentsSeenAtMs.map { seen in subagentLiveSinceMs.map { seen >= $0 } ?? false } == true
+        subagentsSeenAtMs = nowMs
         let messages = SessionChatChildSessionLinker.link(
             timeline.loadedMessages(),
             children: timeline.childSessions
@@ -1477,7 +1492,7 @@ final class SessionChatViewModel {
                 busySessionIDs: infoState.busySessionIDs,
                 requestSessionIDs: inboxState.permissionRequests.map(\.sessionID)
                     + inboxState.questionRequests.map(\.sessionID),
-                finishedAtMs: finishTimes
+                localFinishedAtMs: finishTimes
             )
         }
         let current = rows(subagentFinishTimes)
@@ -1485,7 +1500,8 @@ final class SessionChatViewModel {
             previous: uiState.subagents,
             current: current,
             known: subagentFinishTimes,
-            nowMs: clock.nowMs()
+            nowMs: nowMs,
+            seenLive: seenLive
         )
         guard finishTimes != subagentFinishTimes else { return current }
         subagentFinishTimes = finishTimes

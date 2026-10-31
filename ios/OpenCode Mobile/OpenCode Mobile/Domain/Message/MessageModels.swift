@@ -610,6 +610,8 @@ nonisolated struct ToolPart: Equatable, Sendable {
     let output: String?
     let metadata: [String: AnyCodable]?
     let timeStartEpochMs: Int64?
+    /// When the call settled on the server (v1 `state.time.end`, v2 completion time); nil while running.
+    let timeEndEpochMs: Int64?
     /// Failed because the user stopped the run or declined the call, not a real failure.
     let isInterrupted: Bool
     /// The model emitted a tool call the server could not run (`executed: false`).
@@ -629,6 +631,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
         output: String? = nil,
         metadata: [String: AnyCodable]? = nil,
         timeStartEpochMs: Int64? = nil,
+        timeEndEpochMs: Int64? = nil,
         isInterrupted: Bool = false,
         isMalformed: Bool = false,
         images: [FilePart] = []
@@ -643,6 +646,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
         self.output = output
         self.metadata = metadata
         self.timeStartEpochMs = timeStartEpochMs
+        self.timeEndEpochMs = timeEndEpochMs
         self.isInterrupted = isInterrupted
         self.isMalformed = isMalformed
         self.images = images
@@ -660,6 +664,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
             output: output,
             metadata: metadata,
             timeStartEpochMs: timeStartEpochMs,
+            timeEndEpochMs: timeEndEpochMs,
             isInterrupted: isInterrupted,
             isMalformed: isMalformed,
             images: images
@@ -680,6 +685,7 @@ nonisolated struct ToolPart: Equatable, Sendable {
             output: output,
             metadata: metadata,
             timeStartEpochMs: timeStartEpochMs,
+            timeEndEpochMs: timeEndEpochMs,
             isInterrupted: isInterrupted,
             isMalformed: isMalformed,
             images: images

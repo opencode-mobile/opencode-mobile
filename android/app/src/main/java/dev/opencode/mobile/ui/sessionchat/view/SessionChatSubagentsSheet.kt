@@ -118,4 +118,6 @@ internal val SessionChatSubagentStatus.rowStatus: OpenCodeChildSessionRowStatus
             SessionChatSubagentStatus.Running -> OpenCodeChildSessionRowStatus.Running
             SessionChatSubagentStatus.WaitingForInput -> OpenCodeChildSessionRowStatus.WaitingForInput
             SessionChatSubagentStatus.Done -> OpenCodeChildSessionRowStatus.Done
+            SessionChatSubagentStatus.Failed -> OpenCodeChildSessionRowStatus.Failed
+            SessionChatSubagentStatus.Stopped -> OpenCodeChildSessionRowStatus.Stopped
         }

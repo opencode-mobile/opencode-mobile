@@ -667,6 +667,21 @@ struct EventDomainAdapterTests {
         #expect(metadata?["count"]?.int64Value == 2)
     }
 
+    @Test func parseEvent_settledToolStampsItsEventTimeAsTheEnd() {
+        let adapter = EventDomainAdapter()
+        let success = adapter.parseEvent(
+            dataLine: #"{"type":"session.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","created":1710000045000}}"#
+        )
+        let progress = adapter.parseEvent(
+            dataLine: #"{"type":"session.tool.progress","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","created":1710000001000}}"#
+        )
+        let time = { (event: OpencodeEvent?) in
+            event?.rawProperties?["part"]?.dictionaryValue?["state"]?.dictionaryValue?["time"]?.dictionaryValue
+        }
+        #expect(time(success)?["end"]?.int64Value == 1_710_000_045_000)
+        #expect(time(progress)?["end"] == nil)
+    }
+
     @Test func parseEvent_infersWebsearchToolFromInputQuery() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(

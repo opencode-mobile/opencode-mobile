@@ -19,6 +19,8 @@ struct BackgroundWorkPillGalleryView: View {
                 ? nil
                 : Self.row("prt-1", "general", "Run the test suite", .running, startedAgoMs: 95_000, now: now),
             Self.row("prt-4", "review", "Review the diff", .done, startedAgoMs: 300_000, now: now, finishedAgoMs: 220_000),
+            Self.row("prt-5", "general", "Migrate the fixtures", .failed, startedAgoMs: 400_000, now: now, finishedAgoMs: 380_000),
+            Self.row("prt-6", "explore", "Profile the parser", .stopped, startedAgoMs: 500_000, now: now, finishedAgoMs: 470_000),
         ].compactMap { $0 }
     }
 

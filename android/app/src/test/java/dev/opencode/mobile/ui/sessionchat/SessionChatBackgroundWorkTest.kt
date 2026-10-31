@@ -170,7 +170,7 @@ class SessionChatBackgroundWorkTest {
         val before = listOf(row("prt-1", Running), row("prt-2", Done))
         val after = listOf(row("prt-1", Done), row("prt-2", Done))
 
-        val times = SessionChatBackgroundWork.finishTimes(before, after, known = emptyMap(), nowMs = 42)
+        val times = SessionChatBackgroundWork.finishTimes(before, after, known = emptyMap(), nowMs = 42, seenLive = true)
 
         assertEquals(mapOf("prt-1" to 42L), times)
     }
@@ -185,6 +185,7 @@ class SessionChatBackgroundWorkTest {
                 current = current,
                 known = mapOf("prt-1" to 10L, "prt-2" to 20L, "prt-gone" to 30L),
                 nowMs = 99,
+                seenLive = true,
             )
 
         assertEquals(mapOf("prt-1" to 10L), times)
@@ -198,10 +199,121 @@ class SessionChatBackgroundWorkTest {
                 sessions = emptyList(),
                 busySessionIds = emptySet(),
                 requestSessionIds = emptyList(),
-                finishedAtMs = mapOf("prt-1" to 5_000L),
+                localFinishedAtMs = mapOf("prt-1" to START + 5_000L),
             )
 
-        assertEquals(5_000L, rows.first().finishedAtMs)
+        assertEquals(START + 5_000L, rows.first().finishedAtMs)
+    }
+
+    @Test
+    fun subagents_resumedChildKeepsOneRowFromTheLatestPart() {
+        // v1 resume (`task_id`) writes the same child session id on a new tool part.
+        val rows =
+            subagents(
+                task("prt-1", ToolStatus.Completed, child = "ses-a", end = START + 30_000),
+                task("prt-2", ToolStatus.Running, child = "ses-a", start = START + 60_000),
+                busy = setOf("ses-a"),
+            )
+
+        assertEquals(listOf("prt-2"), rows.map { it.id })
+        assertEquals(Running, rows.single().status)
+        assertEquals(START + 60_000, rows.single().startedAtMs)
+        assertEquals("1 subagent", SessionChatBackgroundWork.pill(rows)?.label)
+    }
+
+    @Test
+    fun subagents_resumedChildWaitingCountsOnce() {
+        val rows =
+            subagents(
+                task("prt-1", ToolStatus.Completed, child = "ses-a", agent = "general"),
+                task("prt-2", ToolStatus.Running, child = "ses-a", agent = "general"),
+                busy = setOf("ses-a"),
+                requests = listOf("ses-a"),
+            )
+
+        assertEquals("general needs input", SessionChatBackgroundWork.pill(rows)?.label)
+    }
+
+    @Test
+    fun subagents_partsWithoutChildStaySeparate() {
+        val rows = subagents(task("prt-1", ToolStatus.Running, child = null), task("prt-2", ToolStatus.Running, child = null))
+
+        assertEquals(2, rows.size)
+    }
+
+    @Test
+    fun finishTime_usesTheToolEndFromTheServer() {
+        val rows =
+            subagents(
+                task("prt-1", ToolStatus.Completed, child = "ses-a", end = START + 45_000),
+                sessions = listOf(session("ses-a", parent = "ses-root", updatedAt = START + 600_000)),
+            )
+
+        assertEquals(START + 45_000, rows.single().finishedAtMs)
+        assertEquals("0:45", rows.single().elapsed(START + 600_000))
+    }
+
+    @Test
+    fun finishTime_backgroundCallUsesTheChildSessionUpdate() {
+        // A background call settles at spawn; its end is not when the child finished.
+        val rows =
+            subagents(
+                task("prt-1", ToolStatus.Completed, child = "ses-a", end = START + 1_000, background = true),
+                sessions = listOf(session("ses-a", parent = "ses-root", updatedAt = START + 90_000)),
+            )
+
+        assertEquals(START + 90_000, rows.single().finishedAtMs)
+    }
+
+    @Test
+    fun finishTime_serverTimeWinsOverALocalStampAndIgnoresTimesBeforeStart() {
+        val tool =
+            MessagePart.Tool(
+                toolName = "task",
+                status = ToolStatus.Completed,
+                timeStartEpochMs = START,
+                timeEndEpochMs = START + 20_000,
+            )
+        val stale = tool.copy(timeEndEpochMs = START - 5_000)
+
+        assertEquals(START + 20_000, SessionChatBackgroundWork.finishTime(tool, session = null, local = START + 99_000))
+        assertEquals(START + 7_000, SessionChatBackgroundWork.finishTime(stale, session = null, local = START + 7_000))
+    }
+
+    @Test
+    fun finishTimes_findingAFinishAfterAGapStampsNothing() {
+        // Running at 12:00:00, app away, done found by the reconnect refresh ten minutes later.
+        val before = listOf(row("prt-1", Running))
+        val after = listOf(row("prt-1", Done))
+
+        val times = SessionChatBackgroundWork.finishTimes(before, after, emptyMap(), nowMs = START + 600_000, seenLive = false)
+
+        assertTrue(times.isEmpty())
+        assertNull(after.single().elapsed(START + 600_000))
+    }
+
+    @Test
+    fun finishTimes_skipsRowsWithAServerFinish() {
+        val before = listOf(row("prt-1", Running))
+        val after = listOf(row("prt-1", Done, finished = START + 45_000))
+
+        val times = SessionChatBackgroundWork.finishTimes(before, after, emptyMap(), nowMs = START + 50_000, seenLive = true)
+
+        assertTrue(times.isEmpty())
+    }
+
+    @Test
+    fun subagents_errorIsFailedAndInterruptedIsStopped_neitherCounts() {
+        val rows =
+            subagents(
+                task("prt-1", ToolStatus.Error, child = "ses-a"),
+                task("prt-2", ToolStatus.Error, child = "ses-b", interrupted = true),
+                busy = setOf("ses-a", "ses-b"),
+            )
+
+        assertEquals(listOf(SessionChatSubagentStatus.Failed, SessionChatSubagentStatus.Stopped), rows.map { it.status })
+        assertTrue(rows.none { it.isActive })
+        assertNull(SessionChatBackgroundWork.pill(rows))
     }
 
     private fun subagents(
@@ -224,6 +336,10 @@ class SessionChatBackgroundWorkTest {
         status: ToolStatus,
         child: String?,
         agent: String? = "general",
+        start: Long = START,
+        end: Long? = null,
+        background: Boolean = false,
+        interrupted: Boolean = false,
     ) = MessagePart.Tool(
         toolName = "task",
         status = status,
@@ -233,8 +349,14 @@ class SessionChatBackgroundWorkTest {
                 put("description", "Look around")
                 agent?.let { put("subagent_type", it) }
             },
-        metadata = child?.let { buildJsonObject { put("sessionId", it) } },
-        timeStartEpochMs = START,
+        metadata =
+            buildJsonObject {
+                child?.let { put("sessionId", it) }
+                if (background) put("background", true)
+            }.takeIf { it.isNotEmpty() },
+        timeStartEpochMs = start,
+        timeEndEpochMs = end,
+        isInterrupted = interrupted,
     )
 
     private fun session(
@@ -242,7 +364,8 @@ class SessionChatBackgroundWorkTest {
         parent: String?,
         title: String = "Subagent",
         agentName: String? = null,
-    ) = Session(id = id, title = title, parentId = parent, agentName = agentName)
+        updatedAt: Long? = null,
+    ) = Session(id = id, title = title, parentId = parent, agentName = agentName, updatedAtEpochMs = updatedAt)
 
     private fun row(
         id: String = "prt-1",

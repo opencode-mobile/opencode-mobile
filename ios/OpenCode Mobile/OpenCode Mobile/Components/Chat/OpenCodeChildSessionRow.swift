@@ -6,12 +6,26 @@ enum OpenCodeChildSessionRowStatus: CaseIterable, Equatable {
     /// Amber: the subagent waits on a permission or question.
     case waitingForInput
     case done
+    /// Error token: the subagent's call failed.
+    case failed
+    /// The run was stopped before the subagent finished.
+    case stopped
 
     var label: String {
         switch self {
         case .running: "running"
         case .waitingForInput: "waiting for input"
         case .done: "done"
+        case .failed: "failed"
+        case .stopped: "stopped"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .waitingForInput: OpenCodeColors.warning
+        case .failed: OpenCodeColors.error
+        case .running, .done, .stopped: OpenCodeColors.textWeaker
         }
     }
 }
@@ -85,7 +99,7 @@ struct OpenCodeChildSessionRow: View {
                 if let status {
                     Text(status.label)
                         .font(OpenCodeTypography.caption)
-                        .foregroundStyle(status == .waitingForInput ? OpenCodeColors.warning : OpenCodeColors.textWeaker)
+                        .foregroundStyle(status.color)
                         .lineLimit(1)
                 }
                 if let elapsed, !elapsed.isEmpty {

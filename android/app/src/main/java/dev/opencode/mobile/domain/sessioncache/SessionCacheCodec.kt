@@ -484,6 +484,7 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 output = output,
                 metadata = metadata,
                 timeStartEpochMs = timeStartEpochMs,
+                timeEndEpochMs = timeEndEpochMs,
                 isInterrupted = isInterrupted,
                 isMalformed = isMalformed,
             )
@@ -546,6 +547,7 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 metadata = metadata,
                 id = id,
                 timeStartEpochMs = timeStartEpochMs,
+                timeEndEpochMs = timeEndEpochMs,
                 isInterrupted = isInterrupted,
                 isMalformed = isMalformed,
             )

@@ -84,6 +84,8 @@ extension SessionChatSubagentStatus {
         case .running: .running
         case .waitingForInput: .waitingForInput
         case .done: .done
+        case .failed: .failed
+        case .stopped: .stopped
         }
     }
 }

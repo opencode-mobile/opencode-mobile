@@ -340,8 +340,17 @@ class SessionChatViewModel
         private var stepEntryDebounce = SessionChatStepEntryDebounce()
         private var activityCardFooters: Map<String, SessionChatActivityFooter> = emptyMap()
 
-        /** When subagents seen working finished, keyed by tool part id, for their frozen run time. */
+        /** When subagents seen working finished live, keyed by tool part id, for rows with no server time. */
         private var subagentFinishTimes: Map<String, Long> = emptyMap()
+
+        /**
+         * When the connection last became live; null while it is not. Rows published before it
+         * were seen before a gap, so a finish found after it is not stamped locally.
+         */
+        private var subagentLiveSinceMs: Long? = null
+
+        /** When the published subagent rows were computed. */
+        private var subagentsSeenAtMs: Long? = null
         private var debouncedStepIds: Set<String> = emptySet()
         private var stepTimingJob: Job? = null
         private var liveRailSource: List<SessionChatMessageItem>? = null
@@ -2007,6 +2016,17 @@ class SessionChatViewModel
             inboxState: SessionChatInboxRegionState,
             infoState: SessionInfoRegionState,
         ): List<SessionChatSubagent> {
+            val now = nowMs()
+            val isLive = infoState.connectionStatus == SessionConnectionStatus.Live
+            if (!isLive) {
+                subagentLiveSinceMs = null
+            } else if (subagentLiveSinceMs == null) {
+                subagentLiveSinceMs = now
+            }
+            val liveSince = subagentLiveSinceMs
+            val seenAt = subagentsSeenAtMs
+            val seenLive = isLive && liveSince != null && seenAt != null && seenAt >= liveSince
+            subagentsSeenAtMs = now
             val messages = SessionChatChildSessionLinker.link(timeline.loadedMessages(), timeline.childSessions)
             val sessions = inboxState.permissionSessions + inboxState.questionSessions
             val requestSessionIds =
@@ -2018,7 +2038,7 @@ class SessionChatViewModel
                     sessions = sessions,
                     busySessionIds = infoState.busySessionIds,
                     requestSessionIds = requestSessionIds,
-                    finishedAtMs = finishTimes,
+                    localFinishedAtMs = finishTimes,
                 )
             val current = rows(subagentFinishTimes)
             val finishTimes =
@@ -2026,7 +2046,8 @@ class SessionChatViewModel
                     previous = _uiState.value.subagents,
                     current = current,
                     known = subagentFinishTimes,
-                    nowMs = nowMs(),
+                    nowMs = now,
+                    seenLive = seenLive,
                 )
             if (finishTimes == subagentFinishTimes) return current
             subagentFinishTimes = finishTimes

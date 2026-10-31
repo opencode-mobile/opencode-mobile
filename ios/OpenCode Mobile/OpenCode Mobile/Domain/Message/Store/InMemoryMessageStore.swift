@@ -604,6 +604,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     output: tool.output,
                     metadata: tool.metadata,
                     timeStartEpochMs: tool.timeStartEpochMs,
+                    timeEndEpochMs: tool.timeEndEpochMs,
                     isInterrupted: tool.isInterrupted,
                     isMalformed: tool.isMalformed,
                     images: tool.images
@@ -1169,6 +1170,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                         output: tool.output,
                         metadata: tool.metadata,
                         timeStartEpochMs: tool.timeStartEpochMs,
+                        timeEndEpochMs: tool.timeEndEpochMs,
                         isInterrupted: tool.isInterrupted,
                         isMalformed: tool.isMalformed,
                         images: tool.images
@@ -1197,6 +1199,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                         output: prior.output,
                         metadata: mergeDict(prior.metadata, next.metadata),
                         timeStartEpochMs: prior.timeStartEpochMs ?? next.timeStartEpochMs,
+                        timeEndEpochMs: prior.timeEndEpochMs ?? next.timeEndEpochMs,
                         isInterrupted: prior.isInterrupted,
                         isMalformed: prior.isMalformed,
                         images: prior.images
@@ -1219,6 +1222,7 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     output: nonEmpty(next.output) ?? prior.output,
                     metadata: mergeDict(prior.metadata, next.metadata),
                     timeStartEpochMs: next.timeStartEpochMs ?? prior.timeStartEpochMs,
+                    timeEndEpochMs: next.timeEndEpochMs ?? prior.timeEndEpochMs,
                     isInterrupted: next.isInterrupted,
                     isMalformed: next.isMalformed || prior.isMalformed,
                     // Images arrive once, with the settled call; a later update without them keeps them.

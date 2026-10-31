@@ -6,11 +6,15 @@ nonisolated enum SessionChatSubagentStatus: Equatable, Sendable {
     /// The subagent, or a subagent it started, has a pending permission or question.
     case waitingForInput
     case done
+    /// The subagent's call failed.
+    case failed
+    /// The user stopped the run (or declined the call) while the subagent worked.
+    case stopped
 }
 
 /// One subagent the open session started, as the background work panel lists it.
 nonisolated struct SessionChatSubagent: Equatable, Identifiable, Sendable {
-    /// The subagent tool part id.
+    /// The id of the subagent's latest tool part (a resumed subagent keeps one row).
     let id: String
     /// The subagent's own session, once the server has named it.
     let childSessionID: String?
@@ -19,10 +23,10 @@ nonisolated struct SessionChatSubagent: Equatable, Identifiable, Sendable {
     let title: String?
     let status: SessionChatSubagentStatus
     let startedAtMs: Int64?
-    /// When the app saw it finish; nil for subagents that finished before the chat opened.
+    /// When it finished: server time when known, else when the app saw it finish live; nil when unknown.
     let finishedAtMs: Int64?
 
-    var isActive: Bool { status != .done }
+    var isActive: Bool { status == .running || status == .waitingForInput }
 
     var letter: String { SessionChatChildSessionElapsed.letter(from: agentName) }
 
@@ -49,13 +53,18 @@ nonisolated struct SessionChatBackgroundWorkPill: Equatable, Sendable {
 /// view model feeds it the loaded messages, live session activity and the
 /// pending requests it already collects for the session tree.
 nonisolated enum SessionChatBackgroundWork {
-    /// Subagent rows in panel order: waiting, then running, then done, each in spawn order.
+    /// Subagent rows in panel order: waiting, then running, then finished, each in spawn order.
+    ///
+    /// One row per child session: a resumed subagent (v1 `task_id`, or a resume the linker maps
+    /// through `input.sessionID`) adds a tool part for the same child, and only its latest part
+    /// counts, so the child's live state is never applied to an earlier, finished call.
+    /// `localFinishedAtMs` holds finishes the app saw live; server times win over them.
     static func subagents(
         messages: [Message],
         sessions: [Session],
         busySessionIDs: Set<String>,
         requestSessionIDs: [String],
-        finishedAtMs: [String: Int64] = [:]
+        localFinishedAtMs: [String: Int64] = [:]
     ) -> [SessionChatSubagent] {
         let tools = messages.flatMap { message in
             message.parts.compactMap { part -> ToolPart? in
@@ -67,17 +76,27 @@ nonisolated enum SessionChatBackgroundWork {
             }
         }
         guard !tools.isEmpty else { return [] }
+        let latestIndexByChild = Dictionary(
+            tools.enumerated().compactMap { index, tool in childSessionID(tool).map { ($0, index) } },
+            uniquingKeysWith: { _, later in later }
+        )
+        let latestTools = tools.enumerated().filter { index, tool in
+            guard let childID = childSessionID(tool) else { return true }
+            return latestIndexByChild[childID] == index
+        }.map(\.element)
         let sessionsByID = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let childIDs = Set(tools.compactMap(childSessionID))
+        let childIDs = Set(latestIndexByChild.keys)
         let waitingChildIDs = Set(requestSessionIDs.compactMap {
             owningChild(of: $0, childIDs: childIDs, sessionsByID: sessionsByID)
         })
-        let rows = tools.map { tool -> SessionChatSubagent in
+        let rows = latestTools.map { tool -> SessionChatSubagent in
             let partID = tool.id ?? ""
             let childID = childSessionID(tool)
             let session = childID.flatMap { sessionsByID[$0] }
             let status: SessionChatSubagentStatus =
-                if let childID, waitingChildIDs.contains(childID) {
+                if tool.status == .error {
+                    tool.isInterrupted ? .stopped : .failed
+                } else if let childID, waitingChildIDs.contains(childID) {
                     .waitingForInput
                 } else if tool.status == .running || tool.status == .pending
                     || childID.map(busySessionIDs.contains) == true {
@@ -85,6 +104,7 @@ nonisolated enum SessionChatBackgroundWork {
                 } else {
                     .done
                 }
+            let isActive = status == .running || status == .waitingForInput
             return SessionChatSubagent(
                 id: partID,
                 childSessionID: childID,
@@ -92,7 +112,7 @@ nonisolated enum SessionChatBackgroundWork {
                 title: string(tool.input, "description") ?? nonEmpty(session?.title),
                 status: status,
                 startedAtMs: tool.timeStartEpochMs,
-                finishedAtMs: status == .done ? finishedAtMs[partID] : nil
+                finishedAtMs: isActive ? nil : finishTime(tool, session: session, local: localFinishedAtMs[partID])
             )
         }
         return rows.enumerated()
@@ -102,6 +122,21 @@ nonisolated enum SessionChatBackgroundWork {
                 return left == right ? lhs.offset < rhs.offset : left < right
             }
             .map(\.element)
+    }
+
+    /// Server end time first. A background call settles at spawn while its child keeps
+    /// working, so its own end time is skipped; the child session's last update stands in.
+    /// A finish the app saw live is the last resort. Times before the start are ignored.
+    static func finishTime(_ tool: ToolPart, session: Session?, local: Int64?) -> Int64? {
+        let start = ToolStartTime.normalizeEpochMs(tool.timeStartEpochMs) ?? 0
+        let candidates = [
+            isBackground(tool) ? nil : tool.timeEndEpochMs,
+            session?.updatedAtEpochMs,
+            local,
+        ]
+        return candidates
+            .compactMap { ToolStartTime.normalizeEpochMs($0) }
+            .first { $0 >= start }
     }
 
     /// The pill for these rows; nil when no subagent is working or waiting.
@@ -121,13 +156,16 @@ nonisolated enum SessionChatBackgroundWork {
         return SessionChatBackgroundWorkPill(label: label, needsInput: true, accessibilityLabel: spoken)
     }
 
-    /// Remembers when subagents seen working finish, so their rows keep a frozen run time.
-    /// Entries for parts no longer listed are dropped.
+    /// Remembers when subagents finish while the app watches live, for rows without a server
+    /// finish time. `seenLive` is false when the previous rows predate the current live
+    /// connection (backgrounded, offline, reconnect refresh): the finish happened at some
+    /// unknown point while the app was away, so nothing is stamped.
     static func finishTimes(
         previous: [SessionChatSubagent],
         current: [SessionChatSubagent],
         known: [String: Int64],
-        nowMs: Int64
+        nowMs: Int64,
+        seenLive: Bool
     ) -> [String: Int64] {
         let wasActive = Set(previous.filter(\.isActive).map(\.id))
         let currentIDs = Set(current.map(\.id))
@@ -135,7 +173,7 @@ nonisolated enum SessionChatBackgroundWork {
         for row in current {
             if row.isActive {
                 next[row.id] = nil
-            } else if next[row.id] == nil, wasActive.contains(row.id) {
+            } else if seenLive, row.finishedAtMs == nil, next[row.id] == nil, wasActive.contains(row.id) {
                 next[row.id] = nowMs
             }
         }
@@ -150,7 +188,7 @@ nonisolated enum SessionChatBackgroundWork {
         switch status {
         case .waitingForInput: 0
         case .running: 1
-        case .done: 2
+        case .done, .failed, .stopped: 2
         }
     }
 
@@ -177,6 +215,14 @@ nonisolated enum SessionChatBackgroundWork {
             ?? session?.agentName
             ?? session.flatMap { InboxRequestAttribution.agentName(fromTitle: $0.title) }
             ?? (tool.toolName.lowercased() == "subagent" ? "General" : "Task")
+    }
+
+    private static func isBackground(_ tool: ToolPart) -> Bool {
+        switch tool.metadata?["background"] {
+        case .bool(let flag)?: flag
+        case .string(let text)?: text.lowercased() == "true" || text == "1"
+        default: false
+        }
     }
 
     private static func childSessionID(_ tool: ToolPart) -> String? {

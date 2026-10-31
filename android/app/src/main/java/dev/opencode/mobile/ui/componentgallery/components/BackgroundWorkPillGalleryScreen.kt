@@ -98,6 +98,11 @@ private fun gallerySubagents(
             row("prt-2", "explore", "Find the session store", SessionChatSubagentStatus.Running, startedAgoMs = 42_000),
             row("prt-3", "explore", "Map the settings screens", SessionChatSubagentStatus.Running, startedAgoMs = 18_000),
         )
-    val done = row("prt-4", "review", "Review the diff", SessionChatSubagentStatus.Done, 300_000, finishedAgoMs = 220_000)
-    return if (needsInput) listOf(general) + running + done else running + general + done
+    val finished =
+        listOf(
+            row("prt-4", "review", "Review the diff", SessionChatSubagentStatus.Done, 300_000, finishedAgoMs = 220_000),
+            row("prt-5", "general", "Migrate the fixtures", SessionChatSubagentStatus.Failed, 400_000, finishedAgoMs = 380_000),
+            row("prt-6", "explore", "Profile the parser", SessionChatSubagentStatus.Stopped, 500_000, finishedAgoMs = 470_000),
+        )
+    return if (needsInput) listOf(general) + running + finished else running + general + finished
 }

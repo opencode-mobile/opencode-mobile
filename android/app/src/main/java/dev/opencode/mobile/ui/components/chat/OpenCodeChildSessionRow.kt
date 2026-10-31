@@ -54,6 +54,12 @@ enum class OpenCodeChildSessionRowStatus(
     /** Amber: the subagent waits on a permission or question. */
     WaitingForInput("waiting for input"),
     Done("done"),
+
+    /** Error token: the subagent's call failed. */
+    Failed("failed"),
+
+    /** The run was stopped before the subagent finished. */
+    Stopped("stopped"),
 }
 
 @Composable
@@ -165,10 +171,10 @@ fun OpenCodeChildSessionRow(
                     text = status.label,
                     style = MaterialTheme.typography.bodySmall,
                     color =
-                        if (status == OpenCodeChildSessionRowStatus.WaitingForInput) {
-                            openCodeColor("warning")
-                        } else {
-                            openCodeColor("text-weaker")
+                        when (status) {
+                            OpenCodeChildSessionRowStatus.WaitingForInput -> openCodeColor("warning")
+                            OpenCodeChildSessionRowStatus.Failed -> MaterialTheme.colorScheme.error
+                            else -> openCodeColor("text-weaker")
                         },
                     maxLines = 1,
                 )

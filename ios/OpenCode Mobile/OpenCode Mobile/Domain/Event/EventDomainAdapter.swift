@@ -965,8 +965,11 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let output { state["output"] = output }
         if let error { state["error"] = error }
         if let metadata { state["metadata"] = metadata }
-        if let start = int64(in: properties, key: "created") {
-            state["time"] = ["start": start]
+        if let created = int64(in: properties, key: "created") {
+            // A settled call's event time is when it ended; the store keeps the first start.
+            state["time"] = status == "completed" || status == "error"
+                ? ["start": created, "end": created]
+                : ["start": created]
         }
         var part: [String: Any] = ["type": "tool", "tool": toolName, "state": state]
         if let partID { part["id"] = partID }
