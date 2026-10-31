@@ -23,6 +23,7 @@ import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
+import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRetryCard
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.VcsFileStatus
@@ -243,12 +244,23 @@ data class SessionChatUiState(
     val isLifecycleActionInFlight: Boolean = false,
     val shouldLeaveSession: Boolean = false,
     val permissionRequest: PermissionRequest? = null,
+    /** 1-based position of [permissionRequest] among the waiting permissions. */
+    val permissionQueuePosition: Int = 1,
     val permissionQueueCount: Int = 0,
+    /** The subagent asking for [permissionRequest]; null for the session's own requests. */
+    val permissionAttribution: InboxRequestAttribution? = null,
     /** The permission dock is collapsed to a "Review permission" pill above the composer. */
     val permissionDockHidden: Boolean = false,
     val permissionSubmitting: Boolean = false,
     val permissionErrorMessage: String? = null,
     val questionRequest: QuestionRequest? = null,
+    /** 1-based position of [questionRequest] among the waiting question requests. */
+    val questionQueuePosition: Int = 1,
+    val questionQueueCount: Int = 0,
+    /** The subagent asking [questionRequest]; null for the session's own questions. */
+    val questionAttribution: InboxRequestAttribution? = null,
+    /** The question panel is collapsed to an "Answer question" pill above the composer. */
+    val questionDockHidden: Boolean = false,
     val questionWizardIndex: Int = 0,
     val questionSelectedLabels: List<String> = emptyList(),
     val questionCustomText: String = "",
@@ -747,26 +759,66 @@ fun SessionChatRepoStripRegionState.toSessionBranchPill(): SessionBranchPillUiSt
 }
 
 data class SessionChatInboxRegionState(
+    /** The session the inbox is bound to; requests from any other session are a subagent's. */
+    val rootSessionId: String = "",
     val permissionRequests: List<PermissionRequest> = emptyList(),
+    /** The permission request the panel pages to; null or gone means the first one. */
+    val permissionSelectedId: String? = null,
     /** The pending permission the user tucked away to reach the composer (never rejects it). */
     val permissionHiddenId: String? = null,
     val permissionSubmittingId: String? = null,
     val permissionError: String? = null,
     val permissionTopologyError: String? = null,
+    /** Sessions loaded to place descendant permission requests; also names the asking subagent. */
+    val permissionSessions: List<Session> = emptyList(),
     val questionRequests: List<QuestionRequest> = emptyList(),
+    /** The question request the panel pages to; null or gone means the first one. */
+    val questionSelectedId: String? = null,
+    /** The pending question the user collapsed to an "Answer question" pill (never dismisses it). */
+    val questionHiddenId: String? = null,
     val questionSubmittingId: String? = null,
     val questionError: String? = null,
     val questionTopologyError: String? = null,
+    val questionSessions: List<Session> = emptyList(),
     val questionWizardIndex: Int = 0,
     val questionDrafts: Map<Int, QuestionAnswerDraft> = emptyMap(),
     val sessionTodos: List<SessionTodo> = emptyList(),
 ) {
-    val visibleQuestionRequest: QuestionRequest?
-        get() = if (permissionRequests.isNotEmpty()) null else questionRequests.firstOrNull()
+    val permissionPageIndex: Int
+        get() = InboxRequestPaging.index(permissionRequests.map { it.id }, permissionSelectedId)
 
-    /** True while the first pending permission is the one the user hid; a new request shows again. */
+    val visiblePermissionRequest: PermissionRequest?
+        get() = permissionRequests.getOrNull(permissionPageIndex)
+
+    val questionPageIndex: Int
+        get() = InboxRequestPaging.index(questionRequests.map { it.id }, questionSelectedId)
+
+    /** The question request the panel pages to, regardless of a waiting permission. */
+    val selectedQuestionRequest: QuestionRequest?
+        get() = questionRequests.getOrNull(questionPageIndex)
+
+    val visibleQuestionRequest: QuestionRequest?
+        get() = if (permissionRequests.isNotEmpty()) null else selectedQuestionRequest
+
+    /** True while the shown permission is the one the user hid; paging or a new request shows again. */
     val isPermissionDockHidden: Boolean
-        get() = permissionHiddenId != null && permissionRequests.firstOrNull()?.id == permissionHiddenId
+        get() = permissionHiddenId != null && visiblePermissionRequest?.id == permissionHiddenId
+
+    /** True while the shown question is the one the user collapsed. */
+    val isQuestionDockHidden: Boolean
+        get() = questionHiddenId != null && visibleQuestionRequest?.id == questionHiddenId
+
+    val visiblePermissionAttribution: InboxRequestAttribution?
+        get() =
+            visiblePermissionRequest?.let {
+                InboxRequestAttribution.resolve(it.sessionId, rootSessionId, permissionSessions)
+            }
+
+    val visibleQuestionAttribution: InboxRequestAttribution?
+        get() =
+            visibleQuestionRequest?.let {
+                InboxRequestAttribution.resolve(it.sessionId, rootSessionId, questionSessions)
+            }
 
     val questionDraft: QuestionAnswerDraft
         get() = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()

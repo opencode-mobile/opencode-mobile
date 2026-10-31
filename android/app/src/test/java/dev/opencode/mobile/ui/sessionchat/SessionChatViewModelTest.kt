@@ -648,6 +648,140 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun permissionPaging_movesBetweenRequestsAndNamesTheSubagent() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions =
+                        listOf(
+                            Session(id = "ses-1", title = "Title"),
+                            Session(id = "child", title = "Run tests (@general subagent)", parentId = "ses-1"),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore =
+                        FakePermissionLiveStore(
+                            listOf(permissionRequest("permission-root", "ses-1"), permissionRequest("permission-child", "child")),
+                        ),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(2, viewModel.uiState.value.permissionQueueCount)
+            assertEquals(
+                "permission-root",
+                viewModel.uiState.value.permissionRequest
+                    ?.id,
+            )
+            assertEquals(1, viewModel.uiState.value.permissionQueuePosition)
+            assertEquals(null, viewModel.uiState.value.permissionAttribution)
+
+            viewModel.pagePermission(1)
+            advanceUntilIdle()
+            assertEquals(
+                "permission-child",
+                viewModel.uiState.value.permissionRequest
+                    ?.id,
+            )
+            assertEquals(2, viewModel.uiState.value.permissionQueuePosition)
+            assertEquals(
+                "general",
+                viewModel.uiState.value.permissionAttribution
+                    ?.agentName,
+            )
+            assertEquals(
+                "child",
+                viewModel.uiState.value.permissionAttribution
+                    ?.sessionId,
+            )
+
+            viewModel.pagePermission(1)
+            advanceUntilIdle()
+            assertEquals(2, viewModel.uiState.value.permissionQueuePosition)
+
+            viewModel.hidePermissionDock("permission-child")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.permissionDockHidden)
+            viewModel.pagePermission(-1)
+            advanceUntilIdle()
+            assertEquals(
+                "permission-root",
+                viewModel.uiState.value.permissionRequest
+                    ?.id,
+            )
+            assertFalse(viewModel.uiState.value.permissionDockHidden)
+        }
+
+    @Test
+    fun questionPaging_keepsEachRequestsAnswersAndCollapses() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions =
+                        listOf(
+                            Session(id = "ses-1", title = "Title"),
+                            Session(id = "child", title = "Look around (@explore subagent)", parentId = "ses-1"),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository = FakeMessageRepository(),
+                    sessionRepository = sessionRepository,
+                    questionLiveStore =
+                        FakeQuestionLiveStore(
+                            listOf(questionRequest("question-root", "ses-1"), questionRequest("question-child", "child")),
+                        ),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(2, viewModel.uiState.value.questionQueueCount)
+            assertEquals(
+                "question-root",
+                viewModel.uiState.value.questionRequest
+                    ?.id,
+            )
+            assertEquals(null, viewModel.uiState.value.questionAttribution)
+            viewModel.toggleQuestionOption("question-root", "ses-1", "A")
+            advanceUntilIdle()
+            assertEquals(listOf("A"), viewModel.uiState.value.questionSelectedLabels)
+
+            viewModel.pageQuestion(1)
+            advanceUntilIdle()
+            assertEquals(
+                "question-child",
+                viewModel.uiState.value.questionRequest
+                    ?.id,
+            )
+            assertEquals(2, viewModel.uiState.value.questionQueuePosition)
+            assertEquals(
+                "explore · subagent asks",
+                viewModel.uiState.value.questionAttribution
+                    ?.questionSummary,
+            )
+            assertEquals(emptyList<String>(), viewModel.uiState.value.questionSelectedLabels)
+
+            viewModel.pageQuestion(-1)
+            advanceUntilIdle()
+            assertEquals(
+                "question-root",
+                viewModel.uiState.value.questionRequest
+                    ?.id,
+            )
+            assertEquals(listOf("A"), viewModel.uiState.value.questionSelectedLabels)
+
+            viewModel.hideQuestionDock("question-root")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.questionDockHidden)
+            viewModel.showQuestionDock()
+            advanceUntilIdle()
+            assertFalse(viewModel.uiState.value.questionDockHidden)
+        }
+
+    @Test
     fun permissionTopologyFailure_isReported() =
         runTest(testDispatcher) {
             val viewModel =

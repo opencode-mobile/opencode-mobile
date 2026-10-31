@@ -587,7 +587,7 @@ private fun SessionChatScreenBody(
         SessionChatComposerKind.resolve(
             isChildSession = isChildSession,
             hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
-            hasQuestion = uiState.questionRequest != null,
+            hasQuestion = uiState.questionRequest != null && !uiState.questionDockHidden,
         )
     LaunchedEffect(composerKindForDictation) {
         if (composerKindForDictation != SessionChatComposerKind.Prompt) {
@@ -1073,7 +1073,7 @@ private fun SessionChatScreenBody(
                         SessionChatComposerKind.resolve(
                             isChildSession = isChildSession,
                             hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
-                            hasQuestion = uiState.questionRequest != null,
+                            hasQuestion = uiState.questionRequest != null && !uiState.questionDockHidden,
                         )
                     if (overlayComposerKind == SessionChatComposerKind.Prompt) {
                         when {
@@ -1147,6 +1147,16 @@ private fun SessionChatScreenBody(
                                         .padding(bottom = 6.dp),
                             )
                         }
+                        if (overlayComposerKind == SessionChatComposerKind.Prompt && uiState.questionDockHidden) {
+                            OpenCodeActionPill(
+                                variant = OpenCodeActionPillVariant.AnswerQuestion,
+                                onClick = viewModel::showQuestionDock,
+                                modifier =
+                                    Modifier
+                                        .align(Alignment.CenterHorizontally)
+                                        .padding(bottom = 6.dp),
+                            )
+                        }
                         if (overlayComposerKind == SessionChatComposerKind.Prompt) {
                             SessionChatSideQuestionRow(
                                 state = uiState.sideQuestions,
@@ -1180,7 +1190,7 @@ private fun SessionChatScreenBody(
                             SessionChatComposerKind.resolve(
                                 isChildSession = isChildSession,
                                 hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
-                                hasQuestion = uiState.questionRequest != null,
+                                hasQuestion = uiState.questionRequest != null && !uiState.questionDockHidden,
                             )
                         val composerState =
                             when (composerKind) {
@@ -1200,7 +1210,19 @@ private fun SessionChatScreenBody(
                                                 )
                                             },
                                         alwaysPatterns = request?.always.orEmpty(),
+                                        queuePosition = uiState.permissionQueuePosition,
                                         queueCount = uiState.permissionQueueCount,
+                                        attribution =
+                                            uiState.permissionAttribution?.let { attribution ->
+                                                attribution.toComposerAttribution(
+                                                    attribution.permissionSummary(
+                                                        permission = request?.permission.orEmpty(),
+                                                        target =
+                                                            request?.fileChanges?.firstOrNull()?.path
+                                                                ?: request?.patterns?.firstOrNull(),
+                                                    ),
+                                                )
+                                            },
                                         submitting = uiState.permissionSubmitting,
                                         actionsEnabled = uiState.canMutate,
                                         errorMessage = uiState.permissionErrorMessage,
@@ -1248,6 +1270,12 @@ private fun SessionChatScreenBody(
                                         submitEnabled = answered && index == questionCount - 1 && !submitting,
                                         submitting = submitting,
                                         errorMessage = uiState.questionErrorMessage,
+                                        requestPosition = uiState.questionQueuePosition,
+                                        requestCount = uiState.questionQueueCount,
+                                        attribution =
+                                            uiState.questionAttribution?.let {
+                                                it.toComposerAttribution(it.questionSummary)
+                                            },
                                     )
                                 }
                                 SessionChatComposerKind.ChildLockout ->
@@ -1381,6 +1409,29 @@ private fun SessionChatScreenBody(
                                         viewModel.alwaysAllowPermission(action.requestId, action.sessionId)
                                     is OpenCodeSessionComposerAction.HidePermission ->
                                         viewModel.hidePermissionDock(action.requestId)
+                                    is OpenCodeSessionComposerAction.HideQuestion ->
+                                        viewModel.hideQuestionDock(action.requestId)
+                                    is OpenCodeSessionComposerAction.PageRequest ->
+                                        if (composerKind == SessionChatComposerKind.Permission) {
+                                            viewModel.pagePermission(action.delta)
+                                        } else {
+                                            viewModel.pageQuestion(action.delta)
+                                        }
+                                    is OpenCodeSessionComposerAction.OpenRequestSession -> {
+                                        val attribution =
+                                            listOfNotNull(uiState.permissionAttribution, uiState.questionAttribution)
+                                                .firstOrNull { it.sessionId == action.sessionId }
+                                        if (attribution != null) {
+                                            logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
+                                            onChildSessionClick(
+                                                ChildSessionNavigationTarget(
+                                                    sessionId = attribution.sessionId,
+                                                    sessionTitle = attribution.sessionTitle,
+                                                    worktree = currentWorktree,
+                                                ),
+                                            )
+                                        }
+                                    }
                                     is OpenCodeSessionComposerAction.ToggleQuestionOption ->
                                         viewModel.toggleQuestionOption(action.requestId, action.sessionId, action.label)
                                     is OpenCodeSessionComposerAction.ToggleQuestionCustom ->
@@ -2003,3 +2054,5 @@ private fun SessionChatSideQuestionRow(
     }
 }
 
+private fun InboxRequestAttribution.toComposerAttribution(summary: String) =
+    OpenCodeSessionComposerState.RequestAttribution(sessionId = sessionId, letter = letter, summary = summary)

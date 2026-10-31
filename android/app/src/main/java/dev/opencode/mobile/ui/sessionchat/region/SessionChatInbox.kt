@@ -9,9 +9,9 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.session.PermissionDecision
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
-import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
+import dev.opencode.mobile.ui.sessionchat.InboxRequestPaging
 import dev.opencode.mobile.ui.sessionchat.QuestionAnswerDraft
 import dev.opencode.mobile.ui.sessionchat.SessionChatInboxRegionState
 import dev.opencode.mobile.ui.sessionchat.buildQuestionAnswers
@@ -46,9 +46,10 @@ class SessionChatInbox(
 
     private var boundSessionId: String? = null
     private var boundWorktree: String? = null
-    private var permissionSessions: List<Session> = emptyList()
-    private var questionSessions: List<Session> = emptyList()
     private var questionDraftRequestId: String? = null
+
+    /** Wizard progress of question requests paged away from, restored when paged back. */
+    private var parkedQuestionDrafts: Map<String, Pair<Int, Map<Int, QuestionAnswerDraft>>> = emptyMap()
     private var permissionObservationJob: Job? = null
     private var questionObservationJob: Job? = null
     private var todoObservationJob: Job? = null
@@ -65,11 +66,10 @@ class SessionChatInbox(
         stop()
         boundSessionId = sessionId
         boundWorktree = worktree
-        permissionSessions = emptyList()
-        questionSessions = emptyList()
         questionDraftRequestId = null
+        parkedQuestionDrafts = emptyMap()
         lastTodoLive = null
-        _state.value = SessionChatInboxRegionState()
+        _state.value = SessionChatInboxRegionState(rootSessionId = sessionId)
         observe(sessionId, worktree)
     }
 
@@ -158,6 +158,37 @@ class SessionChatInbox(
 
     fun showPermissionDock() {
         _state.update { it.copy(permissionHiddenId = null) }
+    }
+
+    /** Pages the permission panel [delta] requests forward (negative goes back), clamped to the ends. */
+    fun pagePermission(delta: Int) {
+        val current = _state.value
+        if (current.permissionSubmittingId != null) return
+        val target =
+            InboxRequestPaging.pagedId(current.permissionRequests.map { it.id }, current.permissionSelectedId, delta)
+                ?: return
+        if (target == current.visiblePermissionRequest?.id) return
+        _state.update { it.copy(permissionSelectedId = target, permissionError = null) }
+    }
+
+    /** Pages the question panel [delta] requests forward; each request keeps its own answers. */
+    fun pageQuestion(delta: Int) {
+        val current = _state.value
+        if (current.questionSubmittingId != null) return
+        val target =
+            InboxRequestPaging.pagedId(current.questionRequests.map { it.id }, current.questionSelectedId, delta)
+                ?: return
+        if (target == current.selectedQuestionRequest?.id) return
+        _state.update { syncQuestionDrafts(it.copy(questionSelectedId = target, questionError = null)) }
+    }
+
+    fun hideQuestionDock(requestId: String) {
+        if (_state.value.visibleQuestionRequest?.id != requestId) return
+        _state.update { it.copy(questionHiddenId = requestId) }
+    }
+
+    fun showQuestionDock() {
+        _state.update { it.copy(questionHiddenId = null) }
     }
 
     fun toggleQuestionOption(
@@ -363,31 +394,33 @@ class SessionChatInbox(
         val needsSessionTree =
             requests.any { request ->
                 request.sessionId != sessionId &&
-                    permissionSessions.none { session -> session.id == request.sessionId }
+                    _state.value.permissionSessions.none { session -> session.id == request.sessionId }
             }
+        var sessions = _state.value.permissionSessions
         val topologyError =
             if (needsSessionTree) {
                 runCatching { sessionRepository.listSessions(worktree) }
                     .fold(
                         onSuccess = {
-                            permissionSessions = it
+                            sessions = it
                             null
                         },
                         onFailure = {
-                            permissionSessions = emptyList()
+                            sessions = emptyList()
                             "Unable to refresh permission session tree"
                         },
                     )
             } else {
                 null
             }
-        val ordered = orderedPermissionRequests(sessionId, permissionSessions, requests)
+        val ordered = orderedPermissionRequests(sessionId, sessions, requests)
         _state.update { current ->
             val submittingCleared =
                 current.permissionSubmittingId != null &&
                     ordered.none { request -> request.id == current.permissionSubmittingId }
             current.copy(
                 permissionRequests = ordered,
+                permissionSessions = sessions,
                 permissionTopologyError = topologyError,
                 permissionSubmittingId = if (submittingCleared) null else current.permissionSubmittingId,
                 permissionError = if (submittingCleared) null else current.permissionError,
@@ -411,30 +444,28 @@ class SessionChatInbox(
         val needsSessionTree =
             requests.any { request ->
                 request.sessionId != sessionId &&
-                    questionSessions.none { session -> session.id == request.sessionId }
+                    _state.value.questionSessions.none { session -> session.id == request.sessionId }
             }
+        var sessions = _state.value.questionSessions
         val topologyError =
             if (needsSessionTree) {
                 runCatching { sessionRepository.listSessions(worktree) }
                     .fold(
                         onSuccess = {
-                            questionSessions = it
+                            sessions = it
                             null
                         },
                         onFailure = {
-                            questionSessions = emptyList()
+                            sessions = emptyList()
                             "Unable to refresh question session tree"
                         },
                     )
             } else {
                 null
             }
-        val ordered = orderedQuestionRequests(sessionId, questionSessions, requests)
+        val ordered = orderedQuestionRequests(sessionId, sessions, requests)
         val filtered = dropOrphanQuestionRequests(ordered, loadedMessages())
-        val previousVisibleId =
-            _state.value.questionRequests
-                .firstOrNull()
-                ?.id
+        val previousVisibleId = _state.value.selectedQuestionRequest?.id
         _state.update { current ->
             val submittingCleared =
                 current.questionSubmittingId != null &&
@@ -442,16 +473,14 @@ class SessionChatInbox(
             val next =
                 current.copy(
                     questionRequests = filtered,
+                    questionSessions = sessions,
                     questionTopologyError = topologyError,
                     questionSubmittingId = if (submittingCleared) null else current.questionSubmittingId,
                     questionError = if (submittingCleared) null else current.questionError,
                 )
             syncQuestionDrafts(next)
         }
-        val visibleId =
-            _state.value.questionRequests
-                .firstOrNull()
-                ?.id
+        val visibleId = _state.value.selectedQuestionRequest?.id
         if (visibleId != previousVisibleId) {
             logI("question visible=${visibleId ?: "none"} queue=${filtered.size}")
         }
@@ -499,14 +528,25 @@ class SessionChatInbox(
     }
 
     private fun syncQuestionDrafts(current: SessionChatInboxRegionState): SessionChatInboxRegionState {
-        val visible = current.questionRequests.firstOrNull()
+        val pendingIds = current.questionRequests.mapTo(mutableSetOf()) { it.id }
+        parkedQuestionDrafts = parkedQuestionDrafts.filterKeys { it in pendingIds }
+        val visible = current.selectedQuestionRequest
         if (visible == null) {
             questionDraftRequestId = null
             return current.copy(questionWizardIndex = 0, questionDrafts = emptyMap())
         }
         if (questionDraftRequestId != visible.id) {
+            val previous = questionDraftRequestId
+            if (previous != null && previous in pendingIds) {
+                parkedQuestionDrafts = parkedQuestionDrafts + (previous to (current.questionWizardIndex to current.questionDrafts))
+            }
             questionDraftRequestId = visible.id
-            return current.copy(questionWizardIndex = 0, questionDrafts = emptyMap())
+            val parked = parkedQuestionDrafts[visible.id]
+            parkedQuestionDrafts = parkedQuestionDrafts - visible.id
+            return current.copy(
+                questionWizardIndex = (parked?.first ?: 0).coerceIn(0, (visible.questions.size - 1).coerceAtLeast(0)),
+                questionDrafts = parked?.second.orEmpty(),
+            )
         }
         return current.copy(
             questionWizardIndex = current.questionWizardIndex.coerceIn(0, (visible.questions.size - 1).coerceAtLeast(0)),

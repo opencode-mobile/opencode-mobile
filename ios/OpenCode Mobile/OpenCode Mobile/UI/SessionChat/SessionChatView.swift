@@ -454,7 +454,7 @@ struct SessionChatView: View {
                 if SessionChatComposerKind.resolve(
                     isChildSession: session.parentID != nil,
                     hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
-                    hasQuestion: viewModel.uiState.questionRequest != nil
+                    hasQuestion: viewModel.uiState.questionRequest != nil && !viewModel.uiState.questionDockHidden
                 ) == .prompt, viewModel.uiState.dictation == nil {
                     if viewModel.uiState.atSuggestionsVisible {
                         OpenCodeComposerSuggestionOverlay(
@@ -501,13 +501,19 @@ struct SessionChatView: View {
                         }
                         .padding(.bottom, 6)
                     }
+                    if viewModel.uiState.questionDockHidden {
+                        OpenCodeActionPill(variant: .answerQuestion) {
+                            viewModel.showQuestionDock()
+                        }
+                        .padding(.bottom, 6)
+                    }
                     sideQuestionRow
                         .padding(.horizontal, 12)
                         .padding(.bottom, 6)
                     if SessionChatComposerKind.resolve(
                         isChildSession: session.parentID != nil,
                         hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
-                        hasQuestion: viewModel.uiState.questionRequest != nil
+                        hasQuestion: viewModel.uiState.questionRequest != nil && !viewModel.uiState.questionDockHidden
                     ) == .prompt,
                         !viewModel.uiState.pendingPrompts.isEmpty {
                         OpenCodePendingPromptsStrip(
@@ -1407,7 +1413,7 @@ struct SessionChatView: View {
         SessionChatComposerKind.resolve(
             isChildSession: session.parentID != nil,
             hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
-            hasQuestion: viewModel.uiState.questionRequest != nil
+            hasQuestion: viewModel.uiState.questionRequest != nil && !viewModel.uiState.questionDockHidden
         )
     }
 
@@ -1462,7 +1468,17 @@ struct SessionChatView: View {
                         .init(path: $0.path, additions: $0.additions, deletions: $0.deletions)
                     },
                     alwaysPatterns: request.always,
+                    queuePosition: viewModel.uiState.permissionQueuePosition,
                     queueCount: viewModel.uiState.permissionQueueCount,
+                    attribution: viewModel.uiState.permissionAttribution.map {
+                        composerAttribution(
+                            $0,
+                            summary: $0.permissionSummary(
+                                permission: request.permission,
+                                target: request.fileChanges.first?.path ?? request.patterns.first
+                            )
+                        )
+                    },
                     submitting: viewModel.uiState.permissionSubmitting,
                     actionsEnabled: viewModel.uiState.canMutate,
                     errorMessage: viewModel.uiState.permissionErrorMessage
@@ -1504,7 +1520,12 @@ struct SessionChatView: View {
                     submitEnabled: isValid && index == questionCount - 1 && !draft.questionSubmitting &&
                         viewModel.uiState.canMutate,
                     submitting: draft.questionSubmitting,
-                    errorMessage: draft.questionErrorMessage
+                    errorMessage: draft.questionErrorMessage,
+                    requestPosition: draft.questionQueuePosition,
+                    requestCount: draft.questionQueueCount,
+                    attribution: draft.questionAttribution.map {
+                        composerAttribution($0, summary: $0.questionSummary)
+                    }
                 )
             )
         } else if kind == .childLockout {
@@ -1650,6 +1671,16 @@ struct SessionChatView: View {
                     Task { await viewModel.alwaysAllowPermission(requestID: requestID, sessionID: sessionID) }
                 case let .hidePermission(requestID):
                     viewModel.hidePermissionDock(requestID: requestID)
+                case let .hideQuestion(requestID):
+                    viewModel.hideQuestionDock(requestID: requestID)
+                case let .pageRequest(delta):
+                    if composerKind == .permission {
+                        viewModel.pagePermission(by: delta)
+                    } else {
+                        viewModel.pageQuestion(by: delta)
+                    }
+                case let .openRequestSession(sessionID):
+                    openRequestSession(sessionID: sessionID)
                 case let .toggleQuestionOption(requestID, sessionID, label):
                     viewModel.toggleQuestionOption(requestID: requestID, sessionID: sessionID, label: label)
                 case let .toggleQuestionCustom(requestID, sessionID):
@@ -1682,6 +1713,29 @@ struct SessionChatView: View {
                 }
             },
             status: status
+        )
+    }
+
+    private func composerAttribution(
+        _ attribution: InboxRequestAttribution,
+        summary: String
+    ) -> OpenCodeSessionComposerState.RequestAttribution {
+        .init(sessionID: attribution.sessionID, letter: attribution.letter, summary: summary)
+    }
+
+    /// Opens the subagent session a permission or question comes from, as a child session.
+    private func openRequestSession(sessionID: String) {
+        let attribution = [viewModel.uiState.permissionAttribution, viewModel.uiState.questionAttribution]
+            .compactMap { $0 }
+            .first { $0.sessionID == sessionID }
+        guard let attribution else { return }
+        logChatAction(ProductAnalytics.Action.chatOpenChildSession)
+        childSessionTarget = ChildSessionNavigationTarget(
+            sessionID: attribution.sessionID,
+            sessionTitle: attribution.sessionTitle,
+            worktree: boundSession.worktree,
+            optimisticNavigationInstanceID: nil,
+            parentID: attribution.parentID
         )
     }
 
