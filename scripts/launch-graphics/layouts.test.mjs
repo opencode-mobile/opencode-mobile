@@ -31,6 +31,15 @@ test("switching moment never changes the layout (every composition × format)", 
   }
 });
 
+test("text x/y move the text block and leave the devices alone", () => {
+  const base = { format: "1600x900", composition: "full", moment: "code" };
+  const a = computeLayout(normalize(base));
+  const b = computeLayout(normalize({ ...base, text: { x: 120, y: -30 } }));
+  assert.equal(b.text.box.x, a.text.box.x + 120);
+  assert.equal(b.text.box.y, a.text.box.y - 30);
+  assert.deepEqual(b.devices, a.devices);
+});
+
 test("layout edits survive a moment switch", () => {
   const base = { format: "1600x900", composition: "pair", formats: { "1600x900": { devices: { iphone: { x: 40, scale: 0.9, anchor: "bottom" } } } } };
   const a = computeLayout(normalize({ ...base, moment: "approval" }));

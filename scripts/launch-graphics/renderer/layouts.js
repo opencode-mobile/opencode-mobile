@@ -467,6 +467,9 @@ export function computeLayout(spec, { format = spec.format, measure = estimateTe
     const pb = Math.round(py * 0.8);
     box = { x: T.align === "center" ? (W - T.width) / 2 : px, y: T.position === "top" ? pb : H - pb - hmax, w: T.width, h: hmax };
   }
+  // x/y nudge the text block only, like a device's x/y; the device area stays where the text column put it
+  box.x += ov.text.x || 0;
+  box.y += ov.text.y || 0;
   const mirror = T.position === "right";
   ctx.band = T.band;
   ctx.tpos = T.position;

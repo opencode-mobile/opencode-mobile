@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "name": "App Store header (strip)",
+  "description": "App Store product page header, 3840x1646 at the default 2x: one whole iPhone on the code chat and one line of copy, both inside the centre band that iPhone and iPad crops keep.",
+  "format": "1920x823",
+  "mode": "dark",
+  "composition": "full",
+  "moment": "code",
+  "copy": {
+    "headline": "Your opencode\nsessions,\non your phone.",
+    "subline": "",
+    "label": "",
+    "brand": "",
+    "appStore": "",
+    "googlePlay": "",
+    "disclaimer": ""
+  },
+  "text": {
+    "size": 1.4,
+    "width": 600,
+    "x": 427
+  },
+  "devices": {
+    "iphone": {
+      "visible": true,
+      "anchor": "full",
+      "shot": "02-chat-code",
+      "scale": 0.78,
+      "x": -55
+    }
+  }
+}
