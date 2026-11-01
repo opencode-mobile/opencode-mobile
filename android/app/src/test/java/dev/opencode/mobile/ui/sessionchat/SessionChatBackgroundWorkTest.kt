@@ -4,10 +4,13 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.session.PermissionRequest
+import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.Done
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.Running
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.WaitingForInput
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
@@ -315,6 +318,102 @@ class SessionChatBackgroundWorkTest {
         assertTrue(rows.none { it.isActive })
         assertNull(SessionChatBackgroundWork.pill(rows))
     }
+
+    @Test
+    fun needsInputTarget_pagesToTheWaitingSubagentsPermission() {
+        val target =
+            SessionChatBackgroundWork.needsInputTarget(
+                subagents = listOf(waitingRow("prt-a", "ses-a"), waitingRow("prt-b", "ses-b")),
+                sessions = emptyList(),
+                permissions = listOf(permission("per-root", "ses-root"), permission("per-a", "ses-a")),
+                questions = listOf(question("que-b", "ses-b")),
+                shownPermissionId = "per-root",
+            )
+
+        assertEquals(SessionChatInboxTarget.Permission("per-a"), target)
+    }
+
+    @Test
+    fun needsInputTarget_findsARequestFromTheSubagentsOwnSubagent() {
+        val target =
+            SessionChatBackgroundWork.needsInputTarget(
+                subagents = listOf(waitingRow("prt-a", "ses-a")),
+                sessions = listOf(session("ses-grandchild", parent = "ses-a")),
+                permissions = emptyList(),
+                questions = listOf(question("que-root", "ses-root"), question("que-a", "ses-grandchild")),
+                shownPermissionId = null,
+            )
+
+        assertEquals(SessionChatInboxTarget.Question("que-a"), target)
+    }
+
+    @Test
+    fun needsInputTarget_questionBehindAPermissionOpensTheShownPermission() {
+        val target =
+            SessionChatBackgroundWork.needsInputTarget(
+                subagents = listOf(waitingRow("prt-a", "ses-a")),
+                sessions = emptyList(),
+                permissions = listOf(permission("per-root", "ses-root"), permission("per-other", "ses-root")),
+                questions = listOf(question("que-a", "ses-a")),
+                shownPermissionId = "per-other",
+            )
+
+        assertEquals(SessionChatInboxTarget.Permission("per-other"), target)
+    }
+
+    @Test
+    fun needsInputTarget_nullWithoutAWaitingSubagentOrItsRequest() {
+        assertNull(
+            SessionChatBackgroundWork.needsInputTarget(
+                subagents = listOf(waitingRow("prt-a", "ses-a").copy(status = Running)),
+                sessions = emptyList(),
+                permissions = listOf(permission("per-a", "ses-a")),
+                questions = emptyList(),
+                shownPermissionId = null,
+            ),
+        )
+        assertNull(
+            SessionChatBackgroundWork.needsInputTarget(
+                subagents = listOf(waitingRow("prt-a", "ses-a")),
+                sessions = emptyList(),
+                permissions = listOf(permission("per-root", "ses-root")),
+                questions = emptyList(),
+                shownPermissionId = null,
+            ),
+        )
+    }
+
+    private fun waitingRow(
+        id: String,
+        child: String,
+    ) = SessionChatSubagent(
+        id = id,
+        childSessionId = child,
+        agentName = "general",
+        title = null,
+        status = WaitingForInput,
+        startedAtMs = null,
+        finishedAtMs = null,
+    )
+
+    private fun permission(
+        id: String,
+        session: String,
+    ) = PermissionRequest(
+        id = id,
+        sessionId = session,
+        permission = "bash",
+        patterns = listOf("npm test"),
+        metadata = JsonObject(emptyMap()),
+        always = emptyList(),
+        toolMessageId = null,
+        toolCallId = null,
+    )
+
+    private fun question(
+        id: String,
+        session: String,
+    ) = QuestionRequest(id = id, sessionId = session, questions = emptyList(), toolMessageId = null, toolCallId = null)
 
     private fun subagents(
         vararg parts: MessagePart,

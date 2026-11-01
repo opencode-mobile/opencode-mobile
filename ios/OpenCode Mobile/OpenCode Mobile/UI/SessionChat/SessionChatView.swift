@@ -523,6 +523,7 @@ struct SessionChatView: View {
                             .padding(.bottom, 6)
                     }
                     composer
+                        .sessionChatPanelPulse(trigger: viewModel.uiState.inboxPanelPulse)
                 }
                 // Match home SessionList dock measurement — preference keys from a
                 // background GeometryReader were staying at 0, so timeline clearance
@@ -580,7 +581,8 @@ struct SessionChatView: View {
             viewModel.showPermissionDock()
         case .answerQuestion:
             viewModel.showQuestionDock()
-        case .subagents:
+        case let .subagents(pill):
+            if pill.needsInput, viewModel.openWaitingSubagentRequest() { return }
             logChatAction(ProductAnalytics.Action.chatOpenSubagents)
             ProductAnalytics.logScreenView(
                 screenId: ProductAnalytics.Screen.sessionSubagents,

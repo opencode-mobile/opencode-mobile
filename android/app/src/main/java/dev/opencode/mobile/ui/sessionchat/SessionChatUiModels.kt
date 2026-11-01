@@ -267,6 +267,8 @@ data class SessionChatUiState(
     val questionAttribution: InboxRequestAttribution? = null,
     /** The question panel is collapsed to an "Answer question" pill above the composer. */
     val questionDockHidden: Boolean = false,
+    /** Bumped each time a pill opens the permission or question panel; the panel pulses on change. */
+    val inboxPanelPulse: Int = 0,
     val questionWizardIndex: Int = 0,
     val questionSelectedLabels: List<String> = emptyList(),
     val questionCustomText: String = "",
@@ -763,6 +765,8 @@ data class SessionChatInboxRegionState(
     /** Answers of question requests paged away from, restored when paged back. */
     val keptQuestionDrafts: Map<String, KeptQuestionDraft> = emptyMap(),
     val sessionTodos: List<SessionTodo> = emptyList(),
+    /** Bumped each time a pill opens the permission or question panel, so the panel pulses. */
+    val panelPulse: Int = 0,
 ) {
     val permissionPageIndex: Int
         get() = InboxRequestPaging.index(permissionRequests.map { it.id }, permissionSelectedId)

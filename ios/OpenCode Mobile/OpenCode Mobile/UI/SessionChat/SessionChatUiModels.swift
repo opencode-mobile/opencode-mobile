@@ -347,6 +347,8 @@ struct SessionChatUiState: Equatable {
     var questionAttribution: InboxRequestAttribution?
     /// The question panel is collapsed to an "Answer question" pill above the composer.
     var questionDockHidden: Bool = false
+    /// Bumped each time a pill opens the permission or question panel; the panel pulses on change.
+    var inboxPanelPulse = 0
     var questionWizardIndex: Int = 0
     var questionSelectedLabels: [String] = []
     var questionCustomText = ""
@@ -898,6 +900,8 @@ struct SessionChatInboxRegionState: Equatable {
     var questionWizardIndex = 0
     var questionDrafts: [Int: QuestionAnswerDraft] = [:]
     var sessionTodos: [SessionTodo] = []
+    /// Bumped each time a pill opens the permission or question panel, so the panel pulses.
+    var panelPulse = 0
 
     var permissionPageIndex: Int {
         InboxRequestPaging.index(ids: permissionRequests.map(\.id), selectedID: permissionSelectedID)

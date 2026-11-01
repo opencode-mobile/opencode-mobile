@@ -14,6 +14,7 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.InboxRequestPaging
 import dev.opencode.mobile.ui.sessionchat.QuestionAnswerDraft
 import dev.opencode.mobile.ui.sessionchat.SessionChatInboxRegionState
+import dev.opencode.mobile.ui.sessionchat.SessionChatInboxTarget
 import dev.opencode.mobile.ui.sessionchat.buildQuestionAnswers
 import dev.opencode.mobile.ui.sessionchat.dropOrphanQuestionRequests
 import dev.opencode.mobile.ui.sessionchat.isQuestionAnswerValid
@@ -152,7 +153,35 @@ class SessionChatInbox(
     }
 
     fun showPermissionDock() {
-        _state.update { it.copy(permissionHiddenId = null) }
+        _state.update { it.copy(permissionHiddenId = null, panelPulse = it.panelPulse + 1) }
+    }
+
+    /**
+     * Opens the panel on [target], expanding it if collapsed, and pulses it.
+     * Stays on the current page while a reply is in flight.
+     */
+    fun focus(target: SessionChatInboxTarget) {
+        when (target) {
+            is SessionChatInboxTarget.Permission ->
+                _state.update { current ->
+                    if (current.permissionRequests.none { it.id == target.requestId }) return@update current
+                    val pages = current.permissionSubmittingId == null && current.visiblePermissionRequest?.id != target.requestId
+                    val paged = if (pages) current.copy(permissionSelectedId = target.requestId, permissionError = null) else current
+                    paged.copy(permissionHiddenId = null, panelPulse = current.panelPulse + 1)
+                }
+            is SessionChatInboxTarget.Question ->
+                _state.update { current ->
+                    if (current.questionRequests.none { it.id == target.requestId }) return@update current
+                    val pages = current.questionSubmittingId == null && current.selectedQuestionRequest?.id != target.requestId
+                    val paged =
+                        if (pages) {
+                            syncedQuestionDrafts(current.copy(questionSelectedId = target.requestId, questionError = null))
+                        } else {
+                            current
+                        }
+                    paged.copy(questionHiddenId = null, panelPulse = current.panelPulse + 1)
+                }
+        }
     }
 
     /** Pages the permission panel [delta] requests forward (negative goes back), clamped to the ends. */
@@ -183,7 +212,7 @@ class SessionChatInbox(
     }
 
     fun showQuestionDock() {
-        _state.update { it.copy(questionHiddenId = null) }
+        _state.update { it.copy(questionHiddenId = null, panelPulse = it.panelPulse + 1) }
     }
 
     fun toggleQuestionOption(

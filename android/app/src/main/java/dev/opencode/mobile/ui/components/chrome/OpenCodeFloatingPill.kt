@@ -48,6 +48,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -268,7 +269,10 @@ fun OpenCodeFloatingPill(
                         Modifier
                             .clip(FloatingPillShape)
                             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
-                            .semantics(mergeDescendants = true) {
+                            // Only the description is spoken: clearing drops the visible label and
+                            // spinner below it, so TalkBack doesn't repeat them after a custom label.
+                            // The click action and role above stay on the same node.
+                            .clearAndSetSemantics {
                                 contentDescription = description
                                 if (announcesUpdates) liveRegion = LiveRegionMode.Polite
                             }.then(
