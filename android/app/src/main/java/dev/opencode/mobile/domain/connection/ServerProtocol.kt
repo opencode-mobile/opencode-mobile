@@ -49,6 +49,13 @@ data class ServerCapabilities(
      * (v1) Session Chat derives the same notices from consecutive user messages.
      */
     val recordsTimelineChangeNotices: Boolean = false,
+    /**
+     * Session Chat lists the session's running agent shells: v1 from `bash` tool parts, v2 from
+     * `/api/shell` on releases that declare it.
+     */
+    val supportsAgentShells: Boolean = false,
+    /** A running agent shell can be stopped from the app (`DELETE /api/shell/{id}`, v2). */
+    val supportsAgentShellStop: Boolean = false,
 ) {
     companion object {
         fun forProtocol(
@@ -63,6 +70,7 @@ data class ServerCapabilities(
                         supportsFollowUpDelivery = false,
                         supportsSessionViewed = false,
                         commandKeepsClientMessageId = true,
+                        supportsAgentShells = true,
                     )
                 ServerProtocol.V2 ->
                     ServerCapabilities(
@@ -74,6 +82,8 @@ data class ServerCapabilities(
                         supportsSideQuestion = v2Features.sessionGenerate,
                         supportsAttachmentUpload = v2Features.attachmentUpload,
                         recordsTimelineChangeNotices = true,
+                        supportsAgentShells = v2Features.agentShells,
+                        supportsAgentShellStop = v2Features.agentShells,
                     )
             }
     }

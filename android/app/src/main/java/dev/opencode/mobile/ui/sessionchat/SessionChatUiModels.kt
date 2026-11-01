@@ -27,6 +27,7 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRetryCard
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.VcsFileStatus
+import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
@@ -37,6 +38,7 @@ import dev.opencode.mobile.ui.components.OpenCodeSessionBranchChangedFile
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchSummary
 import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellOutputUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 
@@ -237,7 +239,11 @@ data class SessionChatUiState(
     val sessionTodoTotalCount: Int = 0,
     /** Subagents this session started, in background work panel order. */
     val subagents: List<SessionChatSubagent> = emptyList(),
-    /** The background work pill; null when no subagent works or waits. */
+    /** Running agent shells of this session, in background work panel order (#907). */
+    val shells: List<AgentShell> = emptyList(),
+    /** The shell output sheet; null while it is closed. */
+    val shellOutput: SessionChatShellOutputUiState? = null,
+    /** The background work pill; null when no subagent or shell works or waits. */
     val backgroundWorkPill: SessionChatBackgroundWorkPill? = null,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val canMutate: Boolean = false,

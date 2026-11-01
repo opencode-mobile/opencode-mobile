@@ -317,8 +317,12 @@ struct SessionChatUiState: Equatable {
     var sessionTodoTotalCount: Int = 0
     /// Subagents this session started, in background work panel order.
     var subagents: [SessionChatSubagent] = []
-    /// The background work pill; nil when no subagent works or waits.
+    /// The background work pill; nil when no subagent or shell works or waits.
     var backgroundWorkPill: SessionChatBackgroundWorkPill? = nil
+    /// Running shells of this session, in start order: the panel's Shells section.
+    var shells: [AgentShell] = []
+    /// The open shell output sheet; nil when closed.
+    var shellOutput: SessionChatShellOutputState? = nil
     var connectionStatus: SessionConnectionStatus = .offline
     var canMutate = false
     var composerEnabled = false

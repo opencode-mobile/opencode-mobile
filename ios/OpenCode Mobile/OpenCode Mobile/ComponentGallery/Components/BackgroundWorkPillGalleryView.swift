@@ -3,6 +3,9 @@ import SwiftUI
 struct BackgroundWorkPillGalleryView: View {
     @State private var needsInput = false
     @State private var compact = false
+    @State private var showSubagents = true
+    @State private var showShells = true
+    @State private var openShell: AgentShell?
     @State private var log = "Tap the pill or a row"
     /// Fixed so the running timers tick instead of restarting on every redraw.
     @State private var openedAtMs = Int64(Date().timeIntervalSince1970 * 1_000)
@@ -21,12 +24,34 @@ struct BackgroundWorkPillGalleryView: View {
             Self.row("prt-4", "review", "Review the diff", .done, startedAgoMs: 300_000, now: now, finishedAgoMs: 220_000),
             Self.row("prt-5", "general", "Migrate the fixtures", .failed, startedAgoMs: 400_000, now: now, finishedAgoMs: 380_000),
             Self.row("prt-6", "explore", "Profile the parser", .stopped, startedAgoMs: 500_000, now: now, finishedAgoMs: 470_000),
-        ].compactMap { $0 }
+        ].compactMap { $0 }.filter { _ in showSubagents }
+    }
+
+    private var shells: [AgentShell] {
+        guard showShells else { return [] }
+        return [
+            AgentShell(
+                id: "sh_1",
+                sessionID: "ses-gallery",
+                command: "npm test",
+                description: "Run the test suite",
+                status: .running,
+                startedAtMs: openedAtMs - 72_000,
+                canStop: true
+            ),
+            AgentShell(
+                id: "sh_2",
+                sessionID: "ses-gallery",
+                command: "for i in $(seq 1 40); do echo line $i; sleep 0.5; done",
+                status: .running,
+                startedAtMs: openedAtMs - 12_000
+            ),
+        ]
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text("Session Chat background work: a live counter of running subagents. When one waits on a permission or question the pill turns amber with a pulsing dot. Tapping it opens the Subagents panel.")
+            Text("Session Chat background work: a live counter of running subagents and shells. When a subagent waits on a permission or question the pill turns amber with a pulsing dot. Tapping it opens the background work panel; a shell row opens its output.")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .fixedSize(horizontal: false, vertical: true)
@@ -34,20 +59,45 @@ struct BackgroundWorkPillGalleryView: View {
             HStack(spacing: 8) {
                 OpenCodeChoiceBadge(label: "Needs input", selected: needsInput, action: { needsInput.toggle() })
                 OpenCodeChoiceBadge(label: "Compact", selected: compact, action: { compact.toggle() })
+                OpenCodeChoiceBadge(label: "Subagents", selected: showSubagents, action: { showSubagents.toggle() })
+                OpenCodeChoiceBadge(label: "Shells", selected: showShells, action: { showShells.toggle() })
             }
 
-            if let pill = SessionChatBackgroundWork.pill(for: subagents) {
+            if let pill = SessionChatBackgroundWork.pill(for: subagents, shells: shells) {
                 SessionChatBackgroundWorkPillView(pill: pill, compact: compact) {
-                    log = "Opened Subagents"
+                    log = "Opened background work"
                 }
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Subagents panel")
+                Text(SessionChatBackgroundWorkSheetModifier.title)
                     .font(OpenCodeTypography.heading)
                     .foregroundStyle(OpenCodeColors.textStrong)
-                SessionChatSubagentsList(subagents: subagents) { subagent in
-                    log = "Opened \(subagent.agentName) · \(subagent.title ?? "")"
+                SessionChatBackgroundWorkList(
+                    subagents: subagents,
+                    shells: shells,
+                    onOpen: { subagent in
+                        log = "Opened \(subagent.agentName) · \(subagent.title ?? "")"
+                    },
+                    onOpenShell: { shell in
+                        log = "Opened shell output"
+                        openShell = shell
+                    }
+                )
+            }
+
+            if let openShell {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Shell output")
+                        .font(OpenCodeTypography.heading)
+                        .foregroundStyle(OpenCodeColors.textStrong)
+                    SessionChatShellOutputHeader(shell: openShell)
+                    SessionChatShellOutputBody(output: AgentShellOutput(text: "line 1\nline 2\nline 3\n", isTruncated: true))
+                    SessionChatShellOutputActions(
+                        state: SessionChatShellOutputState(shell: openShell),
+                        onCopy: { log = "Copied output" },
+                        onStop: { _ in log = "Stop shell" }
+                    )
                 }
             }
 

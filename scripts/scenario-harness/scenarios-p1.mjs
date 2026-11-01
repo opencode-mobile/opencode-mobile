@@ -1,6 +1,6 @@
 // P1 scenarios: important behaviour beyond the core list. Format: see scenarios.mjs.
 
-import { subagentTool, path, say, run, subagent, CURRENCY_QUESTION, QUESTION_EVENTS } from "./scenario-kit.mjs";
+import { shell, subagentTool, path, say, run, subagent, CURRENCY_QUESTION, QUESTION_EVENTS } from "./scenario-kit.mjs";
 
 const PATCH = `*** Begin Patch
 *** Add File: src/currency.ts
@@ -17,6 +17,12 @@ const QUESTION_CALLS = [
   { steps: [say("Before I change the API, one question:"), { op: "tool", name: "question", input: { questions: [CURRENCY_QUESTION] } }] },
   { steps: [say("Got it. I'll go with that and fall back to `USD`.")] },
 ];
+
+// Harmless, self-contained shell loops (echo/seq/sleep only) for the background work pill.
+const FOREGROUND_LOOP = 'for i in $(seq 1 120); do echo "build step $i/120"; sleep 0.5; done';
+const backgroundLoop = (label, seconds) => `for i in $(seq 1 ${seconds}); do echo "${label} tick $i/${seconds}"; sleep 1; done`;
+// v2 shell tool: background returns at once and has no default timeout. v1 bash has no background mode.
+const backgroundShell = (command, description) => ({ op: "tool", name: "shell", input: { command, description, background: true } });
 
 // Read-only step N of a long turn, numbered so each sheet row is easy to tell apart.
 const longTurnStep = (n) =>
@@ -437,5 +443,87 @@ export const P1 = [
         summary: [{ op: "httpError", status: 500, body: { error: { message: "summarizer unavailable", type: "server_error" } } }],
       },
     },
+  },
+{
+    id: "shell-foreground-stream",
+    priority: "P1",
+    title: "Foreground shell streams for a minute",
+    category: "shell",
+    prompt: "Run the long build and tell me when it's done.",
+    expect:
+      "Allow the shell ask. While the command runs (about 60s, a line every 0.5s) the background work pill reads '1 shell'; open the panel, tap the shell row: the output sheet shows 'Running · …' and new 'build step N/120' lines follow the bottom. When the command ends the pill disappears, an open sheet stays and shows 'Exited · 1 min …', and the reply streams. v1 has no Stop; on v2 'Stop shell' shows.",
+    modelCalls: [
+      { steps: [say("Starting the long build."), { op: "tool", name: shell, input: { command: FOREGROUND_LOOP, description: "Run the long build", timeout: 90000 } }] },
+      { steps: [say("The build finished all 120 steps.")] },
+    ],
+    // probe: reads /api/shell and its output twice while the command runs (read-only; no-ops on v1).
+    // Timed from the shell ask, which both protocols raise just before the shell starts.
+    variants: {
+      probe: [
+        { on: "permission.replied", delayMs: 3000, do: "listShells" },
+        { on: "permission.replied", delayMs: 4000, do: "readShellOutputs" },
+        { on: "permission.replied", delayMs: 8000, do: "readShellOutputs" },
+      ],
+    },
+    checkVariant: "probe",
+    checkTimeoutMs: 120000,
+    serverChecks: { v1: ["bashOutputGrows", "bashCompleted"], v2: ["shellListed", "shellOutputGrows", "shellExited"] },
+  },
+  {
+    id: "shell-background",
+    priority: "P1",
+    title: "Background shell keeps running after the turn ends",
+    category: "shell",
+    protocols: ["v2"],
+    prompt: "Start the dev watcher in the background.",
+    expect:
+      "Allow the shell ask. The turn ends at once and the session goes idle, but the pill keeps reading '1 shell' with a live timer for about 3 minutes ('watcher tick N/180' every second). Tap the row: the output sheet polls new lines; 'Stop shell' shows 'Stopping…', then 'Stopped · …', and the pill disappears. Variant stop-from-outside: another client stops it 10s after it starts; the row leaves the panel and an open sheet shows 'Stopped'. If left alone it exits after 3 minutes and the server wakes the session with the result.",
+    modelCalls: [
+      { steps: [say("Starting the watcher in the background."), backgroundShell(backgroundLoop("watcher", 180), "Run the dev watcher")] },
+      { steps: [say("The watcher is running in the background. I'll pick up its output when it finishes.")] },
+    ],
+    variants: {
+      "stop-from-outside": [
+        { on: "permission.replied", delayMs: 3000, do: "listShells" },
+        { on: "permission.replied", delayMs: 4000, do: "readShellOutputs" },
+        { on: "permission.replied", delayMs: 8000, do: "readShellOutputs" },
+        { on: "permission.replied", delayMs: 10000, do: "stopShells" },
+      ],
+    },
+    checkVariant: "stop-from-outside",
+    // Stopping the shell may wake the session with the result; that call answers "ok".
+    serverChecks: { v2: ["idleWhileShellRuns", "shellListed", "shellOutputGrows", "shellKilled"] },
+  },
+  {
+    id: "shell-two-running",
+    priority: "P1",
+    title: "Two background shells and a subagent at once",
+    category: "shell",
+    protocols: ["v2"],
+    prompt: "Start the watcher and the test runner in the background, and have a subagent review format.ts.",
+    expect:
+      "Allow both shell asks. The pill reads '1 subagent · 2 shells' while the subagent works (about 45s after the run starts), then '2 shells'. The panel shows Subagents first, then Shells with both commands in monospace and their own timers. Both shells run about 3 minutes; stop one from the panel and the pill reads '1 shell'. Variant quick: the subagent finishes after 5s and the harness stops both shells after 12s.",
+    modelCalls: [
+      {
+        steps: [
+          say("Starting both in the background and handing the review to a subagent."),
+          backgroundShell(backgroundLoop("watcher", 180), "Run the dev watcher"),
+          backgroundShell(backgroundLoop("tests", 180), "Run the tests in watch mode"),
+          { op: "tool", name: subagentTool, child: "review", input: subagent("Review format.ts", "Review src/format.ts for rounding bugs.") },
+        ],
+      },
+      { child: "review", steps: [{ op: "wait", gate: "review-finish" }, say("format.ts rounds with toFixed(2); switch to integer cents.", 12)] },
+      { steps: [say("The review is done; the watcher and tests keep running in the background.")] },
+    ],
+    automation: [{ on: "harness.run.started", delayMs: 45000, do: "release", gate: "review-finish" }],
+    variants: {
+      quick: [
+        { on: "harness.run.started", delayMs: 5000, do: "release", gate: "review-finish" },
+        { on: "permission.replied", delayMs: 3000, do: "listShells" },
+        { on: "permission.replied", delayMs: 12000, do: "stopShells" },
+      ],
+    },
+    checkVariant: "quick",
+    serverChecks: { v2: ["twoShellsListed", "shellKilled"] },
   },
 ];

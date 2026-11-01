@@ -64,6 +64,8 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.domain.session.SideQuestion
 import dev.opencode.mobile.domain.session.SideQuestionStore
+import dev.opencode.mobile.domain.shell.AgentShellRepository
+import dev.opencode.mobile.domain.shell.EmptyAgentShellRepository
 import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.SyncCoordinator
@@ -77,6 +79,7 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatImageViewer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionNotice
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatShells
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestions
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatInbox
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatRepoStrip
@@ -148,6 +151,7 @@ class SessionChatViewModel
         sideQuestionStore: SideQuestionStore? = null,
         private val serverFilePreviews: ServerFilePreviews = UnavailableServerFilePreviews,
         private val attachmentUploads: AttachmentUploadService = UnavailableAttachmentUploadService,
+        agentShellRepository: AgentShellRepository = EmptyAgentShellRepository,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -257,6 +261,16 @@ class SessionChatViewModel
                     !screenSheetOpen && !state.blocksChipTimelineIntro() && state.presentedActivityCard == null
                 }
             }
+
+        /** The open session's loaded messages, for servers that read shells from `bash` tool parts (v1). */
+        private val shellMessages = MutableStateFlow<List<Message>>(emptyList())
+
+        private val shells =
+            SessionChatShells(
+                repository = agentShellRepository,
+                scope = viewModelScope,
+                nowMs = { nowMs() },
+            )
 
         private val worktreeMove =
             SessionChatWorktreeMove(
@@ -451,6 +465,7 @@ class SessionChatViewModel
                         isSessionBusy = infoState.sessionStatusLabel != null,
                     )
                     observeTimelineStylePickerLoad(timelineState.timeline)
+                    shellMessages.value = timeline.loadedMessages()
                     publishUiState(
                         timelineState,
                         composerState,
@@ -466,6 +481,9 @@ class SessionChatViewModel
             }
             viewModelScope.launch {
                 sideQuestions.state.collect { publishUiState() }
+            }
+            viewModelScope.launch {
+                shells.state.collect { publishUiState() }
             }
             viewModelScope.launch {
                 combine(
@@ -540,6 +558,8 @@ class SessionChatViewModel
             worktreeMove.reset()
             worktreeCreate.dismiss()
             logI("bind session=$sessionId worktree=$worktree title=$sessionTitle")
+            // A new session starts from no messages, so no shell carries over from the last one.
+            shellMessages.value = emptyList()
             seedProjectIdentity(worktree)
             _uiState.value =
                 SessionChatUiState.initial(sessionId = sessionId, sessionTitle = sessionTitle).copy(
@@ -557,6 +577,7 @@ class SessionChatViewModel
             commands.bind(sessionId, worktree)
             inbox.bind(sessionId, worktree)
             sideQuestions.bind(sessionId)
+            bindShells(sessionId, worktree)
             syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
             viewModelScope.launch {
                 composer.loadCatalog()
@@ -600,6 +621,7 @@ class SessionChatViewModel
             sessionInfo.moveDirectory(directory)
             commands.moveDirectory(directory)
             inbox.moveDirectory(directory)
+            bindShells(sessionId, directory)
             val knownBranch =
                 homeProjectsSnapshot
                     .projectContaining(directory)
@@ -656,6 +678,7 @@ class SessionChatViewModel
             reviewChanges.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
             repoStrip.bind(worktree, startExpanded = true)
             commands.bind(OptimisticSessionCreate.PLACEHOLDER_SESSION_ID, worktree)
+            shells.reset()
             optimisticCreateJob =
                 viewModelScope.launch {
                     runCatching {
@@ -704,10 +727,47 @@ class SessionChatViewModel
             commands.bind(sessionId, worktree)
             inbox.bind(sessionId, worktree)
             sideQuestions.bind(sessionId)
+            bindShells(sessionId, worktree)
             syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
             viewModelScope.launch {
                 composer.loadCatalog()
             }
+        }
+
+        private fun bindShells(
+            sessionId: String,
+            directory: String,
+        ) {
+            shells.bind(sessionId, directory, shellMessages)
+        }
+
+        // Shells (#907): the Shells section of the background work panel and the output sheet.
+
+        /** A row in the Shells section: opens its output sheet. */
+        fun openShellOutput(id: String) {
+            logAction(ProductAnalytics.Action.CHAT_OPEN_SHELL_OUTPUT, screenId = ProductAnalytics.Screen.SESSION_SUBAGENTS)
+            shells.open(id)
+        }
+
+        fun closeShellOutput() {
+            logAction(ProductAnalytics.Action.SHELL_OUTPUT_DISMISS, screenId = ProductAnalytics.Screen.SESSION_SHELL_OUTPUT)
+            shells.close()
+        }
+
+        /** The output sheet is visible and the app is in the foreground; output is read only then. */
+        fun setShellOutputObserved(observed: Boolean) {
+            shells.setOutputObserved(observed)
+        }
+
+        /** Stop shell in the output sheet; only offered where the server can stop it. */
+        fun stopShell(id: String) {
+            logAction(ProductAnalytics.Action.SHELL_STOP, screenId = ProductAnalytics.Screen.SESSION_SHELL_OUTPUT)
+            shells.stop(id)
+        }
+
+        /** The output sheet copied its output to the clipboard. */
+        fun copyShellOutput() {
+            logAction(ProductAnalytics.Action.SHELL_OUTPUT_COPY, screenId = ProductAnalytics.Screen.SESSION_SHELL_OUTPUT)
         }
 
         private fun bindTitleIfChanged(
@@ -2235,6 +2295,7 @@ class SessionChatViewModel
                 )
             schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
             val subagents = resolveSubagents(inboxSnapshot, infoState)
+            val shellsState = shells.state.value
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
                 sessionTitle = infoState.sessionTitle,
@@ -2267,7 +2328,9 @@ class SessionChatViewModel
                 sessionTodoCompletedCount = SessionTodoList.completedCount(inboxSnapshot.sessionTodos),
                 sessionTodoTotalCount = inboxSnapshot.sessionTodos.size,
                 subagents = subagents,
-                backgroundWorkPill = SessionChatBackgroundWork.pill(subagents),
+                shells = shellsState.shells,
+                shellOutput = shellsState.output,
+                backgroundWorkPill = SessionChatBackgroundWork.pill(subagents, shellsState.shells),
                 connectionStatus = infoState.connectionStatus,
                 canMutate = infoState.canMutate,
                 composerEnabled = infoState.composerEnabled,

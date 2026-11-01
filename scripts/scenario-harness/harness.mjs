@@ -162,7 +162,7 @@ async function latestSession() {
 async function targetSession(step, props = {}) {
   if (step.session === "latest") return latestSession();
   if (step.session && automation?.sessions[step.session]) return automation.sessions[step.session];
-  return props.sessionID ?? automation?.sessionID ?? lastActiveSession;
+  return props.sessionID ?? props.info?.metadata?.sessionID ?? automation?.sessionID ?? lastActiveSession;
 }
 
 async function runStep(step, props = {}) {
@@ -226,6 +226,12 @@ async function runStep(step, props = {}) {
       return actions.revertCommit({ sessionID });
     case "revertClear":
       return actions.revertClear({ sessionID });
+    case "listShells":
+      return actions.listShells({ sessionID });
+    case "readShellOutputs":
+      return actions.readShellOutputs({ sessionID });
+    case "stopShells":
+      return actions.stopShells({ sessionID });
     case "dropStreams":
       return proxy.dropStreams();
     case "offline":
@@ -349,7 +355,7 @@ function fullState() {
       username: "opencode",
       password,
     },
-    scenarios: SCENARIOS.map(({ id, title, category, priority, prompt, expect, protocols, variants, automation: auto, setup, appOnly, checkVariant, modelCalls, summary, optionalCalls }) => ({
+    scenarios: SCENARIOS.map(({ id, title, category, priority, prompt, expect, protocols, variants, automation: auto, setup, appOnly, checkVariant, modelCalls, summary, optionalCalls, serverChecks, checkTimeoutMs }) => ({
       id,
       title,
       category,
@@ -363,6 +369,8 @@ function fullState() {
       checkVariant: checkVariant ?? null,
       scripted: Boolean(modelCalls?.length || summary),
       optionalCalls: optionalCalls ?? 0,
+      serverChecks: serverChecks ?? null,
+      checkTimeoutMs: checkTimeoutMs ?? null,
       variantOptionalCalls: Object.fromEntries(
         Object.entries(variants ?? {})
           .filter(([, value]) => !Array.isArray(value) && value.optionalCalls !== undefined)

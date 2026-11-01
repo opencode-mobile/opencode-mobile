@@ -153,7 +153,8 @@ import dev.opencode.mobile.ui.sessionchat.view.sessionChatPanelPulse
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineStylePickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatSubagentsSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatBackgroundWorkSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatShellOutputSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
@@ -942,7 +943,7 @@ private fun SessionChatScreenBody(
                             sessionTodoCompletedCount = uiState.sessionTodoCompletedCount,
                             sessionTodoTotalCount = uiState.sessionTodoTotalCount,
                             sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
-                            hideFloatStack = showSessionTodosSheet || showSubagentsSheet,
+                            hideFloatStack = showSessionTodosSheet || showSubagentsSheet || uiState.shellOutput != null,
                             hideLiveRetryFailures = uiState.retryCard != null,
                             hideRetryCountdown = uiState.isRetrying,
                             noticeModelNames = noticeModelNames,
@@ -1567,6 +1568,7 @@ private fun SessionChatScreenBody(
                 skillsTarget != null ||
                 showSessionTodosSheet ||
                 showSubagentsSheet ||
+                uiState.shellOutput != null ||
                 showAttachmentSource ||
                 activePicker != null ||
                 showDeleteConfirmation
@@ -1584,11 +1586,13 @@ private fun SessionChatScreenBody(
             onDismiss = viewModel::dismissTimelineStylePicker,
         )
 
-        SessionChatSubagentsSheet(
+        SessionChatBackgroundWorkSheet(
             visible = showSubagentsSheet,
             subagents = uiState.subagents,
-            onOpen = { subagent ->
-                val childId = subagent.childSessionId ?: return@SessionChatSubagentsSheet
+            shells = uiState.shells,
+            onOpenShell = { shell -> viewModel.openShellOutput(shell.id) },
+            onOpenSubagent = { subagent ->
+                val childId = subagent.childSessionId ?: return@SessionChatBackgroundWorkSheet
                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
                 onChildSessionClick(
                     ChildSessionNavigationTarget(
@@ -1599,6 +1603,14 @@ private fun SessionChatScreenBody(
                 )
             },
             onDismiss = { showSubagentsSheet = false },
+        )
+
+        SessionChatShellOutputSheet(
+            sheet = uiState.shellOutput,
+            onCopy = viewModel::copyShellOutput,
+            onStop = viewModel::stopShell,
+            onObservedChange = viewModel::setShellOutputObserved,
+            onDismiss = viewModel::closeShellOutput,
         )
 
         SessionChatTodosSheet(

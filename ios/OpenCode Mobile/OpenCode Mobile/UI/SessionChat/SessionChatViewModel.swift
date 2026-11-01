@@ -23,6 +23,9 @@ final class SessionChatViewModel {
     private let commands: SessionChatCommands
     private let inbox: SessionChatInbox
     private let sideQuestions: SessionChatSideQuestions
+    private let shells: SessionChatShells
+    /// The loaded messages last pushed to `shells`, so unchanged publishes push nothing.
+    @ObservationIgnored private var shellTranscript: [Message]?
     private let sessionRepository: any SessionRepository
     private let sessionReadyStore: any SessionReadyStore
     private let sessionViewReporter: any SessionViewReporter
@@ -139,7 +142,8 @@ final class SessionChatViewModel {
         catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs,
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
         projectRepository: any ProjectRepository = UnavailableProjectRepository(),
-        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache()
+        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
+        agentShellRepository: any AgentShellRepository = UnavailableAgentShellRepository()
     ) {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
@@ -227,6 +231,7 @@ final class SessionChatViewModel {
             store: sideQuestionStore ?? SideQuestionStore(sessionRepository: sessionRepository),
             supported: { activeConnectionManager.capabilities.supportsSideQuestion }
         )
+        self.shells = SessionChatShells(sessionID: sessionID, worktree: worktree, repository: agentShellRepository)
         let boundSessionInfo = self.sessionInfo
         let boundTimeline = self.timeline
         self.inbox = SessionChatInbox(
@@ -258,6 +263,7 @@ final class SessionChatViewModel {
         commands.onChange = { [weak self] in self?.publishUiState() }
         inbox.onChange = { [weak self] in self?.publishUiState() }
         sideQuestions.onChange = { [weak self] in self?.publishUiState() }
+        shells.onChange = { [weak self] in self?.publishUiState() }
         sideQuestions.canPresentAnswer = { [weak self] in self?.canPresentSideQuestionAnswer ?? false }
         refreshProjectIdentity()
         publishUiState()
@@ -302,6 +308,7 @@ final class SessionChatViewModel {
         sessionInfo.startObserving()
         timeline.startObserving()
         inbox.startObserving()
+        shells.start()
     }
 
     /// Error-state Retry. Create failures start the session again. Load failures refetch the timeline.
@@ -1411,6 +1418,48 @@ final class SessionChatViewModel {
         return true
     }
 
+    /// Opens the output sheet of a running shell from the background work panel.
+    func openShellOutput(id: String) {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionSubagents,
+            actionId: ProductAnalytics.Action.chatOpenShellOutput
+        )
+        shells.openOutput(shellID: id)
+    }
+
+    func closeShellOutput() {
+        guard uiState.shellOutput != nil else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionShellOutput,
+            actionId: ProductAnalytics.Action.shellOutputDismiss
+        )
+        shells.closeOutput()
+    }
+
+    /// Reads the open sheet's output until cancelled. The view runs it only while the sheet
+    /// is up and the app is active, so output is never polled in the background.
+    func watchShellOutput() async {
+        await shells.watchOutput()
+    }
+
+    /// The output sheet copied its text to the pasteboard.
+    func shellOutputCopied() {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionShellOutput,
+            actionId: ProductAnalytics.Action.shellOutputCopy
+        )
+    }
+
+    /// Stop shell: only offered while the server can stop it (`canStop`).
+    func stopShell(id: String) {
+        guard uiState.shellOutput?.shell.id == id, uiState.shellOutput?.canStop == true else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionShellOutput,
+            actionId: ProductAnalytics.Action.shellStop
+        )
+        shells.stopShell(shellID: id)
+    }
+
     func pagePermission(by delta: Int) {
         logChatAction(ProductAnalytics.Action.inboxRequestPage)
         inbox.pagePermission(by: delta)
@@ -1639,6 +1688,7 @@ final class SessionChatViewModel {
         sessionInfo.stopObserving()
         inbox.stop()
         sideQuestions.stop()
+        shells.stop()
         collapsePreferenceGeneration += 1
         // Only release our own focus: the next Session Chat (child, parent, fork) may already
         // have focused itself before this screen disappears.
@@ -1870,6 +1920,8 @@ final class SessionChatViewModel {
         sideQuestions.rebind(sessionID: id)
         sessionInfo.bind(sessionID: id, sessionTitle: title)
         inbox.bind(sessionID: id)
+        shells.rebind(sessionID: id)
+        shells.start()
         commands.start()
         sessionInfo.startObserving()
         startCollapsePreferenceObservation()
@@ -2005,6 +2057,13 @@ final class SessionChatViewModel {
         )
         schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
         let subagents = resolveSubagents(inboxState: inboxState, infoState: infoState)
+        let loadedMessages = timeline.loadedMessages()
+        if loadedMessages != shellTranscript {
+            shellTranscript = loadedMessages
+            shells.transcriptChanged(loadedMessages)
+        }
+        let shellsState = shells.state
+        let runningShells = SessionChatBackgroundWork.runningShells(shellsState.shells)
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
@@ -2046,7 +2105,9 @@ final class SessionChatViewModel {
             sessionTodoCompletedCount: SessionTodoList.completedCount(in: inboxState.sessionTodos),
             sessionTodoTotalCount: inboxState.sessionTodos.count,
             subagents: subagents,
-            backgroundWorkPill: SessionChatBackgroundWork.pill(for: subagents),
+            backgroundWorkPill: SessionChatBackgroundWork.pill(for: subagents, shells: runningShells),
+            shells: runningShells,
+            shellOutput: shellsState.output,
             connectionStatus: infoState.connectionStatus,
             canMutate: infoState.canMutate,
             composerEnabled: infoState.composerEnabled,

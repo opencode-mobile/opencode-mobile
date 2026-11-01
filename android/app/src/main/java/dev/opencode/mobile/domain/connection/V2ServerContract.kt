@@ -11,6 +11,8 @@ data class V2ServerFeatures(
     val sessionArchive: Boolean = false,
     val sessionTurnDiff: Boolean = false,
     val sessionGenerate: Boolean = false,
+    /** `GET /api/shell`: agent-run shells the background work pill lists (opencode 2.2+). */
+    val agentShells: Boolean = false,
     /**
      * `paths.tmp` from `/api/info`, set only when the document also declares the upload route
      * (`POST /api/experimental/fs/write`). Null means streamed uploads are off for this connection.
@@ -42,6 +44,7 @@ object V2ServerContract {
     private const val SESSION_PATH = "/api/session/{sessionID}"
     private const val SESSION_DIFF_PATH = "/api/session/{sessionID}/diff"
     private const val SESSION_GENERATE_PATH = "/api/session/{sessionID}/generate"
+    private const val SHELL_PATH = "/api/shell"
     private const val MAX_SCHEMA_DEPTH = 8
     private const val FS_WRITE_PATH = "/api/experimental/fs/write"
     const val INFO_PATH = "api/info"
@@ -51,6 +54,7 @@ object V2ServerContract {
             sessionArchive = declaresSessionArchive(document),
             sessionTurnDiff = declaresSessionTurnDiff(document),
             sessionGenerate = declaresSessionGenerate(document),
+            agentShells = declaresAgentShells(document),
         )
 
     fun declaresSessionArchive(document: JsonObject): Boolean {
@@ -79,6 +83,13 @@ object V2ServerContract {
             .obj("paths")
             ?.obj(SESSION_GENERATE_PATH)
             ?.obj("post") != null
+
+    /** Agent-run shells: `GET /api/shell` lists them; output and removal hang off the same path. */
+    fun declaresAgentShells(document: JsonObject): Boolean =
+        document
+            .obj("paths")
+            ?.obj(SHELL_PATH)
+            ?.obj("get") != null
 
     /**
      * The upload route is experimental and can change without a version bump, so it is trusted

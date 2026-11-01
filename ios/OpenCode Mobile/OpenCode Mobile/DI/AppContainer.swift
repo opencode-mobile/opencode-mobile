@@ -412,6 +412,20 @@ extension Container {
         }.singleton
     }
 
+    var shellAPIClient: Factory<ShellAPIClient> {
+        onMainActor { ShellAPIClient(connectionProvider: self.connectionProvider()) }.singleton
+    }
+
+    var agentShellRepository: Factory<any AgentShellRepository> {
+        onMainActor {
+            DefaultAgentShellRepository(
+                api: self.shellAPIClient(),
+                eventStream: self.foregroundEventStream(),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
+    }
+
     var agentsAPIClient: Factory<AgentsAPIClient> {
         onMainActor { AgentsAPIClient(connectionProvider: self.connectionProvider()) }.singleton
     }
@@ -720,7 +734,8 @@ extension Container {
                 attachmentImageLoader: self.attachmentImageLoader(),
                 worktreeRepository: self.worktreeRepository(),
                 projectRepository: self.projectRepository(),
-                worktreeInventoryCache: self.worktreeInventoryCache()
+                worktreeInventoryCache: self.worktreeInventoryCache(),
+                agentShellRepository: self.agentShellRepository()
             )
         }
     }

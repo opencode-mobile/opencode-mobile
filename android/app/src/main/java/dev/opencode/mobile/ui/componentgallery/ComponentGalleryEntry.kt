@@ -34,6 +34,7 @@ enum class ComponentGalleryEntryId {
     MessageNote,
     TimelineNotice,
     ChildSessionRow,
+    ShellRow,
     StepRail,
     ActivityCard,
     WorkingIndicator,
@@ -398,6 +399,12 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ShellRow,
+            title = "Shell Row",
+            description = "A running agent shell in the background work panel: command, description and a live timer.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
             id = ComponentGalleryEntryId.StepRail,
             title = "Step Rail",
             description = "One line per step on a vertical rail, live while the agent works.",
@@ -485,8 +492,8 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.BackgroundWorkPill,
             title = "Background Work Pill",
             description =
-                "Session Chat subagent counter on the floating pill, amber when a subagent needs input, " +
-                    "and the Subagents panel with live timers.",
+                "Session Chat subagent and shell counter on the floating pill, amber when a subagent needs input, " +
+                    "and the background work panel with live timers.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(
