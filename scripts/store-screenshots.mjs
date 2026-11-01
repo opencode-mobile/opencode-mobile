@@ -839,7 +839,6 @@ async function runIosCapture({ udid, appearance, scenes, outDir, port, logPath }
     `TEST_RUNNER_STORE_SCREENSHOT_OUT=${dest}`,
     `TEST_RUNNER_STORE_SCREENSHOT_SERVER_URL=${serverUrl}`,
     `TEST_RUNNER_STORE_SCREENSHOT_SERVER_PASSWORD=${SERVER_PASSWORD}`,
-    "CODE_SIGNING_ALLOWED=NO",
   ];
   try {
     await runLogged("xcodebuild", argv, {
