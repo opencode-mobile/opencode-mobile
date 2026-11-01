@@ -324,7 +324,7 @@ class SessionChatPillSlotsTest {
         assertTrue(SessionChatActivityPillCopy.isClickable(running))
         assertFalse(SessionChatActivityPillCopy.isClosable(running))
         assertEquals(
-            "general needs input, 2 subagents running. Open subagents",
+            "general needs input, 2 subagents running. Open request",
             SessionChatActivityPillCopy.accessibilityLabel(waiting),
         )
     }

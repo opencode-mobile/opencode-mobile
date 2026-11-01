@@ -36,7 +36,7 @@ sealed interface SessionChatActivityItem {
 
     /**
      * Subagents of this session at work: "3 subagents", or "general needs input · 2 running"
-     * while one waits. Tapping opens the Subagents panel.
+     * while one waits. Tapping opens the waiting request, else the Subagents panel.
      */
     data class Subagents(
         val pill: SessionChatBackgroundWorkPill,
