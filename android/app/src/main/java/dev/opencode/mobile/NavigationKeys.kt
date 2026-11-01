@@ -25,6 +25,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object ComponentGalleryHome : NavKey
 
+@Serializable data object SessionChatPlaygroundHome : NavKey
+
 @Serializable data class ComponentGalleryDetail(
     val entryId: ComponentGalleryEntryId,
 ) : NavKey

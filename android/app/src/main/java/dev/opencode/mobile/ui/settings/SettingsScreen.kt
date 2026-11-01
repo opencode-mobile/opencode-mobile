@@ -63,6 +63,7 @@ fun SettingsScreen(
     onFeatureFlagsClick: () -> Unit = {},
     /** Lab builds only; null hides the Highlighting Lab row. */
     onHighlightingLabClick: (() -> Unit)? = null,
+    onSessionChatPlaygroundClick: () -> Unit = {},
     onDiagnosticLogsClick: () -> Unit,
     onNavigateBack: () -> Unit,
     onServersClick: () -> Unit,
@@ -475,6 +476,16 @@ fun SettingsScreen(
                         style = OpenCodeListItemStyle.Card,
                         startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "Component Gallery"),
                         onClick = onComponentGalleryClick,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+
+                    OpenCodeListItem(
+                        title = "Session Chat Playground",
+                        subtitle = "The real chat over fake scenarios, no server",
+                        style = OpenCodeListItemStyle.Card,
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Session Chat Playground"),
+                        accessory = OpenCodeListItemAccessory.Disclosure,
+                        onClick = onSessionChatPlaygroundClick,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
 

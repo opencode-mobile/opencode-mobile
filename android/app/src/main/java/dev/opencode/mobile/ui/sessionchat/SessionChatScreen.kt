@@ -190,6 +190,8 @@ fun SessionChatScreen(
     onTerminalRequested: (worktree: String, projectTitle: String) -> Unit = { _, _ -> },
     onFilesRequested: (worktree: String) -> Unit = {},
     detailControl: OpenCodeSplitPaneDetailControl? = null,
+    /** Replaces the "Report a problem" sheet; the Session Chat Playground sends no reports. Null opens the sheet. */
+    onReportProblem: (() -> Unit)? = null,
     viewModel: SessionChatViewModel =
         hiltViewModel(
             key = sessionChatViewModelKey(sessionId, worktree, optimisticNavigationInstanceId),
@@ -218,6 +220,7 @@ fun SessionChatScreen(
             onTerminalRequested = onTerminalRequested,
             onFilesRequested = onFilesRequested,
             detailControl = detailControl,
+            onReportProblem = onReportProblem,
             viewModel = viewModel,
         )
     }
@@ -241,6 +244,7 @@ private fun SessionChatScreenBody(
     onTerminalRequested: (worktree: String, projectTitle: String) -> Unit,
     onFilesRequested: (worktree: String) -> Unit,
     detailControl: OpenCodeSplitPaneDetailControl?,
+    onReportProblem: (() -> Unit)?,
     viewModel: SessionChatViewModel,
 ) {
     val context = LocalContext.current
@@ -837,7 +841,7 @@ private fun SessionChatScreenBody(
                                 icon = OpenCodeIcons.Edit,
                                 onClick = {
                                     menuExpanded = false
-                                    feedbackSheet.open()
+                                    if (onReportProblem != null) onReportProblem() else feedbackSheet.open()
                                 },
                             ),
                         )
