@@ -18,6 +18,8 @@ import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertTrue
@@ -49,6 +51,8 @@ class StoreScreenshotTest {
         runBlocking { seedFixtureProfile() }
         AppOnboardingPreferences.markCompleted()
         AnalyticsConsentPreferences.updateProductAnalyticsConsented(true)
+        // A fresh install starts on Activity Card; the seeded profile would otherwise read as an existing install.
+        SessionChatDisplayPreferences.updateTimelineStyle(SessionChatTimelineStyle.ActivityCard)
         scenario = ActivityScenario.launch(MainActivity::class.java)
         instrumentation.waitForIdleSync()
     }

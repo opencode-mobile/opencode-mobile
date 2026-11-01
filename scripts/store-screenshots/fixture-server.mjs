@@ -100,6 +100,7 @@ export function resolveFixture(raw, nowMs) {
     commands: resolved.commands ?? [],
     skills: resolved.skills ?? [],
     diffs,
+    todos: resolved.todos ?? {},
   };
 }
 
@@ -326,14 +327,19 @@ function sendSse(req, res, world) {
     connection: "keep-alive",
     "x-accel-buffering": "no",
   });
-  const frame = (type) => `data: ${JSON.stringify({ payload: { type, properties: {} } })}\n\n`;
-  res.write(frame("server.connected"));
+  const frame = (type, properties = {}) => `data: ${JSON.stringify({ payload: { type, properties } })}\n\n`;
+  // v2 serves todos only as events; resend them so a chat opened later still gets its list.
+  const todoFrames = () =>
+    Object.entries(world.todos ?? {})
+      .map(([sessionID, todos]) => frame("todo.updated", { sessionID, todos }))
+      .join("");
+  res.write(frame("server.connected") + todoFrames());
   const timer = setInterval(() => {
     if (res.writableEnded) {
       clearInterval(timer);
       return;
     }
-    res.write(frame("server.heartbeat"));
+    res.write(frame("server.heartbeat") + todoFrames());
   }, HEARTBEAT_MS);
   timer.unref?.();
   const stop = () => {
@@ -456,7 +462,16 @@ function handleGet(url, pathname, world, req, res) {
   }
   if (pathname === "/api/vcs") {
     const project = projectForDirectory(world, query.directory);
-    sendJson(res, 200, locatedEnvelope(world, query.directory, { branch: project.branch }));
+    sendJson(res, 200, locatedEnvelope(world, query.directory, { provider: project.vcs, branch: project.branch }));
+    return;
+  }
+  if (pathname === "/api/vcs/status") {
+    const project = projectForDirectory(world, query.directory);
+    const files = world.sessions
+      .filter((session) => session.location?.directory === project.directory)
+      .flatMap((session) => world.diffs[session.id] ?? [])
+      .map(({ file, additions, deletions, status }) => ({ file, additions, deletions, status }));
+    sendJson(res, 200, locatedEnvelope(world, query.directory, files));
     return;
   }
   if (pathname === "/api/vcs/diff") {
