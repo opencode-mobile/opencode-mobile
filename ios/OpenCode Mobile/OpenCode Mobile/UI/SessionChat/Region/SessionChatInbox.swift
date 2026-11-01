@@ -135,6 +135,31 @@ final class SessionChatInbox {
 
     func showPermissionDock() {
         state.permissionHiddenID = nil
+        state.panelPulse += 1
+        notifyChange()
+    }
+
+    /// Opens the panel on `target`, expanding it if collapsed, and pulses it.
+    /// Stays on the current page while a reply is in flight.
+    func focus(_ target: SessionChatInboxTarget) {
+        switch target {
+        case let .permission(requestID):
+            guard state.permissionRequests.contains(where: { $0.id == requestID }) else { return }
+            if state.permissionSubmittingID == nil, state.visiblePermissionRequest?.id != requestID {
+                state.permissionSelectedID = requestID
+                state.permissionError = nil
+            }
+            state.permissionHiddenID = nil
+        case let .question(requestID):
+            guard state.questionRequests.contains(where: { $0.id == requestID }) else { return }
+            if state.questionSubmittingID == nil, state.selectedQuestionRequest?.id != requestID {
+                state.questionSelectedID = requestID
+                state.questionError = nil
+                syncQuestionDraftState()
+            }
+            state.questionHiddenID = nil
+        }
+        state.panelPulse += 1
         notifyChange()
     }
 
@@ -173,6 +198,7 @@ final class SessionChatInbox {
 
     func showQuestionDock() {
         state.questionHiddenID = nil
+        state.panelPulse += 1
         notifyChange()
     }
 

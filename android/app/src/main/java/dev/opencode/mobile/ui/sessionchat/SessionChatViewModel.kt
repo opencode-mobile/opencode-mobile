@@ -1739,6 +1739,30 @@ class SessionChatViewModel
             inbox.showPermissionDock()
         }
 
+        /**
+         * Opens the panel on the request of the subagent the needs-input pill names.
+         * Returns false when no subagent request waits, so the caller opens the subagents panel.
+         */
+        fun openWaitingSubagentRequest(): Boolean {
+            val inboxState = inbox.state.value
+            val target =
+                SessionChatBackgroundWork.needsInputTarget(
+                    subagents = _uiState.value.subagents,
+                    sessions = inboxState.permissionSessions + inboxState.questionSessions,
+                    permissions = inboxState.permissionRequests,
+                    questions = inboxState.questionRequests,
+                    shownPermissionId = inboxState.visiblePermissionRequest?.id,
+                ) ?: return false
+            logAction(
+                when (target) {
+                    is SessionChatInboxTarget.Permission -> ProductAnalytics.Action.PERMISSION_SHOW
+                    is SessionChatInboxTarget.Question -> ProductAnalytics.Action.QUESTION_SHOW
+                },
+            )
+            inbox.focus(target)
+            return true
+        }
+
         fun pagePermission(delta: Int) {
             logAction(ProductAnalytics.Action.INBOX_REQUEST_PAGE)
             inbox.pagePermission(delta)
@@ -2271,6 +2295,7 @@ class SessionChatViewModel
                 questionQueueCount = inboxSnapshot.questionRequests.size,
                 questionAttribution = inboxSnapshot.visibleQuestionAttribution,
                 questionDockHidden = inboxSnapshot.isQuestionDockHidden,
+                inboxPanelPulse = inboxSnapshot.panelPulse,
                 questionWizardIndex = inboxSnapshot.questionWizardIndex,
                 questionSelectedLabels = questionDraft.selectedLabels,
                 questionCustomText = questionDraft.customText,

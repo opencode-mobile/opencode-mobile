@@ -184,7 +184,8 @@ internal object SessionChatActivityPillCopy {
         when (item) {
             SessionChatActivityItem.ReviewPermission -> "Review permission request"
             SessionChatActivityItem.AnswerQuestion -> "Answer question"
-            is SessionChatActivityItem.Subagents -> "${item.pill.accessibilityLabel}. Open subagents"
+            is SessionChatActivityItem.Subagents ->
+                "${item.pill.accessibilityLabel}. ${if (item.pill.needsInput) "Open request" else "Open subagents"}"
             is SessionChatActivityItem.RequestFailed -> "Request failed. Show in chat"
             is SessionChatActivityItem.SideQuestionsFailed ->
                 if (item.count > 1) "${item.count} side questions failed. Retry" else "Side question failed. Retry"

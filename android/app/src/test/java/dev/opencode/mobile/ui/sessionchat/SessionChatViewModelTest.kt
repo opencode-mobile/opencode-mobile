@@ -785,6 +785,72 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun openWaitingSubagentRequest_expandsAndPagesToTheSubagentsRequestAndPulses() =
+        runTest(testDispatcher) {
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions =
+                        listOf(
+                            Session(id = "ses-1", title = "Title"),
+                            Session(id = "child-a", title = "Run tests (@general subagent)", parentId = "ses-1"),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(id = "msg-0", role = MessageRole.User, text = "Go"),
+                                    Message(
+                                        id = "msg-1",
+                                        role = MessageRole.Assistant,
+                                        text = "",
+                                        parts =
+                                            listOf(
+                                                MessagePart.Tool(
+                                                    toolName = "task",
+                                                    status = ToolStatus.Running,
+                                                    id = "prt-a",
+                                                    input =
+                                                        buildJsonObject {
+                                                            put("description", "Run tests")
+                                                            put("subagent_type", "general")
+                                                        },
+                                                    metadata = buildJsonObject { put("sessionId", "child-a") },
+                                                ),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore =
+                        FakePermissionLiveStore(
+                            listOf(permissionRequest("permission-root", "ses-1"), permissionRequest("permission-a", "child-a")),
+                        ),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+            assertEquals(true, viewModel.uiState.value.backgroundWorkPill?.needsInput)
+            viewModel.hidePermissionDock("permission-root")
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.permissionDockHidden)
+            val pulse = viewModel.uiState.value.inboxPanelPulse
+
+            assertTrue(viewModel.openWaitingSubagentRequest())
+            advanceUntilIdle()
+            assertEquals("permission-a", viewModel.uiState.value.permissionRequest?.id)
+            assertFalse(viewModel.uiState.value.permissionDockHidden)
+            assertEquals(pulse + 1, viewModel.uiState.value.inboxPanelPulse)
+
+            viewModel.hidePermissionDock("permission-a")
+            viewModel.showPermissionDock()
+            advanceUntilIdle()
+            assertEquals(pulse + 2, viewModel.uiState.value.inboxPanelPulse)
+        }
+
+    @Test
     fun questionPaging_keepsEachRequestsAnswersAndCollapses() =
         runTest(testDispatcher) {
             val sessionRepository =

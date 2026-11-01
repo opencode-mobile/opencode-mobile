@@ -391,6 +391,61 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.subagents.first?.childSessionID == "child-a")
     }
 
+    @Test func openWaitingSubagentRequest_expandsAndPagesToTheSubagentsRequestAndPulses() async throws {
+        let sessionRepository = FakeChatSessionRepository(
+            sessions: [
+                Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil),
+                Session(
+                    id: "child-a", title: "Run tests (@general subagent)", slug: nil, projectID: nil,
+                    directory: "/repo", parentID: "ses-1", updatedAtEpochMs: nil
+                ),
+            ]
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: [
+                Message(id: "user-1", role: .user, text: "Go", model: nil, mode: nil, sentAtEpochMs: 1),
+                Message(
+                    id: "assistant-1",
+                    role: .assistant,
+                    text: "",
+                    parts: [
+                        .tool(ToolPart(
+                            id: "prt-a",
+                            toolName: "task",
+                            status: .running,
+                            input: ["description": .string("Run tests"), "subagent_type": .string("general")],
+                            metadata: ["sessionId": .string("child-a")]
+                        )),
+                    ],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: 2
+                ),
+            ]),
+            sessionRepository: sessionRepository,
+            permissionLiveStore: FakePermissionLiveStore(requests: [
+                permissionRequest(id: "permission-root", sessionID: "ses-1"),
+                permissionRequest(id: "permission-a", sessionID: "child-a"),
+            ])
+        )
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        try #require(await waitUntil { viewModel.uiState.backgroundWorkPill?.needsInput == true })
+        viewModel.hidePermissionDock(requestID: "permission-root")
+        #expect(viewModel.uiState.permissionDockHidden)
+        let pulse = viewModel.uiState.inboxPanelPulse
+
+        #expect(viewModel.openWaitingSubagentRequest())
+        #expect(viewModel.uiState.permissionRequest?.id == "permission-a")
+        #expect(!viewModel.uiState.permissionDockHidden)
+        #expect(viewModel.uiState.inboxPanelPulse == pulse + 1)
+
+        viewModel.hidePermissionDock(requestID: "permission-a")
+        viewModel.showPermissionDock()
+        #expect(viewModel.uiState.inboxPanelPulse == pulse + 2)
+    }
+
     @Test func questionPaging_keepsEachRequestsAnswersAndCollapses() async throws {
         let sessionRepository = FakeChatSessionRepository(
             sessions: [

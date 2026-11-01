@@ -49,6 +49,12 @@ nonisolated struct SessionChatBackgroundWorkPill: Equatable, Sendable {
     let accessibilityLabel: String
 }
 
+/// The waiting request the background work pill opens when a subagent needs input.
+nonisolated enum SessionChatInboxTarget: Equatable, Sendable {
+    case permission(requestID: String)
+    case question(requestID: String)
+}
+
 /// Subagents of the open session and the pill that sums them up. Pure: the
 /// view model feeds it the loaded messages, live session activity and the
 /// pending requests it already collects for the session tree.
@@ -154,6 +160,33 @@ nonisolated enum SessionChatBackgroundWork {
         let label = running > 0 ? "\(asking) · \(running) running" : asking
         let spoken = running > 0 ? "\(asking), \(subagentCount(running)) running" : asking
         return SessionChatBackgroundWorkPill(label: label, needsInput: true, accessibilityLabel: spoken)
+    }
+
+    /// The request the needs-input pill pages to: the first waiting subagent's permission,
+    /// else its question. A question waits behind any permission (the permission panel
+    /// shows first), so then the shown permission opens instead. Nil when no subagent waits
+    /// or its request is gone, so the tap falls back to the subagents panel.
+    static func needsInputTarget(
+        subagents: [SessionChatSubagent],
+        sessions: [Session],
+        permissions: [PermissionRequest],
+        questions: [QuestionRequest],
+        shownPermissionID: String?
+    ) -> SessionChatInboxTarget? {
+        guard let childID = subagents.first(where: { $0.status == .waitingForInput })?.childSessionID else {
+            return nil
+        }
+        let childIDs = Set(subagents.compactMap(\.childSessionID))
+        let sessionsByID = Dictionary(sessions.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        func asks(_ sessionID: String) -> Bool {
+            owningChild(of: sessionID, childIDs: childIDs, sessionsByID: sessionsByID) == childID
+        }
+        if let permission = permissions.first(where: { asks($0.sessionID) }) {
+            return .permission(requestID: permission.id)
+        }
+        guard let question = questions.first(where: { asks($0.sessionID) }) else { return nil }
+        guard !permissions.isEmpty else { return .question(requestID: question.id) }
+        return .permission(requestID: shownPermissionID ?? permissions[0].id)
     }
 
     /// Remembers when subagents finish while the app watches live, for rows without a server

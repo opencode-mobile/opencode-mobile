@@ -149,6 +149,7 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSideQuestionSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
+import dev.opencode.mobile.ui.sessionchat.view.sessionChatPanelPulse
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineStylePickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
@@ -964,8 +965,10 @@ private fun SessionChatScreenBody(
                                     SessionChatActivityItem.ReviewPermission -> viewModel.showPermissionDock()
                                     SessionChatActivityItem.AnswerQuestion -> viewModel.showQuestionDock()
                                     is SessionChatActivityItem.Subagents -> {
-                                        logChatAction(ProductAnalytics.Action.CHAT_OPEN_SUBAGENTS)
-                                        showSubagentsSheet = true
+                                        if (!item.pill.needsInput || !viewModel.openWaitingSubagentRequest()) {
+                                            logChatAction(ProductAnalytics.Action.CHAT_OPEN_SUBAGENTS)
+                                            showSubagentsSheet = true
+                                        }
                                     }
                                     is SessionChatActivityItem.SideQuestionsFailed -> viewModel.retrySideQuestions()
                                     is SessionChatActivityItem.SideQuestionsReady -> viewModel.openSideQuestionAnswer()
@@ -1354,6 +1357,7 @@ private fun SessionChatScreenBody(
                             )
                         OpenCodeSessionComposer(
                             state = composerState,
+                            modifier = Modifier.sessionChatPanelPulse(uiState.inboxPanelPulse),
                             focus = composerFocus,
                             dictation = dictationCard,
                             onAction = { action ->

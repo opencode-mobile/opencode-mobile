@@ -94,7 +94,7 @@ struct SessionChatPillSlotsTests {
         #expect(!SessionChatActivitySlotView.isClosable(.subagents(runningSubagents)))
         #expect(
             SessionChatActivitySlotView.accessibilityLabel(.subagents(waitingSubagent))
-                == "general needs input, 2 subagents running. Open subagents"
+                == "general needs input, 2 subagents running. Open request"
         )
     }
 

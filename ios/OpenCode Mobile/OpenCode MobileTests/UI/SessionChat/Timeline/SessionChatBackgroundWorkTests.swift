@@ -296,7 +296,82 @@ struct SessionChatBackgroundWorkTests {
         #expect(SessionChatBackgroundWork.pill(for: rows) == nil)
     }
 
+    // MARK: - Needs-input target
+
+    @Test func needsInputTarget_pagesToTheWaitingSubagentsPermission() {
+        let rows = [
+            waitingRow("prt-a", child: "ses-a"),
+            waitingRow("prt-b", child: "ses-b"),
+        ]
+        let target = SessionChatBackgroundWork.needsInputTarget(
+            subagents: rows,
+            sessions: [],
+            permissions: [permission("per-root", session: "ses-root"), permission("per-a", session: "ses-a")],
+            questions: [question("que-b", session: "ses-b")],
+            shownPermissionID: "per-root"
+        )
+
+        #expect(target == .permission(requestID: "per-a"))
+    }
+
+    @Test func needsInputTarget_findsARequestFromTheSubagentsOwnSubagent() {
+        let target = SessionChatBackgroundWork.needsInputTarget(
+            subagents: [waitingRow("prt-a", child: "ses-a")],
+            sessions: [session("ses-grandchild", parent: "ses-a")],
+            permissions: [],
+            questions: [question("que-root", session: "ses-root"), question("que-a", session: "ses-grandchild")],
+            shownPermissionID: nil
+        )
+
+        #expect(target == .question(requestID: "que-a"))
+    }
+
+    @Test func needsInputTarget_questionBehindAPermissionOpensTheShownPermission() {
+        let target = SessionChatBackgroundWork.needsInputTarget(
+            subagents: [waitingRow("prt-a", child: "ses-a")],
+            sessions: [],
+            permissions: [permission("per-root", session: "ses-root"), permission("per-other", session: "ses-root")],
+            questions: [question("que-a", session: "ses-a")],
+            shownPermissionID: "per-other"
+        )
+
+        #expect(target == .permission(requestID: "per-other"))
+    }
+
+    @Test func needsInputTarget_nilWithoutAWaitingSubagentOrItsRequest() {
+        let running = SessionChatSubagent(
+            id: "prt-a", childSessionID: "ses-a", agentName: "general", title: nil,
+            status: .running, startedAtMs: nil, finishedAtMs: nil
+        )
+        #expect(SessionChatBackgroundWork.needsInputTarget(
+            subagents: [running], sessions: [], permissions: [permission("per-a", session: "ses-a")],
+            questions: [], shownPermissionID: nil
+        ) == nil)
+        #expect(SessionChatBackgroundWork.needsInputTarget(
+            subagents: [waitingRow("prt-a", child: "ses-a")], sessions: [],
+            permissions: [permission("per-root", session: "ses-root")], questions: [], shownPermissionID: nil
+        ) == nil)
+    }
+
     // MARK: - Helpers
+
+    private func waitingRow(_ id: String, child: String) -> SessionChatSubagent {
+        SessionChatSubagent(
+            id: id, childSessionID: child, agentName: "general", title: nil,
+            status: .waitingForInput, startedAtMs: nil, finishedAtMs: nil
+        )
+    }
+
+    private func permission(_ id: String, session: String) -> PermissionRequest {
+        PermissionRequest(
+            id: id, sessionID: session, permission: "bash", patterns: ["npm test"], metadata: [:],
+            always: [], toolMessageID: nil, toolCallID: nil
+        )
+    }
+
+    private func question(_ id: String, session: String) -> QuestionRequest {
+        QuestionRequest(id: id, sessionID: session, questions: [], toolMessageID: nil, toolCallID: nil)
+    }
 
     private func subagents(
         _ parts: [MessagePart],

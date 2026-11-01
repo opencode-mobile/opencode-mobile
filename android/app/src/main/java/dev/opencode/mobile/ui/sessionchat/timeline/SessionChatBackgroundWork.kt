@@ -4,6 +4,8 @@ import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.ToolStartTime
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.session.PermissionRequest
+import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -61,6 +63,17 @@ data class SessionChatBackgroundWorkPill(
     val needsInput: Boolean,
     val accessibilityLabel: String,
 )
+
+/** The waiting request the background work pill opens when a subagent needs input. */
+sealed interface SessionChatInboxTarget {
+    data class Permission(
+        val requestId: String,
+    ) : SessionChatInboxTarget
+
+    data class Question(
+        val requestId: String,
+    ) : SessionChatInboxTarget
+}
 
 /**
  * Subagents of the open session and the pill that sums them up. Pure: the
@@ -167,6 +180,32 @@ object SessionChatBackgroundWork {
         val label = if (running > 0) "$asking · $running running" else asking
         val spoken = if (running > 0) "$asking, ${subagentCount(running)} running" else asking
         return SessionChatBackgroundWorkPill(label, needsInput = true, accessibilityLabel = spoken)
+    }
+
+    /**
+     * The request the needs-input pill pages to: the first waiting subagent's permission,
+     * else its question. A question waits behind any permission (the permission panel
+     * shows first), so then the shown permission opens instead. Null when no subagent waits
+     * or its request is gone, so the tap falls back to the subagents panel.
+     */
+    fun needsInputTarget(
+        subagents: List<SessionChatSubagent>,
+        sessions: List<Session>,
+        permissions: List<PermissionRequest>,
+        questions: List<QuestionRequest>,
+        shownPermissionId: String?,
+    ): SessionChatInboxTarget? {
+        val childId =
+            subagents.firstOrNull { it.status == SessionChatSubagentStatus.WaitingForInput }?.childSessionId
+                ?: return null
+        val childIds = subagents.mapNotNullTo(mutableSetOf()) { it.childSessionId }
+        val sessionsById = sessions.associateBy { it.id }
+
+        fun asks(sessionId: String) = owningChild(sessionId, childIds, sessionsById) == childId
+        permissions.firstOrNull { asks(it.sessionId) }?.let { return SessionChatInboxTarget.Permission(it.id) }
+        val question = questions.firstOrNull { asks(it.sessionId) } ?: return null
+        if (permissions.isEmpty()) return SessionChatInboxTarget.Question(question.id)
+        return SessionChatInboxTarget.Permission(shownPermissionId ?: permissions.first().id)
     }
 
     /**

@@ -1392,6 +1392,25 @@ final class SessionChatViewModel {
         inbox.showPermissionDock()
     }
 
+    /// Opens the panel on the request of the subagent the needs-input pill names.
+    /// Returns false when no subagent request waits, so the caller opens the subagents panel.
+    func openWaitingSubagentRequest() -> Bool {
+        let inboxState = inbox.state
+        guard let target = SessionChatBackgroundWork.needsInputTarget(
+            subagents: uiState.subagents,
+            sessions: inboxState.permissionSessions + inboxState.questionSessions,
+            permissions: inboxState.permissionRequests,
+            questions: inboxState.questionRequests,
+            shownPermissionID: inboxState.visiblePermissionRequest?.id
+        ) else { return false }
+        switch target {
+        case .permission: logChatAction(ProductAnalytics.Action.permissionShow)
+        case .question: logChatAction(ProductAnalytics.Action.questionShow)
+        }
+        inbox.focus(target)
+        return true
+    }
+
     func pagePermission(by delta: Int) {
         logChatAction(ProductAnalytics.Action.inboxRequestPage)
         inbox.pagePermission(by: delta)
@@ -2054,6 +2073,7 @@ final class SessionChatViewModel {
             questionQueueCount: inboxState.questionRequests.count,
             questionAttribution: inboxState.visibleQuestionAttribution,
             questionDockHidden: inboxState.isQuestionDockHidden,
+            inboxPanelPulse: inboxState.panelPulse,
             questionWizardIndex: inboxState.questionWizardIndex,
             questionSelectedLabels: inboxState.questionDraft.selectedLabels,
             questionCustomText: inboxState.questionDraft.customText,
