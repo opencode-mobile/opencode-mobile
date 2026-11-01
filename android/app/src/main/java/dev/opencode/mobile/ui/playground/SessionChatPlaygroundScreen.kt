@@ -18,6 +18,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.asDisplayMessagePreparing
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
@@ -45,6 +46,9 @@ class SessionChatPlaygroundViewModel
         contentPreparer: MessageContentPreparer,
     ) : ViewModel() {
         private val preparing = contentPreparer.asDisplayMessagePreparing()
+
+        // Fake sessions are not product use: no analytics while the playground is open.
+        private val analyticsSuppression = ProductAnalytics.suppress()
         private var generation = 0
         private val _session = MutableStateFlow(open(PlaygroundScenarioId.Everything))
 
@@ -66,6 +70,7 @@ class SessionChatPlaygroundViewModel
 
         override fun onCleared() {
             _session.value.session.close()
+            analyticsSuppression.close()
         }
     }
 
@@ -155,6 +160,7 @@ fun SessionChatPlaygroundScreen(
                             onSessionReplaceRequested = { notAvailable("Switching sessions") },
                             onTerminalRequested = { _, _ -> notAvailable("Terminal") },
                             onFilesRequested = { notAvailable("Files") },
+                            onReportProblem = { notAvailable("Report a problem") },
                             viewModel = session.chatViewModel,
                         )
                     }

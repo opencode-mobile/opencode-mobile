@@ -8,6 +8,8 @@ struct SessionChatPlaygroundView: View {
     @State private var isReady = false
     @State private var menuExpanded = false
     @State private var snackbar: OpenCodeSnackbarMessage?
+    /// Held while the playground is on screen: fake sessions are not product use.
+    @State private var analyticsSuppression: ProductAnalytics.Suppression?
 
     var body: some View {
         NavigationStack {
@@ -31,6 +33,7 @@ struct SessionChatPlaygroundView: View {
             }
         }
         .task(id: opened?.generation) {
+            if analyticsSuppression == nil { analyticsSuppression = ProductAnalytics.suppress() }
             if opened == nil {
                 open(.everything)
                 return
@@ -40,7 +43,11 @@ struct SessionChatPlaygroundView: View {
             await session.prepare()
             if !Task.isCancelled { isReady = true }
         }
-        .onDisappear { opened?.session.close() }
+        .onDisappear {
+            opened?.session.close()
+            analyticsSuppression?.end()
+            analyticsSuppression = nil
+        }
     }
 
     private func topBar(_ session: PlaygroundSession) -> some View {

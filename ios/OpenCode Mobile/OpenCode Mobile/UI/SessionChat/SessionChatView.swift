@@ -76,8 +76,8 @@ struct SessionChatView: View {
     /// Replaces `dismiss()` when the chat is a split-view root with nothing to pop to.
     private let onLeaveSession: (() -> Void)?
     /// Set only by the Session Chat Playground: screens that load from a server (Changes,
-    /// a child chat, Terminal, Files, Session context, tool groups) do not open; their name
-    /// is passed here instead.
+    /// a child chat, Terminal, Files, Session context, tool groups) and the problem report
+    /// do not open; their name is passed here instead.
     private let onUnavailableRoute: ((String) -> Void)?
 
     init(
@@ -1475,6 +1475,11 @@ struct SessionChatView: View {
     /// Captures this screen once the menu is gone, then opens the report sheet. The capture
     /// is only attached when the user taps "+ Screenshot" (the sheet itself draws over the window).
     private func reportProblem() {
+        if let onUnavailableRoute {
+            // The playground sends no reports: its content is fake and must stay on the device.
+            onUnavailableRoute("Report a problem")
+            return
+        }
         resignComposerKeyboard()
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(250))

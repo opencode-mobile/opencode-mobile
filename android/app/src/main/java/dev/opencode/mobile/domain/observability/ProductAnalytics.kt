@@ -6,6 +6,26 @@ package dev.opencode.mobile
  * [OpenCodeReleaseObservability.logProductEvent] (consent + Debug gate).
  */
 object ProductAnalytics {
+    private val suppressions = java.util.concurrent.atomic.AtomicInteger(0)
+
+    /** Where events go; tests swap it to see what would be sent. */
+    internal var sink: (name: String, parameters: Map<String, String>) -> Unit =
+        { name, parameters -> OpenCodeReleaseObservability.logProductEvent(name, parameters) }
+
+    /** True while a [suppress] handle is open: nothing is logged. */
+    val isSuppressed: Boolean
+        get() = suppressions.get() > 0
+
+    /**
+     * Stops every product event until the returned handle closes. The Session Chat Playground
+     * holds one while it is open: its fake sessions are not product use.
+     */
+    fun suppress(): AutoCloseable {
+        suppressions.incrementAndGet()
+        val closed = java.util.concurrent.atomic.AtomicBoolean(false)
+        return AutoCloseable { if (closed.compareAndSet(false, true)) suppressions.decrementAndGet() }
+    }
+
     object Event {
         const val SCREEN_VIEW = "product_screen_view"
         const val USER_ACTION = "product_user_action"
@@ -371,14 +391,14 @@ object ProductAnalytics {
         presentation: String,
         trigger: String = Trigger.PUSH,
     ) {
-        OpenCodeReleaseObservability.logProductEvent(
-            name = Event.SCREEN_VIEW,
-            parameters =
-                mapOf(
-                    Param.SCREEN_ID to screenId,
-                    Param.PRESENTATION to presentation,
-                    Param.TRIGGER to trigger,
-                ),
+        if (isSuppressed) return
+        sink(
+            Event.SCREEN_VIEW,
+            mapOf(
+                Param.SCREEN_ID to screenId,
+                Param.PRESENTATION to presentation,
+                Param.TRIGGER to trigger,
+            ),
         )
     }
 
@@ -387,14 +407,14 @@ object ProductAnalytics {
         actionId: String,
         parameters: Map<String, String> = emptyMap(),
     ) {
-        OpenCodeReleaseObservability.logProductEvent(
-            name = Event.USER_ACTION,
-            parameters =
-                buildMap {
-                    put(Param.SCREEN_ID, screenId)
-                    put(Param.ACTION_ID, actionId)
-                    putAll(parameters)
-                },
+        if (isSuppressed) return
+        sink(
+            Event.USER_ACTION,
+            buildMap {
+                put(Param.SCREEN_ID, screenId)
+                put(Param.ACTION_ID, actionId)
+                putAll(parameters)
+            },
         )
     }
 }

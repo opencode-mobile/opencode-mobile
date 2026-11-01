@@ -4,6 +4,34 @@ import Foundation
 /// helpers only — never Firebase. All sends go through
 /// `OpenCodeReleaseObservability.logProductEvent` (consent + Debug gate).
 enum ProductAnalytics {
+    private static var suppressions = 0
+
+    /// Where events go; tests swap it to see what would be sent.
+    static var sink: (_ name: String, _ parameters: [String: String]) -> Void = { name, parameters in
+        OpenCodeReleaseObservability.logProductEvent(name: name, parameters: parameters)
+    }
+
+    /// True while a `suppress()` handle is open: nothing is logged.
+    static var isSuppressed: Bool { suppressions > 0 }
+
+    /// Stops every product event until the returned handle ends. The Session Chat Playground
+    /// holds one while it is open: its fake sessions are not product use.
+    static func suppress() -> Suppression {
+        suppressions += 1
+        return Suppression()
+    }
+
+    final class Suppression {
+        private var ended = false
+
+        /// Ends this suppression; later calls do nothing.
+        func end() {
+            guard !ended else { return }
+            ended = true
+            ProductAnalytics.suppressions -= 1
+        }
+    }
+
     enum Event {
         static let screenView = "product_screen_view"
         static let userAction = "product_user_action"
@@ -358,14 +386,12 @@ enum ProductAnalytics {
         presentation: String,
         trigger: String = Trigger.push
     ) {
-        OpenCodeReleaseObservability.logProductEvent(
-            name: Event.screenView,
-            parameters: [
-                Param.screenId: screenId,
-                Param.presentation: presentation,
-                Param.trigger: trigger,
-            ]
-        )
+        guard !isSuppressed else { return }
+        sink(Event.screenView, [
+            Param.screenId: screenId,
+            Param.presentation: presentation,
+            Param.trigger: trigger,
+        ])
     }
 
     static func logUserAction(
@@ -373,12 +399,10 @@ enum ProductAnalytics {
         actionId: String,
         parameters: [String: String] = [:]
     ) {
+        guard !isSuppressed else { return }
         var merged = parameters
         merged[Param.screenId] = screenId
         merged[Param.actionId] = actionId
-        OpenCodeReleaseObservability.logProductEvent(
-            name: Event.userAction,
-            parameters: merged
-        )
+        sink(Event.userAction, merged)
     }
 }
