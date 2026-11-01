@@ -6,10 +6,11 @@ private let actionBarTargetIconSize: CGFloat = 22
 
 /// What the action bar's button acts on: an icon, a name with an optional tag, and a detail
 /// line (a path) that truncates at its start so the end stays readable.
+/// `title` and `subtitle` are content (a project name, a path) and render verbatim.
 struct OpenCodeActionBarTarget: Equatable {
     let icon: OpenCodeIcon
     let title: String
-    var tag: String? = nil
+    var tag: OpenCodeText? = nil
     let subtitle: String
 }
 
@@ -18,14 +19,14 @@ struct OpenCodeActionBarTarget: Equatable {
 /// `compact` hides the target row (for example while the keyboard is up); the button stays.
 struct OpenCodeActionBar: View {
     let target: OpenCodeActionBarTarget?
-    let actionTitle: String
+    let actionTitle: OpenCodeText
     let enabled: Bool
     let compact: Bool
     let action: () -> Void
 
     init(
         target: OpenCodeActionBarTarget?,
-        actionTitle: String,
+        actionTitle: OpenCodeText,
         enabled: Bool = true,
         compact: Bool = false,
         action: @escaping () -> Void
@@ -66,7 +67,7 @@ struct OpenCodeActionBar: View {
                 .foregroundStyle(OpenCodeColors.textWeak)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(target.title)
+                    Text(verbatim: target.title)
                         .font(OpenCodeTypography.bodySecondary.weight(.semibold))
                         .foregroundStyle(OpenCodeColors.textStrong)
                         .lineLimit(1)
@@ -74,7 +75,7 @@ struct OpenCodeActionBar: View {
                         OpenCodeTag(tag, size: .small)
                     }
                 }
-                Text(target.subtitle)
+                Text(verbatim: target.subtitle)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeak)
                     .lineLimit(1)
@@ -83,7 +84,7 @@ struct OpenCodeActionBar: View {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([target.title, target.tag, target.subtitle].compactMap { $0 }.joined(separator: ", "))
+        .accessibilityLabel([target.title, target.tag?.resolved, target.subtitle].compactMap { $0 }.joined(separator: ", "))
     }
 }
 

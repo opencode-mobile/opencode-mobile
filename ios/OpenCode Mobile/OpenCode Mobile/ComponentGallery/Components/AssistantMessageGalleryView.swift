@@ -35,7 +35,7 @@ struct AssistantMessageGalleryView: View {
             HStack(spacing: 8) {
                 ForEach(AssistantMessageSample.allCases, id: \.self) { option in
                     OpenCodeChoiceBadge(
-                        label: option.rawValue,
+                        label: .verbatim(option.rawValue),
                         selected: sample == option,
                         action: { sample = option }
                     )

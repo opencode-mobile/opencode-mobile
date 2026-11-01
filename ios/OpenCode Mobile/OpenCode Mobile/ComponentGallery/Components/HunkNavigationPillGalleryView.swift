@@ -17,7 +17,7 @@ struct HunkNavigationPillGalleryView: View {
 
             HStack(spacing: 8) {
                 ForEach(HunkNavigationPosition.allCases, id: \.self) { value in
-                    OpenCodeChoiceBadge(label: value.label, selected: position == value) { position = value }
+                    OpenCodeChoiceBadge(label: .verbatim(value.label), selected: position == value) { position = value }
                 }
             }
             HStack(spacing: 8) {

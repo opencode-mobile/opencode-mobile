@@ -95,24 +95,24 @@ struct SessionListProjectPickerRows: View {
                 .accessibilityIdentifier("projectPickerReorderNote")
         case let .all(tab):
             OpenCodeListItem(
-                title: tab.pickerTitle,
-                subtitle: tab.pickerSubtitle,
+                title: .unlocalized(tab.pickerTitle),
+                subtitle: .unlocalized(tab.pickerSubtitle),
                 startDecorator: .iconCircle(.widgets, accessibilityLabel: nil)
             )
         case let .project(tab, _):
             OpenCodeListItem(
-                title: tab.pickerTitle,
-                subtitle: compactHomePath(
+                title: .verbatim(tab.pickerTitle),
+                subtitle: .verbatim(compactHomePath(
                     tab.pickerSubtitle,
                     hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
-                ),
+                )),
                 startDecorator: letterDecorator(tab)
             )
             .accessibilityIdentifier("projectPickerProject")
         case let .worktree(tab):
             OpenCodeListItem(
-                title: tab.pickerTitle,
-                subtitle: tab.pickerSubtitle,
+                title: .verbatim(tab.pickerTitle),
+                subtitle: .verbatim(tab.pickerSubtitle),
                 startDecorator: .icon(.callSplit, accessibilityLabel: nil)
             )
             .padding(.leading, Self.worktreeIndent)
@@ -138,10 +138,10 @@ struct SessionListProjectPickerRows: View {
             HStack(spacing: 12) {
                 if let pill, let projectKey = row.tab?.id {
                     OpenCodeExpandPill(
-                        title: pill.title,
+                        title: .unlocalized(pill.title),
                         isExpanded: pill.isExpanded,
                         enabled: pill.enabled,
-                        accessibilityLabel: pill.accessibilityLabel,
+                        accessibilityLabel: .unlocalized(pill.accessibilityLabel),
                         action: { onToggleExpanded(projectKey) }
                     )
                     .accessibilityIdentifier("projectPickerWorktreesPill")

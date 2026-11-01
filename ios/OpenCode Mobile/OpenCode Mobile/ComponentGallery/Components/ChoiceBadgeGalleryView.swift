@@ -16,7 +16,7 @@ struct ChoiceBadgeGalleryView: View {
             HStack(spacing: 8) {
                 ForEach(["Alpha", "Beta", "Gamma"], id: \.self) { option in
                     OpenCodeChoiceBadge(
-                        label: option,
+                        label: .verbatim(option),
                         selected: selection == option,
                         action: { selection = option }
                     )
@@ -33,7 +33,7 @@ struct ChoiceBadgeGalleryView: View {
             let glassChips = HStack(spacing: 8) {
                 ForEach(["Grok 4.5", "Build", "Default"], id: \.self) { option in
                     OpenCodeChoiceBadge(
-                        label: option,
+                        label: .verbatim(option),
                         selected: glassSelection == option,
                         variant: .glass,
                         action: { glassSelection = option }

@@ -48,7 +48,7 @@ struct DialogGalleryView: View {
         .openCodeDialog(
             isPresented: $isPresented,
             title: showsTextField ? "Rename session" : "Clear all data?",
-            subtitle: subtitle,
+            subtitle: .verbatim(ifPresent: subtitle),
             primaryOption: OpenCodeDialogOption(
                 title: showsTextField ? "Save" : "Clear",
                 enabled: optionsEnabled,

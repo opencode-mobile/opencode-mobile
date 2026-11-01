@@ -50,7 +50,7 @@ struct ButtonGalleryView: View {
                 HStack(spacing: 8) {
                     ForEach(GalleryButtonVariant.allCases) { variant in
                         OpenCodeChoiceBadge(
-                            label: variant.label,
+                            label: .verbatim(variant.label),
                             selected: selectedVariant == variant,
                             action: { selectedVariant = variant }
                         )

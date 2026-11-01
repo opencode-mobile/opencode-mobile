@@ -20,8 +20,8 @@ struct FileViewerScreen: View {
                 )
             ) {
                 OpenCodeTopBar(
-                    title: ProjectPaths.name(of: relativePath),
-                    subtitle: relativePath,
+                    title: .verbatim(ProjectPaths.name(of: relativePath)),
+                    subtitle: .verbatim(relativePath),
                     leading: .back(action: {
                         FileViewerMenu.log(ProductAnalytics.Action.filesViewerBack)
                         dismiss()
@@ -143,8 +143,8 @@ struct FileViewerContent: View {
             Self.binaryPlaceholder(mimeType: mimeType)
         case let .tooLarge(byteCount):
             OpenCodeEmptyState(
-                title: FileViewerCopy.tooLargeTitle,
-                message: FileViewerCopy.tooLargeDetail(byteCount: byteCount),
+                title: .unlocalized(FileViewerCopy.tooLargeTitle),
+                message: .unlocalized(FileViewerCopy.tooLargeDetail(byteCount: byteCount)),
                 icon: .description
             )
         case let .image(data, mimeType):
@@ -157,7 +157,7 @@ struct FileViewerContent: View {
     static func binaryPlaceholder(mimeType: String?) -> some View {
         OpenCodeEmptyState(
             title: "Binary file",
-            message: [mimeType, "No preview for this file type."].compactMap { $0 }.joined(separator: "\n"),
+            message: .unlocalized([mimeType, "No preview for this file type."].compactMap { $0 }.joined(separator: "\n")),
             icon: .description
         )
     }

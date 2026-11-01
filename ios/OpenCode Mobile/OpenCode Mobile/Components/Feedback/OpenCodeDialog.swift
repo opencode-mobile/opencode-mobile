@@ -12,12 +12,12 @@ private let dialogScrimAlpha: Double = 0.32
 private let dialogPresentationDuration: TimeInterval = 0.2
 
 struct OpenCodeDialogOption {
-    let title: String
+    let title: OpenCodeText
     let enabled: Bool
     let destructive: Bool
     let action: () -> Void
 
-    init(title: String, enabled: Bool = true, destructive: Bool = false, action: @escaping () -> Void) {
+    init(title: OpenCodeText, enabled: Bool = true, destructive: Bool = false, action: @escaping () -> Void) {
         self.title = title
         self.enabled = enabled
         self.destructive = destructive
@@ -27,19 +27,19 @@ struct OpenCodeDialogOption {
 
 struct OpenCodeDialogTextField {
     var text: Binding<String>
-    var hint: String = ""
-    var accessibilityLabel: String?
+    var hint: OpenCodeText = .empty
+    var accessibilityLabel: OpenCodeText?
     var kind: OpenCodeTextInputKind = .text
     var enabled = true
-    var errorMessage: String?
+    var errorMessage: OpenCodeText?
 
     init(
         text: Binding<String>,
-        hint: String = "",
-        accessibilityLabel: String? = nil,
+        hint: OpenCodeText = .empty,
+        accessibilityLabel: OpenCodeText? = nil,
         kind: OpenCodeTextInputKind = .text,
         enabled: Bool = true,
-        errorMessage: String? = nil
+        errorMessage: OpenCodeText? = nil
     ) {
         self.text = text
         self.hint = hint
@@ -52,8 +52,8 @@ struct OpenCodeDialogTextField {
 
 struct OpenCodeDialog: ViewModifier {
     @Binding var isPresented: Bool
-    let title: String
-    let subtitle: String?
+    let title: OpenCodeText
+    let subtitle: OpenCodeText?
     let primaryOption: OpenCodeDialogOption
     let secondaryOption: OpenCodeDialogOption
     let textField: OpenCodeDialogTextField?
@@ -198,8 +198,8 @@ struct OpenCodeDialogOverlayContent<Card: View>: View {
 }
 
 private struct OpenCodeDialogCard: View {
-    let title: String
-    let subtitle: String?
+    let title: OpenCodeText
+    let subtitle: OpenCodeText?
     let primaryOption: OpenCodeDialogOption
     let secondaryOption: OpenCodeDialogOption
     let textField: OpenCodeDialogTextField?
@@ -207,13 +207,13 @@ private struct OpenCodeDialogCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: dialogContentSpacing) {
             VStack(alignment: .leading, spacing: dialogTitleSubtitleSpacing) {
-                Text(title)
+                Text(openCode: title)
                     .font(OpenCodeTypography.title)
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if let subtitle, !subtitle.isEmpty {
-                    Text(subtitle)
+                    Text(openCode: subtitle)
                         .font(OpenCodeTypography.bodySecondary)
                         .foregroundStyle(OpenCodeColors.textBase)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -261,8 +261,8 @@ private struct OpenCodeDialogCard: View {
 extension View {
     func openCodeDialog(
         isPresented: Binding<Bool>,
-        title: String,
-        subtitle: String? = nil,
+        title: OpenCodeText,
+        subtitle: OpenCodeText? = nil,
         primaryOption: OpenCodeDialogOption,
         secondaryOption: OpenCodeDialogOption,
         textField: OpenCodeDialogTextField? = nil

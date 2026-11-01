@@ -138,7 +138,7 @@ struct SettingsView: View {
 
             ForEach(HomeSessionLadder.allowedWindowHours, id: \.self) { hours in
                 OpenCodeBottomSheetEntry(
-                    title: HomeSessionLadder.formatWindowHoursLabel(hours),
+                    title: .unlocalized(HomeSessionLadder.formatWindowHoursLabel(hours)),
                     selected: hours == homeDisplayPreferences.recentWindowHours,
                     action: {
                         ProductAnalytics.logUserAction(
@@ -156,8 +156,8 @@ struct SettingsView: View {
         .openCodeBottomSheet(isPresented: $showTimelineStylePicker, title: "Timeline Style") {
             ForEach(sessionChatDisplayPreferences.availableTimelineStyles, id: \.self) { style in
                 OpenCodeBottomSheetEntry(
-                    title: style.title,
-                    subtitle: style.subtitle,
+                    title: .unlocalized(style.title),
+                    subtitle: .unlocalized(style.subtitle),
                     selected: style == sessionChatDisplayPreferences.effectiveTimelineStyle,
                     action: {
                         ProductAnalytics.logUserAction(
@@ -176,8 +176,8 @@ struct SettingsView: View {
         .openCodeBottomSheet(isPresented: $showSessionRowsPicker, title: "Session rows") {
             ForEach(HomeSessionRowStyle.allCases, id: \.self) { style in
                 OpenCodeBottomSheetEntry(
-                    title: style.title,
-                    subtitle: style.subtitle,
+                    title: .unlocalized(style.title),
+                    subtitle: .unlocalized(style.subtitle),
                     selected: style == homeDisplayPreferences.sessionRowStyle,
                     action: {
                         ProductAnalytics.logUserAction(
@@ -284,6 +284,12 @@ struct SettingsView: View {
         }
     }
 
+    private var appLockSubtitle: OpenCodeText {
+        appLockAuthenticator.canAuthenticate()
+            ? "Require Face ID, Touch ID or your passcode when the app returns from the background"
+            : "Set a device passcode to use App Lock"
+    }
+
     private var settingsPane: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
@@ -304,7 +310,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "Servers",
-                        subtitle: serversSubtitleState,
+                        subtitle: .unlocalized(serversSubtitleState),
                         selected: isDetailSelected(.servers),
                         style: .card,
                         startDecorator: .letter(serversLetter, serversLetterAccent),
@@ -373,9 +379,9 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "Recent Window",
-                        subtitle: HomeSessionLadder.formatWindowHoursLabel(
+                        subtitle: .unlocalized(HomeSessionLadder.formatWindowHoursLabel(
                             homeDisplayPreferences.recentWindowHours
-                        ),
+                        )),
                         style: .card,
                         startDecorator: .icon(.list, accessibilityLabel: "Recent Window"),
                         action: {
@@ -412,7 +418,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "Timeline Style",
-                        subtitle: sessionChatDisplayPreferences.effectiveTimelineStyle.title,
+                        subtitle: .unlocalized(sessionChatDisplayPreferences.effectiveTimelineStyle.title),
                         style: .card,
                         startDecorator: .icon(.widgets, accessibilityLabel: "Timeline Style"),
                         accessory: .disclosure,
@@ -422,7 +428,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "Follow-up send",
-                        subtitle: followUpSubtitle,
+                        subtitle: .unlocalized(followUpSubtitle),
                         enabled: supportsFollowUpDelivery,
                         style: .card,
                         startDecorator: .icon(
@@ -435,7 +441,7 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     if let loadError = themeManager.loadError {
-                        OpenCodeInlineNotice(message: loadError, tone: .error)
+                        OpenCodeInlineNotice(message: .unlocalized(loadError), tone: .error)
                             .padding(.horizontal, 16)
                             .padding(.top, 4)
                     }
@@ -463,7 +469,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "Session rows",
-                        subtitle: homeDisplayPreferences.sessionRowStyle.title,
+                        subtitle: .unlocalized(homeDisplayPreferences.sessionRowStyle.title),
                         style: .card,
                         startDecorator: .icon(.list, accessibilityLabel: "Session rows"),
                         accessory: .disclosure,
@@ -479,7 +485,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "Size",
-                        subtitle: sessionCacheSizeLabel,
+                        subtitle: .unlocalized(sessionCacheSizeLabel),
                         style: .card,
                         startDecorator: .icon(.archive, accessibilityLabel: "Session Cache Size")
                     )
@@ -506,9 +512,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "App Lock",
-                        subtitle: appLockAuthenticator.canAuthenticate()
-                            ? "Require Face ID, Touch ID or your passcode when the app returns from the background"
-                            : "Set a device passcode to use App Lock",
+                        subtitle: appLockSubtitle,
                         style: .card,
                         startDecorator: .icon(.lock, accessibilityLabel: "App Lock"),
                         accessory: .toggle(
@@ -594,7 +598,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "Version",
-                        subtitle: version,
+                        subtitle: .verbatim(version),
                         style: .card,
                         startDecorator: .icon(.description, accessibilityLabel: "Version"),
                         action: { UIPasteboard.general.string = version }
@@ -603,7 +607,7 @@ struct SettingsView: View {
 
                     OpenCodeListItem(
                         title: "Build",
-                        subtitle: build,
+                        subtitle: .verbatim(build),
                         style: .card,
                         startDecorator: .icon(.settings, accessibilityLabel: "Build"),
                         action: { UIPasteboard.general.string = build }

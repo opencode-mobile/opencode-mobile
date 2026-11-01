@@ -237,7 +237,7 @@ struct ProjectListHomeView: View {
                         viewModel.requestRemoveProject(worktree: projectKey)
                     },
                     onReorderProjects: { projectKeys in
-                        let byKey = Dictionary(
+                        let byKey: [String: [String]] = Dictionary(
                             viewModel.homeProjects.map { ($0.key, $0.memberPaths) },
                             uniquingKeysWith: { first, _ in first }
                         )
@@ -247,7 +247,7 @@ struct ProjectListHomeView: View {
             }
             .openCodeBottomSheet(
                 isPresented: newSessionPickerBinding,
-                title: viewModel.worktreeCreate.state?.title ?? "New session",
+                title: .unlocalized(viewModel.worktreeCreate.state?.title ?? "New session"),
                 leadingAction: WorktreeCreateSheetChrome.backAction(viewModel.worktreeCreate),
                 keyboard: WorktreeCreateSheetChrome.keyboard(viewModel.worktreeCreate)
             ) {
@@ -261,10 +261,10 @@ struct ProjectListHomeView: View {
                     if let active = viewModel.serversChrome.active {
                         OpenCodeSectionHeader(title: "Using now")
                         OpenCodeListItem(
-                            title: active.displayName,
-                            subtitle: active.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/")),
+                            title: .verbatim(active.displayName),
+                            subtitle: .verbatim(active.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))),
                             status: ConnectionProfileListMeta.status(active, isActive: true),
-                            caption: ConnectionProfileListMeta.caption(active, isActive: true),
+                            caption: .verbatim(ifPresent: ConnectionProfileListMeta.caption(active, isActive: true)),
                             style: .card,
                             startDecorator: .letter(
                                 letterCharacter(for: active.displayName),
@@ -277,10 +277,10 @@ struct ProjectListHomeView: View {
                         OpenCodeSectionHeader(title: "Switch to")
                         ForEach(viewModel.serversChrome.others, id: \.id) { profile in
                             OpenCodeListItem(
-                                title: profile.displayName,
-                                subtitle: ConnectionProfileIdentity.hostLabel(profile.baseURL),
+                                title: .verbatim(profile.displayName),
+                                subtitle: .verbatim(ConnectionProfileIdentity.hostLabel(profile.baseURL)),
                                 status: ConnectionProfileListMeta.status(profile, isActive: false),
-                                caption: ConnectionProfileListMeta.caption(profile, isActive: false),
+                                caption: .verbatim(ifPresent: ConnectionProfileListMeta.caption(profile, isActive: false)),
                                 startDecorator: .letter(
                                     letterCharacter(for: profile.displayName),
                                     letterAccent(for: profile.id.isEmpty ? profile.displayName : profile.id)
@@ -353,8 +353,8 @@ struct ProjectListHomeView: View {
             .openCodeDialog(
                 isPresented: projectRemovalBinding,
                 title: "Remove from home?",
-                subtitle: pendingProjectRemoval.map {
-                    "Remove \"\($0.displayName)\" from home? Its sessions stay on the server."
+                subtitle: pendingProjectRemoval.map { project -> OpenCodeText in
+                    "Remove \"\(project.displayName)\" from home? Its sessions stay on the server."
                 },
                 primaryOption: OpenCodeDialogOption(
                     title: "Remove",
@@ -388,7 +388,7 @@ struct ProjectListHomeView: View {
                     ),
                     hint: "Title",
                     enabled: !viewModel.sessionRenameDialog.isSubmitting,
-                    errorMessage: viewModel.sessionRenameDialog.errorMessage
+                    errorMessage: .unlocalized(ifPresent: viewModel.sessionRenameDialog.errorMessage)
                 )
             )
             .openCodeDialog(
@@ -413,8 +413,10 @@ struct ProjectListHomeView: View {
                     ),
                     hint: "Title",
                     enabled: !viewModel.sessionForkDialog.isSubmitting,
-                    errorMessage: viewModel.sessionForkDialog.errorMessage
-                        ?? viewModel.sessionForkDialog.blockedMessage
+                    errorMessage: .unlocalized(
+                        ifPresent: viewModel.sessionForkDialog.errorMessage
+                            ?? viewModel.sessionForkDialog.blockedMessage
+                    )
                 )
             )
             .openCodeDialog(
@@ -647,7 +649,7 @@ struct ProjectListHomeView: View {
     private var homePane: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: viewModel.serversChrome.title,
+                title: .verbatim(viewModel.serversChrome.title),
                 subtitleAccessory: showsLiveUpdatesStatus
                     ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
                     : nil,
@@ -800,12 +802,12 @@ struct ProjectListHomeView: View {
         } else if case let .runIn(projectKey, _) = newSessionSheetMode,
            let runIn = projects.first(where: { $0.key == projectKey })
         {
-            OpenCodeSectionHeader(title: HomeProjectCopy.runInTitle)
+            OpenCodeSectionHeader(title: .unlocalized(HomeProjectCopy.runInTitle))
             ForEach(HomeRunInOption.options(for: runIn, sessions: homeSessions)) { option in
                 OpenCodeListItem(
-                    title: option.title,
-                    subtitle: option.subtitle,
-                    caption: option.trailing,
+                    title: .unlocalized(option.title),
+                    subtitle: .unlocalized(option.subtitle),
+                    caption: .unlocalized(ifPresent: option.trailing),
                     startDecorator: .icon(.callSplit),
                     action: {
                         ProductAnalytics.logUserAction(
@@ -825,7 +827,7 @@ struct ProjectListHomeView: View {
             )
             let others = SessionListHomeChrome.otherProjects(projects, mode: newSessionSheetMode)
             if !others.isEmpty {
-                OpenCodeSectionHeader(title: HomeProjectCopy.otherProjectsTitle)
+                OpenCodeSectionHeader(title: .unlocalized(HomeProjectCopy.otherProjectsTitle))
                 newSessionProjectEntries(others, holdPick: true, worktreesEnabled: worktreesEnabled)
             }
         } else if projects.isEmpty {
@@ -842,7 +844,7 @@ struct ProjectListHomeView: View {
     ) -> some View {
         ForEach(projects) { project in
             OpenCodeBottomSheetEntry(
-                title: project.displayName,
+                title: .verbatim(project.displayName),
                 startDecorator: .icon(.folder),
                 action: {
                     ProductAnalytics.logUserAction(
@@ -1029,7 +1031,7 @@ struct ProjectListHomeView: View {
     private func probeFailed(_ message: String) -> some View {
         OpenCodeEmptyState(
             title: "Unable to connect",
-            message: openCodeNonBlank(message, fallback: "Unable to connect."),
+            message: .verbatim(message, fallback: "Unable to connect."),
             primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                 Task { await viewModel.retryProbe() }
             },

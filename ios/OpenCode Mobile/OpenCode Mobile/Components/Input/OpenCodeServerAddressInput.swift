@@ -2,10 +2,10 @@ import SwiftUI
 
 struct OpenCodeServerAddressInput: View {
     @Binding var value: String
-    var hint: String = "Host"
-    var accessibilityLabel: String?
+    var hint: OpenCodeText = "Host"
+    var accessibilityLabel: OpenCodeText?
     var enabled = true
-    var errorMessage: String?
+    var errorMessage: OpenCodeText?
     var submitAction: OpenCodeTextInputSubmitAction = .done
     var isFocused: Binding<Bool>?
     var onSubmit: (() -> Void)?
@@ -27,16 +27,16 @@ struct OpenCodeServerAddressInput: View {
 
     init(
         value: Binding<String>,
-        hint: String = "Host",
-        accessibilityLabel: String? = nil,
+        hint: OpenCodeText = "Host",
+        accessibilityLabel: OpenCodeText? = nil,
         enabled: Bool = true,
-        errorMessage: String? = nil,
+        errorMessage: OpenCodeText? = nil,
         submitAction: OpenCodeTextInputSubmitAction = .done,
         isFocused: Binding<Bool>? = nil,
         onSubmit: (() -> Void)? = nil
     ) {
         precondition(
-            OpenCodeTextInput.resolveAccessibilityLabel(hint: hint, accessibilityLabel: accessibilityLabel) != nil,
+            OpenCodeTextInput.resolveAccessibilityLabel(hint: hint.resolved, accessibilityLabel: accessibilityLabel?.resolved) != nil,
             "OpenCodeServerAddressInput requires a non-blank hint or accessibilityLabel"
         )
         _value = value
@@ -72,7 +72,7 @@ struct OpenCodeServerAddressInput: View {
                 .accessibilityLabel("Scheme \(scheme.label)")
                 .accessibilityHint("Opens scheme picker")
 
-                TextField(hint, text: hostBinding)
+                TextField(hint.resolved, text: hostBinding)
                     .font(OpenCodeTypography.body)
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .textInputAutocapitalization(.never)
@@ -87,8 +87,8 @@ struct OpenCodeServerAddressInput: View {
                     .disabled(!enabled)
                     .accessibilityLabel(
                         OpenCodeTextInput.resolveAccessibilityLabel(
-                            hint: hint,
-                            accessibilityLabel: accessibilityLabel
+                            hint: hint.resolved,
+                            accessibilityLabel: accessibilityLabel?.resolved
                         )!
                     )
             }
@@ -101,7 +101,7 @@ struct OpenCodeServerAddressInput: View {
             .opacity(enabled ? 1 : 0.6)
 
             if let errorMessage {
-                Text(errorMessage)
+                Text(openCode: errorMessage)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.error)
             }
@@ -120,7 +120,7 @@ struct OpenCodeServerAddressInput: View {
         .openCodeBottomSheet(isPresented: $showSchemeSheet, title: "Scheme") {
             ForEach(ServerAddressScheme.allCases, id: \.self) { option in
                 OpenCodeBottomSheetEntry(
-                    title: option.label,
+                    title: .verbatim(option.label),
                     action: {
                         scheme = option
                         emit()

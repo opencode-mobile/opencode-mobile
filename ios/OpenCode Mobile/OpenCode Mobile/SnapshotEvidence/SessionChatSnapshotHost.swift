@@ -9,7 +9,7 @@ struct SessionChatSnapshotHost: View {
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: sessionTitle,
+                title: .verbatim(sessionTitle),
                 leading: .back(action: {})
             )
             // ImageRenderer collapses ScrollView + maxHeight infinity to zero

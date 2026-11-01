@@ -15,7 +15,7 @@ struct SessionBranchPillGalleryView: View {
 
             HStack(spacing: 8) {
                 ForEach(SessionBranchPillPreviewCase.allCases, id: \.self) { option in
-                    OpenCodeChoiceBadge(label: option.galleryLabel, selected: sample == option) {
+                    OpenCodeChoiceBadge(label: .verbatim(option.galleryLabel), selected: sample == option) {
                         sample = option
                     }
                 }

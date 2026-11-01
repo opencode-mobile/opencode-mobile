@@ -16,12 +16,12 @@ enum OpenCodeTagTone {
 
 /// Static capsule label.
 struct OpenCodeTag: View {
-    let title: String
+    let title: OpenCodeText
     let size: OpenCodeTagSize
     let tone: OpenCodeTagTone
 
-    init(_ title: String, size: OpenCodeTagSize = .regular, tone: OpenCodeTagTone = .neutral) {
-        precondition(!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    init(_ title: OpenCodeText, size: OpenCodeTagSize = .regular, tone: OpenCodeTagTone = .neutral) {
+        precondition(!title.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         self.title = title
         self.size = size
         self.tone = tone
@@ -44,7 +44,7 @@ struct OpenCodeTag: View {
     var body: some View {
         switch size {
         case .regular:
-            Text(title)
+            Text(openCode: title)
                 .font(OpenCodeTypography.caption)
                 .fontWeight(.bold)
                 .foregroundStyle(textColor(neutral: OpenCodeColors.textStrong))
@@ -52,7 +52,7 @@ struct OpenCodeTag: View {
                 .padding(.vertical, 5)
                 .background(fill, in: Capsule())
         case .small:
-            Text(title)
+            Text(openCode: title)
                 .font(OpenCodeTypography.caption)
                 .fontWeight(.semibold)
                 .foregroundStyle(textColor(neutral: OpenCodeColors.textWeak))

@@ -91,7 +91,7 @@ struct SessionComposerGalleryView: View {
                     HStack(spacing: 8) {
                         ForEach(SessionComposerGalleryScenario.allCases) { option in
                             OpenCodeChoiceBadge(
-                                label: option.label,
+                                label: .verbatim(option.label),
                                 selected: scenario == option,
                                 action: {
                                     scenario = option

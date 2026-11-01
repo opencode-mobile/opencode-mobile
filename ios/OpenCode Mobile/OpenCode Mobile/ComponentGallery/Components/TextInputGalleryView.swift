@@ -13,7 +13,7 @@ struct TextInputGalleryView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(OpenCodeTextInputKind.allCases, id: \.self) { option in
-                        OpenCodeChoiceBadge(label: label(option), selected: kind == option) {
+                        OpenCodeChoiceBadge(label: .verbatim(label(option)), selected: kind == option) {
                             kind = option
                             if option != .text { multiline = false }
                             text = isEmpty ? "" : sampleValue(option)
@@ -35,10 +35,10 @@ struct TextInputGalleryView: View {
             }
             OpenCodeTextInput(
                 text: $text,
-                hint: fieldHint,
+                hint: .verbatim(fieldHint),
                 kind: kind,
                 enabled: enabled,
-                errorMessage: showsError ? errorMessage : nil,
+                errorMessage: .verbatim(ifPresent: showsError ? errorMessage : nil),
                 minLines: multiline ? 4 : 1,
                 maxLines: multiline ? 8 : 1
             )

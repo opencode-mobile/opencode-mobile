@@ -216,7 +216,7 @@ struct SessionChatTimelineView: View {
             case .error:
                 OpenCodeEmptyState(
                     title: "Unable to load messages",
-                    message: openCodeNonBlank(props.errorMessage, fallback: "The timeline didn't load."),
+                    message: .verbatim(props.errorMessage, fallback: "The timeline didn't load."),
                     primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                         Task { await props.onRetry() }
                     }

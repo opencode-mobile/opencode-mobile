@@ -24,7 +24,7 @@ struct AddProjectSuggestions: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             OpenCodeListItem(
-                title: AddProjectSheetState.browseFoldersTitle,
+                title: .unlocalized(AddProjectSheetState.browseFoldersTitle),
                 subtitle: "Pick any folder on this server",
                 enabled: !sheet.isValidating,
                 startDecorator: .icon(.folder),
@@ -59,7 +59,7 @@ struct AddProjectSuggestions: View {
             } else if isListError {
                 OpenCodeEmptyState(
                     title: "Unable to list this folder",
-                    message: sheet.listError ?? AddProjectSheetState.listErrorMessage,
+                    message: .verbatim(sheet.listError, fallback: .unlocalized(AddProjectSheetState.listErrorMessage)),
                     fillsAvailableSpace: false,
                     primaryAction: OpenCodeEmptyStateAction(title: "Retry", action: onRetry)
                 )
@@ -107,9 +107,9 @@ struct AddProjectSuggestions: View {
             } else if !sheet.isValidating, !isListError, sheet.showSuggestions, index < sheet.suggestions.count {
                 let suggestion = sheet.suggestions[index]
                 OpenCodeListItem(
-                    title: suggestion.name,
-                    subtitle: suggestion.path,
-                    caption: suggestion.activityLabel,
+                    title: .verbatim(suggestion.name),
+                    subtitle: .verbatim(suggestion.path),
+                    caption: .unlocalized(ifPresent: suggestion.activityLabel),
                     startDecorator: .icon(.folder),
                     action: { onSelectSuggestion(suggestion.path) }
                 )
@@ -194,7 +194,7 @@ struct AddProjectBrowser: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
             OpenCodeActionBar(
                 target: actionBarTarget,
-                actionTitle: sheet.addTitle,
+                actionTitle: .unlocalized(sheet.addTitle),
                 enabled: sheet.addEnabled,
                 compact: isEditingPath,
                 action: onAdd
@@ -207,7 +207,7 @@ struct AddProjectBrowser: View {
         return OpenCodeActionBarTarget(
             icon: .folder,
             title: target.name,
-            tag: target.isGitRepository ? AddProjectSheetState.gitTag : nil,
+            tag: .unlocalized(ifPresent: target.isGitRepository ? AddProjectSheetState.gitTag : nil),
             subtitle: target.path
         )
     }
@@ -230,7 +230,7 @@ struct AddProjectPathChrome: View {
                     hint: "Folder path",
                     kind: .filter,
                     enabled: !sheet.isValidating,
-                    errorMessage: sheet.fieldError,
+                    errorMessage: .unlocalized(ifPresent: sheet.fieldError),
                     submitAction: .go,
                     isFocused: $isEditing,
                     onSubmit: onSubmit
@@ -250,7 +250,7 @@ struct AddProjectPathChrome: View {
                     HStack(spacing: 8) {
                         ForEach(sheet.roots) { root in
                             OpenCodeChoiceBadge(
-                                label: root.label,
+                                label: .unlocalized(root.label),
                                 selected: root.selected,
                                 enabled: !sheet.isValidating,
                                 action: { onSelectRoot(root.path) }
@@ -287,7 +287,7 @@ struct AddProjectFolderList: View {
         } else if let listError = sheet.listError {
             OpenCodeEmptyState(
                 title: "Unable to list this folder",
-                message: listError,
+                message: .verbatim(listError),
                 fillsAvailableSpace: false,
                 primaryAction: OpenCodeEmptyStateAction(title: "Retry", action: onRetry)
             )
@@ -303,9 +303,9 @@ struct AddProjectFolderList: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(sheet.entries) { entry in
                     OpenCodeListItem(
-                        title: entry.name,
-                        subtitle: entry.subtitle,
-                        titleTag: entry.isGitRepository ? AddProjectSheetState.gitTag : nil,
+                        title: .verbatim(entry.name),
+                        subtitle: .unlocalized(ifPresent: entry.subtitle),
+                        titleTag: .unlocalized(ifPresent: entry.isGitRepository ? AddProjectSheetState.gitTag : nil),
                         enabled: !sheet.isValidating,
                         startDecorator: .icon(.folder),
                         action: { onOpenFolder(entry.path) }
