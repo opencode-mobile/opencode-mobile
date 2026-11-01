@@ -90,6 +90,8 @@ class PlaygroundSession(
     }
 
     fun close() {
+        player.pause()
+        sideQuestionStore.clear()
         scope.cancel()
         viewModelStore.clear()
     }
@@ -148,7 +150,10 @@ class PlaygroundSession(
     }
 }
 
-/** Plays a scenario's steps in order; pausing keeps the next step, so play resumes there. */
+/**
+ * Plays a scenario's steps in order. Pausing keeps the next step and the time still to wait
+ * for it, so Play resumes where the script stopped.
+ */
 class PlaygroundPlayer(
     private val world: PlaygroundWorld,
     private val steps: List<PlaygroundStep>,
@@ -166,6 +171,13 @@ class PlaygroundPlayer(
     val progress: StateFlow<Progress> = _progress.asStateFlow()
     private var job: Job? = null
 
+    /** Still to wait for the next step after a pause; null means its full delay. */
+    private var remainingMs: Long? = null
+
+    /** When the current wait started and how long it is; null while not waiting. */
+    private var waitStartedAtMs: Long? = null
+    private var waitMs = 0L
+
     fun play() {
         if (job?.isActive == true || _progress.value.isFinished) return
         _progress.update { it.copy(isPlaying = true) }
@@ -174,7 +186,11 @@ class PlaygroundPlayer(
                 while (true) {
                     val index = _progress.value.nextStep
                     val step = steps.getOrNull(index) ?: break
-                    delay(step.afterMs)
+                    waitMs = remainingMs ?: step.afterMs
+                    remainingMs = null
+                    waitStartedAtMs = world.nowMs()
+                    delay(waitMs)
+                    waitStartedAtMs = null
                     world.update { step.apply(it, world.nowMs()) }
                     _progress.update { it.copy(nextStep = index + 1) }
                 }
@@ -183,6 +199,10 @@ class PlaygroundPlayer(
     }
 
     fun pause() {
+        waitStartedAtMs?.let { startedAt ->
+            remainingMs = (waitMs - (world.nowMs() - startedAt)).coerceAtLeast(0)
+        }
+        waitStartedAtMs = null
         job?.cancel()
         job = null
         _progress.update { it.copy(isPlaying = false) }

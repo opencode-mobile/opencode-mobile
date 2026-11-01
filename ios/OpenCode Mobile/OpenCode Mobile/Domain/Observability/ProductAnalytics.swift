@@ -14,6 +14,9 @@ enum ProductAnalytics {
     /// True while a `suppress()` handle is open: nothing is logged.
     static var isSuppressed: Bool { suppressions > 0 }
 
+    /// Open `suppress()` handles; tests compare it before and after.
+    static var suppressionCount: Int { suppressions }
+
     /// Stops every product event until the returned handle ends. The Session Chat Playground
     /// holds one while it is open: its fake sessions are not product use.
     static func suppress() -> Suppression {

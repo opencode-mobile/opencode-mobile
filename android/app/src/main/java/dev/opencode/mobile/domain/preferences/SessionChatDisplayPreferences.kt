@@ -105,7 +105,7 @@ object SessionChatDisplayPreferences {
 
     /** Session Chat should offer the Timeline Style picker: the stored key is exactly false. */
     val timelineStylePickerPending: Boolean
-        get() = timelineStylePickerDone == false
+        get() = !isSandboxed && timelineStylePickerDone == false
 
     /** True while the `session_chat_chip_timeline` flag allows the mode at all (OPE-269). */
     val chipTimelineAvailable: Boolean
@@ -262,7 +262,8 @@ object SessionChatDisplayPreferences {
         turnToolCalls: Int,
         nowMillis: Long,
     ): Boolean =
-        !timelineStylePickerPending &&
+        !isSandboxed &&
+            !timelineStylePickerPending &&
             ChipTimelineIntro.shouldShow(
                 chipTimelineAvailable = chipTimelineAvailable,
                 chipTimelineOn = chipTimelinePreference,
@@ -294,5 +295,63 @@ object SessionChatDisplayPreferences {
         timelineStylePickerDone = null
     }
 
-    private fun prefs() = preferences
+    private data class Snapshot(
+        val collapseConsecutiveToolCalls: Boolean,
+        val followUpDelivery: FollowUpDelivery,
+        val timelineStylePreference: SessionChatTimelineStyle,
+        val chipTimelineIntroDone: Boolean,
+        val chipTimelineIntroSnoozedUntilMillis: Long?,
+        val timelineStylePickerDone: Boolean?,
+    )
+
+    private var sandboxDepth = 0
+    private var sandboxSnapshot: Snapshot? = null
+
+    /** True while a [sandbox] handle is open. */
+    val isSandboxed: Boolean
+        get() = sandboxDepth > 0
+
+    /**
+     * Keeps every change in memory until the returned handle closes, then restores the values
+     * from before. While a sandbox is open the one-time Timeline Style picker and Chip intro are
+     * not offered. The Session Chat Playground holds one: nothing it does may change the real
+     * preferences.
+     */
+    fun sandbox(): AutoCloseable {
+        if (sandboxDepth == 0) {
+            sandboxSnapshot =
+                Snapshot(
+                    collapseConsecutiveToolCalls = collapseConsecutiveToolCalls,
+                    followUpDelivery = followUpDelivery,
+                    timelineStylePreference = timelineStylePreference,
+                    chipTimelineIntroDone = chipTimelineIntroDone,
+                    chipTimelineIntroSnoozedUntilMillis = chipTimelineIntroSnoozedUntilMillis,
+                    timelineStylePickerDone = timelineStylePickerDone,
+                )
+        }
+        sandboxDepth += 1
+        var closed = false
+        return AutoCloseable {
+            if (!closed) {
+                closed = true
+                endSandbox()
+            }
+        }
+    }
+
+    private fun endSandbox() {
+        sandboxDepth -= 1
+        if (sandboxDepth > 0) return
+        val snapshot = sandboxSnapshot ?: return
+        sandboxSnapshot = null
+        collapseConsecutiveToolCalls = snapshot.collapseConsecutiveToolCalls
+        followUpDelivery = snapshot.followUpDelivery
+        timelineStylePreference = snapshot.timelineStylePreference
+        chipTimelineIntroDone = snapshot.chipTimelineIntroDone
+        chipTimelineIntroSnoozedUntilMillis = snapshot.chipTimelineIntroSnoozedUntilMillis
+        timelineStylePickerDone = snapshot.timelineStylePickerDone
+    }
+
+    /** Where writes go; null while sandboxed, so changes stay in memory. */
+    private fun prefs() = preferences.takeIf { !isSandboxed }
 }

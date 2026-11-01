@@ -214,7 +214,8 @@ enum PlaygroundScenarios {
     // MARK: - Everything
 
     private static func everything(_ now: Int64) -> PlaygroundScenario {
-        let start = now - 50 * minute
+        // After the base history (30 minutes ago), so the timeline keeps this order.
+        let start = now - 28 * minute
         let child = C.session("pg-child-everything", "Find coupon call sites", now: now, parentID: root, agentName: "explore")
         let history: [Message] = C.baseHistory(now: now) + [
             C.userMessage(
@@ -486,7 +487,7 @@ enum PlaygroundScenarios {
 
     private static func scrolledUp(_ now: Int64) -> PlaygroundScenario {
         func reply(_ id: String, _ text: String, _ now: Int64) -> Message {
-            C.assistant(id, now - 2_000, [C.read("\(id)-t", "src/cart/totals.ts", start: now - 2_000), C.text("\(id)-x", text)], completedAt: now)
+            C.assistant(id, now, [C.read("\(id)-t", "src/cart/totals.ts", start: now), C.text("\(id)-x", text)], completedAt: now)
         }
         return PlaygroundScenario(
             id: .scrolledUp,

@@ -45,7 +45,11 @@ struct SettingsView: View {
     /// Trailing-pane sub-screen in the regular-width split view. Unused on compact.
     @State private var selectedDetail: SettingsDetail = .servers
     @State private var showComponentGallery = false
-    @State private var showSessionChatPlayground = false
+    /// The presented Session Chat Playground; SwiftUI clears it when the cover is dismissed.
+    @State private var sessionChatPlayground: SessionChatPlaygroundModel?
+    /// The same playground, kept until `onDismiss` closes it: teardown follows the cover's
+    /// dismissal, not any disappear (a cover the chat shows over it fires those too).
+    @State private var openSessionChatPlayground: SessionChatPlaygroundModel?
     @State private var showDiagnosticLogs = false
     @State private var showFeatureFlags = false
     #if HIGHLIGHT_LAB
@@ -103,8 +107,8 @@ struct SettingsView: View {
             ComponentGalleryHomeView()
         }
         // Full screen, also in the split layout: it hosts the whole Session Chat screen.
-        .fullScreenCover(isPresented: $showSessionChatPlayground) {
-            SessionChatPlaygroundView()
+        .fullScreenCover(item: $sessionChatPlayground, onDismiss: closeSessionChatPlayground) { model in
+            SessionChatPlaygroundView(model: model)
         }
         .navigationDestination(isPresented: $showFeatureFlags) {
             FeatureFlagsView()
@@ -635,7 +639,11 @@ struct SettingsView: View {
                             style: .card,
                             startDecorator: .icon(.widgets, accessibilityLabel: "Session Chat Playground"),
                             accessory: .disclosure,
-                            action: { showSessionChatPlayground = true }
+                            action: {
+                                let model = SessionChatPlaygroundModel()
+                                openSessionChatPlayground = model
+                                sessionChatPlayground = model
+                            }
                         )
                         .padding(.horizontal, 16)
                         .accessibilityIdentifier("settings.sessionChatPlayground")
@@ -698,6 +706,11 @@ struct SettingsView: View {
 
     private func isDetailSelected(_ detail: SettingsDetail) -> Bool {
         isSplitLayout && visibleDetail == detail
+    }
+
+    private func closeSessionChatPlayground() {
+        openSessionChatPlayground?.close()
+        openSessionChatPlayground = nil
     }
 
     /// The split swaps the trailing pane; stacked pushes as before.

@@ -1,6 +1,15 @@
 package dev.opencode.mobile.ui.playground
 
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.domain.message.DisplayMessage
+import dev.opencode.mobile.domain.message.FollowUpDelivery
+import dev.opencode.mobile.domain.preferences.InMemoryPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.message.DisplayMessagePreparing
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
@@ -69,15 +78,35 @@ class SessionChatPlaygroundTest {
     fun contentStaysObviouslyFake() {
         for (id in PlaygroundScenarioId.entries) {
             val scenario = PlaygroundScenarios.build(id, NOW)
-            val text =
-                scenario.finalState(NOW).messages.values.flatten().joinToString("\n") { message ->
-                    message.text + message.parts.joinToString { part -> (part as? MessagePart.Tool)?.input.toString() }
-                }
+            // Everything the world holds: titles, directories, message text, tool input, output
+            // and metadata, file names, branch, changed files, diffs and requests.
+            val text = listOf(scenario.initial, scenario.finalState(NOW)).joinToString("\n") { it.toString() }
             Regex("""https?://([a-z0-9.-]+)""").findAll(text).forEach { match ->
                 assertTrue("$id links ${match.value}", match.groupValues[1].endsWith("example.com"))
             }
             Regex("""/Users/([A-Za-z0-9_-]+)""").findAll(text).forEach { match ->
                 assertEquals("$id names a home folder", "example", match.groupValues[1])
+            }
+            scenario.initial.sessions.forEach { session ->
+                assertEquals("$id session ${session.id} lives in the fake project", PlaygroundContent.WORKTREE, session.directory)
+                assertEquals(PlaygroundContent.PROJECT_ID, session.projectId)
+            }
+            val paths = scenario.initial.changedFiles.map { it.path } + scenario.initial.turnDiff.map { it.path }
+            assertTrue("$id changes only fake project files", paths.all { it.startsWith("src/") })
+            scenario.initial.branch?.let { assertEquals(PlaygroundContent.BRANCH, it) }
+        }
+        assertTrue(PlaygroundContent.WORKTREE.startsWith("/Users/example/acme-"))
+    }
+
+    @Test
+    fun everyScenarioKeepsItsMessagesInTimeOrder() {
+        for (id in PlaygroundScenarioId.entries) {
+            val scenario = PlaygroundScenarios.build(id, NOW)
+            for (state in listOf(scenario.initial, scenario.finalState(NOW))) {
+                for ((sessionId, messages) in state.messages) {
+                    val times = messages.mapNotNull { it.sentAtEpochMs }
+                    assertEquals("$id/$sessionId is out of order", times.sorted(), times)
+                }
             }
         }
     }
@@ -207,6 +236,136 @@ class SessionChatPlaygroundTest {
             session.close()
             scope.cancel()
         }
+
+    @Test
+    fun leavingMidScriptStopsTheScript() =
+        runTest(dispatcher) {
+            val scope = CoroutineScope(SupervisorJob() + dispatcher)
+            val session = PlaygroundSession(twoStepScenario(), PlainPreparing, scope, nowMs = { dispatcher.scheduler.currentTime })
+            runCurrent()
+            assertTrue(session.player.progress.value.isPlaying)
+            advanceTimeBy(60)
+            runCurrent()
+            assertEquals("first", session.world.state.value.branch)
+
+            session.close()
+            val afterClose = session.world.state.value
+            advanceTimeBy(5_000)
+            runCurrent()
+            assertEquals(afterClose, session.world.state.value)
+            assertFalse(session.player.progress.value.isPlaying)
+            scope.cancel()
+        }
+
+    @Test
+    fun pauseThenPlayKeepsTheRemainingWait() =
+        runTest(dispatcher) {
+            val scope = CoroutineScope(SupervisorJob() + dispatcher)
+            val session = PlaygroundSession(twoStepScenario(), PlainPreparing, scope, nowMs = { dispatcher.scheduler.currentTime })
+            runCurrent()
+            advanceTimeBy(60)
+            runCurrent()
+            // The second step's 200 ms wait began at 50 ms; pause 150 ms into it.
+            advanceTimeBy(140)
+            session.player.pause()
+            assertEquals("first", session.world.state.value.branch)
+
+            session.player.play()
+            advanceTimeBy(49)
+            runCurrent()
+            assertEquals("first", session.world.state.value.branch)
+            advanceTimeBy(2)
+            runCurrent()
+            assertEquals("second", session.world.state.value.branch)
+            assertTrue(session.player.progress.value.isFinished)
+            session.close()
+            scope.cancel()
+        }
+
+    @Test
+    fun restartMidScriptStartsAFreshWorldWithoutStackingIsolation() =
+        runTest(dispatcher) {
+            val before = ProductAnalytics.suppressionCount
+            val store = ViewModelStore()
+            val viewModel =
+                ViewModelProvider.create(
+                    store,
+                    viewModelFactory { initializer { SessionChatPlaygroundViewModel(PlainPreparing) { NOW + dispatcher.scheduler.currentTime } } },
+                )[SessionChatPlaygroundViewModel::class]
+            runCurrent()
+            assertEquals(before + 1, ProductAnalytics.suppressionCount)
+            assertTrue(SessionChatDisplayPreferences.isSandboxed)
+            val first = viewModel.session.value.session
+            advanceTimeBy(3_500)
+            runCurrent()
+            assertEquals(1, first.player.progress.value.nextStep)
+
+            viewModel.restart()
+            runCurrent()
+            val second = viewModel.session.value.session
+            assertTrue(second !== first)
+            assertEquals(PlaygroundScenarioId.Everything, second.scenario.id)
+            assertEquals(0, second.player.progress.value.nextStep)
+            assertFalse(first.player.progress.value.isPlaying)
+            val firstAfterRestart = first.world.state.value
+            advanceTimeBy(5_000)
+            runCurrent()
+            assertEquals(firstAfterRestart, first.world.state.value)
+
+            viewModel.select(PlaygroundScenarioId.Quiet)
+            assertEquals(before + 1, ProductAnalytics.suppressionCount)
+
+            store.clear()
+            assertEquals(before, ProductAnalytics.suppressionCount)
+            assertFalse(SessionChatDisplayPreferences.isSandboxed)
+        }
+
+    @Test
+    fun playgroundLeavesRealPreferencesUntouched() {
+        // An updated install that has not answered the Timeline Style picker yet.
+        val stored = InMemoryPreferences()
+        stored.values["timeline_style"] = "standard"
+        stored.values["timeline_style_picker_done"] = false
+        SessionChatDisplayPreferences.initialize(stored)
+        val before = stored.values.toMap()
+        assertTrue(SessionChatDisplayPreferences.timelineStylePickerPending)
+        try {
+            val isolation = PlaygroundIsolation.begin()
+            // The one-time offers stay for the real app.
+            assertFalse(SessionChatDisplayPreferences.timelineStylePickerPending)
+            assertFalse(SessionChatDisplayPreferences.shouldOfferChipTimelineIntro(20, NOW))
+            // What Session Chat writes when the user answers them or switches delivery.
+            SessionChatDisplayPreferences.dismissTimelineStylePicker()
+            SessionChatDisplayPreferences.updateTimelineStyle(SessionChatTimelineStyle.Chips)
+            SessionChatDisplayPreferences.postponeChipTimelineIntro(NOW)
+            SessionChatDisplayPreferences.finishChipTimelineIntro()
+            SessionChatDisplayPreferences.updateFollowUpDelivery(FollowUpDelivery.Queue)
+            SessionChatDisplayPreferences.updateCollapseConsecutiveToolCalls(false)
+            assertEquals(SessionChatTimelineStyle.Chips, SessionChatDisplayPreferences.timelineStylePreference)
+            isolation.close()
+            isolation.close()
+
+            assertEquals(before, stored.values.toMap())
+            assertTrue(SessionChatDisplayPreferences.timelineStylePickerPending)
+            assertEquals(SessionChatTimelineStyle.Standard, SessionChatDisplayPreferences.timelineStylePreference)
+            assertEquals(FollowUpDelivery.Steer, SessionChatDisplayPreferences.followUpDelivery)
+            assertTrue(SessionChatDisplayPreferences.collapseConsecutiveToolCalls)
+            assertFalse(SessionChatDisplayPreferences.chipTimelineIntroDone)
+            assertFalse(SessionChatDisplayPreferences.isSandboxed)
+        } finally {
+            SessionChatDisplayPreferences.initialize(InMemoryPreferences())
+            SessionChatDisplayPreferences.clear()
+        }
+    }
+
+    private fun twoStepScenario() =
+        PlaygroundScenarios.build(PlaygroundScenarioId.Subagents, NOW).copy(
+            steps =
+                listOf(
+                    PlaygroundStep(50, "first") { state, _ -> state.copy(branch = "first") },
+                    PlaygroundStep(200, "second") { state, _ -> state.copy(branch = "second") },
+                ),
+        )
 
     private fun pill(state: PlaygroundState) =
         SessionChatBackgroundWork.pill(

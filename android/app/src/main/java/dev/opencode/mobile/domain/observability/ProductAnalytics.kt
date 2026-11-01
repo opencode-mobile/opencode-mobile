@@ -16,6 +16,10 @@ object ProductAnalytics {
     val isSuppressed: Boolean
         get() = suppressions.get() > 0
 
+    /** Open [suppress] handles; tests compare it before and after. */
+    internal val suppressionCount: Int
+        get() = suppressions.get()
+
     /**
      * Stops every product event until the returned handle closes. The Session Chat Playground
      * holds one while it is open: its fake sessions are not product use.

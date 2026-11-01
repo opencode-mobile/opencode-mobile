@@ -9,6 +9,7 @@ final class PlaygroundSession {
     let player: PlaygroundPlayer
     let chatViewModel: SessionChatViewModel
     private let activeConnectionManager: ActiveConnectionManager
+    private let sideQuestionStore: SideQuestionStore
     private var tasks: [Task<Void, Never>] = []
 
     init(scenario: PlaygroundScenario, now: @escaping () -> Int64 = PlaygroundWorld.systemNow) {
@@ -33,6 +34,7 @@ final class PlaygroundSession {
             }
             return try await sessionRepository.askSideQuestion(sessionID: sessionID, question: question)
         }
+        self.sideQuestionStore = sideQuestionStore
         let agentRepository = PlaygroundAgentRepository()
         let selectionStore = PlaygroundModelSelectionStore()
         let catalogStore = ModelCatalogStore(
@@ -60,7 +62,9 @@ final class PlaygroundSession {
             activeConnectionManager: manager,
             connectionProfileStore: PlaygroundProfileStore(),
             newSessionModelSelectionResolver: NewSessionModelSelectionResolver(store: selectionStore, modelCatalogStore: catalogStore),
-            sideQuestionStore: sideQuestionStore
+            sideQuestionStore: sideQuestionStore,
+            // Playground images are data URLs, decoded on the device; there is no server to read files from.
+            attachmentImageLoader: AttachmentImageLoader { _, _ in throw URLError(.notConnectedToInternet) }
         )
         for question in ready + running {
             _ = sideQuestionStore.ask(sessionID: scenario.boundSessionID, question: question)
@@ -89,11 +93,14 @@ final class PlaygroundSession {
     func close() {
         tasks.forEach { $0.cancel() }
         player.pause()
+        // Cancels the side questions still asking, such as Busy corner's one that never answers.
+        sideQuestionStore.clearCache()
         world.close()
     }
 }
 
-/// Plays a scenario's steps in order; pausing keeps the next step, so play resumes there.
+/// Plays a scenario's steps in order. Pausing keeps the next step and the time still to wait
+/// for it, so Play resumes where the script stopped.
 @Observable
 final class PlaygroundPlayer {
     private(set) var isPlaying = false
@@ -103,8 +110,19 @@ final class PlaygroundPlayer {
     @ObservationIgnored private let world: PlaygroundWorld
     @ObservationIgnored private let steps: [PlaygroundStep]
     @ObservationIgnored private var task: Task<Void, Never>?
+    /// Still to wait for the next step after a pause; nil means its full delay.
+    @ObservationIgnored private var remainingMs: Int64?
+    /// When the current wait started and how long it is; nil while not waiting.
+    @ObservationIgnored private var waitStartedAtMs: Int64?
+    @ObservationIgnored private var waitMs: Int64 = 0
 
     var isFinished: Bool { nextStep >= stepCount }
+
+    /// What Play would wait before the next step.
+    var nextWaitMs: Int64? {
+        guard !isFinished else { return nil }
+        return remainingMs ?? steps[nextStep].afterMs
+    }
 
     init(world: PlaygroundWorld, steps: [PlaygroundStep]) {
         self.world = world
@@ -118,8 +136,12 @@ final class PlaygroundPlayer {
         task = Task { @MainActor [weak self] in
             while let self, self.nextStep < self.steps.count {
                 let step = self.steps[self.nextStep]
-                try? await Task.sleep(for: .milliseconds(step.afterMs))
+                self.waitMs = self.remainingMs ?? step.afterMs
+                self.remainingMs = nil
+                self.waitStartedAtMs = self.world.now()
+                try? await Task.sleep(for: .milliseconds(self.waitMs))
                 if Task.isCancelled { return }
+                self.waitStartedAtMs = nil
                 self.world.update { step.apply($0, self.world.now()) }
                 self.nextStep += 1
             }
@@ -129,6 +151,10 @@ final class PlaygroundPlayer {
     }
 
     func pause() {
+        if let startedAt = waitStartedAtMs {
+            remainingMs = max(0, waitMs - (world.now() - startedAt))
+        }
+        waitStartedAtMs = nil
         task?.cancel()
         task = nil
         isPlaying = false

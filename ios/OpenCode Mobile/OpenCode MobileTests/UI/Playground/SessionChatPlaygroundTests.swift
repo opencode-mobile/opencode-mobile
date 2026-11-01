@@ -3,6 +3,7 @@ import Testing
 @testable import OpenCode_Mobile
 
 @MainActor
+@Suite(.serialized)
 struct SessionChatPlaygroundTests {
     private let now: Int64 = 1_800_000_000_000
 
@@ -25,20 +26,36 @@ struct SessionChatPlaygroundTests {
         let links = try Regex(#"https?://([a-z0-9.-]+)"#)
         let homes = try Regex(#"/Users/([A-Za-z0-9_-]+)"#)
         for id in PlaygroundScenarioID.allCases {
-            let text = PlaygroundScenarios.build(id, now: now).finalState(now: now).messages.values.flatMap { $0 }
-                .map { message in
-                    message.text + message.parts.map { part in
-                        if case let .tool(tool) = part { return String(describing: tool.input ?? [:]) }
-                        return ""
-                    }.joined()
-                }
-                .joined(separator: "\n")
+            let scenario = PlaygroundScenarios.build(id, now: now)
+            // Everything the world holds: titles, directories, message text, tool input, output
+            // and metadata, file names, branch, changed files, diffs and requests.
+            let text = [scenario.initial, scenario.finalState(now: now)].map { String(reflecting: $0) }.joined(separator: "\n")
             for match in text.matches(of: links) {
                 let host = String(text[match.output[1].range!])
                 #expect(host.hasSuffix("example.com"), "\(id) links \(host)")
             }
             for match in text.matches(of: homes) {
                 #expect(String(text[match.output[1].range!]) == "example", "\(id) names a home folder")
+            }
+            for session in scenario.initial.sessions {
+                #expect(session.directory == PlaygroundContent.worktree, "\(id) session \(session.id) lives in the fake project")
+                #expect(session.projectID == PlaygroundContent.projectID)
+            }
+            let paths = scenario.initial.changedFiles.map(\.path) + scenario.initial.turnDiff.map(\.path)
+            #expect(paths.allSatisfy { $0.hasPrefix("src/") }, "\(id) changes only fake project files")
+            if let branch = scenario.initial.branch { #expect(branch == PlaygroundContent.branch) }
+        }
+        #expect(PlaygroundContent.worktree.hasPrefix("/Users/example/acme-"))
+    }
+
+    @Test func everyScenarioKeepsItsMessagesInTimeOrder() {
+        for id in PlaygroundScenarioID.allCases {
+            let scenario = PlaygroundScenarios.build(id, now: now)
+            for state in [scenario.initial, scenario.finalState(now: now)] {
+                for (sessionID, messages) in state.messages {
+                    let times = messages.compactMap(\.sentAtEpochMs)
+                    #expect(times == times.sorted(), "\(id)/\(sessionID) is out of order")
+                }
             }
         }
     }
@@ -140,6 +157,128 @@ struct SessionChatPlaygroundTests {
         }
         #expect(await eventually { viewModel.uiState.backgroundWorkPill == nil && viewModel.uiState.permissionRequest == nil })
         viewModel.stopObserving()
+    }
+
+    @Test func leavingMidScriptStopsTheScript() async {
+        var scenario = PlaygroundScenarios.build(.subagents, now: now)
+        scenario.steps = [
+            PlaygroundStep(afterMs: 50, label: "first") { state, _ in var copy = state; copy.branch = "first"; return copy },
+            PlaygroundStep(afterMs: 150, label: "second") { state, _ in var copy = state; copy.branch = "second"; return copy },
+        ]
+        let session = PlaygroundSession(scenario: scenario)
+        await session.prepare()
+        #expect(await eventually { session.world.state.branch == "first" })
+        session.close()
+        let afterClose = session.world.state
+        try? await Task.sleep(for: .milliseconds(300))
+        #expect(session.world.state == afterClose)
+        #expect(session.world.state.branch == "first")
+        #expect(!session.player.isPlaying)
+    }
+
+    @Test func pauseThenPlayKeepsTheRemainingWait() async {
+        var scenario = PlaygroundScenarios.build(.subagents, now: now)
+        scenario.steps = [
+            PlaygroundStep(afterMs: 600, label: "only") { state, _ in var copy = state; copy.branch = "done"; return copy },
+        ]
+        let session = PlaygroundSession(scenario: scenario)
+        defer { session.close() }
+        await session.prepare()
+        try? await Task.sleep(for: .milliseconds(300))
+        session.player.pause()
+        let remaining = session.player.nextWaitMs ?? 0
+        #expect(remaining > 0 && remaining < 600, "paused with \(remaining) ms left")
+        #expect(session.world.state.branch != "done")
+
+        let resumedAt = PlaygroundWorld.systemNow()
+        session.player.play()
+        #expect(await eventually { session.world.state.branch == "done" })
+        // A full 600 ms wait again would land well after the remaining time.
+        #expect(PlaygroundWorld.systemNow() - resumedAt < 550)
+        #expect(session.player.isFinished)
+    }
+
+    @Test func restartMidScriptStartsAFreshWorld() async {
+        let preferences = SessionChatDisplayPreferences(defaults: freshDefaults("restart"))
+        let before = ProductAnalytics.suppressionCount
+        let model = SessionChatPlaygroundModel(preferences: preferences)
+        defer { model.close() }
+        #expect(await eventually { model.isReady && model.session?.player.isPlaying == true })
+        let first = model.session!
+        first.world.update { state in var copy = state; copy.branch = "changed"; return copy }
+
+        model.restart()
+        let second = model.session!
+        #expect(second !== first)
+        #expect(second.scenario.id == .everything)
+        #expect(second.world.state.branch == PlaygroundContent.branch)
+        #expect(!first.player.isPlaying)
+        #expect(await eventually { model.isReady && second.player.isPlaying })
+        // Switching scenarios does not stack isolation.
+        model.open(.quiet)
+        #expect(ProductAnalytics.suppressionCount == before + 1)
+    }
+
+    @Test func closingReleasesAnalyticsAndPreferences() {
+        let defaults = freshDefaults("close")
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+        let before = ProductAnalytics.suppressionCount
+        let model = SessionChatPlaygroundModel(preferences: preferences)
+        #expect(ProductAnalytics.suppressionCount == before + 1)
+        #expect(preferences.isSandboxed)
+
+        model.close()
+        model.close()
+        #expect(ProductAnalytics.suppressionCount == before)
+        #expect(!preferences.isSandboxed)
+        #expect(model.isClosed)
+        let session = model.session
+        model.open(.quiet)
+        #expect(model.session === session, "a closed playground opens nothing")
+    }
+
+    @Test func playgroundLeavesRealPreferencesUntouched() {
+        let defaults = freshDefaults("untouched")
+        // An updated install that has not answered the Timeline Style picker yet.
+        defaults.set("standard", forKey: "timelineStyle")
+        defaults.set(false, forKey: "timelineStylePickerDone")
+        let stored = defaults.dictionaryRepresentation().filter { Self.preferenceKeys.contains($0.key) }
+        let preferences = SessionChatDisplayPreferences(defaults: defaults)
+        #expect(preferences.timelineStylePickerPending)
+
+        let model = SessionChatPlaygroundModel(preferences: preferences)
+        // The one-time offers stay for the real app.
+        #expect(!preferences.timelineStylePickerPending)
+        #expect(!preferences.shouldOfferChipTimelineIntro(turnToolCalls: 20, nowMs: now))
+        // What Session Chat writes when the user answers them or switches delivery.
+        preferences.dismissTimelineStylePicker()
+        preferences.setTimelineStyle(.chips)
+        preferences.postponeChipTimelineIntro(nowMs: now)
+        preferences.finishChipTimelineIntro()
+        preferences.setFollowUpDelivery(.queue)
+        preferences.setCollapseConsecutiveToolCalls(false)
+        #expect(preferences.timelineStyle == .chips)
+        model.close()
+
+        let after = defaults.dictionaryRepresentation().filter { Self.preferenceKeys.contains($0.key) }
+        #expect(NSDictionary(dictionary: after).isEqual(to: stored))
+        #expect(preferences.timelineStylePickerPending)
+        #expect(preferences.timelineStyle == .standard)
+        #expect(preferences.followUpDelivery == .steer)
+        #expect(preferences.collapseConsecutiveToolCalls)
+        #expect(!preferences.chipTimelineIntroDone)
+    }
+
+    private static let preferenceKeys: Set<String> = [
+        "collapseConsecutiveToolCalls", "chipTimeline", "timelineStyle", "followUpDelivery",
+        "chipTimelineIntroDone", "chipTimelineIntroSnoozedUntilMs", "timelineStylePickerDone",
+    ]
+
+    private func freshDefaults(_ name: String) -> UserDefaults {
+        let suite = "SessionChatPlaygroundTests.\(name)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        return defaults
     }
 
     private func eventually(_ condition: () -> Bool) async -> Bool {

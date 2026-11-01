@@ -18,7 +18,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.message.DisplayMessagePreparing
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.asDisplayMessagePreparing
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
@@ -41,14 +41,15 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class SessionChatPlaygroundViewModel
-    @Inject
-    constructor(
-        contentPreparer: MessageContentPreparer,
+    internal constructor(
+        private val preparing: DisplayMessagePreparing,
+        private val nowMs: () -> Long = { System.currentTimeMillis() },
     ) : ViewModel() {
-        private val preparing = contentPreparer.asDisplayMessagePreparing()
+        @Inject
+        constructor(contentPreparer: MessageContentPreparer) : this(contentPreparer.asDisplayMessagePreparing())
 
-        // Fake sessions are not product use: no analytics while the playground is open.
-        private val analyticsSuppression = ProductAnalytics.suppress()
+        // Nothing the playground does may reach analytics or the real preferences.
+        private val isolation = PlaygroundIsolation.begin()
         private var generation = 0
         private val _session = MutableStateFlow(open(PlaygroundScenarioId.Everything))
 
@@ -64,13 +65,13 @@ class SessionChatPlaygroundViewModel
 
         private fun open(id: PlaygroundScenarioId): OpenedPlayground {
             generation += 1
-            val scenario = PlaygroundScenarios.build(id, System.currentTimeMillis())
-            return OpenedPlayground(generation, PlaygroundSession(scenario, preparing, viewModelScope))
+            val scenario = PlaygroundScenarios.build(id, nowMs())
+            return OpenedPlayground(generation, PlaygroundSession(scenario, preparing, viewModelScope, nowMs))
         }
 
         override fun onCleared() {
             _session.value.session.close()
-            analyticsSuppression.close()
+            isolation.close()
         }
     }
 

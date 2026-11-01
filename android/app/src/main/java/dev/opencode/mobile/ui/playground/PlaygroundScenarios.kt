@@ -239,7 +239,8 @@ object PlaygroundScenarios {
     // region Everything
 
     private fun everything(nowMs: Long): PlaygroundScenario {
-        val start = nowMs - 50 * MINUTE
+        // After the base history (30 minutes ago), so the timeline keeps this order.
+        val start = nowMs - 28 * MINUTE
         val child = session("pg-child-everything", "Find coupon call sites", nowMs, ROOT_SESSION_ID, "explore")
         val history =
             PlaygroundContent.baseHistory(nowMs) +
@@ -686,7 +687,7 @@ object PlaygroundScenarios {
             id: String,
             text: String,
             now: Long,
-        ) = assistant(id, now - 2_000, listOf(read("$id-t", "src/cart/totals.ts", now - 2_000), text("$id-x", text)), completedAtMs = now)
+        ) = assistant(id, now, listOf(read("$id-t", "src/cart/totals.ts", now), text("$id-x", text)), completedAtMs = now)
         return PlaygroundScenario(
             id = PlaygroundScenarioId.ScrolledUp,
             initial = state("Cart cleanup", nowMs, PlaygroundContent.longHistory(nowMs)),
