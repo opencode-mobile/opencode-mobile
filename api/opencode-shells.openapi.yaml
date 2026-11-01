@@ -1,0 +1,215 @@
+openapi: 3.1.0
+info:
+  title: opencode shells (v2, mobile subset)
+  version: 1.0.0
+  description: |
+    Agent-run shell commands on v2 servers (`/api/shell`), as the background work
+    pill reads them. v1 servers have no shell routes: the app derives running
+    shells from `bash` tool parts there.
+
+    Every agent `shell` tool call, foreground or background, creates one shell
+    with `metadata.sessionID` set to the calling session. Routes are scoped by
+    `location[directory]`; responses are `{location, data}` envelopes.
+
+    There is no output event. Poll `GET /api/shell/{id}/output` with the cursor
+    while output is on screen.
+servers:
+  - url: http://127.0.0.1:4096
+paths:
+  /api/shell:
+    get:
+      operationId: listShells
+      summary: List running shell commands for a location (exited ones are not included)
+      parameters:
+        - $ref: "#/components/parameters/LocationDirectory"
+      responses:
+        "200":
+          description: Running shells
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  location:
+                    $ref: "#/components/schemas/Location"
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ShellInfo"
+                required: [data]
+  /api/shell/{id}:
+    get:
+      operationId: getShell
+      parameters:
+        - $ref: "#/components/parameters/ShellId"
+        - $ref: "#/components/parameters/LocationDirectory"
+      responses:
+        "200":
+          description: One shell, including its exit code once exited
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  location:
+                    $ref: "#/components/schemas/Location"
+                  data:
+                    $ref: "#/components/schemas/ShellInfo"
+                required: [data]
+        "404":
+          description: Shell not found (removed)
+    delete:
+      operationId: removeShell
+      summary: Kill and remove one shell and its output
+      description: Publishes `shell.exited` with status `killed`, then `shell.deleted`. Unknown ids also answer 204.
+      parameters:
+        - $ref: "#/components/parameters/ShellId"
+        - $ref: "#/components/parameters/LocationDirectory"
+      responses:
+        "204":
+          description: Removed
+  /api/shell/{id}/output:
+    get:
+      operationId: readShellOutput
+      summary: Page through combined stdout and stderr by absolute byte cursor
+      description: |
+        Without `limit` a page holds at most 64 KiB from `cursor` (default 0).
+        A cursor at or past the end answers an empty page whose `cursor` and
+        `size` are the current total. Output stays readable after the shell
+        exits, until it is removed.
+      parameters:
+        - $ref: "#/components/parameters/ShellId"
+        - $ref: "#/components/parameters/LocationDirectory"
+        - name: cursor
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: One page of output
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  location:
+                    $ref: "#/components/schemas/Location"
+                  data:
+                    $ref: "#/components/schemas/ShellOutput"
+                required: [data]
+        "404":
+          description: Shell not found (removed)
+components:
+  parameters:
+    ShellId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: "^sh_"
+    LocationDirectory:
+      name: location[directory]
+      in: query
+      required: false
+      schema:
+        type: string
+  schemas:
+    Location:
+      type: object
+      properties:
+        directory:
+          type: string
+    ShellStatus:
+      type: string
+      enum: [running, exited, timeout, killed]
+    ShellInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          $ref: "#/components/schemas/ShellStatus"
+        command:
+          type: string
+        cwd:
+          type: string
+        shell:
+          type: string
+        file:
+          type: string
+        pid:
+          type: integer
+        exit:
+          type: number
+        signal:
+          type: string
+        metadata:
+          type: object
+          description: Caller tags. The shell tool sets `sessionID` to the calling session.
+          additionalProperties: true
+        time:
+          type: object
+          properties:
+            started:
+              type: number
+              description: Milliseconds since the Unix epoch
+            completed:
+              type: number
+          required: [started]
+      required: [id, status, command, cwd, shell, file, metadata, time]
+    ShellOutput:
+      type: object
+      properties:
+        output:
+          type: string
+        cursor:
+          type: integer
+          description: Absolute byte cursor after this page; equals size once caught up
+        size:
+          type: integer
+          description: Total bytes captured so far
+        truncated:
+          type: boolean
+      required: [output, cursor, size, truncated]
+    # Events on GET /api/event (data line: {id, created, type, location, data}).
+    ShellCreatedEvent:
+      type: object
+      properties:
+        type:
+          const: shell.created
+        data:
+          type: object
+          properties:
+            info:
+              $ref: "#/components/schemas/ShellInfo"
+    ShellExitedEvent:
+      type: object
+      properties:
+        type:
+          const: shell.exited
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+            exit:
+              type: number
+            status:
+              $ref: "#/components/schemas/ShellStatus"
+    ShellDeletedEvent:
+      type: object
+      properties:
+        type:
+          const: shell.deleted
+        data:
+          type: object
+          properties:
+            id:
+              type: string
