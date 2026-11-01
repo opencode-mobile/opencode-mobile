@@ -372,21 +372,6 @@ as documented in `docs/design-system/components/action-pill.md`.
 | `actionPill.iconSpacing` | 6 (logical px) |
 | `actionPill.shadowElevation` | 4 (logical px; Android / pre–iOS 26 fallback only) |
 
-### Syncing pill
-
-Non-interactive floating status pill for quiet cache→network sync over the
-timeline. Reuses Action pill geometry; materials follow the same floating glass
-capsule family as documented in `docs/design-system/components/syncing-pill.md`.
-
-| Token | Value |
-| --- | --- |
-| `syncingPill.minHeight` | 36 (logical px; same as `actionPill.minHeight`) |
-| `syncingPill.paddingHorizontal` | 14 (logical px) |
-| `syncingPill.paddingVertical` | 8 (logical px) |
-| `syncingPill.spinnerSize` | 14 (logical px) |
-| `syncingPill.iconSpacing` | 6 (logical px) |
-| `syncingPill.shadowElevation` | 4 (logical px; Android / pre–iOS 26 fallback only) |
-
 ### Review changes pill
 
 Contextual floating entry point for reviewing the latest completed turn's
@@ -399,22 +384,6 @@ same floating glass capsule geometry.
 | `reviewChangesPill.paddingHorizontal` | 14 (logical px) |
 | `reviewChangesPill.paddingVertical` | 8 (logical px) |
 | `reviewChangesPill.shadowElevation` | 4 (logical px; Android / pre–iOS 26 fallback only) |
-
-### Session todos pill
-
-Contextual floating entry point for the live Session Todo List. Shares the
-floating glass capsule language with Action / Review Changes pills and adds a
-max width so the active preview can truncate.
-
-| Token | Value |
-| --- | --- |
-| `sessionTodosPill.minHeight` | 36 (logical px; enforced via vertical padding) |
-| `sessionTodosPill.paddingHorizontal` | 14 (logical px) |
-| `sessionTodosPill.paddingVertical` | 8 (logical px) |
-| `sessionTodosPill.shadowElevation` | 4 (logical px; Android / pre–iOS 26 fallback only) |
-| `sessionTodosPill.statusDotSize` | 8 (logical px) |
-| `sessionTodosPill.contentSpacing` | 8 (logical px) |
-| `sessionTodosPill.maxWidth` | 320 (logical px) |
 
 ### Session todo item
 

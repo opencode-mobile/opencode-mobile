@@ -25,7 +25,6 @@ enum ComponentGalleryEntryID: String, Hashable {
     case imageGallery
     case imageViewer
     case outgoingMessage
-    case pendingPromptsStrip
     case assistantMessage
     case toolCallCard
     case toolChip
@@ -53,12 +52,9 @@ enum ComponentGalleryEntryID: String, Hashable {
     case filterTabs
     case actionPill
     case actionTile
-    case syncingPill
-    case sideQuestionPill
     case floatingPill
     case backgroundWorkPill
     case reviewChangesPill
-    case sessionTodosPill
     case sessionTodoItem
     case hunkNavigationPill
     case unifiedDiff
@@ -164,18 +160,6 @@ let componentGalleryEntries = [
         id: .actionTile,
         title: "Action Tile",
         description: "Labeled icon tile for two-column action palettes such as Commands.",
-        category: .controls
-    ),
-    ComponentGalleryEntry(
-        id: .syncingPill,
-        title: "Syncing Pill",
-        description: "Non-interactive floating status pill for quiet cache→network sync.",
-        category: .controls
-    ),
-    ComponentGalleryEntry(
-        id: .sideQuestionPill,
-        title: "Side Question Pill",
-        description: "Floating /btw status above the composer: running, answer ready, or failed with Retry.",
         category: .controls
     ),
     ComponentGalleryEntry(
@@ -359,12 +343,6 @@ let componentGalleryEntries = [
         category: .chat
     ),
     ComponentGalleryEntry(
-        id: .pendingPromptsStrip,
-        title: "Pending Prompts Strip",
-        description: "Compact capsule for steer and queued prompts waiting while a session is working.",
-        category: .chat
-    ),
-    ComponentGalleryEntry(
         id: .assistantMessage,
         title: "Assistant Message",
         description: "Leading reply card for assistant text in Session Chat.",
@@ -495,12 +473,6 @@ let componentGalleryEntries = [
         title: "Review Changes Pill",
         description: "Contextual shortcut to files changed by the latest completed turn.",
         category: .diffs
-    ),
-    ComponentGalleryEntry(
-        id: .sessionTodosPill,
-        title: "Session Todos Pill",
-        description: "Floating live Session Todo List progress and active preview.",
-        category: .session
     ),
     ComponentGalleryEntry(
         id: .sessionTodoItem,

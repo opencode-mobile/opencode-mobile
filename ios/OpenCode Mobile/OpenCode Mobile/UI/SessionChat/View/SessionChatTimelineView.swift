@@ -580,7 +580,7 @@ private struct SessionChatTimelineReadyView: View {
     private var topOverlayContent: some View {
         let pills = SessionChatContextSlotView(
             items: contextItems,
-            todosAccessibilityLabel: OpenCodeSessionTodosPill.accessibilityLabel(
+            todosAccessibilityLabel: sessionTodosPillAccessibilityLabel(
                 completedCount: props.sessionTodoCompletedCount,
                 totalCount: props.sessionTodoTotalCount,
                 activePreview: props.sessionTodoActivePreview
