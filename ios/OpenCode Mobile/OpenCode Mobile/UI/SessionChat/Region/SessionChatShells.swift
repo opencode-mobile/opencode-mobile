@@ -34,22 +34,36 @@ final class SessionChatShells {
     private let repository: any AgentShellRepository
     private let transcript = SessionChatTranscriptFeed()
     private var listTask: Task<Void, Never>?
+    /// Tells a finished list task from the one that replaced it.
+    private var listGeneration = 0
     private var stopTask: Task<Void, Never>?
+    private let nowMs: @MainActor () -> Int64
 
-    init(sessionID: String, worktree: String, repository: any AgentShellRepository) {
+    init(
+        sessionID: String,
+        worktree: String,
+        repository: any AgentShellRepository,
+        nowMs: @escaping @MainActor () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1_000) }
+    ) {
         self.sessionID = sessionID
         self.worktree = worktree
         self.repository = repository
+        self.nowMs = nowMs
     }
 
     func start() {
         guard listTask == nil, !OptimisticSessionCreate.isPlaceholder(sessionID) else { return }
-        let stream = repository.shells(sessionID: sessionID, directory: worktree, transcript: transcript.stream())
+        let stream = repository.shells(sessionID: sessionID, directory: worktree, transcript: transcriptSubscription)
+        listGeneration += 1
+        let generation = listGeneration
         listTask = Task { [weak self] in
             for await shells in stream {
                 guard let self, !Task.isCancelled else { return }
                 self.apply(shells)
             }
+            // A list that ended on its own lets the next `start()` subscribe again.
+            guard let self, self.listGeneration == generation else { return }
+            self.listTask = nil
         }
     }
 
@@ -71,6 +85,8 @@ final class SessionChatShells {
         transcript.publish(messages)
     }
 
+    var transcriptSubscriberCount: Int { transcript.subscriberCount }
+
     func openOutput(shellID: String) {
         guard let shell = state.shells.first(where: { $0.id == shellID }) else { return }
         if state.output?.shell.id == shellID { return }
@@ -91,13 +107,16 @@ final class SessionChatShells {
     /// it while the sheet is up and the app is active, so nothing polls in the background.
     func watchOutput() async {
         guard let shell = state.output?.shell else { return }
-        let stream = repository.output(shell: shell, directory: worktree, transcript: transcript.stream())
+        let stream = repository.output(shell: shell, directory: worktree, transcript: transcriptSubscription)
         for await output in stream {
             guard !Task.isCancelled else { return }
             guard state.output?.shell.id == shell.id, state.output?.output != output else { continue }
             state.output?.output = output
             onChange?()
         }
+        // The output ended on its own: the shell is gone (v2 404). Keep the last text.
+        guard !Task.isCancelled, state.output?.shell.id == shell.id else { return }
+        endOpenShellLocally()
     }
 
     func stopShell(shellID: String) {
@@ -121,17 +140,43 @@ final class SessionChatShells {
         }
     }
 
+    /// Subscribes to the transcript only when a remote reads it (v1).
+    private var transcriptSubscription: AgentShellTranscript {
+        let feed = transcript
+        return { await feed.stream() }
+    }
+
     private func apply(_ shells: [AgentShell]) {
         var next = state
         next.shells = shells
-        if var output = next.output, let latest = shells.first(where: { $0.id == output.shell.id }) {
-            output.shell = latest
-            if !latest.status.isRunning { output.isStopping = false }
+        if var output = next.output {
+            if let latest = shells.first(where: { $0.id == output.shell.id }) {
+                output.shell = latest
+                if !latest.status.isRunning { output.isStopping = false }
+            } else if output.shell.status.isRunning {
+                // Gone without an end event (missed while away, or removed): it ended.
+                output = Self.endedLocally(output, atMs: nowMs())
+            }
             next.output = output
         }
         guard next != state else { return }
         state = next
         onChange?()
+    }
+
+    private func endOpenShellLocally() {
+        guard let output = state.output, output.shell.status.isRunning else { return }
+        state.output = Self.endedLocally(output, atMs: nowMs())
+        onChange?()
+    }
+
+    /// Stopped when Stop was in flight, else exited with an unknown code.
+    private static func endedLocally(_ output: SessionChatShellOutputState, atMs: Int64) -> SessionChatShellOutputState {
+        var next = output
+        next.shell = output.shell.ended(output.isStopping ? .stopped : .exited(code: nil), atMs: atMs)
+        next.shell.finishedAtMs = atMs
+        next.isStopping = false
+        return next
     }
 }
 
@@ -141,6 +186,9 @@ final class SessionChatShells {
 final class SessionChatTranscriptFeed {
     private var latest: [Message]?
     private var continuations: [UUID: AsyncStream<[Message]>.Continuation] = [:]
+
+    /// Open subscriptions; only transcript-backed remotes (v1) hold one.
+    var subscriberCount: Int { continuations.count }
 
     func stream() -> AsyncStream<[Message]> {
         let id = UUID()

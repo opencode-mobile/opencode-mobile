@@ -9,7 +9,7 @@ struct V2AgentShellRemoteTests {
         ShellRoutingURLProtocol.reset(responses: [.json(AgentShellFixtures.listJSON)])
         let events = FakeForegroundEventStream()
         let remote = makeRemote(events: events)
-        var updates = remote.shells(sessionID: "ses_test", directory: "/tmp/project", transcript: AsyncStream { $0.finish() })
+        var updates = remote.shells(sessionID: "ses_test", directory: "/tmp/project", transcript: { AsyncStream { $0.finish() } })
             .makeAsyncIterator()
 
         let first = await updates.next()
@@ -38,7 +38,7 @@ struct V2AgentShellRemoteTests {
         let shell = AgentShellFixtures.shell(AgentShellFixtures.runningID)
 
         var outputs: [AgentShellOutput] = []
-        for await output in remote.output(shell: shell, directory: "/tmp/project", transcript: AsyncStream { $0.finish() }) {
+        for await output in remote.output(shell: shell, directory: "/tmp/project", transcript: { AsyncStream { $0.finish() } }) {
             outputs.append(output)
         }
 
@@ -86,13 +86,39 @@ struct V2AgentShellRemoteTests {
             activeConnectionManager: manager
         )
 
-        var lists: [[AgentShell]] = []
-        for await list in repository.shells(sessionID: "ses_test", directory: "/tmp/project", transcript: AsyncStream { $0.finish() }) {
-            lists.append(list)
-        }
+        var lists = repository.shells(sessionID: "ses_test", directory: "/tmp/project", transcript: { AsyncStream { $0.finish() } })
+            .makeAsyncIterator()
 
-        #expect(lists == [[]])
+        #expect(await lists.next() == [])
         #expect(ShellRoutingURLProtocol.requests.isEmpty)
+    }
+
+    @Test func coldStartPicksTheShellAPIOnceTheContractIsReadAndTheStreamConnects() async throws {
+        let probe = ShellFeatureProbe()
+        let manager = ActiveConnectionManager(connectionProbing: probe)
+        manager.apply(
+            ConnectionProfile(baseURL: "https://example.com/", username: "opencode", password: "test-password"),
+            serverProtocol: .v2
+        )
+        _ = try? await manager.probeActive()
+        #expect(!manager.capabilities.supportsAgentShells)
+        let events = FakeForegroundEventStream()
+        let shell = AgentShellFixtures.shell("sh_1")
+        let repository = DefaultAgentShellRepository(
+            v1: UnavailableAgentShellRemote(),
+            v2: FixedShellsRemote(shells: [shell]),
+            activeConnectionManager: manager,
+            eventStream: events
+        )
+        var lists = repository.shells(sessionID: "ses_test", directory: "/tmp/project", transcript: { AsyncStream { $0.finish() } })
+            .makeAsyncIterator()
+        #expect(await lists.next() == [])
+
+        probe.declaresShells = true
+        _ = try? await manager.probeActive()
+        events.emit(OpencodeEvent(type: "server.connected", sessionID: nil))
+
+        #expect(await lists.next() == [shell])
     }
 
     private func makeRemote(events: FakeForegroundEventStream) -> V2AgentShellRemote {
@@ -168,4 +194,36 @@ private final class ShellRoutingURLProtocol: URLProtocol, @unchecked Sendable {
     }
 
     override func stopLoading() {}
+}
+
+private final class ShellFeatureProbe: ConnectionProbing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _declaresShells = false
+
+    var declaresShells: Bool {
+        get { lock.withLock { _declaresShells } }
+        set { lock.withLock { _declaresShells = newValue } }
+    }
+
+    func probe(connection _: ServerConnection) async throws -> ServerProtocol { .v2 }
+
+    func probeV2Features(connection _: ServerConnection) async throws -> V2ServerFeatures {
+        V2ServerFeatures(agentShells: declaresShells)
+    }
+}
+
+/// Yields one fixed list and stays open.
+private struct FixedShellsRemote: AgentShellRemote {
+    let shells: [AgentShell]
+
+    func shells(sessionID _: String, directory _: String, transcript _: @escaping AgentShellTranscript) -> AsyncStream<[AgentShell]> {
+        let shells = shells
+        return AsyncStream { $0.yield(shells) }
+    }
+
+    func output(shell _: AgentShell, directory _: String, transcript _: @escaping AgentShellTranscript) -> AsyncStream<AgentShellOutput> {
+        AsyncStream { $0.finish() }
+    }
+
+    func stop(shell _: AgentShell, directory _: String) async throws {}
 }

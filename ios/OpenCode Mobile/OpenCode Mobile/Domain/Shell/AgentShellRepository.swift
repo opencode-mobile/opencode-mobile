@@ -14,19 +14,30 @@ nonisolated struct DefaultAgentShellRepository: AgentShellRepository {
         self.init(
             v1: V1AgentShellRemote(),
             v2: V2AgentShellRemote(api: api, eventStream: eventStream),
-            activeConnectionManager: activeConnectionManager
+            activeConnectionManager: activeConnectionManager,
+            eventStream: eventStream
         )
     }
 
-    init(v1: any AgentShellRemote, v2: any AgentShellRemote, activeConnectionManager: ActiveConnectionManager?) {
-        self.remote = ProtocolSelectedAgentShellRemote(v1: v1, v2: v2, activeConnectionManager: activeConnectionManager)
+    init(
+        v1: any AgentShellRemote,
+        v2: any AgentShellRemote,
+        activeConnectionManager: ActiveConnectionManager?,
+        eventStream: (any ForegroundEventStream)? = nil
+    ) {
+        self.remote = ProtocolSelectedAgentShellRemote(
+            v1: v1,
+            v2: v2,
+            activeConnectionManager: activeConnectionManager,
+            eventStream: eventStream
+        )
     }
 
-    func shells(sessionID: String, directory: String, transcript: AsyncStream<[Message]>) -> AsyncStream<[AgentShell]> {
+    func shells(sessionID: String, directory: String, transcript: @escaping AgentShellTranscript) -> AsyncStream<[AgentShell]> {
         remote.shells(sessionID: sessionID, directory: directory, transcript: transcript)
     }
 
-    func output(shell: AgentShell, directory: String, transcript: AsyncStream<[Message]>) -> AsyncStream<AgentShellOutput> {
+    func output(shell: AgentShell, directory: String, transcript: @escaping AgentShellTranscript) -> AsyncStream<AgentShellOutput> {
         remote.output(shell: shell, directory: directory, transcript: transcript)
     }
 
@@ -39,11 +50,11 @@ nonisolated struct DefaultAgentShellRepository: AgentShellRepository {
 nonisolated struct UnavailableAgentShellRepository: AgentShellRepository {
     private let remote = UnavailableAgentShellRemote()
 
-    func shells(sessionID: String, directory: String, transcript: AsyncStream<[Message]>) -> AsyncStream<[AgentShell]> {
+    func shells(sessionID: String, directory: String, transcript: @escaping AgentShellTranscript) -> AsyncStream<[AgentShell]> {
         remote.shells(sessionID: sessionID, directory: directory, transcript: transcript)
     }
 
-    func output(shell: AgentShell, directory: String, transcript: AsyncStream<[Message]>) -> AsyncStream<AgentShellOutput> {
+    func output(shell: AgentShell, directory: String, transcript: @escaping AgentShellTranscript) -> AsyncStream<AgentShellOutput> {
         remote.output(shell: shell, directory: directory, transcript: transcript)
     }
 

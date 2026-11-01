@@ -24,6 +24,8 @@ final class SessionChatViewModel {
     private let inbox: SessionChatInbox
     private let sideQuestions: SessionChatSideQuestions
     private let shells: SessionChatShells
+    /// The loaded messages last pushed to `shells`, so unchanged publishes push nothing.
+    @ObservationIgnored private var shellTranscript: [Message]?
     private let sessionRepository: any SessionRepository
     private let sessionReadyStore: any SessionReadyStore
     private let sessionViewReporter: any SessionViewReporter
@@ -1418,7 +1420,10 @@ final class SessionChatViewModel {
 
     /// Opens the output sheet of a running shell from the background work panel.
     func openShellOutput(id: String) {
-        logChatAction(ProductAnalytics.Action.chatOpenShellOutput)
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.sessionSubagents,
+            actionId: ProductAnalytics.Action.chatOpenShellOutput
+        )
         shells.openOutput(shellID: id)
     }
 
@@ -2052,7 +2057,11 @@ final class SessionChatViewModel {
         )
         schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
         let subagents = resolveSubagents(inboxState: inboxState, infoState: infoState)
-        shells.transcriptChanged(timeline.loadedMessages())
+        let loadedMessages = timeline.loadedMessages()
+        if loadedMessages != shellTranscript {
+            shellTranscript = loadedMessages
+            shells.transcriptChanged(loadedMessages)
+        }
         let shellsState = shells.state
         let runningShells = SessionChatBackgroundWork.runningShells(shellsState.shells)
         uiState = SessionChatUiState(
