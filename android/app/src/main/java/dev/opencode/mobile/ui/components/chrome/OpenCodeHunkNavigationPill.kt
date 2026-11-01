@@ -1,6 +1,5 @@
 package dev.opencode.mobile.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Row
@@ -36,8 +35,8 @@ fun OpenCodeHunkNavigationPill(
     Surface(
         modifier = modifier,
         shape = RoundedCornerShape(percent = 50),
-        color = openCodeColor("surface-raised-base"),
-        border = BorderStroke(1.dp, openCodeColor("border-weaker-base")),
+        color = OpenCodeFloatingPillStyle.fill(),
+        border = OpenCodeFloatingPillStyle.border(),
         shadowElevation = 4.dp,
     ) {
         Row(Modifier.width(132.dp).defaultMinSize(minHeight = 44.dp)) {
