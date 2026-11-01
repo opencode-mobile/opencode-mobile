@@ -42,7 +42,7 @@ nonisolated struct SessionChatSubagent: Equatable, Identifiable, Sendable {
 
 /// What the background work pill says.
 nonisolated struct SessionChatBackgroundWorkPill: Equatable, Sendable {
-    /// "3 subagents", or "general needs input · 2 running".
+    /// "3 subagents", "1 subagent · 2 shells", or "general needs input · 2 running".
     let label: String
     /// A subagent waits for input: amber pill with a pulsing dot.
     let needsInput: Bool
@@ -145,21 +145,48 @@ nonisolated enum SessionChatBackgroundWork {
             .first { $0 >= start }
     }
 
-    /// The pill for these rows; nil when no subagent is working or waiting.
-    static func pill(for subagents: [SessionChatSubagent]) -> SessionChatBackgroundWorkPill? {
+    /// The pill for these rows and the open session's shells; nil when nothing works or waits.
+    /// Running shells count like running subagents: "1 subagent · 2 shells", "1 shell".
+    static func pill(
+        for subagents: [SessionChatSubagent],
+        shells: [AgentShell] = []
+    ) -> SessionChatBackgroundWorkPill? {
         let waiting = subagents.filter { $0.status == .waitingForInput }
-        let running = subagents.filter { $0.status == .running }.count
+        let runningSubagents = subagents.filter { $0.status == .running }.count
+        let runningShells = shells.filter(\.status.isRunning).count
+        let running = runningSubagents + runningShells
         guard let firstWaiting = waiting.first else {
             guard running > 0 else { return nil }
-            let label = subagentCount(running)
-            return SessionChatBackgroundWorkPill(label: label, needsInput: false, accessibilityLabel: "\(label) running")
+            let label = [
+                runningSubagents > 0 ? subagentCount(runningSubagents) : nil,
+                runningShells > 0 ? shellCount(runningShells) : nil,
+            ].compactMap { $0 }.joined(separator: " · ")
+            return SessionChatBackgroundWorkPill(
+                label: label,
+                needsInput: false,
+                accessibilityLabel: "\(spokenCount(subagents: runningSubagents, shells: runningShells)) running"
+            )
         }
         let asking = waiting.count == 1
             ? "\(firstWaiting.agentName) needs input"
             : "\(subagentCount(waiting.count)) need input"
         let label = running > 0 ? "\(asking) · \(running) running" : asking
-        let spoken = running > 0 ? "\(asking), \(subagentCount(running)) running" : asking
+        let spoken = running > 0
+            ? "\(asking), \(spokenCount(subagents: runningSubagents, shells: runningShells)) running"
+            : asking
         return SessionChatBackgroundWorkPill(label: label, needsInput: true, accessibilityLabel: spoken)
+    }
+
+    /// Running shells of the panel's Shells section, in start order.
+    static func runningShells(_ shells: [AgentShell]) -> [AgentShell] {
+        shells.enumerated()
+            .filter { $0.element.status.isRunning }
+            .sorted { lhs, rhs in
+                let left = lhs.element.startedAtMs ?? .max
+                let right = rhs.element.startedAtMs ?? .max
+                return left == right ? lhs.offset < rhs.offset : left < right
+            }
+            .map(\.element)
     }
 
     /// The request the needs-input pill pages to: the first waiting subagent's permission,
@@ -215,6 +242,18 @@ nonisolated enum SessionChatBackgroundWork {
 
     private static func subagentCount(_ count: Int) -> String {
         count == 1 ? "1 subagent" : "\(count) subagents"
+    }
+
+    private static func shellCount(_ count: Int) -> String {
+        count == 1 ? "1 shell" : "\(count) shells"
+    }
+
+    /// "1 subagent and 2 shells", "2 shells", "3 subagents".
+    private static func spokenCount(subagents: Int, shells: Int) -> String {
+        [
+            subagents > 0 ? subagentCount(subagents) : nil,
+            shells > 0 ? shellCount(shells) : nil,
+        ].compactMap { $0 }.joined(separator: " and ")
     }
 
     private static func rank(_ status: SessionChatSubagentStatus) -> Int {

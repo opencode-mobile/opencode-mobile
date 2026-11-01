@@ -391,6 +391,132 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.subagents.first?.childSessionID == "child-a")
     }
 
+    // MARK: Shells (#907)
+
+    @Test func shells_v1RunningBashCallShowsInThePillAndPanel() async throws {
+        let manager = Self.makeActiveConnectionManager(serverProtocol: .v1)
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: [
+                Message(id: "user-1", role: .user, text: "Go", model: nil, mode: nil, sentAtEpochMs: 1),
+                Message(
+                    id: "assistant-1",
+                    role: .assistant,
+                    text: "",
+                    parts: [
+                        .tool(ToolPart(
+                            id: "prt-bash",
+                            toolName: "bash",
+                            status: .running,
+                            input: ["command": .string("npm test"), "description": .string("Run the tests")],
+                            metadata: ["output": .string("line 1\n")],
+                            timeStartEpochMs: 1_700_000_000_000
+                        )),
+                    ],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: 2
+                ),
+            ]),
+            activeConnectionManager: manager,
+            agentShellRepository: DefaultAgentShellRepository(
+                api: ShellAPIClient(connectionProvider: { nil }),
+                eventStream: FakeForegroundEventStream(),
+                activeConnectionManager: manager
+            )
+        )
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        try #require(await waitUntil { viewModel.uiState.shells.count == 1 })
+        #expect(viewModel.uiState.backgroundWorkPill?.label == "1 shell")
+        #expect(viewModel.uiState.shells.first?.command == "npm test")
+        #expect(viewModel.uiState.shells.first?.canStop == false)
+
+        viewModel.openShellOutput(id: "prt-bash")
+        let watch = Task { await viewModel.watchShellOutput() }
+        defer { watch.cancel() }
+        try #require(await waitUntil { viewModel.uiState.shellOutput?.output.text == "line 1\n" })
+        #expect(viewModel.uiState.shellOutput?.canStop == false)
+    }
+
+    @Test func shellOutput_staysOpenWithTheFinalStateAfterTheShellEnds() async throws {
+        let repository = FakeAgentShellRepository()
+        let viewModel = makeViewModel(agentShellRepository: repository)
+        defer { viewModel.stopObserving() }
+        let running = AgentShell(id: "sh_1", sessionID: "ses-1", command: "npm test", status: .running, startedAtMs: 1, canStop: true)
+
+        repository.yield([running])
+        try #require(await waitUntil { viewModel.uiState.shells == [running] })
+        #expect(viewModel.uiState.backgroundWorkPill?.label == "1 shell")
+        viewModel.openShellOutput(id: "sh_1")
+        #expect(viewModel.uiState.shellOutput?.output == .empty)
+        let watch = Task { await viewModel.watchShellOutput() }
+        defer { watch.cancel() }
+        repository.yieldOutput(AgentShellOutput(text: "done\n", isTruncated: false))
+        try #require(await waitUntil { viewModel.uiState.shellOutput?.output.text == "done\n" })
+
+        repository.yield([running.ended(.exited(code: 1), atMs: 9)])
+        repository.yield([])
+
+        try #require(await waitUntil { viewModel.uiState.shells.isEmpty })
+        #expect(viewModel.uiState.backgroundWorkPill == nil)
+        #expect(viewModel.uiState.shellOutput?.shell.status == .exited(code: 1))
+        #expect(viewModel.uiState.shellOutput?.output.text == "done\n")
+
+        viewModel.closeShellOutput()
+        #expect(viewModel.uiState.shellOutput == nil)
+    }
+
+    @Test func stopShell_showsStoppingUntilTheShellEnds() async throws {
+        let repository = FakeAgentShellRepository()
+        let viewModel = makeViewModel(agentShellRepository: repository)
+        defer { viewModel.stopObserving() }
+        let running = AgentShell(id: "sh_1", sessionID: "ses-1", command: "sleep 60", status: .running, startedAtMs: 1, canStop: true)
+        repository.yield([running])
+        try #require(await waitUntil { viewModel.uiState.shells.count == 1 })
+        viewModel.openShellOutput(id: "sh_1")
+
+        viewModel.stopShell(id: "sh_1")
+
+        #expect(viewModel.uiState.shellOutput?.isStopping == true)
+        try #require(await waitUntil { repository.stoppedIDs == ["sh_1"] })
+        #expect(viewModel.uiState.shellOutput?.isStopping == true)
+        repository.yield([running.ended(.stopped, atMs: 5)])
+        try #require(await waitUntil { viewModel.uiState.shellOutput?.shell.status == .stopped })
+        #expect(viewModel.uiState.shellOutput?.isStopping == false)
+        #expect(viewModel.uiState.shellOutput?.canStop == false)
+    }
+
+    @Test func stopShell_failureShowsTheErrorAndEnablesStopAgain() async throws {
+        let repository = FakeAgentShellRepository()
+        repository.stopError = ShellAPIError.httpStatus(500, nil)
+        let viewModel = makeViewModel(agentShellRepository: repository)
+        defer { viewModel.stopObserving() }
+        repository.yield([AgentShell(id: "sh_1", sessionID: "ses-1", command: "sleep 60", status: .running, canStop: true)])
+        try #require(await waitUntil { viewModel.uiState.shells.count == 1 })
+        viewModel.openShellOutput(id: "sh_1")
+
+        viewModel.stopShell(id: "sh_1")
+
+        try #require(await waitUntil { viewModel.uiState.shellOutput?.stopFailed == true })
+        #expect(viewModel.uiState.shellOutput?.isStopping == false)
+        #expect(viewModel.uiState.shellOutput?.canStop == true)
+    }
+
+    @Test func stopShell_isIgnoredWhenTheServerCannotStopIt() async throws {
+        let repository = FakeAgentShellRepository()
+        let viewModel = makeViewModel(agentShellRepository: repository)
+        defer { viewModel.stopObserving() }
+        repository.yield([AgentShell(id: "prt-1", sessionID: "ses-1", command: "ls", status: .running, canStop: false)])
+        try #require(await waitUntil { viewModel.uiState.shells.count == 1 })
+        viewModel.openShellOutput(id: "prt-1")
+
+        viewModel.stopShell(id: "prt-1")
+
+        #expect(viewModel.uiState.shellOutput?.isStopping == false)
+        #expect(repository.stoppedIDs.isEmpty)
+    }
+
     @Test func openWaitingSubagentRequest_expandsAndPagesToTheSubagentsRequestAndPulses() async throws {
         let sessionRepository = FakeChatSessionRepository(
             sessions: [
@@ -5705,7 +5831,8 @@ struct SessionChatViewModelTests {
         connectionProfileStore: any ConnectionProfileStore = EmptyConnectionProfileStore(),
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
         worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
-        sideQuestionStore: SideQuestionStore? = nil
+        sideQuestionStore: SideQuestionStore? = nil,
+        agentShellRepository: (any AgentShellRepository)? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
@@ -5765,7 +5892,8 @@ struct SessionChatViewModelTests {
             attachmentUploadRepository: attachmentUploadRepository,
             catalogRetryDelaysMs: catalogRetryDelaysMs,
             worktreeRepository: worktreeRepository,
-            worktreeInventoryCache: worktreeInventoryCache
+            worktreeInventoryCache: worktreeInventoryCache,
+            agentShellRepository: agentShellRepository ?? UnavailableAgentShellRepository()
         )
         viewModel.startObserving()
         return viewModel
@@ -7254,5 +7382,40 @@ final class FakeAttachmentUploadRepository: AttachmentUploadRepository, @uncheck
             }
             throw AttachmentUploadError.failed
         }
+    }
+}
+
+/// Hands the view model scripted shell lists and output; records Stop.
+final class FakeAgentShellRepository: AgentShellRepository, @unchecked Sendable {
+    private let lock = NSLock()
+    private let lists = AsyncStream.makeStream(of: [AgentShell].self)
+    private let outputs = AsyncStream.makeStream(of: AgentShellOutput.self)
+    private var _stoppedIDs: [String] = []
+    var stopError: Error?
+
+    var stoppedIDs: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _stoppedIDs
+    }
+
+    func yield(_ shells: [AgentShell]) { lists.continuation.yield(shells) }
+
+    func yieldOutput(_ output: AgentShellOutput) { outputs.continuation.yield(output) }
+
+    func shells(sessionID _: String, directory _: String, transcript _: AsyncStream<[Message]>) -> AsyncStream<[AgentShell]> {
+        lists.stream
+    }
+
+    func output(shell _: AgentShell, directory _: String, transcript _: AsyncStream<[Message]>) -> AsyncStream<AgentShellOutput> {
+        outputs.stream
+    }
+
+    func stop(shell: AgentShell, directory _: String) async throws {
+        lock.lock()
+        _stoppedIDs.append(shell.id)
+        let error = stopError
+        lock.unlock()
+        if let error { throw error }
     }
 }

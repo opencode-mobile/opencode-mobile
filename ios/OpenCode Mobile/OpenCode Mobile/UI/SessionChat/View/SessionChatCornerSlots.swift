@@ -123,7 +123,7 @@ struct SessionChatActivitySlotView: View {
         case .answerQuestion:
             "Answer question"
         case let .subagents(pill):
-            "\(pill.accessibilityLabel). \(pill.needsInput ? "Open request" : "Open subagents")"
+            "\(pill.accessibilityLabel). \(pill.needsInput ? "Open request" : "Open background work")"
         case .requestFailed:
             "Request failed. Show in chat"
         case let .sideQuestionsFailed(count):

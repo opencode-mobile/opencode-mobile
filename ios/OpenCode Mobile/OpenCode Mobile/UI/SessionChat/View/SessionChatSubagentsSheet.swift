@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Background work pill for Session Chat: "3 subagents" with a spinner, or the amber
-/// "general needs input · 2 running" with a pulsing dot. Opens the Subagents panel.
+/// Background work pill for Session Chat: "3 subagents" or "1 subagent · 2 shells" with a
+/// spinner, or the amber "general needs input · 2 running" with a pulsing dot. Opens the
+/// background work panel.
 struct SessionChatBackgroundWorkPillView: View {
     let pill: SessionChatBackgroundWorkPill
     var compact = false
@@ -18,24 +19,42 @@ struct SessionChatBackgroundWorkPillView: View {
     }
 }
 
-/// The Subagents panel: each subagent with its status and a live timer. Tapping a
-/// row with a known session opens it.
-struct SessionChatSubagentsList: View {
+/// The background work panel: a Subagents section (each subagent with its status and a
+/// live timer; tapping one with a known session opens it), then a Shells section (each
+/// running shell; tapping one opens its output). A section shows only when it has rows.
+struct SessionChatBackgroundWorkList: View {
     let subagents: [SessionChatSubagent]
+    var shells: [AgentShell] = []
     let onOpen: (SessionChatSubagent) -> Void
+    var onOpenShell: (AgentShell) -> Void = { _ in }
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let nowMs = Int64(context.date.timeIntervalSince1970 * 1_000)
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(subagents) { subagent in
-                    OpenCodeChildSessionRow(
-                        title: subagent.agentName,
-                        subtitle: subagent.title,
-                        elapsed: subagent.elapsed(nowMs: nowMs),
-                        status: subagent.status.rowStatus,
-                        action: subagent.childSessionID == nil ? nil : { onOpen(subagent) }
-                    )
+                if !subagents.isEmpty {
+                    OpenCodeActivitySectionLabel(text: "Subagents")
+                    ForEach(subagents) { subagent in
+                        OpenCodeChildSessionRow(
+                            title: subagent.agentName,
+                            subtitle: subagent.title,
+                            elapsed: subagent.elapsed(nowMs: nowMs),
+                            status: subagent.status.rowStatus,
+                            action: subagent.childSessionID == nil ? nil : { onOpen(subagent) }
+                        )
+                    }
+                }
+                if !shells.isEmpty {
+                    OpenCodeActivitySectionLabel(text: SessionChatShellPresentation.sectionTitle)
+                        .padding(.top, subagents.isEmpty ? 0 : 8)
+                    ForEach(shells) { shell in
+                        OpenCodeShellRow(
+                            command: shell.command,
+                            description: shell.description,
+                            elapsed: SessionChatShellPresentation.elapsed(shell, nowMs: nowMs),
+                            action: { onOpenShell(shell) }
+                        )
+                    }
                 }
             }
             .openCodeBottomSheetContentInset()
@@ -43,24 +62,36 @@ struct SessionChatSubagentsList: View {
     }
 }
 
-struct SessionChatSubagentsSheetModifier: ViewModifier {
+struct SessionChatBackgroundWorkSheetModifier: ViewModifier {
     @Binding var isPresented: Bool
     let subagents: [SessionChatSubagent]
+    let shells: [AgentShell]
     let onOpen: (SessionChatSubagent) -> Void
+    let onOpenShell: (AgentShell) -> Void
 
     func body(content: Content) -> some View {
         content
             .openCodeBottomSheet(
                 isPresented: presentedBinding,
-                title: "Subagents",
+                title: Self.title,
                 content: {
-                    SessionChatSubagentsList(subagents: subagents) { subagent in
-                        isPresented = false
-                        onOpen(subagent)
-                    }
+                    SessionChatBackgroundWorkList(
+                        subagents: subagents,
+                        shells: shells,
+                        onOpen: { subagent in
+                            isPresented = false
+                            onOpen(subagent)
+                        },
+                        onOpenShell: { shell in
+                            isPresented = false
+                            onOpenShell(shell)
+                        }
+                    )
                 }
             )
     }
+
+    static let title = "Background work"
 
     private var presentedBinding: Binding<Bool> {
         Binding(
@@ -91,11 +122,21 @@ extension SessionChatSubagentStatus {
 }
 
 extension View {
-    func sessionChatSubagentsSheet(
+    func sessionChatBackgroundWorkSheet(
         isPresented: Binding<Bool>,
         subagents: [SessionChatSubagent],
-        onOpen: @escaping (SessionChatSubagent) -> Void
+        shells: [AgentShell],
+        onOpen: @escaping (SessionChatSubagent) -> Void,
+        onOpenShell: @escaping (AgentShell) -> Void
     ) -> some View {
-        modifier(SessionChatSubagentsSheetModifier(isPresented: isPresented, subagents: subagents, onOpen: onOpen))
+        modifier(
+            SessionChatBackgroundWorkSheetModifier(
+                isPresented: isPresented,
+                subagents: subagents,
+                shells: shells,
+                onOpen: onOpen,
+                onOpenShell: onOpenShell
+            )
+        )
     }
 }

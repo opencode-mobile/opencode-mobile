@@ -334,7 +334,8 @@ struct SessionChatView: View {
                     sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
                     sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
                     sessionTodoActivePreview: viewModel.uiState.sessionTodoActivePreview?.content,
-                    hideFloatStack: showSessionTodosSheet || showSubagentsSheet,
+                    hideFloatStack: showSessionTodosSheet || showSubagentsSheet
+                        || viewModel.uiState.shellOutput != nil,
                     hideLiveRetryFailures: viewModel.uiState.retryCard != nil,
                     hideRetryCountdown: viewModel.uiState.isRetrying,
                     // Composer (+ shown snackbar) + 16 end-pin gap; Scroll to end
@@ -669,19 +670,40 @@ struct SessionChatView: View {
                 onUse: { viewModel.chooseTimelineStyleFromPicker($0) },
                 onDismiss: { viewModel.dismissTimelineStylePicker() }
             )
-            .sessionChatSubagentsSheet(
+            .sessionChatBackgroundWorkSheet(
                 isPresented: $showSubagentsSheet,
-                subagents: viewModel.uiState.subagents
-            ) { subagent in
-                guard let childID = subagent.childSessionID else { return }
-                logChatAction(ProductAnalytics.Action.chatOpenChildSession)
-                childSessionTarget = ChildSessionNavigationTarget(
-                    sessionID: childID,
-                    sessionTitle: subagent.title ?? subagent.agentName,
-                    worktree: boundSession.worktree,
-                    optimisticNavigationInstanceID: nil,
-                    parentID: session.id
-                )
+                subagents: viewModel.uiState.subagents,
+                shells: viewModel.uiState.shells,
+                onOpen: { subagent in
+                    guard let childID = subagent.childSessionID else { return }
+                    logChatAction(ProductAnalytics.Action.chatOpenChildSession)
+                    childSessionTarget = ChildSessionNavigationTarget(
+                        sessionID: childID,
+                        sessionTitle: subagent.title ?? subagent.agentName,
+                        worktree: boundSession.worktree,
+                        optimisticNavigationInstanceID: nil,
+                        parentID: session.id
+                    )
+                },
+                onOpenShell: { shell in
+                    ProductAnalytics.logScreenView(
+                        screenId: ProductAnalytics.Screen.sessionShellOutput,
+                        presentation: ProductAnalytics.Presentation.sheet,
+                        trigger: ProductAnalytics.Trigger.present
+                    )
+                    viewModel.openShellOutput(id: shell.id)
+                }
+            )
+            .sessionChatShellOutputSheet(
+                state: viewModel.uiState.shellOutput,
+                onCopy: { viewModel.shellOutputCopied() },
+                onStop: { viewModel.stopShell(id: $0) },
+                onDismiss: { viewModel.closeShellOutput() }
+            )
+            // Output is read only while its sheet is up and the app is active.
+            .task(id: shellOutputWatchKey) {
+                guard viewModel.uiState.shellOutput != nil, scenePhase == .active else { return }
+                await viewModel.watchShellOutput()
             }
             .sessionChatTodosSheet(
                 isPresented: $showSessionTodosSheet,
@@ -1069,9 +1091,15 @@ struct SessionChatView: View {
             || skillsTarget != nil
             || showSessionTodosSheet
             || showSubagentsSheet
+            || viewModel.uiState.shellOutput != nil
             || showAttachmentSources
             || activePicker != nil
             || showDeleteConfirmation
+    }
+
+    /// Restarts output reading when the open shell or the app's activity changes.
+    private var shellOutputWatchKey: String {
+        "\(viewModel.uiState.shellOutput?.shell.id ?? "")|\(scenePhase == .active)"
     }
 
     private var blocksSessionTodosSheet: Bool {
