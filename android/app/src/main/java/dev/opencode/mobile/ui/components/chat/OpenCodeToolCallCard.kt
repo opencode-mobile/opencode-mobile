@@ -88,6 +88,7 @@ fun OpenCodeToolCallCard(
                     if (onClick != null) {
                         Modifier
                             .clip(shape)
+                            .openCodeFocusRing(shape)
                             .clickable(onClick = onClick)
                     } else {
                         Modifier

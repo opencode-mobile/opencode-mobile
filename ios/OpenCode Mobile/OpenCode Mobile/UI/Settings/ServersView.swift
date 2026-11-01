@@ -102,6 +102,7 @@ struct ServersView: View {
                 }
                 .padding(.bottom, 88)
             }
+            .openCodeFocusGroup(.vertical)
             OpenCodeButton(
                 variant: .fullWidthText(title: "Add server"),
                 action: onAddServer

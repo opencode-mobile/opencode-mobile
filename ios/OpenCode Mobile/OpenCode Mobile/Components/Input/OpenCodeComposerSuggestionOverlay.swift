@@ -118,6 +118,7 @@ private struct ComposerSuggestionRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
+        .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: OpenCodeRadius.small, horizontalInset: 4), activate: action)
     }
 
     private static let iconSize: CGFloat = 16

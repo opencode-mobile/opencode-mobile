@@ -30,6 +30,7 @@ import dev.opencode.mobile.domain.security.AppLockPolicy
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.LocalOpenCodeInputFocusRegistry
 import dev.opencode.mobile.ui.diagnostic.PerformanceOverlayHost
+import dev.opencode.mobile.ui.keyboard.KeyboardFocusRoot
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHost
 import dev.opencode.mobile.ui.keyboard.LocalKeyboardShortcutHost
 import dev.opencode.mobile.ui.root.PrivacyCover
@@ -79,6 +80,7 @@ class MainActivity : FragmentActivity() {
                 }
             }
         }
+        keyboardShortcuts.systemBack = { onBackPressedDispatcher.onBackPressed() }
         setContent {
             CompositionLocalProvider(
                 LocalKeyboardShortcutHost provides keyboardShortcuts,
@@ -94,7 +96,7 @@ class MainActivity : FragmentActivity() {
                             Modifier.fillMaxSize()
                         },
                     ) {
-                        MainNavigation()
+                        KeyboardFocusRoot { MainNavigation() }
                         PerformanceOverlayHost()
                     }
                     // MainNavigation applies the theme inside itself; the cover sits beside it.
@@ -214,7 +216,7 @@ class MainActivity : FragmentActivity() {
             }
         }
         if (keyboardShortcuts.handleKeyEvent(event, currentFocus)) return true
-        return super.dispatchKeyEvent(event)
+        return keyboardShortcuts.dispatchNavigationKeyEvent(event, currentFocus) { super.dispatchKeyEvent(event) }
     }
 
     override fun onProvideKeyboardShortcuts(

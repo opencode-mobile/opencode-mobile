@@ -94,7 +94,7 @@ private struct OpenCodeAnchoredCardWindowOverlay: UIViewRepresentable {
     }
 
     final class Coordinator {
-        private var controller: OpenCodeBottomSheetHostingController<OpenCodeAnchoredCardOverlayContent>?
+        private var controller: OpenCodeOverlayHostingController<OpenCodeAnchoredCardOverlayContent>?
 
         func update(isPresented: Bool, content: OpenCodeAnchoredCardOverlayContent, hostView: UIView) {
             guard isPresented, content.anchorFrame != .zero, let window = hostView.window else {
@@ -106,10 +106,10 @@ private struct OpenCodeAnchoredCardWindowOverlay: UIViewRepresentable {
                 controller.rootView = content
                 controller.overrideUserInterfaceStyle = style
                 controller.view.frame = window.bounds
-                OpenCodeBottomSheetEscape.register(self, dismiss: content.onDismiss)
+                OpenCodeOverlayEscape.register(self, layer: controller.layer, dismiss: content.onDismiss)
                 return
             }
-            let controller = OpenCodeBottomSheetHostingController(rootView: content)
+            let controller = OpenCodeOverlayHostingController(rootView: content)
             controller.overrideUserInterfaceStyle = style
             controller.safeAreaRegions = []
             controller.view.backgroundColor = .clear
@@ -121,10 +121,8 @@ private struct OpenCodeAnchoredCardWindowOverlay: UIViewRepresentable {
             OpenCodeWindowOverlayRegistry.shared.attach(controller.view)
             self.controller = controller
             // Hardware Escape dismisses the newest window overlay, as for bottom sheets.
-            OpenCodeBottomSheetEscape.register(self, dismiss: content.onDismiss)
-            if !(UIResponder.openCodeCurrentFirstResponder() is UITextInput) {
-                controller.becomeFirstResponder()
-            }
+            OpenCodeOverlayEscape.register(self, layer: controller.layer, dismiss: content.onDismiss)
+            controller.takeEscapeFocusIfFree()
             // Move VoiceOver into the card.
             UIAccessibility.post(notification: .screenChanged, argument: controller.view)
         }
@@ -132,7 +130,7 @@ private struct OpenCodeAnchoredCardWindowOverlay: UIViewRepresentable {
         func remove() {
             guard let view = controller?.view else { return }
             OpenCodeWindowOverlayRegistry.shared.detach(view)
-            OpenCodeBottomSheetEscape.unregister(self)
+            OpenCodeOverlayEscape.unregister(self)
             controller?.resignFirstResponder()
             view.removeFromSuperview()
             controller = nil

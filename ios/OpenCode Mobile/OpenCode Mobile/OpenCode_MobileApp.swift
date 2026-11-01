@@ -13,6 +13,7 @@ struct OpenCode_MobileApp: App {
     init() {
         _ = ThemeManager.shared
         _ = OpenCodeTextInputFocusMonitor.shared
+        _ = OpenCodeKeyboardFocusState.shared
         OpenCodeReleaseObservability.initialize()
         MainThreadHangWatchdog.shared.start()
     }
@@ -29,6 +30,11 @@ struct OpenCode_MobileApp: App {
                 }
                 .background {
                     OpenCodeKeyCommandBridgeAnchor()
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+                .background {
+                    OpenCodeKeyboardAnchorView()
                         .allowsHitTesting(false)
                         .accessibilityHidden(true)
                 }

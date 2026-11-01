@@ -266,6 +266,7 @@ struct OpenCodeTopBarVerticalBarLayer: View {
         .opacity(item.enabled ? 1 : 0.5)
         .disabled(!item.enabled)
         .accessibilityLabel(item.accessibilityLabel)
+        .openCodeKeyboardFocusable(.circle, enabled: item.enabled, activate: item.action)
     }
 
     @ViewBuilder

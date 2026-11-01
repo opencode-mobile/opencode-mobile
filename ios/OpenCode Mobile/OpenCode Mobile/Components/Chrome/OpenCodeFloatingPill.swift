@@ -215,6 +215,7 @@ struct OpenCodeFloatingPill: View {
                     .buttonStyle(OpenCodeFloatingPillPressStyle())
                     .accessibilityLabel(accessibilityLabel)
                     .accessibilityAddTraits(updateTraits)
+                    .openCodeKeyboardFocusable(.capsule, activate: action)
             } else {
                 content
                     .accessibilityElement(children: .ignore)
@@ -260,6 +261,7 @@ struct OpenCodeFloatingPill: View {
         .accessibilityLabel(
             OpenCodeFloatingPillStyle.closeAccessibilityLabel(layout: layout, override: accessibilityLabelOverride)
         )
+        .openCodeKeyboardFocusable(.circle, activate: onClose)
     }
 
     @ViewBuilder

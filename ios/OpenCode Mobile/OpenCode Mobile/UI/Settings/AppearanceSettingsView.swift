@@ -52,6 +52,7 @@ struct AppearanceSettingsView: View {
                 }
                 .padding(.vertical, 16)
             }
+            .openCodeFocusGroup(.vertical)
             .openCodeReadableColumn()
         }
         .navigationBarBackButtonHidden(true)
@@ -109,6 +110,7 @@ struct ThemePickerView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
             }
+            .openCodeFocusGroup(.vertical)
             .openCodeReadableColumn()
         }
         .navigationBarBackButtonHidden(true)
@@ -159,6 +161,7 @@ struct SyntaxHighlightPickerView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
             }
+            .openCodeFocusGroup(.vertical)
             .openCodeReadableColumn()
         }
         .navigationBarBackButtonHidden(true)

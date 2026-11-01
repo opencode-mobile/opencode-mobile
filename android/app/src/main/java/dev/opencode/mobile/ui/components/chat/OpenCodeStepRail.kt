@@ -247,7 +247,13 @@ private fun StepRowContainer(
                     .heightIn(min = StepRailRowMinHeight)
                     .bleedHorizontally(StepRailPressBleed)
                     .clip(RoundedCornerShape(OpenCodeRadius.small))
-                    .then(if (onTap != null) Modifier.clickable(onClick = onTap) else Modifier)
+                    .then(
+                        if (onTap != null) {
+                            Modifier.openCodeFocusRing(RoundedCornerShape(OpenCodeRadius.small)).clickable(onClick = onTap)
+                        } else {
+                            Modifier
+                        },
+                    )
                     .padding(horizontal = StepRailPressBleed),
             contentAlignment = Alignment.CenterStart,
         ) {
@@ -376,7 +382,7 @@ private fun ChildSessionRow(
                     .clip(shape)
                     .background(tint.copy(alpha = STEP_RAIL_CHILD_TINT_ALPHA))
                     .border(BorderStroke(1.dp, tint.copy(alpha = STEP_RAIL_CHILD_BORDER_ALPHA)), shape)
-                    .then(if (item.tappable) Modifier.clickable(onClick = onTap) else Modifier)
+                    .then(if (item.tappable) Modifier.openCodeFocusRing(shape).clickable(onClick = onTap) else Modifier)
                     .padding(horizontal = StepRailChildCardPaddingHorizontal, vertical = StepRailChildCardPaddingVertical),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {

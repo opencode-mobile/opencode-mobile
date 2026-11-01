@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,8 +40,8 @@ import androidx.compose.ui.graphics.LinearGradientShader
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shader
 import androidx.compose.ui.graphics.ShaderBrush
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.AlignmentLine
 import androidx.compose.ui.layout.HorizontalAlignmentLine
@@ -60,11 +61,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
+import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.cos
-import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val ToolChipCornerRadius = OpenCodeRadius.small
 private val ToolChipPaddingStart = 8.dp
@@ -172,6 +173,7 @@ fun OpenCodeToolChip(
     val colors = toolChipColors(variant, effectiveStatus, showsRunningTreatment)
     val shape = RoundedCornerShape(ToolChipCornerRadius)
     val interactionSource = remember { MutableInteractionSource() }
+    val chipFocused by interactionSource.collectIsFocusedAsState()
     val accessibilityLabel = toolChipAccessibilityLabel(variant, status, trailingText)
 
     val chipModifier =
@@ -183,6 +185,7 @@ fun OpenCodeToolChip(
                 if (onClick != null) {
                     Modifier
                         .touchTargetShell()
+                        .openCodeFocusMemory()
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,
@@ -198,6 +201,7 @@ fun OpenCodeToolChip(
             chipModifier
                 // Never shorter than the other pills (branch, review changes, action pill).
                 .defaultMinSize(minHeight = ToolChipMinHeight)
+                .openCodeFocusRing(focused = chipFocused, shape = shape)
                 .clip(shape)
                 .background(colors.background, shape)
                 .then(

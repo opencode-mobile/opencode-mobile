@@ -28,6 +28,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.onInterceptKeyBeforeSoftKeyboard
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.contentType
@@ -96,6 +97,8 @@ fun OpenCodeTextInput(
         "OpenCodeTextInput requires a non-blank hint or accessibilityLabel"
     }
     val focusManager = LocalFocusManager.current
+    val leaveTextInput = rememberOpenCodeLeaveTextInput()
+    val hardwareKeyboard = rememberOpenCodeHardwareKeyboardConnected()
     // Keep a local TextFieldValue so selection/cursor survive recomposition when the
     // parent echoes the same text back. String-only fields can drop the
     // empty-field text toolbar (Paste) after clearing on some devices.
@@ -156,6 +159,9 @@ fun OpenCodeTextInput(
                 Modifier
                     .fillMaxWidth()
                     .onFocusChanged { reportFocus(it.isFocused) }
+                    .onInterceptKeyBeforeSoftKeyboard { event ->
+                        multiline && focusManager.moveFocusOnHardwareTab(event, hardwareKeyboard)
+                    }
                     .semantics {
                         autofillContentType?.let { contentType = it }
                         explicitAccessibilityLabel?.let { contentDescription = it }
@@ -194,7 +200,7 @@ fun OpenCodeTextInput(
                 KeyboardActions(
                     onNext = { focusManager.moveFocus(FocusDirection.Next) },
                     onDone = {
-                        focusManager.clearFocus()
+                        leaveTextInput()
                         onSubmit?.invoke()
                     },
                     onGo = { onSubmit?.invoke() },

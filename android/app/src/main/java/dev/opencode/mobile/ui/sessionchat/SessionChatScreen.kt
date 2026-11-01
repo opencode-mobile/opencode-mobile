@@ -128,7 +128,9 @@ import dev.opencode.mobile.ui.feedback.FeedbackSheet
 import dev.opencode.mobile.ui.feedback.rememberFeedbackSheetState
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutAction
+import dev.opencode.mobile.ui.keyboard.KeyboardInterruptHandler
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
+import dev.opencode.mobile.ui.keyboard.rememberKeyboardInterruptArmed
 import dev.opencode.mobile.ui.sessionchat.dictation.ComposerDictationSession
 import dev.opencode.mobile.ui.sessionchat.dictation.DictationModelDownloader
 import dev.opencode.mobile.ui.sessionchat.dictation.DictationSupport
@@ -1357,6 +1359,7 @@ private fun SessionChatScreenBody(
                                         showDictationButton = dictationSupport.showsMic,
                                         shellMode = uiState.composer.isShellMode && !sideQuestionMode,
                                         sideQuestionMode = sideQuestionMode,
+                                        suggestionsOpen = uiState.atSuggestionsVisible || uiState.slashSuggestionsVisible,
                                     )
                             }
                         // Drops attach only where the Attach button would: a prompt composer that takes attachments.
@@ -1371,6 +1374,13 @@ private fun SessionChatScreenBody(
                         ) {
                             composerFocus.requestFocus()
                         }
+                        // Esc twice interrupts a busy turn, through the same abort as Stop.
+                        KeyboardInterruptHandler(
+                            enabled = uiState.sessionStatusLabel != null && !uiState.isAborting && uiState.canMutate,
+                        ) {
+                            viewModel.abort()
+                        }
+                        val interruptArmed = rememberKeyboardInterruptArmed()
                         val dictationCard =
                             uiState.dictation?.toCardModel(
                                 elapsedLabel =
@@ -1384,6 +1394,7 @@ private fun SessionChatScreenBody(
                             modifier = Modifier.sessionChatPanelPulse(uiState.inboxPanelPulse),
                             focus = composerFocus,
                             dictation = dictationCard,
+                            interruptArmed = interruptArmed,
                             onAction = { action ->
                                 when (action) {
                                     is OpenCodeSessionComposerAction.TextChanged ->

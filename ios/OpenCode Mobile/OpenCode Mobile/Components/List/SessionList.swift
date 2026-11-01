@@ -965,6 +965,7 @@ private struct SessionListScrollView<SectionContent: View>: View {
                         sectionContent(section)
                     }
                 }
+                .openCodeFocusGroup(.vertical)
                 Color.clear.frame(height: sessionListFallbackBottomSpacer)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

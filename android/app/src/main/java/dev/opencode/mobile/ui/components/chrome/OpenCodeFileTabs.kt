@@ -119,6 +119,7 @@ private fun FileTabItem(
                 .clip(shape)
                 .background(if (selected) openCodeColor("surface-raised-base") else Color.Transparent, shape)
                 .border(1.dp, if (selected) openCodeColor("border-weak-base") else Color.Transparent, shape)
+                .openCodeFocusRing(shape)
                 .clickable(onClick = onSelect)
                 .semantics {
                     role = Role.Tab
@@ -140,6 +141,7 @@ private fun FileTabItem(
                 Modifier
                     .size(FileTabCloseTarget)
                     .clip(shape)
+                    .openCodeFocusRing(shape)
                     .clickable(role = Role.Button, onClick = onClose)
                     .semantics { contentDescription = "Close ${tab.title}" },
             contentAlignment = Alignment.Center,

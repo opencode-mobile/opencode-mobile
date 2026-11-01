@@ -101,7 +101,7 @@ struct OpenCodeDialogOverlayHost<Card: View>: UIViewRepresentable {
 
     final class Coordinator {
         private let onDismiss: () -> Void
-        private var overlayController: UIHostingController<OpenCodeDialogOverlayContent<Card>>?
+        private var overlayController: OpenCodeOverlayHostingController<OpenCodeDialogOverlayContent<Card>>?
         private var isAnimatingOut = false
 
         init(onDismiss: @escaping () -> Void) {
@@ -129,8 +129,9 @@ struct OpenCodeDialogOverlayHost<Card: View>: UIViewRepresentable {
                     overlayController.rootView = content
                     overlayController.view.frame = window.bounds
                     OpenCodeWindowOverlayRegistry.shared.attach(overlayController.view)
+                    OpenCodeOverlayEscape.register(self, layer: overlayController.layer, dismiss: onDismiss)
                 } else {
-                    let controller = UIHostingController(rootView: content)
+                    let controller = OpenCodeOverlayHostingController(rootView: content)
                     controller.view.backgroundColor = .clear
                     controller.view.frame = window.bounds
                     controller.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
@@ -138,6 +139,8 @@ struct OpenCodeDialogOverlayHost<Card: View>: UIViewRepresentable {
                     window.addSubview(controller.view)
                     OpenCodeWindowOverlayRegistry.shared.attach(controller.view)
                     overlayController = controller
+                    OpenCodeOverlayEscape.register(self, layer: controller.layer, dismiss: onDismiss)
+                    controller.takeEscapeFocusIfFree()
                     UIView.animate(withDuration: dialogPresentationDuration) {
                         controller.view.alpha = 1
                     }
@@ -150,6 +153,8 @@ struct OpenCodeDialogOverlayHost<Card: View>: UIViewRepresentable {
         private func dismissOverlay() {
             guard let overlayController else { return }
             OpenCodeWindowOverlayRegistry.shared.detach(overlayController.view)
+            OpenCodeOverlayEscape.unregister(self)
+            overlayController.resignFirstResponder()
             isAnimatingOut = true
             UIView.animate(withDuration: dialogPresentationDuration, animations: {
                 overlayController.view.alpha = 0
@@ -248,6 +253,7 @@ private struct OpenCodeDialogCard: View {
                 )
                 .frame(maxWidth: .infinity)
             }
+            .openCodeFocusGroup(.horizontal)
         }
         .padding(.horizontal, dialogPaddingHorizontal)
         .padding(.vertical, dialogPaddingVertical)

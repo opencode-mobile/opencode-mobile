@@ -170,6 +170,7 @@ struct OpenCodeActivityCard: View {
             .accessibilityLabel(headerAccessibilityLabel(startedAtMs: startedAtMs))
             .accessibilityHint("Opens activity")
             .accessibilityAddTraits(.isButton)
+            .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: ActivityCardMetrics.cornerRadius), activate: onOpen)
 
             if !agents.isEmpty {
                 agentSection
@@ -206,6 +207,7 @@ struct OpenCodeActivityCard: View {
                         .padding(.horizontal, ActivityCardMetrics.paddingHorizontal)
                 }
                 .buttonStyle(.plain)
+                .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: OpenCodeRadius.small, horizontalInset: 4), activate: { onAgentTap(agent.id) })
             }
         }
     }
@@ -245,6 +247,7 @@ struct OpenCodeActivityCard: View {
         .accessibilityLabel(footerAccessibilityLabel)
         .accessibilityHint("Opens activity")
         .accessibilityAddTraits(.isButton)
+        .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: ActivityCardMetrics.cornerRadius), activate: onOpen)
     }
 
     private var footerContent: some View {
@@ -323,6 +326,7 @@ struct OpenCodeActivityCard: View {
         )
         .accessibilityHint("Opens activity")
         .accessibilityAddTraits(.isButton)
+        .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: ActivityCardMetrics.cornerRadius), activate: onOpen)
     }
 
     private func settledText(stepCount: Int) -> Text {

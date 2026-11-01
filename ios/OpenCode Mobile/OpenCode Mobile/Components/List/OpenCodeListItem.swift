@@ -189,6 +189,34 @@ struct OpenCodeListItem<Trailing: View>: View {
     }
 
     var body: some View {
+        rowBody
+            .openCodeKeyboardFocusable(focusRing, enabled: enabled && keyboardActivate != nil, activate: keyboardActivate)
+    }
+
+    /// Return / Space: the row action; a toggle row flips its switch; a row with
+    /// only a long-press runs that (its actions menu).
+    private var keyboardActivate: (() -> Void)? {
+        if let action { return action }
+        if case let .toggle(isOn, _) = accessory { return { isOn.wrappedValue.toggle() } }
+        return onLongPress
+    }
+
+    /// Plain rows ring the same inset highlight as selection; cards ring their border.
+    private var focusRing: OpenCodeFocusRingShape {
+        switch style {
+        case .plain:
+            .insetRoundedRectangle(
+                cornerRadius: listItemSelectionCornerRadius,
+                horizontalInset: listItemSelectionHorizontalInset,
+                verticalInset: listItemSelectionVerticalInset
+            )
+        case .card:
+            .roundedRectangle(cornerRadius: listItemCornerRadius)
+        }
+    }
+
+    @ViewBuilder
+    private var rowBody: some View {
         Group {
             if let onLongPress {
                 // Gestures must sit above Text in an overlay. Putting onTap/onLongPress

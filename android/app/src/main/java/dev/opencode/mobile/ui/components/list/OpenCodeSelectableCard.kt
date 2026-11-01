@@ -51,7 +51,7 @@ fun OpenCodeSelectableCard(
                     } else {
                         Modifier
                     },
-                )
+                ).openCodeFocusRing(shape)
                 .clickable(role = Role.Button, onClick = onClick)
                 .semantics { this.selected = selected }
                 .padding(12.dp),

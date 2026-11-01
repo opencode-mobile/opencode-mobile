@@ -96,6 +96,7 @@ struct OpenCodeSectionHeader: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(label)
+            .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: OpenCodeRadius.small), activate: action)
         case nil:
             EmptyView()
         }

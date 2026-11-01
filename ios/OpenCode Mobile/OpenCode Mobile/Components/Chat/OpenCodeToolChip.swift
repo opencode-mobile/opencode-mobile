@@ -68,6 +68,7 @@ struct OpenCodeToolChip: View {
                     chipContent
                 }
                 .buttonStyle(.plain)
+                .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: Self.cornerRadius), activate: action)
             } else {
                 chipContent
             }

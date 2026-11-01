@@ -677,67 +677,6 @@ final class OpenCodeBottomSheetPresentation {
     var dragOffset: CGFloat = 0
 }
 
-/// Hardware-keyboard Escape for window-level sheets: dismisses the newest
-/// presented sheet. Each sheet's hosting controller carries the command and
-/// takes first responder when nothing else holds it.
-enum OpenCodeBottomSheetEscape {
-    private static var sheets: [(owner: ObjectIdentifier, dismiss: () -> Void)] = []
-
-    static func makeCommand() -> UIKeyCommand {
-        let command = UIKeyCommand(
-            input: UIKeyCommand.inputEscape,
-            modifierFlags: [],
-            action: #selector(UIResponder.openCodeDismissNewestBottomSheet(_:))
-        )
-        command.wantsPriorityOverSystemBehavior = true
-        return command
-    }
-
-    /// Registers (or refreshes) a presented sheet; a new sheet becomes the newest.
-    static func register(_ owner: AnyObject, dismiss: @escaping () -> Void) {
-        let id = ObjectIdentifier(owner)
-        if let index = sheets.firstIndex(where: { $0.owner == id }) {
-            sheets[index].dismiss = dismiss
-        } else {
-            sheets.append((id, dismiss))
-        }
-    }
-
-    static func unregister(_ owner: AnyObject) {
-        sheets.removeAll { $0.owner == ObjectIdentifier(owner) }
-    }
-
-    static func dismissNewest() {
-        sheets.last?.dismiss()
-    }
-}
-
-extension UIResponder {
-    @objc fileprivate func openCodeDismissNewestBottomSheet(_ sender: UIKeyCommand) {
-        OpenCodeBottomSheetEscape.dismissNewest()
-    }
-}
-
-/// Hosts the sheet overlay. It carries the Escape command and takes first
-/// responder when nothing else holds it, so Escape reaches the sheet. The
-/// anchored card overlay reuses it for the same Escape handling.
-final class OpenCodeBottomSheetHostingController<Content: View>: UIHostingController<Content> {
-    private let escapeCommand = OpenCodeBottomSheetEscape.makeCommand()
-
-    override var canBecomeFirstResponder: Bool { true }
-
-    override var keyCommands: [UIKeyCommand]? {
-        [escapeCommand] + (super.keyCommands ?? [])
-    }
-
-    // Claim the Escape action explicitly, so the hosting controller's own action
-    // filtering cannot drop it on the way up the responder chain.
-    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-        action == #selector(UIResponder.openCodeDismissNewestBottomSheet(_:))
-            || super.canPerformAction(action, withSender: sender)
-    }
-}
-
 /// Window-level bottom sheet driven by `isPresented`.
 ///
 /// Dismiss contract (shared with Android): a dismiss gesture (scrim, Close,
@@ -836,7 +775,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
     final class Coordinator {
         private typealias OverlayContent = OpenCodeBottomSheetOverlayContent<PinnedTop, SheetContent, PinnedBottom>
 
-        private var overlayController: OpenCodeBottomSheetHostingController<OverlayContent>?
+        private var overlayController: OpenCodeOverlayHostingController<OverlayContent>?
         private let presentation = OpenCodeBottomSheetPresentation()
         private var isAnimatingOut = false
         private var dismissGeneration = 0
@@ -922,7 +861,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
             } else {
                 presentation.revealed = false
                 presentation.dragOffset = 0
-                let controller = OpenCodeBottomSheetHostingController(rootView: content)
+                let controller = OpenCodeOverlayHostingController(rootView: content)
                 configureOverlay(controller)
                 attachOverlay(controller.view, to: window)
                 OpenCodeWindowOverlayRegistry.shared.attach(controller.view)
@@ -936,8 +875,10 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
             if shouldDismissKeyboard {
                 window.endEditing(true)
             }
-            OpenCodeBottomSheetEscape.register(self, dismiss: onDismiss)
-            takeEscapeFocusIfFree()
+            if let overlayController {
+                OpenCodeOverlayEscape.register(self, layer: overlayController.layer, dismiss: onDismiss)
+            }
+            overlayController?.takeEscapeFocusIfFree()
         }
 
         func removeOverlayImmediately() {
@@ -948,7 +889,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
             if let view = overlayController?.view {
                 OpenCodeWindowOverlayRegistry.shared.detach(view)
             }
-            OpenCodeBottomSheetEscape.unregister(self)
+            OpenCodeOverlayEscape.unregister(self)
             overlayController?.resignFirstResponder()
             overlayController?.view.removeFromSuperview()
             overlayController = nil
@@ -963,19 +904,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
             }
         }
 
-        /// Escape reaches the sheet through the responder chain. A field inside
-        /// the sheet already routes there; otherwise the sheet takes first
-        /// responder, unless another text input still holds it (a sheet that
-        /// keeps the keyboard over the composer).
-        private func takeEscapeFocusIfFree() {
-            guard let overlayController, !overlayController.isFirstResponder else { return }
-            let current = UIResponder.openCodeCurrentFirstResponder()
-            if let view = current as? UIView, view.isDescendant(of: overlayController.view) { return }
-            guard !(current is UITextInput) else { return }
-            overlayController.becomeFirstResponder()
-        }
-
-        private func configureOverlay(_ controller: OpenCodeBottomSheetHostingController<OverlayContent>) {
+        private func configureOverlay(_ controller: OpenCodeOverlayHostingController<OverlayContent>) {
             controller.safeAreaRegions = []
             controller.additionalSafeAreaInsets = .zero
             controller.view.backgroundColor = .clear
@@ -998,7 +927,7 @@ private struct OpenCodeBottomSheetOverlayHost<PinnedTop: View, SheetContent: Vie
         private func dismissOverlay() {
             guard let overlayController else { return }
             OpenCodeWindowOverlayRegistry.shared.detach(overlayController.view)
-            OpenCodeBottomSheetEscape.unregister(self)
+            OpenCodeOverlayEscape.unregister(self)
             overlayController.resignFirstResponder()
             isAnimatingOut = true
             dismissGeneration += 1
@@ -1249,6 +1178,7 @@ struct OpenCodeBottomSheetEntry: View {
         .buttonStyle(OpenCodeBottomSheetEntryPressStyle(enabled: enabled))
         .disabled(!enabled)
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: OpenCodeRadius.small), enabled: enabled, activate: action)
     }
 }
 
@@ -1400,6 +1330,7 @@ private struct OpenCodeBottomSheetContainer<PinnedTop: View, SheetContent: View,
         VStack(spacing: 0) {
             content()
         }
+        .openCodeFocusGroup(.vertical)
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
         .background(

@@ -195,7 +195,7 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
 
     final class Coordinator {
         private let onDismiss: () -> Void
-        private var overlayController: UIHostingController<OpenCodeOverflowMenuOverlayContent>?
+        private var overlayController: OpenCodeOverlayHostingController<OpenCodeOverflowMenuOverlayContent>?
 
         init(onDismiss: @escaping () -> Void) {
             self.onDismiss = onDismiss
@@ -218,7 +218,7 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
 
             if isPresented, anchorFrame != .zero {
                 if overlayController == nil {
-                    let controller = UIHostingController(
+                    let controller = OpenCodeOverlayHostingController(
                         rootView: OpenCodeOverflowMenuOverlayContent(
                             anchorFrame: anchorFrame,
                             placement: placement,
@@ -233,6 +233,8 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
                     window.addSubview(controller.view)
                     OpenCodeWindowOverlayRegistry.shared.attach(controller.view)
                     overlayController = controller
+                    OpenCodeOverlayEscape.register(self, layer: controller.layer, dismiss: onDismiss)
+                    controller.takeEscapeFocusIfFree()
                 } else {
                     overlayController?.rootView = OpenCodeOverflowMenuOverlayContent(
                         anchorFrame: anchorFrame,
@@ -247,6 +249,8 @@ private struct OpenCodeOverflowMenuWindowOverlay: UIViewRepresentable {
                 if let view = overlayController?.view {
                     OpenCodeWindowOverlayRegistry.shared.detach(view)
                 }
+                OpenCodeOverlayEscape.unregister(self)
+                overlayController?.resignFirstResponder()
                 overlayController?.view.removeFromSuperview()
                 overlayController = nil
             }
@@ -361,8 +365,17 @@ private struct OpenCodeOverflowMenuPanel: View {
                 .disabled(!entry.enabled)
                 .accessibilityLabel(entry.spokenLabel)
                 .modifier(OverflowEntryIdentifier(identifier: entry.accessibilityIdentifier))
+                .openCodeKeyboardFocusable(
+                    .insetRoundedRectangle(cornerRadius: OpenCodeRadius.small, horizontalInset: 4),
+                    enabled: entry.enabled,
+                    activate: {
+                        entry.action()
+                        onEntrySelected()
+                    }
+                )
             }
         }
+        .openCodeFocusGroup(.vertical)
         .padding(.vertical, overflowMenuPaddingVertical)
         .fixedSize(horizontal: true, vertical: true)
         .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: overflowMenuCornerRadius))

@@ -45,6 +45,7 @@ struct OpenCodeToolCallCard: View {
                     cardContent
                 }
                 .buttonStyle(.plain)
+                .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: Self.cornerRadius), activate: action)
             } else {
                 cardContent
             }

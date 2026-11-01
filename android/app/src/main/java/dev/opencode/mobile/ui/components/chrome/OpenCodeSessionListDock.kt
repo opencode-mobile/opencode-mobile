@@ -8,6 +8,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
@@ -49,6 +50,11 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
@@ -321,6 +327,32 @@ fun SessionListScopeControl(
                 .fillMaxWidth()
                 .clip(ScopeControlShape)
                 .background(dockControlFill())
+                // Keyboard: Return or Space opens the scope list; Left and Right page projects like a swipe.
+                .onKeyEvent { event ->
+                    if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+                    when (event.key) {
+                        Key.Enter, Key.NumPadEnter, Key.Spacebar, Key.DirectionCenter -> {
+                            latestOnOpen()
+                            true
+                        }
+                        Key.DirectionLeft ->
+                            if (latestCanGoPrevious && !isSwitching) {
+                                startSwitch(SessionListScopePaging.Direction.Previous, from = 0f)
+                                true
+                            } else {
+                                false
+                            }
+                        Key.DirectionRight ->
+                            if (latestCanGoNext && !isSwitching) {
+                                startSwitch(SessionListScopePaging.Direction.Next, from = 0f)
+                                true
+                            } else {
+                                false
+                            }
+                        else -> false
+                    }
+                }.openCodeFocusRing(ScopeControlShape)
+                .focusable()
                 .pointerInput(shownTabId, isSwitching) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
@@ -829,6 +861,7 @@ fun SessionListWorktreesPill(
             modifier
                 .clip(RoundedCornerShape(percent = 50))
                 .background(textStrong.copy(alpha = if (enabled) 0.08f else 0.04f))
+                .openCodeFocusRing(RoundedCornerShape(percent = 50))
                 .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
                 .semantics { this.contentDescription = contentDescription }
                 .heightIn(min = 28.dp)
@@ -941,6 +974,7 @@ private fun DockCta(
             modifier
                 .clip(shape)
                 .background(fill)
+                .openCodeFocusRing(shape)
                 .then(interaction),
         contentAlignment = Alignment.Center,
     ) {

@@ -55,6 +55,7 @@ struct OpenCodeSelectableCard<Preview: View>: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: selectableCardCornerRadius), activate: action)
     }
 }
 

@@ -71,6 +71,7 @@ struct OpenCodeAttachmentChip: View {
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(attachment.filename), \(attachment.detailLabel)")
                 .accessibilityAddTraits(.isButton)
+                .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: OpenCodeRadius.small), activate: { onOpen(attachment.id) })
             } else {
                 chipLabel
                     .accessibilityElement(children: .ignore)
@@ -84,6 +85,7 @@ struct OpenCodeAttachmentChip: View {
             .accessibilityLabel(
                 attachment.uploadFraction == nil ? "Remove \(attachment.filename)" : "Cancel upload of \(attachment.filename)"
             )
+            .openCodeKeyboardFocusable(.circle, activate: { onRemove(attachment.id) })
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)

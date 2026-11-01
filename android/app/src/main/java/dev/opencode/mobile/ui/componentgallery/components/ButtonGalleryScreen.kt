@@ -9,9 +9,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
@@ -34,6 +39,8 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
     var sizeName by rememberSaveable { mutableStateOf(OpenCodeButtonSize.Medium.name) }
     var contrastName by rememberSaveable { mutableStateOf(OpenCodeButtonContrast.High.name) }
     var enabled by rememberSaveable { mutableStateOf(true) }
+    val sampleFocus = remember { FocusRequester() }
+    val inputModeManager = LocalInputModeManager.current
 
     val variantSelection =
         try {
@@ -87,6 +94,15 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OpenCodeChoiceBadge(label = "Enabled", selected = enabled, onClick = { enabled = !enabled })
+            // Keyboard focus shows the design-system focus ring; Tab moves it with a hardware keyboard.
+            OpenCodeChoiceBadge(
+                label = "Show focus ring",
+                selected = false,
+                onClick = {
+                    inputModeManager.requestInputMode(InputMode.Keyboard)
+                    runCatching { sampleFocus.requestFocus() }
+                },
+            )
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -125,6 +141,7 @@ fun ButtonGalleryScreen(modifier: Modifier = Modifier) {
             contrast = contrastSelection,
             size = sizeSelection,
             onClick = {},
+            modifier = Modifier.focusRequester(sampleFocus),
         )
     }
 }

@@ -207,6 +207,7 @@ final class OpenCodeTextInputFocusMonitor {
         guard input === editingInput || editingInput == nil else { return }
         editingInput = nil
         update(.none)
+        OpenCodeKeyboardAnchor.reclaimSoon()
     }
 
     private func update(_ next: OpenCodeTextInputFocus) {

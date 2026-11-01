@@ -73,6 +73,7 @@ struct SessionChatView: View {
     @State private var keyboardGlideAnimation: Animation?
     /// Bumped by the Focus Composer keyboard shortcut.
     @State private var composerFocusRequest = 0
+    @State private var keyboardInterruptOwner = UUID()
     /// False while another screen is pushed over this chat.
     @State private var isOnScreen = false
     /// This screen's lease on a view model it may share with the other Home layout.
@@ -1032,6 +1033,23 @@ struct SessionChatView: View {
                 .focusComposer,
                 action: acceptsComposerFocusShortcut ? { composerFocusRequest += 1 } : nil
             )
+            // Esc twice interrupts the running turn, like the TUI; same path as Stop.
+            .onChange(of: isOnScreen && keyboardInterruptAvailable, initial: true) { _, available in
+                OpenCodeEscapeRouter.shared.setInterrupt(
+                    keyboardInterruptOwner,
+                    interrupt: available ? { Task { await viewModel.abortSession() } } : nil
+                )
+            }
+            .onDisappear {
+                OpenCodeEscapeRouter.shared.setInterrupt(keyboardInterruptOwner, interrupt: nil)
+            }
+    }
+
+    /// The session is busy and Stop is enabled, so Esc can interrupt it.
+    private var keyboardInterruptAvailable: Bool {
+        viewModel.uiState.sessionStatusLabel != nil &&
+            !viewModel.uiState.isAborting &&
+            viewModel.uiState.canMutate
     }
 
     private func sessionChatDialogs(_ content: some View) -> some View {
@@ -1710,6 +1728,29 @@ struct SessionChatView: View {
             // A side question answers with the session's own model, so it needs no model pick.
             let sideQuestionSendEnabled =
                 !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let sessionReady =
+                !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
+                viewModel.uiState.timeline != .creating &&
+                viewModel.uiState.composerEnabled &&
+                viewModel.uiState.pendingSend == nil
+            let sendEnabled = (sideQuestionMode ? sideQuestionSendEnabled : promptSendEnabled) && sessionReady
+            // Return does not send over an open @ or / suggestion list. The draft text is
+            // checked live when Return arrives; the model's copy can lag queued keys.
+            let suggestionsOpen = viewModel.uiState.atSuggestionsVisible || viewModel.uiState.slashSuggestionsVisible
+            let returnKeyRule: OpenCodeReturnKeyRule = if composer.isShellMode && !sideQuestionMode {
+                .fixed(sendEnabled && !suggestionsOpen)
+            } else {
+                OpenCodeReturnKeyRule(
+                    readyIgnoringText: sessionReady && !suggestionsOpen && (sideQuestionMode || (
+                        !composer.hasPendingUploads &&
+                            composer.selectedModel != nil &&
+                            composer.isModelSelectionReady &&
+                            !isSending &&
+                            !blockedSideQuestion
+                    )),
+                    hasOtherContent: !sideQuestionMode && !composer.attachments.isEmpty
+                )
+            }
             state = .prompt(
                 .init(
                     text: composer.text,
@@ -1723,12 +1764,8 @@ struct SessionChatView: View {
                     selectedModeLabel: composer.selectedModeLabel,
                     selectedVariantLabel: composer.selectedVariantLabel,
                     showVariant: composer.canSelectVariant,
-                    sendEnabled:
-                        (sideQuestionMode ? sideQuestionSendEnabled : promptSendEnabled) &&
-                        !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
-                        viewModel.uiState.timeline != .creating &&
-                        viewModel.uiState.composerEnabled &&
-                        viewModel.uiState.pendingSend == nil,
+                    sendEnabled: sendEnabled,
+                    returnKeyRule: returnKeyRule,
                     attachEnabled: promptAttachEnabled,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting &&
@@ -1772,6 +1809,7 @@ struct SessionChatView: View {
             focusRequestToken: composerFocusRequest,
             dictation: kind == .prompt ? viewModel.uiState.dictation.map(composerDictation) : nil,
             attachmentDragActive: attachmentDropSummary != nil,
+            interruptHintVisible: OpenCodeEscapeRouter.shared.interruptArmedAt != nil && keyboardInterruptAvailable,
             onAction: { action in
                 switch action {
                 case let .textChanged(text, selectionStart, _):
