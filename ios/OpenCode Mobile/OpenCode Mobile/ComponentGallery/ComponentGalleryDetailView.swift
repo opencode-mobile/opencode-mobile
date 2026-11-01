@@ -98,10 +98,12 @@ struct ComponentGalleryDetailView: View {
             KeyValueRowGalleryView()
         case .attachment:
             AttachmentGalleryView()
+        case .imageGallery:
+            ImageGalleryGalleryView()
+        case .imageViewer:
+            ImageViewerGalleryView()
         case .outgoingMessage:
             OutgoingMessageGalleryView()
-        case .pendingPromptsStrip:
-            PendingPromptsStripGalleryView()
         case .sessionBranchPill:
             SessionBranchPillGalleryView()
         case .assistantMessage:
@@ -158,12 +160,12 @@ struct ComponentGalleryDetailView: View {
             ActionPillGalleryView()
         case .actionTile:
             ActionTileGalleryView()
-        case .syncingPill:
-            SyncingPillGalleryView()
+        case .floatingPill:
+            FloatingPillGalleryView()
+        case .backgroundWorkPill:
+            BackgroundWorkPillGalleryView()
         case .reviewChangesPill:
             ReviewChangesPillGalleryView()
-        case .sessionTodosPill:
-            SessionTodosPillGalleryView()
         case .sessionTodoItem:
             SessionTodoItemGalleryView()
         case .hunkNavigationPill:
@@ -204,6 +206,8 @@ struct ComponentGalleryDetailView: View {
             SessionComposerGalleryView()
         case .dictationCard:
             DictationCardGalleryView()
+        case .dropOverlay:
+            DropOverlayGalleryView()
         case .composerSuggestionOverlay:
             ComposerSuggestionOverlayGalleryView()
         case .renderedMarkdown:

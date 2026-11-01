@@ -1,7 +1,10 @@
 package dev.opencode.mobile.ui.main
 
+import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
+import dev.opencode.mobile.domain.connection.ConnectionProfileCatalog
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
+import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.connection.SecureCredentialStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.testConnectionSessionCoordinator
@@ -52,6 +55,8 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.session.VcsInfo
+import dev.opencode.mobile.domain.sessioncache.DefaultSessionCache
+import dev.opencode.mobile.domain.sessioncache.InMemorySessionCacheStore
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
@@ -95,6 +100,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainScreenViewModelTest {
@@ -118,6 +124,123 @@ class MainScreenViewModelTest {
             val viewModel = createViewModel(shouldFailProbe = true)
             advanceUntilIdle()
             assertTrue(viewModel.uiState.value is MainScreenUiState.ProbeFailed)
+        }
+
+    @Test
+    fun switchProfile_paintsCachedSessionsAndSkeletonsBeforeTheServerIsBound() =
+        runTest(testDispatcher) {
+            val other = "http://192.0.2.2:4096/"
+            val store = SwitchingProfileStore()
+            store.add(ConnectionProfile(id = "a", baseUrl = serverUrl, username = "opencode", password = "", name = "A"), listOf("/a"))
+            store.add(
+                ConnectionProfile(
+                    id = "b",
+                    baseUrl = other,
+                    username = "opencode",
+                    password = "",
+                    name = "B",
+                    serverUrls = listOf(other, "http://100.64.0.3:4096/"),
+                ),
+                listOf("/b/cached", "/b/new"),
+            )
+            store.applyProfile("a")
+            val holdProbe = CompletableDeferred<Unit>()
+            val cached = listOf(Session(id = "ses-cached", title = "Cached", updatedAtEpochMs = 1L))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = store,
+                    initialProfile = store.profile("a"),
+                    connectionProbing = ConnectionProbing { holdProbe.await().let { ServerProtocol.V2 } },
+                    sessionCache =
+                        object : SessionCache by NoOpSessionCache {
+                            override suspend fun seedSessions(worktree: String): List<Session>? = null
+
+                            override suspend fun seedSessions(
+                                worktree: String,
+                                connectionId: String,
+                            ): List<Session>? = cached.takeIf { connectionId == "b" && worktree == "/b/cached" }
+                        },
+                )
+            advanceUntilIdle()
+            val painted = mutableListOf<MainScreenUiState>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { viewModel.uiState.collect { painted += it } }
+
+            viewModel.switchProfile("b")
+            runCurrent()
+
+            assertEquals("B", viewModel.serversChrome.value.title)
+            val first =
+                painted.filterIsInstance<MainScreenUiState.Loaded>().first { state ->
+                    state.sections.any { it.worktree == "/b/cached" }
+                }
+            val cachedSection = first.sections.single { it.worktree == "/b/cached" }
+            assertEquals(listOf("ses-cached"), cachedSection.allSessions.map { it.id })
+            assertNull(first.projectLoads["/b/cached"])
+            assertTrue(first.projectLoads["/b/new"] is ProjectFirstLoad.Loading)
+            // The switch has bound the server by now; the uncached project still shows its skeleton.
+            val current = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertTrue(current.projectLoads["/b/new"] is ProjectFirstLoad.Loading)
+        }
+
+    @Test
+    fun switchProfile_thatFailsReturnsHomeToTheActiveServer() =
+        runTest(testDispatcher) {
+            val store = SwitchingProfileStore()
+            store.add(ConnectionProfile(id = "a", baseUrl = serverUrl, username = "opencode", password = "", name = "A"), listOf("/a"))
+            store.add(
+                ConnectionProfile(id = "b", baseUrl = "http://192.0.2.2:4096/", username = "opencode", password = "", name = "B"),
+                listOf("/b"),
+            )
+            store.applyProfile("a")
+            store.failApply = true
+            val viewModel = createViewModel(connectionProfileStore = store, initialProfile = store.profile("a"))
+            advanceUntilIdle()
+
+            viewModel.switchProfile("b")
+            assertEquals("B", viewModel.serversChrome.value.title)
+            advanceUntilIdle()
+
+            assertEquals("A", viewModel.serversChrome.value.title)
+            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("/a"), loaded.sections.map { it.worktree })
+        }
+
+    @Test
+    fun emptyHome_waitsOnTheAddressCheckBeforeShowingUnreachable() =
+        runTest(testDispatcher) {
+            val store = SwitchingProfileStore()
+            val profile =
+                ConnectionProfile(
+                    id = "a",
+                    baseUrl = serverUrl,
+                    username = "opencode",
+                    password = "",
+                    name = "A",
+                    serverUrls = listOf(serverUrl, "http://100.64.0.3:4096/"),
+                )
+            store.add(profile, emptyList())
+            var holdProbe: CompletableDeferred<Unit>? = null
+            var coordinator: ConnectionSessionCoordinator? = null
+            val viewModel =
+                createViewModel(
+                    shouldFailProbe = true,
+                    connectionProfileStore = store,
+                    initialProfile = profile,
+                    connectionProbing = ConnectionProbing { holdProbe?.await().let { ServerProtocol.V2 } },
+                    onCoordinator = { coordinator = it },
+                )
+            advanceUntilIdle()
+            assertTrue(viewModel.uiState.value is MainScreenUiState.ProbeFailed)
+
+            val held = CompletableDeferred<Unit>().also { holdProbe = it }
+            val save = launch { requireNotNull(coordinator).saveProfile(store.profile("a")) }
+            runCurrent()
+
+            assertTrue("${viewModel.uiState.value}", viewModel.uiState.value is MainScreenUiState.Empty)
+            held.complete(Unit)
+            save.join()
+            advanceUntilIdle()
+            assertTrue("${viewModel.uiState.value}", viewModel.uiState.value is MainScreenUiState.ProbeFailed)
         }
 
     @Test
@@ -2472,6 +2595,47 @@ class MainScreenViewModelTest {
     }
 
     @Test
+    fun cachedPaint_keepsTheProjectKeyTheServerResolves() =
+        runTest(testDispatcher) {
+            // The project key is the single-project scope id; a key that changes when the server
+            // resolves the path swaps the whole list on the next launch.
+            val cache =
+                DefaultSessionCache(
+                    store = InMemorySessionCacheStore(),
+                    connectionIdProvider = { "profile-1" },
+                    scope = backgroundScope,
+                    json = json,
+                    debounceMs = 0L,
+                    activityDebounceMs = 0L,
+                )
+            val live =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(projectsByDirectory = repoProjects),
+                    sessionsByWorktree = mapOf("/repo" to emptyList()),
+                    sessionCache = cache,
+                )
+            advanceUntilIdle()
+            assertEquals(listOf("proj"), (live.uiState.value as MainScreenUiState.Loaded).projects.map { it.key })
+            assertEquals("proj", cache.seedProjectResolution("/repo")?.projectId)
+            val cached = listOf(Session(id = "s1", title = "Cached", directory = "/repo", updatedAtEpochMs = 1L))
+            cache.rememberSessions("/repo", cached)
+
+            // Next launch: the server does not resolve the path (yet).
+            val cold =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    projectRepository = FakeProjectRepository(currentProjectError = IllegalStateException("not yet")),
+                    sessionsByWorktree = mapOf("/repo" to cached),
+                    sessionCache = cache,
+                )
+            advanceUntilIdle()
+            val painted = cold.uiState.value as MainScreenUiState.Loaded
+            assertEquals(listOf("proj"), painted.projects.map { it.key })
+            assertEquals(listOf("s1"), painted.homeSessions().map { it.id })
+        }
+
+    @Test
     fun worktreesOfOneRepository_groupIntoOneProjectWithBranches() =
         runTest(testDispatcher) {
             val shared =
@@ -2779,7 +2943,10 @@ class MainScreenViewModelTest {
 
     private fun createViewModel(
         shouldFailProbe: Boolean = false,
-        connectionProfileStore: FakeConnectionProfileStore = FakeConnectionProfileStore(),
+        connectionProfileStore: ConnectionProfileStore = FakeConnectionProfileStore(),
+        initialProfile: ConnectionProfile = ConnectionProfile(baseUrl = serverUrl, username = "opencode", password = ""),
+        connectionProbing: ConnectionProbing? = null,
+        onCoordinator: (ConnectionSessionCoordinator) -> Unit = {},
         bootWorktree: String = "/boot/project",
         sessionsByWorktree: Map<String, List<Session>> = emptyMap(),
         eventStream: FakeForegroundEventStream =
@@ -2806,12 +2973,9 @@ class MainScreenViewModelTest {
             dev.opencode.mobile.domain.worktree
                 .WorktreeInventoryCache(),
     ): MainScreenViewModel {
-        val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+        val activeConnectionManager = ActiveConnectionManager(connectionProfileStore, connectionProbing)
         runBlocking {
-            activeConnectionManager.applyProfile(
-                ConnectionProfile(baseUrl = serverUrl, username = "opencode", password = ""),
-                serverProtocol = serverProtocol,
-            )
+            activeConnectionManager.applyProfile(initialProfile, serverProtocol = serverProtocol)
         }
         val coordinator =
             testConnectionSessionCoordinator(
@@ -2825,7 +2989,7 @@ class MainScreenViewModelTest {
                 httpClient = OpencodeHttpClient(json, activeConnectionManager),
                 sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
                 eventStream = eventStream,
-            )
+            ).also(onCoordinator)
         if (sessionStatuses.isNotEmpty()) {
             sessionRepository.statuses = sessionStatuses
         }
@@ -3171,6 +3335,66 @@ private class FakeMessageRepository(
         options: ShellCommandOptions,
         directory: String?,
     ) = Unit
+}
+
+/** Several profiles, each with its own added projects, for server switch tests. */
+private class SwitchingProfileStore : ConnectionProfileStore {
+    private var catalog = ConnectionProfileCatalog()
+    private val worktrees = mutableMapOf<String, List<String>>()
+
+    /** Makes [applyProfile] throw, like a failed preferences write. */
+    var failApply = false
+
+    fun add(
+        profile: ConnectionProfile,
+        added: List<String>,
+    ) {
+        catalog = catalog.save(profile)
+        worktrees[catalog.profiles.single { it.id == profile.id }.baseUrl] = added
+    }
+
+    fun profile(id: String): ConnectionProfile = catalog.profiles.single { it.id == id }
+
+    override suspend fun activeProfile(): ConnectionProfile? = catalog.activeProfile()
+
+    override suspend fun listProfiles(): List<ConnectionProfile> = catalog.profiles
+
+    override suspend fun saveProfile(profile: ConnectionProfile) {
+        catalog = catalog.save(profile)
+    }
+
+    override suspend fun applyProfile(id: String) {
+        if (failApply) throw IOException("write failed")
+        catalog = catalog.apply(id)
+    }
+
+    override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = worktrees[serverBaseUrl].orEmpty()
+
+    override suspend fun addWorktree(
+        serverBaseUrl: String,
+        worktree: String,
+    ) {
+        worktrees[serverBaseUrl] = worktrees[serverBaseUrl].orEmpty() + worktree
+    }
+
+    override suspend fun removeWorktree(
+        serverBaseUrl: String,
+        worktree: String,
+    ) {
+        worktrees[serverBaseUrl] = worktrees[serverBaseUrl].orEmpty() - worktree
+    }
+
+    override suspend fun setAddedWorktrees(
+        serverBaseUrl: String,
+        worktrees: List<String>,
+    ) {
+        this.worktrees[serverBaseUrl] = worktrees
+    }
+
+    override suspend fun clearAll() {
+        catalog = ConnectionProfileCatalog()
+        worktrees.clear()
+    }
 }
 
 private class FakeConnectionProfileStore(

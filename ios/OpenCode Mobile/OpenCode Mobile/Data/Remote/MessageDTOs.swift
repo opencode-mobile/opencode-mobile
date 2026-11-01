@@ -22,6 +22,8 @@ nonisolated struct MessageInfoDTO: Codable, Sendable {
     let waiting: Bool?
     let delivery: String?
     let finish: String?
+    /// v2 live prompt skills, projected from the inbox event.
+    let skills: [V2UserSkillDTO]?
 }
 
 nonisolated struct MessageTokensDTO: Codable, Sendable {
@@ -48,6 +50,8 @@ nonisolated struct MessageErrorDataDTO: Codable, Sendable {
     var isRetryable: Bool? = nil
     var providerID: String? = nil
     var retries: Int? = nil
+    /// v2 `retryAfterMs`, carried here by the live event translation; v1 servers never send it.
+    var retryAfterMs: Int64? = nil
 }
 
 nonisolated struct MessageModelRefDTO: Codable, Sendable {
@@ -91,6 +95,8 @@ nonisolated struct MessagePartDTO: Codable, Sendable {
     let mime: String?
     let filename: String?
     let url: String?
+    /// Client-only: absolute server path of an uploaded file (live `metadata.attachments`).
+    let serverPath: String?
     /// Client-only `notice` part from the v2 live projection.
     let notice: V2NoticeDTO?
 }
@@ -108,6 +114,17 @@ nonisolated struct MessageToolStateDTO: Codable, Sendable {
     var interrupted: Bool? = nil
     /// Set when the server closed the call without running it (`executed: false`).
     var malformed: Bool? = nil
+    /// Files the completed tool returned (v1 `attachments`); the v2 live projection fills it
+    /// from `content` file items.
+    var attachments: [MessageToolAttachmentDTO]? = nil
+}
+
+/// A v1 tool attachment: a file part whose `url` is normally a `data:` URL.
+nonisolated struct MessageToolAttachmentDTO: Codable, Sendable {
+    let id: String?
+    let mime: String?
+    let filename: String?
+    let url: String?
 }
 
 nonisolated struct MessageToolTimeDTO: Codable, Sendable {
@@ -226,6 +243,16 @@ nonisolated struct AgentPartSourceDTO: Codable, Sendable, Equatable {
     let end: Int
 }
 
+nonisolated struct V2PromptMetadataDTO: Codable, Sendable, Equatable {
+    let attachments: [V2PromptUploadedAttachmentDTO]
+}
+
+nonisolated struct V2PromptUploadedAttachmentDTO: Codable, Sendable, Equatable {
+    let name: String
+    let mime: String
+    let path: String
+}
+
 nonisolated struct V2PromptRequestDTO: Codable, Sendable {
     let id: String?
     let text: String
@@ -235,6 +262,8 @@ nonisolated struct V2PromptRequestDTO: Codable, Sendable {
     let delivery: String
     /// Project-file mentions. Written into `files` as literal URIs, after device attachments.
     let fileMentions: [V2PromptFileMentionDTO]?
+    /// `{ attachments: [{ name, mime, path }] }` for files uploaded to the server (#644).
+    let metadata: V2PromptMetadataDTO?
 
     init(
         id: String? = nil,
@@ -243,7 +272,8 @@ nonisolated struct V2PromptRequestDTO: Codable, Sendable {
         agents: [V2PromptAgentDTO]? = nil,
         skills: [V2PromptSkillDTO]? = nil,
         delivery: String = "steer",
-        fileMentions: [V2PromptFileMentionDTO]? = nil
+        fileMentions: [V2PromptFileMentionDTO]? = nil,
+        metadata: V2PromptMetadataDTO? = nil
     ) {
         self.id = id
         self.text = text
@@ -252,10 +282,11 @@ nonisolated struct V2PromptRequestDTO: Codable, Sendable {
         self.skills = skills
         self.delivery = delivery
         self.fileMentions = fileMentions
+        self.metadata = metadata
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, text, files, agents, skills, delivery
+        case id, text, files, agents, skills, delivery, metadata
     }
 
     init(from decoder: Decoder) throws {
@@ -267,6 +298,7 @@ nonisolated struct V2PromptRequestDTO: Codable, Sendable {
         skills = try container.decodeIfPresent([V2PromptSkillDTO].self, forKey: .skills)
         delivery = try container.decode(String.self, forKey: .delivery)
         fileMentions = nil
+        metadata = try container.decodeIfPresent(V2PromptMetadataDTO.self, forKey: .metadata)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -277,6 +309,7 @@ nonisolated struct V2PromptRequestDTO: Codable, Sendable {
         try container.encodeIfPresent(agents, forKey: .agents)
         try container.encodeIfPresent(skills, forKey: .skills)
         try container.encode(delivery, forKey: .delivery)
+        try container.encodeIfPresent(metadata, forKey: .metadata)
     }
 }
 

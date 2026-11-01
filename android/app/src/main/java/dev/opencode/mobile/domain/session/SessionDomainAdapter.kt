@@ -71,6 +71,7 @@ class SessionDomainAdapter {
             idleAtEpochMs = dto.time?.idle,
             viewedAtEpochMs = dto.time?.viewed,
             idleOutcome = SessionIdleOutcome.fromWire(dto.outcome),
+            agentName = dto.agent?.takeIf { it.isNotEmpty() },
         )
 
     fun toSessionStatusesFromActive(activeById: Map<String, ApiSessionActiveDto>): List<SessionStatus> =

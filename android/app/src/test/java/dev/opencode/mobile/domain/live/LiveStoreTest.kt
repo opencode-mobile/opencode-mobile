@@ -52,8 +52,7 @@ import dev.opencode.mobile.domain.sessioncache.SessionActivityCacheEntry
 import dev.opencode.mobile.domain.sessioncache.SessionCache
 import dev.opencode.mobile.domain.sessioncache.SessionMessageCacheHandle
 import dev.opencode.mobile.domain.sync.testSyncCoordinator
-import dev.opencode.mobile.markdown.OpenCodeSyntaxHighlighter
-import dev.opencode.mobile.markdown.OpenCodeTextMateHighlightingEngine
+import dev.opencode.mobile.markdown.HighlightCoreHighlightingEngine
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -1413,7 +1412,7 @@ class MessageSyncTest {
             val eventStream = FakeForegroundEventStream()
             val sync = createMessageSync(repository, eventStream)
             val preparer =
-                MessageContentPreparer(OpenCodeTextMateHighlightingEngine(OpenCodeSyntaxHighlighter.default)).apply {
+                MessageContentPreparer(HighlightCoreHighlightingEngine()).apply {
                     computationDispatcher = testDispatcher
                 }
             val pipeline = DisplayMessagePipeline(sync, preparer)

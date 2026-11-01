@@ -1,6 +1,7 @@
 package dev.opencode.mobile.data.remote
 
 import dev.opencode.mobile.data.remote.dto.ApiActiveSessionsEnvelope
+import dev.opencode.mobile.data.remote.dto.ApiDataEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiListEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiLocatedEnvelope
 import dev.opencode.mobile.data.remote.dto.ApiSessionActiveDto
@@ -33,6 +34,8 @@ import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RenameSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2RevertStageRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionDto
+import dev.opencode.mobile.data.remote.dto.V2SessionGenerateRequestDto
+import dev.opencode.mobile.data.remote.dto.V2SessionGenerateResponseDto
 import dev.opencode.mobile.data.remote.dto.V2SessionViewRequestDto
 import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
 import dev.opencode.mobile.data.remote.dto.VcsFileStatusDto
@@ -563,6 +566,27 @@ class SessionsApi private constructor(
                 setJsonBody(json, V2MoveSessionRequestDto(directory = directory))
             }.ensureSuccess()
 
+    /**
+     * `POST /api/session/{id}/generate` → `{ data: { text } }`: answers [prompt] from the session's
+     * context and model without adding a message; nothing streams. One model call can outlast the
+     * default request timeout, so this waits up to [SIDE_QUESTION_TIMEOUT_MS].
+     */
+    suspend fun generateSessionTextV2(
+        id: String,
+        prompt: String,
+    ): String =
+        httpClient
+            .get()
+            .post("api/session/$id/generate") {
+                timeout {
+                    requestTimeoutMillis = SIDE_QUESTION_TIMEOUT_MS
+                    socketTimeoutMillis = SIDE_QUESTION_TIMEOUT_MS
+                }
+                setJsonBody(json, V2SessionGenerateRequestDto(prompt = prompt))
+            }.bodyOnSuccess<ApiDataEnvelope<V2SessionGenerateResponseDto>>()
+            .data
+            .text
+
     suspend fun compactSessionV2(id: String): Boolean =
         httpClient
             .get()
@@ -673,5 +697,8 @@ class SessionsApi private constructor(
 
     private companion object {
         const val MAX_V2_SESSION_LIST_PAGES = 500
+
+        /** One `/btw` model call; longer than the default request timeout. */
+        const val SIDE_QUESTION_TIMEOUT_MS = 300_000L
     }
 }

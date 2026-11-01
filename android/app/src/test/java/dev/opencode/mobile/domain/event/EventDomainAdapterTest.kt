@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.event
 
+import dev.opencode.mobile.data.remote.dto.MessageInfoDto
+import dev.opencode.mobile.domain.message.MessageDomainAdapter
 import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionStatus
 import kotlinx.serialization.json.Json
@@ -286,6 +288,22 @@ class EventDomainAdapterTest {
         assertEquals("data:image/png;base64,AA==", file?.get("url")?.jsonPrimitive?.content)
         assertEquals("image/png", file?.get("mime")?.jsonPrimitive?.content)
         assertEquals("a.png", file?.get("filename")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvents_projectsUploadedAttachmentsIntoServerPathFilePartsAndDropsTheTextLines() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.next.prompted","data":{"sessionID":"ses-1","messageID":"msg-1","prompt":{"text":"unpack\nAttached file: `/srv/tmp/uploads/u1/data.zip`","metadata":{"attachments":[{"name":"data.zip","mime":"application/zip","path":"/srv/tmp/uploads/u1/data.zip"}]}},"delivery":"steer"}}""",
+            )
+
+        assertEquals(listOf("message.updated", "message.part.updated", "message.part.updated"), events.map { it.type })
+        assertEquals("unpack", events[1].rawProperties?.get("part")?.jsonObject?.get("text")?.jsonPrimitive?.content)
+        val file = events[2].rawProperties?.get("part")?.jsonObject
+        assertEquals("file", file?.get("type")?.jsonPrimitive?.content)
+        assertEquals("/srv/tmp/uploads/u1/data.zip", file?.get("serverPath")?.jsonPrimitive?.content)
+        assertEquals("application/zip", file?.get("mime")?.jsonPrimitive?.content)
+        assertEquals("data.zip", file?.get("filename")?.jsonPrimitive?.content)
     }
 
     @Test
@@ -1438,6 +1456,26 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun stepFailed_keepsRetryAfterOnTheTranslatedError() {
+        val events =
+            adapter.parseEvents(
+                """{"type":"session.step.failed","data":{"sessionID":"ses-1","assistantMessageID":"a1","error":{"type":"provider.free-limit","message":"Free usage limit reached.","status":429,"retryAfterMs":3600000}}}""",
+            )
+        val info = events.single().rawProperties?.get("info") as kotlinx.serialization.json.JsonObject
+        val payload = (info["error"] as kotlinx.serialization.json.JsonObject)["data"] as kotlinx.serialization.json.JsonObject
+        assertEquals("3600000", (payload["retryAfterMs"] as kotlinx.serialization.json.JsonPrimitive).content)
+
+        val failure =
+            MessageDomainAdapter(nowEpochMs = { 5_000L })
+                .toMessage(
+                    Json { ignoreUnknownKeys = true }.decodeFromJsonElement(MessageInfoDto.serializer(), info),
+                    emptyList(),
+                ).failure
+        assertEquals(3_600_000L, failure?.retryAfterMs)
+        assertEquals(3_605_000L, failure?.retryAtEpochMs())
+    }
+
+    @Test
     fun stepFailed_withAssistantId_putsTheErrorOnTheMessageAndSkipsTheSnackbarEvent() {
         val events =
             adapter.parseEvents(
@@ -1711,6 +1749,32 @@ class EventDomainAdapterTest {
                 ?.jsonObject
         assertEquals("child-1", metadata?.get("sessionID")?.jsonPrimitive?.content)
         assertEquals("2", metadata?.get("count")?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun parseEvent_settledToolStampsItsEventTimeAsTheEnd() {
+        fun time(line: String) =
+            adapter
+                .parseEvent(line)
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("state")
+                ?.jsonObject
+                ?.get("time")
+                ?.jsonObject
+
+        val success =
+            time(
+                """{"type":"session.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","created":1710000045000}}""",
+            )
+        val progress =
+            time(
+                """{"type":"session.tool.progress","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","created":1710000001000}}""",
+            )
+
+        assertEquals("1710000045000", success?.get("end")?.jsonPrimitive?.content)
+        assertEquals(null, progress?.get("end"))
     }
 
     @Test

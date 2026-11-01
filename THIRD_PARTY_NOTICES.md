@@ -32,17 +32,6 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-## TextMate grammars from Shiki
-
-Generated into
-`shared/markdown-core/src/commonMain/resources/textmate-grammars/` from
-[Shiki](https://github.com/shikijs/shiki) 4.2.0 (`@shikijs/langs`, MIT,
-Copyright (c) 2021 Pine Wu, Copyright (c) 2023 Anthony Fu). Shiki bundles the
-grammars from the
-[textmate-grammars-themes](https://github.com/shikijs/textmate-grammars-themes)
-collection. Each grammar keeps the license of its upstream repository, which
-that collection lists per grammar.
-
 ## Lucide icons
 
 Generated into the Android and iOS icon sets from
@@ -93,12 +82,43 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-## Oniguruma
+## Code color presets from editor themes
 
-Downloaded and compiled at build time by
-`shared/markdown-core/native/build-oniguruma-ios.sh` and linked into the iOS
-app. BSD 2-Clause License, Copyright (c) 2002-2021 K.Kosako.
-<https://github.com/kkos/oniguruma>
+The code color values in `shared/syntax-presets/` (Nocturne, Citrus, Paper, and
+Neon dark) are derived from these editor themes by
+`scripts/generate-syntax-presets.mjs`, reading the theme files packaged in
+[@shikijs/themes](https://github.com/shikijs/textmate-grammars-themes)
+(MIT, Copyright (c) 2021 Pine Wu, Copyright (c) 2023 Anthony Fu).
+
+| Preset | Theme | Source | Copyright |
+| --- | --- | --- | --- |
+| Nocturne dark | One Dark Pro | <https://github.com/Binaryify/OneDark-Pro> | Copyright (c) 2013-2022 Binaryify |
+| Nocturne light | One Light | <https://github.com/akamud/vscode-theme-onelight> | Copyright (c) 2015 Mahmoud Ali |
+| Citrus | Solarized Dark and Light | <https://github.com/microsoft/vscode>, palette from <https://github.com/altercation/solarized> | Copyright (c) 2015 - present Microsoft Corporation; palette Copyright (c) 2011 Ethan Schoonover |
+| Paper | GitHub Dark Default and Light Default | <https://github.com/primer/github-vscode-theme> | Copyright (c) 2020 Primer |
+| Neon dark | Dracula | <https://github.com/dracula/visual-studio-code> | Copyright (c) 2016 Dracula Theme |
+
+Each is distributed under the MIT License:
+
+```text
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ## Libraries resolved by Gradle and Swift Package Manager
 

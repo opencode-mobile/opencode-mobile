@@ -90,7 +90,8 @@ nonisolated struct SessionRunningContext: Equatable, Sendable {
             followUpDelivery: message.followUpDelivery,
             isWaitingForPickup: message.isWaitingForPickup,
             stopReason: message.stopReason,
-            failure: message.failure
+            failure: message.failure,
+            promptSkills: message.promptSkills
         )
     }
 

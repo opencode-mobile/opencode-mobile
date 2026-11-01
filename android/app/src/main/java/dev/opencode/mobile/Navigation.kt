@@ -54,7 +54,6 @@ import dev.opencode.mobile.domain.preferences.AnalyticsConsentPreferences
 import dev.opencode.mobile.domain.preferences.AppLockPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
-import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.security.AppLockAvailability
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -69,6 +68,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ActionTileGalleryScree
 import dev.opencode.mobile.ui.componentgallery.components.ActivityCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AssistantMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AttachmentGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ImageGalleryGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomFadeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
@@ -79,11 +79,14 @@ import dev.opencode.mobile.ui.componentgallery.components.CodeSnippetGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.ComposerSuggestionOverlayGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DialogGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DictationCardGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.DropOverlayGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DiffStatGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FileIconGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FileTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FilterTabsGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.BackgroundWorkPillGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.FloatingPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.HunkNavigationPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.InlineNoticeGalleryScreen
@@ -96,7 +99,6 @@ import dev.opencode.mobile.ui.componentgallery.components.ModalGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.PageIndicatorGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.PendingPromptsStripGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReasoningRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReorderableListGalleryScreen
@@ -112,13 +114,11 @@ import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.SessionListSkeletonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodoItemGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.SessionTodosPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SkeletonIllustrationGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SplitPaneGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StepRailGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.SyncingPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TagGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TimelineNoticeGalleryScreen
@@ -149,6 +149,7 @@ import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
 import dev.opencode.mobile.ui.main.MainScreen
 import dev.opencode.mobile.ui.main.SessionOpenTarget
 import dev.opencode.mobile.ui.onboarding.AppOnboardingScreen
+import dev.opencode.mobile.ui.playground.SessionChatPlaygroundScreen
 import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
 import dev.opencode.mobile.ui.settings.AppearanceSettingsScreen
@@ -161,9 +162,6 @@ import dev.opencode.mobile.ui.settings.SettingsDetail
 import dev.opencode.mobile.ui.settings.SettingsScreen
 import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.SyntaxHighlightPickerScreen
-import dev.opencode.mobile.ui.settings.TextMateLanguagesRoute
-import dev.opencode.mobile.ui.settings.TextMateLogbookScreen
-import dev.opencode.mobile.ui.settings.TextMateLogbookViewModel
 import dev.opencode.mobile.ui.settings.ThemePickerScreen
 import dev.opencode.mobile.ui.terminal.TerminalsCatalogScreen
 
@@ -294,27 +292,11 @@ fun MainNavigation() {
                         onNavigateBack = onNavigateBack,
                         detailControl = detailControl,
                     )
-                SettingsDetail.TextMateLanguages ->
-                    TextMateLanguagesRoute(
-                        onNavigateBack = onNavigateBack,
-                        detailControl = detailControl,
-                    )
                 SettingsDetail.FeatureFlags ->
                     FeatureFlagsRoute(
                         onNavigateBack = onNavigateBack,
                         detailControl = detailControl,
                     )
-                SettingsDetail.TextMateLogbook -> {
-                    val logbookViewModel: TextMateLogbookViewModel = hiltViewModel()
-                    val logbookState by logbookViewModel.state.collectAsStateWithLifecycle()
-                    TextMateLogbookScreen(
-                        state = logbookState,
-                        onNavigateBack = onNavigateBack,
-                        detailControl = detailControl,
-                        onRefresh = logbookViewModel::refresh,
-                        onClear = logbookViewModel::clear,
-                    )
-                }
                 SettingsDetail.DiagnosticLogs -> {
                     val diagnosticLogsViewModel: DiagnosticLogsViewModel = hiltViewModel()
                     val diagnosticLogsState by diagnosticLogsViewModel.state.collectAsStateWithLifecycle()
@@ -508,14 +490,17 @@ fun MainNavigation() {
                                                     onComponentGalleryClick = {
                                                         openSettingsDetail(SettingsDetail.ComponentGallery)
                                                     },
-                                                    onTextMateLanguagesClick = {
-                                                        openSettingsDetail(SettingsDetail.TextMateLanguages)
-                                                    },
                                                     onFeatureFlagsClick = {
                                                         openSettingsDetail(SettingsDetail.FeatureFlags)
                                                     },
-                                                    onTextMateLogbookClick = {
-                                                        openSettingsDetail(SettingsDetail.TextMateLogbook)
+                                                    // A full-screen route, also on wide windows; null in release builds.
+                                                    onHighlightingLabClick =
+                                                        HighlightingLabSeam.homeRoute?.let { route -> { backStack.add(route) } },
+                                                    // A full-screen route, also on wide windows.
+                                                    onSessionChatPlaygroundClick = {
+                                                        if (backStack.lastOrNull() != SessionChatPlaygroundHome) {
+                                                            backStack.add(SessionChatPlaygroundHome)
+                                                        }
                                                     },
                                                     onDiagnosticLogsClick = {
                                                         openSettingsDetail(SettingsDetail.DiagnosticLogs)
@@ -561,8 +546,6 @@ fun MainNavigation() {
                                                         settingsViewModel::setFollowUpDelivery,
                                                     supportsFollowUpDelivery =
                                                         settingsViewModel.supportsFollowUpDelivery(),
-                                                    textMateEnabled = MarkdownHighlightPreferences.textMateEnabled,
-                                                    onTextMateEnabledChange = settingsViewModel::setTextMateEnabled,
                                                     productAnalyticsConsented =
                                                         AnalyticsConsentPreferences.productAnalyticsConsented,
                                                     onProductAnalyticsConsentedChange =
@@ -674,23 +657,9 @@ fun MainNavigation() {
                                             )
                                         }
                                     }
-                                    entry<TextMateLanguagesHome> {
-                                        RouteSurface {
-                                            settingsDetailContent(SettingsDetail.TextMateLanguages, null) {
-                                                backStack.popRouteUnlessRoot()
-                                            }
-                                        }
-                                    }
                                     entry<FeatureFlagsHome> {
                                         RouteSurface {
                                             settingsDetailContent(SettingsDetail.FeatureFlags, null) {
-                                                backStack.popRouteUnlessRoot()
-                                            }
-                                        }
-                                    }
-                                    entry<TextMateLogbookHome> {
-                                        RouteSurface {
-                                            settingsDetailContent(SettingsDetail.TextMateLogbook, null) {
                                                 backStack.popRouteUnlessRoot()
                                             }
                                         }
@@ -700,6 +669,11 @@ fun MainNavigation() {
                                             settingsDetailContent(SettingsDetail.DiagnosticLogs, null) {
                                                 backStack.popRouteUnlessRoot()
                                             }
+                                        }
+                                    }
+                                    entry<SessionChatPlaygroundHome> {
+                                        RouteSurface(edgeToEdgeBottom = true) {
+                                            SessionChatPlaygroundScreen(onNavigateBack = { backStack.popRouteUnlessRoot() })
                                         }
                                     }
                                     entry<ComponentGalleryHome> {
@@ -735,9 +709,8 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.Tag -> TagGalleryScreen()
                                                         ComponentGalleryEntryId.KeyValueRow -> KeyValueRowGalleryScreen()
                                                         ComponentGalleryEntryId.Attachment -> AttachmentGalleryScreen()
+                                                        ComponentGalleryEntryId.ImageGallery -> ImageGalleryGalleryScreen()
                                                         ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
-                                                        ComponentGalleryEntryId.PendingPromptsStrip ->
-                                                            PendingPromptsStripGalleryScreen()
                                                         ComponentGalleryEntryId.AssistantMessage -> AssistantMessageGalleryScreen()
                                                         ComponentGalleryEntryId.ToolCallCard -> ToolCallCardGalleryScreen()
                                                         ComponentGalleryEntryId.ToolChip -> ToolChipGalleryScreen()
@@ -768,13 +741,13 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.FilterTabs -> FilterTabsGalleryScreen()
                                                         ComponentGalleryEntryId.ActionPill -> ActionPillGalleryScreen()
                                                         ComponentGalleryEntryId.ActionTile -> ActionTileGalleryScreen()
-                                                        ComponentGalleryEntryId.SyncingPill -> SyncingPillGalleryScreen()
+                                                        ComponentGalleryEntryId.FloatingPill -> FloatingPillGalleryScreen()
+                                                        ComponentGalleryEntryId.BackgroundWorkPill -> BackgroundWorkPillGalleryScreen()
                                                         ComponentGalleryEntryId.ComposerSuggestionOverlay ->
                                                             ComposerSuggestionOverlayGalleryScreen()
                                                         ComponentGalleryEntryId.ReviewChangesPill -> ReviewChangesPillGalleryScreen()
                                                         ComponentGalleryEntryId.SessionBranchPill ->
                                                             SessionBranchPillGalleryScreen()
-                                                        ComponentGalleryEntryId.SessionTodosPill -> SessionTodosPillGalleryScreen()
                                                         ComponentGalleryEntryId.SessionTodoItem -> SessionTodoItemGalleryScreen()
                                                         ComponentGalleryEntryId.HunkNavigationPill -> HunkNavigationPillGalleryScreen()
                                                         ComponentGalleryEntryId.UnifiedDiff -> UnifiedDiffGalleryScreen()
@@ -806,6 +779,8 @@ fun MainNavigation() {
                                                             SessionComposerGalleryScreen()
                                                         ComponentGalleryEntryId.DictationCard ->
                                                             DictationCardGalleryScreen()
+                                                        ComponentGalleryEntryId.DropOverlay ->
+                                                            DropOverlayGalleryScreen()
                                                         ComponentGalleryEntryId.RenderedMarkdown ->
                                                             RenderedMarkdownGalleryScreen()
                                                         ComponentGalleryEntryId.MessageList -> Unit
@@ -906,8 +881,6 @@ private val SettingsDetail.route: NavKey
             SettingsDetail.Servers -> ServersHome
             SettingsDetail.Appearance -> AppearanceHome
             SettingsDetail.ComponentGallery -> ComponentGalleryHome
-            SettingsDetail.TextMateLanguages -> TextMateLanguagesHome
-            SettingsDetail.TextMateLogbook -> TextMateLogbookHome
             SettingsDetail.FeatureFlags -> FeatureFlagsHome
             SettingsDetail.DiagnosticLogs -> DiagnosticLogsHome
         }

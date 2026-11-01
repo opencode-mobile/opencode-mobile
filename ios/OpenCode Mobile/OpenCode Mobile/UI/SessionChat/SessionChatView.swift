@@ -39,13 +39,19 @@ struct SessionChatView: View {
     @State private var showAttachmentSources = false
     @State private var showFilesPicker = false
     @State private var showPhotosPicker = false
+    /// The drag-over card while images or files are dragged over the chat (#870).
+    @State private var attachmentDropSummary: AttachmentDropSummary?
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var showSessionTodosSheet = false
+    @State private var showSubagentsSheet = false
     @State private var holdingFinishedTodos = false
     @State private var sawUnfinishedTodos = false
     @State private var finishedHoldTask: Task<Void, Never>?
     /// Measured floating composer chrome height (composer + optional pending-prompts strip).
     @State private var composerOverlayHeight: CGFloat = 0
+    /// A shown snackbar floats above the composer; the timeline lifts its
+    /// end-pinned last row over it so the row keeps the same end gap.
+    @State private var snackbarOverlayHeight: CGFloat = 0
     @State private var bottomSafeAreaInset: CGFloat = 0
     /// Keyboard overlap reported by `keyboardOverlapPadding`. Zero when hidden.
     @State private var keyboardOverlap: CGFloat = 0
@@ -69,16 +75,22 @@ struct SessionChatView: View {
     private let detailControl: OpenCodeSplitPaneDetailControl?
     /// Replaces `dismiss()` when the chat is a split-view root with nothing to pop to.
     private let onLeaveSession: (() -> Void)?
+    /// Set only by the Session Chat Playground: screens that load from a server (Changes,
+    /// a child chat, Terminal, Files, Session context, tool groups) and the problem report
+    /// do not open; their name is passed here instead.
+    private let onUnavailableRoute: ((String) -> Void)?
 
     init(
         session: SessionListItem,
         viewModel: SessionChatViewModel? = nil,
         detailControl: OpenCodeSplitPaneDetailControl? = nil,
-        onLeaveSession: (() -> Void)? = nil
+        onLeaveSession: (() -> Void)? = nil,
+        onUnavailableRoute: ((String) -> Void)? = nil
     ) {
         self.session = session
         self.detailControl = detailControl
         self.onLeaveSession = onLeaveSession
+        self.onUnavailableRoute = onUnavailableRoute
         // Do not construct the ViewModel in `State(initialValue:)` — SwiftUI re-runs
         // View.init (and that expression) whenever the parent body refreshes, while
         // keeping one live `@State`. Eager make() was spawning bind storms and
@@ -180,7 +192,44 @@ struct SessionChatView: View {
         let sheets = sessionChatPickerSheets(sessionChatSheets(sessionChatLayout))
         let observed = sessionChatObservers(sessionChatDestinations(sheets))
         return sessionChatMoveToWorktree(sessionChatRoutes(sessionChatDialogs(sessionChatLifecycle(observed))))
+            .onDrop(
+                of: [.item],
+                delegate: SessionChatAttachmentDropDelegate(
+                    isEnabled: attachmentDropEnabled,
+                    context: { attachmentDropContext },
+                    summary: $attachmentDropSummary,
+                    onDrop: { attachItemProviders($0, source: .drop) }
+                )
+            )
+            .overlay {
+                if let summary = attachmentDropSummary {
+                    OpenCodeDropOverlay(
+                        variant: summary.rejected ? .reject : .accept,
+                        title: summary.title,
+                        subtitle: summary.subtitle,
+                        previews: summary.previews.map(\.attachmentVariant)
+                    )
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                }
+            }
+            .animation(.easeInOut(duration: 0.12), value: attachmentDropSummary)
+            .onChange(of: attachmentDropEnabled) { _, enabled in
+                if !enabled { attachmentDropSummary = nil }
+            }
             .feedbackSheet(model: $feedbackModel)
+            .sessionChatImageViewer(
+                state: viewModel.uiState.imageViewer,
+                loader: viewModel.attachmentImageLoader,
+                directory: boundSession.directory ?? boundSession.worktree,
+                onIndexChange: { viewModel.showImageViewerPage($0) },
+                onDismiss: { viewModel.closeImageViewer() }
+            )
+            .environment(\.attachmentImageLoading, viewModel.attachmentImageLoader)
+            .environment(\.attachmentImageDirectory, boundSession.directory ?? boundSession.worktree)
+            .environment(\.openImageViewer, SessionChatOpenImageViewerAction { images, index in
+                viewModel.openImageViewer(images: images, index: index)
+            })
     }
 
     private var sessionChatLayout: some View {
@@ -285,13 +334,19 @@ struct SessionChatView: View {
                     sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
                     sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
                     sessionTodoActivePreview: viewModel.uiState.sessionTodoActivePreview?.content,
-                    hideFloatStack: showSessionTodosSheet,
+                    hideFloatStack: showSessionTodosSheet || showSubagentsSheet,
                     hideLiveRetryFailures: viewModel.uiState.retryCard != nil,
-                    // Composer + 16 end-pin gap; Scroll to end uses this as-is
-                    // (no extra scrollToEndPillBottomPadding).
+                    hideRetryCountdown: viewModel.uiState.isRetrying,
+                    // Composer (+ shown snackbar) + 16 end-pin gap; Scroll to end
+                    // uses this as-is (no extra scrollToEndPillBottomPadding).
                     bottomOverlayInset: sessionChatTimelineBottomInset(composerOverlayHeight)
+                        + snackbarOverlayHeight
                         + composerHomeIndicatorLift
                         + keyboardOverlap,
+                    activityItems: sessionChatActivityItems,
+                    keyboardVisible: keyboardOverlap > 0,
+                    onActivityTap: handleActivityTap,
+                    onActivityClose: handleActivityClose,
                     onRefresh: { await viewModel.refreshMessages() },
                     onRetry: { await viewModel.retryFailedTimeline() },
                     onLoadOlder: { Task { await viewModel.loadOlderMessages() } },
@@ -299,6 +354,7 @@ struct SessionChatView: View {
                         logChatAction(ProductAnalytics.Action.chatOpenChanges)
                         changesTarget = viewModel.uiState.changesNavigationTarget(worktree: boundSession.worktree)
                     },
+                    onSessionBranchCopied: { viewModel.branchNameCopied() },
                     onSessionTodosTap: {
                         guard !blocksSessionTodosSheet else { return }
                         logChatAction(ProductAnalytics.Action.chatOpenTodos)
@@ -397,7 +453,20 @@ struct SessionChatView: View {
 
             OpenCodeSnackbarHost(
                 message: viewModel.uiState.snackbar.mapToOpenCodeSnackbarMessage(),
-                onDismissed: { viewModel.consumeSnackbar() }
+                onDismissed: { viewModel.consumeSnackbar() },
+                onAction: { message in
+                    guard message.id == viewModel.uiState.snackbar?.id else { return }
+                    switch viewModel.uiState.snackbar?.action {
+                    case let .retrySideQuestion(id):
+                        viewModel.retrySideQuestions(id: id)
+                    case nil:
+                        break
+                    }
+                },
+                onHeightChange: { height in
+                    guard abs(snackbarOverlayHeight - height) > 0.5 else { return }
+                    snackbarOverlayHeight = height
+                }
             )
             // Sit just above the measured composer, like Android; 168 only
             // covers the first frame before the composer reports its height.
@@ -407,7 +476,7 @@ struct SessionChatView: View {
                 if SessionChatComposerKind.resolve(
                     isChildSession: session.parentID != nil,
                     hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
-                    hasQuestion: viewModel.uiState.questionRequest != nil
+                    hasQuestion: viewModel.uiState.questionRequest != nil && !viewModel.uiState.questionDockHidden
                 ) == .prompt, viewModel.uiState.dictation == nil {
                     if viewModel.uiState.atSuggestionsVisible {
                         OpenCodeComposerSuggestionOverlay(
@@ -446,35 +515,15 @@ struct SessionChatView: View {
                     }
                 }
                 VStack(spacing: 0) {
-                    // Suggestions float above this stack. Keep the pending strip
-                    // in the measured height so the timeline inset does not jump.
-                    if viewModel.uiState.permissionDockHidden {
-                        OpenCodeActionPill(variant: .reviewPermission) {
-                            viewModel.showPermissionDock()
-                        }
-                        .padding(.bottom, 6)
-                    }
-                    if SessionChatComposerKind.resolve(
-                        isChildSession: session.parentID != nil,
-                        hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
-                        hasQuestion: viewModel.uiState.questionRequest != nil
-                    ) == .prompt,
-                        !viewModel.uiState.pendingPrompts.isEmpty {
-                        OpenCodePendingPromptsStrip(
-                            prompts: viewModel.uiState.pendingPrompts,
-                            onTap: {
-                                ProductAnalytics.logScreenView(
-                                    screenId: ProductAnalytics.Screen.sessionPendingPrompts,
-                                    presentation: ProductAnalytics.Presentation.sheet,
-                                    trigger: ProductAnalytics.Trigger.present
-                                )
-                                showPendingPromptsSheet = true
-                            }
-                        )
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 6)
+                    // Suggestions float above this stack. Corner pills float over the
+                    // timeline, which reserves their row (`SessionChatCornerSlotsLayout`).
+                    if let notice = viewModel.uiState.sideQuestions.unsupportedNotice {
+                        OpenCodeInlineNotice(message: notice, variant: .banner)
+                            .padding(.horizontal, 12)
+                            .padding(.bottom, 6)
                     }
                     composer
+                        .sessionChatPanelPulse(trigger: viewModel.uiState.inboxPanelPulse)
                 }
                 // Match home SessionList dock measurement — preference keys from a
                 // background GeometryReader were staying at 0, so timeline clearance
@@ -494,8 +543,85 @@ struct SessionChatView: View {
         }
     }
 
+    /// Bottom-left activity the screen owns: collapsed requests, `/btw` side questions and queued prompts.
+    private var sessionChatActivityItems: [SessionChatActivityItem] {
+        var items: [SessionChatActivityItem] = []
+        if viewModel.uiState.permissionDockHidden {
+            items.append(.reviewPermission)
+        }
+        if viewModel.uiState.questionDockHidden {
+            items.append(.answerQuestion)
+        }
+        if let pill = viewModel.uiState.backgroundWorkPill {
+            items.append(.subagents(pill))
+        }
+        let sideQuestions = viewModel.uiState.sideQuestions
+        if sideQuestions.failedCount > 0 {
+            items.append(.sideQuestionsFailed(count: sideQuestions.failedCount))
+        }
+        if sideQuestions.readyCount > 0 {
+            items.append(.sideQuestionsReady(count: sideQuestions.readyCount))
+        }
+        if sideQuestions.pendingCount > 0 {
+            items.append(.sideQuestionsRunning(count: sideQuestions.pendingCount))
+        }
+        if SessionChatComposerKind.resolve(
+            isChildSession: session.parentID != nil,
+            hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
+            hasQuestion: viewModel.uiState.questionRequest != nil && !viewModel.uiState.questionDockHidden
+        ) == .prompt, !viewModel.uiState.pendingPrompts.isEmpty {
+            items.append(.queued(count: viewModel.uiState.pendingPrompts.count))
+        }
+        return items
+    }
+
+    private func handleActivityTap(_ item: SessionChatActivityItem) {
+        switch item {
+        case .reviewPermission:
+            viewModel.showPermissionDock()
+        case .answerQuestion:
+            viewModel.showQuestionDock()
+        case let .subagents(pill):
+            if pill.needsInput, viewModel.openWaitingSubagentRequest() { return }
+            logChatAction(ProductAnalytics.Action.chatOpenSubagents)
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.sessionSubagents,
+                presentation: ProductAnalytics.Presentation.sheet,
+                trigger: ProductAnalytics.Trigger.present
+            )
+            showSubagentsSheet = true
+        case .sideQuestionsFailed:
+            viewModel.retrySideQuestions()
+        case .sideQuestionsReady:
+            viewModel.openSideQuestionAnswer()
+        case .queued:
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.sessionPendingPrompts,
+                presentation: ProductAnalytics.Presentation.sheet,
+                trigger: ProductAnalytics.Trigger.present
+            )
+            showPendingPromptsSheet = true
+        case .requestFailed, .sideQuestionsRunning, .syncing, .finished:
+            break
+        }
+    }
+
+    private func handleActivityClose(_ item: SessionChatActivityItem) {
+        if case .sideQuestionsFailed = item {
+            viewModel.dismissFailedSideQuestions()
+        }
+    }
+
     private func sessionChatSheets(_ content: some View) -> some View {
         content
+            .sessionChatSideQuestionAnswerSheet(
+                answer: viewModel.uiState.sideQuestions.presentedAnswer,
+                onCopy: { viewModel.sideQuestionAnswerCopied() },
+                onClose: { viewModel.closeSideQuestionAnswer() }
+            )
+            .onChange(of: viewSheetOpen, initial: true) { _, open in
+                viewModel.setScreenSheetOpen(open)
+            }
             .sessionChatMessageActionsSheet(
                 target: $messageActionsTarget,
                 onRevertMessage: { viewModel.revertMessage($0) },
@@ -543,6 +669,20 @@ struct SessionChatView: View {
                 onUse: { viewModel.chooseTimelineStyleFromPicker($0) },
                 onDismiss: { viewModel.dismissTimelineStylePicker() }
             )
+            .sessionChatSubagentsSheet(
+                isPresented: $showSubagentsSheet,
+                subagents: viewModel.uiState.subagents
+            ) { subagent in
+                guard let childID = subagent.childSessionID else { return }
+                logChatAction(ProductAnalytics.Action.chatOpenChildSession)
+                childSessionTarget = ChildSessionNavigationTarget(
+                    sessionID: childID,
+                    sessionTitle: subagent.title ?? subagent.agentName,
+                    worktree: boundSession.worktree,
+                    optimisticNavigationInstanceID: nil,
+                    parentID: session.id
+                )
+            }
             .sessionChatTodosSheet(
                 isPresented: $showSessionTodosSheet,
                 todos: viewModel.uiState.sessionTodos,
@@ -637,10 +777,10 @@ struct SessionChatView: View {
 
     private func sessionChatDestinations(_ content: some View) -> some View {
         content
-            .navigationDestination(isPresented: $showSessionContext) {
+            .navigationDestination(isPresented: availableRoute($showSessionContext)) {
                 SessionContextView(sessionID: viewModel.uiState.sessionID, worktree: boundSession.worktree)
             }
-            .navigationDestination(item: $changesTarget) { target in
+            .navigationDestination(item: availableRoute($changesTarget)) { target in
                 ChangesView(
                     sessionID: target.sessionID,
                     worktree: target.worktree,
@@ -649,7 +789,7 @@ struct SessionChatView: View {
                     initialFilePath: target.initialFilePath
                 )
             }
-            .navigationDestination(item: $toolGroupTarget) { target in
+            .navigationDestination(item: availableRoute($toolGroupTarget)) { target in
                 SessionChatToolGroupView(
                     target: target,
                     worktree: boundSession.worktree,
@@ -665,9 +805,42 @@ struct SessionChatView: View {
                     lastTurnDiffUnavailable: lastTurnDiffUnavailable(assistantMessageID: target.messageID)
                 )
             }
-            .navigationDestination(item: $childSessionTarget) { target in
+            .navigationDestination(item: availableRoute($childSessionTarget)) { target in
                 SessionChatView(session: target.sessionListItem)
             }
+            .onChange(of: showSessionContext) { _, open in
+                if open { refuseRoute("Session context") { showSessionContext = false } }
+            }
+            .onChange(of: changesTarget != nil) { _, open in
+                if open { refuseRoute("Changes") { changesTarget = nil } }
+            }
+            .onChange(of: toolGroupTarget != nil) { _, open in
+                if open { refuseRoute("Tool groups") { toolGroupTarget = nil } }
+            }
+            .onChange(of: childSessionTarget != nil) { _, open in
+                if open { refuseRoute("Opening a subagent") { childSessionTarget = nil } }
+            }
+            .onChange(of: terminalRoute != nil) { _, open in
+                if open { refuseRoute("Terminal") { terminalRoute = nil } }
+            }
+            .onChange(of: filesRoute != nil) { _, open in
+                if open { refuseRoute("Files") { filesRoute = nil } }
+            }
+    }
+
+    /// The route as is, or one that never presents while the playground refuses routes.
+    private func availableRoute<Target>(_ route: Binding<Target?>) -> Binding<Target?> {
+        onUnavailableRoute == nil ? route : .constant(nil)
+    }
+
+    private func availableRoute(_ route: Binding<Bool>) -> Binding<Bool> {
+        onUnavailableRoute == nil ? route : .constant(false)
+    }
+
+    private func refuseRoute(_ name: String, reset: () -> Void) {
+        guard let onUnavailableRoute else { return }
+        reset()
+        onUnavailableRoute(name)
     }
 
     private func sessionChatObservers(_ content: some View) -> some View {
@@ -868,7 +1041,7 @@ struct SessionChatView: View {
                     viewModel.consumePendingTerminalOpen()
                 }
             }
-            .navigationDestination(item: $terminalRoute) { route in
+            .navigationDestination(item: availableRoute($terminalRoute)) { route in
                 TerminalView(worktree: route.worktree, projectTitle: route.projectTitle, ptyId: route.ptyId)
             }
             .onChange(of: viewModel.uiState.pendingFilesOpen) { _, _ in
@@ -877,7 +1050,7 @@ struct SessionChatView: View {
                     viewModel.consumePendingFilesOpen()
                 }
             }
-            .navigationDestination(item: $filesRoute) { route in
+            .navigationDestination(item: availableRoute($filesRoute)) { route in
                 FilesView(worktree: route.worktree)
             }
     }
@@ -895,6 +1068,7 @@ struct SessionChatView: View {
             || toolDetailTarget != nil
             || skillsTarget != nil
             || showSessionTodosSheet
+            || showSubagentsSheet
             || showAttachmentSources
             || activePicker != nil
             || showDeleteConfirmation
@@ -1011,6 +1185,43 @@ struct SessionChatView: View {
             onLeaveSession?()
         } else {
             dismiss()
+        }
+    }
+
+    /// Pasted or dropped items (#870): each is copied to a temporary file, then attached like a file
+    /// from the Files picker. Paste names an unnamed image `Pasted image N.png`.
+    private func attachItemProviders(_ providers: [NSItemProvider], source: SessionChatAttachmentSource) {
+        Task {
+            let directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("attachment-\(source.rawValue)-\(UUID().uuidString)", isDirectory: true)
+            defer { try? FileManager.default.removeItem(at: directory) }
+            var names = viewModel.uiState.composer.attachments.map(\.filename)
+            var files: [URL] = []
+            var folders = 0
+            var unreadable = 0
+            for provider in providers {
+                switch AttachmentItemProviders.kind(of: provider) {
+                case .folder:
+                    folders += 1
+                case nil:
+                    continue
+                case .some:
+                    let unnamedImageName: (() -> String)? = source == .paste ? {
+                        let name = AttachmentDropRouting.pastedImageName(draftFilenames: names)
+                        names.append(name)
+                        return name
+                    } : nil
+                    do {
+                        files.append(try await AttachmentItemProviders.copy(provider, into: directory, unnamedImageName: unnamedImageName))
+                    } catch {
+                        unreadable += 1
+                    }
+                }
+            }
+            let added = await viewModel.addPastedOrDroppedFiles(files, skippedFolders: folders, unreadable: unreadable)
+            if added {
+                logAttachmentSourceAction(source == .paste ? ProductAnalytics.Action.attachPaste : ProductAnalytics.Action.attachDrop)
+            }
         }
     }
 
@@ -1266,6 +1477,11 @@ struct SessionChatView: View {
     /// Captures this screen once the menu is gone, then opens the report sheet. The capture
     /// is only attached when the user taps "+ Screenshot" (the sheet itself draws over the window).
     private func reportProblem() {
+        if let onUnavailableRoute {
+            // The playground sends no reports: its content is fake and must stay on the device.
+            onUnavailableRoute("Report a problem")
+            return
+        }
         resignComposerKeyboard()
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(250))
@@ -1278,7 +1494,34 @@ struct SessionChatView: View {
         SessionChatComposerKind.resolve(
             isChildSession: session.parentID != nil,
             hasPermission: viewModel.uiState.permissionRequest != nil && !viewModel.uiState.permissionDockHidden,
-            hasQuestion: viewModel.uiState.questionRequest != nil
+            hasQuestion: viewModel.uiState.questionRequest != nil && !viewModel.uiState.questionDockHidden
+        )
+    }
+
+    /// The prompt takes attachments: the Attach button, paste of images and files, and drops.
+    private var promptAttachEnabled: Bool {
+        let composer = viewModel.uiState.composer
+        return composerAttachmentSources.isAttachEnabled &&
+            !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
+            composer.isModelSelectionReady &&
+            !composer.isShellMode &&
+            !viewModel.uiState.sideQuestions.composerMode
+    }
+
+    /// Drops attach only where the Attach button would: a prompt composer that takes attachments,
+    /// not mid-dictation. Otherwise drops fall through to the system default.
+    private var attachmentDropEnabled: Bool {
+        composerKind == .prompt && promptAttachEnabled && viewModel.uiState.dictation == nil
+    }
+
+    private var attachmentDropContext: AttachmentDropContext {
+        let composer = viewModel.uiState.composer
+        let option = composer.selectedModel?.option
+        return AttachmentDropContext(
+            imagesSupported: option?.supportsImageInput ?? true,
+            pdfSupported: option?.supportsPdfInput ?? true,
+            uploadAvailable: composer.streamedUploadAvailable,
+            draft: composer.attachments
         )
     }
 
@@ -1306,7 +1549,17 @@ struct SessionChatView: View {
                         .init(path: $0.path, additions: $0.additions, deletions: $0.deletions)
                     },
                     alwaysPatterns: request.always,
+                    queuePosition: viewModel.uiState.permissionQueuePosition,
                     queueCount: viewModel.uiState.permissionQueueCount,
+                    attribution: viewModel.uiState.permissionAttribution.map {
+                        composerAttribution(
+                            $0,
+                            summary: $0.permissionSummary(
+                                permission: request.permission,
+                                target: request.fileChanges.first?.path ?? request.patterns.first
+                            )
+                        )
+                    },
                     submitting: viewModel.uiState.permissionSubmitting,
                     actionsEnabled: viewModel.uiState.canMutate,
                     errorMessage: viewModel.uiState.permissionErrorMessage
@@ -1348,7 +1601,12 @@ struct SessionChatView: View {
                     submitEnabled: isValid && index == questionCount - 1 && !draft.questionSubmitting &&
                         viewModel.uiState.canMutate,
                     submitting: draft.questionSubmitting,
-                    errorMessage: draft.questionErrorMessage
+                    errorMessage: draft.questionErrorMessage,
+                    requestPosition: draft.questionQueuePosition,
+                    requestCount: draft.questionQueueCount,
+                    attribution: draft.questionAttribution.map {
+                        composerAttribution($0, summary: $0.questionSummary)
+                    }
                 )
             )
         } else if kind == .childLockout {
@@ -1360,6 +1618,19 @@ struct SessionChatView: View {
                 )
             )
         } else {
+            let sideQuestions = viewModel.uiState.sideQuestions
+            let sideQuestionMode = sideQuestions.composerMode
+            let blockedSideQuestion = !sideQuestions.supported && SideQuestion.question(inDraft: composer.text) != nil
+            let promptSendEnabled =
+                composer.hasSendableContent &&
+                !composer.hasPendingUploads &&
+                composer.selectedModel != nil &&
+                composer.isModelSelectionReady &&
+                !isSending &&
+                !blockedSideQuestion
+            // A side question answers with the session's own model, so it needs no model pick.
+            let sideQuestionSendEnabled =
+                !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             state = .prompt(
                 .init(
                     text: composer.text,
@@ -1374,24 +1645,19 @@ struct SessionChatView: View {
                     selectedVariantLabel: composer.selectedVariantLabel,
                     showVariant: composer.canSelectVariant,
                     sendEnabled:
-                        composer.hasSendableContent &&
-                        composer.selectedModel != nil &&
-                        composer.isModelSelectionReady &&
-                        !isSending &&
+                        (sideQuestionMode ? sideQuestionSendEnabled : promptSendEnabled) &&
                         !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
                         viewModel.uiState.timeline != .creating &&
                         viewModel.uiState.composerEnabled &&
                         viewModel.uiState.pendingSend == nil,
-                    attachEnabled: composerAttachmentSources.isAttachEnabled &&
-                        !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
-                        composer.isModelSelectionReady &&
-                        !composer.isShellMode,
+                    attachEnabled: promptAttachEnabled,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting &&
                         viewModel.uiState.canMutate,
-                    followUpDelivery: composer.supportsFollowUpDelivery ? composer.followUpDelivery : nil,
+                    followUpDelivery: composer.supportsFollowUpDelivery && !sideQuestionMode ? composer.followUpDelivery : nil,
                     showDictationButton: dictationSupport.showsMic,
-                    shellMode: composer.isShellMode
+                    shellMode: composer.isShellMode && !sideQuestionMode,
+                    sideQuestionMode: sideQuestionMode
                 )
             )
         }
@@ -1426,6 +1692,7 @@ struct SessionChatView: View {
             state: state,
             focusRequestToken: composerFocusRequest,
             dictation: kind == .prompt ? viewModel.uiState.dictation.map(composerDictation) : nil,
+            attachmentDragActive: attachmentDropSummary != nil,
             onAction: { action in
                 switch action {
                 case let .textChanged(text, selectionStart, _):
@@ -1461,10 +1728,14 @@ struct SessionChatView: View {
                     }
                 case let .removeAttachment(id):
                     viewModel.removeAttachment(id: id)
+                case let .pasteAttachments(providers):
+                    attachItemProviders(providers, source: .paste)
                 case .cancelRevert:
                     viewModel.cancelRevert()
                 case .exitShellMode:
                     viewModel.exitShellMode()
+                case .exitSideQuestionMode:
+                    viewModel.exitSideQuestionMode()
                 case .openCommands:
                     viewModel.openCommands()
                 case .send:
@@ -1481,6 +1752,16 @@ struct SessionChatView: View {
                     Task { await viewModel.alwaysAllowPermission(requestID: requestID, sessionID: sessionID) }
                 case let .hidePermission(requestID):
                     viewModel.hidePermissionDock(requestID: requestID)
+                case let .hideQuestion(requestID):
+                    viewModel.hideQuestionDock(requestID: requestID)
+                case let .pageRequest(delta):
+                    if composerKind == .permission {
+                        viewModel.pagePermission(by: delta)
+                    } else {
+                        viewModel.pageQuestion(by: delta)
+                    }
+                case let .openRequestSession(sessionID):
+                    openRequestSession(sessionID: sessionID)
                 case let .toggleQuestionOption(requestID, sessionID, label):
                     viewModel.toggleQuestionOption(requestID: requestID, sessionID: sessionID, label: label)
                 case let .toggleQuestionCustom(requestID, sessionID):
@@ -1513,6 +1794,29 @@ struct SessionChatView: View {
                 }
             },
             status: status
+        )
+    }
+
+    private func composerAttribution(
+        _ attribution: InboxRequestAttribution,
+        summary: String
+    ) -> OpenCodeSessionComposerState.RequestAttribution {
+        .init(sessionID: attribution.sessionID, letter: attribution.letter, summary: summary)
+    }
+
+    /// Opens the subagent session a permission or question comes from, as a child session.
+    private func openRequestSession(sessionID: String) {
+        let attribution = [viewModel.uiState.permissionAttribution, viewModel.uiState.questionAttribution]
+            .compactMap { $0 }
+            .first { $0.sessionID == sessionID }
+        guard let attribution else { return }
+        logChatAction(ProductAnalytics.Action.chatOpenChildSession)
+        childSessionTarget = ChildSessionNavigationTarget(
+            sessionID: attribution.sessionID,
+            sessionTitle: attribution.sessionTitle,
+            worktree: boundSession.worktree,
+            optimisticNavigationInstanceID: nil,
+            parentID: attribution.parentID
         )
     }
 
@@ -1753,6 +2057,7 @@ private extension SessionChatSnackbar {
         OpenCodeSnackbarMessage(
             text: message,
             variant: tone == .error ? .error : .default,
+            actionLabel: action?.label,
             id: id
         )
     }
@@ -1855,6 +2160,7 @@ private extension ClientSlashAction {
         case .redo: .redo
         case .compact: .verticalAlignCenter
         case .mcp: .plug
+        case .btw: .subdirectoryArrowRight
         }
     }
 }

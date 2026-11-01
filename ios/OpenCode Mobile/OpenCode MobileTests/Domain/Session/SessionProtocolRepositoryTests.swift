@@ -63,7 +63,7 @@ struct SessionProtocolRepositoryTests {
 
     @Test func v2ListSessionsAcceptsUntitledSessions() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
-            .json(#"{"directory":"/home/ivan"}"#),
+            .json(#"{"directory":"/home/example"}"#),
             .json(#"""
             {
               "data": [
@@ -73,8 +73,8 @@ struct SessionProtocolRepositoryTests {
                   "cost": 0,
                   "tokens": {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}},
                   "time": {"created": 1, "updated": 1},
-                  "location": {"directory": "/home/ivan"},
-                  "subpath": "home/ivan"
+                  "location": {"directory": "/home/example"},
+                  "subpath": "home/example"
                 },
                 {
                   "id": "ses_titled",
@@ -83,7 +83,7 @@ struct SessionProtocolRepositoryTests {
                   "cost": 0,
                   "tokens": {"input": 1, "output": 2, "reasoning": 0, "cache": {"read": 0, "write": 0}},
                   "time": {"created": 2, "updated": 3},
-                  "location": {"directory": "/home/ivan"}
+                  "location": {"directory": "/home/example"}
                 }
               ],
               "cursor": {"previous": null, "next": null}
@@ -92,11 +92,11 @@ struct SessionProtocolRepositoryTests {
         ])
         let repository = makeSessionRepository(serverProtocol: .v2)
 
-        let sessions = try await repository.listSessions(directory: "/home/ivan")
+        let sessions = try await repository.listSessions(directory: "/home/example")
 
         #expect(sessions.map(\.id) == ["ses_untitled", "ses_titled"])
         #expect(sessions.map(\.title) == ["New Session", "What is OpenCode 2?"])
-        #expect(sessions.first?.directory == "/home/ivan")
+        #expect(sessions.first?.directory == "/home/example")
     }
 
     @Test func v2ActiveStatusesMapRunningToBusy() async throws {
@@ -307,6 +307,29 @@ struct SessionProtocolRepositoryTests {
         await #expect(throws: (any Error).self) {
             _ = try await service.probeV2Features(connection: connection)
         }
+    }
+
+    @Test func probeV2FeaturesLeavesUploadUnresolvedWhenInfoFails() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(StreamedUploadContractTests.route),
+            StubResponse(statusCode: 503, body: "Unavailable"),
+        ])
+        let service = ConnectionProbeService(urlSession: makeURLSession())
+
+        let features = try await service.probeV2Features(connection: try #require(makeManager(serverProtocol: .v2).connection))
+
+        #expect(!features.streamedUpload)
+        #expect(features.uploadDirectoryUnread)
+    }
+
+    @Test func probeV2FeaturesInfoWithoutTmpIsAFinalAnswer() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [.json(StreamedUploadContractTests.route), .json("{}")])
+        let service = ConnectionProbeService(urlSession: makeURLSession())
+
+        let features = try await service.probeV2Features(connection: try #require(makeManager(serverProtocol: .v2).connection))
+
+        #expect(!features.streamedUpload)
+        #expect(!features.uploadDirectoryUnread)
     }
 
     @Test func v2ProjectCurrentUsesLocationDirectoryQuery() async throws {

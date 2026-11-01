@@ -1,0 +1,11 @@
+# gitleaks config, used by .github/workflows/secret-scan.yml and local runs.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Fake credentials that exercise the log redactors, and vendored xterm.js"
+paths = [
+  '''^shared/terminal-web/xterm\.js$''',
+  '''DiagnosticLogBufferTests?\.(kt|swift)$''',
+]

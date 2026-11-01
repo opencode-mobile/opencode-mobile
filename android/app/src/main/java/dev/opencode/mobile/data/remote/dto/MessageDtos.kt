@@ -59,6 +59,8 @@ data class MessageErrorDataDto(
     val isRetryable: Boolean? = null,
     val providerID: String? = null,
     val retries: Int? = null,
+    /** v2 `retryAfterMs`, carried here by the live event translation; v1 servers never send it. */
+    val retryAfterMs: Long? = null,
 )
 
 @Serializable
@@ -83,6 +85,8 @@ data class MessagePartDto(
     val mime: String? = null,
     val url: String? = null,
     val filename: String? = null,
+    /** Absolute server path of a file the client uploaded (from a v2 prompt's `metadata.attachments`). */
+    val serverPath: String? = null,
     val system: String? = null,
     val tool: String? = null,
     val source: JsonObject? = null,
@@ -128,6 +132,8 @@ data class MessageToolStateDto(
     val interrupted: Boolean? = null,
     /** Set when the server closed the call without running it (`executed: false`). */
     val malformed: Boolean? = null,
+    /** v1 completed-state files the tool returned (`url` is a `data:` URL); the v2 live projection fills it too. */
+    val attachments: List<MessagePartDto>? = null,
 )
 
 @Serializable
@@ -196,6 +202,8 @@ data class V2PromptRequestDto(
     val agents: List<V2PromptAgentDto>? = null,
     val skills: List<V2PromptSkillDto>? = null,
     val delivery: String,
+    /** `{attachments: [{name, mime, path}]}` for files uploaded to the server instead of sent inline. */
+    val metadata: JsonObject? = null,
     /** Project-file mentions. Written into `files` as literal URIs, after device attachments. */
     @Transient val fileMentions: List<V2PromptFileMentionDto>? = null,
 )

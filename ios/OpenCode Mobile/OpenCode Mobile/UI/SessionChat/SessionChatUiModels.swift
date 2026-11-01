@@ -13,6 +13,10 @@ struct SessionChatRow: Identifiable, Equatable {
     let modelProviderID: String?
     let modelID: String?
     let contextInputTokens: Int64?
+    /// When the message was sent; user bubbles reveal it on a drag.
+    let sentAtEpochMs: Int64?
+    /// Set on a prompt steered into a running turn, pending or delivered.
+    let steer: SessionChatSteer?
     /// Working-row only: reserved list identity collapsed after the Idle hold.
     let isLayoutCollapsed: Bool
 
@@ -29,6 +33,8 @@ struct SessionChatRow: Identifiable, Equatable {
         modelProviderID: String? = nil,
         modelID: String? = nil,
         contextInputTokens: Int64? = nil,
+        sentAtEpochMs: Int64? = nil,
+        steer: SessionChatSteer? = nil,
         isLayoutCollapsed: Bool = false
     ) {
         self.id = id
@@ -43,6 +49,8 @@ struct SessionChatRow: Identifiable, Equatable {
         self.modelProviderID = modelProviderID
         self.modelID = modelID
         self.contextInputTokens = contextInputTokens
+        self.sentAtEpochMs = sentAtEpochMs
+        self.steer = steer
         self.isLayoutCollapsed = isLayoutCollapsed
     }
 
@@ -59,6 +67,8 @@ struct SessionChatRow: Identifiable, Equatable {
               lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count,
               lhs.text.count == rhs.text.count,
               lhs.metadataLabel == rhs.metadataLabel,
+              lhs.sentAtEpochMs == rhs.sentAtEpochMs,
+              lhs.steer == rhs.steer,
               lhs.pendingDelivery == rhs.pendingDelivery,
               lhs.isLayoutCollapsed == rhs.isLayoutCollapsed,
               lhs.blocks.count == rhs.blocks.count
@@ -118,6 +128,11 @@ struct SessionChatComposerState: Equatable {
     var selectionRevision: Int = 0
     var followUpDelivery: FollowUpDelivery = .steer
     var supportsFollowUpDelivery = false
+    /// The server streams uploads (`POST /api/experimental/fs/write`), so any file can attach.
+    var streamedUploadAvailable = false
+
+    /// Send waits for every upload in flight (#644).
+    var hasPendingUploads: Bool { attachments.contains(where: \.isUploadPending) }
 
     var selectedModeLabel: String {
         selectableAgents.first { $0.id.compare(selectedMode, options: .caseInsensitive) == .orderedSame }?.displayName
@@ -160,15 +175,15 @@ struct SessionChatComposerState: Equatable {
     }
 
     var canAttach: Bool {
-        selectedModel?.option.canAttach == true
+        selectedModel?.option.canAttach == true || (selectedModel != nil && streamedUploadAvailable)
     }
 
     var canAttachPhotos: Bool {
-        selectedModel?.option.canAttachPhotos == true
+        selectedModel?.option.canAttachPhotos == true || (selectedModel != nil && streamedUploadAvailable)
     }
 
     var canAttachFiles: Bool {
-        selectedModel?.option.canAttachFiles == true
+        selectedModel?.option.canAttachFiles == true || (selectedModel != nil && streamedUploadAvailable)
     }
 
     func attachmentSources(developerToolsUnlocked: Bool) -> ComposerAttachmentSources {
@@ -209,10 +224,23 @@ enum SessionChatSnackbarTone: Equatable {
     case error
 }
 
+/// A button on a Session Chat snackbar.
+enum SessionChatSnackbarAction: Equatable {
+    /// Ask a failed `/btw` question again.
+    case retrySideQuestion(UUID)
+
+    var label: String {
+        switch self {
+        case .retrySideQuestion: "Retry"
+        }
+    }
+}
+
 struct SessionChatSnackbar: Equatable, Identifiable {
     let id: UInt64
     let message: String
     let tone: SessionChatSnackbarTone
+    var action: SessionChatSnackbarAction? = nil
 }
 
 enum ComposerDictationPhase: Equatable {
@@ -273,6 +301,8 @@ struct SessionChatUiState: Equatable {
     var workingIndicatorLabel: String? = nil
     /// Live rate-limit countdown. Hidden for content-filter retries.
     var retryCard: SessionRetryCard? = nil
+    /// The session is in `retry` status: the composer owns the countdown, failure marks show none.
+    var isRetrying: Bool = false
     /// True after the Idle hold when the reserved footer has collapsed.
     var workingIndicatorCollapsed: Bool = false
     /// True while the reserved Working lamp/label is fading through the idle hold.
@@ -285,6 +315,10 @@ struct SessionChatUiState: Equatable {
     var sessionTodoActivePreview: SessionTodo?
     var sessionTodoCompletedCount: Int = 0
     var sessionTodoTotalCount: Int = 0
+    /// Subagents this session started, in background work panel order.
+    var subagents: [SessionChatSubagent] = []
+    /// The background work pill; nil when no subagent works or waits.
+    var backgroundWorkPill: SessionChatBackgroundWorkPill? = nil
     var connectionStatus: SessionConnectionStatus = .offline
     var canMutate = false
     var composerEnabled = false
@@ -296,12 +330,25 @@ struct SessionChatUiState: Equatable {
     var isLifecycleActionInFlight: Bool = false
     var shouldLeaveSession: Bool = false
     var permissionRequest: PermissionRequest?
+    /// 1-based position of `permissionRequest` among the waiting permissions.
+    var permissionQueuePosition: Int = 1
     var permissionQueueCount: Int = 0
+    /// The subagent asking for `permissionRequest`; nil for the session's own requests.
+    var permissionAttribution: InboxRequestAttribution?
     /// The permission dock is collapsed to a "Review permission" pill above the composer.
     var permissionDockHidden: Bool = false
     var permissionSubmitting: Bool = false
     var permissionErrorMessage: String?
     var questionRequest: QuestionRequest?
+    /// 1-based position of `questionRequest` among the waiting question requests.
+    var questionQueuePosition: Int = 1
+    var questionQueueCount: Int = 0
+    /// The subagent asking `questionRequest`; nil for the session's own questions.
+    var questionAttribution: InboxRequestAttribution?
+    /// The question panel is collapsed to an "Answer question" pill above the composer.
+    var questionDockHidden: Bool = false
+    /// Bumped each time a pill opens the permission or question panel; the panel pulses on change.
+    var inboxPanelPulse = 0
     var questionWizardIndex: Int = 0
     var questionSelectedLabels: [String] = []
     var questionCustomText = ""
@@ -355,11 +402,15 @@ struct SessionChatUiState: Equatable {
     var activityCardFooters: [String: SessionChatActivityFooter] = [:]
     /// In-flight steps not rendered yet: seen running for less than the entry debounce (#779).
     var debouncedStepIDs: Set<String> = []
+    /// The image viewer open over a gallery: its images and the shown page (#898).
+    var imageViewer: SessionChatImageViewerState?
     /// One-time Chip timeline intro sheet (OPE-270).
     var chipTimelineIntroVisible = false
     /// One-time Timeline Style picker for updated installs (#805).
     var timelineStylePickerVisible = false
     var dictation: ComposerDictationUiState? = nil
+    /// `/btw` side questions: composer mode, chips above the composer and the answer sheet.
+    var sideQuestions = SessionChatSideQuestionsUiState()
 
     /// A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet.
     var blocksChipTimelineIntro: Bool {
@@ -367,6 +418,7 @@ struct SessionChatUiState: Equatable {
             || questionRequest != nil
             || commandsSheetVisible
             || presentedActivityCard != nil
+            || imageViewer != nil
             || mcpPageVisible
             || forkDialogVisible
             || forkResultVisible
@@ -509,47 +561,12 @@ enum SessionBranchPillVisibility {
     }
 }
 
-/// The one pill shown at the top of the Session Chat timeline.
-/// Priority: Syncing, then ToDo, then Branch / Changes.
-enum SessionChatTopPill: Equatable {
-    case syncing(label: String)
-    case todos
-    case branch(SessionChatBranchPillUiState)
-
-    /// Syncing waits this long before it takes the slot, so a fast catch-up
-    /// does not flash the ToDo or Branch pill out and back in.
-    static let syncingShowDelay: Duration = .milliseconds(400)
-    /// Once shown, Syncing keeps the slot at least this long.
-    static let syncingMinimumVisible: Duration = .milliseconds(600)
-
-    static func resolve(
-        syncingLabel: String?,
-        todosVisible: Bool,
-        todoTotalCount: Int,
-        branchPill: SessionChatBranchPillUiState?,
-        hideFloatStack: Bool
-    ) -> SessionChatTopPill? {
-        if let syncingLabel {
-            return .syncing(label: syncingLabel)
-        }
-        if !hideFloatStack, todosVisible, todoTotalCount > 0 {
-            return .todos
-        }
-        if SessionBranchPillVisibility.shouldShow(pill: branchPill, hideFloatStack: hideFloatStack),
-           let branchPill {
-            return .branch(branchPill)
-        }
-        return nil
-    }
-
-    /// Stable per pill kind so label or count updates do not re-run the swap transition.
-    var kind: Int {
-        switch self {
-        case .syncing: 0
-        case .todos: 1
-        case .branch: 2
-        }
-    }
+/// Timing of the Syncing pill in the bottom-left activity slot.
+enum SessionChatSyncingPillTiming {
+    /// Syncing waits this long before it shows, so a fast catch-up does not flash.
+    static let showDelay: Duration = .milliseconds(400)
+    /// Once shown, Syncing stays at least this long.
+    static let minimumVisible: Duration = .milliseconds(600)
 }
 
 struct ReviewChangesSummary: Equatable {
@@ -649,6 +666,12 @@ struct ChildSessionNavigationTarget: Hashable {
     }
 }
 
+/// The image viewer over one gallery: every image of the group and the page shown.
+struct SessionChatImageViewerState: Equatable {
+    let images: [FilePart]
+    var index: Int
+}
+
 struct SessionChatTimelineRegionState: Equatable {
     var timeline: SessionChatTimelineState = .loading
     var messages: [SessionChatRow] = []
@@ -670,6 +693,8 @@ struct SessionChatTimelineRegionState: Equatable {
     var activityCardFooters: [String: SessionChatActivityFooter] = [:]
     /// In-flight steps not rendered yet: seen running for less than the entry debounce (#779).
     var debouncedStepIDs: Set<String> = []
+    /// The image viewer open over a gallery (#898).
+    var imageViewer: SessionChatImageViewerState?
 
     var knownChildSessionIDs: Set<String> {
         Set(
@@ -820,7 +845,10 @@ struct SessionInfoRegionState: Equatable {
     var sessionTitle: String = ""
     var sessionStatusLabel: String?
     var retryCard: SessionRetryCard?
+    var isRetrying = false
     var hasResolvedSessionStatus = false
+    /// Sessions in this directory the server reports running, so subagent rows follow their child sessions.
+    var busySessionIDs: Set<String> = []
     var connectionStatus: SessionConnectionStatus = .offline
     var canMutate = false
     var composerEnabled = false
@@ -833,11 +861,13 @@ struct SessionInfoRegionState: Equatable {
     mutating func applyStatus(
         authoritative: String?,
         hasResolved: Bool = true,
-        retryCard: SessionRetryCard? = nil
+        retryCard: SessionRetryCard? = nil,
+        isRetrying: Bool = false
     ) {
         sessionStatusLabel = authoritative
         hasResolvedSessionStatus = hasResolved
         self.retryCard = retryCard
+        self.isRetrying = isRetrying
     }
 }
 
@@ -846,27 +876,79 @@ struct PendingSend: Equatable {
 }
 
 struct SessionChatInboxRegionState: Equatable {
+    /// The session the inbox is bound to; requests from any other session are a subagent's.
+    var rootSessionID = ""
     var permissionRequests: [PermissionRequest] = []
+    /// The permission request the panel pages to; nil or gone means the first one.
+    var permissionSelectedID: String?
     /// The pending permission the user tucked away to reach the composer (never rejects it).
     var permissionHiddenID: String?
     var permissionSubmittingID: String?
     var permissionError: String?
     var permissionTopologyError: String?
+    /// Sessions loaded to place descendant permission requests; also names the asking subagent.
+    var permissionSessions: [Session] = []
     var questionRequests: [QuestionRequest] = []
+    /// The question request the panel pages to; nil or gone means the first one.
+    var questionSelectedID: String?
+    /// The pending question the user collapsed to an "Answer question" pill (never dismisses it).
+    var questionHiddenID: String?
     var questionSubmittingID: String?
     var questionError: String?
     var questionTopologyError: String?
+    var questionSessions: [Session] = []
     var questionWizardIndex = 0
     var questionDrafts: [Int: QuestionAnswerDraft] = [:]
     var sessionTodos: [SessionTodo] = []
+    /// Bumped each time a pill opens the permission or question panel, so the panel pulses.
+    var panelPulse = 0
 
-    var visibleQuestionRequest: QuestionRequest? {
-        permissionRequests.isEmpty ? questionRequests.first : nil
+    var permissionPageIndex: Int {
+        InboxRequestPaging.index(ids: permissionRequests.map(\.id), selectedID: permissionSelectedID)
     }
 
-    /// True while the first pending permission is the one the user hid; a new request shows again.
+    var visiblePermissionRequest: PermissionRequest? {
+        permissionRequests.isEmpty ? nil : permissionRequests[permissionPageIndex]
+    }
+
+    /// The question request the panel pages to, regardless of a waiting permission.
+    var selectedQuestionRequest: QuestionRequest? {
+        guard !questionRequests.isEmpty else { return nil }
+        return questionRequests[questionPageIndex]
+    }
+
+    var questionPageIndex: Int {
+        InboxRequestPaging.index(ids: questionRequests.map(\.id), selectedID: questionSelectedID)
+    }
+
+    var visibleQuestionRequest: QuestionRequest? {
+        permissionRequests.isEmpty ? selectedQuestionRequest : nil
+    }
+
+    /// True while the shown permission is the one the user hid; paging or a new request shows again.
     var isPermissionDockHidden: Bool {
-        permissionHiddenID != nil && permissionRequests.first?.id == permissionHiddenID
+        permissionHiddenID != nil && visiblePermissionRequest?.id == permissionHiddenID
+    }
+
+    /// True while the shown question is the one the user collapsed.
+    var isQuestionDockHidden: Bool {
+        questionHiddenID != nil && visibleQuestionRequest?.id == questionHiddenID
+    }
+
+    var visiblePermissionAttribution: InboxRequestAttribution? {
+        visiblePermissionRequest.flatMap {
+            InboxRequestAttribution.resolve(
+                requestSessionID: $0.sessionID, rootSessionID: rootSessionID, sessions: permissionSessions
+            )
+        }
+    }
+
+    var visibleQuestionAttribution: InboxRequestAttribution? {
+        visibleQuestionRequest.flatMap {
+            InboxRequestAttribution.resolve(
+                requestSessionID: $0.sessionID, rootSessionID: rootSessionID, sessions: questionSessions
+            )
+        }
     }
 
     var questionDraft: QuestionAnswerDraft {
@@ -890,17 +972,26 @@ struct SessionChatRepoStripRegionState: Equatable {
 
 /// Floating session branch pill. Nil when the worktree branch is unknown.
 struct SessionChatBranchPillUiState: Equatable {
-    let branch: String
-    let additions: Int
-    let deletions: Int
+    let summary: OpenCodeSessionBranchSummary
 
-    static func resolved(from region: SessionChatRepoStripRegionState) -> SessionChatBranchPillUiState? {
+    var branch: String { summary.branch }
+    var additions: Int { summary.additions }
+    var deletions: Int { summary.deletions }
+
+    /// `isWorktree` is the worktree-checkout mark the title chrome already uses.
+    static func resolved(
+        from region: SessionChatRepoStripRegionState,
+        isWorktree: Bool = false
+    ) -> SessionChatBranchPillUiState? {
         guard region.isAvailable, !region.branch.isEmpty else { return nil }
-        return SessionChatBranchPillUiState(
+        return SessionChatBranchPillUiState(summary: OpenCodeSessionBranchSummary(
             branch: region.branch,
-            additions: max(0, region.files.reduce(0) { $0 + $1.additions }),
-            deletions: max(0, region.files.reduce(0) { $0 + $1.deletions })
-        )
+            baseBranch: region.defaultBranch,
+            isWorktree: isWorktree,
+            files: region.files.map {
+                OpenCodeSessionBranchChangedFile(path: $0.path, additions: max(0, $0.additions), deletions: max(0, $0.deletions))
+            }
+        ))
     }
 }
 
@@ -1007,6 +1098,27 @@ struct PendingPrompt: Equatable, Identifiable, Sendable {
 }
 
 extension SessionChatRow {
+    func withSteer(_ steer: SessionChatSteer?) -> SessionChatRow {
+        guard steer != self.steer else { return self }
+        return SessionChatRow(
+            id: id,
+            role: role,
+            text: text,
+            metadataLabel: metadataLabel,
+            pendingDelivery: pendingDelivery,
+            isPending: isPending,
+            isStreaming: isStreaming,
+            renderedMarkdown: renderedMarkdown,
+            blocks: blocks,
+            modelProviderID: modelProviderID,
+            modelID: modelID,
+            contextInputTokens: contextInputTokens,
+            sentAtEpochMs: sentAtEpochMs,
+            steer: steer,
+            isLayoutCollapsed: isLayoutCollapsed
+        )
+    }
+
     func withRenderedMarkdown(_ document: NativeMarkdownDocument?) -> SessionChatRow {
         SessionChatRow(
             id: id,
@@ -1020,7 +1132,9 @@ extension SessionChatRow {
             blocks: blocks,
             modelProviderID: modelProviderID,
             modelID: modelID,
-            contextInputTokens: contextInputTokens
+            contextInputTokens: contextInputTokens,
+            sentAtEpochMs: sentAtEpochMs,
+            steer: steer
         )
     }
 }

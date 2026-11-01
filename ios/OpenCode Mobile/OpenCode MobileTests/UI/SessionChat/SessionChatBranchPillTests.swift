@@ -3,7 +3,7 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct SessionChatBranchPillTests {
-    @Test func knownBranchShowsPillWithSummedCounts() {
+    @Test func knownBranchShowsPillWithSummedCountsAndBase() {
         let pill = SessionChatBranchPillUiState.resolved(from: SessionChatRepoStripRegionState(
             isAvailable: true,
             branch: "fix/probe",
@@ -15,33 +15,32 @@ struct SessionChatBranchPillTests {
             isExpanded: true
         ))
 
-        #expect(pill == SessionChatBranchPillUiState(branch: "fix/probe", additions: 42, deletions: 26))
+        #expect(pill?.branch == "fix/probe")
+        #expect(pill?.additions == 42)
+        #expect(pill?.deletions == 26)
+        #expect(pill?.summary.visibleBaseBranch == "main")
+        #expect(pill?.summary.isWorktree == false)
+        #expect(pill?.summary.files == [
+            .init(path: "a.kt", additions: 42, deletions: 7),
+            .init(path: "b.md", additions: 0, deletions: 19),
+        ])
         #expect(SessionBranchPillVisibility.shouldShow(pill: pill, hideFloatStack: false))
     }
 
-    @Test func additionsOnlyAndDeletionsOnlyKeepZeroSide() {
-        let additionsOnly = SessionChatBranchPillUiState.resolved(from: region(branch: "fix/probe", files: [
-            VcsFileStatus(path: "a.kt", status: .added, additions: 5, deletions: 0),
-        ]))
-        let deletionsOnly = SessionChatBranchPillUiState.resolved(from: region(branch: "fix/probe", files: [
-            VcsFileStatus(path: "a.kt", status: .deleted, additions: 0, deletions: 2),
-        ]))
+    @Test func worktreeCheckoutMarksTheSummary() {
+        let pill = SessionChatBranchPillUiState.resolved(from: region(branch: "fix/probe", files: []), isWorktree: true)
 
-        #expect(additionsOnly == SessionChatBranchPillUiState(branch: "fix/probe", additions: 5, deletions: 0))
-        #expect(deletionsOnly == SessionChatBranchPillUiState(branch: "fix/probe", additions: 0, deletions: 2))
-        #expect(OpenCodeSessionBranchPill.additionLabel(additions: additionsOnly?.additions ?? -1) == "+5")
-        #expect(OpenCodeSessionBranchPill.deletionLabel(deletions: additionsOnly?.deletions ?? -1) == nil)
-        #expect(OpenCodeSessionBranchPill.additionLabel(additions: deletionsOnly?.additions ?? -1) == nil)
-        #expect(OpenCodeSessionBranchPill.deletionLabel(deletions: deletionsOnly?.deletions ?? -1) == "−2")
+        #expect(pill?.summary.isWorktree == true)
+        #expect(pill?.summary.icon == .callSplit)
     }
 
-    @Test func cleanBranchShowsNameWithoutCounts() {
+    @Test func cleanBranchShowsIconOnlyPill() {
         let pill = SessionChatBranchPillUiState.resolved(from: region(branch: "main", files: []))
 
-        #expect(pill == SessionChatBranchPillUiState(branch: "main", additions: 0, deletions: 0))
+        #expect(pill?.additions == 0)
+        #expect(pill?.deletions == 0)
+        #expect(pill?.summary.changeLabel == nil)
         #expect(SessionBranchPillVisibility.shouldShow(pill: pill, hideFloatStack: false))
-        #expect(OpenCodeSessionBranchPill.additionLabel(additions: 0) == nil)
-        #expect(OpenCodeSessionBranchPill.deletionLabel(deletions: 0) == nil)
     }
 
     @Test func unavailableOrEmptyBranchHidesPill() {
@@ -57,7 +56,7 @@ struct SessionChatBranchPillTests {
     }
 
     @Test func todosSheetHidesKnownBranch() {
-        let pill = SessionChatBranchPillUiState(branch: "main", additions: 1, deletions: 0)
+        let pill = SessionChatBranchPillUiState.resolved(from: region(branch: "main", files: []))
         #expect(!SessionBranchPillVisibility.shouldShow(pill: pill, hideFloatStack: true))
     }
 

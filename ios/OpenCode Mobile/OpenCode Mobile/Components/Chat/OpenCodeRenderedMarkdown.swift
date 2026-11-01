@@ -14,6 +14,25 @@ enum OpenCodeRenderedMarkdownDetector: Sendable {
     }
 }
 
+/// What a tap on assistant text landed on.
+enum OpenCodeMessageTapTarget: Equatable {
+    case text
+    case codeBlock(String)
+}
+
+private struct MarkdownCodeBlockTapActionKey: EnvironmentKey {
+    static let defaultValue: ((String) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    /// Set by a message that offers actions: tapping or long-pressing a code
+    /// or diff block calls it with the block's text.
+    var markdownCodeBlockTapAction: ((String) -> Void)? {
+        get { self[MarkdownCodeBlockTapActionKey.self] }
+        set { self[MarkdownCodeBlockTapActionKey.self] = newValue }
+    }
+}
+
 struct OpenCodeRenderedMarkdown: View {
     let document: NativeMarkdownDocument
     let variant: OpenCodeRenderedMarkdownVariant
@@ -166,11 +185,12 @@ struct OpenCodeRenderedMarkdown: View {
                 .padding(.vertical, 10)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 6))
+        .background(OpenCodeColors.codeBackground(or: OpenCodeColors.surfaceRaisedBase), in: RoundedRectangle(cornerRadius: 6))
         .overlay(
             RoundedRectangle(cornerRadius: 6)
                 .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         )
+        .modifier(MarkdownCodeBlockTapTarget(code: code))
     }
 
     private func diffBlock(lines: [NativeDiffLine]) -> some View {
@@ -179,11 +199,12 @@ struct OpenCodeRenderedMarkdown: View {
                 .padding(.vertical, 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 6))
+        .background(OpenCodeColors.codeBackground(or: OpenCodeColors.surfaceRaisedBase), in: RoundedRectangle(cornerRadius: 6))
         .overlay(
             RoundedRectangle(cornerRadius: 6)
                 .stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1)
         )
+        .modifier(MarkdownCodeBlockTapTarget(code: lines.map(\.text).joined(separator: "\n")))
     }
 
     private func table(
@@ -402,7 +423,7 @@ enum NativeMarkdownAttributedString {
     ) -> AttributedString {
         var output = AttributedString(code)
         output.font = OpenCodeTypography.code
-        output.foregroundColor = OpenCodeColors.textStrong
+        output.foregroundColor = OpenCodeColors.codeText
 
         let sortedSpans = spans.sorted {
             let leftPriority = stylePriority(for: $0.role)
@@ -557,43 +578,9 @@ enum NativeMarkdownAttributedString {
         }
     }
 
+    /// Every highlighted surface colors roles through `OpenCodeCodeColors`.
     private static func color(for role: NativeCodeTokenRole) -> Color {
-        switch role {
-        case .plain:
-            OpenCodeColors.textStrong
-        case .comment:
-            OpenCodeColors.syntaxComment
-        case .keyword:
-            OpenCodeColors.syntaxKeyword
-        case .type:
-            OpenCodeColors.syntaxType
-        case .variable:
-            OpenCodeColors.syntaxVariable
-        case .property:
-            OpenCodeColors.syntaxConstant
-        case .constant:
-            OpenCodeColors.syntaxConstant
-        case .function:
-            OpenCodeColors.syntaxPrimitive
-        case .number, .attribute:
-            OpenCodeColors.syntaxProperty
-        case .string:
-            OpenCodeColors.syntaxString
-        case .operatorToken:
-            OpenCodeColors.syntaxOperator
-        case .punctuation:
-            OpenCodeColors.syntaxPunctuation
-        case .tag:
-            OpenCodeColors.syntaxInfo
-        case .inserted:
-            OpenCodeColors.diffAdd
-        case .deleted:
-            OpenCodeColors.diffDelete
-        case .warning:
-            OpenCodeColors.syntaxDiffUnknown
-        case .critical:
-            OpenCodeColors.syntaxCritical
-        }
+        OpenCodeColors.code(role)
     }
 }
 
@@ -616,27 +603,10 @@ struct NativeCodeColorPalette: Sendable {
     @MainActor
     static func current() -> NativeCodeColorPalette {
         NativeCodeColorPalette(
-            colors: [
-                .plain: UIColor(OpenCodeColors.textStrong),
-                .comment: UIColor(OpenCodeColors.syntaxComment),
-                .keyword: UIColor(OpenCodeColors.syntaxKeyword),
-                .type: UIColor(OpenCodeColors.syntaxType),
-                .variable: UIColor(OpenCodeColors.syntaxVariable),
-                .property: UIColor(OpenCodeColors.syntaxConstant),
-                .constant: UIColor(OpenCodeColors.syntaxConstant),
-                .function: UIColor(OpenCodeColors.syntaxPrimitive),
-                .number: UIColor(OpenCodeColors.syntaxProperty),
-                .attribute: UIColor(OpenCodeColors.syntaxProperty),
-                .string: UIColor(OpenCodeColors.syntaxString),
-                .operatorToken: UIColor(OpenCodeColors.syntaxOperator),
-                .punctuation: UIColor(OpenCodeColors.syntaxPunctuation),
-                .tag: UIColor(OpenCodeColors.syntaxInfo),
-                .inserted: UIColor(OpenCodeColors.diffAdd),
-                .deleted: UIColor(OpenCodeColors.diffDelete),
-                .warning: UIColor(OpenCodeColors.syntaxDiffUnknown),
-                .critical: UIColor(OpenCodeColors.syntaxCritical),
-            ],
-            plain: UIColor(OpenCodeColors.textStrong),
+            colors: Dictionary(
+                uniqueKeysWithValues: NativeCodeTokenRole.allCases.map { ($0, UIColor(OpenCodeColors.code($0))) }
+            ),
+            plain: UIColor(OpenCodeColors.codeText),
             cacheRevision: ThemeManager.shared.revision
         )
     }
@@ -692,6 +662,43 @@ private struct MarkdownTableLayout<Content: View>: View {
     }
 }
 
+/// Makes a code or diff block its own tap target when the message offers
+/// actions: a tap or long-press flashes the block and passes its text on.
+/// Inner gestures win over the bubble's long-press, and the horizontal
+/// scroll still cancels a tap that turns into a swipe.
+private struct MarkdownCodeBlockTapTarget: ViewModifier {
+    let code: String
+
+    @Environment(\.markdownCodeBlockTapAction) private var tapAction
+    @State private var isHighlighted = false
+
+    func body(content: Content) -> some View {
+        if let tapAction {
+            content
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(OpenCodeColors.textStrong.opacity(isHighlighted ? 0.08 : 0))
+                        .allowsHitTesting(false)
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+                .onTapGesture { open(tapAction) }
+                .onLongPressGesture { open(tapAction) }
+                .accessibilityAction(named: "Code block actions") { open(tapAction) }
+        } else {
+            content
+        }
+    }
+
+    private func open(_ tapAction: (String) -> Void) {
+        isHighlighted = true
+        // Fade on the next turn so the highlighted frame is committed first.
+        DispatchQueue.main.async {
+            withAnimation(.easeOut(duration: 0.3)) { isHighlighted = false }
+        }
+        tapAction(code)
+    }
+}
+
 private struct InlineMarkdownText: View {
     let inlines: [NativeMarkdownInline]
     let font: Font
@@ -717,7 +724,7 @@ private struct DeferredHighlightedCodeText: View {
         if forcePlain {
             Text(code)
                 .font(OpenCodeTypography.code)
-                .foregroundStyle(OpenCodeColors.textStrong)
+                .foregroundStyle(OpenCodeColors.codeText)
         } else {
             Text(NativeMarkdownAttributedString.code(code, spans: spans))
                 .font(OpenCodeTypography.code)
@@ -1048,7 +1055,7 @@ nonisolated struct NativeCodeSpan: Decodable, Hashable, Sendable {
     let role: NativeCodeTokenRole
 }
 
-nonisolated enum NativeCodeTokenRole: String, Decodable, Hashable, Sendable {
+nonisolated enum NativeCodeTokenRole: String, CaseIterable, Decodable, Hashable, Sendable {
     case plain = "Plain"
     case comment = "Comment"
     case keyword = "Keyword"

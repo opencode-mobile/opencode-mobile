@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.message
 
+import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -76,5 +77,26 @@ class StreamingDecorationTargetTest {
         assertNotNull(target)
         assertEquals(PresentationBlockId.messageFallback("msg-1"), target!!.blockID)
         assertEquals("hello", target.plain)
+    }
+
+    @Test
+    fun liveDocumentsAreDroppedOnceTheirMessageStopsStreamingOrLeaves() {
+        fun message(
+            id: String,
+            streaming: Boolean,
+        ) = Message(
+            id = id,
+            role = MessageRole.Assistant,
+            text = "# $id",
+            parts = listOf(MessagePart.Text(text = "# $id", isStreaming = streaming, id = "prt-$id")),
+        )
+        val document = MarkdownDocument(sourceHash = 1, blocks = emptyList())
+        val docs = mutableMapOf("live" to document, "done" to document, "gone" to document)
+
+        docs.retainStillStreaming(listOf(message("live", streaming = true), message("done", streaming = false)))
+        assertEquals(setOf("live"), docs.keys)
+
+        docs.retainStillStreaming(listOf(message("live", streaming = false)))
+        assertTrue(docs.isEmpty())
     }
 }

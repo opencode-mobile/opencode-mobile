@@ -26,8 +26,8 @@ enum class ComponentGalleryEntryId {
     Tag,
     KeyValueRow,
     Attachment,
+    ImageGallery,
     OutgoingMessage,
-    PendingPromptsStrip,
     AssistantMessage,
     ToolCallCard,
     ToolChip,
@@ -56,10 +56,10 @@ enum class ComponentGalleryEntryId {
     FilterTabs,
     ActionPill,
     ActionTile,
-    SyncingPill,
+    FloatingPill,
+    BackgroundWorkPill,
     ComposerSuggestionOverlay,
     ReviewChangesPill,
-    SessionTodosPill,
     SessionTodoItem,
     HunkNavigationPill,
     UnifiedDiff,
@@ -81,6 +81,7 @@ enum class ComponentGalleryEntryId {
     SessionBranchPill,
     SessionComposer,
     DictationCard,
+    DropOverlay,
     RenderedMarkdown,
     MessageList,
 }
@@ -161,9 +162,11 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(
-            id = ComponentGalleryEntryId.SyncingPill,
-            title = "Syncing Pill",
-            description = "Non-interactive floating status pill for quiet cache→network sync.",
+            id = ComponentGalleryEntryId.FloatingPill,
+            title = "Floating Pill",
+            description =
+                "Shared Session Chat pill: icon + label, icon only, live counter, or label with close, " +
+                    "in live, ready, needs attention, error, and done.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(
@@ -335,6 +338,12 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.ImageGallery,
+            title = "Image Gallery",
+            description = "Inline image mosaic by count with +N overflow, and the paged full-screen viewer.",
+            category = ComponentGalleryCategory.Chat,
+        ),
+        ComponentGalleryEntry(
             id = ComponentGalleryEntryId.MessageList,
             title = "Message List",
             description = "Scrollable outgoing and incoming message list with scroll-to-end pill.",
@@ -344,12 +353,6 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.OutgoingMessage,
             title = "Outgoing Message",
             description = "Trailing prompt card that renders sent prompts at full height.",
-            category = ComponentGalleryCategory.Chat,
-        ),
-        ComponentGalleryEntry(
-            id = ComponentGalleryEntryId.PendingPromptsStrip,
-            title = "Pending Prompts Strip",
-            description = "Compact capsule between the timeline and composer for prompts waiting in the inbox.",
             category = ComponentGalleryCategory.Chat,
         ),
         ComponentGalleryEntry(
@@ -449,9 +452,15 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.DropOverlay,
+            title = "Drop Overlay",
+            description = "Drag-over scrim card for images and files dropped on Session Chat.",
+            category = ComponentGalleryCategory.Session,
+        ),
+        ComponentGalleryEntry(
             id = ComponentGalleryEntryId.SessionBranchPill,
             title = "Session Branch Pill",
-            description = "Floating worktree branch and uncommitted line counts.",
+            description = "Floating branch pill with uncommitted line counts and a branch details popover.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(
@@ -473,9 +482,11 @@ val ComponentGalleryEntries =
             category = ComponentGalleryCategory.Diffs,
         ),
         ComponentGalleryEntry(
-            id = ComponentGalleryEntryId.SessionTodosPill,
-            title = "Session Todos Pill",
-            description = "Floating live Session Todo List progress and active preview.",
+            id = ComponentGalleryEntryId.BackgroundWorkPill,
+            title = "Background Work Pill",
+            description =
+                "Session Chat subagent counter on the floating pill, amber when a subagent needs input, " +
+                    "and the Subagents panel with live timers.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(

@@ -18,7 +18,29 @@ const QUESTION_CALLS = [
   { steps: [say("Got it. I'll go with that and fall back to `USD`.")] },
 ];
 
+// Read-only step N of a long turn, numbered so each sheet row is easy to tell apart.
+const longTurnStep = (n) =>
+  n % 2 === 0
+    ? { op: "tool", name: "grep", input: { pattern: `step ${n}|cents`, include: "*.ts" } }
+    : { op: "tool", name: "glob", input: { pattern: `src/**/step-${n}*.ts` } };
+
 export const P1 = [
+  {
+    id: "tool-long-turn",
+    priority: "P1",
+    title: "Long turn: 24 steps with no text between them",
+    category: "tools",
+    prompt: "Audit every money path in the project before changing anything.",
+    expect:
+      "Activity Card timeline style. One card counts up to Working 24, a step every ~1.5s. Open its sheet mid-turn: it opens on the newest step and keeps new ones in view; scroll up and it stays put, scroll back to the bottom and it follows again. Open a step and go back: the list returns to that step. Reopened after the turn ends, the sheet starts at the first step (issue 879).",
+    modelCalls: [
+      { steps: [say("I'll read through every money path first."), longTurnStep(1)] },
+      ...Array.from({ length: 23 }, (_, i) => ({
+        steps: [{ op: "wait", ms: 1500 }, longTurnStep(i + 2)],
+      })),
+      { steps: [say("Audit done: every path goes through `formatMoney` or `totalCents`.")] },
+    ],
+  },
   {
     id: "permission-reject-in-app",
     priority: "P1",
@@ -99,6 +121,109 @@ export const P1 = [
       { child: "tests", steps: [run("npm test", "Run tests")] },
       { child: "tests", steps: [say("All 3 tests pass.", 12)] },
       { steps: [say("Tests are green.", 12)] },
+    ],
+  },
+  {
+    id: "permission-in-parallel-subagents",
+    priority: "P1",
+    title: "Permissions from the session and two subagents at once",
+    category: "permission",
+    prompt: "Clean the build and run the tests and lint with subagents.",
+    expect: "The permission panel says 1 of 3 with arrows and dots. The session's own `rm -rf dist` has no subagent row; paging (arrows or swipe) shows \"general · subagent wants to run: npm test\" and \"explore · subagent wants to run: npm run lint\" rows with Open, which opens that subagent's session. Allow each one.",
+    modelCalls: [
+      {
+        steps: [
+          run("rm -rf dist", "Remove stale build output"),
+          { op: "tool", name: subagentTool, child: "tests", input: subagent("Run the tests", "Run npm test and summarise failures.") },
+          {
+            op: "tool",
+            name: subagentTool,
+            child: "lint",
+            input: {
+              v1: { description: "Run the linter", prompt: "Run npm run lint.", subagent_type: "explore" },
+              v2: { description: "Run the linter", prompt: "Run npm run lint.", agent: "explore" },
+            },
+          },
+        ],
+      },
+      { child: "tests", steps: [run("npm test", "Run tests")] },
+      { child: "tests", steps: [say("All 3 tests pass.", 12)] },
+      { child: "lint", steps: [run("npm run lint", "Run the linter")] },
+      { child: "lint", steps: [say("Lint is clean.", 12)] },
+      { steps: [say("Build cleaned, tests and lint are green.", 12)] },
+    ],
+  },
+  {
+    id: "question-in-parallel-subagents",
+    priority: "P1",
+    title: "Two subagents ask questions at once",
+    category: "question",
+    prompt: "Ask two subagents to plan the currency change.",
+    expect: "The question panel says 1 of 2 with arrows and dots and an \"explore · subagent asks\" or \"general · subagent asks\" row with Open. Paging keeps each answer. The chevron collapses it to an Answer question pill. Answer both.",
+    modelCalls: [
+      {
+        steps: [
+          {
+            op: "tool",
+            name: subagentTool,
+            child: "plan",
+            input: {
+              v1: { description: "Plan the currency source", prompt: "Ask where the currency comes from.", subagent_type: "explore" },
+              v2: { description: "Plan the currency source", prompt: "Ask where the currency comes from.", agent: "explore" },
+            },
+          },
+          { op: "tool", name: subagentTool, child: "rounding", input: subagent("Plan the rounding", "Ask how to round.") },
+        ],
+      },
+      { child: "plan", steps: [{ op: "tool", name: "question", input: { questions: [CURRENCY_QUESTION] } }] },
+      { child: "plan", steps: [say("Noted the currency source.", 12)] },
+      {
+        child: "rounding",
+        steps: [
+          {
+            op: "tool",
+            name: "question",
+            input: {
+              questions: [
+                {
+                  header: "Rounding",
+                  question: "How should half cents round?",
+                  multiple: false,
+                  options: [
+                    { label: "Half up", description: "1.005 becomes 1.01" },
+                    { label: "Half even", description: "Banker's rounding" },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      },
+      { child: "rounding", steps: [say("Noted the rounding rule.", 12)] },
+      { steps: [say("Both subagents have their answers.", 12)] },
+    ],
+  },
+  {
+    id: "provider-free-limit-retry-after",
+    priority: "P1",
+    title: "Free usage limit with retry-after",
+    category: "error",
+    // v1 treats the 429 as a throttle and retries it live instead of failing the turn.
+    protocols: ["v2"],
+    prompt: "Summarise the README.",
+    expect:
+      "The provider refuses with a free usage limit (429, retry-after 75 s). The failure mark shows the server's free-limit message with a Try again in N s line counting down under it (gone at zero), and the sheet offers Pick a model.",
+    modelCalls: [
+      {
+        steps: [
+          {
+            op: "httpError",
+            status: 429,
+            headers: { "retry-after": "75" },
+            body: { type: "error", error: { type: "FreeUsageLimitError", message: "Rate limit exceeded. Please try again later." } },
+          },
+        ],
+      },
     ],
   },
   {

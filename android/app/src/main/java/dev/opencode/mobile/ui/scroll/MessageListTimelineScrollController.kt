@@ -75,6 +75,28 @@ internal class MessageListTimelineScrollController(
         }
     }
 
+    /**
+     * Scroll the lazy item at [index] into view, away from the end (a failure the
+     * activity pill points at). Follow stops; the place then holds like a user scroll.
+     */
+    fun revealItem(
+        index: Int,
+        messageCount: Int,
+        tolerancePx: Int,
+        bottomAnchorHeightPx: Int,
+    ) {
+        launchScroll {
+            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd = false)
+            listState.animateScrollToItem(index)
+            settleScroll(
+                messageCount = messageCount,
+                tolerancePx = tolerancePx,
+                bottomAnchorHeightPx = bottomAnchorHeightPx,
+                autoFollowEnabled = true,
+            )
+        }
+    }
+
     private fun launchScroll(block: suspend () -> Unit) {
         scrollJob?.cancel()
         isProgrammaticScrolling = true

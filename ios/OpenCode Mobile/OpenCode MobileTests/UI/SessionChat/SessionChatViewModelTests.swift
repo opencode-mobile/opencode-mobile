@@ -292,6 +292,201 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.responseSessionID == "child")
     }
 
+    @Test func permissionPaging_movesBetweenRequestsAndNamesTheSubagent() async throws {
+        let sessionRepository = FakeChatSessionRepository(
+            sessions: [
+                Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil),
+                Session(
+                    id: "child", title: "Run tests (@general subagent)", slug: nil, projectID: nil,
+                    directory: "/repo", parentID: "ses-1", updatedAtEpochMs: nil
+                ),
+            ]
+        )
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            permissionLiveStore: FakePermissionLiveStore(requests: [
+                permissionRequest(id: "permission-root", sessionID: "ses-1"),
+                permissionRequest(id: "permission-child", sessionID: "child"),
+            ])
+        )
+        defer { viewModel.stopObserving() }
+
+        try #require(await waitUntil { viewModel.uiState.permissionQueueCount == 2 })
+        #expect(viewModel.uiState.permissionRequest?.id == "permission-root")
+        #expect(viewModel.uiState.permissionQueuePosition == 1)
+        #expect(viewModel.uiState.permissionAttribution == nil)
+
+        viewModel.pagePermission(by: 1)
+        #expect(viewModel.uiState.permissionRequest?.id == "permission-child")
+        #expect(viewModel.uiState.permissionQueuePosition == 2)
+        #expect(viewModel.uiState.permissionAttribution?.agentName == "general")
+        #expect(viewModel.uiState.permissionAttribution?.sessionID == "child")
+
+        viewModel.pagePermission(by: 1)
+        #expect(viewModel.uiState.permissionQueuePosition == 2)
+
+        viewModel.hidePermissionDock(requestID: "permission-child")
+        #expect(viewModel.uiState.permissionDockHidden)
+        viewModel.pagePermission(by: -1)
+        #expect(viewModel.uiState.permissionRequest?.id == "permission-root")
+        #expect(!viewModel.uiState.permissionDockHidden)
+    }
+
+    @Test func backgroundWorkPill_countsRunningSubagentsAndFlagsTheOneWaitingForInput() async throws {
+        func subagent(_ id: String, child: String, agent: String) -> MessagePart {
+            .tool(ToolPart(
+                id: id,
+                toolName: "task",
+                status: .running,
+                input: ["description": .string("Look around"), "subagent_type": .string(agent)],
+                metadata: ["sessionId": .string(child)]
+            ))
+        }
+        func child(_ id: String, agent: String) -> Session {
+            Session(
+                id: id, title: "Look around (@\(agent) subagent)", slug: nil, projectID: nil,
+                directory: "/repo", parentID: "ses-1", updatedAtEpochMs: nil
+            )
+        }
+        let sessionRepository = FakeChatSessionRepository(
+            sessions: [
+                Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil),
+                child("child-a", agent: "general"),
+                child("child-b", agent: "explore"),
+                child("child-c", agent: "explore"),
+            ]
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: [
+                Message(id: "user-1", role: .user, text: "Go", model: nil, mode: nil, sentAtEpochMs: 1),
+                Message(
+                    id: "assistant-1",
+                    role: .assistant,
+                    text: "",
+                    parts: [
+                        subagent("prt-a", child: "child-a", agent: "general"),
+                        subagent("prt-b", child: "child-b", agent: "explore"),
+                        subagent("prt-c", child: "child-c", agent: "explore"),
+                    ],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: 2
+                ),
+            ]),
+            sessionRepository: sessionRepository,
+            permissionLiveStore: FakePermissionLiveStore(requests: [
+                permissionRequest(id: "permission-a", sessionID: "child-a"),
+            ])
+        )
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        try #require(await waitUntil { viewModel.uiState.backgroundWorkPill?.needsInput == true })
+        #expect(viewModel.uiState.backgroundWorkPill == SessionChatBackgroundWorkPill(
+            label: "general needs input · 2 running",
+            needsInput: true,
+            accessibilityLabel: "general needs input, 2 subagents running"
+        ))
+        #expect(viewModel.uiState.subagents.map(\.id) == ["prt-a", "prt-b", "prt-c"])
+        #expect(viewModel.uiState.subagents.first?.childSessionID == "child-a")
+    }
+
+    @Test func openWaitingSubagentRequest_expandsAndPagesToTheSubagentsRequestAndPulses() async throws {
+        let sessionRepository = FakeChatSessionRepository(
+            sessions: [
+                Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil),
+                Session(
+                    id: "child-a", title: "Run tests (@general subagent)", slug: nil, projectID: nil,
+                    directory: "/repo", parentID: "ses-1", updatedAtEpochMs: nil
+                ),
+            ]
+        )
+        let viewModel = makeViewModel(
+            messageRepository: FakeMessageRepository(messages: [
+                Message(id: "user-1", role: .user, text: "Go", model: nil, mode: nil, sentAtEpochMs: 1),
+                Message(
+                    id: "assistant-1",
+                    role: .assistant,
+                    text: "",
+                    parts: [
+                        .tool(ToolPart(
+                            id: "prt-a",
+                            toolName: "task",
+                            status: .running,
+                            input: ["description": .string("Run tests"), "subagent_type": .string("general")],
+                            metadata: ["sessionId": .string("child-a")]
+                        )),
+                    ],
+                    model: nil,
+                    mode: nil,
+                    sentAtEpochMs: 2
+                ),
+            ]),
+            sessionRepository: sessionRepository,
+            permissionLiveStore: FakePermissionLiveStore(requests: [
+                permissionRequest(id: "permission-root", sessionID: "ses-1"),
+                permissionRequest(id: "permission-a", sessionID: "child-a"),
+            ])
+        )
+        defer { viewModel.stopObserving() }
+
+        await viewModel.loadMessages()
+        try #require(await waitUntil { viewModel.uiState.backgroundWorkPill?.needsInput == true })
+        viewModel.hidePermissionDock(requestID: "permission-root")
+        #expect(viewModel.uiState.permissionDockHidden)
+        let pulse = viewModel.uiState.inboxPanelPulse
+
+        #expect(viewModel.openWaitingSubagentRequest())
+        #expect(viewModel.uiState.permissionRequest?.id == "permission-a")
+        #expect(!viewModel.uiState.permissionDockHidden)
+        #expect(viewModel.uiState.inboxPanelPulse == pulse + 1)
+
+        viewModel.hidePermissionDock(requestID: "permission-a")
+        viewModel.showPermissionDock()
+        #expect(viewModel.uiState.inboxPanelPulse == pulse + 2)
+    }
+
+    @Test func questionPaging_keepsEachRequestsAnswersAndCollapses() async throws {
+        let sessionRepository = FakeChatSessionRepository(
+            sessions: [
+                Session(id: "ses-1", title: "Title", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: nil),
+                Session(
+                    id: "child", title: "Look around (@explore subagent)", slug: nil, projectID: nil,
+                    directory: "/repo", parentID: "ses-1", updatedAtEpochMs: nil
+                ),
+            ]
+        )
+        let viewModel = makeViewModel(
+            sessionRepository: sessionRepository,
+            questionLiveStore: FakeQuestionLiveStore(requests: [
+                questionRequest(id: "question-root", sessionID: "ses-1"),
+                questionRequest(id: "question-child", sessionID: "child"),
+            ])
+        )
+        defer { viewModel.stopObserving() }
+
+        try #require(await waitUntil { viewModel.uiState.questionQueueCount == 2 })
+        #expect(viewModel.uiState.questionRequest?.id == "question-root")
+        #expect(viewModel.uiState.questionAttribution == nil)
+        viewModel.toggleQuestionOption(requestID: "question-root", sessionID: "ses-1", label: "A")
+        #expect(viewModel.uiState.questionSelectedLabels == ["A"])
+
+        viewModel.pageQuestion(by: 1)
+        #expect(viewModel.uiState.questionRequest?.id == "question-child")
+        #expect(viewModel.uiState.questionQueuePosition == 2)
+        #expect(viewModel.uiState.questionAttribution?.questionSummary == "explore · subagent asks")
+        #expect(viewModel.uiState.questionSelectedLabels.isEmpty)
+
+        viewModel.pageQuestion(by: -1)
+        #expect(viewModel.uiState.questionRequest?.id == "question-root")
+        #expect(viewModel.uiState.questionSelectedLabels == ["A"])
+
+        viewModel.hideQuestionDock(requestID: "question-root")
+        #expect(viewModel.uiState.questionDockHidden)
+        viewModel.showQuestionDock()
+        #expect(!viewModel.uiState.questionDockHidden)
+    }
+
     @Test func permissionTopologyFailure_isReported() async {
         let sessionRepository = FakeChatSessionRepository(
             listSessionsError: .transport("offline")
@@ -747,7 +942,7 @@ struct SessionChatViewModelTests {
             await Task.detached(priority: .userInitiated) {
                 for message in messages {
                     guard OpenCodeRenderedMarkdownDetector.shouldRender(message.text) else { continue }
-                    _ = OpenCodeRenderedMarkdownParser.parse(message.text, isStreaming: false)
+                    _ = OpenCodeRenderedMarkdownParser.parse(message.text)
                 }
             }.value
         }
@@ -1444,6 +1639,171 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.snackbar?.message == "Only images, PDFs, or text files can be attached here.")
         #expect(viewModel.uiState.snackbar?.tone == .error)
         #expect(viewModel.uiState.errorMessage == nil)
+    }
+
+    // MARK: Streamed uploads (#644)
+
+    private func uploadFixture(named name: String, text: String = "hello upload") throws -> URL {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("upload-fixture-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent(name)
+        try Data(text.utf8).write(to: file)
+        return file
+    }
+
+    // MARK: Paste and drop (#870)
+
+    @Test func drop_filesWithAFolderAttachTheFilesAndNameTheFolder() async throws {
+        let viewModel = makeViewModel()
+        await viewModel.loadMessages()
+
+        let added = await viewModel.addPastedOrDroppedFiles([try uploadFixture(named: "notes.txt")], skippedFolders: 1, unreadable: 0)
+
+        #expect(added)
+        #expect(viewModel.uiState.composer.attachments.map(\.filename) == ["notes.txt"])
+        #expect(viewModel.uiState.snackbar?.message == "Folders can't be attached.")
+    }
+
+    @Test func drop_folderOnlyAddsNothingAndSaysWhy() async {
+        let viewModel = makeViewModel()
+        await viewModel.loadMessages()
+
+        let added = await viewModel.addPastedOrDroppedFiles([], skippedFolders: 1, unreadable: 0)
+
+        #expect(!added)
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+        #expect(viewModel.uiState.snackbar?.message == "Folders can't be attached.")
+    }
+
+    @Test func drop_duplicateKeepsTheDuplicateMessageOverTheFolder() async throws {
+        let viewModel = makeViewModel()
+        await viewModel.loadMessages()
+        await viewModel.addAttachmentFiles([try uploadFixture(named: "notes.txt")])
+
+        let added = await viewModel.addPastedOrDroppedFiles([try uploadFixture(named: "notes.txt")], skippedFolders: 1, unreadable: 0)
+
+        #expect(!added)
+        #expect(viewModel.uiState.snackbar?.message == "This file has already been uploaded")
+    }
+
+    @Test func paste_unreadableItemSaysItCouldNotBeRead() async {
+        let viewModel = makeViewModel()
+        await viewModel.loadMessages()
+
+        let added = await viewModel.addPastedOrDroppedFiles([], skippedFolders: 0, unreadable: 1)
+
+        #expect(!added)
+        #expect(viewModel.uiState.snackbar?.message == "The attachment could not be read.")
+    }
+
+    @Test func upload_textFileUploadsAndSendsServerPathWithoutBytes() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .succeed("/tmp/uploads/u1/notes.txt"))
+        let repository = FakeMessageRepository(failListMessagesAfterSend: true)
+        let viewModel = makeViewModel(messageRepository: repository, attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+        let file = try uploadFixture(named: "notes.txt")
+
+        await viewModel.addAttachmentFiles([file])
+        await waitUntil { viewModel.uiState.composer.attachments.first?.isServerFile == true }
+
+        let attachment = try #require(viewModel.uiState.composer.attachments.first)
+        #expect(attachment.upload == .uploaded(serverPath: "/tmp/uploads/u1/notes.txt"))
+        #expect(uploads.uploadedFilenames == ["notes.txt"])
+        #expect(uploads.directories == ["/repo"])
+        viewModel.updateComposerText("read this")
+        await viewModel.sendPrompt()
+        #expect(repository.sentOptions?.uploadedAttachments.map(\.uploadedServerPath) == ["/tmp/uploads/u1/notes.txt"])
+        #expect(repository.sentOptions?.inlineAttachments.isEmpty == true)
+    }
+
+    @Test func upload_sendIsBlockedWhilePendingAndCancelRemovesChipSilently() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .hold)
+        let repository = FakeMessageRepository()
+        let viewModel = makeViewModel(messageRepository: repository, attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+
+        await viewModel.addAttachmentFiles([try uploadFixture(named: "big.log")])
+        let id = try #require(viewModel.uiState.composer.attachments.first?.id)
+        #expect(viewModel.uiState.composer.hasPendingUploads)
+        viewModel.updateComposerText("go")
+        await viewModel.sendPrompt()
+        #expect(repository.sentOptions == nil)
+
+        viewModel.removeAttachment(id: id)
+        await waitUntil { uploads.cancelledCount == 1 }
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+        #expect(viewModel.uiState.snackbar == nil)
+        #expect(viewModel.uiState.errorMessage == nil)
+    }
+
+    @Test func upload_transportFailureRemovesChipAndShowsUploadFailed() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .fail(.failed))
+        let viewModel = makeViewModel(attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+
+        await viewModel.addAttachmentFiles([try uploadFixture(named: "notes.txt")])
+        await waitUntil { viewModel.uiState.snackbar?.message == "Upload failed" }
+
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+        #expect(viewModel.uiState.composer.streamedUploadAvailable)
+    }
+
+    @Test func upload_contractMissFallsBackToInlineWithoutError() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .fail(.contractMiss))
+        let viewModel = makeViewModel(attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+
+        await viewModel.addAttachmentFiles([try uploadFixture(named: "notes.txt")])
+        await waitUntil { viewModel.uiState.composer.attachments.first?.upload == .inline }
+
+        let attachment = try #require(viewModel.uiState.composer.attachments.first)
+        #expect(attachment.filename == "notes.txt")
+        #expect(attachment.mime == "text/plain")
+        #expect(viewModel.uiState.snackbar == nil)
+        #expect(!viewModel.uiState.composer.streamedUploadAvailable)
+    }
+
+    @Test func upload_contractMissOnHugeFileKeepsTheOldTooLargeError() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .fail(.contractMiss))
+        let viewModel = makeViewModel(attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+        let file = try uploadFixture(named: "huge.txt", text: "")
+        let handle = try FileHandle(forWritingTo: file)
+        try handle.truncate(atOffset: UInt64(AttachmentLimits.maxDecodedBytes) + 1)
+        try handle.close()
+
+        await viewModel.addAttachmentFiles([file])
+        await waitUntil { viewModel.uiState.snackbar?.message == AttachmentLimits.tooLargeMessage }
+
+        #expect(viewModel.uiState.composer.attachments.isEmpty)
+    }
+
+    @Test func upload_sameNameAndSizeIsRefusedAsDuplicate() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .hold)
+        let viewModel = makeViewModel(attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+        let file = try uploadFixture(named: "notes.txt")
+
+        await viewModel.addAttachmentFiles([file])
+        await viewModel.addAttachmentFiles([file])
+
+        #expect(viewModel.uiState.composer.attachments.count == 1)
+        #expect(uploads.uploadedFilenames == ["notes.txt"])
+        #expect(viewModel.uiState.snackbar?.message == "This file has already been uploaded")
+        viewModel.removeAttachment(id: viewModel.uiState.composer.attachments[0].id)
+    }
+
+    @Test func upload_modelThatReadsPngKeepsItInline() async throws {
+        let uploads = FakeAttachmentUploadRepository(mode: .succeed("/tmp/x"))
+        let viewModel = makeViewModel(attachmentUploadRepository: uploads)
+        await viewModel.loadMessages()
+        await viewModel.refreshAttachmentUploadAvailability()
+
+        viewModel.addAttachmentData(Data([0x89, 0x50, 0x4E, 0x47, 0, 0]), filename: "p.png", declaredMime: "image/png")
+
+        #expect(viewModel.uiState.composer.attachments.first?.upload == .inline)
+        #expect(uploads.uploadedFilenames.isEmpty)
     }
 
     @Test func sendPrompt_attachmentInFlight_showsSendingPercent() async {
@@ -3588,6 +3948,24 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.snackbar?.tone == .default)
     }
 
+    @Test func branchNameCopied_confirmsWithSnackbarEachTime() async {
+        let viewModel = makeViewModel(sessionRepository: FakeChatSessionRepository(), serverProtocol: .v2)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.branchNameCopied()
+        #expect(viewModel.uiState.snackbar?.message == SessionChatViewModel.branchCopiedMessage)
+        #expect(viewModel.uiState.snackbar?.tone == .default)
+        let firstID = viewModel.uiState.snackbar?.id
+
+        viewModel.consumeSnackbar()
+        #expect(viewModel.uiState.snackbar == nil)
+
+        viewModel.branchNameCopied()
+        #expect(viewModel.uiState.snackbar?.message == SessionChatViewModel.branchCopiedMessage)
+        #expect(viewModel.uiState.snackbar?.id != firstID)
+    }
+
     @Test func moveToWorktree_failureShowsTheServerMessage() async {
         let sessionRepository = FakeChatSessionRepository()
         sessionRepository.moveSessionError = .http(statusCode: 400, message: "Destination is not a directory")
@@ -5057,6 +5435,250 @@ struct SessionChatViewModelTests {
         #expect(reporter.calls == ["focus:ses-1", "release:ses-1"])
     }
 
+    @Test func sideQuestion_typedBtwAsksOnceWithoutTouchingTheConversation() async {
+        let messageRepository = FakeMessageRepository()
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            messageRepository: messageRepository,
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        #expect(viewModel.uiState.visibleClientSlashActions.first == .btw)
+        let messagesBefore = viewModel.uiState.messages
+
+        viewModel.updateComposerText("/btw ")
+        #expect(viewModel.uiState.sideQuestions.composerMode)
+        #expect(viewModel.uiState.composer.text == "")
+
+        viewModel.updateComposerText("What changed?")
+        await viewModel.sendPrompt()
+        let asked = await waitUntil { sessionRepository.sideQuestionRequests.count == 1 }
+
+        #expect(asked)
+        #expect(sessionRepository.sideQuestionRequests == [.init(sessionID: "ses-1", question: "What changed?")])
+        #expect(!messageRepository.sendPromptAsyncCalled)
+        #expect(viewModel.uiState.composer.text == "")
+        #expect(!viewModel.uiState.sideQuestions.composerMode)
+        #expect(viewModel.uiState.sideQuestions.pendingCount == 1)
+
+        sessionRepository.replySideQuestion(.success("Two files."))
+        let answered = await waitUntil { viewModel.uiState.sideQuestions.presentedAnswer != nil }
+
+        #expect(answered)
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer?.question == "What changed?")
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer?.answer == "Two files.")
+        #expect(viewModel.uiState.sideQuestions.pendingCount == 0)
+        #expect(viewModel.uiState.messages == messagesBefore)
+        #expect(!messageRepository.sendPromptAsyncCalled)
+    }
+
+    @Test func sideQuestion_btwTileEntersModeAndEmptyQuestionIsNotSent() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.runClientSlashAction(.btw)
+        #expect(viewModel.uiState.sideQuestions.composerMode)
+        #expect(!viewModel.uiState.commandsSheetVisible)
+
+        await viewModel.sendPrompt()
+        #expect(sessionRepository.sideQuestionRequests.isEmpty)
+
+        viewModel.exitSideQuestionMode()
+        #expect(!viewModel.uiState.sideQuestions.composerMode)
+    }
+
+    @Test(arguments: [ServerProtocol.v1, ServerProtocol.v2])
+    func sideQuestion_unsupportedServerShowsNoticeAndNeverSendsAPrompt(serverProtocol: ServerProtocol) async {
+        let messageRepository = FakeMessageRepository()
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            messageRepository: messageRepository,
+            sessionRepository: sessionRepository,
+            serverProtocol: serverProtocol
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        #expect(!viewModel.uiState.visibleClientSlashActions.contains(.btw))
+
+        viewModel.updateComposerText("/btw why?")
+        #expect(viewModel.uiState.sideQuestions.unsupportedNotice == SessionChatSideQuestions.unsupportedNotice)
+        #expect(!viewModel.uiState.sideQuestions.composerMode)
+
+        await viewModel.sendPrompt()
+        #expect(sessionRepository.sideQuestionRequests.isEmpty)
+        #expect(!messageRepository.sendPromptAsyncCalled)
+        #expect(viewModel.uiState.composer.text == "/btw why?")
+    }
+
+    @Test func sideQuestion_answerArrivingUnderAnOpenSheetWaitsThenOpens() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/btw One?")
+        await viewModel.sendPrompt()
+        viewModel.updateComposerText("/btw Two?")
+        await viewModel.sendPrompt()
+        _ = await waitUntil { sessionRepository.pendingSideQuestionReplies == 2 }
+        #expect(viewModel.uiState.sideQuestions.pendingCount == 2)
+
+        sessionRepository.replySideQuestion(.success("First"))
+        _ = await waitUntil { viewModel.uiState.sideQuestions.presentedAnswer != nil }
+        sessionRepository.replySideQuestion(.success("Second"))
+        _ = await waitUntil { viewModel.uiState.sideQuestions.readyCount == 1 }
+
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer?.answer == "First")
+        #expect(viewModel.uiState.sideQuestions.readyCount == 1)
+
+        viewModel.closeSideQuestionAnswer()
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer?.answer == "Second")
+        #expect(viewModel.uiState.sideQuestions.readyCount == 0)
+
+        viewModel.closeSideQuestionAnswer()
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer == nil)
+        #expect(viewModel.uiState.sideQuestions.readyCount == 0)
+    }
+
+    @Test func sideQuestion_failureOffersRetryOnTheSnackbarAndChip() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/btw Why?")
+        await viewModel.sendPrompt()
+        _ = await waitUntil { sessionRepository.pendingSideQuestionReplies == 1 }
+
+        sessionRepository.replySideQuestion(.failure(SessionError.http(statusCode: 503, message: "busy")))
+        let failed = await waitUntil { viewModel.uiState.sideQuestions.failedCount == 1 }
+
+        #expect(failed)
+        #expect(viewModel.uiState.snackbar?.message == "/btw failed: “Why?”")
+        #expect(viewModel.uiState.snackbar?.tone == .error)
+        guard case let .retrySideQuestion(id) = viewModel.uiState.snackbar?.action else {
+            Issue.record("expected a Retry action")
+            return
+        }
+
+        viewModel.retrySideQuestions(id: id)
+        _ = await waitUntil { sessionRepository.sideQuestionRequests.count == 2 }
+        #expect(viewModel.uiState.sideQuestions.failedCount == 0)
+        #expect(viewModel.uiState.sideQuestions.pendingCount == 1)
+
+        sessionRepository.replySideQuestion(.failure(SessionError.http(statusCode: 503, message: "busy")))
+        _ = await waitUntil { viewModel.uiState.sideQuestions.failedCount == 1 }
+        viewModel.dismissFailedSideQuestions()
+        #expect(viewModel.uiState.sideQuestions.failedCount == 0)
+    }
+
+    @Test func sideQuestion_requestsAndUnreadAnswersOutliveLeavingSessionChat() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let store = SideQuestionStore(sessionRepository: sessionRepository)
+        let viewModel = makeViewModel(
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository,
+            sideQuestionStore: store
+        )
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/btw Why?")
+        await viewModel.sendPrompt()
+        _ = await waitUntil { sessionRepository.pendingSideQuestionReplies == 1 }
+
+        viewModel.stopObserving()
+        viewModel.startObserving()
+        #expect(viewModel.uiState.sideQuestions.pendingCount == 1)
+
+        viewModel.stopObserving()
+        sessionRepository.replySideQuestion(.success("Because."))
+        _ = await waitUntil { store.entries(sessionID: "ses-1").first?.answer != nil }
+        viewModel.startObserving()
+
+        #expect(viewModel.uiState.sideQuestions.readyCount == 1)
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer == nil)
+
+        viewModel.openSideQuestionAnswer()
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer?.answer == "Because.")
+
+        viewModel.stopObserving()
+        viewModel.startObserving()
+        defer { viewModel.stopObserving() }
+        #expect(viewModel.uiState.sideQuestions.readyCount == 0)
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer == nil)
+        #expect(store.entries(sessionID: "ses-1").isEmpty)
+    }
+
+    @Test func sideQuestion_btwTileOnABtwDraftAsksOnlyTheQuestion() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        viewModel.restoreComposerText("/btw Why?")
+        viewModel.runClientSlashAction(.btw)
+        await viewModel.sendPrompt()
+        _ = await waitUntil { sessionRepository.sideQuestionRequests.count == 1 }
+
+        #expect(sessionRepository.sideQuestionRequests == [.init(sessionID: "ses-1", question: "Why?")])
+    }
+
+    @Test func sideQuestion_leavingInModeKeepsTheDraftASideQuestion() async {
+        let messageRepository = FakeMessageRepository()
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            messageRepository: messageRepository,
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/btw ")
+        viewModel.updateComposerText("Why?")
+
+        viewModel.stopObserving()
+        viewModel.startObserving()
+        defer { viewModel.stopObserving() }
+        #expect(!viewModel.uiState.sideQuestions.composerMode)
+        #expect(viewModel.uiState.composer.text == "/btw Why?")
+
+        await viewModel.sendPrompt()
+        _ = await waitUntil { sessionRepository.sideQuestionRequests.count == 1 }
+        #expect(sessionRepository.sideQuestionRequests == [.init(sessionID: "ses-1", question: "Why?")])
+        #expect(!messageRepository.sendPromptAsyncCalled)
+    }
+
+    @Test func sideQuestion_answerWaitsBehindAScreenSheet() async {
+        let sessionRepository = FakeChatSessionRepository()
+        let viewModel = makeViewModel(
+            activeConnectionManager: await Self.makeSideQuestionConnectionManager(),
+            sessionRepository: sessionRepository
+        )
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+        viewModel.updateComposerText("/btw Why?")
+        await viewModel.sendPrompt()
+        _ = await waitUntil { sessionRepository.pendingSideQuestionReplies == 1 }
+
+        viewModel.setScreenSheetOpen(true)
+        sessionRepository.replySideQuestion(.success("Because."))
+        _ = await waitUntil { viewModel.uiState.sideQuestions.readyCount == 1 }
+
+        #expect(viewModel.uiState.sideQuestions.presentedAnswer == nil)
+        #expect(viewModel.uiState.sideQuestions.readyCount == 1)
+    }
+
     private func makeViewModel(
         messageRepository: (any MessageRepository)? = nil,
         eventStream: FakeForegroundEventStream? = nil,
@@ -5078,10 +5700,12 @@ struct SessionChatViewModelTests {
         catalogRetryDelaysMs: [Int] = [],
         sessionViewReporter: (any SessionViewReporter)? = nil,
         projectFilesRepository: (any ProjectFilesRepository)? = nil,
+        attachmentUploadRepository: (any AttachmentUploadRepository)? = nil,
         worktree: String = "/repo",
         connectionProfileStore: any ConnectionProfileStore = EmptyConnectionProfileStore(),
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
-        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache()
+        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
+        sideQuestionStore: SideQuestionStore? = nil
     ) -> SessionChatViewModel {
         let eventStream = eventStream ?? FakeForegroundEventStream()
         // Mutations (send/rename/fork/new/permissions) require Connected; default fakes start Idle.
@@ -5135,14 +5759,27 @@ struct SessionChatViewModelTests {
                 modelCatalogStore: catalogStore
             ),
             liveUpdates: liveUpdates,
+            sideQuestionStore: sideQuestionStore ?? SideQuestionStore(sessionRepository: sessionRepository),
             clock: clock,
             projectFilesRepository: projectFilesRepository,
+            attachmentUploadRepository: attachmentUploadRepository,
             catalogRetryDelaysMs: catalogRetryDelaysMs,
             worktreeRepository: worktreeRepository,
             worktreeInventoryCache: worktreeInventoryCache
         )
         viewModel.startObserving()
         return viewModel
+    }
+
+    /// A v2 server whose contract declares `POST /api/session/{id}/generate`.
+    private static func makeSideQuestionConnectionManager() async -> ActiveConnectionManager {
+        let manager = ActiveConnectionManager(connectionProbing: SideQuestionProbe())
+        manager.apply(
+            ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
+            serverProtocol: .v2
+        )
+        _ = try? await manager.probeActive()
+        return manager
     }
 
     private func sharedCatalogFixture() -> (ModelSelectionOption, ModelSelectionOption, ModelSelectionCatalog) {
@@ -6163,6 +6800,39 @@ private final class FakeChatSessionRepository: SessionRepository, @unchecked Sen
     private(set) var moveRequests: [MoveRequest] = []
     var moveSessionError: SessionError?
 
+    struct SideQuestionRequest: Equatable {
+        let sessionID: String
+        let question: String
+    }
+
+    private let sideQuestionLock = NSLock()
+    private var _sideQuestionRequests: [SideQuestionRequest] = []
+    private var sideQuestionReplies: [CheckedContinuation<String, Error>] = []
+
+    var sideQuestionRequests: [SideQuestionRequest] {
+        sideQuestionLock.withLock { _sideQuestionRequests }
+    }
+
+    /// Requests still waiting for `replySideQuestion`.
+    var pendingSideQuestionReplies: Int {
+        sideQuestionLock.withLock { sideQuestionReplies.count }
+    }
+
+    func askSideQuestion(sessionID: String, question: String) async throws -> String {
+        try await withCheckedThrowingContinuation { continuation in
+            sideQuestionLock.withLock {
+                _sideQuestionRequests.append(SideQuestionRequest(sessionID: sessionID, question: question))
+                sideQuestionReplies.append(continuation)
+            }
+        }
+    }
+
+    /// Answers the oldest waiting `/btw` request.
+    func replySideQuestion(_ result: Result<String, Error>) {
+        let continuation = sideQuestionLock.withLock { sideQuestionReplies.removeFirst() }
+        continuation.resume(with: result)
+    }
+
     func moveSession(id: String, directory: String) async throws {
         moveRequests.append(MoveRequest(id: id, directory: directory))
         if let moveSessionError { throw moveSessionError }
@@ -6526,4 +7196,63 @@ private final class RecordingSessionViewReporter: SessionViewReporter {
     func focus(sessionId: String) { calls.append("focus:\(sessionId)") }
     func release(sessionId: String) { calls.append("release:\(sessionId)") }
     func clearCache() { calls.append("clearCache") }
+}
+
+private struct SideQuestionProbe: ConnectionProbing {
+    func probe(connection _: ServerConnection) async throws -> ServerProtocol { .v2 }
+
+    func probeV2Features(connection _: ServerConnection) async throws -> V2ServerFeatures {
+        V2ServerFeatures(sessionGenerate: true)
+    }
+}
+
+final class FakeAttachmentUploadRepository: AttachmentUploadRepository, @unchecked Sendable {
+    enum Mode {
+        case succeed(String)
+        case fail(AttachmentUploadError)
+        case hold
+    }
+
+    private let lock = NSLock()
+    private let mode: Mode
+    private var filenames: [String] = []
+    private var dirs: [String?] = []
+    private var cancelled = 0
+
+    init(mode: Mode) {
+        self.mode = mode
+    }
+
+    var uploadedFilenames: [String] { lock.withLock { filenames } }
+    var directories: [String?] { lock.withLock { dirs } }
+    var cancelledCount: Int { lock.withLock { cancelled } }
+
+    func isAvailable() async -> Bool { true }
+
+    func upload(
+        fileURL: URL,
+        filename: String,
+        directory: String?,
+        onProgress: @escaping @Sendable (Double) -> Void
+    ) async throws -> UploadedAttachment {
+        lock.withLock {
+            filenames.append(filename)
+            dirs.append(directory)
+        }
+        switch mode {
+        case let .succeed(path):
+            onProgress(0.5)
+            return UploadedAttachment(serverPath: path)
+        case let .fail(error):
+            throw error
+        case .hold:
+            do {
+                try await Task.sleep(for: .seconds(60))
+            } catch {
+                lock.withLock { cancelled += 1 }
+                throw AttachmentUploadError.cancelled
+            }
+            throw AttachmentUploadError.failed
+        }
+    }
 }

@@ -20,6 +20,10 @@ private enum class AssistantMessageSample(
     val label: String,
     val text: String,
 ) {
+    Compact(
+        label = "Compact",
+        text = "Done.",
+    ),
     Short(
         label = "Short",
         text = "The Alleskoenner is the right class for that parcel.",
@@ -44,7 +48,9 @@ fun AssistantMessageGalleryScreen(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(text = "Interactive", style = MaterialTheme.typography.titleMedium)
         Text(
-            text = "Switch samples to review short, long, and empty assistant messages.",
+            text =
+                "Switch samples to review compact, short, long, and empty assistant messages. " +
+                    "Messages wider than 80% of the row fill it.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

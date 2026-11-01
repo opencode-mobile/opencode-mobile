@@ -9,12 +9,19 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,11 +30,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -57,27 +64,32 @@ import dev.opencode.mobile.domain.connection.ExternalLinkPolicy
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.feedback.FeedbackScreen
+import dev.opencode.mobile.domain.message.AttachmentDropContext
+import dev.opencode.mobile.domain.message.AttachmentDropRouting
+import dev.opencode.mobile.domain.message.AttachmentDropSummary
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
+import dev.opencode.mobile.domain.session.SideQuestion
 import dev.opencode.mobile.domain.worktree.WorktreeCreateCopy
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.ComposerDictationCardModel
-import dev.opencode.mobile.ui.components.OpenCodeActionPill
-import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
+import dev.opencode.mobile.ui.components.LocalOpenCodeAttachmentImageLoader
 import dev.opencode.mobile.ui.components.OpenCodeActionTile
 import dev.opencode.mobile.ui.components.OpenCodeActionTileBadge
 import dev.opencode.mobile.ui.components.OpenCodeActionTileGrid
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
 import dev.opencode.mobile.ui.components.OpenCodeBottomFade
 import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderAction
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetKeyboard
+import dev.opencode.mobile.ui.components.OpenCodeComposerPastedContent
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionItem
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionOverlay
 import dev.opencode.mobile.ui.components.OpenCodeDialog
@@ -85,11 +97,13 @@ import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
 import dev.opencode.mobile.ui.components.OpenCodeDictationCardVariant
 import dev.opencode.mobile.ui.components.OpenCodeDictationUnavailableReason
+import dev.opencode.mobile.ui.components.OpenCodeDropOverlay
+import dev.opencode.mobile.ui.components.OpenCodeDropOverlayVariant
 import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
+import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeVariant
 import dev.opencode.mobile.ui.components.OpenCodeLayout
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
-import dev.opencode.mobile.ui.components.OpenCodePendingPromptsStrip
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
@@ -127,20 +141,24 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveTags
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroModal
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineStylePickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingPromptsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPickerSheet
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatSideQuestionSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
+import dev.opencode.mobile.ui.sessionchat.view.sessionChatPanelPulse
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineStylePickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatSubagentsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionRetryCountdown
+import dev.opencode.mobile.ui.sessionchat.view.SessionToolGroupImages
 import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
 import dev.opencode.mobile.ui.sessionchat.view.toRoute
@@ -155,7 +173,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-@OptIn(ExperimentalMaterial3Api::class)
+/** Session Chat; gives the timeline the loader for images that live on the server. */
 @Composable
 fun SessionChatScreen(
     sessionId: String,
@@ -173,10 +191,62 @@ fun SessionChatScreen(
     onTerminalRequested: (worktree: String, projectTitle: String) -> Unit = { _, _ -> },
     onFilesRequested: (worktree: String) -> Unit = {},
     detailControl: OpenCodeSplitPaneDetailControl? = null,
+    /** Replaces the "Report a problem" sheet; the Session Chat Playground sends no reports. Null opens the sheet. */
+    onReportProblem: (() -> Unit)? = null,
     viewModel: SessionChatViewModel =
         hiltViewModel(
             key = sessionChatViewModelKey(sessionId, worktree, optimisticNavigationInstanceId),
         ),
+) {
+    val attachmentImageLoader =
+        remember(viewModel) {
+            val loader: suspend (OpenCodeAttachmentImageSource.ServerPath) -> ByteArray? =
+                { source -> viewModel.loadAttachmentPreview(source.path) }
+            loader
+        }
+    CompositionLocalProvider(LocalOpenCodeAttachmentImageLoader provides attachmentImageLoader) {
+        SessionChatScreenBody(
+            sessionId = sessionId,
+            sessionTitle = sessionTitle,
+            worktree = worktree,
+            modifier = modifier,
+            optimisticNavigationInstanceId = optimisticNavigationInstanceId,
+            parentId = parentId,
+            onNavigateBack = onNavigateBack,
+            onSessionContextClick = onSessionContextClick,
+            onReviewChangesClick = onReviewChangesClick,
+            onChildSessionClick = onChildSessionClick,
+            onToolGroupClick = onToolGroupClick,
+            onSessionReplaceRequested = onSessionReplaceRequested,
+            onTerminalRequested = onTerminalRequested,
+            onFilesRequested = onFilesRequested,
+            detailControl = detailControl,
+            onReportProblem = onReportProblem,
+            viewModel = viewModel,
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun SessionChatScreenBody(
+    sessionId: String,
+    sessionTitle: String,
+    worktree: String,
+    modifier: Modifier,
+    optimisticNavigationInstanceId: String?,
+    parentId: String?,
+    onNavigateBack: () -> Unit,
+    onSessionContextClick: () -> Unit,
+    onReviewChangesClick: (ChangesNavigationTarget) -> Unit,
+    onChildSessionClick: (ChildSessionNavigationTarget) -> Unit,
+    onToolGroupClick: (SessionToolGroup) -> Unit,
+    onSessionReplaceRequested: (ChildSessionNavigationTarget) -> Unit,
+    onTerminalRequested: (worktree: String, projectTitle: String) -> Unit,
+    onFilesRequested: (worktree: String) -> Unit,
+    detailControl: OpenCodeSplitPaneDetailControl?,
+    onReportProblem: (() -> Unit)?,
+    viewModel: SessionChatViewModel,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -192,6 +262,7 @@ fun SessionChatScreen(
         onDispose {
             viewModel.cancelDictationForDismiss()
             viewModel.clearSessionReadyFocus()
+            viewModel.leaveSideQuestions()
         }
     }
 
@@ -210,6 +281,7 @@ fun SessionChatScreen(
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
     var skillsTarget by remember { mutableStateOf<SessionChatSkillsTarget?>(null) }
     var showSessionTodosSheet by rememberSaveable { mutableStateOf(false) }
+    var showSubagentsSheet by rememberSaveable { mutableStateOf(false) }
     var holdingFinishedTodos by remember { mutableStateOf(false) }
     var sawUnfinishedTodos by remember { mutableStateOf(false) }
     var composerOverlayHeightPx by remember { mutableStateOf(0) }
@@ -221,6 +293,14 @@ fun SessionChatScreen(
         } else {
             0.dp
         }
+    // A shown snackbar floats above the composer; lift the end-pinned last row
+    // over it so the row keeps the same end gap instead of sitting under the card.
+    var snackbarOverlayHeight by remember { mutableStateOf(0.dp) }
+    val animatedSnackbarOverlayHeight by animateDpAsState(
+        targetValue = snackbarOverlayHeight,
+        animationSpec = tween(durationMillis = 200),
+        label = "sessionChatSnackbarInset",
+    )
     val sessionCreated = !OptimisticSessionCreate.isPlaceholder(uiState.sessionId)
     val lifecycleActionsEnabled = sessionCreated && !uiState.isLifecycleActionInFlight
     var showAttachmentSource by rememberSaveable { mutableStateOf(false) }
@@ -264,11 +344,74 @@ fun SessionChatScreen(
 
     fun ingestAttachments(uris: List<android.net.Uri>) {
         if (uris.isEmpty()) return
+        val uploadAvailable = viewModel.attachmentUploadAvailable()
         coroutineScope.launch {
-            val result = withContext(Dispatchers.IO) { attachmentIngestion.ingest(uris) }
+            val result = withContext(Dispatchers.IO) { attachmentIngestion.ingest(uris, uploadAvailable) }
             viewModel.addAttachments(result.attachments)
             result.errors.firstOrNull()?.let(viewModel::reportAttachmentError)
         }
+    }
+
+    fun attachPasted(content: OpenCodeComposerPastedContent) {
+        val uploadAvailable = viewModel.attachmentUploadAvailable()
+        val names =
+            viewModel.uiState.value.composer.attachments
+                .map { it.filename }
+                .toMutableList()
+        coroutineScope.launch {
+            val (folders, result) =
+                try {
+                    withContext(Dispatchers.IO) {
+                        val (folders, uris) = content.uris.partition { context.contentResolver.isFolder(it) }
+                        folders to
+                            attachmentIngestion.ingest(uris, uploadAvailable) { mime ->
+                                // An unnamed pasted image is `Pasted image N.png`; other content keeps its URI name.
+                                if (mime?.startsWith("image/") != true) return@ingest null
+                                AttachmentDropRouting.pastedImageName(names).also { names += it }
+                            }
+                    }
+                } finally {
+                    content.release()
+                }
+            if (viewModel.addPastedOrDroppedAttachments(result, skippedFolders = folders.size)) {
+                logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_PASTE)
+            }
+        }
+    }
+
+    fun attachDropped(files: SessionChatDroppedFiles) {
+        val uploadAvailable = viewModel.attachmentUploadAvailable()
+        coroutineScope.launch {
+            val (folders, result) =
+                try {
+                    withContext(Dispatchers.IO) {
+                        val (folders, uris) = files.uris.partition { context.contentResolver.isFolder(it) }
+                        folders to attachmentIngestion.ingest(uris, uploadAvailable)
+                    }
+                } finally {
+                    files.release()
+                }
+            if (viewModel.addPastedOrDroppedAttachments(result, skippedFolders = folders.size)) {
+                logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_DROP)
+            }
+        }
+    }
+
+    var attachDropEnabled by remember { mutableStateOf(false) }
+    var attachDropSummary by remember { mutableStateOf<AttachmentDropSummary?>(null) }
+    LaunchedEffect(attachDropEnabled) {
+        if (!attachDropEnabled) attachDropSummary = null
+    }
+
+    fun attachmentDropContext(): AttachmentDropContext {
+        val composer = viewModel.uiState.value.composer
+        val option = composer.selectedModel?.option
+        return AttachmentDropContext(
+            imagesSupported = option?.supportsImageInput != false,
+            pdfSupported = option?.supportsPdfInput != false,
+            uploadAvailable = viewModel.attachmentUploadAvailable(),
+            draft = composer.attachments,
+        )
     }
 
     fun attachDiagnosticLog() {
@@ -442,7 +585,7 @@ fun SessionChatScreen(
         SessionChatComposerKind.resolve(
             isChildSession = isChildSession,
             hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
-            hasQuestion = uiState.questionRequest != null,
+            hasQuestion = uiState.questionRequest != null && !uiState.questionDockHidden,
         )
     LaunchedEffect(composerKindForDictation) {
         if (composerKindForDictation != SessionChatComposerKind.Prompt) {
@@ -580,7 +723,17 @@ fun SessionChatScreen(
             ),
     )
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(
+        modifier =
+            modifier
+                .fillMaxSize()
+                .sessionChatAttachmentDropTarget(
+                    enabled = attachDropEnabled,
+                    dropContext = ::attachmentDropContext,
+                    onSummaryChange = { attachDropSummary = it },
+                    onDrop = ::attachDropped,
+                ),
+    ) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBarOverflowHost(
                 expanded = menuExpanded,
@@ -689,7 +842,7 @@ fun SessionChatScreen(
                                 icon = OpenCodeIcons.Edit,
                                 onClick = {
                                     menuExpanded = false
-                                    feedbackSheet.open()
+                                    if (onReportProblem != null) onReportProblem() else feedbackSheet.open()
                                 },
                             ),
                         )
@@ -789,12 +942,45 @@ fun SessionChatScreen(
                             sessionTodoCompletedCount = uiState.sessionTodoCompletedCount,
                             sessionTodoTotalCount = uiState.sessionTodoTotalCount,
                             sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
-                            hideFloatStack = showSessionTodosSheet,
+                            hideFloatStack = showSessionTodosSheet || showSubagentsSheet,
                             hideLiveRetryFailures = uiState.retryCard != null,
+                            hideRetryCountdown = uiState.isRetrying,
                             noticeModelNames = noticeModelNames,
-                            // Composer + 16 end-pin gap; Scroll to end uses this as-is
-                            // (no extra scrollToEndPillBottomPadding).
-                            bottomOverlayInset = timelineBottomInset,
+                            // Composer (+ shown snackbar) + 16 end-pin gap; Scroll to end
+                            // uses this as-is (no extra scrollToEndPillBottomPadding).
+                            bottomOverlayInset = timelineBottomInset + animatedSnackbarOverlayHeight,
+                            activityItems =
+                                sessionChatActivityItems(
+                                    uiState = uiState,
+                                    composerKind =
+                                        SessionChatComposerKind.resolve(
+                                            isChildSession = isChildSession,
+                                            hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
+                                            hasQuestion = uiState.questionRequest != null && !uiState.questionDockHidden,
+                                        ),
+                                ),
+                            keyboardVisible = WindowInsets.isImeVisible,
+                            onActivityClick = { item ->
+                                when (item) {
+                                    SessionChatActivityItem.ReviewPermission -> viewModel.showPermissionDock()
+                                    SessionChatActivityItem.AnswerQuestion -> viewModel.showQuestionDock()
+                                    is SessionChatActivityItem.Subagents -> {
+                                        if (!item.pill.needsInput || !viewModel.openWaitingSubagentRequest()) {
+                                            logChatAction(ProductAnalytics.Action.CHAT_OPEN_SUBAGENTS)
+                                            showSubagentsSheet = true
+                                        }
+                                    }
+                                    is SessionChatActivityItem.SideQuestionsFailed -> viewModel.retrySideQuestions()
+                                    is SessionChatActivityItem.SideQuestionsReady -> viewModel.openSideQuestionAnswer()
+                                    is SessionChatActivityItem.Queued -> showPendingPromptsSheet = true
+                                    else -> Unit
+                                }
+                            },
+                            onActivityClose = { item ->
+                                if (item is SessionChatActivityItem.SideQuestionsFailed) {
+                                    viewModel.dismissFailedSideQuestions()
+                                }
+                            },
                             onRefresh = viewModel::refreshMessages,
                             onRetry = viewModel::retryFailedTimeline,
                             onLoadOlder = viewModel::loadOlderMessages,
@@ -802,6 +988,7 @@ fun SessionChatScreen(
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES)
                                 onReviewChangesClick(uiState.changesNavigationTarget(currentWorktree))
                             },
+                            onSessionBranchCopied = viewModel::branchNameCopied,
                             onSessionTodosClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TODOS)
                                 if (!blocksSessionTodosSheet) {
@@ -822,6 +1009,7 @@ fun SessionChatScreen(
                             },
                             onToolGroupTap = { target ->
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TOOL_GROUP)
+                                SessionToolGroupImages.put(sessionId, target)
                                 onToolGroupClick(
                                     target.toRoute(
                                         sessionId = sessionId,
@@ -879,6 +1067,10 @@ fun SessionChatScreen(
                                 viewModel.openActivityCardStep(stepId)
                             },
                             onCloseActivityCardStep = viewModel::closeActivityCardStep,
+                            imageViewer = uiState.imageViewer,
+                            onOpenImageViewer = viewModel::openImageViewer,
+                            onImageViewerPageChange = viewModel::showImageViewerPage,
+                            onDismissImageViewer = viewModel::dismissImageViewer,
                         ),
                     modifier = Modifier.fillMaxSize(),
                 )
@@ -893,10 +1085,18 @@ fun SessionChatScreen(
                 OpenCodeSnackbarHost(
                     message = uiState.snackbar?.toOpenCodeSnackbarMessage(),
                     onDismissed = viewModel::consumeSnackbar,
+                    onAction = { message ->
+                        val snackbar = uiState.snackbar?.takeIf { it.id == message.id }
+                        when (val action = snackbar?.action) {
+                            is SessionChatSnackbarAction.RetrySideQuestion -> viewModel.retrySideQuestions(action.id)
+                            null -> Unit
+                        }
+                    },
                     modifier =
                         Modifier
                             .align(Alignment.BottomCenter)
                             .padding(bottom = composerOverlayHeight),
+                    onHeightChange = { snackbarOverlayHeight = it },
                 )
 
                 Column(
@@ -909,7 +1109,7 @@ fun SessionChatScreen(
                         SessionChatComposerKind.resolve(
                             isChildSession = isChildSession,
                             hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
-                            hasQuestion = uiState.questionRequest != null,
+                            hasQuestion = uiState.questionRequest != null && !uiState.questionDockHidden,
                         )
                     if (overlayComposerKind == SessionChatComposerKind.Prompt) {
                         when {
@@ -969,38 +1169,30 @@ fun SessionChatScreen(
                                     WindowInsets.ime.union(WindowInsets.navigationBars),
                                 ),
                     ) {
-                        // Suggestions float above this column. Keep the pending strip
-                        // in the measured height so the timeline inset does not jump.
-                        if (overlayComposerKind == SessionChatComposerKind.Prompt &&
-                            uiState.permissionDockHidden
-                        ) {
-                            OpenCodeActionPill(
-                                variant = OpenCodeActionPillVariant.ReviewPermission,
-                                onClick = viewModel::showPermissionDock,
-                                modifier =
-                                    Modifier
-                                        .align(Alignment.CenterHorizontally)
-                                        .padding(bottom = 6.dp),
-                            )
-                        }
-                        if (overlayComposerKind == SessionChatComposerKind.Prompt &&
-                            uiState.pendingPrompts.isNotEmpty()
-                        ) {
-                            OpenCodePendingPromptsStrip(
-                                prompts = uiState.pendingPrompts,
-                                onClick = { showPendingPromptsSheet = true },
-                                modifier =
-                                    Modifier
-                                        .padding(horizontal = 12.dp)
-                                        .padding(bottom = 6.dp),
-                            )
+                        // Suggestions float above this column. Corner pills float over the
+                        // timeline, which reserves their row (SessionChatCornerSlotsLayout).
+                        if (overlayComposerKind == SessionChatComposerKind.Prompt) {
+                            uiState.sideQuestions.unsupportedNotice?.let { notice ->
+                                OpenCodeInlineNotice(
+                                    message = notice,
+                                    variant = OpenCodeInlineNoticeVariant.Banner,
+                                    modifier =
+                                        Modifier
+                                            .padding(horizontal = 12.dp)
+                                            .padding(bottom = 6.dp),
+                                )
+                            }
                         }
 
+                        val sideQuestionMode = uiState.sideQuestions.composerMode
+                        val blockedSideQuestion =
+                            !uiState.sideQuestions.supported &&
+                                SideQuestion.questionInDraft(uiState.composer.text) != null
                         val composerKind =
                             SessionChatComposerKind.resolve(
                                 isChildSession = isChildSession,
                                 hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
-                                hasQuestion = uiState.questionRequest != null,
+                                hasQuestion = uiState.questionRequest != null && !uiState.questionDockHidden,
                             )
                         val composerState =
                             when (composerKind) {
@@ -1020,7 +1212,19 @@ fun SessionChatScreen(
                                                 )
                                             },
                                         alwaysPatterns = request?.always.orEmpty(),
+                                        queuePosition = uiState.permissionQueuePosition,
                                         queueCount = uiState.permissionQueueCount,
+                                        attribution =
+                                            uiState.permissionAttribution?.let { attribution ->
+                                                attribution.toComposerAttribution(
+                                                    attribution.permissionSummary(
+                                                        permission = request?.permission.orEmpty(),
+                                                        target =
+                                                            request?.fileChanges?.firstOrNull()?.path
+                                                                ?: request?.patterns?.firstOrNull(),
+                                                    ),
+                                                )
+                                            },
                                         submitting = uiState.permissionSubmitting,
                                         actionsEnabled = uiState.canMutate,
                                         errorMessage = uiState.permissionErrorMessage,
@@ -1068,6 +1272,12 @@ fun SessionChatScreen(
                                         submitEnabled = answered && index == questionCount - 1 && !submitting,
                                         submitting = submitting,
                                         errorMessage = uiState.questionErrorMessage,
+                                        requestPosition = uiState.questionQueuePosition,
+                                        requestCount = uiState.questionQueueCount,
+                                        attribution =
+                                            uiState.questionAttribution?.let {
+                                                it.toComposerAttribution(it.questionSummary)
+                                            },
                                     )
                                 }
                                 SessionChatComposerKind.ChildLockout ->
@@ -1091,10 +1301,18 @@ fun SessionChatScreen(
                                         selectedVariantLabel = uiState.composer.selectedVariantLabel,
                                         showVariant = uiState.composer.canSelectVariant,
                                         sendEnabled =
-                                            uiState.composer.canSend &&
-                                                uiState.composer.selectedModel != null &&
-                                                uiState.composer.isModelSelectionReady &&
-                                                !uiState.isSending &&
+                                            (
+                                                if (sideQuestionMode) {
+                                                    // A side question answers with the session's own model.
+                                                    uiState.composer.text.isNotBlank()
+                                                } else {
+                                                    uiState.composer.canSend &&
+                                                        uiState.composer.selectedModel != null &&
+                                                        uiState.composer.isModelSelectionReady &&
+                                                        !uiState.isSending &&
+                                                        !blockedSideQuestion
+                                                }
+                                            ) &&
                                                 sessionCreated &&
                                                 uiState.timeline != SessionChatTimelineState.Creating &&
                                                 uiState.composerEnabled,
@@ -1102,19 +1320,26 @@ fun SessionChatScreen(
                                             attachmentSources.isAttachEnabled &&
                                                 sessionCreated &&
                                                 uiState.composer.isModelSelectionReady &&
-                                                !uiState.composer.isShellMode,
+                                                !uiState.composer.isShellMode &&
+                                                !sideQuestionMode,
                                         showStop = uiState.sessionStatusLabel != null,
                                         stopEnabled =
                                             !uiState.isAborting &&
                                                 uiState.canMutate,
                                         followUpDelivery =
                                             uiState.composer.followUpDelivery.takeIf {
-                                                uiState.composer.supportsFollowUpDelivery
+                                                uiState.composer.supportsFollowUpDelivery && !sideQuestionMode
                                             },
                                         showDictationButton = dictationSupport.showsMic,
-                                        shellMode = uiState.composer.isShellMode,
+                                        shellMode = uiState.composer.isShellMode && !sideQuestionMode,
+                                        sideQuestionMode = sideQuestionMode,
                                     )
                             }
+                        // Drops attach only where the Attach button would: a prompt composer that takes attachments.
+                        val promptAttachEnabled =
+                            (composerState as? OpenCodeSessionComposerState.Prompt)?.attachEnabled == true &&
+                                uiState.dictation == null
+                        SideEffect { attachDropEnabled = promptAttachEnabled }
                         val composerFocus = rememberOpenCodeSessionComposerFocus()
                         KeyboardShortcutHandler(
                             KeyboardShortcutAction.FocusComposer,
@@ -1132,6 +1357,7 @@ fun SessionChatScreen(
                             )
                         OpenCodeSessionComposer(
                             state = composerState,
+                            modifier = Modifier.sessionChatPanelPulse(uiState.inboxPanelPulse),
                             focus = composerFocus,
                             dictation = dictationCard,
                             onAction = { action ->
@@ -1171,8 +1397,10 @@ fun SessionChatScreen(
                                         }
                                     }
                                     is OpenCodeSessionComposerAction.RemoveAttachment -> viewModel.removeAttachment(action.id)
+                                    is OpenCodeSessionComposerAction.PasteContent -> attachPasted(action.content)
                                     OpenCodeSessionComposerAction.CancelRevert -> viewModel.cancelRevert()
                                     OpenCodeSessionComposerAction.ExitShellMode -> viewModel.exitShellMode()
+                                    OpenCodeSessionComposerAction.ExitSideQuestionMode -> viewModel.exitSideQuestionMode()
                                     OpenCodeSessionComposerAction.Send -> viewModel.sendPrompt()
                                     OpenCodeSessionComposerAction.ToggleFollowUp -> viewModel.toggleFollowUp()
                                     OpenCodeSessionComposerAction.Stop -> viewModel.abort()
@@ -1184,6 +1412,29 @@ fun SessionChatScreen(
                                         viewModel.alwaysAllowPermission(action.requestId, action.sessionId)
                                     is OpenCodeSessionComposerAction.HidePermission ->
                                         viewModel.hidePermissionDock(action.requestId)
+                                    is OpenCodeSessionComposerAction.HideQuestion ->
+                                        viewModel.hideQuestionDock(action.requestId)
+                                    is OpenCodeSessionComposerAction.PageRequest ->
+                                        if (composerKind == SessionChatComposerKind.Permission) {
+                                            viewModel.pagePermission(action.delta)
+                                        } else {
+                                            viewModel.pageQuestion(action.delta)
+                                        }
+                                    is OpenCodeSessionComposerAction.OpenRequestSession -> {
+                                        val attribution =
+                                            listOfNotNull(uiState.permissionAttribution, uiState.questionAttribution)
+                                                .firstOrNull { it.sessionId == action.sessionId }
+                                        if (attribution != null) {
+                                            logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
+                                            onChildSessionClick(
+                                                ChildSessionNavigationTarget(
+                                                    sessionId = attribution.sessionId,
+                                                    sessionTitle = attribution.sessionTitle,
+                                                    worktree = currentWorktree,
+                                                ),
+                                            )
+                                        }
+                                    }
                                     is OpenCodeSessionComposerAction.ToggleQuestionOption ->
                                         viewModel.toggleQuestionOption(action.requestId, action.sessionId, action.label)
                                     is OpenCodeSessionComposerAction.ToggleQuestionCustom ->
@@ -1281,6 +1532,12 @@ fun SessionChatScreen(
             onClearAll = viewModel::clearPendingPrompts,
         )
 
+        SessionChatSideQuestionSheet(
+            answer = uiState.sideQuestions.presentedAnswer,
+            onCopy = viewModel::sideQuestionAnswerCopied,
+            onClose = viewModel::closeSideQuestionAnswer,
+        )
+
         val sheetContext = LocalContext.current
         SessionChatToolDetailSheet(
             target = toolDetailTarget,
@@ -1309,9 +1566,11 @@ fun SessionChatScreen(
                 toolDetailTarget != null ||
                 skillsTarget != null ||
                 showSessionTodosSheet ||
+                showSubagentsSheet ||
                 showAttachmentSource ||
                 activePicker != null ||
                 showDeleteConfirmation
+        LaunchedEffect(screenSheetOpen) { viewModel.setScreenSheetOpen(screenSheetOpen) }
         SessionChatChipTimelineIntroModal(
             visible = uiState.chipTimelineIntroVisible && !screenSheetOpen,
             onEnable = viewModel::enableChipTimelineFromIntro,
@@ -1323,6 +1582,23 @@ fun SessionChatScreen(
             options = uiState.timelineStylePickerOptions,
             onUse = viewModel::chooseTimelineStyleFromPicker,
             onDismiss = viewModel::dismissTimelineStylePicker,
+        )
+
+        SessionChatSubagentsSheet(
+            visible = showSubagentsSheet,
+            subagents = uiState.subagents,
+            onOpen = { subagent ->
+                val childId = subagent.childSessionId ?: return@SessionChatSubagentsSheet
+                logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
+                onChildSessionClick(
+                    ChildSessionNavigationTarget(
+                        sessionId = childId,
+                        sessionTitle = subagent.title ?: subagent.agentName,
+                        worktree = currentWorktree,
+                    ),
+                )
+            },
+            onDismiss = { showSubagentsSheet = false },
         )
 
         SessionChatTodosSheet(
@@ -1514,6 +1790,24 @@ fun SessionChatScreen(
             secondaryOption = OpenCodeDialogOption(title = "Stay here", onClick = viewModel::chooseForkStay),
             onDismissRequest = viewModel::chooseForkStay,
         )
+
+        AnimatedVisibility(
+            visible = attachDropSummary != null,
+            enter = fadeIn(tween(durationMillis = 120)),
+            exit = fadeOut(tween(durationMillis = 120)),
+        ) {
+            // Keeps the last summary while fading out.
+            val summary = remember { mutableStateOf<AttachmentDropSummary?>(null) }
+            attachDropSummary?.let { summary.value = it }
+            summary.value?.let { shown ->
+                OpenCodeDropOverlay(
+                    variant = if (shown.rejected) OpenCodeDropOverlayVariant.Reject else OpenCodeDropOverlayVariant.Accept,
+                    title = shown.title,
+                    subtitle = shown.subtitle,
+                    previews = shown.previews.map { it.toAttachmentVariant() },
+                )
+            }
+        }
     }
 }
 
@@ -1613,6 +1907,7 @@ private fun SessionChatSnackbar.toOpenCodeSnackbarMessage(): OpenCodeSnackbarMes
                 SessionChatSnackbarTone.Default -> OpenCodeSnackbarVariant.Default
                 SessionChatSnackbarTone.Error -> OpenCodeSnackbarVariant.Error
             },
+        actionLabel = action?.label,
         id = id,
     )
 
@@ -1655,6 +1950,7 @@ private fun ClientSlashAction.tileIcon(): ImageVector =
         ClientSlashAction.Redo -> OpenCodeIcons.Redo
         ClientSlashAction.Compact -> OpenCodeIcons.VerticalAlignCenter
         ClientSlashAction.Mcp -> OpenCodeIcons.Plug
+        ClientSlashAction.Btw -> OpenCodeIcons.SubdirectoryArrowRight
     }
 
 internal fun sessionChatViewModelKey(
@@ -1742,3 +2038,26 @@ private fun SessionChatMoveToWorktreeRows(
     )
 }
 
+private fun InboxRequestAttribution.toComposerAttribution(summary: String) =
+    OpenCodeSessionComposerState.RequestAttribution(sessionId = sessionId, letter = letter, summary = summary)
+
+/**
+ * Bottom-left activity the screen owns: collapsed requests, subagents, `/btw` side questions and queued prompts.
+ * Collapsed requests show whatever the composer shows, so a child session's lockout cannot strand one.
+ */
+internal fun sessionChatActivityItems(
+    uiState: SessionChatUiState,
+    composerKind: SessionChatComposerKind,
+): List<SessionChatActivityItem> =
+    buildList {
+        if (uiState.permissionDockHidden) add(SessionChatActivityItem.ReviewPermission)
+        if (uiState.questionDockHidden) add(SessionChatActivityItem.AnswerQuestion)
+        uiState.backgroundWorkPill?.let { add(SessionChatActivityItem.Subagents(it)) }
+        if (composerKind == SessionChatComposerKind.Prompt) {
+            val sideQuestions = uiState.sideQuestions
+            if (sideQuestions.failedCount > 0) add(SessionChatActivityItem.SideQuestionsFailed(sideQuestions.failedCount))
+            if (sideQuestions.readyCount > 0) add(SessionChatActivityItem.SideQuestionsReady(sideQuestions.readyCount))
+            if (sideQuestions.pendingCount > 0) add(SessionChatActivityItem.SideQuestionsRunning(sideQuestions.pendingCount))
+            if (uiState.pendingPrompts.isNotEmpty()) add(SessionChatActivityItem.Queued(uiState.pendingPrompts.size))
+        }
+    }

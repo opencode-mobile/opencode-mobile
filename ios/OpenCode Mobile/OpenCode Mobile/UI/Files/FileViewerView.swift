@@ -56,7 +56,7 @@ enum FileViewerMenu {
         dismissMenu: @escaping () -> Void
     ) -> [OpenCodeOverflowMenuEntry] {
         let wraps = viewModel.state.wrapLines
-        return [
+        let entries = [
             OpenCodeOverflowMenuEntry(
                 id: "files-copy-path",
                 title: "Copy path",
@@ -79,6 +79,22 @@ enum FileViewerMenu {
                 }
             ),
         ]
+        #if HIGHLIGHT_LAB
+        guard let document = viewModel.state.viewers[relativePath]?.textDocument else { return entries }
+        return entries + [
+            OpenCodeOverflowMenuEntry(
+                id: "files-open-in-highlighting-lab",
+                title: "Open in Highlighting Lab",
+                icon: .code,
+                action: {
+                    dismissMenu()
+                    HighlightLabLauncher.shared.open(relativePath: relativePath, document: document)
+                }
+            ),
+        ]
+        #else
+        return entries
+        #endif
     }
 
     /// The viewed file path is never reported.
@@ -164,17 +180,24 @@ struct FileViewerContent: View {
                         OpenCodeStatusStack(spinner: "Rendering preview")
                     }
                 } else {
-                    OpenCodeCodeFile(
-                        lines: document.lines,
-                        lineSpans: viewer.lineSpans,
-                        wrapsLines: viewModel.state.wrapLines,
-                        maxLineLength: document.maxLineLength
-                    )
+                    codeFile(viewer, document: document)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             footer(viewer, document: document)
         }
+    }
+
+    private func codeFile(_ viewer: ProjectFileViewerState, document: FileTextDocument) -> some View {
+        let relativePath = relativePath
+        let viewModel = viewModel
+        return OpenCodeCodeFile(
+            lines: document.lines,
+            lineSpans: viewer.lineSpans,
+            wrapsLines: viewModel.state.wrapLines,
+            maxLineLength: document.maxLineLength,
+            onLineAppear: { viewModel.lineAppeared(relativePath, line: $0) }
+        )
     }
 
     private func footer(_ viewer: ProjectFileViewerState, document: FileTextDocument) -> some View {

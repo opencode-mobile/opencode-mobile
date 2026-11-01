@@ -17,13 +17,11 @@ import dev.opencode.mobile.domain.preferences.AppOnboardingPreferences
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.preferences.HomeSessionRowStyle
-import dev.opencode.mobile.domain.preferences.MarkdownHighlightPreferences
 import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.preferences.SplitPanePreferences
 import dev.opencode.mobile.domain.sessioncache.SessionCache
-import dev.opencode.mobile.domain.textmate.TextMateLogbook
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.ThemeManager
@@ -43,7 +41,6 @@ class SettingsViewModel
         private val activeConnectionManager: ActiveConnectionManager,
         private val projectionCaches: ProjectionCaches,
         private val messageContentPreparer: MessageContentPreparer,
-        private val textMateLogbook: TextMateLogbook,
         private val diagnosticLogBuffer: DiagnosticLogBuffer,
         private val sessionCache: SessionCache,
     ) : ViewModel() {
@@ -87,7 +84,6 @@ class SettingsViewModel
                 runCatching { sessionCache.clearAll() }
                 ThemeManager.clearAll()
                 HomeDisplayPreferences.clear()
-                MarkdownHighlightPreferences.clear()
                 AnalyticsConsentPreferences.clear()
                 // Apply the reset default to Crashlytics and Analytics collection now, not at next launch.
                 OpenCodeReleaseObservability.setProductAnalyticsConsented(
@@ -98,11 +94,12 @@ class SettingsViewModel
                 DeveloperToolsPreferences.clear()
                 PerformanceOverlayPreferences.clear()
                 SessionChatDisplayPreferences.clear()
+                // A wipe is a fresh install: settle the timeline now so the update-only picker never shows.
+                SessionChatDisplayPreferences.resolveTimelineForInstall(existingInstall = false)
                 SplitPanePreferences.clear()
                 FeatureFlags.clearOverrides()
                 messageContentPreparer.clearDocumentCache()
                 BlockDecorationCache.clear()
-                textMateLogbook.clear()
                 diagnosticLogBuffer.clear()
                 refreshSessionCacheSize()
             }
@@ -145,12 +142,6 @@ class SettingsViewModel
         }
 
         fun supportsFollowUpDelivery(): Boolean = activeConnectionManager.currentCapabilities().supportsFollowUpDelivery
-
-        fun setTextMateEnabled(enabled: Boolean) {
-            MarkdownHighlightPreferences.updateTextMateEnabled(enabled)
-            messageContentPreparer.clearDocumentCache()
-            BlockDecorationCache.clear()
-        }
 
         /** Through the observability seam so Crashlytics and automatic Analytics follow at once. */
         fun setProductAnalyticsConsented(enabled: Boolean) {

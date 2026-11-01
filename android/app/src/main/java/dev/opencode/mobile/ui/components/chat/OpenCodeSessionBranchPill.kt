@@ -1,158 +1,386 @@
 package dev.opencode.mobile.ui.components
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import kotlin.math.roundToInt
 
-private val SessionBranchPillShape = RoundedCornerShape(percent = 50)
+/** Popover width when the screen allows it; narrower screens keep the corner slot's inset. */
+val SessionBranchPopoverWidth = 320.dp
+private val BranchPopoverPaddingHorizontal = 16.dp
+private val BranchPopoverSectionPaddingVertical = 12.dp
+private val BranchPopoverIconSize = 16.dp
+private val BranchPopoverIconSpacing = 10.dp
+private val BranchPopoverFileRowSpacing = 8.dp
 
-fun sessionBranchPillAdditionLabel(additions: Int): String? = additions.takeIf { it > 0 }?.let { "+$it" }
-
-fun sessionBranchPillDeletionLabel(deletions: Int): String? = deletions.takeIf { it > 0 }?.let { "−$it" }
-
-fun sessionBranchPillAccessibilityLabel(
-    branch: String,
-    additions: Int,
-    deletions: Int,
-): String {
-    val parts =
-        buildList {
-            add("Branch $branch")
-            additions.takeIf { it > 0 }?.let { add("$it ${if (it == 1) "addition" else "additions"}") }
-            deletions.takeIf { it > 0 }?.let { add("$it ${if (it == 1) "deletion" else "deletions"}") }
-        }
-    return parts.joinToString(", ")
-}
-
-enum class SessionBranchPillPreviewCase(
-    val branch: String,
+/** One uncommitted file change on the session's branch. */
+data class OpenCodeSessionBranchChangedFile(
+    val path: String,
     val additions: Int,
     val deletions: Int,
-    val enabled: Boolean,
-    val darkTheme: Boolean,
 ) {
-    MixedLight("feature/session-branch", 12, 3, true, false),
-    MixedDark("feature/session-branch", 12, 3, true, true),
-    AdditionsOnlyLight("feature/session-branch", 12, 0, true, false),
-    DeletionsOnlyDark("feature/session-branch", 0, 3, true, true),
-    CleanLight("main", 0, 0, true, false),
-    LongBranchLight("feature/very-long-worktree-branch-name-that-must-ellipsis", 48, 2, true, false),
-    DisabledLight("feature/session-branch", 12, 3, false, false),
-    DisabledDark("main", 0, 0, false, true),
+    val linesChanged: Int get() = additions + deletions
+
+    /** Counts to draw: a zero side is null, so a binary or rename-only file shows none. */
+    val visibleAdditions: Int? get() = additions.takeIf { it > 0 }
+    val visibleDeletions: Int? get() = deletions.takeIf { it > 0 }
+
+    /** "src/a.kt, 61 added"; a file without line counts reads its path only. */
+    val accessibilityLabel: String
+        get() = OpenCodeSessionBranchSummary.spokenCounts(path, additions, deletions)
 }
 
-@Composable
-private fun SessionBranchPillPreview(case: SessionBranchPillPreviewCase) {
-    OpenCodeTheme(darkTheme = case.darkTheme) {
-        OpenCodeSessionBranchPill(
-            branch = case.branch,
-            additions = case.additions,
-            deletions = case.deletions,
-            enabled = case.enabled,
-            onClick = {},
-        )
+/**
+ * What the Session Branch Pill and its popover show: the session's branch, its base,
+ * whether it is a worktree checkout, and the uncommitted file changes.
+ */
+data class OpenCodeSessionBranchSummary(
+    val branch: String,
+    val baseBranch: String? = null,
+    val isWorktree: Boolean = false,
+    val files: List<OpenCodeSessionBranchChangedFile> = emptyList(),
+) {
+    val additions: Int get() = files.sumOf { it.additions }.coerceAtLeast(0)
+    val deletions: Int get() = files.sumOf { it.deletions }.coerceAtLeast(0)
+    val hasChanges: Boolean get() = files.isNotEmpty()
+
+    /** Worktree checkouts use the worktree icon from Home and Settings; other sessions the branch icon. */
+    val icon: ImageVector get() = if (isWorktree) OpenCodeIcons.CallSplit else OpenCodeIcons.GitBranch
+
+    /**
+     * "+128 −14" with zero sides left out, or "2 files" when the changes have no line counts.
+     * Null without changes: the pill shows its icon only.
+     */
+    val changeLabel: String?
+        get() {
+            if (!hasChanges) return null
+            val parts =
+                buildList {
+                    if (additions > 0) add("+$additions")
+                    if (deletions > 0) add("−$deletions")
+                }
+            return if (parts.isEmpty()) fileCount(files.size) else parts.joinToString(" ")
+        }
+
+    val pillLayout: OpenCodeFloatingPillLayout
+        get() =
+            changeLabel?.let { OpenCodeFloatingPillLayout.IconLabel(icon, it) }
+                ?: OpenCodeFloatingPillLayout.IconOnly(icon, accessibilityLabel)
+
+    /** "Branch feature-x, 128 added, 14 removed" or "Branch feature-x, no changes". */
+    val accessibilityLabel: String
+        get() {
+            val name = "${if (isWorktree) "Worktree branch" else "Branch"} $branch"
+            if (!hasChanges) return "$name, no changes"
+            if (additions == 0 && deletions == 0) return "$name, ${uncommittedFileCount(files.size)}"
+            return spokenCounts(name, additions, deletions)
+        }
+
+    /** The base branch when the server reports one that differs from the branch itself. */
+    val visibleBaseBranch: String?
+        get() = baseBranch?.takeIf { it.isNotEmpty() && it != branch }
+
+    /** "3 uncommitted files"; null without changes. Worded so it does not read as a diff against the base. */
+    val fileCountLabel: String?
+        get() = if (hasChanges) uncommittedFileCount(files.size) else null
+
+    /** Popover totals: a zero side is null, as on the pill. */
+    val visibleAdditions: Int? get() = additions.takeIf { it > 0 }
+    val visibleDeletions: Int? get() = deletions.takeIf { it > 0 }
+
+    /** "3 uncommitted files, 106 added"; null without changes. */
+    val fileCountAccessibilityLabel: String?
+        get() = fileCountLabel?.let { spokenCounts(it, additions, deletions) }
+
+    /** The most-changed files by lines added plus removed, ties by path. */
+    val topFiles: List<OpenCodeSessionBranchChangedFile>
+        get() =
+            files
+                .sortedWith(compareByDescending<OpenCodeSessionBranchChangedFile> { it.linesChanged }.thenBy { it.path })
+                .take(TOP_FILE_LIMIT)
+
+    companion object {
+        /** The popover lists at most this many files. */
+        const val TOP_FILE_LIMIT = 3
+
+        private fun fileCount(count: Int): String = "$count ${if (count == 1) "file" else "files"}"
+
+        private fun uncommittedFileCount(count: Int): String = "$count uncommitted ${if (count == 1) "file" else "files"}"
+
+        /** "prefix, 128 added, 14 removed" with zero sides left out. */
+        fun spokenCounts(
+            prefix: String,
+            additions: Int,
+            deletions: Int,
+        ): String =
+            buildList {
+                add(prefix)
+                if (additions > 0) add("$additions added")
+                if (deletions > 0) add("$deletions removed")
+            }.joinToString(", ")
     }
 }
 
+/**
+ * Session Chat context pill for the session's branch: an icon and the line counts, or the
+ * icon alone with no changes. Tapping it opens a popover with the branch details, the
+ * most-changed files, View all changes and Copy branch name. Placement is up to the caller.
+ *
+ * [onBranchNameCopied] runs after the branch name is on the clipboard, so the host can confirm it.
+ */
 @Composable
 fun OpenCodeSessionBranchPill(
-    branch: String,
-    additions: Int,
-    deletions: Int,
-    onClick: () -> Unit,
+    summary: OpenCodeSessionBranchSummary,
+    onViewAllChanges: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true,
+    onBranchNameCopied: () -> Unit = {},
 ) {
-    require(branch.isNotEmpty()) { "Session Branch Pill requires a non-empty branch" }
-    require(additions >= 0) { "Session Branch Pill requires nonnegative additions" }
-    require(deletions >= 0) { "Session Branch Pill requires nonnegative deletions" }
-    val additionLabel = sessionBranchPillAdditionLabel(additions)
-    val deletionLabel = sessionBranchPillDeletionLabel(deletions)
-    val interactionSource = remember { MutableInteractionSource() }
-    val contentColor =
-        if (enabled) openCodeColor("text-strong") else MaterialTheme.colorScheme.onSurfaceVariant
-    val iconColor = if (enabled) openCodeColor("icon-base") else MaterialTheme.colorScheme.onSurfaceVariant
-    val surfaceRaised = openCodeColor("surface-raised-base")
-    val branchStyle =
-        MaterialTheme.typography.bodySmall.copy(
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
-        )
+    require(summary.branch.isNotEmpty()) { "Session Branch Pill requires a non-empty branch" }
+    var expanded by remember { mutableStateOf(false) }
+    var anchorLeftPx by remember { mutableIntStateOf(0) }
+    val clipboard = LocalClipboardManager.current
+    val windowWidthPx = LocalWindowInfo.current.containerSize.width
 
-    Surface(
-        onClick = onClick,
-        enabled = enabled,
-        modifier =
-            modifier.semantics {
-                contentDescription = sessionBranchPillAccessibilityLabel(branch, additions, deletions)
-            },
-        shape = SessionBranchPillShape,
-        color = surfaceRaised.copy(alpha = if (enabled) 0.95f else 0.7f),
-        contentColor = contentColor,
-        border = BorderStroke(1.dp, openCodeColor("border-weaker-base")),
-        tonalElevation = 2.dp,
-        shadowElevation = if (enabled) 4.dp else 0.dp,
-        interactionSource = interactionSource,
-    ) {
+    Box(modifier = modifier.onGloballyPositioned { anchorLeftPx = it.positionInWindow().x.roundToInt() }) {
+        OpenCodeFloatingPill(
+            layout = summary.pillLayout,
+            state = OpenCodeFloatingPillState.Ready,
+            accessibilityLabel = summary.accessibilityLabel,
+            onClick = { expanded = true },
+        )
+        OpenCodeAnchoredCard(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            anchorLeftPx = anchorLeftPx,
+            windowWidthPx = windowWidthPx,
+            preferredWidth = SessionBranchPopoverWidth,
+        ) {
+            OpenCodeSessionBranchPopoverContent(
+                summary = summary,
+                onViewAllChanges = {
+                    expanded = false
+                    onViewAllChanges()
+                },
+                onCopyBranchName = {
+                    expanded = false
+                    clipboard.setText(AnnotatedString(summary.branch))
+                    onBranchNameCopied()
+                },
+            )
+        }
+    }
+}
+
+/** Body of the branch popover. Public so the Component Gallery can show it open. */
+@Composable
+fun OpenCodeSessionBranchPopoverContent(
+    summary: OpenCodeSessionBranchSummary,
+    onViewAllChanges: () -> Unit,
+    onCopyBranchName: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val textStrong = openCodeColor("text-strong")
+    val textWeak = openCodeColor("text-weak")
+    val iconStrong = openCodeColor("icon-strong-base")
+    val divider = openCodeColor("border-weak-base")
+
+    Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier =
                 Modifier
-                    .widthIn(max = 320.dp)
-                    .defaultMinSize(minHeight = 36.dp)
-                    .padding(horizontal = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .fillMaxWidth()
+                    .padding(horizontal = BranchPopoverPaddingHorizontal, vertical = BranchPopoverSectionPaddingVertical)
+                    .semantics(mergeDescendants = true) {},
+            horizontalArrangement = Arrangement.spacedBy(BranchPopoverIconSpacing),
         ) {
             Icon(
-                imageVector = OpenCodeIcons.CallSplit,
+                imageVector = summary.icon,
                 contentDescription = null,
-                modifier = Modifier.size(14.dp),
-                tint = iconColor,
+                tint = iconStrong,
+                modifier = Modifier.padding(top = 2.dp).size(BranchPopoverIconSize),
             )
-            Text(
-                text = branch,
-                style = branchStyle,
-                color = contentColor,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            if (additionLabel != null) {
-                OpenCodeDiffStat(
-                    additions = additions,
-                    enabled = enabled,
-                    style = OpenCodeDiffStatStyle.Mono,
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = summary.branch,
+                    style = CodeTextStyle,
+                    color = textStrong,
+                    maxLines = 1,
+                    overflow = TextOverflow.MiddleEllipsis,
                 )
+                summary.visibleBaseBranch?.let { base ->
+                    Text(
+                        text = "Based on $base",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = textWeak,
+                        maxLines = 1,
+                        overflow = TextOverflow.MiddleEllipsis,
+                    )
+                }
             }
-            if (deletionLabel != null) {
-                OpenCodeDiffStat(
-                    deletions = deletions,
-                    enabled = enabled,
-                    style = OpenCodeDiffStatStyle.Mono,
+        }
+        if (summary.hasChanges) {
+            HorizontalDivider(color = divider)
+            Column(
+                modifier =
+                    Modifier.padding(
+                        horizontal = BranchPopoverPaddingHorizontal,
+                        vertical = BranchPopoverSectionPaddingVertical,
+                    ),
+                verticalArrangement = Arrangement.spacedBy(BranchPopoverFileRowSpacing),
+            ) {
+                summary.fileCountLabel?.let { label ->
+                    Row(
+                        modifier =
+                            Modifier.fillMaxWidth().clearAndSetSemantics {
+                                contentDescription = summary.fileCountAccessibilityLabel ?: label
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(label, style = MaterialTheme.typography.bodySmall, color = textWeak)
+                        Spacer(Modifier.weight(1f))
+                        OpenCodeDiffStat(additions = summary.visibleAdditions, deletions = summary.visibleDeletions)
+                    }
+                }
+                summary.topFiles.forEach { file ->
+                    Row(
+                        modifier =
+                            Modifier.fillMaxWidth().clearAndSetSemantics {
+                                contentDescription = file.accessibilityLabel
+                            },
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            text = file.path,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = textStrong,
+                            maxLines = 1,
+                            overflow = TextOverflow.StartEllipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        OpenCodeDiffStat(additions = file.visibleAdditions, deletions = file.visibleDeletions)
+                    }
+                }
+            }
+        }
+        HorizontalDivider(color = divider)
+        Column(modifier = Modifier.padding(vertical = 4.dp)) {
+            if (summary.hasChanges) {
+                BranchPopoverAction("View all changes", OpenCodeIcons.Description, onViewAllChanges)
+            }
+            BranchPopoverAction("Copy branch name", OpenCodeIcons.ContentCopy, onCopyBranchName)
+        }
+    }
+}
+
+@Composable
+private fun BranchPopoverAction(
+    title: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+) {
+    DropdownMenuItem(
+        text = { Text(title, style = MaterialTheme.typography.bodyMedium, color = openCodeColor("text-strong")) },
+        leadingIcon = {
+            Icon(icon, contentDescription = null, tint = openCodeColor("icon-strong-base"), modifier = Modifier.size(20.dp))
+        },
+        onClick = onClick,
+        contentPadding = PaddingValues(horizontal = BranchPopoverPaddingHorizontal),
+        modifier = Modifier.height(48.dp),
+    )
+}
+
+enum class SessionBranchPillPreviewCase(
+    val galleryLabel: String,
+    val summary: OpenCodeSessionBranchSummary,
+) {
+    Changes(
+        "Changes",
+        OpenCodeSessionBranchSummary("feature/session-branch", baseBranch = "main", files = SessionBranchPillSampleFiles),
+    ),
+    NoChanges("None", OpenCodeSessionBranchSummary("feature/session-branch", baseBranch = "main")),
+    Worktree(
+        "Worktree",
+        OpenCodeSessionBranchSummary(
+            "feature/worktree-checkout",
+            baseBranch = "main",
+            isWorktree = true,
+            files = SessionBranchPillSampleFiles.take(2),
+        ),
+    ),
+    ManyFiles(
+        "Many",
+        OpenCodeSessionBranchSummary(
+            "feature/very-long-worktree-branch-name-that-must-ellipsis",
+            baseBranch = "main",
+            files =
+                SessionBranchPillSampleFiles +
+                    listOf(
+                        OpenCodeSessionBranchChangedFile("README.md", 3, 0),
+                        OpenCodeSessionBranchChangedFile("docs/notes.md", 0, 4),
+                    ),
+        ),
+    ),
+}
+
+private val SessionBranchPillSampleFiles =
+    listOf(
+        OpenCodeSessionBranchChangedFile("app/src/main/session/BranchPill.kt", 96, 4),
+        OpenCodeSessionBranchChangedFile("app/src/main/session/BranchPopover.kt", 24, 2),
+        OpenCodeSessionBranchChangedFile("app/src/test/BranchPillTest.kt", 8, 8),
+        OpenCodeSessionBranchChangedFile("app/src/main/legacy/OldBranchRow.kt", 0, 6),
+        OpenCodeSessionBranchChangedFile("app/src/main/res/drawable/branch_icon.png", 0, 0),
+    )
+
+@Composable
+private fun SessionBranchPillPreview(darkTheme: Boolean) {
+    OpenCodeTheme(darkTheme = darkTheme) {
+        Surface(color = openCodeColor("background-base")) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SessionBranchPillPreviewCase.entries.forEach {
+                    OpenCodeSessionBranchPill(summary = it.summary, onViewAllChanges = {})
+                }
+                OpenCodeSessionBranchPopoverContent(
+                    summary = SessionBranchPillPreviewCase.Changes.summary,
+                    onViewAllChanges = {},
+                    onCopyBranchName = {},
                 )
             }
         }
@@ -161,48 +389,12 @@ fun OpenCodeSessionBranchPill(
 
 @Preview(showBackground = true)
 @Composable
-private fun OpenCodeSessionBranchPillMixedLightPreview() {
-    SessionBranchPillPreview(SessionBranchPillPreviewCase.MixedLight)
+private fun OpenCodeSessionBranchPillLightPreview() {
+    SessionBranchPillPreview(darkTheme = false)
 }
 
 @Preview(showBackground = true)
 @Composable
-private fun OpenCodeSessionBranchPillMixedDarkPreview() {
-    SessionBranchPillPreview(SessionBranchPillPreviewCase.MixedDark)
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeSessionBranchPillAdditionsOnlyLightPreview() {
-    SessionBranchPillPreview(SessionBranchPillPreviewCase.AdditionsOnlyLight)
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeSessionBranchPillDeletionsOnlyDarkPreview() {
-    SessionBranchPillPreview(SessionBranchPillPreviewCase.DeletionsOnlyDark)
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeSessionBranchPillCleanLightPreview() {
-    SessionBranchPillPreview(SessionBranchPillPreviewCase.CleanLight)
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeSessionBranchPillLongBranchLightPreview() {
-    SessionBranchPillPreview(SessionBranchPillPreviewCase.LongBranchLight)
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeSessionBranchPillDisabledLightPreview() {
-    SessionBranchPillPreview(SessionBranchPillPreviewCase.DisabledLight)
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun OpenCodeSessionBranchPillDisabledDarkPreview() {
-    SessionBranchPillPreview(SessionBranchPillPreviewCase.DisabledDark)
+private fun OpenCodeSessionBranchPillDarkPreview() {
+    SessionBranchPillPreview(darkTheme = true)
 }

@@ -129,6 +129,13 @@ class DefaultSessionRepository
         ) = runCatching { remote.moveSession(id, directory) }
             .getOrElse { throw adapter.mapError(it) }
 
+        override suspend fun askSideQuestion(
+            sessionId: String,
+            question: String,
+        ): String =
+            runCatching { remote.askSideQuestion(sessionId, question) }
+                .getOrElse { throw adapter.mapError(it) }
+
         override suspend fun abortSession(
             id: String,
             directory: String?,

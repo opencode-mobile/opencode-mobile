@@ -3,8 +3,8 @@ import Testing
 @testable import OpenCode_Mobile
 
 struct ServerAddressProbeTests {
-    private let lan = "http://192.168.0.160:4096/"
-    private let tailscale = "http://100.84.57.15:4096/"
+    private let lan = "http://192.168.1.60:4096/"
+    private let tailscale = "http://100.64.0.15:4096/"
 
     @Test func resolve_sendsCredentialsOnlyToTheChosenHost() async {
         let probe = RecordingCredentialProbe()
@@ -42,7 +42,7 @@ struct ServerAddressProbeTests {
     }
 
     @Test func resolve_silentHostsAreUnreachableAndNeverReceiveCredentials() async {
-        let probe = RecordingCredentialProbe(silentHosts: ["100.84.57.15"])
+        let probe = RecordingCredentialProbe(silentHosts: ["100.64.0.15"])
         let resolution = await ServerAddressProbe.resolve(
             urls: [lan, tailscale],
             username: "opencode",
@@ -57,7 +57,7 @@ struct ServerAddressProbeTests {
     }
 
     @Test func resolve_nothingAnswered_choosesNobodyAndSendsNoCredentials() async {
-        let probe = RecordingCredentialProbe(silentHosts: ["192.168.0.160", "100.84.57.15"])
+        let probe = RecordingCredentialProbe(silentHosts: ["192.168.1.60", "100.64.0.15"])
         let resolution = await ServerAddressProbe.resolve(
             urls: [lan, tailscale],
             username: "opencode",

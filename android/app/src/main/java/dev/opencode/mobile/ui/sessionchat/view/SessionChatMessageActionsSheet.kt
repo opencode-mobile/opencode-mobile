@@ -15,6 +15,8 @@ internal data class SessionChatMessageActionsTarget(
     val id: String,
     val text: String,
     val showsRevertMessage: Boolean,
+    /** The code block the tap landed on, offered as its own copy action. */
+    val codeBlock: String? = null,
 )
 
 @Composable
@@ -60,20 +62,35 @@ internal fun SessionChatMessageActionsSheet(
                 },
             )
         }
+        target?.codeBlock?.let { code ->
+            OpenCodeBottomSheetEntry(
+                title = "Copy code block",
+                startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Code),
+                onClick = {
+                    logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_COPY_CODE_BLOCK)
+                    context.copyToClipboard(label = "Code", text = code)
+                    onDismiss()
+                },
+            )
+        }
         OpenCodeBottomSheetEntry(
             title = "Copy message",
             startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy),
             onClick = {
                 logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_COPY)
-                target?.text?.let { text ->
-                    val clipboardManager =
-                        context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    clipboardManager.setPrimaryClip(ClipData.newPlainText("Message", text))
-                }
+                target?.text?.let { text -> context.copyToClipboard(label = "Message", text = text) }
                 onDismiss()
             },
         )
     }
+}
+
+private fun Context.copyToClipboard(
+    label: String,
+    text: String,
+) {
+    val clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+    clipboardManager.setPrimaryClip(ClipData.newPlainText(label, text))
 }
 
 private fun logMessageActionsAction(actionId: String) {

@@ -75,6 +75,7 @@ research/
 
 # Throwaway on-demand UI snapshot evidence (OPE-161)
 .snapshot-evidence/
+/snapshot-evidence/
 ios/OpenCode Mobile/OpenCode MobileTests/GeneratedSnapshotEvidence/
 android/app/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapshotEvidence/
 android/app/src/test/snapshots/
@@ -82,11 +83,6 @@ android/screenshot/src/test/java/dev/opencode/mobile/ui/snapshot/GeneratedSnapsh
 android/screenshot/src/test/snapshots/
 **/*SnapshotEvidence.swift
 **/*SnapshotEvidence.kt
-
-# markdown-core native Oniguruma build artifacts
-shared/markdown-core/native/build/
-shared/markdown-core/native/libs/
-shared/markdown-core/native/oniguruma-src/
 
 # Store screenshot capture output
 /store-screenshots/

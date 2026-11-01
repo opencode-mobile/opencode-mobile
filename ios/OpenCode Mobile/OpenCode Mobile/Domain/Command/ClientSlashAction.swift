@@ -9,6 +9,7 @@ enum ClientSlashAction: String, Sendable, Equatable, CaseIterable {
     case terminal
     case files
     case mcp
+    case btw
 
     var command: String { rawValue }
 
@@ -22,6 +23,7 @@ enum ClientSlashAction: String, Sendable, Equatable, CaseIterable {
         case .terminal: "Open project shell"
         case .files: "Browse project files"
         case .mcp: "Show MCP server status"
+        case .btw: "Ask a side question"
         }
     }
 
@@ -48,11 +50,14 @@ struct ClientSlashActionVisibilityInput: Sendable, Equatable {
     let hasUndoableUserMessage: Bool
     let hasActiveSessionRevert: Bool
     let hasSelectedComposerModel: Bool
+    /// The server answers `/btw` side questions (`ServerCapabilities.supportsSideQuestion`).
+    var supportsSideQuestion = false
 }
 
 enum ClientSlashActionCatalog {
     static func visibleActions(_ input: ClientSlashActionVisibilityInput) -> [ClientSlashAction] {
-        var actions: [ClientSlashAction] = [.new, .terminal, .files]
+        var actions: [ClientSlashAction] = input.supportsSideQuestion ? [.btw] : []
+        actions += [.new, .terminal, .files]
         if input.visibleUserMessageCount > 0 {
             actions.append(.fork)
         }
@@ -72,7 +77,8 @@ enum ClientSlashActionCatalog {
     static func visibilityInput(
         messages: [ClientSlashMessageRef],
         revertMessageID: String?,
-        hasSelectedComposerModel: Bool
+        hasSelectedComposerModel: Bool,
+        supportsSideQuestion: Bool = false
     ) -> ClientSlashActionVisibilityInput {
         let visible = messages.filter { message in
             guard let revertMessageID else { return true }
@@ -85,7 +91,8 @@ enum ClientSlashActionCatalog {
             visibleUserMessageCount: visibleUsers.count,
             hasUndoableUserMessage: visibleUsers.contains(where: \.hasNonEmptyText),
             hasActiveSessionRevert: revertMessageID != nil,
-            hasSelectedComposerModel: hasSelectedComposerModel
+            hasSelectedComposerModel: hasSelectedComposerModel,
+            supportsSideQuestion: supportsSideQuestion
         )
     }
 }

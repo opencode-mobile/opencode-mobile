@@ -33,11 +33,16 @@ import dev.opencode.mobile.domain.live.SessionViewReporter
 import dev.opencode.mobile.domain.mcp.McpRepository
 import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentIngestionResult
+import dev.opencode.mobile.domain.message.AttachmentUploadService
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageListUpdate
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.ServerFilePreviews
+import dev.opencode.mobile.domain.message.UnavailableAttachmentUploadService
+import dev.opencode.mobile.domain.message.UnavailableServerFilePreviews
 import dev.opencode.mobile.ui.changes.TurnDiffUnavailable
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelectionOption
@@ -57,6 +62,8 @@ import dev.opencode.mobile.domain.session.SessionActivity
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionTodoList
+import dev.opencode.mobile.domain.session.SideQuestion
+import dev.opencode.mobile.domain.session.SideQuestionStore
 import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
 import dev.opencode.mobile.domain.sync.ProjectionKey
 import dev.opencode.mobile.domain.sync.SyncCoordinator
@@ -68,6 +75,9 @@ import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatCommands
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatImageViewer
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionNotice
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestions
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatInbox
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatRepoStrip
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
@@ -101,6 +111,7 @@ import kotlin.coroutines.coroutineContext
 
 /** Minimum time a child session's current action stays on screen before the next one replaces it. */
 private const val ACTIVITY_CHILD_UPDATE_HOLD_MS = 800L
+private const val ATTACHMENT_PREVIEW_MAX_BYTES = 32 * 1024 * 1024
 
 @HiltViewModel
 class SessionChatViewModel
@@ -134,6 +145,9 @@ class SessionChatViewModel
         private val projectRepository: ProjectRepository = UnavailableProjectRepository,
         private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
         private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
+        sideQuestionStore: SideQuestionStore? = null,
+        private val serverFilePreviews: ServerFilePreviews = UnavailableServerFilePreviews,
+        private val attachmentUploads: AttachmentUploadService = UnavailableAttachmentUploadService,
     ) : ViewModel() {
         internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
             set(value) {
@@ -167,6 +181,7 @@ class SessionChatViewModel
                 messageRepository = messageRepository,
                 scope = viewModelScope,
                 listChildSessions = { id -> sessionRepository.listChildSessions(id) },
+                derivesChangeNotices = { !activeConnectionManager.currentCapabilities().recordsTimelineChangeNotices },
             )
         private val composer =
             SessionChatComposer(
@@ -181,6 +196,7 @@ class SessionChatViewModel
                 scope = viewModelScope,
                 foregroundEventStream = foregroundEventStream,
                 projectFilesRepository = projectFilesRepository,
+                attachmentUploads = attachmentUploads,
             )
         private val sessionInfo =
             SessionInfo(
@@ -213,6 +229,7 @@ class SessionChatViewModel
                 mcpRepository = mcpRepository,
                 composerDraftStore = composerDraftStore,
                 scope = viewModelScope,
+                supportsSideQuestion = { activeConnectionManager.currentCapabilities().supportsSideQuestion },
             )
         private val inbox =
             SessionChatInbox(
@@ -224,6 +241,22 @@ class SessionChatViewModel
                 canMutate = { sessionInfo.state.value.canMutate },
                 loadedMessages = { timeline.loadedMessages() },
             )
+
+        private val sideQuestions =
+            SessionChatSideQuestions(
+                store =
+                    sideQuestionStore ?: SideQuestionStore(
+                        request = { sessionId, question -> sessionRepository.askSideQuestion(sessionId, question) },
+                        scope = viewModelScope,
+                    ),
+                supported = { activeConnectionManager.currentCapabilities().supportsSideQuestion },
+                scope = viewModelScope,
+            ).also { region ->
+                region.canPresentAnswer = {
+                    val state = _uiState.value
+                    !screenSheetOpen && !state.blocksChipTimelineIntro() && state.presentedActivityCard == null
+                }
+            }
 
         private val worktreeMove =
             SessionChatWorktreeMove(
@@ -254,6 +287,9 @@ class SessionChatViewModel
         val uiState: StateFlow<SessionChatUiState> = _uiState.asStateFlow()
 
         private var boundSessionId: String? = null
+
+        /** A sheet or dialog the screen owns is up; see [setScreenSheetOpen]. */
+        private var screenSheetOpen = false
         private var boundSessionTitle: String? = null
         private var boundWorktree: String? = null
 
@@ -273,9 +309,12 @@ class SessionChatViewModel
         private var workingChrome: WorkingTurnIndicator.Chrome = WorkingTurnIndicator.Chrome.Unmounted
         private var workingHold: WorkingTurnIndicator.Hold? = null
         private var workingHoldJob: Job? = null
+        private val pendingPromptsGate = PendingPromptsStripGate()
+        private var pendingPromptsWakeJob: Job? = null
         private var suppressedSnackbarKey: String? = null
         private var snackbarSequence: Long = 0L
         private var turnDiffNotice: String? = null
+        private var branchCopiedNotice: String? = null
 
         // Chip-timeline paragraphs the user expanded past `+N more`, keyed by
         // expansion id with the chip count at tap time; reset per session.
@@ -283,6 +322,7 @@ class SessionChatViewModel
 
         // Step rails the user unfolded past `N earlier steps`, keyed by rail id; reset per session.
         private var unfoldedStepRails: Set<String> = emptySet()
+        private val imageViewer = SessionChatImageViewer()
 
         // Activity card whose sheet is open, by block id; reset per session (#779).
         private var presentedActivityCard: String? = null
@@ -299,6 +339,18 @@ class SessionChatViewModel
         private val activityFooterHolds = mutableMapOf<String, SessionChatActivityFooterHold>()
         private var stepEntryDebounce = SessionChatStepEntryDebounce()
         private var activityCardFooters: Map<String, SessionChatActivityFooter> = emptyMap()
+
+        /** When subagents seen working finished live, keyed by tool part id, for rows with no server time. */
+        private var subagentFinishTimes: Map<String, Long> = emptyMap()
+
+        /**
+         * When the connection last became live; null while it is not. Rows published before it
+         * were seen before a gap, so a finish found after it is not stamped locally.
+         */
+        private var subagentLiveSinceMs: Long? = null
+
+        /** When the published subagent rows were computed. */
+        private var subagentsSeenAtMs: Long? = null
         private var debouncedStepIds: Set<String> = emptySet()
         private var stepTimingJob: Job? = null
         private var liveRailSource: List<SessionChatMessageItem>? = null
@@ -413,6 +465,9 @@ class SessionChatViewModel
                 repoStrip.state.collect { publishUiState() }
             }
             viewModelScope.launch {
+                sideQuestions.state.collect { publishUiState() }
+            }
+            viewModelScope.launch {
                 combine(
                     worktreeMove.state,
                     homeProjectsSnapshot.projects,
@@ -475,8 +530,10 @@ class SessionChatViewModel
             suppressedSnackbarKey = null
             snackbarSequence = 0L
             turnDiffNotice = null
+            branchCopiedNotice = null
             expandedStepParagraphs = emptyMap()
             unfoldedStepRails = emptySet()
+            imageViewer.dismiss()
             resetActivityCards()
             resetChipTimelineIntro()
             resetWorkingFooter()
@@ -499,6 +556,7 @@ class SessionChatViewModel
             repoStrip.bind(worktree, startExpanded = false)
             commands.bind(sessionId, worktree)
             inbox.bind(sessionId, worktree)
+            sideQuestions.bind(sessionId)
             syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
             viewModelScope.launch {
                 composer.loadCatalog()
@@ -520,6 +578,7 @@ class SessionChatViewModel
             // Peers may have changed while the screen was away; re-resolve smart label.
             scheduleProjectIdentityRefine(worktree)
             timeline.restartLiveObservation()
+            sideQuestions.bind(sessionId)
             syncCoordinator.markFocused(ProjectionKey.Transcript(transcriptWorktree ?: worktree, sessionId))
         }
 
@@ -567,8 +626,10 @@ class SessionChatViewModel
             suppressedSnackbarKey = null
             snackbarSequence = 0L
             turnDiffNotice = null
+            branchCopiedNotice = null
             expandedStepParagraphs = emptyMap()
             unfoldedStepRails = emptySet()
+            imageViewer.dismiss()
             resetActivityCards()
             resetChipTimelineIntro()
             resetWorkingFooter()
@@ -642,6 +703,7 @@ class SessionChatViewModel
             reviewChanges.bind(sessionId, worktree)
             commands.bind(sessionId, worktree)
             inbox.bind(sessionId, worktree)
+            sideQuestions.bind(sessionId)
             syncCoordinator.markFocused(ProjectionKey.Transcript(worktree, sessionId))
             viewModelScope.launch {
                 composer.loadCatalog()
@@ -728,11 +790,94 @@ class SessionChatViewModel
             text: String,
             cursor: Int = text.length,
         ) {
+            // Typing `/btw ` switches to side-question mode and keeps only the question. Also strips
+            // the command when it is already in that mode: a keystroke typed before the field took
+            // the stripped draft brings it back.
+            val question = SideQuestion.draftAfterCommand(text)
+            if (question != null && supportsSideQuestion()) {
+                sideQuestions.enterMode()
+                composer.restoreComposerText(question)
+                return
+            }
             composer.updateComposerText(text, cursor)
+            sideQuestions.updateDraft(composer.state.value.composer.text)
         }
 
         fun exitShellMode() {
             composer.exitShellMode()
+        }
+
+        fun exitSideQuestionMode() {
+            sideQuestions.exitMode()
+        }
+
+        /** The "answer ready" chip. */
+        fun openSideQuestionAnswer() {
+            logAction(ProductAnalytics.Action.SIDE_QUESTION_OPEN_ANSWER)
+            sideQuestions.openReadyAnswer()
+        }
+
+        fun closeSideQuestionAnswer() {
+            logAction(ProductAnalytics.Action.SIDE_QUESTION_CLOSE)
+            sideQuestions.closeAnswer()
+        }
+
+        /** The answer sheet copied its text to the clipboard. */
+        fun sideQuestionAnswerCopied() {
+            logAction(ProductAnalytics.Action.SIDE_QUESTION_COPY)
+            sideQuestions.answerCopied()
+        }
+
+        /** The failed chip, or Retry on its snackbar when [id] is set. */
+        fun retrySideQuestions(id: String? = null) {
+            logAction(ProductAnalytics.Action.SIDE_QUESTION_RETRY)
+            if (id != null) sideQuestions.retry(id) else sideQuestions.retryFailed()
+        }
+
+        fun dismissFailedSideQuestions() {
+            logAction(ProductAnalytics.Action.SIDE_QUESTION_DISMISS_FAILED)
+            sideQuestions.dismissFailed()
+        }
+
+        private fun supportsSideQuestion(): Boolean = activeConnectionManager.currentCapabilities().supportsSideQuestion
+
+        /** Session Chat left the screen: the open answer was read; requests keep running. */
+        fun leaveSideQuestions() {
+            keepSideQuestionDraft()
+            sideQuestions.stop()
+        }
+
+        /** Sheets and dialogs Session Chat owns itself are up; a new answer waits behind them. */
+        fun setScreenSheetOpen(open: Boolean) {
+            screenSheetOpen = open
+        }
+
+        /**
+         * The mode is not kept, so a side-question draft gets its `/btw` back before leaving; it
+         * still asks a side question later instead of going out as a prompt.
+         */
+        private fun keepSideQuestionDraft() {
+            if (!sideQuestions.state.value.ui.composerMode) return
+            val draft = composer.state.value.composer.text
+            if (draft.isBlank() || SideQuestion.questionInDraft(draft) != null) return
+            composer.restoreComposerText("${SideQuestion.COMMAND} $draft")
+        }
+
+        /**
+         * Sends the draft as a `/btw` side question: one `generate` request, nothing added to the
+         * timeline, and the draft cleared. A `/btw` this server cannot answer stays in the draft.
+         */
+        private fun askSideQuestion() {
+            val side = sideQuestions.state.value.ui
+            val draft = composer.state.value.composer.text
+            // The Btw tile keeps the draft as it is, so it may still start with `/btw `.
+            val question =
+                if (side.composerMode) SideQuestion.draftAfterCommand(draft) ?: draft else SideQuestion.questionInDraft(draft).orEmpty()
+            if (!supportsSideQuestion() || question.isBlank()) return
+            logAction(ProductAnalytics.Action.SIDE_QUESTION_ASK)
+            if (!sideQuestions.ask(question)) return
+            composer.restoreComposerText("")
+            sideQuestions.updateDraft("")
         }
 
         fun beginDictation(
@@ -869,9 +1014,23 @@ class SessionChatViewModel
             composer.loadMentionableAgents(force = true)
         }
 
+        /** Whether new picks should be staged for streaming (no size cap, any type). */
+        fun attachmentUploadAvailable(): Boolean = attachmentUploads.isAvailable()
+
+        /** Bytes of an image that lives on the server, for a timeline preview; null on any failure. */
+        suspend fun loadAttachmentPreview(serverPath: String): ByteArray? {
+            val directory = boundWorktree ?: return null
+            return serverFilePreviews.read(serverPath, directory, ATTACHMENT_PREVIEW_MAX_BYTES)
+        }
+
         fun addAttachments(attachments: List<Attachment>) {
             composer.addAttachments(attachments)
         }
+
+        fun addPastedOrDroppedAttachments(
+            result: AttachmentIngestionResult,
+            skippedFolders: Int,
+        ): Boolean = composer.addPastedOrDroppedAttachments(result, skippedFolders)
 
         fun removeAttachment(id: String) {
             logAction(ProductAnalytics.Action.COMPOSER_REMOVE_ATTACHMENT)
@@ -987,6 +1146,10 @@ class SessionChatViewModel
                 ClientSlashAction.Files -> commands.runFiles()
                 ClientSlashAction.Mcp -> commands.openMcpServers()
                 ClientSlashAction.Compact -> compactCurrentSession()
+                ClientSlashAction.Btw -> {
+                    commands.dismissCommands()
+                    sideQuestions.enterMode()
+                }
             }
         }
 
@@ -1298,12 +1461,23 @@ class SessionChatViewModel
             publishUiState()
         }
 
+        /** The branch pill copied the branch name; confirm it with a snackbar. */
+        fun branchNameCopied() {
+            branchCopiedNotice = BRANCH_COPIED_MESSAGE
+            // A repeat copy shows the snackbar again even if the last one was dismissed.
+            lastSnackbarKey = null
+            suppressedSnackbarKey = null
+            publishUiState()
+        }
+
         fun consumeSnackbar() {
             logAction(ProductAnalytics.Action.CHAT_DISMISS_SNACKBAR)
             suppressedSnackbarKey = lastSnackbarKey
             turnDiffNotice = null
+            branchCopiedNotice = null
             chipTimelineIntroNotice = null
             commands.clearActionFeedback()
+            sideQuestions.clearNotice()
             worktreeMove.clearMessages()
             composer.clearTransientErrors()
             sessionInfo.clearTransientErrors()
@@ -1429,6 +1603,13 @@ class SessionChatViewModel
 
         fun sendPrompt() {
             if (!hasCreatedSession()) return
+            // A side question never becomes a prompt, including a typed `/btw` this server cannot answer.
+            if (sideQuestions.state.value.ui.composerMode ||
+                SideQuestion.questionInDraft(composer.state.value.composer.text) != null
+            ) {
+                if (sessionInfo.state.value.composerEnabled) askSideQuestion()
+                return
+            }
             val composerState = composer.state.value.composer
             logAction(
                 actionId = ProductAnalytics.Action.COMPOSER_SEND,
@@ -1556,6 +1737,51 @@ class SessionChatViewModel
         fun showPermissionDock() {
             logAction(ProductAnalytics.Action.PERMISSION_SHOW)
             inbox.showPermissionDock()
+        }
+
+        /**
+         * Opens the panel on the request of the subagent the needs-input pill names.
+         * Returns false when no subagent request waits, so the caller opens the subagents panel.
+         */
+        fun openWaitingSubagentRequest(): Boolean {
+            val inboxState = inbox.state.value
+            val target =
+                SessionChatBackgroundWork.needsInputTarget(
+                    subagents = _uiState.value.subagents,
+                    sessions = inboxState.permissionSessions + inboxState.questionSessions,
+                    permissions = inboxState.permissionRequests,
+                    questions = inboxState.questionRequests,
+                    shownPermissionId = inboxState.visiblePermissionRequest?.id,
+                ) ?: return false
+            logAction(
+                when (target) {
+                    is SessionChatInboxTarget.Permission -> ProductAnalytics.Action.PERMISSION_SHOW
+                    is SessionChatInboxTarget.Question -> ProductAnalytics.Action.QUESTION_SHOW
+                },
+            )
+            inbox.focus(target)
+            return true
+        }
+
+        fun pagePermission(delta: Int) {
+            logAction(ProductAnalytics.Action.INBOX_REQUEST_PAGE)
+            inbox.pagePermission(delta)
+        }
+
+        fun pageQuestion(delta: Int) {
+            logAction(ProductAnalytics.Action.INBOX_REQUEST_PAGE)
+            inbox.pageQuestion(delta)
+        }
+
+        /** Collapse the question panel so the composer is reachable; the question stays pending. */
+        fun hideQuestionDock(requestId: String) {
+            logAction(ProductAnalytics.Action.QUESTION_HIDE)
+            inbox.hideQuestionDock(requestId)
+        }
+
+        fun showQuestionDock() {
+            logAction(ProductAnalytics.Action.QUESTION_SHOW)
+            inbox.showQuestionDock()
         }
 
         fun denyPermission(
@@ -1797,8 +2023,59 @@ class SessionChatViewModel
                     inboxState,
                 )
             syncStepTiming(merged.messages, nowMs())
-            _uiState.value = merged.copy(activityCardFooters = activityCardFooters, debouncedStepIds = debouncedStepIds)
+            _uiState.value =
+                merged.copy(
+                    activityCardFooters = activityCardFooters,
+                    debouncedStepIds = debouncedStepIds,
+                    imageViewer = imageViewer.reconcile(merged.messages),
+                )
             syncActivityChildren(_uiState.value.messages)
+        }
+
+        /**
+         * Subagent rows from the linked timeline, live session activity and the pending
+         * requests of the session tree; remembers when rows seen working finish.
+         */
+        private fun resolveSubagents(
+            inboxState: SessionChatInboxRegionState,
+            infoState: SessionInfoRegionState,
+        ): List<SessionChatSubagent> {
+            val now = nowMs()
+            val isLive = infoState.connectionStatus == SessionConnectionStatus.Live
+            if (!isLive) {
+                subagentLiveSinceMs = null
+            } else if (subagentLiveSinceMs == null) {
+                subagentLiveSinceMs = now
+            }
+            val liveSince = subagentLiveSinceMs
+            val seenAt = subagentsSeenAtMs
+            val seenLive = isLive && liveSince != null && seenAt != null && seenAt >= liveSince
+            subagentsSeenAtMs = now
+            val messages = SessionChatChildSessionLinker.link(timeline.loadedMessages(), timeline.childSessions)
+            val sessions = inboxState.permissionSessions + inboxState.questionSessions
+            val requestSessionIds =
+                inboxState.permissionRequests.map { it.sessionId } + inboxState.questionRequests.map { it.sessionId }
+
+            fun rows(finishTimes: Map<String, Long>) =
+                SessionChatBackgroundWork.subagents(
+                    messages = messages,
+                    sessions = sessions,
+                    busySessionIds = infoState.busySessionIds,
+                    requestSessionIds = requestSessionIds,
+                    localFinishedAtMs = finishTimes,
+                )
+            val current = rows(subagentFinishTimes)
+            val finishTimes =
+                SessionChatBackgroundWork.finishTimes(
+                    previous = _uiState.value.subagents,
+                    current = current,
+                    known = subagentFinishTimes,
+                    nowMs = now,
+                    seenLive = seenLive,
+                )
+            if (finishTimes == subagentFinishTimes) return current
+            subagentFinishTimes = finishTimes
+            return rows(finishTimes)
         }
 
         private fun mergeUiState(
@@ -1879,9 +2156,11 @@ class SessionChatViewModel
             val snackbar =
                 resolveSnackbar(
                     transientError,
+                    sideQuestions.state.value.notice,
                     composerState.followUpNotice
                         ?: worktreeMove.state.value.notice
                         ?: commandsState.actionSuccessMessage
+                        ?: branchCopiedNotice
                         ?: chipTimelineIntroNotice,
                 )
             val sessionStatusLabel =
@@ -1946,21 +2225,28 @@ class SessionChatViewModel
                 } else {
                     null
                 }
+            val pendingResolution =
+                pendingPromptsGate.resolve(
+                    pendingPromptsFrom(
+                        loaded = timeline.loadedMessages(),
+                        optimistic = timeline.pendingOptimisticItems(),
+                    ),
+                    nowMs = nowMs(),
+                )
+            schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
+            val subagents = resolveSubagents(inboxSnapshot, infoState)
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
                 sessionTitle = infoState.sessionTitle,
                 timeline = timelineState.timeline,
                 messages = messages,
-                pendingPrompts =
-                    pendingPromptsFrom(
-                        loaded = timeline.loadedMessages(),
-                        optimistic = timeline.pendingOptimisticItems(),
-                    ),
+                pendingPrompts = pendingResolution.prompts,
                 timelineFrame = timelineFrame,
                 composer =
                     composerState.composer.copy(
                         supportsFollowUpDelivery =
                             activeConnectionManager.currentCapabilities().supportsFollowUpDelivery,
+                        attachmentUploadAvailable = attachmentUploads.isAvailable(),
                     ),
                 isSending = composerState.isSending,
                 isRefreshing = timelineState.isRefreshing,
@@ -1970,6 +2256,7 @@ class SessionChatViewModel
                 sessionStatusLabel = sessionStatusLabel,
                 workingIndicatorLabel = workingIndicatorLabel,
                 retryCard = infoState.retryCard,
+                isRetrying = infoState.isRetrying,
                 workingIndicatorCollapsed = workingIndicatorCollapsed,
                 workingIndicatorFading = workingIndicatorFading,
                 syncingIndicatorLabel = syncingIndicatorLabel,
@@ -1979,6 +2266,8 @@ class SessionChatViewModel
                 sessionTodoActivePreview = SessionTodoList.activePreview(inboxSnapshot.sessionTodos),
                 sessionTodoCompletedCount = SessionTodoList.completedCount(inboxSnapshot.sessionTodos),
                 sessionTodoTotalCount = inboxSnapshot.sessionTodos.size,
+                subagents = subagents,
+                backgroundWorkPill = SessionChatBackgroundWork.pill(subagents),
                 connectionStatus = infoState.connectionStatus,
                 canMutate = infoState.canMutate,
                 composerEnabled = infoState.composerEnabled,
@@ -1994,12 +2283,19 @@ class SessionChatViewModel
                 snackbar = snackbar,
                 isLifecycleActionInFlight = infoState.isLifecycleActionInFlight,
                 shouldLeaveSession = infoState.shouldLeaveSession,
-                permissionRequest = inboxSnapshot.permissionRequests.firstOrNull(),
+                permissionRequest = inboxSnapshot.visiblePermissionRequest,
+                permissionQueuePosition = inboxSnapshot.permissionPageIndex + 1,
                 permissionQueueCount = inboxSnapshot.permissionRequests.size,
+                permissionAttribution = inboxSnapshot.visiblePermissionAttribution,
                 permissionDockHidden = inboxSnapshot.isPermissionDockHidden,
                 permissionSubmitting = inboxSnapshot.permissionSubmittingId != null,
                 permissionErrorMessage = inboxSnapshot.permissionError ?: inboxSnapshot.permissionTopologyError,
                 questionRequest = visibleQuestion,
+                questionQueuePosition = inboxSnapshot.questionPageIndex + 1,
+                questionQueueCount = inboxSnapshot.questionRequests.size,
+                questionAttribution = inboxSnapshot.visibleQuestionAttribution,
+                questionDockHidden = inboxSnapshot.isQuestionDockHidden,
+                inboxPanelPulse = inboxSnapshot.panelPulse,
                 questionWizardIndex = inboxSnapshot.questionWizardIndex,
                 questionSelectedLabels = questionDraft.selectedLabels,
                 questionCustomText = questionDraft.customText,
@@ -2055,9 +2351,15 @@ class SessionChatViewModel
                 projectLetter = projectIdentity.letter,
                 projectLetterAccent = projectIdentity.accent,
                 worktreeCheckout = projectIdentity.isWorktreeCheckout,
-                sessionBranchPill = repoStrip.state.value.toSessionBranchPill(),
+                sessionBranchPill =
+                    repoStrip.state.value.toSessionBranchPill(isWorktree = projectIdentity.isWorktreeCheckout),
                 worktree = boundWorktree.orEmpty(),
                 dictation = dictation,
+                sideQuestions =
+                    sideQuestions.state.value.ui.let { side ->
+                        val supported = activeConnectionManager.currentCapabilities().supportsSideQuestion
+                        side.copy(supported = supported, composerMode = side.composerMode && supported)
+                    },
             )
         }
 
@@ -2079,6 +2381,30 @@ class SessionChatViewModel
             liveRailActive = isTurnActive
             liveRailMarked = marked
             return marked
+        }
+
+        /** Opens the full-screen viewer on image [index] of timeline gallery [galleryId] (#898). */
+        fun openImageViewer(
+            galleryId: String,
+            index: Int,
+        ) {
+            imageViewer.open(galleryId, index)
+            publishImageViewer()
+        }
+
+        fun showImageViewerPage(index: Int) {
+            imageViewer.showPage(index)
+            publishImageViewer()
+        }
+
+        fun dismissImageViewer() {
+            imageViewer.dismiss()
+            publishImageViewer()
+        }
+
+        private fun publishImageViewer() {
+            val viewer = imageViewer.reconcile(_uiState.value.messages)
+            if (viewer != _uiState.value.imageViewer) _uiState.value = _uiState.value.copy(imageViewer = viewer)
         }
 
         /** Shows every step of a folded step rail, or folds it again. */
@@ -2225,8 +2551,25 @@ class SessionChatViewModel
 
         private fun resolveSnackbar(
             transientError: String?,
+            sideQuestionNotice: SessionChatSideQuestionNotice?,
             successNotice: String?,
         ): SessionChatSnackbar? {
+            // A `/btw` notice outranks other success notices and yields to errors; its id keeps a
+            // repeated failure of the same question from deduping into the earlier snackbar.
+            if (transientError == null && sideQuestionNotice != null) {
+                val key = "sideQuestion:${sideQuestionNotice.id}"
+                if (key == suppressedSnackbarKey) return null
+                if (key != lastSnackbarKey) {
+                    snackbarSequence += 1
+                    lastSnackbarKey = key
+                }
+                return SessionChatSnackbar(
+                    message = sideQuestionNotice.message,
+                    tone = if (sideQuestionNotice.isError) SessionChatSnackbarTone.Error else SessionChatSnackbarTone.Default,
+                    id = snackbarSequence,
+                    action = sideQuestionNotice.retryId?.let { SessionChatSnackbarAction.RetrySideQuestion(it) },
+                )
+            }
             val key =
                 when {
                     transientError != null -> "error:$transientError"
@@ -2312,6 +2655,20 @@ class SessionChatViewModel
             workingHoldJob = null
             workingHold = null
             workingChrome = WorkingTurnIndicator.Chrome.Unmounted
+            pendingPromptsWakeJob?.cancel()
+            pendingPromptsWakeJob = null
+            pendingPromptsGate.reset()
+        }
+
+        private fun schedulePendingPromptsWake(wakeAfterMs: Long?) {
+            pendingPromptsWakeJob?.cancel()
+            pendingPromptsWakeJob = null
+            if (wakeAfterMs == null) return
+            pendingPromptsWakeJob =
+                viewModelScope.launch {
+                    delay(wakeAfterMs)
+                    publishUiState()
+                }
         }
 
         private fun scheduleWorkingFooterWake(wakeAfterMs: Long?) {
@@ -2346,6 +2703,7 @@ class SessionChatViewModel
             const val PENDING_SEND_TIMEOUT_MS = 8_000L
             const val PENDING_PROMPT_FAILURE = "Couldn't update pending prompt"
             const val CHIP_TIMELINE_INTRO_ENABLED_NOTICE = "Chip timeline is on. Turn it off in Settings."
+            const val BRANCH_COPIED_MESSAGE = "Branch name copied"
 
             /** Pause after the first history load before the Timeline Style picker rises (#805). */
             const val TIMELINE_STYLE_PICKER_DELAY_MILLIS = 600L
@@ -2415,6 +2773,7 @@ private val ClientSlashAction.productActionId: String
             ClientSlashAction.Terminal -> ProductAnalytics.Action.COMMANDS_TERMINAL
             ClientSlashAction.Files -> ProductAnalytics.Action.COMMANDS_FILES
             ClientSlashAction.Mcp -> ProductAnalytics.Action.COMMANDS_MCP
+            ClientSlashAction.Btw -> ProductAnalytics.Action.COMMANDS_BTW
         }
 
 private object EmptyMcpRepository : McpRepository {

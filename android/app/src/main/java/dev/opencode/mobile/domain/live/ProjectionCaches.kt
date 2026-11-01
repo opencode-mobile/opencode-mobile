@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.live
 
 import dev.opencode.mobile.domain.message.MessageSync
 import dev.opencode.mobile.domain.model.ModelCatalogStore
+import dev.opencode.mobile.domain.session.SideQuestionStore
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,6 +32,7 @@ class DefaultProjectionCaches
         private val sessionViewReporter: SessionViewReporter,
         private val messageSync: MessageSync,
         private val modelCatalogStore: ModelCatalogStore,
+        private val sideQuestionStore: SideQuestionStore,
     ) : ProjectionCaches {
         override fun clearAll() {
             clearLiveProjections()
@@ -46,6 +48,7 @@ class DefaultProjectionCaches
             sessionViewReporter.clearCache()
             messageSync.clearCache()
             modelCatalogStore.clear()
+            sideQuestionStore.clear()
         }
 
         override fun bindProfile(profileId: String?) {

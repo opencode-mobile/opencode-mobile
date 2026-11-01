@@ -74,6 +74,11 @@ internal class ProtocolSelectedSessionRemote(
         directory: String,
     ) = selected().moveSession(id, directory)
 
+    override suspend fun askSideQuestion(
+        sessionId: String,
+        question: String,
+    ): String = selected().askSideQuestion(sessionId, question)
+
     override suspend fun abortSession(
         id: String,
         directory: String?,

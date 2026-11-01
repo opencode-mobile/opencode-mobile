@@ -54,11 +54,40 @@ fun OpenCodeCodeSnippet(
     )
 }
 
+/**
+ * Monospace block for highlighted code drawn with [colors]: unspanned runs use the code text color,
+ * and a syntax preset's editor background replaces the [surface] fill.
+ */
+@Composable
+internal fun OpenCodeCodeSnippet(
+    code: AnnotatedString,
+    colors: CodeColors,
+    modifier: Modifier = Modifier,
+    surface: OpenCodeCodeSnippetSurface = OpenCodeCodeSnippetSurface.Base,
+) {
+    OpenCodeCodeSnippet(
+        code = code,
+        modifier = modifier,
+        fill = colors.surface(surface.fill()),
+        defaultColor = colors.plain,
+    )
+}
+
 @Composable
 private fun OpenCodeCodeSnippet(
     code: AnnotatedString,
     modifier: Modifier,
     surface: OpenCodeCodeSnippetSurface,
+    defaultColor: Color,
+) {
+    OpenCodeCodeSnippet(code = code, modifier = modifier, fill = surface.fill(), defaultColor = defaultColor)
+}
+
+@Composable
+private fun OpenCodeCodeSnippet(
+    code: AnnotatedString,
+    modifier: Modifier,
+    fill: Color,
     defaultColor: Color,
 ) {
     require(code.text.isNotBlank()) { "Code Snippet requires non-blank text" }
@@ -69,7 +98,7 @@ private fun OpenCodeCodeSnippet(
             modifier
                 .fillMaxWidth()
                 .clip(shape)
-                .background(surface.fill(), shape)
+                .background(fill, shape)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         style = CodeTextStyle,
         color = defaultColor,

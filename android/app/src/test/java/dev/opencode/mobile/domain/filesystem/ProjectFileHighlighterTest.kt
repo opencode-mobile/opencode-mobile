@@ -1,111 +1,58 @@
 package dev.opencode.mobile.domain.filesystem
 
-import dev.opencode.mobile.markdown.CodeSpan
-import dev.opencode.mobile.markdown.CodeTokenRole
-import dev.opencode.mobile.markdown.HighlightRequest
-import dev.opencode.mobile.markdown.HighlightResult
-import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
-import dev.opencode.mobile.markdown.TextMateHighlightingEngine
-import dev.opencode.mobile.markdown.TextMateParseObservation
-import dev.opencode.mobile.markdown.TextMateParseOutcome
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.runTest
+import dev.opencode.mobile.highlight.core.HighlightCore
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProjectFileHighlighterTest {
-    private val source = "const greeting = \"hi\" // say hi\n"
-    private val textMateSpans = listOf(CodeSpan(0, 5, CodeTokenRole.Keyword))
-    private val fallbackSpans = OpenCodeSemanticFallbackHighlighter.highlight("javascript", source).spans
+    private val highlighter = HighlightCoreProjectFileHighlighter()
 
     @Test
-    fun attachableOutcomes_useTextMateSpans() =
-        runTest {
-            listOf(
-                TextMateParseOutcome.Highlighted,
-                TextMateParseOutcome.NoSpans,
-                TextMateParseOutcome.Unsupported,
-                TextMateParseOutcome.Fallback,
-            ).forEach { outcome ->
-                val engine = FakeEngine(outcome, textMateSpans)
-                val spans = highlighter(engine).highlight("src/app.js", "javascript", source)
-                assertEquals(outcome.name, textMateSpans, spans)
-                assertEquals(1, engine.requests.size)
-            }
+    fun commonFileNamesResolveToHighlightCoreLanguages() {
+        mapOf(
+            "app/src/Main.kt" to "kotlin",
+            "build.gradle.kts" to "kotlin",
+            "web/App.tsx" to "typescript",
+            "Dockerfile" to "docker",
+            "deploy/Dockerfile.release" to "docker",
+            "Makefile" to "make",
+            "package.json" to "json",
+            "scripts/build.sh" to "shellscript",
+            "README.md" to "markdown",
+        ).forEach { (path, language) ->
+            val grammar = ProjectFileLanguage.forPath(path).grammar
+            assertEquals(path, language, grammar)
+            assertEquals(path, language, HighlightCore.canonicalLanguage(requireNotNull(grammar)))
         }
+    }
 
     @Test
-    fun unattachableOutcomes_useSemanticFallback() =
-        runTest {
-            assertTrue(fallbackSpans.isNotEmpty())
-            listOf(
-                TextMateParseOutcome.Failed,
-                TextMateParseOutcome.Cancelled,
-                TextMateParseOutcome.BudgetExceeded,
-            ).forEach { outcome ->
-                val engine = FakeEngine(outcome, textMateSpans)
-                val spans = highlighter(engine).highlight("src/app.js", "javascript", source)
-                assertEquals(outcome.name, fallbackSpans, spans)
-            }
+    fun everyTableLanguageIsACanonicalHighlightCoreId() {
+        val grammars =
+            (ProjectFileLanguage.extensions.values + ProjectFileLanguage.fileNames.values)
+                .mapNotNull { it.grammar }
+                .toSet()
+        grammars.forEach { grammar ->
+            assertEquals(grammar, grammar, HighlightCore.canonicalLanguage(grammar))
         }
+    }
 
     @Test
-    fun wholeFileGoesToTheEngineInOnePass() =
-        runTest {
-            val engine = FakeEngine(TextMateParseOutcome.Highlighted, textMateSpans)
-            highlighter(engine).highlight("src/app.js", "javascript", source)
-
-            val request = engine.requests.single()
-            assertEquals(source, request.source)
-            assertEquals("javascript", request.language)
-        }
+    fun unknownFilesArePlainAndOpenNoSession() {
+        assertNull(ProjectFileLanguage.forPath("notes.unknownext").grammar)
+        assertNull(ProjectFileLanguage.forPath("LICENSE").grammar)
+        assertNull(highlighter.openSession("notes.brainfuck", "brainfuck", "++[>+<-]"))
+    }
 
     @Test
-    fun textMateOff_skipsEngineAndUsesSemanticFallback() =
-        runTest {
-            val engine = FakeEngine(TextMateParseOutcome.Highlighted, textMateSpans)
-            val highlighter = TextMateProjectFileHighlighter(engine, StandardTestDispatcher(testScheduler)) { false }
-
-            assertEquals(fallbackSpans, highlighter.highlight("src/app.js", "javascript", source))
-            assertTrue(engine.requests.isEmpty())
-        }
-
-    private fun TestScope.highlighter(engine: TextMateHighlightingEngine) =
-        TextMateProjectFileHighlighter(engine, StandardTestDispatcher(testScheduler)) { true }
-}
-
-private class FakeEngine(
-    private val outcome: TextMateParseOutcome,
-    private val spans: List<CodeSpan>,
-) : TextMateHighlightingEngine {
-    val requests = mutableListOf<HighlightRequest>()
-
-    override suspend fun highlight(request: HighlightRequest): HighlightResult {
-        requests += request
-        return HighlightResult(
-            key = request.key,
-            revision = request.revision,
-            source = request.source,
-            canonicalLanguage = request.language,
-            policyEpoch = request.policyEpoch,
-            spans = spans,
-            outcome = outcome,
-            diagnostics = emptyList(),
-            observation =
-                TextMateParseObservation(
-                    outcome = outcome,
-                    messageCharacters = request.source.length,
-                    fenceCharacters = request.source.length,
-                    fenceLines = 1,
-                    fenceIndex = 0,
-                    fenceCount = 1,
-                    spanCount = spans.size,
-                    totalNanoseconds = 0,
-                    stages = emptyList(),
-                    diagnosticKinds = emptyList(),
-                ),
-        )
+    fun aSupportedFileOpensASessionThatColorsItsLines() {
+        val source = "fun main() {\n    println(\"hi\")\n}\n"
+        val session = requireNotNull(highlighter.openSession("Main.kt", "kotlin", source))
+        val result = session.highlight(0, 3, deadlineMillis = 1_000.0)
+        assertEquals(0, result.startLine)
+        assertEquals(3, result.endLine)
+        assertTrue(result.spans.isNotEmpty())
     }
 }

@@ -16,8 +16,6 @@ class SettingsDetailTest {
         val developerTools =
             listOf(
                 SettingsDetail.ComponentGallery,
-                SettingsDetail.TextMateLanguages,
-                SettingsDetail.TextMateLogbook,
                 SettingsDetail.FeatureFlags,
             )
         developerTools.forEach { detail ->

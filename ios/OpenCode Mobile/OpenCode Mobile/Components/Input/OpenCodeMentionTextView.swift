@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 /// Prompt-field height for `OpenCodeMentionTextView`. Height is measured from
 /// attributed text, not `UITextView.sizeThatFits`: once scroll is on,
@@ -70,6 +71,14 @@ struct OpenCodeMentionTextView: View {
     /// Turns off autocorrect, auto-capitalization and smart quotes and dashes, for text that
     /// must reach the server exactly as typed, such as a shell command (`--flag` stays `--flag`).
     var literalInput = false
+    /// Delete on an empty field, which changes no text: the composer leaves a mode with it.
+    var onDeleteBackwardWhenEmpty: (() -> Void)?
+    /// When set, Paste (menu or ⌘V) of an image or file hands its item providers here and inserts no
+    /// text. A text-only clipboard always pastes as text.
+    var onPasteAttachments: (([NSItemProvider]) -> Void)?
+    /// False while an image or file is dragged over the screen, so the field's own text drop does
+    /// not take the drop and the screen's drop target gets it (#870).
+    var acceptsTextDrops = true
     let onChange: (_ text: String, _ selectionStart: Int, _ selectionEnd: Int) -> Void
 
     var body: some View {
@@ -83,6 +92,9 @@ struct OpenCodeMentionTextView: View {
             focusRequestToken: focusRequestToken,
             onFocusChange: onFocusChange,
             literalInput: literalInput,
+            onDeleteBackwardWhenEmpty: onDeleteBackwardWhenEmpty,
+            onPasteAttachments: onPasteAttachments,
+            acceptsTextDrops: acceptsTextDrops,
             onChange: onChange
         )
     }
@@ -98,6 +110,9 @@ private struct Representable: UIViewRepresentable {
     let focusRequestToken: Int
     let onFocusChange: ((Bool) -> Void)?
     let literalInput: Bool
+    let onDeleteBackwardWhenEmpty: (() -> Void)?
+    let onPasteAttachments: (([NSItemProvider]) -> Void)?
+    let acceptsTextDrops: Bool
     let onChange: (String, Int, Int) -> Void
 
     func makeUIView(context: Context) -> PlaceholderTextView {
@@ -124,6 +139,9 @@ private struct Representable: UIViewRepresentable {
         uiView.placeholderLabel.text = placeholder
         uiView.placeholderLabel.textColor = UIColor(OpenCodeColors.textWeak)
         context.coordinator.onFocusChange = onFocusChange
+        uiView.onDeleteBackwardWhenEmpty = onDeleteBackwardWhenEmpty
+        uiView.onPasteAttachments = onPasteAttachments
+        uiView.acceptsTextDrops = acceptsTextDrops
         applyInputTraits(to: uiView)
         if context.coordinator.lastFocusRequestToken != focusRequestToken {
             context.coordinator.lastFocusRequestToken = focusRequestToken
@@ -286,6 +304,15 @@ private struct Representable: UIViewRepresentable {
 
 final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput {
     let placeholderLabel = UILabel()
+    var onDeleteBackwardWhenEmpty: (() -> Void)?
+    var onPasteAttachments: (([NSItemProvider]) -> Void)?
+    var acceptsTextDrops = true {
+        didSet {
+            guard acceptsTextDrops != oldValue else { return }
+            updateTextDropInteraction()
+        }
+    }
+    private var removedTextDropInteraction: UIDropInteraction?
     private var pendingCaretScroll = false
     private var pendingFocus = false
 
@@ -309,6 +336,55 @@ final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput {
     override func layoutSubviews() {
         super.layoutSubviews()
         retryPendingCaretScrollIfNeeded()
+    }
+
+    override func deleteBackward() {
+        if text.isEmpty, let onDeleteBackwardWhenEmpty {
+            onDeleteBackwardWhenEmpty()
+            return
+        }
+        super.deleteBackward()
+    }
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(paste(_:)), onPasteAttachments != nil, Self.pasteboardHasAttachments {
+            return true
+        }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
+    /// Paste from the edit menu or ⌘V is user-initiated, so reading the pasteboard here shows no
+    /// paste-permission prompt.
+    override func paste(_ sender: Any?) {
+        guard let onPasteAttachments, Self.pasteboardHasAttachments else {
+            super.paste(sender)
+            return
+        }
+        let providers = UIPasteboard.general.itemProviders.filter { AttachmentItemProviders.kind(of: $0) != nil }
+        guard !providers.isEmpty else {
+            super.paste(sender)
+            return
+        }
+        onPasteAttachments(providers)
+    }
+
+    /// Reads types only; no pasteboard contents, so no prompt.
+    private static var pasteboardHasAttachments: Bool {
+        let pasteboard = UIPasteboard.general
+        return pasteboard.hasImages ||
+            pasteboard.contains(pasteboardTypes: [UTType.pdf.identifier, UTType.fileURL.identifier])
+    }
+
+    private func updateTextDropInteraction() {
+        if acceptsTextDrops {
+            if let removedTextDropInteraction {
+                addInteraction(removedTextDropInteraction)
+                self.removedTextDropInteraction = nil
+            }
+        } else if let interaction = textDropInteraction {
+            removeInteraction(interaction)
+            removedTextDropInteraction = interaction
+        }
     }
 
     override func didMoveToWindow() {

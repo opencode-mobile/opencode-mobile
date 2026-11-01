@@ -1,5 +1,5 @@
 [versions]
-androidGradlePlugin = "9.4.1"
+androidGradlePlugin = "9.5.0"
 androidxCore = "1.19.1"
 androidxSplashscreen = "1.2.0"
 androidxLifecycle = "2.10.0"
@@ -14,7 +14,6 @@ androidxTestUiautomator = "2.4.0"
 coroutines = "1.11.0"
 desugarJdkLibs = "2.1.5"
 junit = "4.13.2"
-joni = "2.2.7"
 kotlin = "2.4.21"
 nav3Core = "1.0.1"
 lifecycleViewmodelNav3 = "2.10.0"
@@ -56,7 +55,6 @@ androidx-test-espresso-core = { module = "androidx.test.espresso:espresso-core",
 androidx-test-runner = { module = "androidx.test:runner", version.ref = "androidxTestRunner" }
 androidx-test-uiautomator = { module = "androidx.test.uiautomator:uiautomator", version.ref = "androidxTestUiautomator" }
 junit = { module = "junit:junit", version.ref = "junit" }
-joni = { module = "org.jruby.joni:joni", version.ref = "joni" }
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 androidx-navigation3-runtime = { module = "androidx.navigation3:navigation3-runtime", version.ref = "nav3Core" }
 androidx-navigation3-ui = { module = "androidx.navigation3:navigation3-ui", version.ref = "nav3Core" }
@@ -73,7 +71,7 @@ ktor-client-auth = { module = "io.ktor:ktor-client-auth", version.ref = "ktor" }
 ktor-client-logging = { module = "io.ktor:ktor-client-logging", version.ref = "ktor" }
 ktor-client-mock = { module = "io.ktor:ktor-client-mock", version.ref = "ktor" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version = "1.11.0" }
-jetbrains-markdown = { module = "org.jetbrains:markdown", version = "0.7.16" }
+jetbrains-markdown = { module = "org.jetbrains:markdown", version = "0.7.18" }
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }

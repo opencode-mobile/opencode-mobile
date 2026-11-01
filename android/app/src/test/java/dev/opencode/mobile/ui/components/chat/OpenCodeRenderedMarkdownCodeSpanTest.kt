@@ -90,7 +90,7 @@ class OpenCodeRenderedMarkdownCodeSpanTest {
     }
 
     @Test
-    fun pathARolesUseDedicatedSyntaxColorsWhilePlainStaysBody() {
+    fun variableOperatorAndPunctuationDrawInPlainCodeText() {
         val code = "count += 1;"
         val colors = testCodeColors()
         val spans =
@@ -98,7 +98,7 @@ class OpenCodeRenderedMarkdownCodeSpanTest {
                 CodeSpan(0, 5, CodeTokenRole.Variable),
                 CodeSpan(6, 8, CodeTokenRole.Operator),
                 CodeSpan(10, 11, CodeTokenRole.Punctuation),
-                CodeSpan(9, 10, CodeTokenRole.Plain),
+                CodeSpan(9, 10, CodeTokenRole.Number),
             )
 
         val result =
@@ -108,14 +108,14 @@ class OpenCodeRenderedMarkdownCodeSpanTest {
                 colors = colors,
             )
 
-        assertEquals(colors.variable, result.colorAt(0))
-        assertEquals(colors.operator, result.colorAt(6))
-        assertEquals(colors.punctuation, result.colorAt(10))
-        assertEquals(colors.plain, result.colorAt(9))
+        assertEquals(colors.plain, result.colorAt(0))
+        assertEquals(colors.plain, result.colorAt(6))
+        assertEquals(colors.plain, result.colorAt(10))
+        assertEquals(Color(0xFF0000AA), result.colorAt(9))
     }
 
     @Test
-    fun propertyRoleUsesConstantSyntaxColor() {
+    fun propertyRoleUsesPropertySyntaxColor() {
         val result =
             buildCodeAnnotatedString(
                 code = "this",
@@ -123,27 +123,23 @@ class OpenCodeRenderedMarkdownCodeSpanTest {
                 colors = testCodeColors(),
             )
 
-        assertEquals(testCodeColors().constant, result.colorAt(0))
+        assertEquals(Color.Red, result.colorAt(0))
     }
 
     private fun testCodeColors(): CodeColors =
-        CodeColors(
-            plain = Color.Black,
-            comment = Color.Gray,
-            keyword = Color.Blue,
-            string = Color.Green,
-            constant = Color.Cyan,
-            type = Color.Magenta,
-            property = Color.Red,
-            primitive = Color.Yellow,
-            variable = Color(0xFFAA0000),
-            operator = Color(0xFF00AAAA),
-            punctuation = Color(0xFF111111),
-            info = Color.DarkGray,
-            inserted = Color.Green,
-            deleted = Color.Red,
-            warning = Color.Yellow,
-            critical = Color.Red,
+        CodeColors.from(
+            mapOf(
+                "text-strong" to "#000000",
+                "syntax-comment" to "#888888",
+                "syntax-keyword" to "#0000FF",
+                "syntax-string" to "#00FF00",
+                "syntax-number" to "#0000AA",
+                "syntax-constant" to "#00FFFF",
+                "syntax-type" to "#FF00FF",
+                "syntax-function" to "#FFFF00",
+                "syntax-property" to "#FF0000",
+                "syntax-attribute" to "#AA00AA",
+            ),
         )
 
     private fun androidx.compose.ui.text.AnnotatedString.colorAt(index: Int): Color =

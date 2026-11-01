@@ -198,12 +198,14 @@ struct SessionListFilterTab: Identifiable, Hashable {
         self.pickerSubtitleOverride = pickerSubtitle
     }
 
-    static func all(projectCount: Int, sessionCount: Int) -> SessionListFilterTab {
+    /// `load` is loading while any project's first list is outstanding (a server switch).
+    static func all(projectCount: Int, sessionCount: Int, load: SessionListScopeLoad? = nil) -> SessionListFilterTab {
         SessionListFilterTab(
             id: allId,
             title: allTitle,
             count: sessionCount,
-            subtitle: projectCount == 1 ? "1 project" : "\(projectCount) projects"
+            subtitle: projectCount == 1 ? "1 project" : "\(projectCount) projects",
+            load: load
         )
     }
 
@@ -586,13 +588,8 @@ struct SessionList<EmptyContent: View>: View {
     private func recentStack(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
         OpenCodeSectionHeader(title: "Recent")
 
-        ForEach(Array(section.items.enumerated()), id: \.element.id) { index, session in
+        ForEach(section.items, id: \.id) { session in
             sessionRow(session, showStatusDot: true)
-            if sessionListShowsDivider(after: index, in: section.items, selectedSessionId: selectedSessionId) {
-                Divider()
-                    .overlay(OpenCodeColors.borderWeakerBase)
-                    .padding(.leading, dividerLeadingInset)
-            }
         }
     }
 
@@ -600,25 +597,13 @@ struct SessionList<EmptyContent: View>: View {
     private func dayOrWeekSection(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
         OpenCodeSectionHeader(title: section.title)
 
-        ForEach(Array(section.items.enumerated()), id: \.element.id) { index, session in
+        ForEach(section.items, id: \.id) { session in
             sessionRow(session, showStatusDot: false)
-            if sessionListShowsDivider(after: index, in: section.items, selectedSessionId: selectedSessionId) {
-                Divider()
-                    .overlay(OpenCodeColors.borderWeakerBase)
-                    .padding(.leading, dividerLeadingInset)
-            }
         }
     }
 
     private var effectiveRowStyle: HomeSessionRowStyle {
         rowStyle ?? homeDisplayPreferences.sessionRowStyle
-    }
-
-    private var dividerLeadingInset: CGFloat {
-        switch effectiveRowStyle {
-        case .compact: 58
-        case .classic: 60
-        }
     }
 
     @ViewBuilder
@@ -1214,15 +1199,3 @@ private struct SessionListRefreshableModifier: ViewModifier {
     .openCodeTheme()
 }
 #endif
-
-/// Whether the hairline divider after row `index` is drawn. Skipped after the last
-/// row and on either side of the selected row so it never butts against the pill.
-func sessionListShowsDivider(
-    after index: Int,
-    in items: [SessionListSession],
-    selectedSessionId: String?
-) -> Bool {
-    guard index >= 0, index < items.count - 1 else { return false }
-    guard let selectedSessionId else { return true }
-    return items[index].id != selectedSessionId && items[index + 1].id != selectedSessionId
-}

@@ -66,15 +66,14 @@ struct OpenCodeRenderedMarkdownDetectorTests {
         #expect(lines.map(\.kind) == [.added, .deleted])
     }
 
-    @Test func parserUsesBundledTextMateGrammarPathOnIOSBridge() {
+    @Test func parserColorsFencesWithHighlightCoreOnIOSBridge() {
         let document = OpenCodeRenderedMarkdownParser.parse(
             """
             ```swift
             let answer = 42
             ```
             """,
-            variant: .standalone,
-            textMateEnabled: true
+            variant: .standalone
         )
 
         #expect(!document.diagnostics.contains { $0.kind == "HighlighterFallback" })
@@ -86,8 +85,24 @@ struct OpenCodeRenderedMarkdownDetectorTests {
 
         #expect(spans.contains { $0.role == .keyword })
         #expect(!spans.isEmpty)
-        let usedNativeHighlighter = !document.diagnostics.contains { $0.kind == "HighlighterBackendFallback" }
-        let usedBackendFallback = document.diagnostics.contains { $0.kind == "HighlighterBackendFallback" }
-        #expect(usedNativeHighlighter || usedBackendFallback)
+    }
+
+    @Test func structureOnlyParseKeepsFencesWithoutSpans() {
+        let document = OpenCodeRenderedMarkdownParser.parse(
+            """
+            ```swift
+            let answer = 42
+            ```
+            """,
+            structureOnly: true
+        )
+
+        guard case .codeBlock(let language, let code, let spans) = document.blocks.first else {
+            Issue.record("Expected a code block from KMP render tree")
+            return
+        }
+        #expect(language == "swift")
+        #expect(code == "let answer = 42")
+        #expect(spans.isEmpty)
     }
 }

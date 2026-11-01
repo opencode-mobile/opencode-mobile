@@ -1,3 +1,4 @@
+import ImageIO
 import UIKit
 
 nonisolated enum AttachmentPreview {
@@ -7,6 +8,18 @@ nonisolated enum AttachmentPreview {
     nonisolated static func make(data: Data) -> Data? {
         guard let image = UIImage(data: data) else { return nil }
         return jpeg(from: image)
+    }
+
+    /// Thumbnail of an image file without decoding the whole picture.
+    nonisolated static func make(fileURL: URL) -> Data? {
+        guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxDimension,
+        ]
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return jpeg(from: UIImage(cgImage: cgImage))
     }
 
     nonisolated static func jpeg(from image: UIImage) -> Data? {

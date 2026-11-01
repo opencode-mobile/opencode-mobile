@@ -1,6 +1,9 @@
 import Foundation
 
 nonisolated struct MessageDomainAdapter: Sendable {
+    /// Receive time for a failure whose message has no completed time yet.
+    var nowEpochMs: @Sendable () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1_000) }
+
     func message(from dto: MessageDTO) -> Message {
         let info = dto.info
         let domainParts = parseParts(from: dto.parts)
@@ -25,7 +28,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup: info.waiting == true,
             stopReason: stop,
-            failure: sessionFailure(info.error, stopReason: stop)
+            failure: sessionFailure(info.error, stopReason: stop, completedAtEpochMs: info.time?.completed)
         )
     }
 
@@ -54,7 +57,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             followUpDelivery: FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup: info.waiting == true,
             stopReason: stop,
-            failure: sessionFailure(info.error, stopReason: stop)
+            failure: sessionFailure(info.error, stopReason: stop, completedAtEpochMs: info.time?.completed),
+            promptSkills: promptSkills(info.skills ?? [])
         )
     }
 
@@ -192,9 +196,48 @@ nonisolated struct MessageDomainAdapter: Sendable {
             output: state?.output,
             metadata: state?.metadata,
             timeStartEpochMs: state?.time?.start,
+            timeEndEpochMs: state?.time?.end,
             isInterrupted: status == .error
                 && (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error)),
-            isMalformed: state?.malformed == true
+            isMalformed: state?.malformed == true,
+            images: toolImages(state?.attachments, ownerID: id ?? callID)
+        )
+    }
+
+    /// v1 tool `attachments` (and v2 live `content` files projected into the same shape) that
+    /// the timeline can show as images.
+    private func toolImages(_ attachments: [MessageToolAttachmentDTO]?, ownerID: String?) -> [FilePart] {
+        guard let attachments, !attachments.isEmpty else { return [] }
+        return attachments.enumerated().compactMap { index, attachment in
+            toolImage(
+                id: attachment.id?.nilIfEmpty ?? Self.toolImageID(ownerID: ownerID, index: index),
+                filename: attachment.filename,
+                mime: attachment.mime,
+                url: attachment.url
+            )
+        }
+    }
+
+    /// Id for a tool-returned file that carries none (v2 content items): the tool part id and
+    /// the file's position, so a live result and its REST copy agree.
+    static func toolImageID(ownerID: String?, index: Int) -> String {
+        "\(ownerID ?? "tool"):file:\(index)"
+    }
+
+    /// A tool-returned file kept only when it is an image the app can show, carried as a data URL.
+    /// The file name stays empty when the tool gave none.
+    private func toolImage(id: String, filename: String?, mime: String?, url: String?) -> FilePart? {
+        let dataURL = url?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard !dataURL.isEmpty,
+              case .file(let file)? = resolvedFilePart(id: id, filename: filename, mime: mime, dataURL: dataURL),
+              file.kind == .image
+        else { return nil }
+        return FilePart(
+            id: file.id,
+            filename: filename?.trimmingCharacters(in: .whitespacesAndNewlines) ?? "",
+            mime: file.mime,
+            kind: file.kind,
+            dataURL: file.dataURL
         )
     }
 
@@ -240,8 +283,9 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     func sendRequest(options: PromptSendOptions) -> SendMessageRequestDTO {
         var parts: [SendMessagePartDTO] = []
-        if !options.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            parts.append(SendMessagePartDTO(type: "text", text: options.text))
+        let text = UploadedAttachmentMetadata.promptText(options.text, uploaded: options.uploadedAttachments)
+        if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append(SendMessagePartDTO(type: "text", text: text))
         }
         parts.append(contentsOf: ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
             SendMessagePartDTO(
@@ -253,7 +297,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
         parts.append(contentsOf: fileReferenceParts(options))
         // Omit wire `id`: FilePartInput allows it only when it matches ^prt.
         // Local Attachment ids are UUIDs for composer chip identity.
-        parts.append(contentsOf: options.attachments.map {
+        parts.append(contentsOf: options.inlineAttachments.map {
             SendMessagePartDTO(type: "file", mime: $0.mime, filename: $0.filename, url: $0.dataURL)
         })
         return SendMessageRequestDTO(
@@ -278,9 +322,17 @@ nonisolated struct MessageDomainAdapter: Sendable {
     }
 
     func v2PromptRequest(options: PromptSendOptions) -> V2PromptRequestDTO {
-        let files = options.attachments.map {
+        let files = options.inlineAttachments.map {
             V2PromptFileDTO(uri: $0.dataURL, name: $0.filename, mime: $0.mime)
         }
+        let uploaded = options.uploadedAttachments
+        let metadata = uploaded.isEmpty ? nil : V2PromptMetadataDTO(
+            attachments: uploaded.compactMap { attachment in
+                attachment.uploadedServerPath.map {
+                    V2PromptUploadedAttachmentDTO(name: attachment.filename, mime: attachment.mime, path: $0)
+                }
+            }
+        )
         let agents = ComposerMentionRouting.agentParts(text: options.text, mentions: options.agentMentions).map { part in
             V2PromptAgentDTO(
                 name: part.name,
@@ -295,12 +347,13 @@ nonisolated struct MessageDomainAdapter: Sendable {
         }
         return V2PromptRequestDTO(
             id: options.messageID,
-            text: options.text,
+            text: UploadedAttachmentMetadata.promptText(options.text, uploaded: uploaded),
             files: files.isEmpty ? nil : files,
             agents: agents.isEmpty ? nil : agents,
             skills: skills.isEmpty ? nil : skills,
             delivery: options.delivery.wireValue,
-            fileMentions: v2FileMentions(options)
+            fileMentions: v2FileMentions(options),
+            metadata: metadata
         )
     }
 
@@ -470,7 +523,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     private func projectV2User(_ dto: V2SessionMessageDTO, agent: String, model: V2ModelRefDTO?) -> Message {
         var parts: [MessagePart] = []
-        let text = dto.text ?? ""
+        let uploaded = UploadedAttachmentMetadata.refs(from: dto.metadata)
+        let text = UploadedAttachmentMetadata.displayText(dto.text ?? "", hiding: uploaded)
         if !text.isEmpty {
             parts.append(.text(TextPart(id: "\(dto.id):text:0", text: text, isStreaming: false)))
         }
@@ -479,11 +533,12 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 parts.append(part)
             }
         }
+        parts.append(contentsOf: UploadedAttachmentMetadata.fileParts(uploaded, messageID: dto.id))
         return messageFromV2(
             id: dto.id,
             role: .user,
             parts: parts,
-            promptSkills: promptSkills(dto),
+            promptSkills: promptSkills(dto.skills),
             mode: dto.agent ?? (agent.isEmpty ? nil : agent),
             model: dto.model ?? model,
             sentAtEpochMs: dto.time?.created,
@@ -577,10 +632,12 @@ nonisolated struct MessageDomainAdapter: Sendable {
                 fallbackID = "\(dto.id):\(content.type):\(index)"
             }
             return v2AssistantPart(content, fallbackID: fallbackID)
-        }
+        } + UploadedAttachmentMetadata.fileParts(UploadedAttachmentMetadata.refs(from: dto.metadata), messageID: dto.id)
         let stopReason = MessageStopReason.from(finish: dto.finish, errorKind: dto.error?.type)
-        let failure = structuredFailure(dto.error, outcome: nil)
-            ?? dto.retry?.error.flatMap { structuredFailure($0, outcome: nil) }.flatMap { candidate in
+        let failure = structuredFailure(dto.error, outcome: nil, completedAtEpochMs: dto.time?.completed)
+            ?? dto.retry?.error.flatMap {
+                structuredFailure($0, outcome: nil, completedAtEpochMs: dto.time?.completed)
+            }.flatMap { candidate in
                 dto.finish?.caseInsensitiveCompare("error") == .orderedSame ? candidate : nil
             }
         var message = messageFromV2(
@@ -623,13 +680,23 @@ nonisolated struct MessageDomainAdapter: Sendable {
             sentAtEpochMs: dto.time?.created,
             completedAtEpochMs: dto.time?.completed,
             contextEstimate: MessageContextEstimate(assistantCharacters: summary.count),
-            failure: structuredFailure(dto.error, outcome: nil, source: .compaction)
+            failure: structuredFailure(
+                dto.error,
+                outcome: nil,
+                source: .compaction,
+                completedAtEpochMs: dto.time?.completed
+            )
         )
     }
 
     /// A failed idle item is its own row when the assistant message did not already carry the same failure.
     private func projectV2Idle(_ dto: V2SessionMessageDTO, messages: inout [Message]) {
-        guard let failure = structuredFailure(dto.error, outcome: dto.outcome, source: .execution) else { return }
+        guard let failure = structuredFailure(
+            dto.error,
+            outcome: dto.outcome,
+            source: .execution,
+            completedAtEpochMs: dto.time?.completed
+        ) else { return }
         if messages.last?.failure?.line() == failure.line() { return }
         messages.append(
             messageFromV2(
@@ -683,8 +750,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
 
     /// Skills ride on the user message. Keep id and name only — `text` is the
     /// model-facing skill body and must not become a second chat bubble.
-    private func promptSkills(_ dto: V2SessionMessageDTO) -> [PromptSkill] {
-        dto.skills.compactMap { skill in
+    private func promptSkills(_ skills: [V2UserSkillDTO]) -> [PromptSkill] {
+        skills.compactMap { skill in
             let id = skill.id?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
                 ?? skill.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
             let name = skill.name?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? id
@@ -735,8 +802,10 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     output: toolOutput(state),
                     metadata: metadata,
                     timeStartEpochMs: content.time?.created,
+                    timeEndEpochMs: content.time?.completed,
                     isInterrupted: status == .error && ToolInterruption.isAbortedType(state?.error?.type),
-                    isMalformed: SessionFailure.isMalformedTool(type: state?.error?.type, executed: state?.executed)
+                    isMalformed: SessionFailure.isMalformedTool(type: state?.error?.type, executed: state?.executed),
+                    images: v2ToolImages(state, ownerID: content.id ?? fallbackID)
                 )
             )
         default:
@@ -750,7 +819,8 @@ nonisolated struct MessageDomainAdapter: Sendable {
             id: dto.id ?? (url.isEmpty ? nil : url) ?? dto.filename ?? "file",
             filename: dto.filename,
             mime: dto.mime,
-            dataURL: url
+            dataURL: url,
+            serverPath: dto.serverPath
         )
     }
 
@@ -767,13 +837,28 @@ nonisolated struct MessageDomainAdapter: Sendable {
         id: String,
         filename: String?,
         mime: String?,
-        dataURL: String
+        dataURL: String,
+        serverPath: String? = nil
     ) -> MessagePart? {
         let resolvedMime = (
             mime
                 ?? AttachmentDataURL.mime(fromDataURL: dataURL)
                 ?? filename.flatMap(AttachmentDataURL.mime(fromFilename:))
         )?.lowercased()
+        if let serverPath, !serverPath.isEmpty {
+            // Uploaded file: any type shows, at least as a chip.
+            let mime = resolvedMime ?? AttachmentMime.binaryFallback
+            return .file(
+                FilePart(
+                    id: id,
+                    filename: filename?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty ?? "Attachment",
+                    mime: mime,
+                    kind: AttachmentMime.kind(for: mime),
+                    dataURL: "",
+                    serverPath: serverPath
+                )
+            )
+        }
         guard let resolvedMime, let kind = AttachmentDataURL.kind(for: resolvedMime) else { return nil }
         if !dataURL.isEmpty {
             guard dataURL.lowercased().hasPrefix("data:"),
@@ -820,6 +905,25 @@ nonisolated struct MessageDomainAdapter: Sendable {
               case let .string(raw)? = state?.input
         else { return nil }
         return [ToolArgumentsPreview.inputKey: .string(raw)]
+    }
+
+    /// v2 tool `content` items of type `file` that the timeline can show as images.
+    private func v2ToolImages(_ state: V2ToolStateDTO?, ownerID: String) -> [FilePart] {
+        guard let content = state?.content, !content.isEmpty else { return [] }
+        var images: [FilePart] = []
+        var fileIndex = 0
+        for item in content where item.type == "file" {
+            defer { fileIndex += 1 }
+            if let image = toolImage(
+                id: Self.toolImageID(ownerID: ownerID, index: fileIndex),
+                filename: item.name,
+                mime: item.mime,
+                url: item.uri
+            ) {
+                images.append(image)
+            }
+        }
+        return images
     }
 
     private func toolOutput(_ state: V2ToolStateDTO?) -> String? {
@@ -885,7 +989,11 @@ nonisolated struct MessageDomainAdapter: Sendable {
         return MessageStopReason.from(finish: info.finish, errorKind: info.error?.name)
     }
 
-    private func sessionFailure(_ error: MessageErrorInfoDTO?, stopReason: MessageStopReason?) -> SessionFailure? {
+    private func sessionFailure(
+        _ error: MessageErrorInfoDTO?,
+        stopReason: MessageStopReason?,
+        completedAtEpochMs: Int64?
+    ) -> SessionFailure? {
         if stopReason == .interrupted { return nil }
         return SessionFailure.fromV1(
             name: error?.name,
@@ -894,14 +1002,17 @@ nonisolated struct MessageDomainAdapter: Sendable {
             responseBody: error?.data?.responseBody,
             isRetryable: error?.data?.isRetryable,
             providerID: error?.data?.providerID,
-            retries: error?.data?.retries
+            retries: error?.data?.retries,
+            retryAfterMs: error?.data?.retryAfterMs,
+            recordedAtEpochMs: recordedAt(retryAfterMs: error?.data?.retryAfterMs, completedAtEpochMs: completedAtEpochMs)
         )
     }
 
     private func structuredFailure(
         _ error: V2UnknownErrorDTO?,
         outcome: String?,
-        source: FailureSource = .step
+        source: FailureSource = .step,
+        completedAtEpochMs: Int64?
     ) -> SessionFailure? {
         SessionFailure.fromV2(
             type: error?.type,
@@ -909,8 +1020,16 @@ nonisolated struct MessageDomainAdapter: Sendable {
             status: error?.status,
             providerBody: error?.response?.body,
             outcome: outcome,
-            source: source
+            source: source,
+            retryAfterMs: error?.retryAfterMs,
+            recordedAtEpochMs: recordedAt(retryAfterMs: error?.retryAfterMs, completedAtEpochMs: completedAtEpochMs)
         )
+    }
+
+    /// The failed message's completion time, else when the app received it. Only a retry hint needs it.
+    private func recordedAt(retryAfterMs: Int64?, completedAtEpochMs: Int64?) -> Int64? {
+        guard retryAfterMs != nil else { return nil }
+        return completedAtEpochMs ?? nowEpochMs()
     }
 
     private func httpMessage(_ body: String?) -> String {

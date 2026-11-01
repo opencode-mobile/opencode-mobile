@@ -61,6 +61,22 @@ nonisolated final class SessionChatDisplayPreferences {
     private let defaults: UserDefaults
     private let featureFlags: FeatureFlags
 
+    /// Values to put back when the last sandbox ends; set while one is open.
+    @ObservationIgnored private var sandboxSnapshot: Snapshot?
+    @ObservationIgnored private var sandboxDepth = 0
+
+    private struct Snapshot {
+        let collapseConsecutiveToolCalls: Bool
+        let timelineStyle: SessionChatTimelineStyle
+        let chipTimelineIntroDone: Bool
+        let chipTimelineIntroSnoozedUntilMs: Int64?
+        let timelineStylePickerDone: Bool?
+        let followUpDelivery: FollowUpDelivery
+    }
+
+    /// True while a `beginSandbox()` handle is open.
+    var isSandboxed: Bool { sandboxDepth > 0 }
+
     /// When true, a run of two or more consecutive visible tool parts in one
     /// assistant message collapses into one summary tool group.
     private(set) var collapseConsecutiveToolCalls: Bool
@@ -118,7 +134,7 @@ nonisolated final class SessionChatDisplayPreferences {
 
     /// True while an updated install has not answered the Timeline Style picker.
     var timelineStylePickerPending: Bool {
-        timelineStylePickerDone == false
+        !isSandboxed && timelineStylePickerDone == false
     }
 
     private(set) var followUpDelivery: FollowUpDelivery
@@ -152,7 +168,7 @@ nonisolated final class SessionChatDisplayPreferences {
 
     func setCollapseConsecutiveToolCalls(_ value: Bool) {
         collapseConsecutiveToolCalls = value
-        defaults.set(value, forKey: StorageKeys.collapseConsecutiveToolCalls)
+        persist { $0.set(value, forKey: StorageKeys.collapseConsecutiveToolCalls) }
     }
 
     /// Intro sheet shim: true picks Chips, false Standard. Ends the intro.
@@ -175,14 +191,16 @@ nonisolated final class SessionChatDisplayPreferences {
 
     private func storeTimelineStylePickerDone(_ done: Bool) {
         timelineStylePickerDone = done
-        defaults.set(done, forKey: StorageKeys.timelineStylePickerDone)
+        persist { $0.set(done, forKey: StorageKeys.timelineStylePickerDone) }
     }
 
     private func storeTimelineStyle(_ style: SessionChatTimelineStyle) {
         timelineStyle = style
-        defaults.set(style.wireValue, forKey: StorageKeys.timelineStyle)
-        // Mirror the legacy key so an older build reading it agrees on Chips.
-        defaults.set(style == .chips, forKey: StorageKeys.chipTimeline)
+        persist { defaults in
+            defaults.set(style.wireValue, forKey: StorageKeys.timelineStyle)
+            // Mirror the legacy key so an older build reading it agrees on Chips.
+            defaults.set(style == .chips, forKey: StorageKeys.chipTimeline)
+        }
     }
 
     /// Settles the starting Timeline Style and the Timeline Style picker once
@@ -204,7 +222,7 @@ nonisolated final class SessionChatDisplayPreferences {
     /// Intro sheet "Don't show again", or a second Later.
     func finishChipTimelineIntro() {
         chipTimelineIntroDone = true
-        defaults.set(true, forKey: StorageKeys.chipTimelineIntroDone)
+        persist { $0.set(true, forKey: StorageKeys.chipTimelineIntroDone) }
     }
 
     /// Intro sheet Later: snooze the first time, end the intro the second time.
@@ -217,13 +235,13 @@ nonisolated final class SessionChatDisplayPreferences {
             return
         }
         chipTimelineIntroSnoozedUntilMs = until
-        defaults.set(NSNumber(value: until), forKey: StorageKeys.chipTimelineIntroSnoozedUntilMs)
+        persist { $0.set(NSNumber(value: until), forKey: StorageKeys.chipTimelineIntroSnoozedUntilMs) }
     }
 
     /// Whether a finished turn with `turnToolCalls` tool calls should offer the intro sheet.
     func shouldOfferChipTimelineIntro(turnToolCalls: Int, nowMs: Int64) -> Bool {
         // The Timeline Style picker replaces the intro (#805); never pitch Chips before it.
-        guard !timelineStylePickerPending else { return false }
+        guard !isSandboxed, !timelineStylePickerPending else { return false }
         return ChipTimelineIntro.shouldShow(
             chipTimelineAvailable: chipTimelineAvailable,
             // Step Rail and Activity Card are explicit style choices too: never pitch Chips over them.
@@ -237,7 +255,57 @@ nonisolated final class SessionChatDisplayPreferences {
 
     func setFollowUpDelivery(_ value: FollowUpDelivery) {
         followUpDelivery = value
-        defaults.set(value.wireValue, forKey: StorageKeys.followUpDelivery)
+        persist { $0.set(value.wireValue, forKey: StorageKeys.followUpDelivery) }
+    }
+
+    /// Keeps every change in memory until the returned handle ends, then restores the values
+    /// from before. While a sandbox is open the one-time Timeline Style picker and Chip intro
+    /// are not offered. The Session Chat Playground holds one: nothing it does may change the
+    /// real preferences.
+    func beginSandbox() -> Sandbox {
+        if sandboxDepth == 0 {
+            sandboxSnapshot = Snapshot(
+                collapseConsecutiveToolCalls: collapseConsecutiveToolCalls,
+                timelineStyle: timelineStyle,
+                chipTimelineIntroDone: chipTimelineIntroDone,
+                chipTimelineIntroSnoozedUntilMs: chipTimelineIntroSnoozedUntilMs,
+                timelineStylePickerDone: timelineStylePickerDone,
+                followUpDelivery: followUpDelivery
+            )
+        }
+        sandboxDepth += 1
+        return Sandbox(preferences: self)
+    }
+
+    private func endSandbox() {
+        sandboxDepth -= 1
+        guard sandboxDepth == 0, let snapshot = sandboxSnapshot else { return }
+        sandboxSnapshot = nil
+        collapseConsecutiveToolCalls = snapshot.collapseConsecutiveToolCalls
+        timelineStyle = snapshot.timelineStyle
+        chipTimelineIntroDone = snapshot.chipTimelineIntroDone
+        chipTimelineIntroSnoozedUntilMs = snapshot.chipTimelineIntroSnoozedUntilMs
+        timelineStylePickerDone = snapshot.timelineStylePickerDone
+        followUpDelivery = snapshot.followUpDelivery
+    }
+
+    /// An open sandbox; `end()` restores the preferences once, later calls do nothing.
+    final class Sandbox {
+        private var preferences: SessionChatDisplayPreferences?
+
+        fileprivate init(preferences: SessionChatDisplayPreferences) {
+            self.preferences = preferences
+        }
+
+        func end() {
+            preferences?.endSandbox()
+            preferences = nil
+        }
+    }
+
+    private func persist(_ write: (UserDefaults) -> Void) {
+        guard !isSandboxed else { return }
+        write(defaults)
     }
 
     func clear() {

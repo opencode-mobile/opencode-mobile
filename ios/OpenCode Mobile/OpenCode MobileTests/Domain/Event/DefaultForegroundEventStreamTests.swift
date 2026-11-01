@@ -281,6 +281,155 @@ struct DefaultForegroundEventStreamTests {
         #expect(states.last == .idle || states.contains(.connected))
     }
 
+    // MARK: Server replaced by the other protocol at the same address (#828)
+
+    @Test func savedV1ServerNowV2MovesToApiEvent() async {
+        let saved = LockedBox<ServerProtocol>(.v1)
+        let harness = makeStream(
+            responses: Array(repeating: Self.connectedFrame, count: 10),
+            holdOpen: true,
+            cachedProtocol: { saved.value },
+            statusByPathSuffix: ["/global/event": 500],
+            protocolRedetect: {
+                saved.value = .v2
+                return .detected(.v2)
+            }
+        )
+        harness.stream.start()
+        let live = await waitUntil {
+            harness.stream.connectionState == .connected
+                && harness.stream.snapshot.config?.serverProtocol == .v2
+        }
+        let paths = MockForegroundSSEURLProtocol.paths(streamID: harness.streamID)
+        await harness.stream.stop()
+        #expect(live)
+        #expect(paths.contains { $0.hasSuffix("/api/event") })
+    }
+
+    @Test func http500OnSavedProtocolRechecksAndFollowsDetectedProtocol() async {
+        let saved = LockedBox<ServerProtocol>(.v1)
+        let checks = LockedBox(0)
+        let harness = makeStream(
+            responses: Array(repeating: Self.connectedFrame, count: 10),
+            holdOpen: true,
+            cachedProtocol: { saved.value },
+            statusByPathSuffix: ["/global/event": 500],
+            // The start check still sees v1; the next one, after the v1 path answers 500, sees v2.
+            protocolRedetect: {
+                checks.value += 1
+                if checks.value == 1 { return .detected(.v1) }
+                saved.value = .v2
+                return .detected(.v2)
+            },
+            protocolRecheckInterval: .zero
+        )
+        harness.stream.start()
+        let live = await waitUntil(timeoutMs: 8_000) {
+            harness.stream.connectionState == .connected
+                && harness.stream.snapshot.config?.serverProtocol == .v2
+        }
+        let paths = MockForegroundSSEURLProtocol.paths(streamID: harness.streamID)
+        await harness.stream.stop()
+        #expect(live)
+        #expect(checks.value >= 2)
+        #expect(paths.contains { $0.hasSuffix("/global/event") })
+        #expect(paths.contains { $0.hasSuffix("/api/event") })
+    }
+
+    @Test func noProtocolAnswersShowsDisconnectedInsteadOfConnecting() async {
+        let harness = makeStream(
+            responses: [],
+            cachedProtocol: { .v1 },
+            statusByPathSuffix: ["/global/event": 500],
+            protocolRedetect: { .unreachable }
+        )
+        harness.stream.start()
+        let offline = await waitUntil { harness.stream.connectionState == .disconnected }
+        await harness.stream.stop()
+        #expect(offline)
+    }
+
+    @Test func rejectedCredentialIsNotAProtocolChange() async {
+        let checks = LockedBox(0)
+        let harness = makeStream(
+            responses: [""],
+            statusCode: 401,
+            cachedProtocol: { .v1 },
+            protocolRedetect: {
+                checks.value += 1
+                return .skipped
+            },
+            protocolRecheckInterval: .zero
+        )
+        harness.stream.start()
+        let failed = await waitUntil { harness.stream.connectionState == .authFailed }
+        for _ in 0 ..< 3 {
+            harness.stream.onReconnectWake()
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        let state = harness.stream.connectionState
+        await harness.stream.stop()
+        #expect(failed)
+        // Only the start check ran; the 401s on the event path did not ask for one.
+        #expect(checks.value == 1)
+        #expect(state == .authFailed)
+    }
+
+    @Test func reconnectAfterDropRechecksAndFollowsServerBackToV1() async {
+        let saved = LockedBox<ServerProtocol>(.v2)
+        let checks = LockedBox(0)
+        // Like opencode 1.19, the v1 server also answers `/api/event`, so only a check finds it.
+        let harness = makeStream(
+            responses: Array(repeating: Self.connectedFrame, count: 20),
+            cachedProtocol: { saved.value },
+            protocolRedetect: {
+                checks.value += 1
+                if checks.value == 1 { return .detected(.v2) }
+                saved.value = .v1
+                return .detected(.v1)
+            },
+            protocolRecheckInterval: .zero
+        )
+        harness.stream.start()
+        let movedToV1 = await waitUntil(timeoutMs: 8_000) {
+            harness.stream.snapshot.config?.serverProtocol == .v1
+                && MockForegroundSSEURLProtocol.paths(streamID: harness.streamID)
+                .contains { $0.hasSuffix("/global/event") }
+        }
+        await harness.stream.stop()
+        #expect(movedToV1)
+    }
+
+    @Test func launchedWhileServerDownThenV1StartsDefersTheRecheckInsteadOfDroppingIt() async {
+        let saved = LockedBox<ServerProtocol>(.v2)
+        let checks = LockedBox(0)
+        // The server is down for the first attempts, then v1 starts and also answers `/api/event`.
+        // The stream stays open, so connecting is the only hint that the protocol changed.
+        let harness = makeStream(
+            responses: Array(repeating: Self.connectedFrame, count: 10),
+            holdOpen: true,
+            cachedProtocol: { saved.value },
+            failFirstRequests: 2,
+            protocolRedetect: {
+                checks.value += 1
+                if checks.value == 1 { return .unreachable }
+                saved.value = .v1
+                return .detected(.v1)
+            },
+            protocolRecheckInterval: .seconds(5)
+        )
+        harness.stream.start()
+        let offline = await waitUntil { harness.stream.connectionState == .disconnected }
+        let movedToV1 = await waitUntil(timeoutMs: 15_000) {
+            harness.stream.snapshot.config?.serverProtocol == .v1
+                && harness.stream.connectionState == .connected
+        }
+        await harness.stream.stop()
+        #expect(offline)
+        #expect(movedToV1)
+        #expect(checks.value == 2)
+    }
+
     private struct StreamHarness {
         let stream: DefaultForegroundEventStream
         let streamID: String
@@ -300,7 +449,11 @@ struct DefaultForegroundEventStreamTests {
         profileID: (@Sendable () async -> String)? = nil,
         connectionIdentity: (@Sendable () async -> String)? = nil,
         credentialFingerprint: (@Sendable () async -> String)? = nil,
-        failBeforeHeaders: Bool = false
+        failBeforeHeaders: Bool = false,
+        failFirstRequests: Int = 0,
+        statusByPathSuffix: [String: Int] = [:],
+        protocolRedetect: (@Sendable () async -> ProtocolRedetection)? = nil,
+        protocolRecheckInterval: Duration = ProtocolRecheckPolicy.minInterval
     ) -> StreamHarness {
         let streamID = UUID().uuidString
         let configuration = URLSessionConfiguration.ephemeral
@@ -310,7 +463,9 @@ struct DefaultForegroundEventStreamTests {
             responses: responses.map { Data($0.utf8) },
             statusCode: statusCode,
             holdOpen: holdOpen,
-            failBeforeHeaders: failBeforeHeaders
+            failBeforeHeaders: failBeforeHeaders,
+            failFirstRequests: failFirstRequests,
+            statusByPathSuffix: statusByPathSuffix
         )
         let session = URLSession(configuration: configuration)
         let connection = ServerConnection(
@@ -330,7 +485,9 @@ struct DefaultForegroundEventStreamTests {
             credentialFingerprint: credentialFingerprint,
             protocolHint: protocolHint,
             cachedProtocol: cachedProtocol,
-            protocolProbe: protocolProbe
+            protocolProbe: protocolProbe,
+            protocolRedetect: protocolRedetect,
+            protocolRecheckInterval: protocolRecheckInterval
         )
         return StreamHarness(stream: stream, streamID: streamID)
     }
@@ -470,6 +627,10 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
         var statusCode: Int
         var holdOpen: Bool
         var failBeforeHeaders: Bool = false
+        /// Requests that fail before headers before the server "starts".
+        var failFirstRequests = 0
+        /// Status for request paths ending in a key; those requests leave `responses` alone.
+        var statusByPathSuffix: [String: Int] = [:]
         var paths: [String] = []
         var requestDates: [Date] = []
         var liveClients: [MockForegroundSSEURLProtocol] = []
@@ -489,14 +650,18 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
         responses: [Data],
         statusCode: Int,
         holdOpen: Bool,
-        failBeforeHeaders: Bool = false
+        failBeforeHeaders: Bool = false,
+        failFirstRequests: Int = 0,
+        statusByPathSuffix: [String: Int] = [:]
     ) {
         lock.lock()
         streams[streamID] = StreamState(
             responses: responses,
             statusCode: statusCode,
             holdOpen: holdOpen,
-            failBeforeHeaders: failBeforeHeaders
+            failBeforeHeaders: failBeforeHeaders,
+            failFirstRequests: failFirstRequests,
+            statusByPathSuffix: statusByPathSuffix
         )
         lock.unlock()
     }
@@ -538,10 +703,21 @@ private final class MockForegroundSSEURLProtocol: URLProtocol {
         guard let streamID = Self.streamID(from: request) else { return }
         Self.lock.lock()
         var state = Self.streams[streamID] ?? StreamState(responses: [], statusCode: 200, holdOpen: false)
-        let body = state.responses.isEmpty ? Data() : state.responses.removeFirst()
-        let statusCode = state.statusCode
+        let path = request.url?.path ?? ""
+        let pathStatus = state.statusByPathSuffix.first { path.hasSuffix($0.key) }?.value
+        let body: Data
+        if pathStatus != nil {
+            body = Data()
+        } else {
+            body = state.responses.isEmpty ? Data() : state.responses.removeFirst()
+        }
+        let statusCode = pathStatus ?? state.statusCode
         let holdOpen = state.holdOpen
-        let failBeforeHeaders = state.failBeforeHeaders
+        var failBeforeHeaders = state.failBeforeHeaders
+        if state.failFirstRequests > 0 {
+            state.failFirstRequests -= 1
+            failBeforeHeaders = true
+        }
         state.paths.append(request.url?.path ?? "")
         state.requestDates.append(Date())
         if holdOpen {

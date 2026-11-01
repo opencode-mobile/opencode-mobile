@@ -350,6 +350,12 @@ nonisolated struct EventDomainAdapter: Sendable {
         if !isSyntheticInboxItem(properties), let delivery = deliveryValue(in: properties) {
             info["delivery"] = delivery
         }
+        // Skill spans for `[/name]` display. Drop `text`: it is the model-facing skill body.
+        let skills = (promptObject(in: properties)?["skills"] as? [[String: Any]] ?? [])
+            .map { $0.filter { $0.key != "text" } }
+        if !skills.isEmpty {
+            info["skills"] = skills
+        }
         return event(type: "message.updated", properties: ["info": info])
     }
 
@@ -361,7 +367,9 @@ nonisolated struct EventDomainAdapter: Sendable {
         // v2 inbox `synthetic` items (e.g. Plan mode's system-reminder) are server-injected
         // context, not something the user typed: keep the part but mark it hidden.
         let isSynthetic = (properties["item"] as? [String: Any]).flatMap { string(in: $0, key: "type") } == "synthetic"
-        if let text = prompt.flatMap({ string(in: $0, key: "text") }) ?? string(in: properties, key: "text"),
+        let uploaded = UploadedAttachmentMetadata.refs(fromJSON: prompt?["metadata"] ?? properties["metadata"])
+        if let rawText = prompt.flatMap({ string(in: $0, key: "text") }) ?? string(in: properties, key: "text"),
+           case let text = UploadedAttachmentMetadata.displayText(rawText, hiding: uploaded),
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         {
             parts.append(
@@ -373,6 +381,17 @@ nonisolated struct EventDomainAdapter: Sendable {
         for (index, element) in files.enumerated() {
             guard let file = element as? [String: Any] else { continue }
             parts.append(userFilePartUpdated(sessionID: sessionID, messageID: messageID, index: index, file: file))
+        }
+        for (index, ref) in uploaded.enumerated() {
+            var part: [String: Any] = [
+                "type": "file", "mime": ref.mime, "filename": ref.name, "serverPath": ref.path,
+            ]
+            if let messageID {
+                part["id"] = "\(messageID):upload:\(index)"
+                part["messageID"] = messageID
+            }
+            if let sessionID { part["sessionID"] = sessionID }
+            parts.append(event(type: "message.part.updated", properties: ["part": part]))
         }
         return parts
     }
@@ -535,6 +554,7 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let body, !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             data["responseBody"] = body
         }
+        if let retryAfterMs = int64(in: error, key: "retryAfterMs") { data["retryAfterMs"] = retryAfterMs }
         var info: [String: Any] = ["data": data]
         if let type { info["name"] = type }
         return info
@@ -594,12 +614,15 @@ nonisolated struct EventDomainAdapter: Sendable {
         let callID = string(in: properties, key: "callID")
         let partID = string(in: properties, key: "id") ?? callID
         var output = string(in: properties, key: "output")
-        if output == nil, let content = properties["content"] as? [[String: Any]] {
+        let content = properties["content"] as? [[String: Any]]
+        if output == nil, let content {
             let texts = content.compactMap { $0["text"] as? String }
             if !texts.isEmpty {
                 output = texts.joined()
             }
         }
+        // v2 tool files arrive whole with the result; carried in the v1 `attachments` shape.
+        let attachments = content.map(toolFileAttachments) ?? []
         let errorObject = properties["error"] as? [String: Any]
         let unwrapped = SessionFailure.unwrap(errorObject?["message"] as? String)
         let error = unwrapped.isEmpty ? nil : unwrapped
@@ -624,8 +647,22 @@ nonisolated struct EventDomainAdapter: Sendable {
             metadata: metadata,
             title: title,
             interrupted: interrupted,
-            malformed: malformed
+            malformed: malformed,
+            attachments: attachments
         )
+    }
+
+    /// v2 `content` items of type `file` as v1 tool attachments (`url` is the item's `uri`).
+    /// Every file item is kept, so a file's position matches the REST projection.
+    private func toolFileAttachments(_ content: [[String: Any]]) -> [[String: Any]] {
+        content.compactMap { item in
+            guard item["type"] as? String == "file" else { return nil }
+            var attachment: [String: Any] = ["type": "file"]
+            if let uri = item["uri"] as? String { attachment["url"] = uri }
+            if let mime = item["mime"] as? String { attachment["mime"] = mime }
+            if let name = item["name"] as? String { attachment["filename"] = name }
+            return attachment
+        }
     }
 
     /// v2 tool events carry tool-reported metadata (a subagent's `sessionID`
@@ -916,9 +953,11 @@ nonisolated struct EventDomainAdapter: Sendable {
         metadata: [String: Any]? = nil,
         title: String? = nil,
         interrupted: Bool = false,
-        malformed: Bool = false
+        malformed: Bool = false,
+        attachments: [[String: Any]] = []
     ) -> OpencodeEvent {
         var state: [String: Any] = ["status": status]
+        if !attachments.isEmpty { state["attachments"] = attachments }
         if interrupted { state["interrupted"] = true }
         if malformed { state["malformed"] = true }
         if let title { state["title"] = title }
@@ -926,8 +965,11 @@ nonisolated struct EventDomainAdapter: Sendable {
         if let output { state["output"] = output }
         if let error { state["error"] = error }
         if let metadata { state["metadata"] = metadata }
-        if let start = int64(in: properties, key: "created") {
-            state["time"] = ["start": start]
+        if let created = int64(in: properties, key: "created") {
+            // A settled call's event time is when it ended; the store keeps the first start.
+            state["time"] = status == "completed" || status == "error"
+                ? ["start": created, "end": created]
+                : ["start": created]
         }
         var part: [String: Any] = ["type": "tool", "tool": toolName, "state": state]
         if let partID { part["id"] = partID }

@@ -69,6 +69,8 @@ sealed class SessionChatTimelineBlock {
         val isReceivingArguments: Boolean = false,
         /** Inspector body for the tool-result sheet. Null when the card does not open one. */
         val presentation: ToolResultPresentation? = null,
+        /** Images the tool returned; the Standard timeline shows them in an [ImageGallery] under the card. */
+        val images: List<SessionChatAttachmentItem> = emptyList(),
     ) : SessionChatTimelineBlock()
 
     /** Persistent note that the reply ended early (cut off or interrupted). */
@@ -81,6 +83,7 @@ sealed class SessionChatTimelineBlock {
      * A failed run under the reply. A provider body or an action opens the
      * detail sheet. [isNeutral] is a permission rejection. [coveredByLiveRetry]
      * is a rate-limit or quota the composer status already shows.
+     * [retryAtEpochMs] is when the provider said to try again.
      */
     data class FailureLine(
         override val blockID: String,
@@ -90,6 +93,7 @@ sealed class SessionChatTimelineBlock {
         val action: FailureAction? = null,
         val actionLabel: String? = null,
         val coveredByLiveRetry: Boolean = false,
+        val retryAtEpochMs: Long? = null,
     ) : SessionChatTimelineBlock()
 
     /**
@@ -109,6 +113,21 @@ sealed class SessionChatTimelineBlock {
         val subtitle: String? = null,
         val errorText: String? = null,
         val members: List<ToolCard>,
+    ) : SessionChatTimelineBlock() {
+        /** Every member's images, in call order. */
+        val images: List<SessionChatAttachmentItem>
+            get() = members.flatMap { it.images }
+    }
+
+    /**
+     * Consecutive images from one source, drawn as a mosaic that opens the paged viewer:
+     * under the tool card or group that returned them ([fromTool]), or two or more images
+     * sent or attached together in a message. A lone message image stays an [Attachment].
+     */
+    data class ImageGallery(
+        override val blockID: String,
+        val images: List<SessionChatAttachmentItem>,
+        val fromTool: Boolean,
     ) : SessionChatTimelineBlock()
 
     data class ChildSessionRow(
@@ -372,6 +391,59 @@ object SessionChatTimelineBlocks {
         }
     }
 
+    /**
+     * Blocks for files sent or attached together: each run of two or more images becomes one
+     * [SessionChatTimelineBlock.ImageGallery]; a lone image and every other file stay an attachment.
+     */
+    fun attachmentBlocks(items: List<SessionChatAttachmentItem>): List<SessionChatTimelineBlock> {
+        val blocks = mutableListOf<SessionChatTimelineBlock>()
+        val images = mutableListOf<SessionChatAttachmentItem>()
+
+        fun flushImages() {
+            when (images.size) {
+                0 -> Unit
+                1 -> blocks += SessionChatTimelineBlock.Attachment(PresentationBlockId.direct(images[0].id), images[0])
+                else ->
+                    blocks +=
+                        SessionChatTimelineBlock.ImageGallery(
+                            blockID = PresentationBlockId.imageGallery(PresentationBlockId.direct(images[0].id)),
+                            images = images.toList(),
+                            fromTool = false,
+                        )
+            }
+            images.clear()
+        }
+        items.forEach { item ->
+            if (item.isGalleryImage) {
+                images += item
+            } else {
+                flushImages()
+                blocks += SessionChatTimelineBlock.Attachment(PresentationBlockId.direct(item.id), item)
+            }
+        }
+        flushImages()
+        return blocks
+    }
+
+    /**
+     * The gallery under a tool card or group that returned images. Keyed on the first member,
+     * so a card that grows into a group keeps its gallery (and an open viewer) in place.
+     */
+    private fun toolGallery(block: SessionChatTimelineBlock): SessionChatTimelineBlock.ImageGallery? {
+        val (sourceId, images) =
+            when (block) {
+                is SessionChatTimelineBlock.ToolCard -> block.blockID to block.images
+                is SessionChatTimelineBlock.ToolGroup -> block.members.first().blockID to block.images
+                else -> return null
+            }
+        if (images.isEmpty()) return null
+        return SessionChatTimelineBlock.ImageGallery(
+            blockID = PresentationBlockId.imageGallery(sourceId),
+            images = images,
+            fromTool = true,
+        )
+    }
+
     fun build(
         role: MessageRole,
         parts: List<MessagePart>,
@@ -454,26 +526,32 @@ object SessionChatTimelineBlocks {
                         if (groupTools.size >= 2) {
                             val group = toToolGroup(groupTools) ?: return SessionChatTimelineBlocksResult.MissingPartIds
                             blocks += group
+                            toolGallery(group)?.let { blocks += it }
                             index = lookAhead
                         } else {
                             val block = toToolBlock(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
                             blocks += block
+                            toolGallery(block)?.let { blocks += it }
                             index += 1
                         }
                     } else {
                         val block = toToolBlock(part) ?: return SessionChatTimelineBlocksResult.MissingPartIds
                         blocks += block
+                        toolGallery(block)?.let { blocks += it }
                         index += 1
                     }
                 }
                 is MessagePart.File -> {
                     if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
-                    blocks +=
-                        SessionChatTimelineBlock.Attachment(
-                            blockID = PresentationBlockId.direct(part.id),
-                            attachment = AttachmentPresentationMapper.from(part),
-                        )
-                    index += 1
+                    var lookAhead = index
+                    val run = mutableListOf<SessionChatAttachmentItem>()
+                    while (lookAhead < parts.size) {
+                        val file = parts[lookAhead] as? MessagePart.File ?: break
+                        run += AttachmentPresentationMapper.from(file)
+                        lookAhead += 1
+                    }
+                    blocks += attachmentBlocks(run)
+                    index = lookAhead
                 }
                 is MessagePart.Reasoning -> {
                     if (!flushText()) return SessionChatTimelineBlocksResult.MissingPartIds
@@ -1253,6 +1331,20 @@ object SessionChatTimelineBlocks {
         }
 
     /**
+     * The failure mark that may count down to its retry time: only on the last
+     * turn, so a user message after it means the countdown no longer applies.
+     */
+    fun retryCountdownBlockId(messages: List<SessionChatMessageItem>): String? {
+        for (message in messages.asReversed()) {
+            if (message.role == MessageRole.User) return null
+            val line =
+                message.blocks.lastOrNull { it is SessionChatTimelineBlock.FailureLine && it.retryAtEpochMs != null }
+            if (line != null) return line.blockID
+        }
+        return null
+    }
+
+    /**
      * Rows never render empty: drop blocks the timeline paints as nothing
      * (live thought is footer chrome) and fall back to the live placeholder.
      */
@@ -1330,6 +1422,7 @@ object SessionChatTimelineBlocks {
                     action = failure.action(),
                     actionLabel = failure.actionLabel(),
                     coveredByLiveRetry = failure.coversLiveRetry(),
+                    retryAtEpochMs = failure.retryAtEpochMs(),
                 )
         }
         return if (blocks === body.blocks) body else body.copy(blocks = blocks)
@@ -1501,6 +1594,8 @@ object SessionChatTimelineBlocks {
         when (block) {
             is SessionChatTimelineBlock.ToolGroup -> true
             is SessionChatTimelineBlock.ToolCard -> !isChildSessionTool(block.toolName)
+            // Rebuilt from the tools' parts when the run merges, so it never breaks a run.
+            is SessionChatTimelineBlock.ImageGallery -> block.fromTool
             is SessionChatTimelineBlock.Text,
             is SessionChatTimelineBlock.Attachment,
             is SessionChatTimelineBlock.ChildSessionRow,
@@ -1943,6 +2038,7 @@ object SessionChatTimelineBlocks {
             isMalformed = tool.isMalformed,
             isReceivingArguments = receivingArguments,
             presentation = ToolResultInspector.fromTool(tool, chrome.title),
+            images = tool.images.map(AttachmentPresentationMapper::from),
         )
     }
 

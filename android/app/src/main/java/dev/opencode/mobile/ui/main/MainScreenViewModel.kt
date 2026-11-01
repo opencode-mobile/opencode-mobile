@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.connection.AddressCheck
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
@@ -133,6 +134,13 @@ class MainScreenViewModel
         private val _serversChrome = MutableStateFlow(HomeServersChrome())
         val serversChrome: StateFlow<HomeServersChrome> = _serversChrome.asStateFlow()
         private var lastHomeHiddenAtEpochMs: Long? = HomeDisplayPreferences.lastHomeHiddenAtEpochMs()
+
+        /** Server the user just picked. A late save from the previous server must not paint over it. */
+        private var pendingSwitchId: String? = null
+        private var switchPaintGeneration = 0
+
+        /** An empty Home failed its probe while other saved addresses were still being tried. */
+        private var probeWaitsOnAddressCheck = false
         val liveUpdatesConnectionStatus: StateFlow<SessionConnectionStatus> =
             liveUpdates.chrome
                 .map { it.label.toSessionConnectionStatus() }
@@ -234,12 +242,41 @@ class MainScreenViewModel
             }
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
+                    val active = connectionProfileStore.activeProfile()
+                    val pending = pendingSwitchId
+                    if (pending != null && active?.id != pending) return@collect
+                    pendingSwitchId = null
+                    switchPaintGeneration++
                     worktreeCreate.dismiss()
                     stopLiveObservations()
-                    projectFirstLoads.clearAll()
+                    // A switch already painted its projects; their skeletons stay until sessions arrive.
+                    if (pending == null) projectFirstLoads.clearAll()
                     pendingFirstServerSnapshots.clear()
                     resetHomeIndex()
                     refresh()
+                }
+            }
+            viewModelScope.launch {
+                connectionSessionCoordinator.addressCheck.collect { check ->
+                    if (pendingSwitchId != null) return@collect
+                    when (check.state) {
+                        AddressCheck.State.Running -> Unit
+                        AddressCheck.State.Moved -> {
+                            probeWaitsOnAddressCheck = false
+                            if (_uiState.value is MainScreenUiState.Loaded) {
+                                sessionLiveStore.invalidate(null)
+                                sessionStatusLiveStore.invalidate(null)
+                            } else {
+                                // Empty, unreachable, or still loading against the old address.
+                                refresh()
+                            }
+                        }
+                        AddressCheck.State.Kept ->
+                            if (probeWaitsOnAddressCheck) {
+                                probeWaitsOnAddressCheck = false
+                                refresh()
+                            }
+                    }
                 }
             }
             viewModelScope.launch {
@@ -275,10 +312,81 @@ class MainScreenViewModel
         }
 
         fun switchProfile(id: String) {
+            val chrome = _serversChrome.value
+            val target = chrome.others.firstOrNull { it.id == id } ?: return
+            pendingSwitchId = id
+            val generation = ++switchPaintGeneration
+            _serversChrome.value =
+                chrome.copy(
+                    title = target.displayName,
+                    isSwitcher = true,
+                    active = target,
+                    others = (listOfNotNull(chrome.active) + chrome.others).filter { it.id != id },
+                    sheetVisible = false,
+                )
+            // Drop the previous server's live updates immediately. Local projects paint next;
+            // the connection switch and session lists catch up in the background.
+            stopLiveObservations()
+            DiagnosticLog.info(DiagnosticLogArea.Connection, "switch profile ui id=$id")
+            viewModelScope.launch { paintSwitchedServer(target.baseUrl, id, generation) }
             viewModelScope.launch {
-                connectionSessionCoordinator.switchProfile(id)
-                dismissServersSheet()
+                val landed =
+                    try {
+                        connectionSessionCoordinator.switchProfile(id)
+                        connectionProfileStore.activeProfile()?.id == id
+                    } catch (cancellation: CancellationException) {
+                        throw cancellation
+                    } catch (error: Exception) {
+                        DiagnosticLog.warning(DiagnosticLogArea.Connection, "switch profile failed id=$id", error)
+                        false
+                    }
+                if (!landed) abandonSwitch(id)
             }
+        }
+
+        /**
+         * The switch to [id] failed or did not stick. Drop the pending pick, so later saves are
+         * not ignored, and reload Home and its title from the server that is actually active.
+         */
+        private fun abandonSwitch(id: String) {
+            if (pendingSwitchId != id) return
+            pendingSwitchId = null
+            switchPaintGeneration++
+            projectFirstLoads.clearAll()
+            pendingFirstServerSnapshots.clear()
+            resetHomeIndex()
+            refresh()
+        }
+
+        /**
+         * The target server's saved projects with their cached sessions, read by profile id because
+         * the switch has not bound that server yet. A project with no cache shows the skeleton.
+         */
+        private suspend fun paintSwitchedServer(
+            baseUrl: String,
+            id: String,
+            generation: Int,
+        ) {
+            val worktrees = connectionProfileStore.addedWorktrees(baseUrl)
+            val sections = worktrees.map { worktree -> sectionFromCache(worktree, connectionId = id) }
+            if (generation != switchPaintGeneration || pendingSwitchId != id) return
+            resetHomeIndex()
+            seedProjectResolutions(worktrees, connectionId = id)
+            if (generation != switchPaintGeneration || pendingSwitchId != id) return
+            projectFirstLoads.clearAll()
+            pendingFirstServerSnapshots.clear()
+            probeWaitsOnAddressCheck = false
+            if (sections.isEmpty()) {
+                _uiState.value = MainScreenUiState.Empty()
+                return
+            }
+            projectFirstLoads.awaitServer(sections.filterNot { it.sessionsFromCache }.map { it.worktree })
+            _uiState.value =
+                MainScreenUiState.Loaded(
+                    sections = sections,
+                    projectLoads = projectFirstLoads.visible,
+                    home = homeIndex,
+                )
         }
 
         private suspend fun refreshServersChrome() {
@@ -946,6 +1054,7 @@ class MainScreenViewModel
                     return
                 }
                 val sections = loadSectionsFromCache(worktrees)
+                seedProjectResolutions(worktrees)
                 _uiState.value =
                     MainScreenUiState.Loaded(sections = sections, projectLoads = projectFirstLoads.visible, home = homeIndex)
                 applyPendingFirstServerSnapshots()
@@ -956,6 +1065,7 @@ class MainScreenViewModel
                         }
                 }
                 startLiveObservations(worktrees)
+                projectFirstLoads.startAwaiting()
                 reloadWorktreeMarks(worktrees)
                 return
             }
@@ -964,8 +1074,10 @@ class MainScreenViewModel
                 stopLiveObservations()
                 _uiState.value = MainScreenUiState.Empty()
                 if (!skipProbe) {
+                    val probedBaseUrl = serverBaseUrl
                     runCatching { projectRepository.probeServer() }
                         .onFailure { error ->
+                            if (!probeFailureIsFinal(probedBaseUrl)) return@onFailure
                             _uiState.value =
                                 MainScreenUiState.ProbeFailed(
                                     when (error) {
@@ -1043,11 +1155,40 @@ class MainScreenViewModel
             }
         }
 
+        /**
+         * Cached projects for paths not resolved yet, so the cached paint groups (and keys its
+         * scopes) the way the live load will. A key that changes later reloads the whole list.
+         */
+        private suspend fun seedProjectResolutions(
+            worktrees: List<String>,
+            connectionId: String? = null,
+        ) {
+            val cached =
+                worktrees
+                    .filter { it !in homeIndex.resolutions }
+                    .mapNotNull { path ->
+                        runCatching { sessionCache.seedProjectResolution(path, connectionId) }.getOrNull()?.let { path to it }
+                    }
+            if (cached.isNotEmpty()) {
+                homeIndex = homeIndex.copy(resolutions = cached.toMap() + homeIndex.resolutions)
+            }
+        }
+
         private suspend fun loadSectionsFromCache(worktrees: List<String>): List<ProjectSectionUi> =
             worktrees.map { worktree -> sectionFromCache(worktree) }
 
-        private suspend fun sectionFromCache(worktree: String): ProjectSectionUi {
-            val seeded = runCatching { sessionCache.seedSessions(worktree) }.getOrNull()
+        private suspend fun sectionFromCache(
+            worktree: String,
+            connectionId: String? = null,
+        ): ProjectSectionUi {
+            val seeded =
+                runCatching {
+                    if (connectionId != null) {
+                        sessionCache.seedSessions(worktree, connectionId)
+                    } else {
+                        sessionCache.seedSessions(worktree)
+                    }
+                }.getOrNull()
             val sessions =
                 seeded
                     ?.activeSessions()
@@ -1067,6 +1208,19 @@ class MainScreenViewModel
                 loadError = null,
                 sessionsFromCache = seeded != null,
             )
+        }
+
+        /**
+         * False while another saved address may still answer: the address check's result reloads
+         * Home. Also false when the address moved during the probe, since a newer load is running.
+         */
+        private fun probeFailureIsFinal(probedBaseUrl: String): Boolean {
+            if (serverBaseUrl != probedBaseUrl) return false
+            if (connectionSessionCoordinator.addressCheck.value.state == AddressCheck.State.Running) {
+                probeWaitsOnAddressCheck = true
+                return false
+            }
+            return true
         }
 
         private suspend fun loadProjectSections(worktrees: List<String>): List<ProjectSectionUi> =
@@ -1432,9 +1586,12 @@ class MainScreenViewModel
         }
 
         private fun updateHomeIndex(transform: (HomeWorktreeIndex) -> HomeWorktreeIndex) {
-            val next = transform(homeIndex)
-            if (next == homeIndex) return
+            val previous = homeIndex
+            val next = transform(previous)
+            if (next == previous) return
             homeIndex = next
+            val changed = next.resolutions.filter { (path, resolution) -> previous.resolutions[path] != resolution }
+            changed.forEach { (path, resolution) -> sessionCache.rememberProjectResolution(path, resolution) }
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) state.copy(home = next) else state
             }

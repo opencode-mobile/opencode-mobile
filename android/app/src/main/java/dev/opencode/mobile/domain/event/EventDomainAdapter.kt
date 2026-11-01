@@ -4,9 +4,12 @@ import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.domain.message.SessionFailure
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.TimelineNoticeCodec
+import dev.opencode.mobile.domain.message.UploadedAttachment
+import dev.opencode.mobile.domain.message.UploadedAttachments
 import dev.opencode.mobile.domain.message.ToolArgumentsPreview
 import dev.opencode.mobile.domain.message.ToolInterruption
 import dev.opencode.mobile.domain.message.ToolPartIdentity
+import dev.opencode.mobile.domain.message.ToolResultImages
 import dev.opencode.mobile.domain.message.V2ContentPartId
 import dev.opencode.mobile.domain.message.V2TimelineNotices
 import dev.opencode.mobile.domain.session.SessionActivity
@@ -19,6 +22,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
@@ -402,18 +406,23 @@ class EventDomainAdapter(
         val sessionId = sessionIdFromProperties(properties)
         val messageId = userMessageId(properties)
         val parts = mutableListOf<OpencodeEvent>()
-        val text = prompt?.string("text") ?: properties.string("text")
+        val rawText = prompt?.string("text") ?: properties.string("text")
+        val uploads = UploadedAttachments.parse(prompt?.get("metadata") as? JsonObject ?: properties["metadata"] as? JsonObject)
+        val text = rawText?.let { UploadedAttachments.stripLines(it, uploads) }
         // v2 inbox `synthetic` items (e.g. Plan mode's system-reminder) are server-injected
         // context, not something the user typed: keep the part but mark it hidden.
         val synthetic = (properties["item"] as? JsonObject)?.string("type") == "synthetic"
         text?.takeIf { it.isNotBlank() }?.let {
             parts += userTextPartUpdated(sessionId, messageId, it, synthetic = synthetic)
         }
-        if (prompt == null) return parts
-        val files = prompt["files"] as? JsonArray ?: return parts
-        files.forEachIndexed { index, element ->
+        if (prompt == null && uploads.isEmpty()) return parts
+        val files = prompt?.get("files") as? JsonArray
+        files?.forEachIndexed { index, element ->
             val file = element as? JsonObject ?: return@forEachIndexed
             parts += userFilePartUpdated(sessionId, messageId, index, file)
+        }
+        uploads.forEachIndexed { index, upload ->
+            parts += uploadedFilePartUpdated(sessionId, messageId, index, upload)
         }
         return parts
     }
@@ -432,6 +441,25 @@ class EventDomainAdapter(
                 put("type", "text")
                 put("text", text)
                 if (synthetic) put("synthetic", true)
+            }
+        return event("message.part.updated", buildJsonObject { put("part", part) })
+    }
+
+    private fun uploadedFilePartUpdated(
+        sessionId: String?,
+        messageId: String?,
+        index: Int,
+        upload: UploadedAttachment,
+    ): OpencodeEvent {
+        val part =
+            buildJsonObject {
+                messageId?.let { put("id", "$it:upload:$index") }
+                sessionId?.let { put("sessionID", it) }
+                messageId?.let { put("messageID", it) }
+                put("type", "file")
+                put("mime", upload.mime)
+                put("filename", upload.name)
+                put("serverPath", upload.path)
             }
         return event("message.part.updated", buildJsonObject { put("part", part) })
     }
@@ -574,6 +602,7 @@ class EventDomainAdapter(
                     if (message.isNotEmpty()) put("message", message)
                     error.int("status")?.let { put("statusCode", it) }
                     body?.takeIf { it.isNotBlank() }?.let { put("responseBody", it) }
+                    error.long("retryAfterMs")?.let { put("retryAfterMs", it) }
                 },
             )
         }
@@ -669,6 +698,7 @@ class EventDomainAdapter(
             properties = properties,
             messageId = properties.string("assistantMessageID"),
             partId = partId,
+            attachments = toolFileAttachments(properties["content"], partId),
             toolName = name,
             status = status,
             callId = callId,
@@ -681,6 +711,35 @@ class EventDomainAdapter(
             title = metadata?.string("title")?.takeIf { it.isNotEmpty() },
             interrupted = interrupted,
         )
+    }
+
+    /**
+     * `tool.success` (and `tool.failed`) `content[]` files, written as the v1 completed-state
+     * `attachments` so one adapter path keeps them. Ids match the REST projection.
+     */
+    private fun toolFileAttachments(
+        content: JsonElement?,
+        partId: String?,
+    ): JsonArray? {
+        val files =
+            (content as? JsonArray)
+                ?.mapNotNull { it as? JsonObject }
+                ?.filter { it.string("type") == "file" }
+                .orEmpty()
+        if (files.isEmpty()) return null
+        return buildJsonArray {
+            files.forEachIndexed { index, file ->
+                add(
+                    buildJsonObject {
+                        put("id", ToolResultImages.id(partId, index))
+                        put("type", "file")
+                        file.string("uri")?.let { put("url", it) }
+                        file.string("mime")?.let { put("mime", it) }
+                        file.string("name")?.let { put("filename", it) }
+                    },
+                )
+            }
+        }
     }
 
     /**
@@ -958,11 +1017,13 @@ class EventDomainAdapter(
         title: String? = null,
         interrupted: Boolean = false,
         malformed: Boolean = false,
+        attachments: JsonArray? = null,
     ): OpencodeEvent {
         val sessionId = sessionIdFromProperties(properties)
         val state =
             buildJsonObject {
                 put("status", status)
+                attachments?.let { put("attachments", it) }
                 if (interrupted) put("interrupted", true)
                 if (malformed) put("malformed", true)
                 title?.let { put("title", it) }
@@ -971,7 +1032,14 @@ class EventDomainAdapter(
                 error?.let { put("error", it) }
                 metadata?.let { put("metadata", it) }
                 properties.long("created")?.let { created ->
-                    put("time", buildJsonObject { put("start", created) })
+                    put(
+                        "time",
+                        buildJsonObject {
+                            put("start", created)
+                            // A settled call's event time is when it ended; the store keeps the first start.
+                            if (status == "completed" || status == "error") put("end", created)
+                        },
+                    )
                 }
             }
         val part =

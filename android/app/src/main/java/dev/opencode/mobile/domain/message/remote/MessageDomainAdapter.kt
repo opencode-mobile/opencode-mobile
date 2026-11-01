@@ -35,9 +35,11 @@ import dev.opencode.mobile.domain.session.ServerErrorMessage
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
@@ -45,7 +47,10 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
-class MessageDomainAdapter {
+class MessageDomainAdapter(
+    /** Receive time for a failure whose message has no completed time yet. */
+    private val nowEpochMs: () -> Long = System::currentTimeMillis,
+) {
     private val json = Json { ignoreUnknownKeys = true }
 
     fun toMessage(dto: MessageDto): Message {
@@ -72,7 +77,7 @@ class MessageDomainAdapter {
             followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup = info.waiting == true,
             stopReason = stopReason,
-            failure = sessionFailure(info.error, stopReason),
+            failure = sessionFailure(info.error, stopReason, completedAtEpochMs = info.time?.completed),
         )
     }
 
@@ -101,7 +106,7 @@ class MessageDomainAdapter {
             followUpDelivery = FollowUpDelivery.fromWire(info.delivery),
             isWaitingForPickup = info.waiting == true,
             stopReason = stopReason,
-            failure = sessionFailure(info.error, stopReason),
+            failure = sessionFailure(info.error, stopReason, completedAtEpochMs = info.time?.completed),
         )
     }
 
@@ -170,12 +175,31 @@ class MessageDomainAdapter {
             metadata = state?.metadata,
             id = id,
             timeStartEpochMs = state?.time?.start,
+            timeEndEpochMs = state?.time?.end,
             isInterrupted =
                 status == ToolStatus.Error &&
                     (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error)),
             isMalformed = state?.malformed == true,
+            images = v1ToolImages(state?.attachments, partId = id ?: callId),
         )
     }
+
+    /** v1 tool `attachments` (file parts); the v2 live projection writes the same shape. */
+    private fun v1ToolImages(
+        attachments: List<MessagePartDto>?,
+        partId: String?,
+    ): List<MessagePart.File> =
+        attachments
+            .orEmpty()
+            .filter { it.type == "file" }
+            .mapIndexedNotNull { index, file ->
+                ToolResultImages.image(
+                    id = file.id ?: ToolResultImages.id(partId, index),
+                    dataUrl = file.url,
+                    mime = file.mime,
+                    name = file.filename,
+                )
+            }
 
     fun toToolStatus(raw: String?): ToolStatus =
         when (raw) {
@@ -254,8 +278,10 @@ class MessageDomainAdapter {
     fun toV2ShellRequest(options: ShellCommandOptions): V2ShellRequestDto = V2ShellRequestDto(command = options.command)
 
     fun toV2PromptRequest(options: PromptSendOptions): V2PromptRequestDto {
+        val uploaded = options.attachments.mapNotNull { attachment -> attachment.uploadedServerPath?.let { attachment to it } }
         val files =
             options.attachments
+                .inlineAttachments()
                 .map { attachment ->
                     V2PromptFileDto(
                         uri = attachment.dataUrl,
@@ -295,13 +321,35 @@ class MessageDomainAdapter {
         val fileMentions = v2FileMentions(options)
         return V2PromptRequestDto(
             id = options.messageId,
-            text = options.text,
+            text = UploadedAttachments.promptText(options.text, uploaded.map { it.second }),
             files = files,
+            metadata = uploadedAttachmentsMetadata(uploaded),
             agents = agents,
             skills = skills,
             delivery = options.delivery.wireValue,
             fileMentions = fileMentions,
         )
+    }
+
+    /** `metadata.attachments` lets the timeline draw a chip for each uploaded file. */
+    private fun uploadedAttachmentsMetadata(uploaded: List<Pair<Attachment, String>>): JsonObject? {
+        if (uploaded.isEmpty()) return null
+        return buildJsonObject {
+            put(
+                "attachments",
+                buildJsonArray {
+                    uploaded.forEach { (attachment, path) ->
+                        add(
+                            buildJsonObject {
+                                put("name", attachment.filename)
+                                put("mime", attachment.mime)
+                                put("path", path)
+                            },
+                        )
+                    }
+                },
+            )
+        }
     }
 
     private fun fileReferenceParts(options: PromptSendOptions): List<SendMessagePartDto> {
@@ -440,12 +488,13 @@ class MessageDomainAdapter {
             userItems
                 .filter { it.id !in existingIds }
                 .map { item ->
-                    val text = item.payload?.text.orEmpty()
+                    val uploads = uploadedFileParts(item.id, item.payload?.metadata)
+                    val text = withoutUploadLines(item.payload?.text.orEmpty(), uploads)
                     Message(
                         id = item.id,
                         role = MessageRole.User,
                         text = text,
-                        parts = listOf(MessagePart.Text(text = text, id = "${item.id}:text:0")),
+                        parts = listOf(MessagePart.Text(text = text, id = "${item.id}:text:0")) + uploads,
                         model = context?.model,
                         modelProviderId = context?.modelProviderId,
                         modelId = context?.modelId,
@@ -467,7 +516,9 @@ class MessageDomainAdapter {
         model: V2ModelRefDto?,
     ): Message {
         val parts = mutableListOf<MessagePart>()
-        val text = dto.text.orEmpty()
+        val uploads = uploadedFileParts(dto)
+        // The prompt text names each uploaded file; the chips say it, so the bubble drops the lines.
+        val text = withoutUploadLines(dto.text.orEmpty(), uploads)
         if (text.isNotEmpty()) {
             parts +=
                 MessagePart.Text(
@@ -478,6 +529,7 @@ class MessageDomainAdapter {
         dto.files.forEachIndexed { index, file ->
             toV2FilePart(file, fallbackId = "${dto.id}:file:$index")?.let { parts += it }
         }
+        parts += uploads
         return messageFromV2(
             id = dto.id,
             role = MessageRole.User,
@@ -627,13 +679,14 @@ class MessageDomainAdapter {
                         V2ContentPartId.of(dto.id, kind, ordinal.toString())
                     } ?: "${dto.id}:${content.type}:$index"
                 toV2AssistantPart(content, fallbackId = fallbackId)
-            }
+            } + uploadedFileParts(dto)
         val stopReason = MessageStopReason.from(finish = dto.finish, errorKind = dto.error?.type)
         val failure =
-            structuredFailure(dto.error, outcome = null)
-                ?: dto.retry?.error?.let { structuredFailure(it, outcome = null) }?.takeIf {
-                    dto.finish.equals("error", ignoreCase = true)
-                }
+            structuredFailure(dto.error, outcome = null, completedAtEpochMs = dto.time?.completed)
+                ?: dto.retry
+                    ?.error
+                    ?.let { structuredFailure(it, outcome = null, completedAtEpochMs = dto.time?.completed) }
+                    ?.takeIf { dto.finish.equals("error", ignoreCase = true) }
         return messageFromV2(
             id = dto.id,
             role = MessageRole.Assistant,
@@ -672,7 +725,13 @@ class MessageDomainAdapter {
             sentAtEpochMs = dto.time?.created,
             completedAtEpochMs = dto.time?.completed,
             contextEstimate = MessageContextEstimate(assistantCharacters = summary.length),
-            failure = structuredFailure(dto.error, outcome = null, source = FailureSource.Compaction),
+            failure =
+                structuredFailure(
+                    dto.error,
+                    outcome = null,
+                    source = FailureSource.Compaction,
+                    completedAtEpochMs = dto.time?.completed,
+                ),
         )
     }
 
@@ -681,7 +740,13 @@ class MessageDomainAdapter {
         dto: V2SessionMessageDto,
         messages: MutableList<Message>,
     ) {
-        val failure = structuredFailure(dto.error, outcome = dto.outcome, source = FailureSource.Execution) ?: return
+        val failure =
+            structuredFailure(
+                dto.error,
+                outcome = dto.outcome,
+                source = FailureSource.Execution,
+                completedAtEpochMs = dto.time?.completed,
+            ) ?: return
         if (messages.lastOrNull()?.failure?.line() == failure.line()) return
         messages +=
             messageFromV2(
@@ -787,16 +852,63 @@ class MessageDomainAdapter {
                     metadata = metadata,
                     id = content.id ?: fallbackId,
                     timeStartEpochMs = content.time?.created,
+                    timeEndEpochMs = content.time?.completed,
                     isInterrupted = status == ToolStatus.Error && ToolInterruption.isAbortedType(state?.error?.type),
                     isMalformed =
                         SessionFailure.isMalformedTool(
                             type = state?.error?.type,
                             executed = state?.executed,
                         ),
+                    images = v2ToolImages(state, partId = content.id ?: fallbackId),
                 )
             }
             else -> null
         }
+
+    /** v2 tool `content[]` files; live `tool.success` projects the same ids ([ToolResultImages.id]). */
+    private fun v2ToolImages(
+        state: V2ToolStateDto?,
+        partId: String,
+    ): List<MessagePart.File> =
+        state
+            ?.content
+            .orEmpty()
+            .filter { it.type == "file" }
+            .mapIndexedNotNull { index, item ->
+                ToolResultImages.image(
+                    id = ToolResultImages.id(partId, index),
+                    dataUrl = item.uri,
+                    mime = item.mime,
+                    name = item.name,
+                )
+            }
+
+    /** `metadata.attachments` of a v2 prompt: files the client uploaded and named in the text. */
+    private fun uploadedFileParts(dto: V2SessionMessageDto): List<MessagePart.File> = uploadedFileParts(dto.id, dto.metadata)
+
+    private fun uploadedFileParts(
+        messageId: String,
+        metadata: JsonObject?,
+    ): List<MessagePart.File> =
+        UploadedAttachments.parse(metadata).mapIndexed { index, upload ->
+            MessagePart.File(
+                id = "$messageId:upload:$index",
+                filename = upload.name,
+                mime = upload.mime,
+                kind = upload.kind,
+                dataUrl = "",
+                serverPath = upload.path,
+            )
+        }
+
+    private fun withoutUploadLines(
+        text: String,
+        uploads: List<MessagePart.File>,
+    ): String =
+        UploadedAttachments.stripLines(
+            text,
+            uploads.mapNotNull { file -> file.serverPath?.let { UploadedAttachment(file.filename, file.mime, it) } },
+        )
 
     private fun toV2FilePart(
         file: V2FileAttachmentDto,
@@ -915,6 +1027,7 @@ class MessageDomainAdapter {
     private fun sessionFailure(
         error: MessageErrorInfoDto?,
         stopReason: MessageStopReason?,
+        completedAtEpochMs: Long?,
     ): SessionFailure? {
         if (stopReason == MessageStopReason.Interrupted) return null
         return SessionFailure.fromV1(
@@ -925,6 +1038,8 @@ class MessageDomainAdapter {
             isRetryable = error?.data?.isRetryable,
             providerId = error?.data?.providerID,
             retries = error?.data?.retries,
+            retryAfterMs = error?.data?.retryAfterMs,
+            recordedAtEpochMs = recordedAt(error?.data?.retryAfterMs, completedAtEpochMs),
         )
     }
 
@@ -932,6 +1047,7 @@ class MessageDomainAdapter {
         error: V2UnknownErrorDto?,
         outcome: String?,
         source: FailureSource = FailureSource.Step,
+        completedAtEpochMs: Long?,
     ): SessionFailure? =
         SessionFailure.fromV2(
             type = error?.type,
@@ -940,7 +1056,15 @@ class MessageDomainAdapter {
             providerBody = error?.response?.body,
             outcome = outcome,
             source = source,
+            retryAfterMs = error?.retryAfterMs,
+            recordedAtEpochMs = recordedAt(error?.retryAfterMs, completedAtEpochMs),
         )
+
+    /** The failed message's completion time, else when the app received it. Only a retry hint needs it. */
+    private fun recordedAt(
+        retryAfterMs: Long?,
+        completedAtEpochMs: Long?,
+    ): Long? = if (retryAfterMs == null) null else completedAtEpochMs ?: nowEpochMs()
 
     private fun httpMessage(body: String?): String {
         val friendly = ServerErrorMessage.userFacing(body)
@@ -1029,6 +1153,17 @@ class MessageDomainAdapter {
     private fun Int?.orZero(): Int = this ?: 0
 
     private fun toFilePart(dto: MessagePartDto): MessagePart.File? {
+        dto.serverPath?.takeIf { it.isNotBlank() }?.let { path ->
+            val mime = dto.mime?.lowercase() ?: AttachmentMime.BINARY
+            return MessagePart.File(
+                id = dto.id ?: path,
+                filename = dto.filename?.takeIf { it.isNotBlank() } ?: "Attachment",
+                mime = mime,
+                kind = AttachmentDataUrl.kindOrFile(mime),
+                dataUrl = "",
+                serverPath = path,
+            )
+        }
         val dataUrl = dto.url?.takeIf { it.isNotBlank() }.orEmpty()
         val mime =
             (

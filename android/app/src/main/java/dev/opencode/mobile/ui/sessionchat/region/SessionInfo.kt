@@ -15,6 +15,7 @@ import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.session.SessionActivitySource
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
@@ -330,12 +331,20 @@ class SessionInfo(
                                 DiagnosticLogArea.Session,
                                 "live status session=$sessionId activity=${entry?.activity ?: "-"} seeded=${snapshot.seeded}",
                             )
+                            val busySessionIds =
+                                snapshot.entries
+                                    .filterValues { entry ->
+                                        (snapshot.seeded || entry.source == SessionActivitySource.Cached) &&
+                                            entry.activity.isBusy()
+                                    }.keys
                             _state.update {
-                                it.withStatus(
-                                    authoritative = label,
-                                    hasResolved = snapshot.seeded,
-                                    retryCard = retryCard,
-                                )
+                                it
+                                    .withStatus(
+                                        authoritative = label,
+                                        hasResolved = snapshot.seeded,
+                                        retryCard = retryCard,
+                                        isRetrying = activity is SessionActivity.Retrying,
+                                    ).copy(busySessionIds = busySessionIds)
                             }
                         }
                     }

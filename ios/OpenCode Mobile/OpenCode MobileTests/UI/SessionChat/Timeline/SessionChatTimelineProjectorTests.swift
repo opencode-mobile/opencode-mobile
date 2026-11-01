@@ -865,16 +865,18 @@ struct SessionChatTimelineProjectorTests {
         #expect(frame.rows.isEmpty)
     }
 
-    @Test func project_excludesSteerPendingUserMessage() {
+    @Test func project_waitingSteerWithNoRunningTurn_showsAsPlainPrompt() {
+        // v2 enqueues an idle prompt as a steer too; with no turn running it is not steering.
         let message = userMessage(
             id: "msg-user",
             text: "Waiting to steer"
         ).withPickupState(isWaitingForPickup: true, followUpDelivery: .steer)
         let frame = project(displayFrame(messages: [DisplayMessage(message: message)]))
-        #expect(frame.rows.isEmpty)
+        #expect(frame.rows.map(\.id) == ["msg-user"])
+        #expect(frame.rows.first?.steer == nil)
     }
 
-    @Test func project_excludesOptimisticPendingDeliveryRow() {
+    @Test func project_showsOptimisticSteerRowAsPendingSteer() {
         let pending = TimelineRow(
             id: "optimistic-1",
             role: .user,
@@ -897,11 +899,12 @@ struct SessionChatTimelineProjectorTests {
             displayFrame(revision: 1, messages: [DisplayMessage(message: earlier)]),
             optimistic: OptimisticInputs(
                 pendingRows: [pending],
-                baselineIDs: [],
+                baselineIDs: ["msg-user-0"],
                 mergePending: true
             )
         )
-        #expect(frame.rows.map(\.id) == ["msg-user-0"])
+        #expect(frame.rows.map(\.id) == ["msg-user-0", "optimistic-1"])
+        #expect(frame.rows.last?.steer == SessionChatSteer(isPending: true, showsLabel: true))
     }
 
     @Test func optimisticThenQueuePendingEcho_dropsOptimisticAndHidesEcho() {
@@ -1124,13 +1127,13 @@ struct SessionChatTimelineProjectorTests {
         #expect(leftover.map(\.id) == ["optimistic-file"])
     }
 
-    @Test func displayedOptimisticSendRows_excludesHiddenPendingRows() {
+    @Test func displayedOptimisticSendRows_excludesQueuedRows() {
         let hidden = SessionChatRow(
             id: "pending-1",
             role: .user,
             text: "Hold this",
             metadataLabel: "",
-            pendingDelivery: .steer,
+            pendingDelivery: .queue,
             isPending: true
         )
         let visible = SessionChatRow(

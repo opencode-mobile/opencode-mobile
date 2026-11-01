@@ -20,7 +20,7 @@ nonisolated enum ServerProtocol: String, Sendable, Equatable, Hashable {
 /// Product capabilities derived from `ServerProtocol`. Screen Models read these
 /// flags instead of branching on protocol themselves.
 ///
-/// v2 session archive and per-turn diff depend on the server release, not the protocol:
+/// v2 session archive, per-turn diff and side questions depend on the server release, not the protocol:
 /// pass `v2Features` from the server's API contract probe.
 nonisolated struct ServerCapabilities: Sendable, Equatable {
     let supportsSessionMessageDiff: Bool
@@ -32,6 +32,15 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
     let supportsSessionMove: Bool
     /// The command route keeps a client message id (v1 `messageID`); v2 `…/command` takes none.
     var commandKeepsClientMessageID: Bool = false
+    /// `/btw` side questions: `POST /api/session/{id}/generate` answers from the session's context
+    /// without adding to it (v2 releases that declare it). v1 has no equivalent.
+    var supportsSideQuestion: Bool = false
+    /// Files can stream to the server (`POST /api/experimental/fs/write`, #644). Off unless the
+    /// server's API contract still matches what the app sends.
+    var supportsStreamedUpload: Bool = false
+    /// The server records agent and model switches as timeline notices (v2). Without them
+    /// (v1) Session Chat derives the same notices from consecutive user messages.
+    var recordsTimelineChangeNotices: Bool = false
 
     static func forProtocol(_ serverProtocol: ServerProtocol, v2Features: V2ServerFeatures = V2ServerFeatures()) -> ServerCapabilities {
         switch serverProtocol {
@@ -50,7 +59,10 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
                 supportsSessionArchive: v2Features.sessionArchive,
                 supportsFollowUpDelivery: true,
                 supportsSessionViewed: true,
-                supportsSessionMove: true
+                supportsSessionMove: true,
+                supportsSideQuestion: v2Features.sessionGenerate,
+                supportsStreamedUpload: v2Features.streamedUpload,
+                recordsTimelineChangeNotices: true
             )
         }
     }

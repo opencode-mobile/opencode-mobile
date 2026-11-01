@@ -16,6 +16,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -209,7 +210,7 @@ class ConnectionProbeServiceTest {
                         "/global/health" -> spaHtml()
                         "/api/info" ->
                             jsonOk(
-                                """{"version":"2.0.7","pid":1481731,"urls":["http://192.168.0.160:4096"]}""",
+                                """{"version":"2.0.7","pid":1481731,"urls":["http://192.168.1.60:4096"]}""",
                             )
                         else -> jsonNotFound()
                     }
@@ -385,6 +386,40 @@ class ConnectionProbeServiceTest {
             } catch (error: ServerProbeError.Http) {
                 assertEquals(404, error.statusCode)
             }
+        }
+
+    @Test
+    fun probeV2Features_unreadableInfoLeavesUploadUnresolved() =
+        runTest {
+            val service =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/openapi.json" -> jsonOk(UPLOAD_DOCUMENT)
+                        else -> respond("{}", HttpStatusCode.ServiceUnavailable)
+                    }
+                }
+
+            val features = service.probeV2Features(connection)
+
+            assertFalse(features.attachmentUpload)
+            assertTrue(features.tmpDirectoryUnread)
+        }
+
+    @Test
+    fun probeV2Features_infoWithoutTmpIsAFinalAnswer() =
+        runTest {
+            val service =
+                service { request ->
+                    when (request.url.encodedPath) {
+                        "/openapi.json" -> jsonOk(UPLOAD_DOCUMENT)
+                        else -> jsonOk("{}")
+                    }
+                }
+
+            val features = service.probeV2Features(connection)
+
+            assertFalse(features.attachmentUpload)
+            assertFalse(features.tmpDirectoryUnread)
         }
 
     private fun openApi(patchBody: String): String =

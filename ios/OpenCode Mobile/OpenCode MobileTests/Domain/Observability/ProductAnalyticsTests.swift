@@ -15,4 +15,28 @@ final class ProductAnalyticsTests: XCTestCase {
             "settings_toggle_product_analytics"
         )
     }
+
+    @MainActor
+    func testSuppressionDropsEveryEventUntilItEnds() {
+        var sent: [String] = []
+        let previous = ProductAnalytics.sink
+        ProductAnalytics.sink = { name, _ in sent.append(name) }
+        defer { ProductAnalytics.sink = previous }
+
+        let before = ProductAnalytics.suppressionCount
+        let suppression = ProductAnalytics.suppress()
+        XCTAssertTrue(ProductAnalytics.isSuppressed)
+        XCTAssertEqual(ProductAnalytics.suppressionCount, before + 1)
+        ProductAnalytics.logScreenView(screenId: ProductAnalytics.Screen.sessionChat, presentation: ProductAnalytics.Presentation.route)
+        ProductAnalytics.logUserAction(screenId: ProductAnalytics.Screen.sessionChat, actionId: ProductAnalytics.Action.composerSend)
+        XCTAssertTrue(sent.isEmpty)
+
+        suppression.end()
+        suppression.end()
+        XCTAssertEqual(ProductAnalytics.suppressionCount, before)
+        // Another test may hold its own suppression at the same time; only then is nothing sent.
+        guard !ProductAnalytics.isSuppressed else { return }
+        ProductAnalytics.logUserAction(screenId: ProductAnalytics.Screen.sessionChat, actionId: ProductAnalytics.Action.composerSend)
+        XCTAssertEqual(sent, [ProductAnalytics.Event.userAction])
+    }
 }

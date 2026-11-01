@@ -23,6 +23,10 @@ enum OpenCodeSessionComposerState {
         /// and a selected Shell badge replaces the model and agent chips; tapping it sends
         /// `.exitShellMode`.
         let shellMode: Bool
+        /// Send asks a `/btw` side question instead of prompting. A selected `/btw` badge replaces
+        /// the model and agent chips and the field shows its own placeholder; tapping the badge or
+        /// deleting on an empty field sends `.exitSideQuestionMode`.
+        let sideQuestionMode: Bool
 
         init(
             text: String,
@@ -42,7 +46,8 @@ enum OpenCodeSessionComposerState {
             stopEnabled: Bool,
             followUpDelivery: FollowUpDelivery? = nil,
             showDictationButton: Bool = false,
-            shellMode: Bool = false
+            shellMode: Bool = false,
+            sideQuestionMode: Bool = false
         ) {
             self.text = text
             self.mentionRanges = mentionRanges
@@ -62,7 +67,16 @@ enum OpenCodeSessionComposerState {
             self.followUpDelivery = followUpDelivery
             self.showDictationButton = showDictationButton
             self.shellMode = shellMode
+            self.sideQuestionMode = sideQuestionMode
         }
+    }
+
+    /// The descendant subagent session asking a permission or question; Open shows that session.
+    struct RequestAttribution: Equatable {
+        let sessionID: String
+        let letter: String
+        /// "general · subagent wants to run: npm test" or "explore · subagent asks".
+        let summary: String
     }
 
     /// A file an edit/write permission would change, with its diff size.
@@ -83,6 +97,7 @@ enum OpenCodeSessionComposerState {
         let alwaysPatterns: [String]
         let queuePosition: Int
         let queueCount: Int
+        let attribution: RequestAttribution?
         let submitting: Bool
         let actionsEnabled: Bool
         let errorMessage: String?
@@ -96,6 +111,7 @@ enum OpenCodeSessionComposerState {
             alwaysPatterns: [String] = [],
             queuePosition: Int = 1,
             queueCount: Int = 1,
+            attribution: RequestAttribution? = nil,
             submitting: Bool = false,
             actionsEnabled: Bool = true,
             errorMessage: String? = nil
@@ -108,6 +124,7 @@ enum OpenCodeSessionComposerState {
             self.alwaysPatterns = alwaysPatterns
             self.queuePosition = queuePosition
             self.queueCount = queueCount
+            self.attribution = attribution
             self.submitting = submitting
             self.actionsEnabled = actionsEnabled
             self.errorMessage = errorMessage
@@ -142,6 +159,10 @@ enum OpenCodeSessionComposerState {
         let submitEnabled: Bool
         let submitting: Bool
         let errorMessage: String?
+        /// 1-based position of this request among the waiting question requests.
+        let requestPosition: Int
+        let requestCount: Int
+        let attribution: RequestAttribution?
 
         init(
             requestID: String,
@@ -162,7 +183,10 @@ enum OpenCodeSessionComposerState {
             nextEnabled: Bool = false,
             submitEnabled: Bool = false,
             submitting: Bool = false,
-            errorMessage: String? = nil
+            errorMessage: String? = nil,
+            requestPosition: Int = 1,
+            requestCount: Int = 1,
+            attribution: RequestAttribution? = nil
         ) {
             self.requestID = requestID
             self.sessionID = sessionID
@@ -183,6 +207,9 @@ enum OpenCodeSessionComposerState {
             self.submitEnabled = submitEnabled
             self.submitting = submitting
             self.errorMessage = errorMessage
+            self.requestPosition = requestPosition
+            self.requestCount = requestCount
+            self.attribution = attribution
         }
     }
 
@@ -214,9 +241,13 @@ enum OpenCodeSessionComposerAction {
     case attach
     case openCommands
     case removeAttachment(String)
+    /// An image or file was pasted into the prompt; only sent while the prompt's `attachEnabled`.
+    case pasteAttachments([NSItemProvider])
     case cancelRevert
     /// Drop the leading `!` so the draft is a prompt again.
     case exitShellMode
+    /// Leave `/btw` side-question mode; the draft stays.
+    case exitSideQuestionMode
     case send
     case toggleFollowUp
     case stop
@@ -225,6 +256,12 @@ enum OpenCodeSessionComposerAction {
     case alwaysAllowPermission(requestID: String, sessionID: String)
     /// Collapse the permission dock without answering it.
     case hidePermission(requestID: String)
+    /// Collapse the question panel without answering or dismissing it.
+    case hideQuestion(requestID: String)
+    /// Page the permission or question panel to another waiting request; `delta` is +1 or -1.
+    case pageRequest(delta: Int)
+    /// Open the subagent session a request comes from.
+    case openRequestSession(sessionID: String)
     case toggleQuestionOption(requestID: String, sessionID: String, label: String)
     case toggleQuestionCustom(requestID: String, sessionID: String)
     case questionCustomTextChanged(requestID: String, sessionID: String, text: String)
@@ -265,6 +302,9 @@ struct OpenCodeSessionComposer: View {
     /// Called with true when the prompt input gains keyboard focus, false when it loses it.
     let onInputFocusChange: ((Bool) -> Void)?
     let dictation: OpenCodeSessionComposerDictation?
+    /// True while an image or file is dragged over the screen that hosts the composer: the prompt
+    /// leaves the drop to that screen instead of taking it as text.
+    let attachmentDragActive: Bool
     let onAction: (OpenCodeSessionComposerAction) -> Void
     private let status: AnyView?
 
@@ -273,6 +313,7 @@ struct OpenCodeSessionComposer: View {
         focusRequestToken: Int = 0,
         onInputFocusChange: ((Bool) -> Void)? = nil,
         dictation: OpenCodeSessionComposerDictation? = nil,
+        attachmentDragActive: Bool = false,
         onAction: @escaping (OpenCodeSessionComposerAction) -> Void,
         status: AnyView? = nil
     ) {
@@ -280,6 +321,7 @@ struct OpenCodeSessionComposer: View {
         self.focusRequestToken = focusRequestToken
         self.onInputFocusChange = onInputFocusChange
         self.dictation = dictation
+        self.attachmentDragActive = attachmentDragActive
         self.onAction = onAction
         self.status = status
     }
@@ -306,6 +348,8 @@ struct OpenCodeSessionComposer: View {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
+            .contentShape(Rectangle())
+            .simultaneousGesture(requestPageSwipe, including: pagesRequests ? .all : .subviews)
         }
         .clipShape(RoundedRectangle(cornerRadius: Self.shellCornerRadius, style: .continuous))
         .openCodeFloatingChrome(cornerRadius: Self.shellCornerRadius)
@@ -362,10 +406,13 @@ struct OpenCodeSessionComposer: View {
                 selectionStart: prompt.selectionStart,
                 selectionEnd: prompt.selectionEnd,
                 selectionRevision: prompt.selectionRevision,
-                placeholder: "Ask anything...",
+                placeholder: prompt.sideQuestionMode ? Self.sideQuestionPlaceholder : "Ask anything...",
                 focusRequestToken: focusRequestToken,
                 onFocusChange: onInputFocusChange,
                 literalInput: prompt.shellMode,
+                onDeleteBackwardWhenEmpty: prompt.sideQuestionMode ? { onAction(.exitSideQuestionMode) } : nil,
+                onPasteAttachments: prompt.attachEnabled ? { onAction(.pasteAttachments($0)) } : nil,
+                acceptsTextDrops: !attachmentDragActive,
                 onChange: { text, selectionStart, selectionEnd in
                     onAction(.textChanged(text: text, selectionStart: selectionStart, selectionEnd: selectionEnd))
                 }
@@ -413,15 +460,17 @@ struct OpenCodeSessionComposer: View {
 
                     OpenCodeButton(
                         variant: .iconCircle(
-                            prompt.followUpDelivery == .steer ? .arrowWarmUp : .arrowUpward,
+                            prompt.followUpDelivery == .steer && !prompt.sideQuestionMode ? .arrowWarmUp : .arrowUpward,
                             accessibilityLabel: Self.sendLabel(
                                 followUpDelivery: prompt.followUpDelivery,
                                 hasActiveWork: prompt.showStop,
-                                shellMode: prompt.shellMode
+                                shellMode: prompt.shellMode,
+                                sideQuestionMode: prompt.sideQuestionMode
                             )
                         ),
                         enabled: prompt.sendEnabled,
-                        contrast: .accent,
+                        // A side question is not a prompt, so its Send does not look like one.
+                        contrast: prompt.sideQuestionMode ? .high : .accent,
                         longPress: prompt.followUpDelivery == nil ? nil : { onAction(.toggleFollowUp) },
                         action: {
                             // OPE-138: send leaves editing intent. Mention UITextView is
@@ -538,7 +587,16 @@ struct OpenCodeSessionComposer: View {
     private func pickerChipsRow(_ prompt: OpenCodeSessionComposerState.Prompt) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
             let chips = HStack(spacing: 8) {
-                if prompt.shellMode {
+                if prompt.sideQuestionMode {
+                    OpenCodeChoiceBadge(
+                        label: "/btw",
+                        selected: true,
+                        variant: .glass,
+                        action: { onAction(.exitSideQuestionMode) }
+                    )
+                    .accessibilityLabel("Side question mode")
+                    .accessibilityHint("Leave side question mode")
+                } else if prompt.shellMode {
                     // Like the TUI, shell mode shows "Shell" in place of the agent and model.
                     OpenCodeChoiceBadge(
                         label: "Shell",
@@ -630,14 +688,19 @@ struct OpenCodeSessionComposer: View {
     @ViewBuilder
     private func permissionApprovalContent(_ permission: OpenCodeSessionComposerState.Permission) -> some View {
         let actionsEnabled = permission.actionsEnabled && !permission.submitting
+        if let attribution = permission.attribution {
+            requestAttributionRow(attribution)
+        }
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Permission requested").font(OpenCodeTypography.heading)
                 Spacer()
-                if permission.queueCount > 1 {
-                    Text("\(permission.queuePosition) of \(permission.queueCount)")
-                        .font(OpenCodeTypography.caption)
-                }
+                requestPager(
+                    position: permission.queuePosition,
+                    count: permission.queueCount,
+                    enabled: !permission.submitting,
+                    noun: "permission request"
+                )
                 OpenCodeButton(
                     variant: .iconCircle(.keyboardArrowDown, accessibilityLabel: "Hide permission request"),
                     contrast: .low,
@@ -701,6 +764,82 @@ struct OpenCodeSessionComposer: View {
                 }
             )
         }
+        requestPageDots(position: permission.queuePosition, count: permission.queueCount)
+    }
+
+    /// Light amber row naming the subagent that asks, with Open to show its session.
+    private func requestAttributionRow(_ attribution: OpenCodeSessionComposerState.RequestAttribution) -> some View {
+        HStack(spacing: 8) {
+            Text(attribution.letter)
+                .font(OpenCodeTypography.caption.weight(.semibold))
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(OpenCodeColors.warning.opacity(0.28)))
+                .accessibilityHidden(true)
+            Text(attribution.summary)
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 4)
+            OpenCodeButton(
+                variant: .compactText(title: "Open"),
+                contrast: .low,
+                action: { onAction(.openRequestSession(sessionID: attribution.sessionID)) }
+            )
+            .accessibilityLabel("Open subagent session")
+        }
+        .padding(.leading, 8)
+        .padding(.trailing, 4)
+        .padding(.vertical, 4)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(OpenCodeColors.warning.opacity(0.12))
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("sessionChatRequestAttribution")
+    }
+
+    /// "‹ 1 of 2 ›" beside the panel title while more than one request waits.
+    @ViewBuilder
+    private func requestPager(position: Int, count: Int, enabled: Bool, noun: String) -> some View {
+        if count > 1 {
+            HStack(spacing: 2) {
+                OpenCodeButton(
+                    variant: .iconCircle(.arrowBack, accessibilityLabel: "Previous \(noun)"),
+                    enabled: enabled && position > 1,
+                    contrast: .low,
+                    action: { onAction(.pageRequest(delta: -1)) }
+                )
+                Text("\(position) of \(count)")
+                    .font(OpenCodeTypography.caption)
+                    .monospacedDigit()
+                OpenCodeButton(
+                    variant: .iconCircle(.arrowForward, accessibilityLabel: "Next \(noun)"),
+                    enabled: enabled && position < count,
+                    contrast: .low,
+                    action: { onAction(.pageRequest(delta: 1)) }
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func requestPageDots(position: Int, count: Int) -> some View {
+        if count > 1 {
+            OpenCodePageIndicator(pageCount: count, currentPage: min(max(position - 1, 0), count - 1))
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// Horizontal swipe on a request panel pages between waiting requests.
+    private var requestPageSwipe: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                let dx = value.translation.width
+                guard abs(dx) > 60, abs(dx) > abs(value.translation.height) * 1.5 else { return }
+                onAction(.pageRequest(delta: dx < 0 ? 1 : -1))
+            }
     }
 
     private func permissionFileLine(_ file: OpenCodeSessionComposerState.PermissionFile) -> some View {
@@ -717,25 +856,43 @@ struct OpenCodeSessionComposer: View {
             .textSelection(.enabled)
     }
 
-    @ViewBuilder
-    private func questionRequestContent(_ question: OpenCodeSessionComposerState.Question) -> some View {
-        let showBack = question.questionIndex > 0
-        let showNext = question.questionIndex < question.questionCount - 1
-        let selectionHint = Self.questionSelectionHint(
-            multiple: question.multiple,
-            minSelections: question.minSelections,
-            maxSelections: question.maxSelections
-        )
+    private static let questionCustomAnswerID = "questionCustomAnswer"
 
+    private func revealQuestionCustomAnswer(
+        _ question: OpenCodeSessionComposerState.Question,
+        proxy: ScrollViewProxy
+    ) {
+        guard question.customSelected else { return }
+        withAnimation(.easeOut(duration: 0.2)) {
+            proxy.scrollTo(Self.questionCustomAnswerID, anchor: .bottom)
+        }
+    }
+
+    private func questionBody(
+        _ question: OpenCodeSessionComposerState.Question,
+        selectionHint: String
+    ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(question.header.isEmpty ? "Question" : question.header)
                     .font(OpenCodeTypography.heading)
                 Spacer()
                 if question.questionCount > 1 {
-                    Text("\(question.questionIndex + 1) of \(question.questionCount)")
+                    // With a request pager beside it, name this counter so the two read apart.
+                    Text("\(question.requestCount > 1 ? "Step " : "")\(question.questionIndex + 1) of \(question.questionCount)")
                         .font(OpenCodeTypography.caption)
                 }
+                requestPager(
+                    position: question.requestPosition,
+                    count: question.requestCount,
+                    enabled: !question.submitting,
+                    noun: "question"
+                )
+                OpenCodeButton(
+                    variant: .iconCircle(.keyboardArrowDown, accessibilityLabel: "Hide question"),
+                    contrast: .low,
+                    action: { onAction(.hideQuestion(requestID: question.requestID)) }
+                )
             }
             Text(question.question)
                 .font(OpenCodeTypography.bodySecondary)
@@ -799,6 +956,7 @@ struct OpenCodeSessionComposer: View {
                                 )
                             }
                         )
+                        .id(Self.questionCustomAnswerID)
                     }
                 }
             }
@@ -811,6 +969,43 @@ struct OpenCodeSessionComposer: View {
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func questionRequestContent(_ question: OpenCodeSessionComposerState.Question) -> some View {
+        let showBack = question.questionIndex > 0
+        let showNext = question.questionIndex < question.questionCount - 1
+        let selectionHint = Self.questionSelectionHint(
+            multiple: question.multiple,
+            minSelections: question.minSelections,
+            maxSelections: question.maxSelections
+        )
+
+        if let attribution = question.attribution {
+            requestAttributionRow(attribution)
+        }
+        // A long question scrolls inside its card so the header and the action row stay on screen.
+        QuestionBodyHeightLayout {
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    questionBody(question, selectionHint: selectionHint)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                // Keep the custom answer in view while it is chosen, the keyboard shrinks the
+                // body, or the answer grows a line.
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _ in
+                    revealQuestionCustomAnswer(question, proxy: proxy)
+                }
+                .onChange(of: question.customSelected) { _, _ in
+                    revealQuestionCustomAnswer(question, proxy: proxy)
+                }
+                .onChange(of: question.customText) { _, _ in
+                    revealQuestionCustomAnswer(question, proxy: proxy)
+                }
+            }
+            // Each question and request opens at its top, not where the previous one was left.
+            .id("\(question.requestID)#\(question.questionIndex)")
+        }
 
         HStack {
             OpenCodeButton(
@@ -856,6 +1051,15 @@ struct OpenCodeSessionComposer: View {
             }
         }
         .accessibilityElement(children: .contain)
+        requestPageDots(position: question.requestPosition, count: question.requestCount)
+    }
+
+    private var pagesRequests: Bool {
+        switch state {
+        case let .permission(permission): permission.queueCount > 1
+        case let .question(question): question.requestCount > 1
+        case .prompt, .childLockout: false
+        }
     }
 
     private var outlineColor: Color? {
@@ -880,11 +1084,15 @@ struct OpenCodeSessionComposer: View {
 
     /// Send button label. Steer/Queue only describe what Send does while work is running;
     /// an idle session just sends. A shell command always runs now.
+    static let sideQuestionPlaceholder = "Side question, not added to chat"
+
     nonisolated static func sendLabel(
         followUpDelivery: FollowUpDelivery?,
         hasActiveWork: Bool,
-        shellMode: Bool = false
+        shellMode: Bool = false,
+        sideQuestionMode: Bool = false
     ) -> String {
+        if sideQuestionMode { return "Ask side question" }
         if shellMode { return "Run shell command" }
         guard hasActiveWork, let followUpDelivery else { return "Send" }
         switch followUpDelivery {
@@ -975,7 +1183,7 @@ private struct QuestionCustomTextField: View {
                 requestID: "permission-preview",
                 sessionID: "session-preview",
                 permission: "external_directory",
-                patterns: ["/Users/ivan/Projects/opencode-web/**"]
+                patterns: ["/Users/example/Projects/opencode-web/**"]
             )
         ),
         onAction: { _ in }
@@ -1183,4 +1391,35 @@ private struct QuestionCustomTextField: View {
     )
     .openCodeTheme()
     .environment(\.colorScheme, .dark)
+}
+
+/// Sizes the question body to its content, up to half the height the composer is offered
+/// (the space above the keyboard), so long option lists scroll instead of leaving the screen.
+/// No minimum: with little room a short scrolling body beats pushing Submit off screen.
+private struct QuestionBodyHeightLayout: Layout {
+    private static let maxHeightFraction: CGFloat = 0.5
+    private static let fallbackMaxHeight: CGFloat = 360
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let body = subviews.first else { return .zero }
+        let width = proposal.width
+        let contentHeight = body.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        let cap: CGFloat
+        if let offered = proposal.height, offered.isFinite {
+            cap = offered * Self.maxHeightFraction
+        } else {
+            cap = Self.fallbackMaxHeight
+        }
+        let height = min(contentHeight, cap)
+        let resolvedWidth = width ?? body.sizeThatFits(ProposedViewSize(width: nil, height: height)).width
+        return CGSize(width: resolvedWidth, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(
+            at: bounds.origin,
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: bounds.width, height: bounds.height)
+        )
+    }
 }

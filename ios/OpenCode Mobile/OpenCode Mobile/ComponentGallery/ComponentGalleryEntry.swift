@@ -22,8 +22,9 @@ enum ComponentGalleryEntryID: String, Hashable {
     case tag
     case keyValueRow
     case attachment
+    case imageGallery
+    case imageViewer
     case outgoingMessage
-    case pendingPromptsStrip
     case assistantMessage
     case toolCallCard
     case toolChip
@@ -51,9 +52,9 @@ enum ComponentGalleryEntryID: String, Hashable {
     case filterTabs
     case actionPill
     case actionTile
-    case syncingPill
+    case floatingPill
+    case backgroundWorkPill
     case reviewChangesPill
-    case sessionTodosPill
     case sessionTodoItem
     case hunkNavigationPill
     case unifiedDiff
@@ -75,6 +76,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case sessionBranchPill
     case sessionComposer
     case dictationCard
+    case dropOverlay
     case composerSuggestionOverlay
     case renderedMarkdown
     case messageList
@@ -161,10 +163,16 @@ let componentGalleryEntries = [
         category: .controls
     ),
     ComponentGalleryEntry(
-        id: .syncingPill,
-        title: "Syncing Pill",
-        description: "Non-interactive floating status pill for quiet cache→network sync.",
+        id: .floatingPill,
+        title: "Floating Pill",
+        description: "Shared Session Chat pill: icon + label, icon only, live counter, or label with close, in live, ready, needs attention, error, and done.",
         category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .backgroundWorkPill,
+        title: "Background Work Pill",
+        description: "Session Chat subagent counter on the floating pill, amber when a subagent needs input, and the Subagents panel with live timers.",
+        category: .session
     ),
     ComponentGalleryEntry(
         id: .button,
@@ -311,6 +319,18 @@ let componentGalleryEntries = [
         category: .chat
     ),
     ComponentGalleryEntry(
+        id: .imageGallery,
+        title: "Image Gallery",
+        description: "Inline images by count: one at its own shape, a pair, one large plus two, or four tiles with +N; loading and failed tiles.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .imageViewer,
+        title: "Image Viewer",
+        description: "Full-screen pager over a group: index label, pinch and double-tap zoom, swipe down to close, share.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
         id: .messageList,
         title: "Message List",
         description: "Scrollable outgoing and incoming message list with scroll-to-end pill.",
@@ -320,12 +340,6 @@ let componentGalleryEntries = [
         id: .outgoingMessage,
         title: "Outgoing Message",
         description: "Trailing prompt card that renders sent prompts at full height.",
-        category: .chat
-    ),
-    ComponentGalleryEntry(
-        id: .pendingPromptsStrip,
-        title: "Pending Prompts Strip",
-        description: "Compact capsule for steer and queued prompts waiting while a session is working.",
         category: .chat
     ),
     ComponentGalleryEntry(
@@ -425,6 +439,12 @@ let componentGalleryEntries = [
         category: .session
     ),
     ComponentGalleryEntry(
+        id: .dropOverlay,
+        title: "Drop Overlay",
+        description: "Drag-over scrim card for images and files dropped on Session Chat.",
+        category: .session
+    ),
+    ComponentGalleryEntry(
         id: .composerSuggestionOverlay,
         title: "Composer Suggestion Overlay",
         description: "Compact suggestion list anchored above the Session Chat composer for / commands.",
@@ -433,7 +453,7 @@ let componentGalleryEntries = [
     ComponentGalleryEntry(
         id: .sessionBranchPill,
         title: "Session Branch Pill",
-        description: "Floating branch and working-tree line totals over Session Chat.",
+        description: "Floating branch pill with working-tree line counts and a branch details popover.",
         category: .session
     ),
     ComponentGalleryEntry(
@@ -453,12 +473,6 @@ let componentGalleryEntries = [
         title: "Review Changes Pill",
         description: "Contextual shortcut to files changed by the latest completed turn.",
         category: .diffs
-    ),
-    ComponentGalleryEntry(
-        id: .sessionTodosPill,
-        title: "Session Todos Pill",
-        description: "Floating live Session Todo List progress and active preview.",
-        category: .session
     ),
     ComponentGalleryEntry(
         id: .sessionTodoItem,

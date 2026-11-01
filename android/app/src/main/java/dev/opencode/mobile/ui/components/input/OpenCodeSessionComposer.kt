@@ -9,26 +9,34 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -44,20 +52,30 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -73,6 +91,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.domain.message.FollowUpDelivery
@@ -80,7 +99,9 @@ import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.components.OpenCodePageIndicator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import kotlin.math.abs
 
 sealed interface OpenCodeSessionComposerState {
     data class Prompt(
@@ -107,7 +128,21 @@ sealed interface OpenCodeSessionComposerState {
          * [OpenCodeSessionComposerAction.ExitShellMode].
          */
         val shellMode: Boolean = false,
+        /**
+         * Send asks a `/btw` side question instead of prompting. A selected `/btw` badge replaces
+         * the model and agent chips and the field shows its own placeholder; tapping the badge or
+         * deleting on an empty field sends [OpenCodeSessionComposerAction.ExitSideQuestionMode].
+         */
+        val sideQuestionMode: Boolean = false,
     ) : OpenCodeSessionComposerState
+
+    /** The descendant subagent session asking a permission or question; Open shows that session. */
+    data class RequestAttribution(
+        val sessionId: String,
+        val letter: String,
+        /** "general · subagent wants to run: npm test" or "explore · subagent asks". */
+        val summary: String,
+    )
 
     /** A file an edit/write permission would change, with its diff size. */
     data class PermissionFile(
@@ -127,6 +162,7 @@ sealed interface OpenCodeSessionComposerState {
         val alwaysPatterns: List<String> = emptyList(),
         val queuePosition: Int = 1,
         val queueCount: Int = 1,
+        val attribution: RequestAttribution? = null,
         val submitting: Boolean = false,
         val actionsEnabled: Boolean = true,
         val errorMessage: String? = null,
@@ -158,6 +194,10 @@ sealed interface OpenCodeSessionComposerState {
         val submitEnabled: Boolean = false,
         val submitting: Boolean = false,
         val errorMessage: String? = null,
+        /** 1-based position of this request among the waiting question requests. */
+        val requestPosition: Int = 1,
+        val requestCount: Int = 1,
+        val attribution: RequestAttribution? = null,
     ) : OpenCodeSessionComposerState
 
     data class ChildLockout(
@@ -188,10 +228,18 @@ sealed interface OpenCodeSessionComposerAction {
         val id: String,
     ) : OpenCodeSessionComposerAction
 
+    /** An image or file was pasted into the prompt; only sent while [OpenCodeSessionComposerState.Prompt.attachEnabled]. */
+    data class PasteContent(
+        val content: OpenCodeComposerPastedContent,
+    ) : OpenCodeSessionComposerAction
+
     data object CancelRevert : OpenCodeSessionComposerAction
 
     /** Drop the leading `!` so the draft is a prompt again. */
     data object ExitShellMode : OpenCodeSessionComposerAction
+
+    /** Leave `/btw` side-question mode; the draft stays. */
+    data object ExitSideQuestionMode : OpenCodeSessionComposerAction
 
     data object Send : OpenCodeSessionComposerAction
 
@@ -217,6 +265,21 @@ sealed interface OpenCodeSessionComposerAction {
     /** Collapse the permission dock without answering it. */
     data class HidePermission(
         val requestId: String,
+    ) : OpenCodeSessionComposerAction
+
+    /** Collapse the question panel without answering or dismissing it. */
+    data class HideQuestion(
+        val requestId: String,
+    ) : OpenCodeSessionComposerAction
+
+    /** Page the permission or question panel to another waiting request; [delta] is +1 or -1. */
+    data class PageRequest(
+        val delta: Int,
+    ) : OpenCodeSessionComposerAction
+
+    /** Open the subagent session a request comes from. */
+    data class OpenRequestSession(
+        val sessionId: String,
     ) : OpenCodeSessionComposerAction
 
     data class ToggleQuestionOption(
@@ -355,6 +418,8 @@ fun OpenCodeSessionComposer(
     val announceBlocking =
         state is OpenCodeSessionComposerState.Permission || state is OpenCodeSessionComposerState.Question
     val shellShape = RoundedCornerShape(OpenCodeFloatingChromeCornerRadius)
+    val currentOnAction by rememberUpdatedState(onAction)
+    val onSwipePage = remember { { delta: Int -> currentOnAction(OpenCodeSessionComposerAction.PageRequest(delta)) } }
     Column(
         modifier =
             modifier
@@ -379,6 +444,7 @@ fun OpenCodeSessionComposer(
                     Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 12.dp)
+                            .requestPageSwipe(enabled = state.pagesRequests, onPage = onSwipePage)
                         .then(
                             if (announceBlocking) {
                                 Modifier.semantics { liveRegion = LiveRegionMode.Polite }
@@ -534,6 +600,12 @@ private fun PromptEntryContent(
         mutableStateOf(TextFieldValue(text = state.text, selection = TextRange(state.text.length)))
     }
     var suppressImeEcho by remember { mutableStateOf(false) }
+    // The text the keyboard last typed, to rebase keystrokes that land on it after a programmatic change.
+    var lastImeText by remember { mutableStateOf(state.text) }
+    val attachmentPaste = rememberComposerAttachmentPaste()
+    val onPasteContent: (OpenCodeComposerPastedContent) -> Unit = { content ->
+        onAction(OpenCodeSessionComposerAction.PasteContent(content))
+    }
     LaunchedEffect(state.text, state.selectionRevision) {
         val selectionStart = (state.selectionStart ?: state.text.length).coerceIn(0, state.text.length)
         val selectionEnd = (state.selectionEnd ?: selectionStart).coerceIn(0, state.text.length)
@@ -551,58 +623,82 @@ private fun PromptEntryContent(
 
     // Cap growth so chips/send stay above the keyboard; further text scrolls
     // inside the field (OPE-127). Matches iOS OpenCodeMentionTextView (~5 body lines).
-    BasicTextField(
-        value = textFieldValue,
-        onValueChange = { newValue ->
-            if (newValue.text != state.text && textFieldValue.text != state.text) {
-                return@BasicTextField
-            }
-            if (suppressImeEcho) {
-                suppressImeEcho = false
-                if (newValue.text != state.text) return@BasicTextField
-            }
-            textFieldValue = newValue
-            onAction(
-                OpenCodeSessionComposerAction.TextChanged(
-                    text = newValue.text,
-                    selectionStart = newValue.selection.start,
-                    selectionEnd = newValue.selection.end,
-                ),
-            )
-        },
-        textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
-        cursorBrush = SolidColor(bodyColor),
-        visualTransformation = mentionTransformation,
-        // A shell command must reach the server as typed: no autocorrect or auto-capitalization.
-        keyboardOptions =
-            if (state.shellMode) {
-                KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false)
-            } else {
-                KeyboardOptions.Default
-            },
-        maxLines = PromptMaxVisibleLines,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp)
-                .focusRequester(focus.requester)
-                .onFocusChanged {
-                    focus.updateFocused(it.isFocused)
-                    reportFocus(it.isFocused)
-                },
-        decorationBox = { innerTextField ->
-            Box {
-                if (state.text.isBlank()) {
-                    Text(
-                        text = "Ask anything...",
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = openCodeColor("text-weak"),
-                    )
+    ComposerKeyboardContentInsertion(enabled = state.attachEnabled, onPaste = onPasteContent) {
+        BasicTextField(
+            value = textFieldValue,
+            onValueChange = { newValue ->
+                val rebased = rebaseAppendedComposerInput(shown = lastImeText, typed = newValue.text, current = state.text)
+                if (rebased != null) {
+                    suppressImeEcho = false
+                    lastImeText = rebased
+                    textFieldValue = TextFieldValue(text = rebased, selection = TextRange(rebased.length))
+                    onAction(OpenCodeSessionComposerAction.TextChanged(text = rebased, selectionStart = rebased.length))
+                    return@BasicTextField
                 }
-                innerTextField()
-            }
-        },
-    )
+                if (newValue.text != state.text && textFieldValue.text != state.text) {
+                    return@BasicTextField
+                }
+                if (suppressImeEcho) {
+                    suppressImeEcho = false
+                    val typedOntoDroppedPrefix =
+                        typedOntoDroppedComposerPrefix(shown = lastImeText, typed = newValue.text, current = state.text)
+                    if (newValue.text != state.text && !typedOntoDroppedPrefix) return@BasicTextField
+                }
+                textFieldValue = newValue
+                lastImeText = newValue.text
+                onAction(
+                    OpenCodeSessionComposerAction.TextChanged(
+                        text = newValue.text,
+                        selectionStart = newValue.selection.start,
+                        selectionEnd = newValue.selection.end,
+                    ),
+                )
+            },
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
+            cursorBrush = SolidColor(bodyColor),
+            visualTransformation = mentionTransformation,
+            // A shell command must reach the server as typed: no autocorrect or auto-capitalization.
+            keyboardOptions =
+                if (state.shellMode) {
+                    KeyboardOptions(capitalization = KeyboardCapitalization.None, autoCorrectEnabled = false)
+                } else {
+                    KeyboardOptions.Default
+                },
+            maxLines = PromptMaxVisibleLines,
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+                    .focusRequester(focus.requester)
+                    .onFocusChanged {
+                        focus.updateFocused(it.isFocused)
+                        reportFocus(it.isFocused)
+                    }.composerAttachmentPasteMenu(attachmentPaste, enabled = state.attachEnabled, onPaste = onPasteContent)
+                    .onPreviewKeyEvent { event ->
+                        if (state.attachEnabled && attachmentPaste.handleKey(event, onPasteContent)) return@onPreviewKeyEvent true
+                        // Delete on an empty field changes no text; in side-question mode it leaves the mode.
+                        val leavesMode =
+                            state.sideQuestionMode &&
+                                state.text.isEmpty() &&
+                                event.key == Key.Backspace &&
+                                event.type == KeyEventType.KeyDown
+                        if (leavesMode) onAction(OpenCodeSessionComposerAction.ExitSideQuestionMode)
+                        leavesMode
+                    },
+            decorationBox = { innerTextField ->
+                Box {
+                    if (state.text.isBlank()) {
+                        Text(
+                            text = if (state.sideQuestionMode) SESSION_COMPOSER_SIDE_QUESTION_PLACEHOLDER else "Ask anything...",
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = openCodeColor("text-weak"),
+                        )
+                    }
+                    innerTextField()
+                }
+            },
+        )
+    }
 
     PickerChipsRow(state = state, onAction = onAction)
 
@@ -650,7 +746,7 @@ private fun PromptEntryContent(
                 variant =
                     OpenCodeButtonVariant.IconCircle(
                         imageVector =
-                            if (state.followUpDelivery == FollowUpDelivery.Steer) {
+                            if (state.followUpDelivery == FollowUpDelivery.Steer && !state.sideQuestionMode) {
                                 OpenCodeIcons.ArrowWarmUp
                             } else {
                                 OpenCodeIcons.ArrowUpward
@@ -660,10 +756,12 @@ private fun PromptEntryContent(
                                 followUpDelivery = state.followUpDelivery,
                                 hasActiveWork = state.showStop,
                                 shellMode = state.shellMode,
+                                sideQuestionMode = state.sideQuestionMode,
                             ),
                     ),
                 enabled = state.sendEnabled,
-                contrast = OpenCodeButtonContrast.Accent,
+                // A side question is not a prompt, so its Send does not look like one.
+                contrast = if (state.sideQuestionMode) OpenCodeButtonContrast.High else OpenCodeButtonContrast.Accent,
                 onLongClick =
                     state.followUpDelivery?.let {
                         { onAction(OpenCodeSessionComposerAction.ToggleFollowUp) }
@@ -677,6 +775,37 @@ private fun PromptEntryContent(
         }
     }
 }
+
+/**
+ * Keystrokes typed onto [shown] after the state replaced it with [current] (the field had not caught
+ * up yet). When they only append and the state only dropped a leading part, such as the `/btw `
+ * that switches to side-question mode, the appended text lands on [current] instead of being lost.
+ * Null when that does not apply.
+ */
+internal fun rebaseAppendedComposerInput(
+    shown: String,
+    typed: String,
+    current: String,
+): String? {
+    if (shown == current || typed.length <= shown.length || !typed.startsWith(shown)) return null
+    if (!shown.endsWith(current)) return null
+    return current + typed.substring(shown.length)
+}
+
+/**
+ * The first keystroke after the state dropped a leading part of [shown] (the field shows [current]
+ * now) is real typing when it appends to [current], not a stale echo of [shown].
+ */
+internal fun typedOntoDroppedComposerPrefix(
+    shown: String,
+    typed: String,
+    current: String,
+): Boolean =
+    shown != current &&
+        shown.endsWith(current) &&
+        typed != shown &&
+        typed.length > current.length &&
+        typed.startsWith(current)
 
 /** Selection hint under a question; reflects a multiselect's `minItems` / `maxItems`. */
 internal fun questionSelectionHint(
@@ -699,10 +828,24 @@ internal fun questionSelectionHint(
  * Send button label. Steer/Queue only describe what Send does while work is running;
  * an idle session just sends. A shell command always runs now.
  */
+internal const val SESSION_COMPOSER_SIDE_QUESTION_PLACEHOLDER = "Side question, not added to chat"
+
 internal fun sessionComposerSendLabel(
     followUpDelivery: FollowUpDelivery?,
     hasActiveWork: Boolean,
     shellMode: Boolean = false,
+    sideQuestionMode: Boolean = false,
+): String =
+    if (sideQuestionMode) {
+        "Ask side question"
+    } else {
+        sessionComposerPromptSendLabel(followUpDelivery, hasActiveWork, shellMode)
+    }
+
+private fun sessionComposerPromptSendLabel(
+    followUpDelivery: FollowUpDelivery?,
+    hasActiveWork: Boolean,
+    shellMode: Boolean,
 ): String =
     when (followUpDelivery.takeIf { hasActiveWork && !shellMode }) {
         FollowUpDelivery.Steer -> "Send as Steer"
@@ -820,7 +963,15 @@ private fun PickerChipsRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (state.shellMode) {
+                if (state.sideQuestionMode) {
+                    OpenCodeChoiceBadge(
+                        label = "/btw",
+                        selected = true,
+                        onClick = { onAction(OpenCodeSessionComposerAction.ExitSideQuestionMode) },
+                        variant = OpenCodeChoiceBadgeVariant.Glass,
+                        modifier = Modifier.semantics { contentDescription = "Side question mode. Leave side question mode" },
+                    )
+                } else if (state.shellMode) {
                     // Like the TUI, shell mode shows "Shell" in place of the agent and model.
                     OpenCodeChoiceBadge(
                         label = "Shell",
@@ -935,15 +1086,20 @@ private fun PermissionApprovalContent(
     onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
     val actionsEnabled = state.actionsEnabled && !state.submitting
+    state.attribution?.let { RequestAttributionRow(it, onAction) }
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Permission requested", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-            if (state.queueCount > 1) {
-                Text("${state.queuePosition} of ${state.queueCount}", style = MaterialTheme.typography.bodySmall)
-            }
+            RequestPager(
+                position = state.queuePosition,
+                count = state.queueCount,
+                enabled = !state.submitting,
+                noun = "permission request",
+                onAction = onAction,
+            )
             OpenCodeButton(
                 variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.KeyboardArrowDown, "Hide permission request"),
                 contrast = OpenCodeButtonContrast.Low,
@@ -1006,6 +1162,125 @@ private fun PermissionApprovalContent(
             enabled = actionsEnabled,
         )
     }
+    RequestPageDots(position = state.queuePosition, count = state.queueCount)
+}
+
+private val OpenCodeSessionComposerState.pagesRequests: Boolean
+    get() =
+        when (this) {
+            is OpenCodeSessionComposerState.Permission -> queueCount > 1
+            is OpenCodeSessionComposerState.Question -> requestCount > 1
+            is OpenCodeSessionComposerState.Prompt,
+            is OpenCodeSessionComposerState.ChildLockout,
+            -> false
+        }
+
+/** Horizontal swipe on a request panel pages between waiting requests. */
+private fun Modifier.requestPageSwipe(
+    enabled: Boolean,
+    onPage: (delta: Int) -> Unit,
+): Modifier {
+    if (!enabled) return this
+    return pointerInput(onPage) {
+        var dragX = 0f
+        detectHorizontalDragGestures(
+            onDragStart = { dragX = 0f },
+            onDragEnd = {
+                if (abs(dragX) > RequestPageSwipeThresholdPx * density) {
+                    onPage(if (dragX < 0) 1 else -1)
+                }
+            },
+            onHorizontalDrag = { _, amount -> dragX += amount },
+        )
+    }
+}
+
+private const val RequestPageSwipeThresholdPx = 60f
+
+/** Light amber row naming the subagent that asks, with Open to show its session. */
+@Composable
+private fun RequestAttributionRow(
+    attribution: OpenCodeSessionComposerState.RequestAttribution,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .background(openCodeColor("warning").copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+                .padding(start = 8.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+                .testTag("sessionChatRequestAttribution"),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Box(
+            modifier =
+                Modifier
+                    .size(22.dp)
+                    .background(openCodeColor("warning").copy(alpha = 0.28f), CircleShape)
+                    // The summary already names the agent; the letter is decoration.
+                    .clearAndSetSemantics {},
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                attribution.letter,
+                style = MaterialTheme.typography.labelMedium,
+                color = openCodeColor("text-strong"),
+            )
+        }
+        Text(
+            attribution.summary,
+            style = MaterialTheme.typography.bodySmall,
+            color = openCodeColor("text-strong"),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.CompactText("Open"),
+            contrast = OpenCodeButtonContrast.Low,
+            onClick = { onAction(OpenCodeSessionComposerAction.OpenRequestSession(attribution.sessionId)) },
+            modifier = Modifier.semantics { contentDescription = "Open subagent session" },
+        )
+    }
+}
+
+/** "‹ 1 of 2 ›" beside the panel title while more than one request waits. */
+@Composable
+private fun RequestPager(
+    position: Int,
+    count: Int,
+    enabled: Boolean,
+    noun: String,
+    onAction: (OpenCodeSessionComposerAction) -> Unit,
+) {
+    if (count <= 1) return
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowBack, "Previous $noun"),
+            enabled = enabled && position > 1,
+            contrast = OpenCodeButtonContrast.Low,
+            onClick = { onAction(OpenCodeSessionComposerAction.PageRequest(-1)) },
+        )
+        Text("$position of $count", style = MaterialTheme.typography.bodySmall)
+        OpenCodeButton(
+            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowForward, "Next $noun"),
+            enabled = enabled && position < count,
+            contrast = OpenCodeButtonContrast.Low,
+            onClick = { onAction(OpenCodeSessionComposerAction.PageRequest(1)) },
+        )
+    }
+}
+
+@Composable
+private fun RequestPageDots(
+    position: Int,
+    count: Int,
+) {
+    if (count <= 1) return
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        OpenCodePageIndicator(pageCount = count, currentPage = (position - 1).coerceIn(0, count - 1))
+    }
 }
 
 /** Commands and paths read as code (iOS: `OpenCodeTypography.code`). */
@@ -1029,7 +1304,7 @@ private fun PermissionFileLine(file: OpenCodeSessionComposerState.PermissionFile
 }
 
 @Composable
-private fun QuestionRequestContent(
+private fun ColumnScope.QuestionRequestContent(
     state: OpenCodeSessionComposerState.Question,
     onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
@@ -1041,8 +1316,17 @@ private fun QuestionRequestContent(
             minSelections = state.minSelections,
             maxSelections = state.maxSelections,
         )
+    state.attribution?.let { RequestAttributionRow(it, onAction) }
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                // The action row measures first; the body takes what is left, up to half the window.
+                .weight(1f, fill = false)
+                .heightIn(max = questionBodyMaxHeight())
+                // Each question and request opens at its top, not where the previous one was left.
+                .verticalScroll(remember(state.requestId, state.questionIndex) { ScrollState(0) })
+                .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1052,11 +1336,24 @@ private fun QuestionRequestContent(
                 modifier = Modifier.weight(1f),
             )
             if (state.questionCount > 1) {
+                // With a request pager beside it, name this counter so the two read apart.
                 Text(
-                    "${state.questionIndex + 1} of ${state.questionCount}",
+                    "${if (state.requestCount > 1) "Step " else ""}${state.questionIndex + 1} of ${state.questionCount}",
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
+            RequestPager(
+                position = state.requestPosition,
+                count = state.requestCount,
+                enabled = !state.submitting,
+                noun = "question",
+                onAction = onAction,
+            )
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.KeyboardArrowDown, "Hide question"),
+                contrast = OpenCodeButtonContrast.Low,
+                onClick = { onAction(OpenCodeSessionComposerAction.HideQuestion(state.requestId)) },
+            )
         }
         Text(state.question, style = MaterialTheme.typography.bodyMedium)
         Text(
@@ -1180,7 +1477,24 @@ private fun QuestionRequestContent(
             }
         }
     }
+    RequestPageDots(position = state.requestPosition, count = state.requestCount)
 }
+
+/**
+ * The question body scrolls inside half of the window above the keyboard, so long option lists
+ * keep the action row below it reachable. No minimum: with little room (landscape with the
+ * keyboard up) a short scrolling body beats pushing Submit off screen.
+ */
+@Composable
+private fun questionBodyMaxHeight(): Dp {
+    val density = LocalDensity.current
+    val windowHeight = LocalWindowInfo.current.containerSize.height
+    val imeHeight = WindowInsets.ime.getBottom(density)
+    val visible = with(density) { (windowHeight - imeHeight).coerceAtLeast(0).toDp() }
+    return visible * QuestionBodyMaxHeightFraction
+}
+
+private const val QuestionBodyMaxHeightFraction = 0.5f
 
 private fun questionSelectionDecorator(selected: Boolean): StartDecorator =
     StartDecorator.Icon(

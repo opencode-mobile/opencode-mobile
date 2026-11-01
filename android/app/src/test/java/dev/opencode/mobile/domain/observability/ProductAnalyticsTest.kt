@@ -1,6 +1,8 @@
 package dev.opencode.mobile
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ProductAnalyticsTest {
@@ -18,5 +20,27 @@ class ProductAnalyticsTest {
             "settings_toggle_product_analytics",
             ProductAnalytics.Action.SETTINGS_TOGGLE_PRODUCT_ANALYTICS,
         )
+    }
+
+    @Test
+    fun `suppression drops every event until its handle closes`() {
+        val sent = mutableListOf<String>()
+        val previous = ProductAnalytics.sink
+        ProductAnalytics.sink = { name, _ -> sent += name }
+        try {
+            val suppression = ProductAnalytics.suppress()
+            assertTrue(ProductAnalytics.isSuppressed)
+            ProductAnalytics.logScreenView(ProductAnalytics.Screen.SESSION_CHAT, ProductAnalytics.Presentation.ROUTE)
+            ProductAnalytics.logUserAction(ProductAnalytics.Screen.SESSION_CHAT, ProductAnalytics.Action.COMPOSER_SEND)
+            assertTrue(sent.isEmpty())
+
+            suppression.close()
+            suppression.close()
+            assertFalse(ProductAnalytics.isSuppressed)
+            ProductAnalytics.logUserAction(ProductAnalytics.Screen.SESSION_CHAT, ProductAnalytics.Action.COMPOSER_SEND)
+            assertEquals(listOf(ProductAnalytics.Event.USER_ACTION), sent)
+        } finally {
+            ProductAnalytics.sink = previous
+        }
     }
 }

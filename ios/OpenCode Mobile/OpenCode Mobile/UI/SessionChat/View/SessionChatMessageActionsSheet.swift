@@ -6,6 +6,8 @@ struct SessionChatMessageActionsTarget: Equatable {
     let text: String
     /// True for outgoing user messages: they offer "Revert message" and "Fork from here".
     let showsRevertMessage: Bool
+    /// The code block the tap landed on, offered as its own copy action.
+    var codeBlock: String? = nil
 }
 
 struct SessionChatMessageActionsSheetModifier: ViewModifier {
@@ -58,6 +60,17 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
                     if let messageID {
                         onForkFromMessage(messageID)
                     }
+                }
+            )
+        }
+        if let codeBlock = target?.codeBlock {
+            OpenCodeBottomSheetEntry(
+                title: "Copy code block",
+                startDecorator: .icon(.code),
+                action: {
+                    logAction(ProductAnalytics.Action.messageActionsCopyCodeBlock)
+                    UIPasteboard.general.string = codeBlock
+                    self.target = nil
                 }
             )
         }

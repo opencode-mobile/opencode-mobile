@@ -96,6 +96,25 @@ struct ActiveConnectionManagerSessionArchiveTests {
         #expect(!manager.capabilities.supportsSessionArchive)
     }
 
+    @Test func unreadTmpDirectoryIsNotCachedSoUploadTurnsOnNextProbe() async throws {
+        let probing = ArchiveProbe(protocol: .v2) { _ in true }
+        probing.uploadDirectory = .unread
+        let manager = connected(probing)
+
+        _ = try await manager.probeActive()
+        #expect(manager.capabilities.supportsSessionArchive)
+        #expect(!manager.capabilities.supportsStreamedUpload)
+
+        probing.uploadDirectory = .read("/tmp/opencode")
+        _ = try await manager.probeActive()
+        #expect(manager.capabilities.supportsStreamedUpload)
+        #expect(manager.streamedUploadDirectory == "/tmp/opencode")
+        #expect(probing.archiveProbes == 2)
+
+        _ = try await manager.probeActive()
+        #expect(probing.archiveProbes == 2)
+    }
+
     /// Starts from a profile stamped v2, as after an earlier session, so archive waits on the contract.
     private func connected(_ probing: ArchiveProbe) -> ActiveConnectionManager {
         let manager = ActiveConnectionManager(connectionProbing: probing)
@@ -119,6 +138,12 @@ private final class ArchiveProbe: ConnectionProbing, @unchecked Sendable {
     private var _version: String? = "2.1.0"
     private var _fail = false
     private var _archiveProbes = 0
+    private var _uploadDirectory: UploadDirectory?
+
+    enum UploadDirectory {
+        case unread
+        case read(String)
+    }
 
     init(protocol serverProtocol: ServerProtocol, archive: @escaping @Sendable (String?) -> Bool) {
         self.serverProtocol = serverProtocol
@@ -137,6 +162,12 @@ private final class ArchiveProbe: ConnectionProbing, @unchecked Sendable {
 
     var archiveProbes: Int { lock.withLock { _archiveProbes } }
 
+    /// When set, the contract also declares the upload route and `/api/info` answers this way.
+    var uploadDirectory: UploadDirectory? {
+        get { lock.withLock { _uploadDirectory } }
+        set { lock.withLock { _uploadDirectory = newValue } }
+    }
+
     func probe(connection _: ServerConnection) async throws -> ServerProtocol { serverProtocol }
 
     func probeServer(connection _: ServerConnection) async throws -> ServerProbeOutcome {
@@ -144,12 +175,23 @@ private final class ArchiveProbe: ConnectionProbing, @unchecked Sendable {
     }
 
     func probeV2Features(connection _: ServerConnection) async throws -> V2ServerFeatures {
-        let (fail, version) = lock.withLock {
+        let (fail, version, upload) = lock.withLock {
             _archiveProbes += 1
-            return (_fail, _version)
+            return (_fail, _version, _uploadDirectory)
         }
         if fail { throw ServerProbeError.http(statusCode: 404, message: "Not Found") }
         let supported = archive(version)
-        return V2ServerFeatures(sessionArchive: supported, sessionTurnDiff: supported)
+        var features = V2ServerFeatures(sessionArchive: supported, sessionTurnDiff: supported)
+        switch upload {
+        case .unread:
+            features.streamedUploadRoute = true
+            features.uploadDirectoryUnread = true
+        case let .read(directory):
+            features.streamedUploadRoute = true
+            features.uploadDirectory = directory
+        case nil:
+            break
+        }
+        return features
     }
 }

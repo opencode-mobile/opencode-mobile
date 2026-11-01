@@ -60,6 +60,8 @@ data class V2UnknownErrorDto(
     val message: String? = null,
     val status: Int? = null,
     val response: V2ErrorResponseDto? = null,
+    /** How long the provider asked to wait, counted from when the failure was recorded. */
+    val retryAfterMs: Long? = null,
 )
 
 @Serializable

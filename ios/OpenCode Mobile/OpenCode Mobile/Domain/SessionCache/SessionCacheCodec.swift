@@ -112,6 +112,37 @@ nonisolated enum SessionCacheCodec {
             return nil
         }
     }
+
+    static func encodeProjectResolution(_ resolution: HomeProjectResolution) throws -> String {
+        let payload = CachedProjectResolutionPayload(
+            schemaVersion: schemaVersion,
+            id: resolution.id,
+            canonical: resolution.canonical,
+            name: resolution.name,
+            isRepository: resolution.isRepository
+        )
+        let data = try encoder.encode(payload)
+        guard let string = String(data: data, encoding: .utf8) else {
+            throw SessionCacheCodecError.utf8EncodingFailed
+        }
+        return string
+    }
+
+    static func decodeProjectResolution(_ raw: String) -> HomeProjectResolution? {
+        guard let data = raw.data(using: .utf8),
+              let payload = try? decoder.decode(CachedProjectResolutionPayload.self, from: data),
+              payload.schemaVersion == schemaVersion
+        else {
+            DiagnosticLog.warning(.session, "project resolution decode failed")
+            return nil
+        }
+        return HomeProjectResolution(
+            id: payload.id,
+            canonical: payload.canonical,
+            name: payload.name,
+            isRepository: payload.isRepository
+        )
+    }
 }
 
 nonisolated enum SessionCacheCodecError: Error {
@@ -125,6 +156,14 @@ nonisolated private struct CachedEnvelope: Codable, Sendable {
     let sessions: CachedSessionListPayload?
     let messages: CachedMessageListPayload?
     let activity: CachedActivityListPayload?
+}
+
+nonisolated private struct CachedProjectResolutionPayload: Codable, Sendable {
+    let schemaVersion: Int
+    let id: String
+    let canonical: String
+    let name: String?
+    let isRepository: Bool
 }
 
 nonisolated private struct CachedSessionListPayload: Codable, Sendable {
@@ -192,6 +231,8 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
     let failureMessage: String?
     let failureStatus: Int?
     let failureBody: String?
+    let failureRetryAfterMs: Int64?
+    let failureRecordedAtEpochMs: Int64?
 
     init(
         id: String,
@@ -213,7 +254,9 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         failureType: String? = nil,
         failureMessage: String? = nil,
         failureStatus: Int? = nil,
-        failureBody: String? = nil
+        failureBody: String? = nil,
+        failureRetryAfterMs: Int64? = nil,
+        failureRecordedAtEpochMs: Int64? = nil
     ) {
         self.id = id
         self.role = role
@@ -235,6 +278,8 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         self.failureMessage = failureMessage
         self.failureStatus = failureStatus
         self.failureBody = failureBody
+        self.failureRetryAfterMs = failureRetryAfterMs
+        self.failureRecordedAtEpochMs = failureRecordedAtEpochMs
     }
 
     init(from decoder: Decoder) throws {
@@ -262,6 +307,8 @@ nonisolated private struct CachedMessagePayload: Codable, Sendable {
         failureMessage = try container.decodeIfPresent(String.self, forKey: .failureMessage)
         failureStatus = try container.decodeIfPresent(Int.self, forKey: .failureStatus)
         failureBody = try container.decodeIfPresent(String.self, forKey: .failureBody)
+        failureRetryAfterMs = try container.decodeIfPresent(Int64.self, forKey: .failureRetryAfterMs)
+        failureRecordedAtEpochMs = try container.decodeIfPresent(Int64.self, forKey: .failureRecordedAtEpochMs)
     }
 }
 
@@ -284,6 +331,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
     let mime: String?
     let attachmentKind: String?
     let dataUrl: String?
+    let serverPath: String?
     let timeStartEpochMs: Int64?
     let timeEndEpochMs: Int64?
     let auto: Bool?
@@ -309,6 +357,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         mime: String? = nil,
         attachmentKind: String? = nil,
         dataUrl: String? = nil,
+        serverPath: String? = nil,
         timeStartEpochMs: Int64? = nil,
         timeEndEpochMs: Int64? = nil,
         auto: Bool? = nil,
@@ -333,6 +382,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         self.mime = mime
         self.attachmentKind = attachmentKind
         self.dataUrl = dataUrl
+        self.serverPath = serverPath
         self.timeStartEpochMs = timeStartEpochMs
         self.timeEndEpochMs = timeEndEpochMs
         self.auto = auto
@@ -360,6 +410,7 @@ nonisolated private struct CachedMessagePartPayload: Codable, Sendable {
         mime = try container.decodeIfPresent(String.self, forKey: .mime)
         attachmentKind = try container.decodeIfPresent(String.self, forKey: .attachmentKind)
         dataUrl = try container.decodeIfPresent(String.self, forKey: .dataUrl)
+        serverPath = try container.decodeIfPresent(String.self, forKey: .serverPath)
         timeStartEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeStartEpochMs)
         timeEndEpochMs = try container.decodeIfPresent(Int64.self, forKey: .timeEndEpochMs)
         auto = try container.decodeIfPresent(Bool.self, forKey: .auto)
@@ -543,7 +594,9 @@ private extension Message {
             failureType: failure?.type,
             failureMessage: failure?.message,
             failureStatus: failure?.status,
-            failureBody: failure?.providerBody
+            failureBody: failure?.providerBody,
+            failureRetryAfterMs: failure?.retryAfterMs,
+            failureRecordedAtEpochMs: failure?.recordedAtEpochMs
         )
     }
 }
@@ -572,7 +625,9 @@ private extension CachedMessagePayload {
                     type: failureType,
                     message: failureMessage ?? "",
                     status: failureStatus,
-                    providerBody: failureBody
+                    providerBody: failureBody,
+                    retryAfterMs: failureRetryAfterMs,
+                    recordedAtEpochMs: failureRecordedAtEpochMs
                 )
                 : nil
         )
@@ -650,6 +705,7 @@ private extension MessagePart {
                 output: part.output,
                 metadata: part.metadata,
                 timeStartEpochMs: part.timeStartEpochMs,
+                timeEndEpochMs: part.timeEndEpochMs,
                 isInterrupted: part.isInterrupted,
                 isMalformed: part.isMalformed
             )
@@ -660,7 +716,8 @@ private extension MessagePart {
                 filename: part.filename,
                 mime: part.mime,
                 attachmentKind: part.kind.rawValue,
-                dataUrl: AttachmentLimits.persistedDataURL(part.dataURL)
+                dataUrl: AttachmentLimits.persistedDataURL(part.dataURL),
+                serverPath: part.serverPath
             )
         case let .compaction(part):
             return CachedMessagePartPayload(
@@ -787,6 +844,7 @@ private extension CachedMessagePartPayload {
                     output: output,
                     metadata: metadata,
                     timeStartEpochMs: timeStartEpochMs,
+                    timeEndEpochMs: timeEndEpochMs,
                     isInterrupted: isInterrupted,
                     isMalformed: isMalformed
                 )
@@ -799,7 +857,8 @@ private extension CachedMessagePartPayload {
                     filename: filename ?? "",
                     mime: mime ?? "",
                     kind: AttachmentKind(rawValue: (attachmentKind ?? "").lowercased()) ?? .text,
-                    dataURL: dataUrl ?? ""
+                    dataURL: dataUrl ?? "",
+                    serverPath: serverPath
                 )
             )
         case "reasoning":

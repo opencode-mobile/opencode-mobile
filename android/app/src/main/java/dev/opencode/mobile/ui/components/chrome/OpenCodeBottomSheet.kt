@@ -80,6 +80,7 @@ import androidx.compose.runtime.rememberCompositionContext
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -278,6 +279,11 @@ data class OpenCodeBottomSheetHeaderTextAction(
  *
  * [scrollTargetKey] scrolls the body so the row marked with the same key through
  * [openCodeBottomSheetScrollTarget] sits centered once the sheet is scrollable.
+ *
+ * While [followsBottom], a new pane (a new [scrollTargetKey]) with no marked row opens at its
+ * bottom, and the body keeps its bottom in view as it grows while the reader is parked there.
+ * Scrolling away stops following; scrolling back to the bottom resumes it. Turning it off
+ * leaves the body where it is.
  */
 @Composable
 fun OpenCodeBottomSheet(
@@ -290,6 +296,7 @@ fun OpenCodeBottomSheet(
     height: OpenCodeBottomSheetHeight = OpenCodeBottomSheetHeight.FitContent,
     keyboard: OpenCodeBottomSheetKeyboard = OpenCodeBottomSheetKeyboard.Dismiss,
     scrollTargetKey: Any? = null,
+    followsBottom: Boolean = false,
     pinnedTop: @Composable ColumnScope.() -> Unit = {},
     pinnedBottom: (@Composable ColumnScope.() -> Unit)? = null,
     /** Replaces the header's [title] text (a live status, say); [title] stays the pane title. */
@@ -310,7 +317,19 @@ fun OpenCodeBottomSheet(
     // reacted to the caller clearing its state (a null target, an empty list).
     val shown = remember { BottomSheetShownSlots() }
     if (visible || !shown.isSet) {
-        shown.update(title, headerLeadingAction, headerTrailingAction, height, keyboard, scrollTargetKey, pinnedTop, pinnedBottom, content, titleContent)
+        shown.update(
+            title,
+            headerLeadingAction,
+            headerTrailingAction,
+            height,
+            keyboard,
+            scrollTargetKey,
+            followsBottom,
+            pinnedTop,
+            pinnedBottom,
+            content,
+            titleContent,
+        )
     }
 
     LaunchedEffect(visible, keyboard) {
@@ -470,6 +489,7 @@ fun OpenCodeBottomSheet(
                         height = shown.height,
                         keyboard = shownKeyboard,
                         scrollTargetKey = shown.scrollTargetKey,
+                        followsBottom = shown.followsBottom,
                         threeButtonNavigation = threeButtonNav,
                         windowHeight = maxHeight,
                         sheetBottomInset = sheetBottomInset,
@@ -533,6 +553,8 @@ private class BottomSheetShownSlots {
         private set
     var scrollTargetKey: Any? = null
         private set
+    var followsBottom: Boolean = false
+        private set
     var pinnedTop: @Composable ColumnScope.() -> Unit = {}
         private set
     var pinnedBottom: (@Composable ColumnScope.() -> Unit)? = null
@@ -549,6 +571,7 @@ private class BottomSheetShownSlots {
         height: OpenCodeBottomSheetHeight,
         keyboard: OpenCodeBottomSheetKeyboard,
         scrollTargetKey: Any?,
+        followsBottom: Boolean,
         pinnedTop: @Composable ColumnScope.() -> Unit,
         pinnedBottom: (@Composable ColumnScope.() -> Unit)?,
         content: @Composable ColumnScope.() -> Unit,
@@ -562,6 +585,7 @@ private class BottomSheetShownSlots {
         this.height = height
         this.keyboard = keyboard
         this.scrollTargetKey = scrollTargetKey
+        this.followsBottom = followsBottom
         this.pinnedTop = pinnedTop
         this.pinnedBottom = pinnedBottom
         this.content = content
@@ -591,16 +615,31 @@ fun Modifier.openCodeBottomSheetScrollTarget(key: Any): Modifier =
 
 private val LocalBottomSheetScrollTargets = compositionLocalOf<BottomSheetScrollTargets?> { null }
 
-/** Scrolls a sheet body so the row for [targetKey] is centered, once per key. */
+/**
+ * Scrolls a sheet body so the row for [targetKey] is centered, once per key, and keeps a
+ * following body at its bottom ([BottomSheetFollow]).
+ */
 private class BottomSheetScrollTargets(
     private val scrollState: ScrollState,
     private val scope: CoroutineScope,
 ) {
+    val follow = BottomSheetFollow()
+    private var paneSeen = false
     var targetKey: Any? = null
+        private set
+    var followsBottom: Boolean = false
     var scrollable: Boolean = false
     var bodyCoordinates: LayoutCoordinates? = null
     var viewportHeightPx: Int = 0
     private var scrolledKey: Any? = null
+
+    /** Each new key is a new pane, which starts following again at its bottom. */
+    fun updateTargetKey(key: Any?) {
+        if (paneSeen && key == targetKey) return
+        paneSeen = true
+        targetKey = key
+        follow.paneChanged(follows = followsBottom, hasTarget = false)
+    }
 
     fun onTargetPositioned(
         key: Any,
@@ -612,6 +651,7 @@ private class BottomSheetScrollTargets(
         val top = body.localPositionOf(coordinates, Offset.Zero).y
         val target = openCodeBottomSheetCenteredScroll(top, coordinates.size.height.toFloat(), viewportHeightPx.toFloat())
         scrolledKey = key
+        follow.targetScrolled()
         scope.launch { scrollState.scrollTo(target.roundToInt().coerceIn(0, scrollState.maxValue)) }
     }
 }
@@ -633,6 +673,7 @@ private fun BottomSheetContent(
     height: OpenCodeBottomSheetHeight,
     keyboard: OpenCodeBottomSheetKeyboard,
     scrollTargetKey: Any?,
+    followsBottom: Boolean,
     threeButtonNavigation: Boolean,
     windowHeight: Dp,
     sheetBottomInset: Dp,
@@ -691,8 +732,31 @@ private fun BottomSheetContent(
         }
     }
 
-    scrollTargets.targetKey = scrollTargetKey
+    scrollTargets.followsBottom = followsBottom
+    scrollTargets.updateTargetKey(scrollTargetKey)
     scrollTargets.scrollable = layoutMode == BottomSheetLayoutMode.Scrollable
+    val parkedThresholdPx = with(density) { BottomSheetParkedThreshold.toPx() }
+    val currentFollowsBottom by rememberUpdatedState(followsBottom)
+
+    // A grown body follows its bottom while parked there; any move re-decides whether it is.
+    LaunchedEffect(scrollTargets) {
+        var lastValue = -1
+        var lastMax = -1
+        snapshotFlow { scrollState.value to scrollState.maxValue }.collect { (value, max) ->
+            val grew = max != lastMax
+            val moved = value != lastValue
+            lastValue = value
+            lastMax = max
+            val action = if (grew) scrollTargets.follow.contentChanged(currentFollowsBottom) else BottomSheetFollowAction.None
+            when {
+                action == BottomSheetFollowAction.Bottom && value < max -> scrollState.scrollTo(max)
+                action == BottomSheetFollowAction.None && moved ->
+                    scrollTargets.follow.offsetChanged((max - value).toFloat(), parkedThresholdPx)
+                // A target scroll is on its way; its move re-decides parking.
+                else -> Unit
+            }
+        }
+    }
 
     val resolvedHeaderHeight = openCodeBottomSheetResolvedHeaderHeight(headerHeight)
     val scrollBodyMaxHeight =

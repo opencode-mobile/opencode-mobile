@@ -5,7 +5,7 @@
  *
  * Usage:
  *   OPENCODE_SERVER_PASSWORD='…' node scripts/capture-sse.mjs \
- *     --url http://192.168.0.160:4096 \
+ *     --url http://192.168.1.60:4096 \
  *     --session ses_…
  *
  * Writes JSONL under build/sse-captures/ (gitignored via build/).

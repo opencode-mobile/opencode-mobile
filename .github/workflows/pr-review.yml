@@ -1,0 +1,92 @@
+# Automated review that runs only for the maintainer's own PRs and their
+# `/review` comments, on a self-hosted runner. Never runs for forks.
+name: PR review
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+# One review per PR; a newer one cancels the older. Concurrency applies to the
+# whole run before the job's `if:` is checked, so every other comment run (any
+# comment on any issue or PR creates one) gets a group of its own. Otherwise an
+# ordinary comment would cancel a running review and nothing would be posted.
+concurrency:
+  group: >-
+    pr-review-${{ github.event.pull_request.number || github.event.issue.number }}${{
+      github.event_name == 'issue_comment'
+      && !(github.event.issue.pull_request
+        && startsWith(github.event.comment.body, '/review')
+        && github.event.comment.user.login == 'ivanfenenko')
+      && format('-ignored-{0}', github.run_id) || '' }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: >-
+      (github.event_name == 'pull_request'
+        && !github.event.pull_request.draft
+        && github.event.pull_request.user.login == 'ivanfenenko'
+        && github.event.pull_request.head.repo.full_name == github.repository)
+      || (github.event_name == 'issue_comment'
+        && github.event.issue.pull_request
+        && github.event.issue.state == 'open'
+        && startsWith(github.event.comment.body, '/review')
+        && github.event.comment.user.login == 'ivanfenenko')
+    runs-on: [self-hosted, pr-review]
+    timeout-minutes: 45
+    steps:
+      # The comment payload does not say where the PR head lives, so ask the
+      # API before anything from the PR reaches the runner. Plain python, since
+      # the runner user (prrunner) has no gh.
+      - name: Skip forks
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          head=$(python3 - <<'PY'
+          import json, os, urllib.request
+          req = urllib.request.Request(
+              f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{os.environ['PR']}",
+              headers={"Authorization": f"Bearer {os.environ['GH_TOKEN']}", "Accept": "application/vnd.github+json"},
+          )
+          with urllib.request.urlopen(req, timeout=30) as resp:
+              print((json.load(resp)["head"].get("repo") or {}).get("full_name") or "")
+          PY
+          )
+          if [ "$head" = "$GITHUB_REPOSITORY" ]; then
+            echo "same_repo=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::PR head is in '${head:-a deleted repository}', not $GITHUB_REPOSITORY; not reviewing"
+          fi
+
+      - name: Check out PR head
+        if: steps.pr.outputs.same_repo == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number || github.event.issue.number }}/head
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Review
+        if: steps.pr.outputs.same_repo == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number || github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        run: |
+          args=(--repo "$GITHUB_REPOSITORY" --pr "$PR" --repo-dir "$GITHUB_WORKSPACE")
+          if [ -n "$COMMENT_ID" ]; then
+            args+=(--comment-id "$COMMENT_ID")
+          fi
+          # The runner user's own homelab clone; ivan cannot write it. A failed
+          # pull reviews with the copy already there rather than not at all.
+          git -C /opt/pr-review/homelab pull -q --ff-only \
+            || echo "::warning::could not update /opt/pr-review/homelab; reviewing with $(git -C /opt/pr-review/homelab rev-parse --short HEAD)"
+          python3 /opt/pr-review/homelab/services/pr-review/review.py "${args[@]}"

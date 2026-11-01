@@ -38,6 +38,8 @@ nonisolated struct V2SessionDTO: Decodable, Sendable {
     let revert: SessionRevertDTO?
     /// How the latest run ended: `succeeded` | `failed` | `interrupted`.
     let outcome: String?
+    /// The agent a subagent session runs (`general`, `explore`).
+    let agent: String?
 
     private enum CodingKeys: String, CodingKey {
         case id
@@ -51,6 +53,7 @@ nonisolated struct V2SessionDTO: Decodable, Sendable {
         case location
         case revert
         case outcome
+        case agent
     }
 
     init(from decoder: Decoder) throws {
@@ -66,6 +69,7 @@ nonisolated struct V2SessionDTO: Decodable, Sendable {
         location = try container.decodeIfPresent(V2LocationDTO.self, forKey: .location)
         revert = try container.decodeIfPresent(SessionRevertDTO.self, forKey: .revert)
         outcome = try? container.decodeIfPresent(String.self, forKey: .outcome)
+        agent = try? container.decodeIfPresent(String.self, forKey: .agent)
     }
 }
 
@@ -76,6 +80,14 @@ nonisolated struct V2ViewSessionRequestDTO: Encodable, Sendable {
 
 nonisolated struct V2MoveSessionRequestDTO: Encodable, Sendable {
     let directory: String
+}
+
+nonisolated struct V2SessionGenerateRequestDTO: Encodable, Sendable {
+    let prompt: String
+}
+
+nonisolated struct V2SessionGenerateResponseDTO: Decodable, Sendable {
+    let text: String
 }
 
 nonisolated struct V2CreateSessionRequestDTO: Encodable, Sendable {

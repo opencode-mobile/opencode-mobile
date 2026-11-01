@@ -115,6 +115,43 @@ struct ProjectListHomeViewModelTests {
         }
     }
 
+    @Test func emptyHome_waitsOnTheAddressCheckBeforeShowingUnreachable() async throws {
+        let profile = ConnectionProfile(
+            baseURL: "http://127.0.0.1:4096/",
+            serverURLs: ["http://127.0.0.1:4096/", "http://192.168.1.2:4096/"],
+            username: "opencode",
+            password: ""
+        )
+        let probe = HeldProbe()
+        var coordinator: ConnectionSessionCoordinator?
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(shouldFailProbe: true),
+            connectionProfileStore: FakeConnectionProfileStore(activeProfile: profile),
+            connectionProbing: probe,
+            initialProfile: profile,
+            onCoordinator: { coordinator = $0 }
+        )
+        await viewModel.refresh()
+        guard case .probeFailed = viewModel.state else {
+            Issue.record("Expected probeFailed before the save")
+            return
+        }
+
+        probe.hold()
+        // A switch reloads Home before the saved addresses are checked; its probe fails meanwhile.
+        let switching = Task { await coordinator?.switchProfile(id: profile.id) }
+        #expect(await eventually { if case .empty = viewModel.state { true } else { false } })
+        try await Task.sleep(for: .milliseconds(100))
+        guard case .empty = viewModel.state else {
+            Issue.record("Expected empty while the address check runs, got \(viewModel.state)")
+            return
+        }
+
+        probe.release()
+        await switching.value
+        #expect(await eventually { if case .probeFailed = viewModel.state { true } else { false } })
+    }
+
     @Test func refresh_staysEmpty_whenNoAddedProjects() async {
         let store = FakeConnectionProfileStore()
         let viewModel = makeViewModel(
@@ -343,6 +380,51 @@ struct ProjectListHomeViewModelTests {
         #expect(viewModel.homeProjects.map(\.key) == ["prj_repo", "prj:/other"])
         #expect(viewModel.homeProjects.first?.memberPaths == ["/repo", "/repo-wt"])
         #expect(viewModel.homeProjects.first?.worktrees.map(\.directory) == ["/repo", "/repo-wt"])
+    }
+
+    @Test func cachedPaintKeepsTheProjectKeyTheServerResolves() async {
+        // The project key is the single-project scope id; a key that changes when the server
+        // resolves the path swaps the whole list on the next launch.
+        let cache = DefaultSessionCache(
+            store: InMemorySessionCacheStore(),
+            connectionIdProvider: { "profile-1" },
+            debounceMilliseconds: 0,
+            activityDebounceMilliseconds: 0
+        )
+        let repo = Project(id: "prj_repo", worktree: "/repo", displayName: "repo", isRepository: true)
+        let live = makeViewModel(
+            projectRepository: FakeProjectRepository(projectsByDirectory: ["/repo": repo]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            worktreeRepository: ScriptedWorktreeRepository(loads: [.loaded(directories: ["/repo"], listsSessions: false)]),
+            sessionCache: cache
+        )
+        await live.refresh()
+        #expect(await waitUntil { live.homeProjects.map(\.key) == ["prj_repo"] })
+        var remembered: HomeProjectResolution?
+        for _ in 0 ..< 100 where remembered == nil {
+            remembered = await cache.seedProjectResolution(worktree: "/repo", connectionID: nil)
+            if remembered == nil { try? await Task.sleep(for: .milliseconds(10)) }
+        }
+        #expect(remembered?.id == "prj_repo")
+        await cache.rememberSessions(worktree: "/repo", sessions: [
+            Session(id: "s1", title: "Cached", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
+        ])
+
+        // Next launch: the server has not resolved the path yet.
+        let cold = makeViewModel(
+            projectRepository: FakeProjectRepository(failingDirectories: ["/repo"]),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionCache: cache
+        )
+        await cold.refresh()
+        guard case let .loaded(sections, _, _, _) = cold.state else {
+            Issue.record("Expected the cached paint")
+            return
+        }
+        #expect(cold.homeProjects.map(\.key) == ["prj_repo"])
+        let rows = sections.crossProjectSessionListSessions(projects: cold.homeProjects)
+        #expect(rows.map(\.id) == ["s1"])
+        #expect(rows.map(\.worktree) == ["prj_repo"])
     }
 
     @Test func branchesOfWorktreesFoundAfterTheRefreshShowWithoutAPullToRefresh() async {
@@ -2366,20 +2448,26 @@ private func makeViewModel(
     projectLoadTiming: ProjectLoadTiming = .standard,
     worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
     branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)],
-    worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache()
+    worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
+    connectionProbing: (any ConnectionProbing)? = nil,
+    sessionCache: any SessionCache = NoOpSessionCache.shared,
+    initialProfile: ConnectionProfile = ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
+    onCoordinator: (ConnectionSessionCoordinator) -> Void = { _ in }
 ) -> ProjectListHomeViewModel {
     let eventStream = eventStream ?? FakeForegroundEventStream()
     // Mutations (createSession) require Connected; default fakes start Idle.
     eventStream.setConnectionState(.connected)
-    let manager = ActiveConnectionManager()
-    manager.apply(
-        ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: ""),
-        serverProtocol: serverProtocol
+    // Saved-address checks need a probe and a store; tests without a probe keep neither.
+    let manager = ActiveConnectionManager(
+        connectionProbing: connectionProbing,
+        profileStore: connectionProbing == nil ? nil : connectionProfileStore
     )
+    manager.apply(initialProfile, serverProtocol: serverProtocol)
     let coordinator = ConnectionSessionCoordinator(
         activeConnectionManager: manager,
         connectionProfileStore: connectionProfileStore
     )
+    onCoordinator(coordinator)
     let sessionStatusLiveStore = sessionStatusLiveStoreOverride ?? DefaultSessionStatusLiveStore(
         sessionRepository: sessionRepository,
         eventStream: eventStream,
@@ -2406,6 +2494,7 @@ private func makeViewModel(
         sessionStatusLiveStore: sessionStatusLiveStore,
         sessionReadyStore: sessionReadyStore,
         connectionSessionCoordinator: coordinator,
+        sessionCache: sessionCache,
         addProjectListingDebounce: .zero,
         projectLoadTiming: projectLoadTiming,
         worktreeRepository: worktreeRepository,
@@ -2584,13 +2673,18 @@ private func folder(_ path: String) -> DirectoryNode {
 
 private final class FakeConnectionProfileStore: ConnectionProfileStore, @unchecked Sendable {
     private var added: [String]
+    private let active: ConnectionProfile
 
-    init(initial: [String] = []) {
+    init(
+        initial: [String] = [],
+        activeProfile: ConnectionProfile = ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "")
+    ) {
         self.added = initial
+        self.active = activeProfile
     }
 
     func activeProfile() async -> ConnectionProfile? {
-        ConnectionProfile(baseURL: "http://127.0.0.1:4096/", username: "opencode", password: "")
+        active
     }
 
     func saveProfile(_ profile: ConnectionProfile) async {}
@@ -2613,6 +2707,44 @@ private final class FakeConnectionProfileStore: ConnectionProfileStore, @uncheck
     func clearAll() async {
         added.removeAll()
     }
+}
+
+/// Answers v2 for every address, but only once released while held.
+private final class HeldProbe: ConnectionProbing, @unchecked Sendable {
+    private let lock = NSLock()
+    private var held = false
+
+    func hold() { setHeld(true) }
+
+    func release() { setHeld(false) }
+
+    private func setHeld(_ value: Bool) {
+        lock.lock()
+        held = value
+        lock.unlock()
+    }
+
+    private var isHeld: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return held
+    }
+
+    func probe(connection _: ServerConnection) async throws -> ServerProtocol {
+        while isHeld {
+            try await Task.sleep(for: .milliseconds(5))
+        }
+        return .v2
+    }
+}
+
+@MainActor
+private func eventually(_ condition: () -> Bool) async -> Bool {
+    for _ in 0 ..< 300 {
+        if condition() { return true }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    return condition()
 }
 
 private struct SlowFirstProjectRepository: ProjectRepository {

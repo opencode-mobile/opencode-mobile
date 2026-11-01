@@ -13,9 +13,8 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
@@ -189,15 +188,18 @@ data class SessionListFilterTab(
         const val ALL_TITLE = "All"
         const val PICKER_ALL_TITLE = "All projects"
 
+        /** [load] is loading while any project's first list is outstanding (a server switch). */
         fun all(
             projectCount: Int,
             sessionCount: Int,
+            load: SessionListScopeLoad.Loading? = null,
         ): SessionListFilterTab =
             SessionListFilterTab(
                 id = ALL_ID,
                 title = ALL_TITLE,
                 count = sessionCount,
                 subtitle = if (projectCount == 1) "1 project" else "$projectCount projects",
+                load = load,
             )
 
         fun project(
@@ -288,7 +290,6 @@ fun SessionList(
     rowStyle: HomeSessionRowStyle = HomeDisplayPreferences.sessionRowStyle,
 ) {
     val background = openCodeColor("background-base")
-    val borderWeaker = openCodeColor("border-weaker-base")
     val density = LocalDensity.current
 
     var dockBlockHeight by remember { mutableStateOf(0.dp) }
@@ -324,7 +325,6 @@ fun SessionList(
                     onFilterSelected = onFilterSelected,
                     onRetryScopeLoad = onRetryScopeLoad,
                     listBottomFadeHeight = listBottomFadeHeight,
-                    borderWeaker = borderWeaker,
                     background = background,
                     emptyContent = emptyContent,
                     revealNewestToken = revealNewestToken,
@@ -376,7 +376,6 @@ private fun SessionListFeedPage(
     onFilterSelected: (String) -> Unit,
     onRetryScopeLoad: (String) -> Unit,
     listBottomFadeHeight: Dp,
-    borderWeaker: androidx.compose.ui.graphics.Color,
     background: androidx.compose.ui.graphics.Color,
     emptyContent: (@Composable () -> Unit)?,
     revealNewestToken: Int,
@@ -489,7 +488,6 @@ private fun SessionListFeedPage(
         ladderSections = ladderSections,
         listState = listState,
         listBottomFadeHeight = listBottomFadeHeight,
-        borderWeaker = borderWeaker,
         emptyContent = emptyContent,
         selectedSessionId = selectedSessionId,
         onSessionSelected = onSessionSelected,
@@ -512,7 +510,6 @@ private fun SessionListFeed(
     ladderSections: List<HomeSessionLadderSection<SessionListSession>>,
     listState: LazyListState,
     listBottomFadeHeight: Dp,
-    borderWeaker: androidx.compose.ui.graphics.Color,
     emptyContent: (@Composable () -> Unit)?,
     selectedSessionId: String?,
     onSessionSelected: (SessionListSession) -> Unit,
@@ -588,7 +585,6 @@ private fun SessionListFeed(
                         ladderSections = ladderSections,
                         listState = listState,
                         listBottomFadeHeight = listBottomFadeHeight,
-                        borderWeaker = borderWeaker,
                         emptyContent = emptyContent,
                         selectedSessionId = selectedSessionId,
                         onSessionSelected = onSessionSelected,
@@ -607,7 +603,6 @@ private fun SessionListFeedRows(
     ladderSections: List<HomeSessionLadderSection<SessionListSession>>,
     listState: LazyListState,
     listBottomFadeHeight: Dp,
-    borderWeaker: androidx.compose.ui.graphics.Color,
     emptyContent: (@Composable () -> Unit)?,
     selectedSessionId: String?,
     onSessionSelected: (SessionListSession) -> Unit,
@@ -637,15 +632,13 @@ private fun SessionListFeedRows(
                         item(key = "header-${section.id}") {
                             OpenCodeSectionHeader(title = "Recent")
                         }
-                        itemsIndexed(
+                        items(
                             section.items,
-                            key = { _, session -> "${section.id}-${session.id}" },
-                        ) { index, session ->
+                            key = { session -> "${section.id}-${session.id}" },
+                        ) { session ->
                             SessionListRow(
                                 session = session,
                                 showStatusDot = true,
-                                showDivider = sessionListShowsDivider(index, section.items, selectedSessionId),
-                                borderWeaker = borderWeaker,
                                 selected = session.id == selectedSessionId,
                                 onSessionSelected = onSessionSelected,
                                 onSessionLongPress = onSessionLongPress,
@@ -659,15 +652,13 @@ private fun SessionListFeedRows(
                         item(key = "header-${section.id}") {
                             OpenCodeSectionHeader(title = section.title)
                         }
-                        itemsIndexed(
+                        items(
                             section.items,
-                            key = { _, session -> "${section.id}-${session.id}" },
-                        ) { index, session ->
+                            key = { session -> "${section.id}-${session.id}" },
+                        ) { session ->
                             SessionListRow(
                                 session = session,
                                 showStatusDot = false,
-                                showDivider = sessionListShowsDivider(index, section.items, selectedSessionId),
-                                borderWeaker = borderWeaker,
                                 selected = session.id == selectedSessionId,
                                 onSessionSelected = onSessionSelected,
                                 onSessionLongPress = onSessionLongPress,
@@ -685,8 +676,6 @@ private fun SessionListFeedRows(
 private fun SessionListRow(
     session: SessionListSession,
     showStatusDot: Boolean,
-    showDivider: Boolean,
-    borderWeaker: androidx.compose.ui.graphics.Color,
     selected: Boolean,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
@@ -697,8 +686,6 @@ private fun SessionListRow(
         SessionListCompactRow(
             session = session,
             status = status,
-            showDivider = showDivider,
-            borderWeaker = borderWeaker,
             selected = selected,
             onSessionSelected = onSessionSelected,
             onSessionLongPress = onSessionLongPress,
@@ -723,12 +710,6 @@ private fun SessionListRow(
         onClick = { onSessionSelected(session) },
         onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
     )
-    if (showDivider) {
-        HorizontalDivider(
-            modifier = Modifier.padding(start = 60.dp),
-            color = borderWeaker,
-        )
-    }
 }
 
 /** Two-line row (#803): the same in every scope; Idle shows no dot and no status. */
@@ -736,8 +717,6 @@ private fun SessionListRow(
 private fun SessionListCompactRow(
     session: SessionListSession,
     status: OpenCodeListItemStatus,
-    showDivider: Boolean,
-    borderWeaker: androidx.compose.ui.graphics.Color,
     selected: Boolean,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
@@ -761,12 +740,6 @@ private fun SessionListCompactRow(
         onClick = { onSessionSelected(session) },
         onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
     )
-    if (showDivider) {
-        HorizontalDivider(
-            modifier = Modifier.padding(start = 58.dp),
-            color = borderWeaker,
-        )
-    }
 }
 
 /** Compact rows show a status only when the session is not Idle. */
@@ -979,18 +952,4 @@ private fun SessionListPreview() {
             onNewSession = {},
         )
     }
-}
-
-/**
- * Whether the hairline divider after row [index] is drawn. Skipped after the last
- * row and on either side of the selected row so it never butts against the pill.
- */
-internal fun sessionListShowsDivider(
-    index: Int,
-    items: List<SessionListSession>,
-    selectedSessionId: String?,
-): Boolean {
-    if (index < 0 || index >= items.lastIndex) return false
-    if (selectedSessionId == null) return true
-    return items[index].id != selectedSessionId && items[index + 1].id != selectedSessionId
 }

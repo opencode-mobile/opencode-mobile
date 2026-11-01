@@ -4,6 +4,37 @@ import Foundation
 /// helpers only — never Firebase. All sends go through
 /// `OpenCodeReleaseObservability.logProductEvent` (consent + Debug gate).
 enum ProductAnalytics {
+    private static var suppressions = 0
+
+    /// Where events go; tests swap it to see what would be sent.
+    static var sink: (_ name: String, _ parameters: [String: String]) -> Void = { name, parameters in
+        OpenCodeReleaseObservability.logProductEvent(name: name, parameters: parameters)
+    }
+
+    /// True while a `suppress()` handle is open: nothing is logged.
+    static var isSuppressed: Bool { suppressions > 0 }
+
+    /// Open `suppress()` handles; tests compare it before and after.
+    static var suppressionCount: Int { suppressions }
+
+    /// Stops every product event until the returned handle ends. The Session Chat Playground
+    /// holds one while it is open: its fake sessions are not product use.
+    static func suppress() -> Suppression {
+        suppressions += 1
+        return Suppression()
+    }
+
+    final class Suppression {
+        private var ended = false
+
+        /// Ends this suppression; later calls do nothing.
+        func end() {
+            guard !ended else { return }
+            ended = true
+            ProductAnalytics.suppressions -= 1
+        }
+    }
+
     enum Event {
         static let screenView = "product_screen_view"
         static let userAction = "product_user_action"
@@ -71,6 +102,7 @@ enum ProductAnalytics {
         static let sessionChipTimelineIntro = "session_chip_timeline_intro"
         static let sessionTimelineStylePicker = "session_timeline_style_picker"
         static let sessionTodos = "session_todos"
+        static let sessionSubagents = "session_subagents"
         static let sessionContext = "session_context"
         static let changes = "changes"
         static let changesFileViewer = "changes_file_viewer"
@@ -159,6 +191,7 @@ enum ProductAnalytics {
         static let chatOpenChangesFromTool = "chat_open_changes_from_tool"
         static let chatOpenChildSession = "chat_open_child_session"
         static let chatOpenTodos = "chat_open_todos"
+        static let chatOpenSubagents = "chat_open_subagents"
         static let chatScrollToEnd = "chat_scroll_to_end"
         static let chatOpenMessageActions = "chat_open_message_actions"
         static let chatOpenToolDetail = "chat_open_tool_detail"
@@ -200,6 +233,9 @@ enum ProductAnalytics {
         static let questionNext = "question_next"
         static let questionSubmit = "question_submit"
         static let questionDismiss = "question_dismiss"
+        static let questionHide = "question_hide"
+        static let questionShow = "question_show"
+        static let inboxRequestPage = "inbox_request_page"
 
         static let commandsDismiss = "commands_dismiss"
         static let commandsNew = "commands_new"
@@ -210,11 +246,20 @@ enum ProductAnalytics {
         static let commandsTerminal = "commands_terminal"
         static let commandsFiles = "commands_files"
         static let commandsMcp = "commands_mcp"
+        static let commandsBtw = "commands_btw"
+        static let sideQuestionAsk = "side_question_ask"
+        static let sideQuestionOpenAnswer = "side_question_open_answer"
+        static let sideQuestionCopy = "side_question_copy"
+        static let sideQuestionClose = "side_question_close"
+        static let sideQuestionRetry = "side_question_retry"
+        static let sideQuestionDismissFailed = "side_question_dismiss_failed"
         static let mcpServersBack = "mcp_servers_back"
         static let attachSourceDismiss = "attach_source_dismiss"
         static let attachPickPhotos = "attach_pick_photos"
         static let attachPickFiles = "attach_pick_files"
         static let attachPickLogFile = "attach_pick_log_file"
+        static let attachPaste = "attach_paste"
+        static let attachDrop = "attach_drop"
         static let modelPickerDismiss = "model_picker_dismiss"
         static let modelPickerSelectProvider = "model_picker_select_provider"
         static let modelPickerBackToProviders = "model_picker_back_to_providers"
@@ -238,6 +283,7 @@ enum ProductAnalytics {
         static let messageActionsRevert = "message_actions_revert"
         static let messageActionsFork = "message_actions_fork"
         static let messageActionsCopy = "message_actions_copy"
+        static let messageActionsCopyCodeBlock = "message_actions_copy_code_block"
         static let chatSteerPendingPrompt = "chat_steer_pending_prompt"
         static let chatQueuePendingPrompt = "chat_queue_pending_prompt"
         static let chatCancelPendingPrompt = "chat_cancel_pending_prompt"
@@ -255,6 +301,7 @@ enum ProductAnalytics {
         static let timelineStylePickerDismiss = "timeline_style_picker_dismiss"
         static let sessionToolGroupBack = "session_tool_group_back"
         static let todosDismiss = "todos_dismiss"
+        static let subagentsDismiss = "subagents_dismiss"
 
         static let sessionContextBack = "session_context_back"
         static let sessionContextRefresh = "session_context_refresh"
@@ -342,14 +389,12 @@ enum ProductAnalytics {
         presentation: String,
         trigger: String = Trigger.push
     ) {
-        OpenCodeReleaseObservability.logProductEvent(
-            name: Event.screenView,
-            parameters: [
-                Param.screenId: screenId,
-                Param.presentation: presentation,
-                Param.trigger: trigger,
-            ]
-        )
+        guard !isSuppressed else { return }
+        sink(Event.screenView, [
+            Param.screenId: screenId,
+            Param.presentation: presentation,
+            Param.trigger: trigger,
+        ])
     }
 
     static func logUserAction(
@@ -357,12 +402,10 @@ enum ProductAnalytics {
         actionId: String,
         parameters: [String: String] = [:]
     ) {
+        guard !isSuppressed else { return }
         var merged = parameters
         merged[Param.screenId] = screenId
         merged[Param.actionId] = actionId
-        OpenCodeReleaseObservability.logProductEvent(
-            name: Event.userAction,
-            parameters: merged
-        )
+        sink(Event.userAction, merged)
     }
 }

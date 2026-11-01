@@ -28,6 +28,7 @@ enum class SessionCacheKind {
     SessionList,
     MessageTimeline,
     Activity,
+    ProjectResolution,
 }
 
 data class SessionCacheKey(
@@ -42,6 +43,7 @@ data class SessionCacheKey(
                 SessionCacheKind.SessionList -> "$connectionId|$worktree|list"
                 SessionCacheKind.MessageTimeline -> "$connectionId|$worktree|msg|$entryId"
                 SessionCacheKind.Activity -> "$connectionId|$worktree|activity"
+                SessionCacheKind.ProjectResolution -> "$connectionId|$worktree|project"
             }
 }
 

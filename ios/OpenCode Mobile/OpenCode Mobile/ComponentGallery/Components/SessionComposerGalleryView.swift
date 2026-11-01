@@ -8,10 +8,12 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     case attachments
     case revert
     case shell
+    case sideQuestion
     case childLockout
     case permission
     case permissionEdit
     case queued
+    case subagentPermission
     case submitting
     case error
     case question
@@ -21,6 +23,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
     case custom
     case questionSubmitting
     case questionError
+    case subagentQuestion
 
     var id: String { rawValue }
 
@@ -33,10 +36,12 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
         case .attachments: "Attachments"
         case .revert: "Revert"
         case .shell: "Shell"
+        case .sideQuestion: "/btw"
         case .childLockout: "Child"
         case .permission: "Permission"
         case .permissionEdit: "Edit"
         case .queued: "Queued"
+        case .subagentPermission: "Subagent"
         case .submitting: "Submitting"
         case .error: "Error"
         case .question: "Question"
@@ -46,6 +51,7 @@ private enum SessionComposerGalleryScenario: String, CaseIterable, Identifiable 
         case .custom: "Custom"
         case .questionSubmitting: "Q Submit"
         case .questionError: "Q Error"
+        case .subagentQuestion: "Q Subagent"
         }
     }
 }
@@ -64,6 +70,8 @@ struct SessionComposerGalleryView: View {
     @State private var draftText = "Summarize the current changes"
     @State private var mentionText = mentionGalleryText
     @State private var shellText = "!git status"
+    @State private var sideQuestionText = "What did we change so far?"
+    @State private var sideQuestionMode = true
     @State private var mentionsCleared = false
     @State private var lastAction = "None"
     @State private var selectedLabels = ["Minimal patch"]
@@ -157,6 +165,8 @@ struct SessionComposerGalleryView: View {
             promptState(text: "Add a dark mode toggle to Settings", showPendingRevert: true)
         case .shell:
             promptState(text: shellText, shellMode: ComposerShellCommand.isShellMode(shellText))
+        case .sideQuestion:
+            promptState(text: sideQuestionText, showStop: true, sideQuestionMode: sideQuestionMode)
         case .childLockout:
             .childLockout(
                 .init(
@@ -171,6 +181,16 @@ struct SessionComposerGalleryView: View {
             permissionState(edit: true)
         case .queued:
             permissionState(queueCount: 3)
+        case .subagentPermission:
+            permissionState(
+                queuePosition: 2,
+                queueCount: 3,
+                attribution: .init(
+                    sessionID: "session-gallery-child",
+                    letter: "G",
+                    summary: "general · subagent wants to run: npm test"
+                )
+            )
         case .submitting:
             permissionState(submitting: true)
         case .error:
@@ -243,6 +263,16 @@ struct SessionComposerGalleryView: View {
                 submitEnabled: true,
                 errorMessage: "The question response failed. Try again."
             )
+        case .subagentQuestion:
+            questionState(
+                questionIndex: 0,
+                questionCount: 1,
+                selectedLabels: selectedLabels,
+                submitEnabled: questionAnswered,
+                requestPosition: 1,
+                requestCount: 2,
+                attribution: .init(sessionID: "session-gallery-child", letter: "E", summary: "explore · subagent asks")
+            )
         }
     }
 
@@ -252,7 +282,8 @@ struct SessionComposerGalleryView: View {
         attachments: [OpenCodeAttachmentPresentation] = [],
         showPendingRevert: Bool = false,
         showStop: Bool = false,
-        shellMode: Bool = false
+        shellMode: Bool = false,
+        sideQuestionMode: Bool = false
     ) -> OpenCodeSessionComposerState {
         .prompt(
             .init(
@@ -267,16 +298,19 @@ struct SessionComposerGalleryView: View {
                 sendEnabled: shellMode
                     ? ComposerShellCommand.command(text) != nil
                     : !text.isEmpty || !attachments.isEmpty,
-                attachEnabled: !shellMode,
+                attachEnabled: !shellMode && !sideQuestionMode,
                 showStop: showStop,
                 stopEnabled: showStop,
-                shellMode: shellMode
+                shellMode: shellMode,
+                sideQuestionMode: sideQuestionMode
             )
         )
     }
 
     private func permissionState(
+        queuePosition: Int = 1,
         queueCount: Int = 1,
+        attribution: OpenCodeSessionComposerState.RequestAttribution? = nil,
         submitting: Bool = false,
         errorMessage: String? = nil,
         edit: Bool = false
@@ -294,7 +328,9 @@ struct SessionComposerGalleryView: View {
                     ]
                     : [],
                 alwaysPatterns: edit ? ["*"] : ["git status *", "git diff *"],
+                queuePosition: queuePosition,
                 queueCount: queueCount,
+                attribution: attribution,
                 submitting: submitting,
                 errorMessage: errorMessage
             )
@@ -316,7 +352,10 @@ struct SessionComposerGalleryView: View {
         nextEnabled: Bool = false,
         submitEnabled: Bool = false,
         submitting: Bool = false,
-        errorMessage: String? = nil
+        errorMessage: String? = nil,
+        requestPosition: Int = 1,
+        requestCount: Int = 1,
+        attribution: OpenCodeSessionComposerState.RequestAttribution? = nil
     ) -> OpenCodeSessionComposerState {
         .question(
             .init(
@@ -337,7 +376,10 @@ struct SessionComposerGalleryView: View {
                 nextEnabled: nextEnabled,
                 submitEnabled: submitEnabled,
                 submitting: submitting,
-                errorMessage: errorMessage
+                errorMessage: errorMessage,
+                requestPosition: requestPosition,
+                requestCount: requestCount,
+                attribution: attribution
             )
         )
     }
@@ -375,11 +417,15 @@ struct SessionComposerGalleryView: View {
                 mentionsCleared = true
             case .shell:
                 shellText = text
+            case .sideQuestion:
+                sideQuestionText = text
             default:
                 draftText = text
             }
         case .exitShellMode:
             shellText = ComposerShellCommand.exitShellMode(shellText)
+        case .exitSideQuestionMode:
+            sideQuestionMode = false
         case let .toggleQuestionOption(_, _, label):
             if scenario == .multiSelect || scenario == .multiSelectBounded {
                 if selectedLabels.contains(label) {
@@ -419,8 +465,10 @@ private extension OpenCodeSessionComposerAction {
         case .attach: "Attach"
         case .openCommands: "Open commands"
         case .removeAttachment: "Remove attachment"
+        case .pasteAttachments: "Paste attachment"
         case .cancelRevert: "Cancel revert"
         case .exitShellMode: "Exit shell mode"
+        case .exitSideQuestionMode: "Exit side question mode"
         case .send: "Send"
         case .toggleFollowUp: "Toggle follow-up"
         case .stop: "Stop"
@@ -428,6 +476,9 @@ private extension OpenCodeSessionComposerAction {
         case .denyPermission: "Deny"
         case .alwaysAllowPermission: "Always"
         case .hidePermission: "Hide permission"
+        case .hideQuestion: "Hide question"
+        case let .pageRequest(delta): delta < 0 ? "Previous request" : "Next request"
+        case .openRequestSession: "Open subagent session"
         case .toggleQuestionOption: "Toggle option"
         case .toggleQuestionCustom: "Toggle custom"
         case .questionCustomTextChanged: "Custom text changed"

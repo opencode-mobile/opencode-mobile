@@ -43,6 +43,8 @@ final class SessionChatTimeline {
     /// Children of this session that subagent parts without a child id link to (#648).
     private(set) var childSessions: [SessionChatChildSessionCandidate] = []
     private let listChildSessions: (@MainActor (String) async throws -> [Session])?
+    /// True when the server records no agent/model notices (v1), so the timeline derives them.
+    private let derivesChangeNotices: @MainActor () -> Bool
     /// Unlinked subagent parts already covered by a child-session lookup.
     private var childSessionLookupPartIDs: Set<String> = []
     private var childSessionLookupTask: Task<Void, Never>?
@@ -67,12 +69,14 @@ final class SessionChatTimeline {
         sessionID: String,
         worktree: String,
         messageRepository: any MessageRepository,
-        listChildSessions: (@MainActor (String) async throws -> [Session])? = nil
+        listChildSessions: (@MainActor (String) async throws -> [Session])? = nil,
+        derivesChangeNotices: @escaping @MainActor () -> Bool = { false }
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
         self.messageRepository = messageRepository
         self.listChildSessions = listChildSessions
+        self.derivesChangeNotices = derivesChangeNotices
     }
 
     func updateServerCommands(_ commands: [ServerCommand]) {
@@ -193,6 +197,29 @@ final class SessionChatTimeline {
     func closeActivityCardStep() {
         guard state.activityCardDetailStepId != nil else { return }
         state.activityCardDetailStepId = nil
+        notifyChange()
+    }
+
+    /// Gallery: open the viewer over `images` at `index`. Ignored when the index is out of range.
+    func openImageViewer(images: [FilePart], index: Int) {
+        guard images.indices.contains(index) else { return }
+        let viewer = SessionChatImageViewerState(images: images, index: index)
+        guard state.imageViewer != viewer else { return }
+        state.imageViewer = viewer
+        notifyChange()
+    }
+
+    /// Viewer: the user paged to `index`.
+    func showImageViewerPage(_ index: Int) {
+        guard var viewer = state.imageViewer, viewer.index != index, viewer.images.indices.contains(index) else { return }
+        viewer.index = index
+        state.imageViewer = viewer
+        notifyChange()
+    }
+
+    func closeImageViewer() {
+        guard state.imageViewer != nil else { return }
+        state.imageViewer = nil
         notifyChange()
     }
 
@@ -430,7 +457,8 @@ final class SessionChatTimeline {
             chipTimeline: chipTimeline,
             stepRail: stepRailTimeline,
             activityCard: activityCardTimeline,
-            childSessions: childSessions
+            childSessions: childSessions,
+            derivesChangeNotices: derivesChangeNotices()
         )
         let stamped = SessionChatTimelineProjector.project(
             frame: frame,
@@ -638,7 +666,7 @@ final class SessionChatTimeline {
             notifyChange()
             return
         }
-        state.messages.append(contentsOf: displayed)
+        state.messages.append(contentsOf: Self.markingOptimisticSteers(displayed, after: timelineFrame))
         state.timeline = .ready
         state.errorMessage = nil
         let inserted = Set(displayed.map(\.id))
@@ -650,6 +678,18 @@ final class SessionChatTimeline {
             layoutChangedRowIDs: inserted
         )
         notifyChange()
+    }
+
+    /// A busy steer send shows as a pending steer from the first frame, before any echo.
+    static func markingOptimisticSteers(_ rows: [SessionChatRow], after frame: TimelineFrame) -> [SessionChatRow] {
+        let previousByID = Dictionary(frame.rows.map { ($0.id, $0) }, uniquingKeysWith: { _, latest in latest })
+        let marked = SessionChatTimelineProjector.markSteers(
+            frame.rows + rows.map { TimelineRow.fromSessionChatRow($0) },
+            previousByID: previousByID,
+            listIDAliases: frame.listIDAliases,
+            runIsActive: false
+        ).suffix(rows.count)
+        return zip(rows, marked).map { row, timelineRow in row.withSteer(timelineRow.steer) }
     }
 
     func failOptimisticSend(optimisticID: String, error: String) {
@@ -848,6 +888,7 @@ final class SessionChatTimeline {
 
         // Match Android: structural DisplayFrame + TimelineFrame conversion off main.
         let previewCandidates = Self.previewWarmCandidates(visibleDisplayMessages)
+        let derivesNotices = derivesChangeNotices()
         let projected = await Task.detached(priority: .userInitiated) {
             AttachmentPreviewCache.shared.warm(previewCandidates)
             let frame = DisplayFrameBuilder.build(
@@ -860,7 +901,8 @@ final class SessionChatTimeline {
                 chipTimeline: chips,
                 stepRail: stepRail,
                 activityCard: activityCard,
-                childSessions: children
+                childSessions: children,
+                derivesChangeNotices: derivesNotices
             )
             return SessionChatTimelineProjector.project(
                 frame: frame,
@@ -1113,8 +1155,7 @@ final class SessionChatTimeline {
                     followUpDelivery: patch.delivery
                 ),
                 renderedMarkdown: display.renderedMarkdown,
-                awaitingTextMateUpgrade: display.awaitingTextMateUpgrade,
-                highlightEpoch: display.highlightEpoch
+                awaitingTextMateUpgrade: display.awaitingTextMateUpgrade
             )
         }
     }

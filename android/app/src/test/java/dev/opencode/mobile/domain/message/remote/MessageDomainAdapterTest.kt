@@ -614,6 +614,25 @@ class MessageDomainAdapterTest {
         val dto = MessagePartDto(id = "prt-1", type = "tool", tool = "task", state = state)
         val tool = adapter.toMessagePart(dto) as MessagePart.Tool
         assertEquals(1_710_000_000_000, tool.timeStartEpochMs)
+        assertEquals(null, tool.timeEndEpochMs)
+    }
+
+    @Test
+    fun toMessagePart_completedMapsTimeEnd() {
+        val state =
+            buildJsonObject {
+                put("status", "completed")
+                put(
+                    "time",
+                    buildJsonObject {
+                        put("start", 1_710_000_000_000)
+                        put("end", 1_710_000_045_000)
+                    },
+                )
+            }
+        val dto = MessagePartDto(id = "prt-1", type = "tool", tool = "task", state = state)
+        val tool = adapter.toMessagePart(dto) as MessagePart.Tool
+        assertEquals(1_710_000_045_000, tool.timeEndEpochMs)
     }
 
     @Test
@@ -1300,7 +1319,7 @@ class MessageDomainAdapterTest {
                           "input":{"agent":"explore","description":"Find git projects"},
                           "metadata":{"sessionID":"ses_child","status":"completed"}
                         },
-                        "time":{"created":10}
+                        "time":{"created":10,"completed":42}
                       }
                     ],
                     "time":{"created":3}
@@ -1309,13 +1328,7 @@ class MessageDomainAdapterTest {
                 """.trimIndent(),
             )
 
-        val tool =
-            adapter
-                .projectV2(dtos)
-                .single()
-                .parts
-                .filterIsInstance<MessagePart.Tool>()
-                .single()
+        val tool = adapter.projectV2(dtos).single().parts.filterIsInstance<MessagePart.Tool>().single()
 
         assertEquals("subagent", tool.toolName)
         assertEquals(ToolStatus.Completed, tool.status)
@@ -1335,6 +1348,7 @@ class MessageDomainAdapterTest {
                 ?.content,
         )
         assertEquals(10L, tool.timeStartEpochMs)
+        assertEquals(42L, tool.timeEndEpochMs)
     }
 
     @Test
@@ -1560,6 +1574,85 @@ class MessageDomainAdapterTest {
     }
 
     @Test
+    fun projectV2_freeLimitCarriesRetryAfterFromTheCompletedTime() {
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [{
+                  "id":"a1","type":"assistant","finish":"error","content":[],
+                  "time":{"created":1000,"completed":2000},
+                  "error":{"type":"provider.free-limit",
+                    "message":"Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.",
+                    "status":429,"retryAfterMs":3600000}
+                }]
+                """.trimIndent(),
+            )
+        val failure = MessageDomainAdapter(nowEpochMs = { 9_999L }).projectV2(dtos).single().failure
+        assertEquals("provider.free-limit", failure?.type)
+        assertEquals(
+            "HTTP 429 · Free usage limit reached. Connect a provider or subscribe to OpenCode Go to keep going, or switch models.",
+            failure?.line(),
+        )
+        assertEquals(FailureAction.PickModel, failure?.action())
+        assertEquals(3_600_000L, failure?.retryAfterMs)
+        assertEquals(2_000L, failure?.recordedAtEpochMs)
+        assertEquals(3_602_000L, failure?.retryAtEpochMs())
+    }
+
+    @Test
+    fun projectV2_budgetLimitsFromTheConsoleEnvelope() {
+        // Payloads as anomalyco/opencode#58694 builds them (dev only, no release sends them yet).
+        val dtos =
+            json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
+                """
+                [
+                  {"id":"a1","type":"assistant","finish":"error","content":[],
+                    "error":{"type":"provider.budget-limit",
+                      "message":"Workspace usage limit reached. Model use is paused until the limit resets.",
+                      "status":429,"retryAfterMs":120000,
+                      "response":{"body":"{\"type\":\"error\",\"error\":{\"type\":\"BudgetLimitError\"}}"}}},
+                  {"id":"u2","type":"user","text":"again","time":{"created":3000}},
+                  {"id":"a2","type":"assistant","finish":"error","content":[],"time":{"created":3001,"completed":3002},
+                    "error":{"type":"provider.model-budget-limit",
+                      "message":"You've reached the spend limit for this model. Switch models to keep going.",
+                      "status":429,
+                      "response":{"body":"{\"type\":\"error\",\"error\":{\"type\":\"BudgetLimitError\",\"metadata\":{\"coverage\":\"models\"}}}"}}}
+                ]
+                """.trimIndent(),
+            )
+        val messages = MessageDomainAdapter(nowEpochMs = { 9_999L }).projectV2(dtos)
+        val budget = messages.first().failure
+        assertEquals("HTTP 429 · Workspace usage limit reached. Model use is paused until the limit resets.", budget?.line())
+        assertNull(budget?.action())
+        // No completed time on the failed message: the countdown runs from when the app received it.
+        assertEquals(9_999L, budget?.recordedAtEpochMs)
+        assertEquals(129_999L, budget?.retryAtEpochMs())
+
+        val modelBudget = messages.last().failure
+        assertEquals("provider.model-budget-limit", modelBudget?.type)
+        assertEquals(FailureAction.PickModel, modelBudget?.action())
+        assertNull(modelBudget?.retryAtEpochMs())
+        assertNull(modelBudget?.recordedAtEpochMs)
+    }
+
+    @Test
+    fun v1Failure_hasNoRetryTime() {
+        val dto =
+            json.decodeFromString<MessageDto>(
+                """
+                {"info":{"id":"m1","role":"assistant","time":{"created":1,"completed":2},
+                  "error":{"name":"APIError","data":{"message":"Rate limited","statusCode":429,"isRetryable":true}}},
+                 "parts":[]}
+                """.trimIndent(),
+            )
+        val failure = adapter.toMessage(dto).failure
+        assertEquals("HTTP 429 · Rate limited", failure?.line())
+        assertNull(failure?.retryAfterMs)
+        assertNull(failure?.recordedAtEpochMs)
+        assertNull(failure?.retryAtEpochMs())
+    }
+
+    @Test
     fun projectV2_hidesAbortAndProjectsFailedIdleAndCompaction() {
         val dtos =
             json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(
@@ -1654,6 +1747,106 @@ class MessageDomainAdapterTest {
     }
 
     // MARK: v2 timeline notices
+
+    @Test
+    fun toV2PromptRequest_namesUploadedFilesInTextAndMetadata_andKeepsThemOutOfFiles() {
+        val uploaded =
+            Attachment(
+                id = "u1",
+                filename = "data.zip",
+                mime = "application/zip",
+                kind = AttachmentKind.File,
+                dataUrl = "",
+                byteCount = 50_000_000,
+                localPath = "/tmp/staged/data.zip",
+                upload = AttachmentUpload.Uploaded("/srv/tmp/uploads/abc/data.zip"),
+            )
+        val inline =
+            Attachment(
+                id = "i1",
+                filename = "shot.png",
+                mime = "image/png",
+                kind = AttachmentKind.Image,
+                dataUrl = "data:image/png;base64,AA==",
+                byteCount = 1,
+            )
+
+        val body = adapter.toV2PromptRequest(PromptSendOptions(text = "look", attachments = listOf(inline, uploaded)))
+
+        assertEquals("look\nAttached file: `/srv/tmp/uploads/abc/data.zip`", body.text)
+        assertEquals(listOf("shot.png"), body.files?.map { it.name })
+        assertEquals(
+            """{"attachments":[{"name":"data.zip","mime":"application/zip","path":"/srv/tmp/uploads/abc/data.zip"}]}""",
+            body.metadata.toString(),
+        )
+    }
+
+    @Test
+    fun toV2PromptRequest_withoutUploadsHasNoMetadataAndKeepsTheText() {
+        val body = adapter.toV2PromptRequest(PromptSendOptions(text = "plain"))
+
+        assertEquals("plain", body.text)
+        assertEquals(null, body.metadata)
+    }
+
+    @Test
+    fun projectV2_userMetadataAttachmentsBecomeFilePartsAndDropTheAttachedFileLines() {
+        val message =
+            projectV2(
+                """
+                [
+                  {
+                    "id":"msg_user",
+                    "type":"user",
+                    "text":"look\nAttached file: `/srv/tmp/uploads/abc/data.zip`\nAttached file: `/srv/tmp/uploads/def/shot.png`",
+                    "metadata":{"attachments":[
+                      {"name":"data.zip","mime":"application/zip","path":"/srv/tmp/uploads/abc/data.zip"},
+                      {"name":"shot.png","mime":"image/png","path":"/srv/tmp/uploads/def/shot.png"}
+                    ]},
+                    "time":{"created":1}
+                  }
+                ]
+                """,
+            ).single()
+
+        assertEquals("look", message.text)
+        val files = message.parts.filterIsInstance<MessagePart.File>()
+        assertEquals(listOf(AttachmentKind.File, AttachmentKind.Image), files.map { it.kind })
+        assertEquals(listOf("/srv/tmp/uploads/abc/data.zip", "/srv/tmp/uploads/def/shot.png"), files.map { it.serverPath })
+        assertEquals(listOf("data.zip", "shot.png"), files.map { it.filename })
+    }
+
+    @Test
+    fun projectV2_keepsATypedAttachedFileLineWithoutMatchingMetadata() {
+        val typed = "see Attached file: `/srv/tmp/uploads/u1/data.zip`"
+        val plain = projectV2("""[{"id":"m1","type":"user","text":"$typed","time":{"created":1}}]""").single()
+        assertEquals(typed, plain.text)
+
+        val other =
+            projectV2(
+                """
+                [{"id":"m2","type":"user","text":"Attached file: `/typed/by/user.txt`\nAttached file: `/srv/real.zip`",
+                  "metadata":{"attachments":[{"name":"real.zip","mime":"application/zip","path":"/srv/real.zip"}]},
+                  "time":{"created":1}}]
+                """,
+            ).single()
+        assertEquals("Attached file: `/typed/by/user.txt`", other.text)
+    }
+
+    @Test
+    fun projectV2_attachmentOnlyUploadLeavesNoTextPart() {
+        val message =
+            projectV2(
+                """
+                [{"id":"m","type":"user","text":"Attached file: `/t/a.bin`",
+                  "metadata":{"attachments":[{"name":"a.bin","mime":"application/octet-stream","path":"/t/a.bin"}]},
+                  "time":{"created":1}}]
+                """,
+            ).single()
+
+        assertEquals(emptyList<MessagePart.Text>(), message.parts.filterIsInstance<MessagePart.Text>())
+        assertEquals(1, message.parts.filterIsInstance<MessagePart.File>().size)
+    }
 
     private fun projectV2(body: String): List<Message> =
         adapter.projectV2(json.decodeFromString<List<dev.opencode.mobile.data.remote.dto.V2SessionMessageDto>>(body.trimIndent()))

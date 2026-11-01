@@ -283,11 +283,15 @@ final class SessionInfo {
                     "live status session=\(state.sessionID) seeded=\(snapshot.seeded)"
                 )
                 let card = snapshot.seeded ? activity?.retryCard : nil
+                var isRetrying = false
+                if snapshot.seeded, case .retrying = activity { isRetrying = true }
                 state.applyStatus(
                     authoritative: snapshot.chatStatusLabel(for: state.sessionID),
                     hasResolved: snapshot.seeded,
-                    retryCard: card
+                    retryCard: card,
+                    isRetrying: isRetrying
                 )
+                state.busySessionIDs = Set(snapshot.entries.keys.filter { snapshot.isBusy(for: $0) })
                 notifyChange()
             }
             if Task.isCancelled { return }

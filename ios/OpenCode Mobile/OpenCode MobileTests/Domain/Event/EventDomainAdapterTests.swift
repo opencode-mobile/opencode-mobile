@@ -667,6 +667,21 @@ struct EventDomainAdapterTests {
         #expect(metadata?["count"]?.int64Value == 2)
     }
 
+    @Test func parseEvent_settledToolStampsItsEventTimeAsTheEnd() {
+        let adapter = EventDomainAdapter()
+        let success = adapter.parseEvent(
+            dataLine: #"{"type":"session.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","created":1710000045000}}"#
+        )
+        let progress = adapter.parseEvent(
+            dataLine: #"{"type":"session.tool.progress","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","created":1710000001000}}"#
+        )
+        let time = { (event: OpencodeEvent?) in
+            event?.rawProperties?["part"]?.dictionaryValue?["state"]?.dictionaryValue?["time"]?.dictionaryValue
+        }
+        #expect(time(success)?["end"]?.int64Value == 1_710_000_045_000)
+        #expect(time(progress)?["end"] == nil)
+    }
+
     @Test func parseEvent_infersWebsearchToolFromInputQuery() {
         let adapter = EventDomainAdapter()
         let event = adapter.parseEvent(
@@ -927,6 +942,15 @@ struct EventDomainAdapterTests {
         #expect(errorType == "provider.quota")
         #expect(actionLabel == "Upgrade")
         #expect(actionLink == "https://example.com")
+    }
+
+    @Test func stepFailed_keepsRetryAfterOnTheTranslatedError() {
+        let adapter = EventDomainAdapter()
+        let events = adapter.parseEvents(
+            dataLine: #"{"type":"session.step.failed","data":{"sessionID":"ses-1","assistantMessageID":"a1","error":{"type":"provider.free-limit","message":"Free usage limit reached.","status":429,"retryAfterMs":3600000}}}"#
+        )
+        let data = events.first?.rawProperties?["info"]?.dictionaryValue?["error"]?.dictionaryValue?["data"]?.dictionaryValue
+        #expect(data?["retryAfterMs"]?.int64Value == 3_600_000)
     }
 
     @Test func stepFailed_withAssistantId_putsTheErrorOnTheMessageAndSkipsTheSnackbarEvent() {

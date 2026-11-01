@@ -1066,6 +1066,7 @@ class InMemoryMessageStore
                                 input = mergedInput,
                                 metadata = mergeJson(existing.metadata, incoming.metadata),
                                 timeStartEpochMs = existing.timeStartEpochMs ?: incoming.timeStartEpochMs,
+                                timeEndEpochMs = existing.timeEndEpochMs ?: incoming.timeEndEpochMs,
                             )
                         }
                         existing.copy(
@@ -1082,8 +1083,11 @@ class InMemoryMessageStore
                             output = incoming.output?.takeIf { it.isNotEmpty() } ?: existing.output,
                             metadata = mergeJson(existing.metadata, incoming.metadata),
                             timeStartEpochMs = incoming.timeStartEpochMs ?: existing.timeStartEpochMs,
+                            timeEndEpochMs = incoming.timeEndEpochMs ?: existing.timeEndEpochMs,
                             isInterrupted = incoming.isInterrupted,
                             isMalformed = incoming.isMalformed || existing.isMalformed,
+                            // Only the terminal update carries files; a later bare update keeps them.
+                            images = incoming.images.ifEmpty { existing.images },
                         )
                     }
                     existing is MessagePart.Text && incoming is MessagePart.Text -> {

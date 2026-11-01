@@ -180,6 +180,19 @@ extension Container {
         }.singleton
     }
 
+    var attachmentUploadRepository: Factory<any AttachmentUploadRepository> {
+        onMainActor {
+            DefaultAttachmentUploadRepository(
+                api: AttachmentUploadAPIClient(connectionProvider: self.connectionProvider()),
+                activeConnectionManager: self.activeConnectionManager()
+            )
+        }.singleton
+    }
+
+    var attachmentImageLoader: Factory<any AttachmentImageLoading> {
+        onMainActor { AttachmentImageLoader(filesystem: self.filesystemAPIClient()) }.singleton
+    }
+
     var messageDomainAdapter: Factory<MessageDomainAdapter> {
         onMainActor { MessageDomainAdapter() }.singleton
     }
@@ -485,7 +498,8 @@ extension Container {
                 },
                 protocolHint: { manager.protocolHint() },
                 cachedProtocol: { manager.serverProtocol },
-                protocolProbe: { await manager.currentProtocolOrProbe() }
+                protocolProbe: { await manager.currentProtocolOrProbe() },
+                protocolRedetect: { await manager.redetectProtocol() }
             )
         }.singleton
     }
@@ -611,9 +625,14 @@ extension Container {
                 sessionReadyStore: self.sessionReadyStore(),
                 messageRepository: self.messageRepository(),
                 modelCatalogStore: self.modelCatalogStore(),
-                sessionViewReporter: self.sessionViewReporter()
+                sessionViewReporter: self.sessionViewReporter(),
+                sideQuestionStore: self.sideQuestionStore()
             )
         }.singleton
+    }
+
+    var sideQuestionStore: Factory<SideQuestionStore> {
+        onMainActor { SideQuestionStore(sessionRepository: self.sessionRepository()) }.singleton
     }
 
     var sessionContextRepository: Factory<any SessionContextRepository> {
@@ -693,9 +712,12 @@ extension Container {
                 ),
                 liveUpdates: self.liveUpdates(),
                 lastTurnReviewChangesStore: self.lastTurnReviewChangesStore(),
+                sideQuestionStore: self.sideQuestionStore(),
                 syncCoordinator: self.syncCoordinator(),
                 mcpRepository: self.mcpRepository(),
                 projectFilesRepository: self.projectFilesRepository(),
+                attachmentUploadRepository: self.attachmentUploadRepository(),
+                attachmentImageLoader: self.attachmentImageLoader(),
                 worktreeRepository: self.worktreeRepository(),
                 projectRepository: self.projectRepository(),
                 worktreeInventoryCache: self.worktreeInventoryCache()
@@ -802,6 +824,10 @@ extension Container {
         shared.terminalViewModel((worktree: worktree, ptyId: ptyId))
     }
 
+    /// Highlighter for Session Chat code fences: highlight-core (#872) in every build. The File
+    /// Viewer keeps its own highlight-core session per open file (`HighlightCoreFileSession`).
+    nonisolated static let codeHighlighter: any TextMateHighlighting = HighlightCoreHighlightingEngine.shared
+
     @MainActor
     static func makeFilesViewModel(worktree: String) -> FilesViewModel {
         FilesViewModel(worktree: worktree, repository: shared.projectFilesRepository())
@@ -819,7 +845,6 @@ extension Container {
             await shared.sessionCache().clearAll()
             ThemeManager.shared.clearAll()
             HomeDisplayPreferences.shared.clear()
-            MarkdownHighlightPreferences.shared.clear()
             AnalyticsConsentPreferences.shared.clear()
             // Apply the reset default to Crashlytics and Analytics collection now, not at next launch.
             OpenCodeReleaseObservability.setProductAnalyticsConsented(
@@ -829,12 +854,14 @@ extension Container {
             AppOnboardingPreferences.shared.clear()
             DeveloperToolsPreferences.shared.clear()
             PerformanceOverlayPreferences.shared.clear()
+            await codeHighlighter.trim(.critical)
             SessionChatDisplayPreferences.shared.clear()
+            // A wipe is a fresh install: settle the timeline now so the update-only picker never shows.
+            SessionChatDisplayPreferences.shared.resolveTimelineForInstall(existingInstall: false)
             SplitPanePreferences.shared.clear()
             FeatureFlags.shared.clearOverrides()
             MessageContentPreparer.shared.clearDocumentCache()
             BlockDecorationCache.shared.clear()
-            await TextMateLogbook.shared.clear()
             DiagnosticLogBuffer.shared.clear()
         }
     }

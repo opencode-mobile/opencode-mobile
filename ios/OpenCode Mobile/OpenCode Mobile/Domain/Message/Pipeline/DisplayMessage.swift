@@ -3,23 +3,19 @@ import Foundation
 nonisolated struct DisplayMessage: Sendable {
     let message: Message
     let renderedMarkdown: NativeMarkdownDocument?
-    /// True when `renderedMarkdown` is still a streaming (semantic-fallback) parse
-    /// kept as a FinalPlaceholder. Final prepare must not settle-reuse these when
-    /// TextMate is enabled.
+    /// True when `renderedMarkdown` is still a structure-only parse (streaming, or
+    /// HistoryPlainFirst) waiting for highlight-core colors. Final prepare must not
+    /// settle-reuse these.
     let awaitingTextMateUpgrade: Bool
-    /// Matches `MarkdownHighlightPreferences.epoch` when this row was prepared.
-    let highlightEpoch: Int
 
     nonisolated init(
         message: Message,
         renderedMarkdown: NativeMarkdownDocument? = nil,
-        awaitingTextMateUpgrade: Bool = false,
-        highlightEpoch: Int = 0
+        awaitingTextMateUpgrade: Bool = false
     ) {
         self.message = message
         self.renderedMarkdown = renderedMarkdown
         self.awaitingTextMateUpgrade = awaitingTextMateUpgrade
-        self.highlightEpoch = highlightEpoch
     }
 
     nonisolated var id: String { message.id }

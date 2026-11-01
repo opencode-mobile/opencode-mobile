@@ -20,6 +20,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     case stopNote(blockID: String, reason: MessageStopReason)
     /// A failed run under the reply. A provider body or an action opens the detail sheet.
     /// `coveredByLiveRetry` is a rate-limit or quota the composer status already shows.
+    /// `retryAtEpochMs` is when the provider said to try again.
     case failureLine(
         blockID: String,
         text: String,
@@ -27,10 +28,14 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         isNeutral: Bool,
         action: FailureAction?,
         actionLabel: String?,
-        coveredByLiveRetry: Bool
+        coveredByLiveRetry: Bool,
+        retryAtEpochMs: Int64? = nil
     )
     /// A session-level change (moved, agent, model, instructions, restart) on its own row.
     case notice(blockID: String, notice: TimelineNotice)
+    /// Consecutive images from one source: under the tool card or group that returned them,
+    /// or a run of two or more attached images in a message (one image stays `.attachment`).
+    case imageGallery(blockID: String, gallery: SessionChatImageGalleryBlock)
 
     var blockID: String {
         switch self {
@@ -54,9 +59,11 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             blockID
         case .stopNote(let blockID, _):
             blockID
-        case .failureLine(let blockID, _, _, _, _, _, _):
+        case .failureLine(let blockID, _, _, _, _, _, _, _):
             blockID
         case .notice(let blockID, _):
+            blockID
+        case .imageGallery(let blockID, _):
             blockID
         }
     }
@@ -78,7 +85,7 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
             guard let textBlockID = paragraph.textBlockID, let text = paragraph.text else { return nil }
             return (textBlockID, text, paragraph.renderedMarkdown)
         case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard, .stopNote,
-             .failureLine, .notice:
+             .failureLine, .notice, .imageGallery:
             return nil
         }
     }
@@ -91,8 +98,17 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case .stepParagraph(let blockID, let paragraph):
             return .stepParagraph(blockID: blockID, paragraph: paragraph.withRenderedMarkdown(document))
         case .attachment, .toolCard, .toolGroup, .childSessionRow, .reasoning, .stepRail, .activityCard, .stopNote,
-             .failureLine, .notice:
+             .failureLine, .notice, .imageGallery:
             return self
+        }
+    }
+
+    /// Files a message carries: an attachment or a gallery of attached images (not tool images).
+    var isAttachmentContent: Bool {
+        switch self {
+        case .attachment: true
+        case .imageGallery(_, let gallery): gallery.source != .tool
+        default: false
         }
     }
 
@@ -129,13 +145,15 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
         case let (.stopNote(lID, lReason), .stopNote(rID, rReason)):
             lID == rID && lReason == rReason
         case let (
-            .failureLine(lID, lText, lBody, lNeutral, lAction, lLabel, lCovered),
-            .failureLine(rID, rText, rBody, rNeutral, rAction, rLabel, rCovered)
+            .failureLine(lID, lText, lBody, lNeutral, lAction, lLabel, lCovered, lRetryAt),
+            .failureLine(rID, rText, rBody, rNeutral, rAction, rLabel, rCovered, rRetryAt)
         ):
             lID == rID && lText == rText && lBody == rBody && lNeutral == rNeutral
-                && lAction == rAction && lLabel == rLabel && lCovered == rCovered
+                && lAction == rAction && lLabel == rLabel && lCovered == rCovered && lRetryAt == rRetryAt
         case let (.notice(lID, lNotice), .notice(rID, rNotice)):
             lID == rID && lNotice == rNotice
+        case let (.imageGallery(lID, lGallery), .imageGallery(rID, rGallery)):
+            lID == rID && lGallery == rGallery
         default:
             false
         }
@@ -168,6 +186,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     let isReceivingArguments: Bool
     /// Inspector body for the tool-result sheet. Nil when there is nothing to classify.
     let presentation: ToolResultPresentation?
+    /// Images the tool returned; the timeline shows them as a gallery under the card.
+    let images: [FilePart]
 
     init(
         toolName: String,
@@ -185,7 +205,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         isInterrupted: Bool = false,
         isMalformed: Bool = false,
         isReceivingArguments: Bool = false,
-        presentation: ToolResultPresentation? = nil
+        presentation: ToolResultPresentation? = nil,
+        images: [FilePart] = []
     ) {
         self.toolName = toolName
         self.status = status
@@ -203,6 +224,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.isMalformed = isMalformed
         self.isReceivingArguments = isReceivingArguments
         self.presentation = presentation
+        self.images = images
     }
 
     func markingFailed(_ errorText: String) -> SessionChatToolCardBlock {
@@ -221,7 +243,8 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
             changesInitialFilePath: changesInitialFilePath,
             isInterrupted: isInterrupted,
             isMalformed: isMalformed,
-            presentation: presentation
+            presentation: presentation,
+            images: images
         )
     }
 }
@@ -233,6 +256,30 @@ nonisolated struct SessionChatToolGroupBlock: Equatable, Sendable {
     let subtitle: String?
     let errorText: String?
     let members: [SessionChatToolCardBlock]
+}
+
+extension FilePart {
+    /// An image the timeline can draw: inline data, a server file, or a preview. A cached copy
+    /// with none of these stays an attachment card.
+    nonisolated var isViewableImage: Bool {
+        kind == .image && (!dataURL.isEmpty || serverPath != nil || previewData != nil)
+    }
+}
+
+/// Where the images of a gallery came from; decides placement and the viewer group.
+nonisolated enum SessionChatImageSource: String, Sendable {
+    /// Returned by a tool: under its card or group card.
+    case tool
+    /// Attached by the user: inside the user bubble, above the text.
+    case user
+    /// File parts on an assistant message: in reply order.
+    case assistant
+}
+
+nonisolated struct SessionChatImageGalleryBlock: Equatable, Sendable {
+    let source: SessionChatImageSource
+    /// In order; the viewer pages over all of them.
+    let images: [FilePart]
 }
 
 nonisolated struct SessionChatChildSessionRowBlock: Equatable, Sendable {
@@ -879,13 +926,27 @@ nonisolated enum SessionChatTimelineBlocks {
                 index += 1
             case .file(let file):
                 flushText()
-                blocks.append(
-                    .attachment(
-                        blockID: PresentationBlockId.direct(file.id),
-                        file: AttachmentPreviewCache.shared.resolved(file)
+                let run = imageRun(in: parts, from: index)
+                if run.images.count >= 2 {
+                    blocks.append(
+                        .imageGallery(
+                            blockID: PresentationBlockId.imageGallery(run.images.map(\.id)),
+                            gallery: SessionChatImageGalleryBlock(
+                                source: role == .user ? .user : .assistant,
+                                images: run.images.map(AttachmentPreviewCache.shared.resolved)
+                            )
+                        )
                     )
-                )
-                index += 1
+                    index = run.end
+                } else {
+                    blocks.append(
+                        .attachment(
+                            blockID: PresentationBlockId.direct(file.id),
+                            file: AttachmentPreviewCache.shared.resolved(file)
+                        )
+                    )
+                    index += 1
+                }
             case .notice(let notice):
                 flushText()
                 blocks.append(noticeBlock(notice))
@@ -942,15 +1003,18 @@ nonisolated enum SessionChatTimelineBlocks {
                     if groupTools.count >= 2 {
                         guard let group = toToolGroup(groupTools) else { return .missingPartIds }
                         blocks.append(group)
+                        blocks.append(contentsOf: toolImageGallery(groupTools, under: group))
                         index = lookAhead
                     } else {
                         guard let block = toToolBlock(tool) else { return .missingPartIds }
                         blocks.append(block)
+                        blocks.append(contentsOf: toolImageGallery([tool], under: block))
                         index += 1
                     }
                 } else {
                     guard let block = toToolBlock(tool) else { return .missingPartIds }
                     blocks.append(block)
+                    blocks.append(contentsOf: toolImageGallery([tool], under: block))
                     index += 1
                 }
             }
@@ -1018,11 +1082,23 @@ nonisolated enum SessionChatTimelineBlocks {
         ]
     }
 
+    /// The failure mark that may count down to its retry time: only on the last
+    /// turn, so a user message after it means the countdown no longer applies.
+    static func retryCountdownBlockID(in rows: [SessionChatRow]) -> String? {
+        for row in rows.reversed() {
+            if row.role == .user { return nil }
+            for block in row.blocks.reversed() {
+                if case .failureLine(let id, _, _, _, _, _, _, let retryAt) = block, retryAt != nil { return id }
+            }
+        }
+        return nil
+    }
+
     /// Newest rate-limit or quota body, for the composer status to open.
     static func newestLiveRetryProviderBody(in rows: [SessionChatRow]) -> String? {
         for row in rows.reversed() {
             for block in row.blocks {
-                if case .failureLine(_, _, let body, _, _, _, let covered) = block,
+                if case .failureLine(_, _, let body, _, _, _, let covered, _) = block,
                    covered,
                    let body = body?.trimmingCharacters(in: .whitespacesAndNewlines),
                    !body.isEmpty
@@ -1112,7 +1188,8 @@ nonisolated enum SessionChatTimelineBlocks {
                     isNeutral: failure.isNeutral,
                     action: failure.action(),
                     actionLabel: failure.actionLabel(),
-                    coveredByLiveRetry: failure.coversLiveRetry()
+                    coveredByLiveRetry: failure.coversLiveRetry(),
+                    retryAtEpochMs: failure.retryAtEpochMs()
                 )
             )
         }
@@ -1272,6 +1349,9 @@ nonisolated enum SessionChatTimelineBlocks {
             true
         case .toolCard(_, let card):
             !Self.isChildSessionTool(card.toolName)
+        case .imageGallery(_, let gallery):
+            // Tool images ride with their card, so a tool-only step still merges.
+            gallery.source == .tool
         case .text, .attachment, .childSessionRow, .reasoning, .stepParagraph, .stepRail, .activityCard, .stopNote,
              .failureLine, .notice:
             false
@@ -2464,6 +2544,43 @@ nonisolated enum SessionChatTimelineBlocks {
         ToolPartIdentity.isVisibleOnTimeline(tool)
     }
 
+    /// Consecutive image files from `start`, looking through parts that draw nothing.
+    /// `end` is the index after the last image taken.
+    private static func imageRun(in parts: [MessagePart], from start: Int) -> (images: [FilePart], end: Int) {
+        var images: [FilePart] = []
+        var end = start
+        var lookAhead = start
+        while lookAhead < parts.count {
+            switch parts[lookAhead] {
+            case .file(let file) where file.isViewableImage:
+                images.append(file)
+                lookAhead += 1
+                end = lookAhead
+            case .text(let text) where !text.isDisplayable
+                || text.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty:
+                lookAhead += 1
+            default:
+                return (images, end)
+            }
+        }
+        return (images, end)
+    }
+
+    /// The gallery of everything `tools` returned, placed under `owner` (their card or group).
+    private static func toolImageGallery(
+        _ tools: [ToolPart],
+        under owner: SessionChatTimelineBlock
+    ) -> [SessionChatTimelineBlock] {
+        let images = tools.flatMap(\.images)
+        guard !images.isEmpty else { return [] }
+        return [
+            .imageGallery(
+                blockID: PresentationBlockId.imageGallery([owner.blockID]),
+                gallery: SessionChatImageGalleryBlock(source: .tool, images: images)
+            ),
+        ]
+    }
+
     /// Parts that never become timeline blocks. Grouping looks through them so
     /// hidden todos, empty text, and compaction markers do not split a visible
     /// tool run (web filters to renderable parts before grouping).
@@ -2683,7 +2800,8 @@ nonisolated enum SessionChatTimelineBlocks {
                 isInterrupted: interrupted,
                 isMalformed: tool.isMalformed,
                 isReceivingArguments: receivingArguments,
-                presentation: toolResultPresentation(tool, fallbackTitle: chrome.title)
+                presentation: toolResultPresentation(tool, fallbackTitle: chrome.title),
+                images: tool.images
             )
         )
     }

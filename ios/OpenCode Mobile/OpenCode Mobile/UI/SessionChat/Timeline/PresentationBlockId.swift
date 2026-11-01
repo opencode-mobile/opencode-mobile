@@ -53,6 +53,13 @@ nonisolated enum PresentationBlockId {
         "ac:" + firstPartId
     }
 
+    /// Image gallery: the block that produced the images (a tool card or group) or, for a run
+    /// of attached files, the ids of its files.
+    nonisolated static func imageGallery(_ orderedIds: [String]) -> String {
+        precondition(!orderedIds.isEmpty, "image gallery requires at least one id")
+        return "i:" + orderedIds.joined(separator: sep)
+    }
+
     /// Unstructured fallback when displayable parts lack stable IDs.
     nonisolated static func messageFallback(_ messageId: String) -> String {
         "m:\(messageId)"

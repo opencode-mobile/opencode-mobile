@@ -14,6 +14,35 @@ struct ThemeResolverSyntaxTokenTests {
         #expect(dark["syntax-punctuation"] == dark["text-strong"])
     }
 
+    @Test func resolverDefaultsTheFunctionNumberAndAttributeTokens() {
+        let light = ThemeResolver.resolve(variant: testVariant(), isDark: false)
+        let dark = ThemeResolver.resolve(variant: testVariant(), isDark: true)
+
+        #expect(light["syntax-function"] == "#034CFF")
+        #expect(dark["syntax-function"] == "#6D97FF") // interactive mixed 42% toward white
+        #expect(light["syntax-number"] == light["syntax-constant"])
+        #expect(dark["syntax-number"] == dark["syntax-constant"])
+        #expect(light["syntax-attribute"] == "#FFDC17")
+        #expect(dark["syntax-attribute"] == dark["syntax-type"])
+        // The code surface comes only from a syntax preset; the retired primitive is gone.
+        for tokens in [light, dark] {
+            #expect(tokens.tokens["syntax-background"] == nil)
+            #expect(tokens.tokens["syntax-foreground"] == nil)
+            #expect(tokens.tokens["syntax-primitive"] == nil)
+        }
+    }
+
+    @Test func overlaySyntax_carriesThePresetCodeSurface() {
+        let base = ThemeResolver.resolve(variant: testVariant(), isDark: true)
+        let overlaid = ThemeResolver.overlaySyntax(
+            base,
+            syntax: ["syntax-background": "#0D1117", "syntax-foreground": "#E6EDF3"]
+        )
+
+        #expect(overlaid.tokens["syntax-background"] == "#0D1117")
+        #expect(overlaid.tokens["syntax-foreground"] == "#E6EDF3")
+    }
+
     @Test func resolverProvidesDesktopAlignedInlineCodeBackground() {
         let light = ThemeResolver.resolve(variant: testVariant(), isDark: false)
         let dark = ThemeResolver.resolve(variant: testVariant(), isDark: true)

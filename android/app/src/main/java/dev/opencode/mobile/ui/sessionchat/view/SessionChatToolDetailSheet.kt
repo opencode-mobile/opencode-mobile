@@ -17,8 +17,8 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
-import dev.opencode.mobile.markdown.OpenCodeSemanticFallbackHighlighter
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
@@ -212,7 +212,7 @@ internal fun SessionChatToolDetailBody(target: SessionChatToolDetailTarget) {
             if (target.bodyIsMarkdown && body.isNotBlank()) {
                 withContext(Dispatchers.Default) {
                     runCatching {
-                        OpenCodeMarkdownParser.parse(body, codeHighlighter = OpenCodeSemanticFallbackHighlighter)
+                        OpenCodeMarkdownParser.parse(body, codeHighlighter = OpenCodeHighlightCoreCodeHighlighter)
                     }.getOrNull()
                 }
             } else {

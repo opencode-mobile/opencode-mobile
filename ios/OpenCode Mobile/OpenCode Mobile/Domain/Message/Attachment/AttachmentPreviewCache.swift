@@ -43,7 +43,8 @@ nonisolated final class AttachmentPreviewCache: @unchecked Sendable {
             mime: file.mime,
             kind: file.kind,
             dataURL: file.dataURL,
-            previewData: data
+            previewData: data,
+            serverPath: file.serverPath
         )
     }
 

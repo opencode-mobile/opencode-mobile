@@ -59,7 +59,7 @@ nonisolated enum SessionChatTimelineProjector {
 
         let serverRows = serverRows(from: frame, previousByID: previousByID, metadataLabel: resolveLabel)
 
-        let merged: (rows: [TimelineRow], echoes: [String: String]) =
+        let merged: (rows: [TimelineRow], echoes: [String: String], hiddenEchoIDs: Set<String>) =
             if optimistic.mergePending {
                 mergeWithPending(
                     serverRows,
@@ -67,12 +67,14 @@ nonisolated enum SessionChatTimelineProjector {
                     baselineIDs: optimistic.baselineIDs
                 )
             } else {
-                (serverRows, [:])
+                (serverRows, [:], [])
             }
-        let rows = merged.rows.filter { !isHiddenPendingPrompt($0) }
+        let visibleRows = merged.rows.filter { row in
+            !isQueuedPrompt(row) && !merged.hiddenEchoIDs.contains(row.id)
+        }
 
         let previousIDs = Set(previousByID.keys)
-        let nextIDs = Set(rows.map(\.id))
+        let nextIDs = Set(visibleRows.map(\.id))
         // Alias only an echo that replaces its optimistic row in this frame. A server
         // row the host already shows under its own id keeps that identity.
         var listIDAliases = (previous?.listIDAliases ?? [:]).filter { nextIDs.contains($0.key) }
@@ -80,6 +82,12 @@ nonisolated enum SessionChatTimelineProjector {
         where previousIDs.contains(pendingID) && !previousIDs.contains(serverID) && nextIDs.contains(serverID) {
             listIDAliases[serverID] = pendingID
         }
+        let rows = markSteers(
+            visibleRows,
+            previousByID: previousByID,
+            listIDAliases: listIDAliases,
+            runIsActive: runIsActive(frame)
+        )
         let inserted = nextIDs.subtracting(previousIDs)
         let removed = previousIDs.subtracting(nextIDs)
 
@@ -142,8 +150,10 @@ nonisolated enum SessionChatTimelineProjector {
         row.role == .user && row.pendingDelivery != nil
     }
 
+    /// Optimistic send rows the timeline shows: everything but a queued prompt,
+    /// which only the queued strip shows. A steer shows as a pending bubble.
     static func displayedOptimisticSendRows(_ rows: [SessionChatRow]) -> [SessionChatRow] {
-        rows.filter { !isHiddenPendingPrompt($0) }
+        rows.filter { !($0.role == .user && $0.pendingDelivery == .queue) }
     }
 
     static func shouldMarkTimelineReadyAfterOptimisticSend(
@@ -200,6 +210,7 @@ nonisolated enum SessionChatTimelineProjector {
            previous.modelProviderID == message.modelProviderID,
            previous.modelID == message.modelID,
            previous.contextInputTokens == message.contextInputTokens,
+           previous.sentAtEpochMs == message.sentAtEpochMs,
            previous.renderedMarkdown?.sourceHash == bridgeMarkdown?.sourceHash,
            previous.renderedMarkdown?.renderTreeVersion == bridgeMarkdown?.renderTreeVersion,
            previous.renderedMarkdown?.blocks.count == bridgeMarkdown?.blocks.count,
@@ -222,7 +233,8 @@ nonisolated enum SessionChatTimelineProjector {
                         renderedMarkdown: bridgeMarkdown,
                         blocks: body.blocks,
                         contentRevision: contentRevision,
-                        layoutRevision: previous.layoutRevision
+                        layoutRevision: previous.layoutRevision,
+                        steer: previous.steer
                     )
                 )
                     ? previous.layoutRevision
@@ -244,6 +256,8 @@ nonisolated enum SessionChatTimelineProjector {
             modelProviderID: message.modelProviderID,
             modelID: message.modelID,
             contextInputTokens: message.contextInputTokens,
+            sentAtEpochMs: message.sentAtEpochMs,
+            steer: previous?.steer,
             contentRevision: contentRevision,
             layoutRevision: layoutRevision
         )
@@ -279,22 +293,68 @@ nonisolated enum SessionChatTimelineProjector {
 
     // MARK: - Optimistic merge (ported from SessionChatTimeline)
 
-    /// Pending-prompt echoes stay in `mergeWithPending` so they can drop a matching
-    /// optimistic row, then leave the displayed set. After merge, hide any user
-    /// row whose `pendingDelivery` is set (steer or queue), including optimistic
-    /// `isPending` rows — the strip is the only surface for inbox items.
+    /// A user row with a pending delivery (steer or queue), including optimistic
+    /// `isPending` rows. Any server echo retires such an optimistic row.
     static func isHiddenPendingPrompt(_ row: TimelineRow) -> Bool {
         row.role == .user && row.pendingDelivery != nil
     }
 
-    /// Merged rows plus, for each dropped optimistic row matched to its server
-    /// echo, `serverID → pendingID`.
+    /// A queued prompt: the queued strip is its only surface until it is delivered.
+    static func isQueuedPrompt(_ row: TimelineRow) -> Bool {
+        row.role == .user && row.pendingDelivery == .queue
+    }
+
+    // MARK: - Steering
+
+    /// The newest assistant message has not finished, so the session is mid-run.
+    /// v2 also enqueues an idle prompt as a steer; this keeps that one unlabelled.
+    static func runIsActive(_ frame: DisplayFrame) -> Bool {
+        guard let assistant = frame.messages.last(where: { $0.message.role == .assistant })?.message else {
+            return false
+        }
+        return assistant.completedAtEpochMs == nil && assistant.failure == nil
+    }
+
+    /// Marks prompts steered into a running turn. A waiting steer is pending; a row
+    /// that was a steer in the previous frame keeps its mark once delivered, so the
+    /// server's copy replaces the pending bubble in place and keeps the label.
+    /// Consecutive steers share one label, on the first.
+    static func markSteers(
+        _ rows: [TimelineRow],
+        previousByID: [String: TimelineRow],
+        listIDAliases: [String: String],
+        runIsActive: Bool
+    ) -> [TimelineRow] {
+        var marked: [TimelineRow] = []
+        marked.reserveCapacity(rows.count)
+        var previousWasSteer = false
+        for row in rows {
+            // A notice line (agent or model change) between steers does not split them.
+            if row.role == .notice {
+                marked.append(row)
+                continue
+            }
+            let isPending = row.role == .user && row.pendingDelivery == .steer
+            let wasSteer = previousByID[row.id]?.steer != nil
+                || listIDAliases[row.id].flatMap { previousByID[$0]?.steer } != nil
+            // `isPending` optimistic rows only carry a steer delivery for a busy send.
+            let isSteer = row.role == .user && (wasSteer || (isPending && (row.isPending || runIsActive)))
+            let steer = isSteer ? SessionChatSteer(isPending: isPending, showsLabel: !previousWasSteer) : nil
+            previousWasSteer = isSteer
+            marked.append(row.steer == steer ? row : row.withSteer(steer))
+        }
+        return marked
+    }
+
+    /// Merged rows; for each dropped optimistic row matched to its server echo,
+    /// `serverID → pendingID`; and waiting-steer echoes of a still-shown optimistic
+    /// row, which stay hidden so the prompt never shows twice.
     private static func mergeWithPending(
         _ serverRows: [TimelineRow],
         pendingRows: [TimelineRow],
         baselineIDs: Set<String>
-    ) -> (rows: [TimelineRow], echoes: [String: String]) {
-        guard !pendingRows.isEmpty else { return (serverRows, [:]) }
+    ) -> (rows: [TimelineRow], echoes: [String: String], hiddenEchoIDs: Set<String>) {
+        guard !pendingRows.isEmpty else { return (serverRows, [:], []) }
         let pendingToKeep = unmatchedPending(
             pendingRows,
             serverRows: serverRows,
@@ -303,7 +363,21 @@ nonisolated enum SessionChatTimelineProjector {
         let keptIDs = Set(pendingToKeep.map(\.id))
         let dropped = pendingRows.filter { !keptIDs.contains($0.id) }
         let chromed = applyPendingChrome(serverRows, dropped: dropped, baselineIDs: baselineIDs)
-        return (splicePending(chromed.rows, pendingToKeep: pendingToKeep), chromed.echoes)
+        let keptShown = pendingToKeep.filter { !isHiddenPendingPrompt($0) }
+        let hiddenEchoIDs = Set(
+            serverRows
+                .filter { server in
+                    server.pendingDelivery == .steer
+                        && keptShown.contains { isNewServerEcho(server, of: $0, baselineIDs: baselineIDs) }
+                }
+                .map(\.id)
+        )
+        // A same-id waiting echo is hidden by id; drop it here so the optimistic row stays.
+        let rows = splicePending(
+            chromed.rows.filter { !hiddenEchoIDs.contains($0.id) },
+            pendingToKeep: pendingToKeep
+        )
+        return (rows, chromed.echoes, hiddenEchoIDs.subtracting(keptIDs))
     }
 
     /// Pending optimistic rows that no new server echo accounts for yet. Shared with
@@ -364,13 +438,16 @@ nonisolated enum SessionChatTimelineProjector {
         pendingToKeep: [TimelineRow]
     ) -> [TimelineRow] {
         guard !pendingToKeep.isEmpty else { return serverRows }
-        if let index = serverRows.firstIndex(where: { $0.role == .assistant && $0.isStreaming }) {
+        // A steer belongs after the step it steers, so only plain sends move above the reply.
+        let steers = pendingToKeep.filter { $0.pendingDelivery != nil }
+        let sends = pendingToKeep.filter { $0.pendingDelivery == nil }
+        if !sends.isEmpty, let index = serverRows.firstIndex(where: { $0.role == .assistant && $0.isStreaming }) {
             let precededByUser = index > 0 && serverRows[index - 1].role == .user
             if !precededByUser {
-                return Array(serverRows[..<index]) + pendingToKeep + Array(serverRows[index...])
+                return Array(serverRows[..<index]) + sends + Array(serverRows[index...]) + steers
             }
         }
-        return serverRows + pendingToKeep
+        return serverRows + sends + steers
     }
 
     private static func applyPendingChrome(
@@ -395,10 +472,7 @@ nonisolated enum SessionChatTimelineProjector {
                 next = next.withMetadataLabel(pending.metadataLabel)
             }
             if !row.hasAttachments, pending.hasAttachments {
-                let attachments = pending.blocks.filter { block in
-                    if case .attachment = block { return true }
-                    return false
-                }
+                let attachments = pending.blocks.filter(\.isAttachmentContent)
                 next = next.withBlocks(next.blocks + attachments)
             }
             return next
@@ -423,6 +497,7 @@ nonisolated enum SessionChatTimelineProjector {
             && lhs.modelProviderID == rhs.modelProviderID
             && lhs.modelID == rhs.modelID
             && lhs.contextInputTokens == rhs.contextInputTokens
+            && lhs.steer == rhs.steer
     }
 
     /// Height-affecting fingerprint for layoutRevision advances.
@@ -461,13 +536,21 @@ nonisolated enum SessionChatTimelineProjector {
                     }.joined(separator: ",")
             case .stopNote(let id, let reason):
                 "x:\(id):\(reason.rawValue)"
-            case .failureLine(let id, _, let body, let neutral, let action, _, _):
-                "f:\(id):\(body != nil):\(neutral):\(action != nil)"
+            case .failureLine(let id, _, let body, let neutral, let action, _, _, let retryAt):
+                "f:\(id):\(body != nil):\(neutral):\(action != nil):\(retryAt != nil)"
             case .notice(let id, let notice):
                 "o:\(id):\(String(describing: notice.kind).hashValue)"
+            case .imageGallery(let id, let gallery):
+                "ig:\(id):\(gallery.images.count):\(gallery.images.filter { $0.previewData != nil }.count)"
             }
         }.joined(separator: "|")
-        return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(row.pendingDelivery == nil ? "0" : "1"):\(blockKey)"
+        return "\(row.isStreaming):\(markdownPresent):\(row.blocks.count):\(row.metadataLabel.isEmpty ? "0" : "1"):\(row.pendingDelivery == nil ? "0" : "1"):\(steerLayoutKey(row.steer)):\(blockKey)"
+    }
+
+    /// The label and the pending caption each add height.
+    private static func steerLayoutKey(_ steer: SessionChatSteer?) -> String {
+        guard let steer else { return "-" }
+        return "\(steer.isPending ? "p" : "d")\(steer.showsLabel ? "l" : "")"
     }
 
     /// Layout bump caused only by markdown presence/sourceHash while streaming flag and
@@ -480,8 +563,11 @@ nonisolated enum SessionChatTimelineProjector {
 
     private static func structureFingerprint(_ row: TimelineRow) -> String {
         let attachments = row.blocks.compactMap { block -> String? in
-            if case .attachment(let id, let file) = block { return "a:\(id):\(file.id)" }
-            return nil
+            switch block {
+            case .attachment(let id, let file): "a:\(id):\(file.id)"
+            case .imageGallery(let id, let gallery): "ig:\(id):\(gallery.images.map(\.id).joined(separator: ","))"
+            default: nil
+            }
         }.joined(separator: "|")
         let blocks = row.blocks.map { block -> String in
             switch block {
@@ -505,10 +591,12 @@ nonisolated enum SessionChatTimelineProjector {
                 "ac:\(id):\(card.steps.count)"
             case .stopNote(let id, let reason):
                 "x:\(id):\(reason.rawValue)"
-            case .failureLine(let id, _, let body, _, _, _, _):
+            case .failureLine(let id, _, let body, _, _, _, _, _):
                 "f:\(id):\(body != nil)"
             case .notice(let id, _):
                 "o:\(id)"
+            case .imageGallery(let id, let gallery):
+                "ig:\(id):\(gallery.images.count)"
             }
         }.joined(separator: "|")
         return "\(row.blocks.count)|\(attachments)|\(blocks)"
@@ -532,7 +620,8 @@ nonisolated enum SessionChatTimelineProjector {
         renderedMarkdown: NativeMarkdownDocument?,
         blocks: [SessionChatTimelineBlock],
         contentRevision: ContentRevision,
-        layoutRevision: UInt64
+        layoutRevision: UInt64,
+        steer: SessionChatSteer?
     ) -> TimelineRow {
         TimelineRow(
             id: id,
@@ -544,6 +633,7 @@ nonisolated enum SessionChatTimelineProjector {
             isStreaming: isStreaming,
             renderedMarkdown: renderedMarkdown,
             blocks: blocks,
+            steer: steer,
             contentRevision: contentRevision,
             layoutRevision: layoutRevision
         )

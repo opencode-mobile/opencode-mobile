@@ -19,15 +19,13 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object SyntaxPickerHome : NavKey
 
-@Serializable data object TextMateLogbookHome : NavKey
-
 @Serializable data object DiagnosticLogsHome : NavKey
-
-@Serializable data object TextMateLanguagesHome : NavKey
 
 @Serializable data object FeatureFlagsHome : NavKey
 
 @Serializable data object ComponentGalleryHome : NavKey
+
+@Serializable data object SessionChatPlaygroundHome : NavKey
 
 @Serializable data class ComponentGalleryDetail(
     val entryId: ComponentGalleryEntryId,

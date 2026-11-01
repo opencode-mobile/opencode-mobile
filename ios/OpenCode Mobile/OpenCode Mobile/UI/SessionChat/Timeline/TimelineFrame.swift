@@ -15,6 +15,9 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
     let modelProviderID: String?
     let modelID: String?
     let contextInputTokens: Int64?
+    let sentAtEpochMs: Int64?
+    /// Set on a prompt steered into a running turn, pending or delivered.
+    let steer: SessionChatSteer?
     /// Aggregate content revision of plain text (hash + length).
     let contentRevision: ContentRevision
     /// Advances on height-affecting changes (text, blocks, markdown presence, streaming).
@@ -33,6 +36,8 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
         modelProviderID: String? = nil,
         modelID: String? = nil,
         contextInputTokens: Int64? = nil,
+        sentAtEpochMs: Int64? = nil,
+        steer: SessionChatSteer? = nil,
         contentRevision: ContentRevision,
         layoutRevision: UInt64
     ) {
@@ -48,6 +53,8 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
         self.modelProviderID = modelProviderID
         self.modelID = modelID
         self.contextInputTokens = contextInputTokens
+        self.sentAtEpochMs = sentAtEpochMs
+        self.steer = steer
         self.contentRevision = contentRevision
         self.layoutRevision = layoutRevision
     }
@@ -70,16 +77,37 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
             modelProviderID: modelProviderID,
             modelID: modelID,
             contextInputTokens: contextInputTokens,
+            sentAtEpochMs: sentAtEpochMs,
+            steer: steer,
             contentRevision: contentRevision,
             layoutRevision: layoutRevision
         )
     }
 
+    /// Height changes when the steering label or pending caption comes or goes.
+    func withSteer(_ steer: SessionChatSteer?) -> TimelineRow {
+        TimelineRow(
+            id: id,
+            role: role,
+            text: text,
+            metadataLabel: metadataLabel,
+            pendingDelivery: pendingDelivery,
+            isPending: isPending,
+            isStreaming: isStreaming,
+            renderedMarkdown: renderedMarkdown,
+            blocks: blocks,
+            modelProviderID: modelProviderID,
+            modelID: modelID,
+            contextInputTokens: contextInputTokens,
+            sentAtEpochMs: sentAtEpochMs,
+            steer: steer,
+            contentRevision: contentRevision,
+            layoutRevision: self.steer == steer ? layoutRevision : layoutRevision &+ 1
+        )
+    }
+
     var hasAttachments: Bool {
-        blocks.contains { block in
-            if case .attachment = block { return true }
-            return false
-        }
+        blocks.contains(where: \.isAttachmentContent)
     }
 
     func withBlocks(_ blocks: [SessionChatTimelineBlock]) -> TimelineRow {
@@ -96,6 +124,8 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
             modelProviderID: modelProviderID,
             modelID: modelID,
             contextInputTokens: contextInputTokens,
+            sentAtEpochMs: sentAtEpochMs,
+            steer: steer,
             contentRevision: contentRevision,
             layoutRevision: layoutRevision &+ 1
         )
@@ -116,6 +146,8 @@ nonisolated struct TimelineRow: Equatable, Identifiable, Sendable {
               lhs.renderedMarkdown?.blocks.count == rhs.renderedMarkdown?.blocks.count,
               lhs.text.count == rhs.text.count,
               lhs.metadataLabel == rhs.metadataLabel,
+              lhs.sentAtEpochMs == rhs.sentAtEpochMs,
+              lhs.steer == rhs.steer,
               lhs.pendingDelivery == rhs.pendingDelivery,
               lhs.blocks.count == rhs.blocks.count
         else { return false }
@@ -161,7 +193,7 @@ nonisolated struct TimelineFrame: Equatable, Sendable {
     }
 
     /// Armed follow targets: inserts and non-decorate layout changes.
-    /// Decorate-only (TextMate / slash collapse) should not re-pin.
+    /// Decorate-only (highlight-core colors / slash collapse) should not re-pin.
     var structureAffectingRowIDs: Set<String> {
         insertedRowIDs.union(layoutChangedRowIDs.subtracting(decorateRowIDs))
     }
@@ -580,7 +612,9 @@ extension TimelineRow {
             blocks: blocks,
             modelProviderID: modelProviderID,
             modelID: modelID,
-            contextInputTokens: contextInputTokens
+            contextInputTokens: contextInputTokens,
+            sentAtEpochMs: sentAtEpochMs,
+            steer: steer
         )
     }
 
@@ -598,6 +632,8 @@ extension TimelineRow {
             modelProviderID: row.modelProviderID,
             modelID: row.modelID,
             contextInputTokens: row.contextInputTokens,
+            sentAtEpochMs: row.sentAtEpochMs,
+            steer: row.steer,
             contentRevision: ContentRevision.of(row.text),
             layoutRevision: layoutRevision
         )

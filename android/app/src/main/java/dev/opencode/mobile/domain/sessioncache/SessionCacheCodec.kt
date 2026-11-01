@@ -2,6 +2,7 @@ package dev.opencode.mobile.domain.sessioncache
 
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
 import dev.opencode.mobile.domain.message.Message
@@ -111,7 +112,47 @@ object SessionCacheCodec {
         }.onFailure { error ->
             DiagnosticLog.warning(DiagnosticLogArea.Session, "activity decode failed", error)
         }.getOrNull()
+
+    fun encodeProjectResolution(
+        resolution: ResolvedHomePath,
+        json: Json,
+    ): String =
+        json.encodeToString(
+            CachedProjectResolutionPayload(
+                schemaVersion = SCHEMA_VERSION,
+                projectId = resolution.projectId,
+                canonicalWorktree = resolution.canonicalWorktree,
+                name = resolution.name,
+                isRepository = resolution.isRepository,
+            ),
+        )
+
+    fun decodeProjectResolution(
+        raw: String,
+        json: Json,
+    ): ResolvedHomePath? =
+        runCatching {
+            val payload = json.decodeFromString<CachedProjectResolutionPayload>(raw)
+            if (payload.schemaVersion != SCHEMA_VERSION) return null
+            ResolvedHomePath(
+                projectId = payload.projectId,
+                canonicalWorktree = payload.canonicalWorktree,
+                name = payload.name,
+                isRepository = payload.isRepository,
+            )
+        }.onFailure { error ->
+            DiagnosticLog.warning(DiagnosticLogArea.Session, "project resolution decode failed", error)
+        }.getOrNull()
 }
+
+@Serializable
+internal data class CachedProjectResolutionPayload(
+    val schemaVersion: Int,
+    val projectId: String,
+    val canonicalWorktree: String,
+    val name: String? = null,
+    val isRepository: Boolean = false,
+)
 
 @Serializable
 internal data class CachedEnvelope(
@@ -193,6 +234,8 @@ internal data class CachedMessagePayload(
     val failureMessage: String? = null,
     val failureStatus: Int? = null,
     val failureBody: String? = null,
+    val failureRetryAfterMs: Long? = null,
+    val failureRecordedAtEpochMs: Long? = null,
 )
 
 @Serializable
@@ -215,6 +258,7 @@ internal data class CachedMessagePartPayload(
     val mime: String? = null,
     val attachmentKind: String? = null,
     val dataUrl: String? = null,
+    val serverPath: String? = null,
     val timeStartEpochMs: Long? = null,
     val timeEndEpochMs: Long? = null,
     val auto: Boolean = false,
@@ -345,6 +389,8 @@ private fun Message.toCachePayload(): CachedMessagePayload =
         failureMessage = failure?.message,
         failureStatus = failure?.status,
         failureBody = failure?.providerBody,
+        failureRetryAfterMs = failure?.retryAfterMs,
+        failureRecordedAtEpochMs = failure?.recordedAtEpochMs,
     )
 
 private fun CachedMessagePayload.toDomain(): Message =
@@ -372,6 +418,8 @@ private fun CachedMessagePayload.toDomain(): Message =
                     message = failureMessage.orEmpty(),
                     status = failureStatus,
                     providerBody = failureBody,
+                    retryAfterMs = failureRetryAfterMs,
+                    recordedAtEpochMs = failureRecordedAtEpochMs,
                 )
             } else {
                 null
@@ -436,6 +484,7 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 output = output,
                 metadata = metadata,
                 timeStartEpochMs = timeStartEpochMs,
+                timeEndEpochMs = timeEndEpochMs,
                 isInterrupted = isInterrupted,
                 isMalformed = isMalformed,
             )
@@ -447,6 +496,7 @@ private fun MessagePart.toCachePayload(): CachedMessagePartPayload? =
                 mime = mime,
                 attachmentKind = kind.name.lowercase(),
                 dataUrl = AttachmentLimits.persistedDataUrl(dataUrl),
+                serverPath = serverPath,
             )
         is MessagePart.Compaction ->
             CachedMessagePartPayload(
@@ -497,6 +547,7 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                 metadata = metadata,
                 id = id,
                 timeStartEpochMs = timeStartEpochMs,
+                timeEndEpochMs = timeEndEpochMs,
                 isInterrupted = isInterrupted,
                 isMalformed = isMalformed,
             )
@@ -510,6 +561,7 @@ private fun CachedMessagePartPayload.toDomain(): MessagePart? =
                     AttachmentKind.entries.firstOrNull { it.name.equals(attachmentKind, ignoreCase = true) }
                         ?: AttachmentKind.Text,
                 dataUrl = dataUrl.orEmpty(),
+                serverPath = serverPath,
             )
         }
         "reasoning" ->

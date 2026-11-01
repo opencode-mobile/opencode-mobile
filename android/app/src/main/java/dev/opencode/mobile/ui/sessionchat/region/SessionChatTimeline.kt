@@ -28,6 +28,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
+import dev.opencode.mobile.ui.sessionchat.TimelineChangeNotices
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.TimelineApply
 import dev.opencode.mobile.ui.sessionchat.TimelineDisplayOrder
@@ -50,6 +51,8 @@ class SessionChatTimeline(
     private val messageRepository: MessageRepository,
     private val scope: CoroutineScope,
     private val listChildSessions: (suspend (String) -> List<Session>)? = null,
+    /** True when the server records no agent/model notices (v1), so the timeline derives them. */
+    private val derivesChangeNotices: () -> Boolean = { false },
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
 
@@ -398,9 +401,14 @@ class SessionChatTimeline(
         mergePendingWhileSending = true
         pendingOptimisticRows = enrichedRows
         pendingBaselineIds = lastLoadedServerRows().mapTo(HashSet()) { it.id }
-        val displayedItems = TimelineProjector.displayedOptimisticSendItems(enrichedRows)
-        val displayedRows = displayedItems.map(TimelineProjector::rowFromMessageItem)
         val previous = lastTimelineFrame
+        // A busy steer send shows as a pending steer from the first frame, before any echo.
+        val displayedItems =
+            TimelineProjector.markOptimisticSteers(
+                TimelineProjector.displayedOptimisticSendItems(enrichedRows),
+                after = previous,
+            )
+        val displayedRows = displayedItems.map(TimelineProjector::rowFromMessageItem)
         val hadPriorRows = _state.value.messages.isNotEmpty() || !previous?.rows.isNullOrEmpty()
         val markReady =
             TimelineProjector.shouldMarkTimelineReadyAfterOptimisticSend(
@@ -790,7 +798,10 @@ class SessionChatTimeline(
         val structuralStartedAt = System.nanoTime()
         val projected =
             withContext(ioDispatcher) {
-                val visible = hidingReverted(sortedDisplayMessages(displayMessages), revertBoundary)
+                val visible =
+                    hidingReverted(sortedDisplayMessages(displayMessages), revertBoundary).let { shown ->
+                        if (derivesChangeNotices()) TimelineChangeNotices.withDerivedNotices(shown) else shown
+                    }
                 AttachmentPreviewCache.shared.warm(
                     visible.takeLast(AttachmentPreviewCache.WARM_MESSAGE_COUNT).map { it.message },
                 )

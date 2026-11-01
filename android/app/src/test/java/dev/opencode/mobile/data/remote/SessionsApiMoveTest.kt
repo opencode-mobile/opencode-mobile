@@ -60,6 +60,41 @@ class SessionsApiMoveTest {
             }
         }
 
+    @Test
+    fun generatePostsThePromptAndReadsTheText() =
+        runTest {
+            val captured = mutableListOf<HttpRequestData>()
+            val api =
+                api { request ->
+                    captured += request
+                    respond(
+                        """{"data":{"text":"Two files."}}""",
+                        HttpStatusCode.OK,
+                        headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+
+            assertEquals("Two files.", api.generateSessionTextV2("ses_1", "Instructions\n\nWhat changed?"))
+
+            val request = captured.single()
+            assertEquals("POST", request.method.value)
+            assertTrue(request.url.encodedPath.endsWith("/api/session/ses_1/generate"))
+            assertEquals("""{"prompt":"Instructions\n\nWhat changed?"}""", request.body.readText())
+        }
+
+    @Test
+    fun generateSurfacesNotFoundAsAStatus() =
+        runTest {
+            val api = api { respond("", HttpStatusCode.NotFound) }
+
+            try {
+                api.generateSessionTextV2("ses_1", "Why?")
+                fail("expected failure")
+            } catch (error: ResponseException) {
+                assertEquals(404, error.response.status.value)
+            }
+        }
+
     private fun api(handler: MockRequestHandler): SessionsApi {
         val json = Json { ignoreUnknownKeys = true }
         val client =

@@ -119,6 +119,8 @@ where Item.ID == String {
     /// Unpinned content offset to restore after a covering destination (tool
     /// group, Changes) pops. Navigation layout otherwise re-pins to the end.
     private var preservedOffsetY: CGFloat?
+    /// Row a reveal is scrolling to; flashed once the scroll lands.
+    private var pendingRevealID: String?
     /// Set when an overlay inset changes while pinned to the end. UIKit can apply
     /// the new adjusted inset in a later layout pass (after the async re-pin) and
     /// moves the offset; re-pin right there, before that frame renders. Stays armed
@@ -780,6 +782,61 @@ where Item.ID == String {
         }
     }
 
+    func performRevealItem(id: String) {
+        guard let index = orderedIDs.firstIndex(of: id),
+              collectionView.numberOfSections > 0,
+              collectionView.numberOfItems(inSection: 0) > index,
+              let attributes = collectionView.layoutAttributesForItem(at: IndexPath(item: index, section: 0))
+        else { return }
+        preservedOffsetY = nil
+        pendingRevealID = id
+        let visible = collectionView.bounds.inset(by: collectionView.adjustedContentInset)
+        if visible.contains(attributes.frame) {
+            // Already on screen: no scroll animation will end, so flash now.
+            finishPendingReveal()
+            return
+        }
+        // The flash waits for the scroll to land (`scrollViewDidEndScrollingAnimation`).
+        collectionView.scrollToItem(at: IndexPath(item: index, section: 0), at: .centeredVertically, animated: true)
+    }
+
+    /// The reveal landed: hold the place and flash the row it points at.
+    private func finishPendingReveal() {
+        guard let id = pendingRevealID else { return }
+        pendingRevealID = nil
+        reportGeometry()
+        scrollController?.noteRevealSettled(contentOffsetY: collectionView.contentOffset.y)
+        flashRow(id: id)
+    }
+
+    /// Brief tint behind a revealed row so the eye finds it. Drawn in the collection
+    /// view at the row's layout frame, not in its reusable cell, so a fast scroll that
+    /// reuses the cell cannot carry the tint to another row.
+    private func flashRow(id: String) {
+        guard let index = orderedIDs.firstIndex(of: id),
+              let attributes = collectionView.layoutAttributesForItem(at: IndexPath(item: index, section: 0))
+        else { return }
+        let flash = UIView(frame: attributes.frame)
+        flash.backgroundColor = UIColor(OpenCodeColors.error).withAlphaComponent(0.12)
+        flash.layer.cornerRadius = 12
+        flash.isUserInteractionEnabled = false
+        flash.alpha = 0
+        if let background = collectionView.backgroundView {
+            collectionView.insertSubview(flash, aboveSubview: background)
+        } else {
+            collectionView.insertSubview(flash, at: 0)
+        }
+        UIView.animate(withDuration: 0.2) {
+            flash.alpha = 1
+        } completion: { _ in
+            UIView.animate(withDuration: 0.8, delay: 0.9) {
+                flash.alpha = 0
+            } completion: { _ in
+                flash.removeFromSuperview()
+            }
+        }
+    }
+
     private func armRepinOnAdjustedInsetChange() {
         repinOnAdjustedInsetChange = true
         repinOnAdjustedInsetGeneration &+= 1
@@ -845,6 +902,8 @@ where Item.ID == String {
         didFireOlderLoadThisGesture = false
         lastUserScrollOffsetY = scrollView.contentOffset.y
         repinOnAdjustedInsetChange = false
+        // The user took over before the reveal landed: no flash.
+        pendingRevealID = nil
     }
 
     func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
@@ -864,6 +923,7 @@ where Item.ID == String {
 
     func scrollViewDidEndScrollingAnimation(_ scrollView: UIScrollView) {
         reportGeometry()
+        finishPendingReveal()
     }
 
     private func configureCollectionView() {

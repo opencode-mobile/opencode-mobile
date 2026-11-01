@@ -50,11 +50,13 @@ nonisolated enum DisplayFrameBuilder {
         chipTimeline: Bool = false,
         stepRail: Bool = false,
         activityCard: Bool = false,
-        childSessions: [SessionChatChildSessionCandidate] = []
+        childSessions: [SessionChatChildSessionCandidate] = [],
+        derivesChangeNotices: Bool = false
     ) -> DisplayFrame {
         // pthread_main_np avoids the async-context warning on Thread.isMainThread.
         lastBuildWasOnMainThread = pthread_main_np() != 0
-        let ordered = linkChildSessions(orderedDisplayMessages(displayMessages), children: childSessions)
+        let linked = linkChildSessions(orderedDisplayMessages(displayMessages), children: childSessions)
+        let ordered = derivesChangeNotices ? TimelineChangeNotices.withDerivedNotices(linked) : linked
 
         var bodies: [DisplayMessageBody] = []
         bodies.reserveCapacity(ordered.count)
@@ -192,8 +194,7 @@ nonisolated enum DisplayFrameBuilder {
             return DisplayMessage(
                 message: message,
                 renderedMarkdown: display.renderedMarkdown,
-                awaitingTextMateUpgrade: display.awaitingTextMateUpgrade,
-                highlightEpoch: display.highlightEpoch
+                awaitingTextMateUpgrade: display.awaitingTextMateUpgrade
             )
         }
     }

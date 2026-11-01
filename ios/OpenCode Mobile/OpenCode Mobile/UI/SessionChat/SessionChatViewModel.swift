@@ -22,6 +22,7 @@ final class SessionChatViewModel {
     private let repoStrip: SessionChatRepoStrip
     private let commands: SessionChatCommands
     private let inbox: SessionChatInbox
+    private let sideQuestions: SessionChatSideQuestions
     private let sessionRepository: any SessionRepository
     private let sessionReadyStore: any SessionReadyStore
     private let sessionViewReporter: any SessionViewReporter
@@ -34,7 +35,16 @@ final class SessionChatViewModel {
     private var lastWorkingLamp: String?
     private var workingChrome = WorkingTurnIndicator.Chrome.unmounted
     private var workingHold: WorkingTurnIndicator.Hold?
+    /// When subagents seen working finished live, keyed by tool part id, for rows with no server time.
+    private var subagentFinishTimes: [String: Int64] = [:]
+    /// When the connection last became live; nil while it is not. Rows published before it
+    /// were seen before a gap, so a finish found after it is not stamped locally.
+    private var subagentLiveSinceMs: Int64?
+    /// When the published subagent rows were computed.
+    private var subagentsSeenAtMs: Int64?
     private var workingHoldTask: Task<Void, Never>?
+    private var pendingPromptsGate = PendingPromptsStripGate()
+    private var pendingPromptsWakeTask: Task<Void, Never>?
     private var isSessionBound = true
     private var suppressedSnackbarKey: String?
     private var snackbarSequence: UInt64 = 0
@@ -54,6 +64,8 @@ final class SessionChatViewModel {
     private var armedSendAcceptance: ArmedSendAcceptance?
     private var sendInFlight = false
     private var projectIdentity: SessionChatProjectIdentity
+    /// Loads timeline image attachments (inline data or server files); nil in tests.
+    let attachmentImageLoader: (any AttachmentImageLoading)?
     private var checkoutProjectIDs: Set<String> = []
     private var worktreeEventTask: Task<Void, Never>?
     private let worktreeRepository: any WorktreeRepository
@@ -67,6 +79,7 @@ final class SessionChatViewModel {
     private var moveInFlight = false
     private var moveErrorMessage: String?
     private var moveNotice: String?
+    private var branchCopiedNotice: String?
     /// Shown instead of opening Changes when the last turn moved folders.
     private var turnDiffNotice: String?
     private var movedDirectory: String?
@@ -88,6 +101,8 @@ final class SessionChatViewModel {
     private var dictation: ComposerDictationUiState?
     private var dictationInsertGeneration: UInt64 = 0
     private var dictationFinishTask: Task<Void, Never>?
+    /// A sheet or dialog the view owns is up; see `setScreenSheetOpen`.
+    @ObservationIgnored private var screenSheetOpen = false
     /// Tests set this to 0 to commit an insert synchronously.
     var dictationFinishDelayNs: UInt64 = 350_000_000
 
@@ -114,10 +129,13 @@ final class SessionChatViewModel {
         newSessionModelSelectionResolver: NewSessionModelSelectionResolver,
         liveUpdates: any LiveUpdates = FixedLiveUpdates(),
         lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil,
+        sideQuestionStore: SideQuestionStore? = nil,
         syncCoordinator: (any SyncCoordinator)? = nil,
         clock: any SyncClock = SystemSyncClock(),
         mcpRepository: (any McpRepository)? = nil,
         projectFilesRepository: (any ProjectFilesRepository)? = nil,
+        attachmentUploadRepository: (any AttachmentUploadRepository)? = nil,
+        attachmentImageLoader: (any AttachmentImageLoading)? = nil,
         catalogRetryDelaysMs: [Int] = SessionChatComposer.defaultCatalogRetryDelaysMs,
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
         projectRepository: any ProjectRepository = UnavailableProjectRepository(),
@@ -126,6 +144,7 @@ final class SessionChatViewModel {
         self.sessionID = sessionID
         self.sessionTitle = sessionTitle
         self.worktree = worktree
+        self.attachmentImageLoader = attachmentImageLoader
         self.newSessionModelSelectionResolver = newSessionModelSelectionResolver
         self.activeConnectionManager = activeConnectionManager
         self.connectionProfileStore = connectionProfileStore
@@ -156,7 +175,8 @@ final class SessionChatViewModel {
             sessionID: sessionID,
             worktree: worktree,
             messageRepository: messageRepository,
-            listChildSessions: { id in try await sessionRepository.listChildSessions(id: id) }
+            listChildSessions: { id in try await sessionRepository.listChildSessions(id: id) },
+            derivesChangeNotices: { !activeConnectionManager.capabilities.recordsTimelineChangeNotices }
         )
         self.composer = SessionChatComposer(
             sessionID: sessionID,
@@ -171,6 +191,7 @@ final class SessionChatViewModel {
             activeConnectionManager: activeConnectionManager,
             foregroundEventStream: foregroundEventStream,
             projectFilesRepository: projectFilesRepository,
+            attachmentUploadRepository: attachmentUploadRepository,
             catalogRetryDelaysMs: catalogRetryDelaysMs
         )
         self.sessionInfo = SessionInfo(
@@ -201,6 +222,11 @@ final class SessionChatViewModel {
             composerDraftStore: composerDraftStore,
             mcpRepository: mcpRepository ?? EmptyMcpRepository()
         )
+        self.sideQuestions = SessionChatSideQuestions(
+            sessionID: sessionID,
+            store: sideQuestionStore ?? SideQuestionStore(sessionRepository: sessionRepository),
+            supported: { activeConnectionManager.capabilities.supportsSideQuestion }
+        )
         let boundSessionInfo = self.sessionInfo
         let boundTimeline = self.timeline
         self.inbox = SessionChatInbox(
@@ -217,6 +243,7 @@ final class SessionChatViewModel {
         suppressedSnackbarKey = nil
         snackbarSequence = 0
         turnDiffNotice = nil
+        branchCopiedNotice = nil
         OpenCodeLog.sessionChat.info("bind session=\(sessionID) worktree=\(worktree) title=\(sessionTitle)")
         sessionInfo.bind(sessionID: sessionID, sessionTitle: sessionTitle)
         timeline.onChange = { [weak self] in self?.publishUiState() }
@@ -230,6 +257,8 @@ final class SessionChatViewModel {
         repoStrip.onChange = { [weak self] in self?.publishUiState() }
         commands.onChange = { [weak self] in self?.publishUiState() }
         inbox.onChange = { [weak self] in self?.publishUiState() }
+        sideQuestions.onChange = { [weak self] in self?.publishUiState() }
+        sideQuestions.canPresentAnswer = { [weak self] in self?.canPresentSideQuestionAnswer ?? false }
         refreshProjectIdentity()
         publishUiState()
     }
@@ -257,6 +286,7 @@ final class SessionChatViewModel {
         startCollapsePreferenceObservation()
         repoStrip.start()
         reviewChanges.start()
+        sideQuestions.start()
         if OptimisticSessionCreate.isPlaceholder(sessionID) {
             beginOptimisticCreate()
             return
@@ -318,11 +348,100 @@ final class SessionChatViewModel {
     }
 
     func updateComposerText(_ text: String, cursor: Int? = nil) {
+        // Typing `/btw ` switches to side-question mode and keeps only the question. Also strips
+        // the command when it is already in that mode: a keystroke typed before the field took
+        // the stripped draft brings it back.
+        if activeConnectionManager.capabilities.supportsSideQuestion, let question = SideQuestion.draftAfterCommand(text) {
+            sideQuestions.enterMode()
+            composer.restoreComposerText(question)
+            return
+        }
         composer.updateComposerText(text, cursor: cursor)
+        sideQuestions.updateDraft(composer.state.composer.text)
     }
 
     func exitShellMode() {
         composer.exitShellMode()
+    }
+
+    func exitSideQuestionMode() {
+        sideQuestions.exitMode()
+    }
+
+    /// The "answer ready" chip.
+    func openSideQuestionAnswer() {
+        logChatAction(ProductAnalytics.Action.sideQuestionOpenAnswer)
+        sideQuestions.openReadyAnswer()
+    }
+
+    func closeSideQuestionAnswer() {
+        logChatAction(ProductAnalytics.Action.sideQuestionClose)
+        sideQuestions.closeAnswer()
+    }
+
+    /// The answer sheet copied its text to the pasteboard.
+    func sideQuestionAnswerCopied() {
+        logChatAction(ProductAnalytics.Action.sideQuestionCopy)
+        sideQuestions.answerCopied()
+    }
+
+    /// The failed chip, or Retry on its snackbar when `id` is set.
+    func retrySideQuestions(id: UUID? = nil) {
+        logChatAction(ProductAnalytics.Action.sideQuestionRetry)
+        if let id {
+            sideQuestions.retry(id)
+        } else {
+            sideQuestions.retryFailed()
+        }
+    }
+
+    func dismissFailedSideQuestions() {
+        logChatAction(ProductAnalytics.Action.sideQuestionDismissFailed)
+        sideQuestions.dismissFailed()
+    }
+
+    /// Sends the draft as a `/btw` side question: one `generate` request, nothing added to the
+    /// timeline, and the draft cleared. A `/btw` this server cannot answer stays in the draft.
+    private func askSideQuestion() {
+        let draft = composer.state.composer.text
+        // The Btw tile keeps the draft as it is, so it may still start with `/btw `.
+        let question = sideQuestions.state.composerMode
+            ? SideQuestion.draftAfterCommand(draft) ?? draft
+            : SideQuestion.question(inDraft: draft) ?? ""
+        guard activeConnectionManager.capabilities.supportsSideQuestion,
+              !question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else { return }
+        logChatAction(ProductAnalytics.Action.sideQuestionAsk)
+        guard sideQuestions.ask(question) else { return }
+        composer.restoreComposerText("")
+        sideQuestions.updateDraft("")
+    }
+
+    /// Sheets and dialogs Session Chat's view owns itself are up; a new answer waits behind them.
+    func setScreenSheetOpen(_ open: Bool) {
+        screenSheetOpen = open
+    }
+
+    /// The mode is not kept, so a side-question draft gets its `/btw` back before leaving; it
+    /// still asks a side question later instead of going out as a prompt.
+    private func keepSideQuestionDraft() {
+        guard sideQuestions.state.composerMode else { return }
+        let draft = composer.state.composer.text
+        guard !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              SideQuestion.question(inDraft: draft) == nil
+        else { return }
+        composer.restoreComposerText(SideQuestion.command + " " + draft)
+    }
+
+    /// A new answer opens its sheet only when no other sheet or dialog is up.
+    private var canPresentSideQuestionAnswer: Bool {
+        isSessionBound
+            && !screenSheetOpen
+            && !uiState.commandsSheetVisible
+            && !uiState.forkDialogVisible
+            && !uiState.moveSheetVisible
+            && !uiState.rename.isDialogVisible
+            && uiState.presentedActivityCard == nil
     }
 
     func beginDictation(languageLabel: String, onDevice: Bool) {
@@ -458,8 +577,18 @@ final class SessionChatViewModel {
         composer.reportAttachmentReadFailure()
     }
 
+    /// Reads whether the server streams uploads, so the composer's attach sources and file routing
+    /// match the connection.
+    func refreshAttachmentUploadAvailability() async {
+        await composer.refreshUploadAvailability()
+    }
+
     func addAttachmentFiles(_ urls: [URL]) async {
         await composer.addAttachmentFiles(urls)
+    }
+
+    func addPastedOrDroppedFiles(_ urls: [URL], skippedFolders: Int, unreadable: Int) async -> Bool {
+        await composer.addPastedOrDroppedFiles(urls, skippedFolders: skippedFolders, unreadable: unreadable)
     }
 
     func retryModelCatalog() async {
@@ -567,6 +696,9 @@ final class SessionChatViewModel {
             commands.openMcpServers()
         case .compact:
             compactCurrentSession()
+        case .btw:
+            commands.dismissCommands()
+            sideQuestions.enterMode()
         }
     }
 
@@ -609,6 +741,7 @@ final class SessionChatViewModel {
             case .terminal: ProductAnalytics.Action.commandsTerminal
             case .files: ProductAnalytics.Action.commandsFiles
             case .mcp: ProductAnalytics.Action.commandsMcp
+            case .btw: ProductAnalytics.Action.commandsBtw
             }
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.sessionCommands,
@@ -798,6 +931,17 @@ final class SessionChatViewModel {
         publishUiState()
     }
 
+    /// The branch pill copied the branch name; confirm it with a snackbar.
+    func branchNameCopied() {
+        branchCopiedNotice = Self.branchCopiedMessage
+        // A repeat copy shows the snackbar again even if the last one was dismissed.
+        lastSnackbarKey = nil
+        suppressedSnackbarKey = nil
+        publishUiState()
+    }
+
+    static let branchCopiedMessage = "Branch name copied"
+
     func consumeSnackbar() {
         if uiState.snackbar != nil {
             logChatAction(ProductAnalytics.Action.chatDismissSnackbar)
@@ -807,8 +951,10 @@ final class SessionChatViewModel {
         timelineStylePickerNotice = nil
         moveErrorMessage = nil
         moveNotice = nil
+        branchCopiedNotice = nil
         turnDiffNotice = nil
         commands.clearActionFeedback()
+        sideQuestions.clearNotice()
         composer.clearTransientErrors()
         sessionInfo.clearTransientErrors()
         timeline.clearReadyError()
@@ -1010,6 +1156,19 @@ final class SessionChatViewModel {
         timeline.toggleStepRailFold(railID)
     }
 
+    /// Gallery: open the image viewer over a group at the tapped image.
+    func openImageViewer(images: [FilePart], index: Int) {
+        timeline.openImageViewer(images: images, index: index)
+    }
+
+    func showImageViewerPage(_ index: Int) {
+        timeline.showImageViewerPage(index)
+    }
+
+    func closeImageViewer() {
+        timeline.closeImageViewer()
+    }
+
     func toggleFollowUp() {
         guard activeConnectionManager.capabilities.supportsFollowUpDelivery else { return }
         composer.toggleFollowUp()
@@ -1091,6 +1250,11 @@ final class SessionChatViewModel {
             return
         }
         if pendingSend != nil || sendInFlight || composer.state.isSending {
+            return
+        }
+        // A side question never becomes a prompt, including a typed `/btw` this server cannot answer.
+        if sideQuestions.state.composerMode || SideQuestion.question(inDraft: composer.state.composer.text) != nil {
+            askSideQuestion()
             return
         }
         sendInFlight = true
@@ -1228,6 +1392,46 @@ final class SessionChatViewModel {
         inbox.showPermissionDock()
     }
 
+    /// Opens the panel on the request of the subagent the needs-input pill names.
+    /// Returns false when no subagent request waits, so the caller opens the subagents panel.
+    func openWaitingSubagentRequest() -> Bool {
+        let inboxState = inbox.state
+        guard let target = SessionChatBackgroundWork.needsInputTarget(
+            subagents: uiState.subagents,
+            sessions: inboxState.permissionSessions + inboxState.questionSessions,
+            permissions: inboxState.permissionRequests,
+            questions: inboxState.questionRequests,
+            shownPermissionID: inboxState.visiblePermissionRequest?.id
+        ) else { return false }
+        switch target {
+        case .permission: logChatAction(ProductAnalytics.Action.permissionShow)
+        case .question: logChatAction(ProductAnalytics.Action.questionShow)
+        }
+        inbox.focus(target)
+        return true
+    }
+
+    func pagePermission(by delta: Int) {
+        logChatAction(ProductAnalytics.Action.inboxRequestPage)
+        inbox.pagePermission(by: delta)
+    }
+
+    func pageQuestion(by delta: Int) {
+        logChatAction(ProductAnalytics.Action.inboxRequestPage)
+        inbox.pageQuestion(by: delta)
+    }
+
+    /// Collapse the question panel so the composer is reachable; the question stays pending.
+    func hideQuestionDock(requestID: String) {
+        logChatAction(ProductAnalytics.Action.questionHide)
+        inbox.hideQuestionDock(requestID: requestID)
+    }
+
+    func showQuestionDock() {
+        logChatAction(ProductAnalytics.Action.questionShow)
+        inbox.showQuestionDock()
+    }
+
     func denyPermission(requestID: String, sessionID: String) async {
         logChatAction(
             ProductAnalytics.Action.permissionDeny,
@@ -1278,6 +1482,49 @@ final class SessionChatViewModel {
     func dismissQuestion(requestID: String, sessionID: String) async {
         logChatAction(ProductAnalytics.Action.questionDismiss)
         await inbox.dismissQuestion(requestID: requestID, sessionID: sessionID)
+    }
+
+    /// Subagent rows from the linked timeline, live session activity and the pending
+    /// requests of the session tree; remembers when rows seen working finish.
+    private func resolveSubagents(
+        inboxState: SessionChatInboxRegionState,
+        infoState: SessionInfoRegionState
+    ) -> [SessionChatSubagent] {
+        let nowMs = clock.nowMs()
+        let isLive = infoState.connectionStatus == .live
+        if !isLive {
+            subagentLiveSinceMs = nil
+        } else if subagentLiveSinceMs == nil {
+            subagentLiveSinceMs = nowMs
+        }
+        let seenLive = isLive
+            && subagentsSeenAtMs.map { seen in subagentLiveSinceMs.map { seen >= $0 } ?? false } == true
+        subagentsSeenAtMs = nowMs
+        let messages = SessionChatChildSessionLinker.link(
+            timeline.loadedMessages(),
+            children: timeline.childSessions
+        )
+        func rows(_ finishTimes: [String: Int64]) -> [SessionChatSubagent] {
+            SessionChatBackgroundWork.subagents(
+                messages: messages,
+                sessions: inboxState.permissionSessions + inboxState.questionSessions,
+                busySessionIDs: infoState.busySessionIDs,
+                requestSessionIDs: inboxState.permissionRequests.map(\.sessionID)
+                    + inboxState.questionRequests.map(\.sessionID),
+                localFinishedAtMs: finishTimes
+            )
+        }
+        let current = rows(subagentFinishTimes)
+        let finishTimes = SessionChatBackgroundWork.finishTimes(
+            previous: uiState.subagents,
+            current: current,
+            known: subagentFinishTimes,
+            nowMs: nowMs,
+            seenLive: seenLive
+        )
+        guard finishTimes != subagentFinishTimes else { return current }
+        subagentFinishTimes = finishTimes
+        return rows(finishTimes)
     }
 
     nonisolated static func orderedPermissionRequests(
@@ -1377,6 +1624,7 @@ final class SessionChatViewModel {
         resetWorkingFooter()
         resetChipTimelineIntro()
         resetTimelineStylePicker()
+        keepSideQuestionDraft()
         composer.flushDraft()
         pendingSend = nil
         optimisticCreateTask?.cancel()
@@ -1390,6 +1638,7 @@ final class SessionChatViewModel {
         timeline.stopObserving()
         sessionInfo.stopObserving()
         inbox.stop()
+        sideQuestions.stop()
         collapsePreferenceGeneration += 1
         // Only release our own focus: the next Session Chat (child, parent, fork) may already
         // have focused itself before this screen disappears.
@@ -1618,6 +1867,7 @@ final class SessionChatViewModel {
         composer.rebind(sessionID: id)
         reviewChanges.rebind(sessionID: id)
         commands.rebind(sessionID: id)
+        sideQuestions.rebind(sessionID: id)
         sessionInfo.bind(sessionID: id, sessionTitle: title)
         inbox.bind(sessionID: id)
         commands.start()
@@ -1695,9 +1945,11 @@ final class SessionChatViewModel {
         }()
         let snackbar = resolveSnackbar(
             transientError: transientError,
+            sideQuestionNotice: sideQuestions.notice,
             successNotice: composerState.followUpNotice
                 ?? commandsState.actionSuccessMessage
                 ?? moveNotice
+                ?? branchCopiedNotice
                 ?? chipTimelineIntroNotice
                 ?? timelineStylePickerNotice
         )
@@ -1744,6 +1996,15 @@ final class SessionChatViewModel {
                 "workingLamp label=\(workingIndicatorLabel ?? "none") collapsed=\(workingIndicatorCollapsed ? 1 : 0) fading=\(workingIndicatorFading ? 1 : 0) hold=\(workingHold != nil ? 1 : 0) status=\(sessionStatusLabel ?? "none") awaitingUser=\(awaitingUser ? 1 : 0) lastIsThinking=\(lastIsThinking ? 1 : 0)"
             )
         }
+        let pendingResolution = pendingPromptsGate.resolve(
+            Self.pendingPrompts(
+                loaded: timeline.loadedMessages(),
+                optimistic: timeline.pendingOptimisticItems()
+            ),
+            nowMs: clock.nowMs()
+        )
+        schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
+        let subagents = resolveSubagents(inboxState: inboxState, infoState: infoState)
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
@@ -1751,13 +2012,13 @@ final class SessionChatViewModel {
             projectLetter: projectIdentity.letter,
             projectLetterAccent: projectIdentity.accent,
             worktreeCheckout: projectIdentity.isWorktreeCheckout,
-            sessionBranchPill: SessionChatBranchPillUiState.resolved(from: repoStripState),
+            sessionBranchPill: SessionChatBranchPillUiState.resolved(
+                from: repoStripState,
+                isWorktree: projectIdentity.isWorktreeCheckout
+            ),
             timeline: timelineState.timeline,
             messages: timelineState.messages,
-            pendingPrompts: Self.pendingPrompts(
-                loaded: timeline.loadedMessages(),
-                optimistic: timeline.pendingOptimisticItems()
-            ),
+            pendingPrompts: pendingResolution.prompts,
             timelineFrame: timelineFrame,
             composer: {
                 var next = composer.state.composer
@@ -1772,6 +2033,7 @@ final class SessionChatViewModel {
             sessionStatusLabel: sessionStatusLabel,
             workingIndicatorLabel: workingIndicatorLabel,
             retryCard: infoState.retryCard,
+            isRetrying: infoState.isRetrying,
             workingIndicatorCollapsed: workingIndicatorCollapsed,
             workingIndicatorFading: workingIndicatorFading,
             syncingIndicatorLabel: timelineState.isSyncingMessages
@@ -1783,6 +2045,8 @@ final class SessionChatViewModel {
             sessionTodoActivePreview: SessionTodoList.activePreview(in: inboxState.sessionTodos),
             sessionTodoCompletedCount: SessionTodoList.completedCount(in: inboxState.sessionTodos),
             sessionTodoTotalCount: inboxState.sessionTodos.count,
+            subagents: subagents,
+            backgroundWorkPill: SessionChatBackgroundWork.pill(for: subagents),
             connectionStatus: infoState.connectionStatus,
             canMutate: infoState.canMutate,
             composerEnabled: infoState.composerEnabled,
@@ -1797,12 +2061,19 @@ final class SessionChatViewModel {
             snackbar: snackbar,
             isLifecycleActionInFlight: infoState.isLifecycleActionInFlight,
             shouldLeaveSession: infoState.shouldLeaveSession,
-            permissionRequest: inboxState.permissionRequests.first,
+            permissionRequest: inboxState.visiblePermissionRequest,
+            permissionQueuePosition: inboxState.permissionPageIndex + 1,
             permissionQueueCount: inboxState.permissionRequests.count,
+            permissionAttribution: inboxState.visiblePermissionAttribution,
             permissionDockHidden: inboxState.isPermissionDockHidden,
             permissionSubmitting: inboxState.permissionSubmittingID != nil,
             permissionErrorMessage: inboxState.permissionError ?? inboxState.permissionTopologyError,
             questionRequest: visibleQuestion,
+            questionQueuePosition: inboxState.questionPageIndex + 1,
+            questionQueueCount: inboxState.questionRequests.count,
+            questionAttribution: inboxState.visibleQuestionAttribution,
+            questionDockHidden: inboxState.isQuestionDockHidden,
+            inboxPanelPulse: inboxState.panelPulse,
             questionWizardIndex: inboxState.questionWizardIndex,
             questionSelectedLabels: inboxState.questionDraft.selectedLabels,
             questionCustomText: inboxState.questionDraft.customText,
@@ -1848,9 +2119,16 @@ final class SessionChatViewModel {
             childActivities: timelineState.childActivities,
             activityCardFooters: timelineState.activityCardFooters,
             debouncedStepIDs: timelineState.debouncedStepIDs,
+            imageViewer: timelineState.imageViewer,
             chipTimelineIntroVisible: chipTimelineIntroVisible,
             timelineStylePickerVisible: timelineStylePickerVisible,
-            dictation: dictation
+            dictation: dictation,
+            sideQuestions: {
+                var next = sideQuestions.state
+                next.supported = activeConnectionManager.capabilities.supportsSideQuestion
+                next.composerMode = next.composerMode && next.supported
+                return next
+            }()
         )
     }
 
@@ -1880,7 +2158,27 @@ final class SessionChatViewModel {
         publishUiState()
     }
 
-    private func resolveSnackbar(transientError: String?, successNotice: String?) -> SessionChatSnackbar? {
+    private func resolveSnackbar(
+        transientError: String?,
+        sideQuestionNotice: SessionChatSideQuestionNotice? = nil,
+        successNotice: String?
+    ) -> SessionChatSnackbar? {
+        // A `/btw` notice outranks other success notices and yields to errors; its id keeps a
+        // repeated failure of the same question from deduping into the earlier snackbar.
+        if transientError == nil, let sideQuestionNotice {
+            let key = "sideQuestion:\(sideQuestionNotice.id)"
+            if key == suppressedSnackbarKey { return nil }
+            if key != lastSnackbarKey {
+                snackbarSequence += 1
+                lastSnackbarKey = key
+            }
+            return SessionChatSnackbar(
+                id: snackbarSequence,
+                message: sideQuestionNotice.message,
+                tone: sideQuestionNotice.isError ? .error : .default,
+                action: sideQuestionNotice.retryID.map { .retrySideQuestion($0) }
+            )
+        }
         let key: String?
         if let transientError {
             key = "error:\(transientError)"
@@ -1928,6 +2226,20 @@ final class SessionChatViewModel {
         workingHoldTask = nil
         workingHold = nil
         workingChrome = .unmounted
+        pendingPromptsWakeTask?.cancel()
+        pendingPromptsWakeTask = nil
+        pendingPromptsGate = PendingPromptsStripGate()
+    }
+
+    private func schedulePendingPromptsWake(_ wakeAfterMs: Int64?) {
+        pendingPromptsWakeTask?.cancel()
+        pendingPromptsWakeTask = nil
+        guard let wakeAfterMs else { return }
+        pendingPromptsWakeTask = Task { [clock] in
+            await clock.sleep(milliseconds: Int(wakeAfterMs))
+            guard !Task.isCancelled else { return }
+            publishUiState()
+        }
     }
 
     private func scheduleWorkingFooterWake(_ wakeAfterMs: Int64?) {

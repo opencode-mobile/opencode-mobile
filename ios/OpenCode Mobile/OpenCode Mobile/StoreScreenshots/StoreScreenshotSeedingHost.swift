@@ -87,8 +87,8 @@ enum StoreScreenshotSeeder {
             let worktrees = projects.map(\.worktree)
             let seeded = worktrees.isEmpty
                 ? [
-                    "/Users/ivan/Projects/opencode-mobile",
-                    "/Users/ivan/Projects/artifact-publisher",
+                    "/Users/example/Projects/opencode-mobile",
+                    "/Users/example/Projects/artifact-publisher",
                 ]
                 : worktrees
             await store.setAddedWorktrees(serverBaseURL: saved.normalizedBaseURL, worktrees: seeded)
@@ -104,7 +104,6 @@ enum StoreScreenshotSeeder {
         await Container.shared.sessionCache().clearAll()
         ThemeManager.shared.clearAll()
         HomeDisplayPreferences.shared.clear()
-        MarkdownHighlightPreferences.shared.clear()
         AnalyticsConsentPreferences.shared.clear()
         AppOnboardingPreferences.shared.clear()
         DeveloperToolsPreferences.shared.clear()
@@ -114,7 +113,7 @@ enum StoreScreenshotSeeder {
         FeatureFlags.shared.clearOverrides()
         MessageContentPreparer.shared.clearDocumentCache()
         BlockDecorationCache.shared.clear()
-        await TextMateLogbook.shared.clear()
+        await Container.codeHighlighter.trim(.critical)
         DiagnosticLogBuffer.shared.clear()
     }
 }

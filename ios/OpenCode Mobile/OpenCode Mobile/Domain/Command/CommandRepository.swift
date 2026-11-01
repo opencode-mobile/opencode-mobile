@@ -48,13 +48,13 @@ struct DefaultCommandRepository: CommandRepository, Sendable {
                 try await api.runCommandV2(
                     sessionID: sessionID,
                     body: adapter.toV2RunRequest(options),
-                    attachments: options.attachments
+                    attachments: options.attachments.inlineAttachments
                 )
             } else {
                 try await api.runCommand(
                     sessionID: sessionID,
                     body: adapter.toRunRequest(options),
-                    attachments: options.attachments,
+                    attachments: options.attachments.inlineAttachments,
                     directory: directory
                 )
             }

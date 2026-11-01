@@ -6,6 +6,30 @@ package dev.opencode.mobile
  * [OpenCodeReleaseObservability.logProductEvent] (consent + Debug gate).
  */
 object ProductAnalytics {
+    private val suppressions = java.util.concurrent.atomic.AtomicInteger(0)
+
+    /** Where events go; tests swap it to see what would be sent. */
+    internal var sink: (name: String, parameters: Map<String, String>) -> Unit =
+        { name, parameters -> OpenCodeReleaseObservability.logProductEvent(name, parameters) }
+
+    /** True while a [suppress] handle is open: nothing is logged. */
+    val isSuppressed: Boolean
+        get() = suppressions.get() > 0
+
+    /** Open [suppress] handles; tests compare it before and after. */
+    internal val suppressionCount: Int
+        get() = suppressions.get()
+
+    /**
+     * Stops every product event until the returned handle closes. The Session Chat Playground
+     * holds one while it is open: its fake sessions are not product use.
+     */
+    fun suppress(): AutoCloseable {
+        suppressions.incrementAndGet()
+        val closed = java.util.concurrent.atomic.AtomicBoolean(false)
+        return AutoCloseable { if (closed.compareAndSet(false, true)) suppressions.decrementAndGet() }
+    }
+
     object Event {
         const val SCREEN_VIEW = "product_screen_view"
         const val USER_ACTION = "product_user_action"
@@ -72,6 +96,7 @@ object ProductAnalytics {
         const val SESSION_CHIP_TIMELINE_INTRO = "session_chip_timeline_intro"
         const val SESSION_TIMELINE_STYLE_PICKER = "session_timeline_style_picker"
         const val SESSION_TODOS = "session_todos"
+        const val SESSION_SUBAGENTS = "session_subagents"
         const val SESSION_CONTEXT = "session_context"
         const val CHANGES = "changes"
         const val CHANGES_FILE_VIEWER = "changes_file_viewer"
@@ -166,6 +191,7 @@ object ProductAnalytics {
         const val CHAT_OPEN_CHANGES_FROM_TOOL = "chat_open_changes_from_tool"
         const val CHAT_OPEN_CHILD_SESSION = "chat_open_child_session"
         const val CHAT_OPEN_TODOS = "chat_open_todos"
+        const val CHAT_OPEN_SUBAGENTS = "chat_open_subagents"
         const val CHAT_SCROLL_TO_END = "chat_scroll_to_end"
         const val CHAT_OPEN_MESSAGE_ACTIONS = "chat_open_message_actions"
         const val CHAT_OPEN_TOOL_DETAIL = "chat_open_tool_detail"
@@ -209,6 +235,9 @@ object ProductAnalytics {
         const val QUESTION_NEXT = "question_next"
         const val QUESTION_SUBMIT = "question_submit"
         const val QUESTION_DISMISS = "question_dismiss"
+        const val QUESTION_HIDE = "question_hide"
+        const val QUESTION_SHOW = "question_show"
+        const val INBOX_REQUEST_PAGE = "inbox_request_page"
 
         // Commands / pickers / dialogs
         const val COMMANDS_DISMISS = "commands_dismiss"
@@ -220,11 +249,20 @@ object ProductAnalytics {
         const val COMMANDS_TERMINAL = "commands_terminal"
         const val COMMANDS_FILES = "commands_files"
         const val COMMANDS_MCP = "commands_mcp"
+        const val COMMANDS_BTW = "commands_btw"
+        const val SIDE_QUESTION_ASK = "side_question_ask"
+        const val SIDE_QUESTION_OPEN_ANSWER = "side_question_open_answer"
+        const val SIDE_QUESTION_COPY = "side_question_copy"
+        const val SIDE_QUESTION_CLOSE = "side_question_close"
+        const val SIDE_QUESTION_RETRY = "side_question_retry"
+        const val SIDE_QUESTION_DISMISS_FAILED = "side_question_dismiss_failed"
         const val MCP_SERVERS_BACK = "mcp_servers_back"
         const val ATTACH_SOURCE_DISMISS = "attach_source_dismiss"
         const val ATTACH_PICK_PHOTOS = "attach_pick_photos"
         const val ATTACH_PICK_FILES = "attach_pick_files"
         const val ATTACH_PICK_LOG_FILE = "attach_pick_log_file"
+        const val ATTACH_PASTE = "attach_paste"
+        const val ATTACH_DROP = "attach_drop"
         const val MODEL_PICKER_DISMISS = "model_picker_dismiss"
         const val MODEL_PICKER_SELECT_PROVIDER = "model_picker_select_provider"
         const val MODEL_PICKER_BACK_TO_PROVIDERS = "model_picker_back_to_providers"
@@ -248,6 +286,7 @@ object ProductAnalytics {
         const val MESSAGE_ACTIONS_REVERT = "message_actions_revert"
         const val MESSAGE_ACTIONS_FORK = "message_actions_fork"
         const val MESSAGE_ACTIONS_COPY = "message_actions_copy"
+        const val MESSAGE_ACTIONS_COPY_CODE_BLOCK = "message_actions_copy_code_block"
         const val CHAT_STEER_PENDING_PROMPT = "chat_steer_pending_prompt"
         const val CHAT_QUEUE_PENDING_PROMPT = "chat_queue_pending_prompt"
         const val CHAT_CANCEL_PENDING_PROMPT = "chat_cancel_pending_prompt"
@@ -265,6 +304,7 @@ object ProductAnalytics {
         const val TIMELINE_STYLE_PICKER_DISMISS = "timeline_style_picker_dismiss"
         const val SESSION_TOOL_GROUP_BACK = "session_tool_group_back"
         const val TODOS_DISMISS = "todos_dismiss"
+        const val SUBAGENTS_DISMISS = "subagents_dismiss"
 
         // Session context / changes
         const val SESSION_CONTEXT_BACK = "session_context_back"
@@ -355,14 +395,14 @@ object ProductAnalytics {
         presentation: String,
         trigger: String = Trigger.PUSH,
     ) {
-        OpenCodeReleaseObservability.logProductEvent(
-            name = Event.SCREEN_VIEW,
-            parameters =
-                mapOf(
-                    Param.SCREEN_ID to screenId,
-                    Param.PRESENTATION to presentation,
-                    Param.TRIGGER to trigger,
-                ),
+        if (isSuppressed) return
+        sink(
+            Event.SCREEN_VIEW,
+            mapOf(
+                Param.SCREEN_ID to screenId,
+                Param.PRESENTATION to presentation,
+                Param.TRIGGER to trigger,
+            ),
         )
     }
 
@@ -371,14 +411,14 @@ object ProductAnalytics {
         actionId: String,
         parameters: Map<String, String> = emptyMap(),
     ) {
-        OpenCodeReleaseObservability.logProductEvent(
-            name = Event.USER_ACTION,
-            parameters =
-                buildMap {
-                    put(Param.SCREEN_ID, screenId)
-                    put(Param.ACTION_ID, actionId)
-                    putAll(parameters)
-                },
+        if (isSuppressed) return
+        sink(
+            Event.USER_ACTION,
+            buildMap {
+                put(Param.SCREEN_ID, screenId)
+                put(Param.ACTION_ID, actionId)
+                putAll(parameters)
+            },
         )
     }
 }

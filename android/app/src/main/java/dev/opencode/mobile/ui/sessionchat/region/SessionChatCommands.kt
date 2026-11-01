@@ -24,9 +24,9 @@ import dev.opencode.mobile.ui.sessionchat.ChildSessionNavigationTarget
 import dev.opencode.mobile.ui.sessionchat.PendingTerminalOpen
 import dev.opencode.mobile.ui.sessionchat.SessionChatCommandsRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
-import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionCompactChrome
 import dev.opencode.mobile.ui.sessionchat.SessionCompactionPresence
+import dev.opencode.mobile.ui.sessionchat.TimelineProjector
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -50,6 +50,8 @@ class SessionChatCommands(
     private val mcpRepository: McpRepository,
     private val composerDraftStore: ComposerDraftStore,
     private val scope: CoroutineScope,
+    /** The server answers `/btw`; shows the Btw tile. */
+    private val supportsSideQuestion: () -> Boolean = { false },
 ) {
     var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
@@ -129,7 +131,13 @@ class SessionChatCommands(
                     hasNonEmptyText = message.text.isNotBlank(),
                 )
             }
-        val input = ClientSlashActionCatalog.visibilityInput(refs, currentRevertMessageId, hasSelectedComposerModel)
+        val input =
+            ClientSlashActionCatalog.visibilityInput(
+                messages = refs,
+                revertMessageId = currentRevertMessageId,
+                hasSelectedComposerModel = hasSelectedComposerModel,
+                supportsSideQuestion = supportsSideQuestion(),
+            )
         _state.update { it.copy(visibleActions = ClientSlashActionCatalog.visibleActions(input)) }
     }
 
@@ -604,7 +612,7 @@ class SessionChatCommands(
     private fun hasRevertibleContent(message: SessionChatMessageItem): Boolean =
         message.text.isNotBlank() ||
             message.attachments.isNotEmpty() ||
-            message.blocks.any { it is SessionChatTimelineBlock.Attachment }
+            message.blocks.any { TimelineProjector.messageAttachments(it).isNotEmpty() }
 
     private fun revert(
         target: SessionChatMessageItem,

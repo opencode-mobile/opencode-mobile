@@ -93,7 +93,8 @@ final class SessionChatCommands {
         let input = ClientSlashActionCatalog.visibilityInput(
             messages: refs,
             revertMessageID: currentRevertMessageID,
-            hasSelectedComposerModel: hasSelectedComposerModel
+            hasSelectedComposerModel: hasSelectedComposerModel,
+            supportsSideQuestion: activeConnectionManager.capabilities.supportsSideQuestion
         )
         state.visibleActions = ClientSlashActionCatalog.visibleActions(input)
     }
@@ -553,7 +554,7 @@ final class SessionChatCommands {
 
     private func hasRevertibleContent(_ message: SessionChatRow) -> Bool {
         !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            || message.blocks.contains { if case .attachment = $0 { true } else { false } }
+            || message.blocks.contains(where: \.isAttachmentContent)
     }
 
     private func revert(

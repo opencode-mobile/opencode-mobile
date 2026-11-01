@@ -4,6 +4,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProbing
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.DetectedServer
+import dev.opencode.mobile.domain.connection.ProtocolRedetection
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.project.ServerProbeError
 import kotlinx.coroutines.CompletableDeferred
@@ -87,6 +88,63 @@ class ActiveConnectionManagerProtocolTest {
 
             assertNull(manager.current())
             assertNull(manager.currentProtocol())
+        }
+
+    @Test
+    fun redetectProtocol_movesSavedV1ProfileToV2AndSavesIt() =
+        runTest {
+            val store = FakeProfileStore()
+            val manager = ActiveConnectionManager(store, ConnectionProbing { ServerProtocol.V2 })
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+
+            val result = manager.redetectProtocol()
+
+            assertEquals(ProtocolRedetection.Detected(ServerProtocol.V2), result)
+            assertEquals(ServerProtocol.V2, manager.currentProtocol())
+            assertEquals(ServerProtocol.V2, store.lastSaved?.serverProtocol)
+            assertEquals(sampleProfile.baseUrl, store.lastSaved?.baseUrl)
+        }
+
+    @Test
+    fun redetectProtocol_movesSavedV2ProfileBackToV1() =
+        runTest {
+            val store = FakeProfileStore()
+            val manager = ActiveConnectionManager(store, ConnectionProbing { ServerProtocol.V1 })
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V2)
+
+            assertEquals(ProtocolRedetection.Detected(ServerProtocol.V1), manager.redetectProtocol())
+            assertEquals(ServerProtocol.V1, store.lastSaved?.serverProtocol)
+        }
+
+    @Test
+    fun redetectProtocol_noAnswerKeepsSavedProtocol() =
+        runTest {
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { throw ServerProbeError.Transport(java.io.IOException("refused")) },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+
+            assertEquals(ProtocolRedetection.Unreachable, manager.redetectProtocol())
+            assertEquals(ServerProtocol.V1, manager.currentProtocol())
+            assertEquals(ServerProtocol.V1, store.lastSaved?.serverProtocol)
+        }
+
+    @Test
+    fun redetectProtocol_rejectedCredentialIsNotAnAnswer() =
+        runTest {
+            val store = FakeProfileStore()
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { throw ServerProbeError.Http(statusCode = 401, message = "Unauthorized") },
+                )
+            manager.applyProfile(sampleProfile, serverProtocol = ServerProtocol.V1)
+
+            assertEquals(ProtocolRedetection.Skipped, manager.redetectProtocol())
+            assertEquals(ServerProtocol.V1, manager.currentProtocol())
         }
 
     @Test
@@ -268,8 +326,8 @@ class ActiveConnectionManagerProtocolTest {
     @Test
     fun applyProfile_reselectsTailscaleAndKeepsServerUrls() =
         runTest {
-            val lan = "http://192.168.0.160:4096/"
-            val tailscale = "http://100.84.57.15:4096/"
+            val lan = "http://192.168.1.60:4096/"
+            val tailscale = "http://100.64.0.15:4096/"
             val store = FakeProfileStore()
             val manager =
                 ActiveConnectionManager(
@@ -298,8 +356,8 @@ class ActiveConnectionManagerProtocolTest {
     @Test
     fun ensureLoaded_reselectsTailscaleWhenStoredBaseUrlIsLan() =
         runTest {
-            val lan = "http://192.168.0.160:4096/"
-            val tailscale = "http://100.84.57.15:4096/"
+            val lan = "http://192.168.1.60:4096/"
+            val tailscale = "http://100.64.0.15:4096/"
             val store = FakeProfileStore()
             store.saveProfile(
                 ConnectionProfile(
@@ -327,8 +385,8 @@ class ActiveConnectionManagerProtocolTest {
     @Test
     fun ensureLoaded_sendsThePasswordOnlyToTheChosenAddress() =
         runTest {
-            val lan = "http://192.168.0.160:4096/"
-            val tailscale = "http://100.84.57.15:4096/"
+            val lan = "http://192.168.1.60:4096/"
+            val tailscale = "http://100.64.0.15:4096/"
             val store = FakeProfileStore()
             store.saveProfile(
                 ConnectionProfile(
@@ -353,8 +411,8 @@ class ActiveConnectionManagerProtocolTest {
     @Test
     fun ensureLoaded_keepsTheStoredAddressWhenTheChosenHostRejectsThePassword() =
         runTest {
-            val lan = "http://192.168.0.160:4096/"
-            val tailscale = "http://100.84.57.15:4096/"
+            val lan = "http://192.168.1.60:4096/"
+            val tailscale = "http://100.64.0.15:4096/"
             val store = FakeProfileStore()
             store.saveProfile(
                 ConnectionProfile(
@@ -379,7 +437,7 @@ class ActiveConnectionManagerProtocolTest {
     fun applyProfile_neverReplacesHttpsWithHttp() =
         runTest {
             val tunnel = "https://box.opentunnel.xyz/"
-            val lan = "http://192.168.0.160:4096/"
+            val lan = "http://192.168.1.60:4096/"
             val probe = CredentialRecordingProbe(silentHosts = setOf("box.opentunnel.xyz"))
             val manager = ActiveConnectionManager(FakeProfileStore(), probe)
 
@@ -400,8 +458,8 @@ class ActiveConnectionManagerProtocolTest {
     @Test
     fun applyProfile_whenNoAddressAnswers_keepsStoredBaseUrl() =
         runTest {
-            val lan = "http://192.168.0.160:4096/"
-            val tailscale = "http://100.84.57.15:4096/"
+            val lan = "http://192.168.1.60:4096/"
+            val tailscale = "http://100.64.0.15:4096/"
             val manager =
                 ActiveConnectionManager(
                     FakeProfileStore(),
@@ -422,6 +480,70 @@ class ActiveConnectionManagerProtocolTest {
 
             assertEquals(lan, manager.current()?.baseUrl)
             assertEquals(listOf(lan, tailscale), manager.currentProfile()?.serverUrls)
+            assertEquals("profile-1", manager.currentProfile()?.id)
+        }
+
+    @Test
+    fun reloadFromStore_bindsStoredAddressWithoutWaitingForProbe() =
+        runTest {
+            val lan = "http://192.168.1.2:4096/"
+            val tailscale = "http://100.64.0.3:4096/"
+            val started = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val store = FakeProfileStore()
+            store.saveProfile(
+                ConnectionProfile(
+                    id = "profile-1",
+                    baseUrl = lan,
+                    username = "opencode",
+                    password = "token",
+                    serverUrls = listOf(lan, tailscale),
+                ),
+            )
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing {
+                        started.complete(Unit)
+                        release.await()
+                        ServerProtocol.V2
+                    },
+                )
+
+            manager.reloadFromStore()
+
+            assertEquals(lan, manager.current()?.baseUrl)
+            assertTrue(!started.isCompleted)
+            release.complete(Unit)
+        }
+
+    @Test
+    fun resolveReachableAddress_rebindsWhenABetterHostWins() =
+        runTest {
+            val lan = "http://192.168.1.2:4096/"
+            val tailscale = "http://100.64.0.3:4096/"
+            val store = FakeProfileStore()
+            store.saveProfile(
+                ConnectionProfile(
+                    id = "profile-1",
+                    baseUrl = lan,
+                    username = "opencode",
+                    password = "token",
+                    serverUrls = listOf(lan, tailscale),
+                ),
+            )
+            val manager =
+                ActiveConnectionManager(
+                    store,
+                    ConnectionProbing { ServerProtocol.V2 },
+                )
+
+            manager.reloadFromStore()
+            assertEquals(lan, manager.current()?.baseUrl)
+
+            assertTrue(manager.resolveReachableAddress(requireNotNull(store.activeProfile())))
+
+            assertEquals(tailscale, manager.current()?.baseUrl)
             assertEquals("profile-1", manager.currentProfile()?.id)
         }
 }

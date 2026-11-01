@@ -43,10 +43,12 @@ private enum class SessionComposerGalleryScenario(
     Attachments("Attachments"),
     Revert("Revert"),
     Shell("Shell"),
+    SideQuestion("/btw"),
     ChildLockout("Child"),
     Permission("Permission"),
     PermissionEdit("Edit"),
     Queued("Queued"),
+    SubagentPermission("Subagent"),
     Submitting("Submitting"),
     Error("Error"),
     Question("Question"),
@@ -56,6 +58,7 @@ private enum class SessionComposerGalleryScenario(
     Custom("Custom"),
     QuestionSubmitting("Q Submit"),
     QuestionError("Q Error"),
+    SubagentQuestion("Q Subagent"),
 }
 
 private const val MentionGalleryText = "Ask @explore about this"
@@ -84,6 +87,8 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
     var mentionText by rememberSaveable { mutableStateOf(MentionGalleryText) }
     var mentionsCleared by rememberSaveable { mutableStateOf(false) }
     var shellText by rememberSaveable { mutableStateOf("!git status") }
+    var sideQuestionText by rememberSaveable { mutableStateOf("What did we change so far?") }
+    var sideQuestionMode by rememberSaveable { mutableStateOf(true) }
     var lastAction by rememberSaveable { mutableStateOf("None") }
     val composerFocus = rememberOpenCodeSessionComposerFocus()
     var selectedLabels by rememberSaveable { mutableStateOf(listOf("Minimal patch")) }
@@ -137,6 +142,8 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                 )
             SessionComposerGalleryScenario.Shell ->
                 promptState(text = shellText, shellMode = ComposerShellCommand.isShellMode(shellText))
+            SessionComposerGalleryScenario.SideQuestion ->
+                promptState(text = sideQuestionText, showStop = true, sideQuestionMode = sideQuestionMode)
             SessionComposerGalleryScenario.ChildLockout ->
                 OpenCodeSessionComposerState.ChildLockout(
                     selectedModelLabel = "Claude Sonnet 4",
@@ -146,6 +153,17 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
             SessionComposerGalleryScenario.Permission -> permissionState()
             SessionComposerGalleryScenario.PermissionEdit -> permissionState(edit = true)
             SessionComposerGalleryScenario.Queued -> permissionState(queueCount = 3)
+            SessionComposerGalleryScenario.SubagentPermission ->
+                permissionState(
+                    queuePosition = 2,
+                    queueCount = 3,
+                    attribution =
+                        OpenCodeSessionComposerState.RequestAttribution(
+                            sessionId = "session-gallery-child",
+                            letter = "G",
+                            summary = "general · subagent wants to run: npm test",
+                        ),
+                )
             SessionComposerGalleryScenario.Submitting -> permissionState(submitting = true)
             SessionComposerGalleryScenario.Error -> permissionState(errorMessage = "The permission response failed. Try again.")
             SessionComposerGalleryScenario.Question ->
@@ -218,6 +236,21 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                     selectedLabels = listOf("Minimal patch"),
                     submitEnabled = true,
                     errorMessage = "The question response failed. Try again.",
+                )
+            SessionComposerGalleryScenario.SubagentQuestion ->
+                questionState(
+                    questionIndex = 0,
+                    questionCount = 1,
+                    selectedLabels = selectedLabels,
+                    submitEnabled = questionAnswered,
+                    requestPosition = 1,
+                    requestCount = 2,
+                    attribution =
+                        OpenCodeSessionComposerState.RequestAttribution(
+                            sessionId = "session-gallery-child",
+                            letter = "E",
+                            summary = "explore · subagent asks",
+                        ),
                 )
         }
 
@@ -302,9 +335,11 @@ fun SessionComposerGalleryScreen(modifier: Modifier = Modifier) {
                                 mentionsCleared = true
                             }
                             SessionComposerGalleryScenario.Shell -> shellText = action.text
+                            SessionComposerGalleryScenario.SideQuestion -> sideQuestionText = action.text
                             else -> draftText = action.text
                         }
                     OpenCodeSessionComposerAction.ExitShellMode -> shellText = ComposerShellCommand.exitShellMode(shellText)
+                    OpenCodeSessionComposerAction.ExitSideQuestionMode -> sideQuestionMode = false
                     is OpenCodeSessionComposerAction.ToggleQuestionOption -> {
                         selectedLabels =
                             if (scenario == SessionComposerGalleryScenario.MultiSelect) {
@@ -345,6 +380,7 @@ private fun promptState(
     showPendingRevert: Boolean = false,
     showStop: Boolean = false,
     shellMode: Boolean = false,
+    sideQuestionMode: Boolean = false,
 ) = OpenCodeSessionComposerState.Prompt(
     text = text,
     mentionRanges = mentionRanges,
@@ -356,14 +392,17 @@ private fun promptState(
     showVariant = true,
     sendEnabled =
         if (shellMode) ComposerShellCommand.command(text) != null else text.isNotBlank() || attachments.isNotEmpty(),
-    attachEnabled = !shellMode,
+    attachEnabled = !shellMode && !sideQuestionMode,
     showStop = showStop,
     stopEnabled = showStop,
     shellMode = shellMode,
+    sideQuestionMode = sideQuestionMode,
 )
 
 private fun permissionState(
+    queuePosition: Int = 1,
     queueCount: Int = 1,
+    attribution: OpenCodeSessionComposerState.RequestAttribution? = null,
     submitting: Boolean = false,
     errorMessage: String? = null,
     edit: Boolean = false,
@@ -382,7 +421,9 @@ private fun permissionState(
             emptyList()
         },
     alwaysPatterns = if (edit) listOf("*") else listOf("git status *", "git diff *"),
+    queuePosition = queuePosition,
     queueCount = queueCount,
+    attribution = attribution,
     submitting = submitting,
     errorMessage = errorMessage,
 )
@@ -403,6 +444,9 @@ private fun questionState(
     submitEnabled: Boolean = false,
     submitting: Boolean = false,
     errorMessage: String? = null,
+    requestPosition: Int = 1,
+    requestCount: Int = 1,
+    attribution: OpenCodeSessionComposerState.RequestAttribution? = null,
 ) = OpenCodeSessionComposerState.Question(
     requestId = "question-gallery",
     sessionId = "session-gallery",
@@ -422,6 +466,9 @@ private fun questionState(
     submitEnabled = submitEnabled,
     submitting = submitting,
     errorMessage = errorMessage,
+    requestPosition = requestPosition,
+    requestCount = requestCount,
+    attribution = attribution,
 )
 
 private val OpenCodeSessionComposerAction.label: String
@@ -434,8 +481,10 @@ private val OpenCodeSessionComposerAction.label: String
             OpenCodeSessionComposerAction.Attach -> "Attach"
             OpenCodeSessionComposerAction.OpenCommands -> "Open commands"
             is OpenCodeSessionComposerAction.RemoveAttachment -> "Remove attachment"
+            is OpenCodeSessionComposerAction.PasteContent -> "Paste attachment"
             OpenCodeSessionComposerAction.CancelRevert -> "Cancel revert"
             OpenCodeSessionComposerAction.ExitShellMode -> "Exit shell mode"
+            OpenCodeSessionComposerAction.ExitSideQuestionMode -> "Exit side question mode"
             OpenCodeSessionComposerAction.Send -> "Send"
             OpenCodeSessionComposerAction.ToggleFollowUp -> "Toggle follow-up"
             OpenCodeSessionComposerAction.Stop -> "Stop"
@@ -443,6 +492,9 @@ private val OpenCodeSessionComposerAction.label: String
             is OpenCodeSessionComposerAction.DenyPermission -> "Deny"
             is OpenCodeSessionComposerAction.AlwaysAllowPermission -> "Always"
             is OpenCodeSessionComposerAction.HidePermission -> "Hide permission"
+            is OpenCodeSessionComposerAction.HideQuestion -> "Hide question"
+            is OpenCodeSessionComposerAction.PageRequest -> if (delta < 0) "Previous request" else "Next request"
+            is OpenCodeSessionComposerAction.OpenRequestSession -> "Open subagent session"
             is OpenCodeSessionComposerAction.ToggleQuestionOption -> "Toggle option"
             is OpenCodeSessionComposerAction.ToggleQuestionCustom -> "Toggle custom"
             is OpenCodeSessionComposerAction.QuestionCustomTextChanged -> "Custom text changed"

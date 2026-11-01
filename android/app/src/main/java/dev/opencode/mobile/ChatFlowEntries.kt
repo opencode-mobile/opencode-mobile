@@ -22,7 +22,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolGroupScreen
-import dev.opencode.mobile.ui.sessionchat.view.toTarget
+import dev.opencode.mobile.ui.sessionchat.view.toTargetWithImages
 import dev.opencode.mobile.ui.sessioncontext.SessionContextScreen
 import dev.opencode.mobile.ui.terminal.TerminalScreen
 
@@ -175,6 +175,12 @@ internal fun EntryProviderScope<NavKey>.chatFlowEntries(
             FilesScreen(
                 worktree = key.worktree,
                 onNavigateBack = navigator.navigateBack,
+                onOpenInHighlightingLab =
+                    if (HighlightingLabSeam.isAvailable) {
+                        { path, source -> HighlightingLabSeam.fileRoute(path, source)?.let(navigator.push) }
+                    } else {
+                        null
+                    },
             )
         }
     }
@@ -186,7 +192,7 @@ internal fun EntryProviderScope<NavKey>.chatFlowEntries(
             var blockedTurnDiff by remember { mutableStateOf<OpenCodeSnackbarMessage?>(null) }
             Box(Modifier.fillMaxSize()) {
                 SessionChatToolGroupScreen(
-                    target = key.toTarget(),
+                    target = key.toTargetWithImages(),
                     supportsSessionMessageDiff = key.supportsSessionMessageDiff,
                     onNavigateBack = navigator.navigateBack,
                     onToolDetailTap = {
@@ -250,4 +256,6 @@ internal fun EntryProviderScope<NavKey>.chatFlowEntries(
             }
         }
     }
+    // The File Viewer opens Lab screens in whichever stack shows it; empty in release builds.
+    highlightingLabEntries(navigator.push, navigator.navigateBack)
 }

@@ -29,6 +29,8 @@ data class V2SessionDto(
     val revert: SessionRevertDto? = null,
     /** `succeeded` | `failed` | `interrupted`; kept raw so unknown values never fail decoding. */
     val outcome: String? = null,
+    /** The agent a subagent session runs (`general`, `explore`). */
+    val agent: String? = null,
 )
 
 @Serializable
@@ -68,6 +70,17 @@ data class V2ForkSessionRequestDto(
 @Serializable
 data class V2MoveSessionRequestDto(
     val directory: String,
+)
+
+/** `POST /api/session/{id}/generate`: the prompt answered from the session's context. */
+@Serializable
+data class V2SessionGenerateRequestDto(
+    val prompt: String,
+)
+
+@Serializable
+data class V2SessionGenerateResponseDto(
+    val text: String,
 )
 
 @Serializable
@@ -134,4 +147,5 @@ data class V2InboxItemDto(
 @Serializable
 data class V2InboxUserPayloadDto(
     val text: String = "",
+    val metadata: JsonObject? = null,
 )

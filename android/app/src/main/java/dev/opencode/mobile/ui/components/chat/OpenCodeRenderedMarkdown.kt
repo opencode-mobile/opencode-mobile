@@ -5,6 +5,9 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -24,15 +27,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -68,6 +75,7 @@ import dev.opencode.mobile.markdown.plainTextFromMarkdownInlines
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.openCodeColor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
@@ -83,12 +91,14 @@ object OpenCodeRenderedMarkdownDetector {
     fun shouldRender(text: String): Boolean = OpenCodeMarkdownDetector.shouldRender(text)
 }
 
+private val CodeBlockShape = RoundedCornerShape(6.dp)
+
 /** Defer only large *inline* attributed builds; fenced code/diff paint spans sync. */
 private const val BACKGROUND_ANNOTATION_CHARACTER_THRESHOLD = 2_000
 
 /**
  * Format-always / color-later: never strip prepared spans while streaming.
- * Structure-only docs already have empty spans; semantic fallback keeps colors.
+ * Structure-only docs already have empty spans; highlight-core colors arrive later.
  */
 @Suppress("UNUSED_PARAMETER")
 internal fun forcePlainStreamingCode(
@@ -106,18 +116,18 @@ fun OpenCodeRenderedMarkdown(
     collapsedMaxHeight: Dp? = null,
     expanded: Boolean = true,
     onLinkTap: ((String) -> Unit)? = null,
-    onTextTap: (() -> Unit)? = null,
+    onTextTap: ((OpenCodeMessageTapTarget) -> Unit)? = null,
     onExpandableChange: (Boolean) -> Unit = {},
     onContentHeightChange: (Dp) -> Unit = {},
 ) {
     val density = LocalDensity.current
     val uriHandler = LocalUriHandler.current
-    val linkTapGate = remember { LinkTapGate() }
-    linkTapGate.onLinkTap = onLinkTap
-    linkTapGate.fallbackOpen = { url -> runCatching { uriHandler.openUri(url) } }
+    val tapGate = remember { MessageTapGate() }
+    tapGate.onLinkTap = onLinkTap
+    tapGate.fallbackOpen = { url -> runCatching { uriHandler.openUri(url) } }
     val trackLinkTaps = onTextTap != null && variant != OpenCodeRenderedMarkdownVariant.OutgoingMessage
-    linkTapGate.track = trackLinkTaps
-    val linkTap = remember { { url: String -> linkTapGate.onLink(url) } }
+    tapGate.track = trackLinkTaps
+    val linkTap = remember { { url: String -> tapGate.onLink(url) } }
     val isExpandable = collapsedMaxHeight != null && document.isLikelyExpandable()
     val visibleModifier =
         if (!expanded && collapsedMaxHeight != null && isExpandable) {
@@ -147,6 +157,7 @@ fun OpenCodeRenderedMarkdown(
                     variant = variant,
                     isStreaming = isStreaming,
                     onLinkTap = if (trackLinkTaps || onLinkTap != null) linkTap else null,
+                    tapGate = tapGate.takeIf { trackLinkTaps },
                 )
             }
         }
@@ -155,7 +166,7 @@ fun OpenCodeRenderedMarkdown(
         blocks()
     } else {
         SelectionContainer(
-            modifier = Modifier.opensMessageActionsOnTextTap(onTextTap, linkTapGate),
+            modifier = Modifier.opensMessageActionsOnTextTap(onTextTap, tapGate),
         ) {
             blocks()
         }
@@ -168,6 +179,7 @@ private fun MarkdownBlockView(
     variant: OpenCodeRenderedMarkdownVariant,
     isStreaming: Boolean,
     onLinkTap: ((String) -> Unit)?,
+    tapGate: MessageTapGate?,
 ) {
     when (block) {
         is MarkdownBlock.Paragraph ->
@@ -219,8 +231,8 @@ private fun MarkdownBlockView(
                 items = block.items.map { it.inlines },
                 onLinkTap = onLinkTap,
             )
-        is MarkdownBlock.CodeBlock -> CodeBlockView(block, isStreaming = isStreaming)
-        is MarkdownBlock.DiffBlock -> DiffBlockView(block)
+        is MarkdownBlock.CodeBlock -> CodeBlockView(block, isStreaming = isStreaming, tapGate = tapGate)
+        is MarkdownBlock.DiffBlock -> DiffBlockView(block, tapGate = tapGate)
         is MarkdownBlock.Table -> TableView(block, onLinkTap)
         MarkdownBlock.ThematicBreak ->
             Box(
@@ -297,6 +309,7 @@ private fun ListRow(
 private fun CodeBlockView(
     block: MarkdownBlock.CodeBlock,
     isStreaming: Boolean,
+    tapGate: MessageTapGate?,
 ) {
     val scrollState = rememberScrollState()
     val colors = codeColors()
@@ -311,14 +324,16 @@ private fun CodeBlockView(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(6.dp))
+                .background(colors.surface(MaterialTheme.colorScheme.surfaceVariant), CodeBlockShape)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CodeBlockShape)
+                .messageCodeBlockTapTarget(block.code, tapGate)
                 .horizontalScroll(scrollState)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
     ) {
         Text(
             text = annotated,
             modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
+            color = colors.plain,
             style = CodeTextStyle,
             softWrap = false,
         )
@@ -326,16 +341,21 @@ private fun CodeBlockView(
 }
 
 @Composable
-private fun DiffBlockView(block: MarkdownBlock.DiffBlock) {
+private fun DiffBlockView(
+    block: MarkdownBlock.DiffBlock,
+    tapGate: MessageTapGate?,
+) {
     val scrollState = rememberScrollState()
     val colors = codeColors()
     val annotatedLines = rememberDiffLineAnnotatedStrings(block.lines, colors)
+    val code = remember(block.lines) { block.lines.joinToString("\n") { it.text } }
     Column(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp))
-                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(6.dp))
+                .background(colors.surface(MaterialTheme.colorScheme.surfaceVariant), CodeBlockShape)
+                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, CodeBlockShape)
+                .messageCodeBlockTapTarget(code, tapGate)
                 .horizontalScroll(scrollState)
                 .padding(vertical = 8.dp),
     ) {
@@ -358,6 +378,7 @@ private fun DiffBlockView(block: MarkdownBlock.DiffBlock) {
                 Text(
                     text = annotated,
                     modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true),
+                    color = colors.plain,
                     style = CodeTextStyle,
                     softWrap = false,
                 )
@@ -519,11 +540,62 @@ private fun EqualHeightRow(
     }
 }
 
-private class LinkTapGate {
+/** What a tap on assistant text landed on. */
+sealed interface OpenCodeMessageTapTarget {
+    data object Text : OpenCodeMessageTapTarget
+
+    data class CodeBlock(
+        val code: String,
+    ) : OpenCodeMessageTapTarget
+}
+
+/**
+ * Whether the user is dragging or flinging the list that holds the message.
+ * A touch that lands then only stops the scroll, so it never opens message
+ * actions.
+ */
+val LocalOpenCodeUserScrollInProgress = staticCompositionLocalOf<() -> Boolean> { { false } }
+
+/**
+ * Decides, one finished touch at a time, whether a touch on message text is a
+ * tap that opens message actions. Long-press belongs to text selection, and
+ * the first tap after a selection only dismisses it.
+ */
+internal class MessageTextTapClassifier {
+    private var selectionActive = false
+
+    fun isTap(
+        released: Boolean,
+        moved: Boolean,
+        linkHandled: Boolean,
+        startedDuringScroll: Boolean,
+    ): Boolean {
+        if (linkHandled) {
+            selectionActive = false
+            return false
+        }
+        if (moved) return false
+        if (!released) {
+            selectionActive = true
+            return false
+        }
+        if (selectionActive) {
+            selectionActive = false
+            return false
+        }
+        return !startedDuringScroll
+    }
+}
+
+private class MessageTapGate {
     var onLinkTap: ((String) -> Unit)? = null
     var fallbackOpen: ((String) -> Unit)? = null
     var track: Boolean = false
     var handled: Boolean = false
+
+    /** Set by the code block the current touch started on. */
+    var codeBlock: String? = null
+    var codeBlockRipple: (() -> Unit)? = null
 
     fun onLink(url: String) {
         if (track) handled = true
@@ -534,26 +606,34 @@ private class LinkTapGate {
 
 /**
  * A short tap opens message actions. The pointer is not consumed, so a
- * long-press still starts text selection and a drag still scrolls. A link
- * marks [LinkTapGate.handled] before this sees the release.
+ * long-press still starts text selection and a drag still scrolls. A touch
+ * that moves past touch slop or lands while the list is scrolling is not a
+ * tap. A link marks
+ * [MessageTapGate.handled] and a code block sets [MessageTapGate.codeBlock]
+ * before this sees the release.
  */
 @Composable
-internal fun Modifier.opensMessageActionsOnTextTap(onTextTap: (() -> Unit)?): Modifier =
-    opensMessageActionsOnTextTap(onTextTap, linkTapGate = null)
+internal fun Modifier.opensMessageActionsOnTextTap(onTextTap: ((OpenCodeMessageTapTarget) -> Unit)?): Modifier =
+    opensMessageActionsOnTextTap(onTextTap, tapGate = null)
 
 @Composable
 private fun Modifier.opensMessageActionsOnTextTap(
-    onTextTap: (() -> Unit)?,
-    linkTapGate: LinkTapGate?,
+    onTextTap: ((OpenCodeMessageTapTarget) -> Unit)?,
+    tapGate: MessageTapGate?,
 ): Modifier {
     // Read `.value` inside the gesture. `by` would capture a stale local, and
     // keying pointerInput on the lambda restarts it whenever streaming recomposes.
     val onTextTapState = rememberUpdatedState(onTextTap)
+    val userScrollInProgress = rememberUpdatedState(LocalOpenCodeUserScrollInProgress.current)
     if (onTextTap == null) return this
     return pointerInput(Unit) {
-        var selectionActive = false
+        val classifier = MessageTextTapClassifier()
         awaitEachGesture {
             val down = awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
+            // The parent sees Initial first, so this clears before a code block sets it.
+            tapGate?.codeBlock = null
+            tapGate?.codeBlockRipple = null
+            val startedDuringScroll = userScrollInProgress.value()
             val slop = viewConfiguration.touchSlop
             val slopSquared = slop * slop
             val timeout = viewConfiguration.longPressTimeoutMillis
@@ -566,6 +646,8 @@ private fun Modifier.opensMessageActionsOnTextTap(
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
                 val dx = change.position.x - down.position.x
                 val dy = change.position.y - down.position.y
+                // A scroll only takes movement past this same slop, and positions are
+                // local, so a list or code block scroll also shows up here.
                 if (dx * dx + dy * dy > slopSquared) {
                     moved = true
                     break
@@ -575,23 +657,55 @@ private fun Modifier.opensMessageActionsOnTextTap(
                     break
                 }
             }
-            val gate = linkTapGate
-            if (gate != null && gate.handled) {
-                gate.handled = false
-                selectionActive = false
-                return@awaitEachGesture
-            }
-            if (released && !moved) {
-                if (selectionActive) {
-                    selectionActive = false
-                    return@awaitEachGesture
-                }
-                onTextTapState.value?.invoke()
-            } else if (!moved) {
-                selectionActive = true
+            val linkHandled = tapGate?.handled == true
+            tapGate?.handled = false
+            val isTap =
+                classifier.isTap(
+                    released = released,
+                    moved = moved,
+                    linkHandled = linkHandled,
+                    startedDuringScroll = startedDuringScroll,
+                )
+            if (!isTap) return@awaitEachGesture
+            val code = tapGate?.codeBlock
+            if (code != null) {
+                tapGate.codeBlockRipple?.invoke()
+                onTextTapState.value?.invoke(OpenCodeMessageTapTarget.CodeBlock(code))
+            } else {
+                onTextTapState.value?.invoke(OpenCodeMessageTapTarget.Text)
             }
         }
     }
+}
+
+/**
+ * Marks a touch that starts on this block so a tap copies the block, and
+ * plays the ripple once the message decides the touch was a tap.
+ */
+@Composable
+private fun Modifier.messageCodeBlockTapTarget(
+    code: String,
+    tapGate: MessageTapGate?,
+): Modifier {
+    if (tapGate == null) return this
+    val interactionSource = remember { MutableInteractionSource() }
+    val scope = rememberCoroutineScope()
+    val currentCode = rememberUpdatedState(code)
+    return clip(CodeBlockShape)
+        .indication(interactionSource, ripple())
+        .pointerInput(tapGate) {
+            awaitEachGesture {
+                val down = awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
+                tapGate.codeBlock = currentCode.value
+                tapGate.codeBlockRipple = {
+                    scope.launch {
+                        val press = PressInteraction.Press(down.position)
+                        interactionSource.emit(press)
+                        interactionSource.emit(PressInteraction.Release(press))
+                    }
+                }
+            }
+        }
 }
 
 private enum class EqualHeightRowSlot {
@@ -734,7 +848,7 @@ internal fun buildCodeAnnotatedString(
                 val start = span.start.coerceIn(0, code.length)
                 val end = span.end.coerceIn(start, code.length)
                 if (start < end) {
-                    addStyle(SpanStyle(color = colors.colorForRole(span.role)), start, end)
+                    addStyle(SpanStyle(color = colors.colorFor(span.role)), start, end)
                 }
             }
     }
@@ -759,69 +873,6 @@ private fun CodeTokenRole.stylePriority(): Int =
         CodeTokenRole.Deleted -> 15
         CodeTokenRole.Warning -> 16
         CodeTokenRole.Critical -> 17
-    }
-
-internal data class CodeColors(
-    val plain: androidx.compose.ui.graphics.Color,
-    val comment: androidx.compose.ui.graphics.Color,
-    val keyword: androidx.compose.ui.graphics.Color,
-    val string: androidx.compose.ui.graphics.Color,
-    val constant: androidx.compose.ui.graphics.Color,
-    val type: androidx.compose.ui.graphics.Color,
-    val property: androidx.compose.ui.graphics.Color,
-    val primitive: androidx.compose.ui.graphics.Color,
-    val variable: androidx.compose.ui.graphics.Color,
-    val operator: androidx.compose.ui.graphics.Color,
-    val punctuation: androidx.compose.ui.graphics.Color,
-    val info: androidx.compose.ui.graphics.Color,
-    val inserted: androidx.compose.ui.graphics.Color,
-    val deleted: androidx.compose.ui.graphics.Color,
-    val warning: androidx.compose.ui.graphics.Color,
-    val critical: androidx.compose.ui.graphics.Color,
-)
-
-@Composable
-internal fun codeColors(): CodeColors =
-    CodeColors(
-        plain = MaterialTheme.colorScheme.onSurface,
-        comment = openCodeColor("syntax-comment"),
-        keyword = openCodeColor("syntax-keyword"),
-        string = openCodeColor("syntax-string"),
-        constant = openCodeColor("syntax-constant"),
-        type = openCodeColor("syntax-type"),
-        property = openCodeColor("syntax-property"),
-        primitive = openCodeColor("syntax-primitive"),
-        variable = openCodeColor("syntax-variable"),
-        operator = openCodeColor("syntax-operator"),
-        punctuation = openCodeColor("syntax-punctuation"),
-        info = openCodeColor("syntax-info"),
-        inserted = openCodeColor("diff-add"),
-        deleted = openCodeColor("diff-delete"),
-        warning = openCodeColor("syntax-diff-unknown"),
-        critical = openCodeColor("syntax-critical"),
-    )
-
-private fun CodeColors.colorForRole(role: CodeTokenRole): androidx.compose.ui.graphics.Color =
-    when (role) {
-        CodeTokenRole.Plain -> plain
-        CodeTokenRole.Comment -> comment
-        CodeTokenRole.Keyword -> keyword
-        CodeTokenRole.Type -> type
-        CodeTokenRole.Variable -> variable
-        CodeTokenRole.Property -> constant
-        CodeTokenRole.Constant -> constant
-        CodeTokenRole.Function -> primitive
-        CodeTokenRole.Number,
-        CodeTokenRole.Attribute,
-        -> property
-        CodeTokenRole.String -> string
-        CodeTokenRole.Operator -> operator
-        CodeTokenRole.Punctuation -> punctuation
-        CodeTokenRole.Tag -> info
-        CodeTokenRole.Inserted -> inserted
-        CodeTokenRole.Deleted -> deleted
-        CodeTokenRole.Warning -> warning
-        CodeTokenRole.Critical -> critical
     }
 
 @Composable

@@ -17,23 +17,27 @@ import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
-
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
+import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRetryCard
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.VcsFileStatus
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.changes.ChangeSource
+import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionLeadingIcon
+import dev.opencode.mobile.ui.components.OpenCodeSessionBranchChangedFile
+import dev.opencode.mobile.ui.components.OpenCodeSessionBranchSummary
 import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 
 data class SessionChatComposerState(
@@ -54,7 +58,13 @@ data class SessionChatComposerState(
     val selectionRevision: Int = 0,
     val followUpDelivery: FollowUpDelivery = FollowUpDelivery.Steer,
     val supportsFollowUpDelivery: Boolean = false,
+    /** The server takes streamed uploads, so any file type or size can be attached. */
+    val attachmentUploadAvailable: Boolean = false,
 ) {
+    /** An attachment is still streaming to the server; sending waits for it. */
+    val hasPendingUploads: Boolean
+        get() = attachments.any { it.isUploading }
+
     val selectedModeLabel: String
         get() =
             selectableAgents.firstOrNull { it.id.equals(selectedMode, ignoreCase = true) }?.displayName
@@ -81,11 +91,11 @@ data class SessionChatComposerState(
             if (isShellMode) {
                 ComposerShellCommand.command(text) != null
             } else {
-                text.isNotBlank() || attachments.isNotEmpty()
+                (text.isNotBlank() || attachments.isNotEmpty()) && !hasPendingUploads
             }
 
     val canAttach: Boolean
-        get() = selectedModel?.option?.canAttach == true
+        get() = selectedModel?.option?.canAttach == true || attachmentUploadAvailable
 
     val mentionRanges: List<IntRange>
         get() =
@@ -96,10 +106,10 @@ data class SessionChatComposerState(
             ).sortedBy { it.first }
 
     val canAttachPhotos: Boolean
-        get() = selectedModel?.option?.canAttachPhotos == true
+        get() = selectedModel?.option?.canAttachPhotos == true || (attachmentUploadAvailable && selectedModel != null)
 
     val canAttachFiles: Boolean
-        get() = selectedModel?.option?.canAttachFiles == true
+        get() = selectedModel?.option?.canAttachFiles == true || (attachmentUploadAvailable && selectedModel != null)
 
     fun attachmentSources(developerToolsUnlocked: Boolean): ComposerAttachmentSources =
         ComposerAttachmentSources(
@@ -133,10 +143,23 @@ enum class SessionChatSnackbarTone {
     Error,
 }
 
+/** A button on a Session Chat snackbar. */
+sealed interface SessionChatSnackbarAction {
+    val label: String
+
+    /** Ask a failed `/btw` question again. */
+    data class RetrySideQuestion(
+        val id: String,
+    ) : SessionChatSnackbarAction {
+        override val label: String get() = "Retry"
+    }
+}
+
 data class SessionChatSnackbar(
     val message: String,
     val tone: SessionChatSnackbarTone,
     val id: Long,
+    val action: SessionChatSnackbarAction? = null,
 )
 
 enum class ComposerDictationPhase {
@@ -198,6 +221,8 @@ data class SessionChatUiState(
     val workingIndicatorLabel: String? = null,
     /** Live rate-limit countdown. Hidden for content-filter retries. */
     val retryCard: SessionRetryCard? = null,
+    /** The session is in `retry` status: the composer owns the countdown, failure marks show none. */
+    val isRetrying: Boolean = false,
     /** True after the Idle hold when the reserved footer has collapsed. */
     val workingIndicatorCollapsed: Boolean = false,
     /** True while the reserved Working lamp/label is fading through the idle hold. */
@@ -210,6 +235,10 @@ data class SessionChatUiState(
     val sessionTodoActivePreview: SessionTodo? = null,
     val sessionTodoCompletedCount: Int = 0,
     val sessionTodoTotalCount: Int = 0,
+    /** Subagents this session started, in background work panel order. */
+    val subagents: List<SessionChatSubagent> = emptyList(),
+    /** The background work pill; null when no subagent works or waits. */
+    val backgroundWorkPill: SessionChatBackgroundWorkPill? = null,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val canMutate: Boolean = false,
     val composerEnabled: Boolean = false,
@@ -221,12 +250,25 @@ data class SessionChatUiState(
     val isLifecycleActionInFlight: Boolean = false,
     val shouldLeaveSession: Boolean = false,
     val permissionRequest: PermissionRequest? = null,
+    /** 1-based position of [permissionRequest] among the waiting permissions. */
+    val permissionQueuePosition: Int = 1,
     val permissionQueueCount: Int = 0,
+    /** The subagent asking for [permissionRequest]; null for the session's own requests. */
+    val permissionAttribution: InboxRequestAttribution? = null,
     /** The permission dock is collapsed to a "Review permission" pill above the composer. */
     val permissionDockHidden: Boolean = false,
     val permissionSubmitting: Boolean = false,
     val permissionErrorMessage: String? = null,
     val questionRequest: QuestionRequest? = null,
+    /** 1-based position of [questionRequest] among the waiting question requests. */
+    val questionQueuePosition: Int = 1,
+    val questionQueueCount: Int = 0,
+    /** The subagent asking [questionRequest]; null for the session's own questions. */
+    val questionAttribution: InboxRequestAttribution? = null,
+    /** The question panel is collapsed to an "Answer question" pill above the composer. */
+    val questionDockHidden: Boolean = false,
+    /** Bumped each time a pill opens the permission or question panel; the panel pulses on change. */
+    val inboxPanelPulse: Int = 0,
     val questionWizardIndex: Int = 0,
     val questionSelectedLabels: List<String> = emptyList(),
     val questionCustomText: String = "",
@@ -279,6 +321,8 @@ data class SessionChatUiState(
     val expandedStepParagraphs: Map<String, Int> = emptyMap(),
     /** Step rails unfolded past their `N earlier steps` row, by rail id (#779). */
     val unfoldedStepRails: Set<String> = emptySet(),
+    /** Timeline gallery open in the full-screen image viewer, and its page (#898). */
+    val imageViewer: SessionChatImageViewerState? = null,
     /** Activity card whose live sheet is open, by block id (#779). */
     val presentedActivityCard: String? = null,
     /** Step of [presentedActivityCard] whose detail the sheet shows in place of its list (#779). */
@@ -299,6 +343,8 @@ data class SessionChatUiState(
     val dictation: ComposerDictationUiState? = null,
     /** Directory the session runs in now; differs from the route's after `session.moved`. Empty until bound. */
     val worktree: String = "",
+    /** `/btw` side questions: composer mode, chips above the composer and the answer sheet. */
+    val sideQuestions: SessionChatSideQuestionsUiState = SessionChatSideQuestionsUiState(),
 ) {
     /** A permission, question, or Screen Model-owned sheet or dialog would sit under the intro sheet. */
     fun blocksChipTimelineIntro(): Boolean =
@@ -449,61 +495,13 @@ object SessionBranchPillVisibility {
     ): Boolean = !hideFloatStack && !pill?.branch.isNullOrEmpty()
 }
 
-/**
- * The one pill shown at the top of the Session Chat timeline.
- * Priority: Syncing, then ToDo, then Branch / Changes.
- */
-sealed interface SessionChatTopPill {
-    data class Syncing(
-        val label: String,
-    ) : SessionChatTopPill
+/** Timing of the Syncing pill in the bottom-left activity slot. */
+object SessionChatSyncingPillTiming {
+    /** Syncing waits this long before it shows, so a fast catch-up does not flash. */
+    const val SHOW_DELAY_MS = 400L
 
-    /**
-     * Counts live on the pill so the outgoing ToDo in a kind crossfade keeps
-     * the last positive total after the session list is cleared.
-     */
-    data class Todos(
-        val completedCount: Int,
-        val totalCount: Int,
-        val activePreview: String?,
-    ) : SessionChatTopPill
-
-    data class Branch(
-        val pill: SessionBranchPillUiState,
-    ) : SessionChatTopPill
-
-    companion object {
-        /**
-         * Syncing waits this long before it takes the slot, so a fast catch-up
-         * does not flash the ToDo or Branch pill out and back in.
-         */
-        const val SYNCING_SHOW_DELAY_MS = 400L
-
-        /** Once shown, Syncing keeps the slot at least this long. */
-        const val SYNCING_MINIMUM_VISIBLE_MS = 600L
-
-        fun resolve(
-            syncingLabel: String?,
-            todosVisible: Boolean,
-            todoTotalCount: Int,
-            branchPill: SessionBranchPillUiState?,
-            hideFloatStack: Boolean,
-            todoCompletedCount: Int = 0,
-            todoActivePreview: String? = null,
-        ): SessionChatTopPill? =
-            when {
-                syncingLabel != null -> Syncing(syncingLabel)
-                !hideFloatStack && todosVisible && todoTotalCount > 0 ->
-                    Todos(
-                        completedCount = todoCompletedCount,
-                        totalCount = todoTotalCount,
-                        activePreview = todoActivePreview,
-                    )
-                branchPill != null && SessionBranchPillVisibility.shouldShow(branchPill, hideFloatStack) ->
-                    Branch(branchPill)
-                else -> null
-            }
-    }
+    /** Once shown, Syncing stays at least this long. */
+    const val MINIMUM_VISIBLE_MS = 600L
 }
 
 data class ReviewChangesSummary(
@@ -668,7 +666,10 @@ data class SessionInfoRegionState(
     val parentId: String? = null,
     val sessionStatusLabel: String? = null,
     val retryCard: SessionRetryCard? = null,
+    val isRetrying: Boolean = false,
     val hasResolvedSessionStatus: Boolean = false,
+    /** Sessions in this directory the server reports running, so subagent rows follow their child sessions. */
+    val busySessionIds: Set<String> = emptySet(),
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val canMutate: Boolean = false,
     val composerEnabled: Boolean = false,
@@ -683,11 +684,13 @@ fun SessionInfoRegionState.withStatus(
     authoritative: String?,
     hasResolved: Boolean = true,
     retryCard: SessionRetryCard? = null,
+    isRetrying: Boolean = false,
 ): SessionInfoRegionState =
     copy(
         sessionStatusLabel = authoritative,
         hasResolvedSessionStatus = hasResolved,
         retryCard = retryCard,
+        isRetrying = isRetrying,
     )
 
 data class SessionChatReviewChangesRegionState(
@@ -704,45 +707,149 @@ data class SessionChatRepoStripRegionState(
     val isExpanded: Boolean = false,
 )
 
+/** Floating session branch pill. Null when the worktree branch is unknown. */
 data class SessionBranchPillUiState(
-    val branch: String,
-    val additions: Int,
-    val deletions: Int,
-)
+    val summary: OpenCodeSessionBranchSummary,
+) {
+    val branch: String get() = summary.branch
+    val additions: Int get() = summary.additions
+    val deletions: Int get() = summary.deletions
+}
 
-fun SessionChatRepoStripRegionState.toSessionBranchPill(): SessionBranchPillUiState? {
+/** [isWorktree] is the worktree-checkout mark the title chrome already uses. */
+fun SessionChatRepoStripRegionState.toSessionBranchPill(isWorktree: Boolean = false): SessionBranchPillUiState? {
     if (!isAvailable || branch.isEmpty()) return null
     return SessionBranchPillUiState(
-        branch = branch,
-        additions = files.sumOf { it.additions }.coerceAtLeast(0),
-        deletions = files.sumOf { it.deletions }.coerceAtLeast(0),
+        OpenCodeSessionBranchSummary(
+            branch = branch,
+            baseBranch = defaultBranch,
+            isWorktree = isWorktree,
+            files =
+                files.map {
+                    OpenCodeSessionBranchChangedFile(
+                        path = it.path,
+                        additions = it.additions.coerceAtLeast(0),
+                        deletions = it.deletions.coerceAtLeast(0),
+                    )
+                },
+        ),
     )
 }
 
 data class SessionChatInboxRegionState(
+    /** The session the inbox is bound to; requests from any other session are a subagent's. */
+    val rootSessionId: String = "",
     val permissionRequests: List<PermissionRequest> = emptyList(),
+    /** The permission request the panel pages to; null or gone means the first one. */
+    val permissionSelectedId: String? = null,
     /** The pending permission the user tucked away to reach the composer (never rejects it). */
     val permissionHiddenId: String? = null,
     val permissionSubmittingId: String? = null,
     val permissionError: String? = null,
     val permissionTopologyError: String? = null,
+    /** Sessions loaded to place descendant permission requests; also names the asking subagent. */
+    val permissionSessions: List<Session> = emptyList(),
     val questionRequests: List<QuestionRequest> = emptyList(),
+    /** The question request the panel pages to; null or gone means the first one. */
+    val questionSelectedId: String? = null,
+    /** The pending question the user collapsed to an "Answer question" pill (never dismisses it). */
+    val questionHiddenId: String? = null,
     val questionSubmittingId: String? = null,
     val questionError: String? = null,
     val questionTopologyError: String? = null,
+    val questionSessions: List<Session> = emptyList(),
     val questionWizardIndex: Int = 0,
     val questionDrafts: Map<Int, QuestionAnswerDraft> = emptyMap(),
+    /** The question request [questionWizardIndex] and [questionDrafts] belong to. */
+    val questionDraftRequestId: String? = null,
+    /** Answers of question requests paged away from, restored when paged back. */
+    val keptQuestionDrafts: Map<String, KeptQuestionDraft> = emptyMap(),
     val sessionTodos: List<SessionTodo> = emptyList(),
+    /** Bumped each time a pill opens the permission or question panel, so the panel pulses. */
+    val panelPulse: Int = 0,
 ) {
-    val visibleQuestionRequest: QuestionRequest?
-        get() = if (permissionRequests.isNotEmpty()) null else questionRequests.firstOrNull()
+    val permissionPageIndex: Int
+        get() = InboxRequestPaging.index(permissionRequests.map { it.id }, permissionSelectedId)
 
-    /** True while the first pending permission is the one the user hid; a new request shows again. */
+    val visiblePermissionRequest: PermissionRequest?
+        get() = permissionRequests.getOrNull(permissionPageIndex)
+
+    val questionPageIndex: Int
+        get() = InboxRequestPaging.index(questionRequests.map { it.id }, questionSelectedId)
+
+    /** The question request the panel pages to, regardless of a waiting permission. */
+    val selectedQuestionRequest: QuestionRequest?
+        get() = questionRequests.getOrNull(questionPageIndex)
+
+    val visibleQuestionRequest: QuestionRequest?
+        get() = if (permissionRequests.isNotEmpty()) null else selectedQuestionRequest
+
+    /** True while the shown permission is the one the user hid; paging or a new request shows again. */
     val isPermissionDockHidden: Boolean
-        get() = permissionHiddenId != null && permissionRequests.firstOrNull()?.id == permissionHiddenId
+        get() = permissionHiddenId != null && visiblePermissionRequest?.id == permissionHiddenId
+
+    /** True while the shown question is the one the user collapsed. */
+    val isQuestionDockHidden: Boolean
+        get() = questionHiddenId != null && visibleQuestionRequest?.id == questionHiddenId
+
+    val visiblePermissionAttribution: InboxRequestAttribution?
+        get() =
+            visiblePermissionRequest?.let {
+                InboxRequestAttribution.resolve(it.sessionId, rootSessionId, permissionSessions)
+            }
+
+    val visibleQuestionAttribution: InboxRequestAttribution?
+        get() =
+            visibleQuestionRequest?.let {
+                InboxRequestAttribution.resolve(it.sessionId, rootSessionId, questionSessions)
+            }
 
     val questionDraft: QuestionAnswerDraft
         get() = questionDrafts[questionWizardIndex] ?: QuestionAnswerDraft()
+}
+
+data class KeptQuestionDraft(
+    val wizardIndex: Int,
+    val drafts: Map<Int, QuestionAnswerDraft>,
+)
+
+/**
+ * Points the question wizard at the selected question request: keeps the answers of the request
+ * paged away from and restores the selected one's. Pure, so a `MutableStateFlow.update` that
+ * re-runs it on a concurrent write cannot mix two requests' answers.
+ */
+internal fun syncedQuestionDrafts(current: SessionChatInboxRegionState): SessionChatInboxRegionState {
+    val pendingIds = current.questionRequests.mapTo(mutableSetOf()) { it.id }
+    val kept = current.keptQuestionDrafts.filterKeys { it in pendingIds }
+    val visible =
+        current.selectedQuestionRequest
+            ?: return current.copy(
+                questionWizardIndex = 0,
+                questionDrafts = emptyMap(),
+                questionDraftRequestId = null,
+                keptQuestionDrafts = kept,
+            )
+    val lastIndex = (visible.questions.size - 1).coerceAtLeast(0)
+    if (current.questionDraftRequestId == visible.id) {
+        return current.copy(
+            questionWizardIndex = current.questionWizardIndex.coerceIn(0, lastIndex),
+            keptQuestionDrafts = kept,
+        )
+    }
+    val previous = current.questionDraftRequestId
+    val withPrevious =
+        if (previous != null && previous in pendingIds) {
+            kept + (previous to KeptQuestionDraft(current.questionWizardIndex, current.questionDrafts))
+        } else {
+            kept
+        }
+    val restored = withPrevious[visible.id]
+    return current.copy(
+        questionWizardIndex = (restored?.wizardIndex ?: 0).coerceIn(0, lastIndex),
+        questionDrafts = restored?.drafts.orEmpty(),
+        questionDraftRequestId = visible.id,
+        keptQuestionDrafts = withPrevious - visible.id,
+    )
 }
 
 data class SessionChatCommandsRegionState(
@@ -883,6 +990,10 @@ data class SessionChatMessageItem(
     val modelProviderId: String? = null,
     val modelId: String? = null,
     val contextInputTokens: Long? = null,
+    /** When the message was sent; user bubbles reveal it on a drag. */
+    val sentAtEpochMs: Long? = null,
+    /** Set on a prompt steered into a running turn, pending or delivered. */
+    val steer: SessionChatSteer? = null,
 )
 
 data class SessionChatAttachmentItem(
@@ -891,18 +1002,26 @@ data class SessionChatAttachmentItem(
     val variant: OpenCodeAttachmentVariant,
     val signature: String,
     val imageBytes: ByteArray? = null,
+    val imageSource: OpenCodeAttachmentImageSource? = null,
 ) {
+    /** An image the timeline can draw (it has a preview or a source), so it can join a gallery. */
+    val isGalleryImage: Boolean
+        get() = variant == OpenCodeAttachmentVariant.Image && (imageBytes != null || imageSource != null)
+
     override fun equals(other: Any?): Boolean =
         other is SessionChatAttachmentItem &&
             id == other.id &&
             filename == other.filename &&
             variant == other.variant &&
             signature == other.signature &&
-            imageBytes.contentEquals(other.imageBytes)
+            imageBytes.contentEquals(other.imageBytes) &&
+            imageSource == other.imageSource
 
     override fun hashCode(): Int =
-        31 * (31 * (31 * (31 * id.hashCode() + filename.hashCode()) + variant.hashCode()) + signature.hashCode()) +
-            imageBytes.contentHashCode()
+        31 * (
+            31 * (31 * (31 * (31 * id.hashCode() + filename.hashCode()) + variant.hashCode()) + signature.hashCode()) +
+                imageBytes.contentHashCode()
+        ) + imageSource.hashCode()
 }
 
 fun MessageRole.displayLabel(): String =

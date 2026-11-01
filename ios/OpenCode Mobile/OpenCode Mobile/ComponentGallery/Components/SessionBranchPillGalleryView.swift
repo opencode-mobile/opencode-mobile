@@ -1,76 +1,85 @@
 import SwiftUI
 
 struct SessionBranchPillGalleryView: View {
-    @State private var enabled = true
-    @State private var summary = SessionBranchPillGallerySummary.mixedDirty
+    @State private var sample = SessionBranchPillPreviewCase.changes
+    @State private var copiedCount = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Interactive")
                 .font(OpenCodeTypography.heading)
                 .foregroundStyle(OpenCodeColors.textStrong)
-            Text("Review mixed dirty, additions-only, deletions-only, clean, long-branch, and disabled states.")
+            Text("Tap the pill to open its popover. With changes it shows the line counts; without, the icon only. Worktree sessions use the worktree icon.")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
 
             HStack(spacing: 8) {
-                OpenCodeChoiceBadge(label: "Mixed", selected: summary == .mixedDirty) {
-                    summary = .mixedDirty
-                }
-                OpenCodeChoiceBadge(label: "+ only", selected: summary == .additionsOnly) {
-                    summary = .additionsOnly
-                }
-                OpenCodeChoiceBadge(label: "− only", selected: summary == .deletionsOnly) {
-                    summary = .deletionsOnly
+                ForEach(SessionBranchPillPreviewCase.allCases, id: \.self) { option in
+                    OpenCodeChoiceBadge(label: option.galleryLabel, selected: sample == option) {
+                        sample = option
+                    }
                 }
             }
 
-            HStack(spacing: 8) {
-                OpenCodeChoiceBadge(label: "Clean", selected: summary == .clean) {
-                    summary = .clean
-                }
-                OpenCodeChoiceBadge(label: "Long", selected: summary == .longBranch) {
-                    summary = .longBranch
-                }
-                OpenCodeChoiceBadge(label: "Enabled", selected: enabled) { enabled.toggle() }
-            }
-
-            HStack {
-                Spacer()
+            // As in the Session Chat top-left corner: the branch first, then todos.
+            HStack(spacing: OpenCodeAnchoredCardLayout.gap) {
                 OpenCodeSessionBranchPill(
-                    branch: summary.branch,
-                    additions: summary.additions,
-                    deletions: summary.deletions,
-                    enabled: enabled,
+                    summary: sample.summary,
+                    onViewAllChanges: {},
+                    onBranchNameCopied: { copiedCount += 1 }
+                )
+                OpenCodeFloatingPill(
+                    layout: .iconLabel(icon: .list, label: "2/5"),
+                    state: .ready,
+                    accessibilityLabel: "Todos, 2 of 5 done",
                     action: {}
                 )
                 Spacer()
             }
+            if copiedCount > 0 {
+                Text("Branch name copied (\(copiedCount))")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textWeak)
+            }
+
+            Text("All pills")
+                .font(OpenCodeTypography.heading)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .padding(.top, 8)
+            HStack(spacing: 8) {
+                ForEach(SessionBranchPillPreviewCase.allCases, id: \.self) { option in
+                    OpenCodeSessionBranchPill(summary: option.summary, onViewAllChanges: {})
+                }
+            }
+
+            Text("Popover open")
+                .font(OpenCodeTypography.heading)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .padding(.top, 8)
+            OpenCodeSessionBranchPopoverContent(summary: sample.summary, onViewAllChanges: {}, onCopyBranchName: {})
+                .frame(maxWidth: OpenCodeSessionBranchPill.popoverWidth)
+                .background(
+                    OpenCodeColors.surfaceRaisedBase,
+                    in: RoundedRectangle(cornerRadius: OpenCodeAnchoredCardLayout.cornerRadius, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: OpenCodeAnchoredCardLayout.cornerRadius, style: .continuous)
+                        .strokeBorder(OpenCodeColors.borderWeakBase)
+                )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-private enum SessionBranchPillGallerySummary {
-    case mixedDirty
-    case additionsOnly
-    case deletionsOnly
-    case clean
-    case longBranch
-
-    private var summary: (branch: String, additions: Int, deletions: Int) {
+private extension SessionBranchPillPreviewCase {
+    var galleryLabel: String {
         switch self {
-        case .mixedDirty: ("fix/probe", 12, 3)
-        case .additionsOnly: ("fix/probe", 12, 0)
-        case .deletionsOnly: ("fix/probe", 0, 3)
-        case .clean: ("main", 0, 0)
-        case .longBranch: (SessionBranchPillPreviewCase.longBranch, 4, 1)
+        case .changes: "Changes"
+        case .noChanges: "None"
+        case .worktree: "Worktree"
+        case .manyFiles: "Many"
         }
     }
-
-    var branch: String { summary.branch }
-    var additions: Int { summary.additions }
-    var deletions: Int { summary.deletions }
 }
 
 #Preview {

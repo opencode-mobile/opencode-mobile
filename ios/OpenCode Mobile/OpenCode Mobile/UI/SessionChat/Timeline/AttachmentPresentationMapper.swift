@@ -9,7 +9,8 @@ enum AttachmentPresentationMapper {
             id: attachment.id,
             filename: attachment.filename,
             variant: variant(for: attachment.kind),
-            image: previewImage(previewData: attachment.previewData, dataURL: attachment.dataURL, mime: attachment.mime, kind: attachment.kind)
+            image: previewImage(previewData: attachment.previewData, dataURL: attachment.dataURL, mime: attachment.mime, kind: attachment.kind),
+            uploadFraction: uploadFraction(attachment.upload)
         )
     }
 
@@ -22,11 +23,17 @@ enum AttachmentPresentationMapper {
         )
     }
 
+    private static func uploadFraction(_ state: AttachmentUploadState) -> Double? {
+        if case let .uploading(fraction) = state { return fraction }
+        return nil
+    }
+
     private static func variant(for kind: AttachmentKind) -> OpenCodeAttachmentVariant {
         switch kind {
         case .image: .image
         case .pdf: .pdf
         case .text: .text
+        case .file: .file
         }
     }
 

@@ -9,18 +9,30 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.SessionToolGroupMember
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.ui.components.LocalOpenCodeAttachmentImageLoader
+import dev.opencode.mobile.ui.components.LocalOpenCodeGalleryImageLoader
+import dev.opencode.mobile.ui.components.OpenCodeImageGallery
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCard
 import dev.opencode.mobile.ui.components.OpenCodeToolCallCardStatus
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.sessionchat.SessionChatAttachmentItem
+import dev.opencode.mobile.ui.sessionchat.SessionChatGalleryImageLoader
+import dev.opencode.mobile.ui.sessionchat.SessionChatImageGalleries
+import dev.opencode.mobile.ui.sessionchat.SessionChatImageViewerState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 
 internal data class SessionChatToolGroupTarget(
@@ -30,6 +42,52 @@ internal data class SessionChatToolGroupTarget(
     val members: List<SessionChatTimelineBlock.ToolCard>,
     val messageId: String,
 )
+
+/**
+ * Tool images for the tool group route, by group. The route key is saved state, so it never
+ * carries image data; the Session Chat that opens a group leaves its members' images here
+ * (references to the timeline's items, not copies). After process death the route shows its
+ * cards without images.
+ */
+internal object SessionToolGroupImages {
+    private const val MAX_GROUPS = 8
+
+    private val byGroup =
+        object : LinkedHashMap<String, Map<String, List<SessionChatAttachmentItem>>>(MAX_GROUPS, 0.75f, true) {
+            override fun removeEldestEntry(
+                eldest: MutableMap.MutableEntry<String, Map<String, List<SessionChatAttachmentItem>>>?,
+            ): Boolean = size > MAX_GROUPS
+        }
+
+    fun put(
+        sessionId: String,
+        target: SessionChatToolGroupTarget,
+    ) {
+        val images = target.members.filter { it.images.isNotEmpty() }.associate { it.blockID to it.images }
+        synchronized(byGroup) {
+            if (images.isEmpty()) byGroup.remove(key(sessionId, target.blockID)) else byGroup[key(sessionId, target.blockID)] = images
+        }
+    }
+
+    /** Member block id to that tool's images; empty when none were left for this group. */
+    fun get(
+        sessionId: String,
+        blockID: String,
+    ): Map<String, List<SessionChatAttachmentItem>> = synchronized(byGroup) { byGroup[key(sessionId, blockID)].orEmpty() }
+
+    private fun key(
+        sessionId: String,
+        blockID: String,
+    ): String = "$sessionId\u0000$blockID"
+}
+
+/** The route's target with the members' images put back from [SessionToolGroupImages]. */
+internal fun SessionToolGroup.toTargetWithImages(): SessionChatToolGroupTarget {
+    val target = toTarget()
+    val images = SessionToolGroupImages.get(sessionId, blockID)
+    if (images.isEmpty()) return target
+    return target.copy(members = target.members.map { card -> images[card.blockID]?.let { card.copy(images = it) } ?: card })
+}
 
 internal fun SessionChatToolGroupTarget.toRoute(
     sessionId: String,
@@ -112,6 +170,11 @@ internal fun SessionChatToolGroupScreen(
             presentation = ProductAnalytics.Presentation.ROUTE,
         )
     }
+    // This route has no screen model; the viewer is local to it (a card's gallery and page).
+    var imageViewer by remember { mutableStateOf<SessionChatImageViewerState?>(null) }
+    val serverImageLoader = LocalOpenCodeAttachmentImageLoader.current
+    val galleryLoader = remember(serverImageLoader) { SessionChatGalleryImageLoader(serverImageLoader) }
+    galleryLoader.update(messages = emptyList(), extra = target.members.flatMap { it.images })
 
     Column(
         modifier =
@@ -158,9 +221,26 @@ internal fun SessionChatToolGroupScreen(
                                 onChangesReviewTap = onChangesReviewTap,
                             ),
                     )
+                    if (card.images.isNotEmpty()) {
+                        CompositionLocalProvider(LocalOpenCodeGalleryImageLoader provides galleryLoader) {
+                            OpenCodeImageGallery(
+                                images = card.images.map(SessionChatImageGalleries::galleryImage),
+                                onImageClick = { index -> imageViewer = SessionChatImageViewerState(card.blockID, index) },
+                            )
+                        }
+                    }
                 }
             }
         }
+    }
+    CompositionLocalProvider(LocalOpenCodeGalleryImageLoader provides galleryLoader) {
+        SessionChatImageViewerHost(
+            state = imageViewer,
+            images = imageViewer?.let { open -> target.members.firstOrNull { it.blockID == open.galleryId }?.images },
+            loader = galleryLoader,
+            onPageChange = { index -> imageViewer = imageViewer?.copy(index = index) },
+            onDismiss = { imageViewer = null },
+        )
     }
 }
 

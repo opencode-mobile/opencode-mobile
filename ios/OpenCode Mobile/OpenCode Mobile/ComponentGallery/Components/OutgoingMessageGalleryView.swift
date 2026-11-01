@@ -46,7 +46,26 @@ struct OutgoingMessageGalleryView: View {
                     .init(id: "text", filename: "notes.md", variant: .text),
                 ] : [],
                 metadataLabel: "Build · DeepSeek V4 Flash · 9:05 PM",
+                sentAt: Date().addingTimeInterval(-26 * 60 * 60),
                 onTap: {}
+            )
+
+            Text("Steering")
+                .font(OpenCodeTypography.heading)
+                .foregroundStyle(OpenCodeColors.textStrong)
+            Text("A delivered steer keeps the label; a pending one is dimmed and outlined until the next step.")
+                .font(OpenCodeTypography.bodySecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
+            OpenCodeOutgoingMessage(
+                text: "Use the staging bucket instead.",
+                metadataLabel: "Build · DeepSeek V4 Flash · 9:06 PM",
+                steering: .delivered(showsLabel: true),
+                onTap: {}
+            )
+            OpenCodeOutgoingMessage(
+                text: "And skip the migration step.",
+                metadataLabel: "Build · DeepSeek V4 Flash · 9:07 PM",
+                steering: .pending(showsLabel: true)
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)

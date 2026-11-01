@@ -2043,7 +2043,7 @@ struct SessionChatTimelineBlocksTests {
     }
 
     @Test func chipTimeline_commandLabel_cutsAtLastWhitespaceBefore48() {
-        let command = "git log --oneline --decorate --graph --all --since=2.weeks --author=ivan"
+        let command = "git log --oneline --decorate --graph --all --since=2.weeks --author=example"
         #expect(command.count > 48)
         let label = SessionChatTimelineBlocks.commandChipLabel(command)
         #expect(label == "git log --oneline --decorate --graph --all\u{2026}")
@@ -2066,7 +2066,7 @@ struct SessionChatTimelineBlocksTests {
     }
 
     @Test func chipTimeline_commandLabel_stripsCdExportAndAssignmentPrefixes() {
-        #expect(SessionChatTimelineBlocks.commandChipLabel("cd /Users/ivan/repo && npm test") == "npm test")
+        #expect(SessionChatTimelineBlocks.commandChipLabel("cd /Users/example/repo && npm test") == "npm test")
         #expect(SessionChatTimelineBlocks.commandChipLabel("cd ios; xcodebuild test") == "xcodebuild test")
         #expect(SessionChatTimelineBlocks.commandChipLabel("cd a && cd b; make check") == "make check")
         #expect(SessionChatTimelineBlocks.commandChipLabel("export JAVA_HOME=/opt/jdk && ./gradlew test") == "./gradlew test")
@@ -2090,7 +2090,7 @@ struct SessionChatTimelineBlocksTests {
     }
 
     @Test func chipTimeline_commandChip_cardKeepsFullCommand() {
-        let command = "cd /Users/ivan/repo && npm test"
+        let command = "cd /Users/example/repo && npm test"
         let blocks = okBlocks(
             parts: [
                 .tool(ToolPart(id: "b1", toolName: "bash", status: .completed, input: ["command": .string(command)])),
@@ -2750,7 +2750,7 @@ struct SessionChatTimelineBlocksTests {
     }
 
     @Test func chipTimeline_executeChipUsesShortenedLabel() {
-        let command = "cd /Users/ivan/repo && npm test"
+        let command = "cd /Users/example/repo && npm test"
         let blocks = okBlocks(
             parts: [
                 .tool(ToolPart(id: "x1", toolName: "execute", status: .completed, input: ["command": .string(command)])),

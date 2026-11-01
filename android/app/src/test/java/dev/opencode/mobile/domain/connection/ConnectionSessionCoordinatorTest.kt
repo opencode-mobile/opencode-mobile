@@ -45,6 +45,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
@@ -370,14 +371,14 @@ class ConnectionSessionCoordinatorTest {
                 )
             val switch = backgroundScope.async { coordinator.switchProfile(home.id) }
             enteredStop.await()
-            assertEquals(listOf("stop"), order.toList())
+            assertEquals(listOf("beginProfileSwitch", "stop"), order.toList())
             releaseStop.complete(Unit)
             switch.await()
             advanceUntilIdle()
             assertEquals(
                 listOf(
-                    "stop",
                     "beginProfileSwitch",
+                    "stop",
                     "clearLiveProjections",
                     "bindProfile",
                     "ProfileSwitched",
@@ -389,6 +390,101 @@ class ConnectionSessionCoordinatorTest {
             assertEquals(1, order.count { it == "stop" })
             assertEquals(1, order.count { it == "start" })
         }
+
+    @Test
+    fun switchProfile_signalsTheUiBeforeStopFinishes() =
+        runTest {
+            val connectionProfileStore = CatalogConnectionProfileStore()
+            connectionProfileStore.saveProfile(
+                ConnectionProfile(
+                    baseUrl = "http://10.0.0.1:4096/",
+                    username = "opencode",
+                    password = "secret",
+                    name = "Home",
+                ),
+            )
+            val home = connectionProfileStore.listProfiles().first { it.name == "Home" }
+            val json = Json { ignoreUnknownKeys = true }
+            val activeConnectionManager = ActiveConnectionManager(connectionProfileStore)
+            val enteredStop = CompletableDeferred<Unit>()
+            val releaseStop = CompletableDeferred<Unit>()
+            val fake = FakeForegroundEventStream()
+            val stream =
+                object : LiveConnection by fake {
+                    override suspend fun stop() {
+                        enteredStop.complete(Unit)
+                        releaseStop.await()
+                        fake.stop()
+                    }
+                }
+            val coordinator =
+                testConnectionSessionCoordinator(
+                    activeConnectionManager = activeConnectionManager,
+                    connectionProfileStore = connectionProfileStore,
+                    secureCredentialStore = FakeSecureCredentialStore(),
+                    sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+                    composerDraftStore = InMemoryComposerDraftStore(),
+                    httpClient = OpencodeHttpClient(json, activeConnectionManager),
+                    sseHttpClient = OpencodeSseHttpClient(json, activeConnectionManager),
+                    eventStream = stream,
+                )
+            val switching = CopyOnWriteArrayList<String>()
+            backgroundScope.launch { coordinator.profileSwitching.collect { switching += it } }
+            val switch = backgroundScope.async { coordinator.switchProfile(home.id) }
+
+            enteredStop.await()
+
+            assertEquals(listOf(home.id), switching.toList())
+            releaseStop.complete(Unit)
+            switch.await()
+        }
+
+    @Test
+    fun saveProfile_reportsMovedWhenAnotherSavedAddressWins() =
+        runTest {
+            val lan = "http://192.168.1.2:4096/"
+            val tailscale = "http://100.64.0.3:4096/"
+            val coordinator = addressCheckCoordinator()
+            val checks = CopyOnWriteArrayList<AddressCheck.State>()
+            backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+                coordinator.addressCheck.collect { checks += it.state }
+            }
+
+            coordinator.saveProfile(
+                ConnectionProfile(baseUrl = lan, username = "opencode", password = "", serverUrls = listOf(lan, tailscale)),
+            )
+
+            assertEquals(listOf(AddressCheck.State.Kept, AddressCheck.State.Running, AddressCheck.State.Moved), checks.toList())
+            assertEquals(coordinator.profileGeneration, coordinator.addressCheck.value.generation)
+            assertEquals(tailscale, coordinator.currentProfile()?.baseUrl)
+        }
+
+    @Test
+    fun saveProfile_reportsKeptWhenTheStoredAddressStays() =
+        runTest {
+            val lan = "http://192.168.1.2:4096/"
+            val coordinator = addressCheckCoordinator()
+
+            coordinator.saveProfile(ConnectionProfile(baseUrl = lan, username = "opencode", password = "", serverUrls = listOf(lan)))
+
+            assertEquals(AddressCheck(coordinator.profileGeneration, AddressCheck.State.Kept), coordinator.addressCheck.value)
+            assertEquals(lan, coordinator.currentProfile()?.baseUrl)
+        }
+
+    private fun addressCheckCoordinator(): ConnectionSessionCoordinator {
+        val store = CatalogConnectionProfileStore()
+        val manager = ActiveConnectionManager(store, ConnectionProbing { ServerProtocol.V2 })
+        val json = Json { ignoreUnknownKeys = true }
+        return testConnectionSessionCoordinator(
+            activeConnectionManager = manager,
+            connectionProfileStore = store,
+            secureCredentialStore = FakeSecureCredentialStore(),
+            sessionModelSelectionStore = FakeSessionModelSelectionStore(),
+            composerDraftStore = InMemoryComposerDraftStore(),
+            httpClient = OpencodeHttpClient(json, manager),
+            sseHttpClient = OpencodeSseHttpClient(json, manager),
+        )
+    }
 
     @Test
     fun concurrentSwitch_isSerializedAndEndsOnLastProfile() =

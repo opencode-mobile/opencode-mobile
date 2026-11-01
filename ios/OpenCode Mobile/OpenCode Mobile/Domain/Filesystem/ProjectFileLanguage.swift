@@ -1,7 +1,7 @@
 import Foundation
 
-/// A TextMate grammar language for the File Viewer. `id` is the canonical language name the
-/// shared engine resolves (`shared/markdown-core/.../textmate-grammars/manifest.json`).
+/// A highlight-core language for the File Viewer. `id` is the canonical language id
+/// `HighlightCore.canonicalLanguage` resolves (`shared/highlight-core/.../HighlightCore.kt`).
 /// Android implements the same table; both are tested against
 /// `shared/file-languages/file-language-cases.json`, so change all three together.
 nonisolated struct ProjectFileLanguage: Equatable, Hashable, Sendable {

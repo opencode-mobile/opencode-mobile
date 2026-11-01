@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.markdown.MarkdownDocument
@@ -37,6 +38,43 @@ enum class OpenCodeAssistantMessagePresentation {
 
 private val AssistantMessagePlainPaddingHorizontal = 4.dp
 
+/**
+ * Content wider than this share of the row fills the row, so long replies line
+ * up with full-width cards instead of ending just short.
+ */
+internal const val ASSISTANT_MESSAGE_FILL_ROW_THRESHOLD = 0.8f
+
+/**
+ * Whether a bubble whose content measures [contentWidth] against
+ * [availableWidth] fills the row. Exactly at the threshold it still hugs.
+ */
+internal fun assistantMessageFillsRow(
+    contentWidth: Float,
+    availableWidth: Float,
+): Boolean {
+    if (availableWidth <= 0f || availableWidth.isInfinite()) return false
+    return contentWidth > availableWidth * ASSISTANT_MESSAGE_FILL_ROW_THRESHOLD
+}
+
+/**
+ * Measures the content once at the available width, then reports either its
+ * own width or the full row when it passes [ASSISTANT_MESSAGE_FILL_ROW_THRESHOLD].
+ * The content stays at its own size on the leading edge; only modifiers before
+ * this one (the bubble background) stretch.
+ */
+private fun Modifier.assistantMessageWidth(): Modifier =
+    layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints.copy(minWidth = 0))
+        val fills =
+            constraints.hasBoundedWidth &&
+                assistantMessageFillsRow(placeable.width.toFloat(), constraints.maxWidth.toFloat())
+        val width =
+            if (fills) constraints.maxWidth else placeable.width.coerceIn(constraints.minWidth, constraints.maxWidth)
+        layout(width, placeable.height) {
+            placeable.placeRelative(0, 0)
+        }
+    }
+
 @Composable
 fun OpenCodeAssistantMessage(
     text: String,
@@ -44,15 +82,18 @@ fun OpenCodeAssistantMessage(
     renderedMarkdown: MarkdownDocument? = null,
     isStreaming: Boolean = false,
     presentation: OpenCodeAssistantMessagePresentation = OpenCodeAssistantMessagePresentation.Bubble,
-    onTextTap: (() -> Unit)? = null,
+    onTextTap: ((OpenCodeMessageTapTarget) -> Unit)? = null,
 ) {
     val shape = RoundedCornerShape(AssistantMessageCornerRadius)
     val bubbleModifier =
         when (presentation) {
+            // The background sits outside the width rule so it covers the
+            // full row when the content passes the fill threshold.
             OpenCodeAssistantMessagePresentation.Bubble ->
                 modifier
                     .widthIn(max = OpenCodeLayout.AssistantMessageMaxWidth)
                     .background(openCodeColor("surface-raised-base"), shape)
+                    .assistantMessageWidth()
                     .padding(
                         horizontal = AssistantMessagePaddingHorizontal,
                         vertical = AssistantMessagePaddingVertical,
@@ -60,6 +101,7 @@ fun OpenCodeAssistantMessage(
             OpenCodeAssistantMessagePresentation.Plain ->
                 modifier
                     .widthIn(max = OpenCodeLayout.AssistantMessageMaxWidth)
+                    .assistantMessageWidth()
                     .padding(horizontal = AssistantMessagePlainPaddingHorizontal)
         }
 

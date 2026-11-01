@@ -167,7 +167,8 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             followUpDelivery: baseMessage.followUpDelivery,
             isWaitingForPickup: baseMessage.isWaitingForPickup,
             stopReason: baseMessage.stopReason,
-            failure: baseMessage.failure
+            failure: baseMessage.failure,
+            promptSkills: baseMessage.promptSkills
         )
     }
 
@@ -330,6 +331,10 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
             }
             if infoDict["error"] == nil, let error = prior["error"] {
                 merged["error"] = error
+            }
+            // Only the v2 enqueue info carries a prompt's skills; delivery omits them.
+            if infoDict["skills"] == nil, let skills = prior["skills"] {
+                merged["skills"] = skills
             }
             // v2 infos are partial projections: keep the times an update omits.
             if infoDict["time"] == nil, let time = prior["time"] {
@@ -599,8 +604,10 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     output: tool.output,
                     metadata: tool.metadata,
                     timeStartEpochMs: tool.timeStartEpochMs,
+                    timeEndEpochMs: tool.timeEndEpochMs,
                     isInterrupted: tool.isInterrupted,
-                    isMalformed: tool.isMalformed
+                    isMalformed: tool.isMalformed,
+                    images: tool.images
                 )
             )
             return SessionChangeSet(
@@ -1163,8 +1170,10 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                         output: tool.output,
                         metadata: tool.metadata,
                         timeStartEpochMs: tool.timeStartEpochMs,
+                        timeEndEpochMs: tool.timeEndEpochMs,
                         isInterrupted: tool.isInterrupted,
-                        isMalformed: tool.isMalformed
+                        isMalformed: tool.isMalformed,
+                        images: tool.images
                     )
                 )
             }
@@ -1190,8 +1199,10 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                         output: prior.output,
                         metadata: mergeDict(prior.metadata, next.metadata),
                         timeStartEpochMs: prior.timeStartEpochMs ?? next.timeStartEpochMs,
+                        timeEndEpochMs: prior.timeEndEpochMs ?? next.timeEndEpochMs,
                         isInterrupted: prior.isInterrupted,
-                        isMalformed: prior.isMalformed
+                        isMalformed: prior.isMalformed,
+                        images: prior.images
                     )
                 )
                 break
@@ -1211,8 +1222,11 @@ nonisolated final class InMemoryMessageStore: MessageStore, @unchecked Sendable 
                     output: nonEmpty(next.output) ?? prior.output,
                     metadata: mergeDict(prior.metadata, next.metadata),
                     timeStartEpochMs: next.timeStartEpochMs ?? prior.timeStartEpochMs,
+                    timeEndEpochMs: next.timeEndEpochMs ?? prior.timeEndEpochMs,
                     isInterrupted: next.isInterrupted,
-                    isMalformed: next.isMalformed || prior.isMalformed
+                    isMalformed: next.isMalformed || prior.isMalformed,
+                    // Images arrive once, with the settled call; a later update without them keeps them.
+                    images: next.images.isEmpty ? prior.images : next.images
                 )
             )
         case (.text(let prior), .text(let next)):

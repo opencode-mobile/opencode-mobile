@@ -194,4 +194,8 @@ struct ProtocolSelectedSessionRemote: SessionRemote, Sendable {
     func moveSession(id: String, directory: String) async throws {
         try await selected().moveSession(id: id, directory: directory)
     }
+
+    func askSideQuestion(sessionID: String, question: String) async throws -> String {
+        try await selected().askSideQuestion(sessionID: sessionID, question: question)
+    }
 }

@@ -107,6 +107,10 @@ private val SheetSubStepInset = 44.dp
  * a back arrow and the detail title lead the header, and back (arrow or
  * system back) calls [onDetailBack]. Close still dismisses the whole sheet.
  * The detail opens at its top; back scrolls the list to the step it came from.
+ *
+ * Steps stay oldest first. A [live] list opens at its newest step and keeps new
+ * steps in view while it is parked at the bottom (#879); a settled one opens at
+ * its top. Settling while open leaves the list where it is.
  */
 @Composable
 fun OpenCodeActivitySheet(
@@ -130,8 +134,10 @@ fun OpenCodeActivitySheet(
     // Each list/detail switch gets a fresh key, so the body scrolls once per switch.
     val panes = remember { SheetPaneMemory() }
     val paneKey =
-        remember(detail?.stepId) {
+        remember(visible, detail?.stepId) {
             panes.switches += 1
+            // A sheet opened again starts fresh, not on the step it last showed.
+            if (!visible) panes.lastDetailStepId = null
             if (detail != null) panes.lastDetailStepId = detail.stepId
             SheetPaneScrollKey(if (detail == null) "list" else "detail", panes.switches)
         }
@@ -164,6 +170,7 @@ fun OpenCodeActivitySheet(
         onDismissRequest = onDismissRequest,
         height = OpenCodeBottomSheetHeight.Half,
         scrollTargetKey = paneKey,
+        followsBottom = live && detail == null,
         headerLeadingAction =
             detail?.let {
                 OpenCodeBottomSheetHeaderAction(

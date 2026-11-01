@@ -28,6 +28,8 @@ for the apps, and a web UI to arm scenarios and watch traffic.
   --v2-repo <path>      opencode checkout with v2 dev (default ~/Projects/opencode)
   --ui-port <n>         Web UI (default 4500, 127.0.0.1)
   --app-port <n>        Port the apps connect to, via the fault proxy (default 4096, 0.0.0.0)
+  --upstream-port <n>   Real opencode server (default 4097, 127.0.0.1)
+  --model-port <n>      Fake model (default 4501, 127.0.0.1)
   --state-dir <path>    Data, config and project dirs (default $TMPDIR/opencode-mobile-harness)
   --fresh               Re-seed the throwaway project on start
 
@@ -61,6 +63,8 @@ function parseArgs(argv) {
     else if (flag === "--v2-repo") args.v2Repo = path.resolve(next());
     else if (flag === "--ui-port") args.uiPort = Number(next());
     else if (flag === "--app-port") args.appPort = Number(next());
+    else if (flag === "--upstream-port") args.upstreamPort = Number(next());
+    else if (flag === "--model-port") args.modelPort = Number(next());
     else if (flag === "--state-dir") args.stateDir = path.resolve(next());
     else if (flag === "--fresh") args.fresh = true;
     else throw new Error(`Unknown flag ${flag}`);

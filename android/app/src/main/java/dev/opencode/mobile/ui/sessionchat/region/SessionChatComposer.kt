@@ -22,10 +22,19 @@ import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.message.Attachment
+import dev.opencode.mobile.domain.message.AttachmentDestination
+import dev.opencode.mobile.domain.message.AttachmentDropRouting
+import dev.opencode.mobile.domain.message.AttachmentIngestionResult
+import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.AttachmentLimits
+import dev.opencode.mobile.domain.message.AttachmentUpload
+import dev.opencode.mobile.domain.message.AttachmentUploadPolicy
+import dev.opencode.mobile.domain.message.AttachmentUploadResult
+import dev.opencode.mobile.domain.message.AttachmentUploadService
 import dev.opencode.mobile.domain.message.ClientMessageId
 import dev.opencode.mobile.domain.message.FollowUpDelivery
+import dev.opencode.mobile.domain.message.InlineRejection
 import dev.opencode.mobile.domain.message.MessageError
 import dev.opencode.mobile.domain.message.MessageRepository
 import dev.opencode.mobile.domain.message.PromptModelSelection
@@ -33,6 +42,7 @@ import dev.opencode.mobile.domain.message.PromptSendOptions
 import dev.opencode.mobile.domain.message.PromptSendProgress
 import dev.opencode.mobile.domain.message.PromptSendProgressReporter
 import dev.opencode.mobile.domain.message.ShellCommandOptions
+import dev.opencode.mobile.domain.message.UnavailableAttachmentUploadService
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
@@ -52,6 +62,7 @@ import dev.opencode.mobile.ui.sessionchat.LatestModelHint
 import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistoryHints
 import dev.opencode.mobile.ui.sessionchat.ModelSelectionHistorySource
 import dev.opencode.mobile.ui.sessionchat.PresentationBlockId
+import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
@@ -75,6 +86,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -93,6 +105,7 @@ class SessionChatComposer(
     private val scope: CoroutineScope,
     private val foregroundEventStream: ForegroundEventStream? = null,
     private val projectFilesRepository: ProjectFilesRepository? = null,
+    private val attachmentUploads: AttachmentUploadService = UnavailableAttachmentUploadService,
 ) {
     var ioDispatcher: CoroutineDispatcher = kotlinx.coroutines.Dispatchers.IO
 
@@ -120,6 +133,7 @@ class SessionChatComposer(
     private var persistDraftJob: Job? = null
     private var nextAttachmentRevision = 1
     private val attachmentRevisions = mutableMapOf<String, Int>()
+    private val uploadJobs = mutableMapOf<String, Job>()
     private var catalogLoadGeneration = 0
     private var catalogEventJob: Job? = null
     private var catalogRetryJob: Job? = null
@@ -167,6 +181,7 @@ class SessionChatComposer(
             val snapshot = currentDraft()
             scope.launch { persistDraft(previousSessionId, previousWorktree, snapshot) }
         }
+        cancelUploads()
         discardStoredAttachments(_state.value.composer.attachments)
         boundSessionId = sessionId
         boundWorktree = worktree
@@ -721,6 +736,7 @@ class SessionChatComposer(
      * Replaces the open `/query` at the caret. A v2 skill becomes a tracked `/name` span;
      * a server command inserts `/name ` with no span. The rest of the draft stays.
      */
+
     /**
      * Inserts the pick at the caret, keeping the rest of the draft: a v2 skill becomes a `/name`
      * span, a command the leading `/name ` token. A draft without an open `/` query (the Commands
@@ -851,12 +867,25 @@ class SessionChatComposer(
         val option =
             _state.value.composer.selectedModel
                 ?.option
-        val accepted = attachments.filter { option?.acceptsAttachmentKind(it.kind) != false }
-        val rejected = attachments.filter { option?.acceptsAttachmentKind(it.kind) == false }
-        if (accepted.isNotEmpty()) {
+        val uploadAvailable = uploadsAvailable()
+        val draft = _state.value.composer.attachments
+        val duplicates = mutableListOf<Attachment>()
+        val fresh = mutableListOf<Attachment>()
+        attachments.forEach { attachment ->
+            val seen = draft + fresh
+            if (AttachmentUploadPolicy.isDuplicate(attachment, seen)) duplicates += attachment else fresh += attachment
+        }
+        val toUpload =
+            fresh.filter { destinationFor(it, option, uploadAvailable) == AttachmentDestination.Upload && it.localPath != null }
+        val inlineVerdicts = fresh.filter { it !in toUpload }.associateWith { AttachmentUploadPolicy.inlineRejection(it, option) }
+        val accepted = inlineVerdicts.filterValues { it == null }.keys.toList()
+        val tooLarge = inlineVerdicts.filterValues { it == InlineRejection.TooLarge }.keys.toList()
+        val rejected = inlineVerdicts.filterValues { it == InlineRejection.Unsupported }.keys.toList()
+        val staged = accepted + toUpload.map { it.copy(upload = AttachmentUpload.Uploading()) }
+        if (staged.isNotEmpty()) {
             updateComposer { composer ->
                 val ordered = composer.attachments.toMutableList()
-                accepted.forEach { attachment ->
+                staged.forEach { attachment ->
                     attachmentRevisions[attachment.id] = nextAttachmentRevision++
                     val index = ordered.indexOfFirst { it.id == attachment.id }
                     if (index >= 0) {
@@ -871,28 +900,160 @@ class SessionChatComposer(
                 }
                 composer.copy(attachments = ordered)
             }
+            toUpload.forEach(::startUpload)
         }
-        if (accepted.isNotEmpty()) {
+        if (staged.isNotEmpty()) {
             DiagnosticLog.info(
                 DiagnosticLogArea.Chat,
-                "attachments selected accepted=${accepted.size} rejected=${rejected.size}",
+                "attachments selected accepted=${staged.size} rejected=${rejected.size + tooLarge.size + duplicates.size}",
             )
         }
-        if (rejected.isNotEmpty()) {
-            discardStoredAttachments(rejected)
-            reportAttachmentError(unsupportedAttachmentMessage(rejected))
-        } else if (accepted.isNotEmpty()) {
-            _state.update { it.copy(errorMessage = null) }
+        discardStoredAttachments(duplicates + tooLarge)
+        when {
+            tooLarge.isNotEmpty() -> reportAttachmentError(AttachmentLimits.TOO_LARGE_ERROR)
+            duplicates.isNotEmpty() -> reportAttachmentError(AttachmentUploadPolicy.DUPLICATE_ERROR)
+            rejected.isNotEmpty() -> reportAttachmentError(unsupportedAttachmentMessage(rejected))
+            staged.isNotEmpty() -> _state.update { it.copy(errorMessage = null) }
+        }
+        if (rejected.isNotEmpty()) discardStoredAttachments(rejected)
+    }
+
+    /**
+     * Pasted or dropped content (#870), already ingested: attached like files from the picker. An
+     * item that failed to ingest, or a skipped folder, shows its error only when adding the rest
+     * left nothing else to say. Returns whether a chip was added.
+     */
+    fun addPastedOrDroppedAttachments(
+        result: AttachmentIngestionResult,
+        skippedFolders: Int,
+    ): Boolean {
+        val before = _state.value.composer.attachments.size
+        val errorBefore = _state.value.errorMessage
+        addAttachments(result.attachments)
+        val errorAfter = _state.value.errorMessage
+        val quiet = errorAfter == null || errorAfter == errorBefore
+        val error = result.errors.firstOrNull()
+        when {
+            quiet && error != null -> reportAttachmentError(error)
+            quiet && skippedFolders > 0 -> reportAttachmentError(AttachmentDropRouting.FOLDER_ERROR)
+        }
+        return _state.value.composer.attachments.size > before
+    }
+
+    private fun uploadsAvailable(): Boolean = boundWorktree != null && attachmentUploads.isAvailable()
+
+    private fun destinationFor(
+        attachment: Attachment,
+        option: ModelSelectionOption?,
+        uploadAvailable: Boolean,
+    ): AttachmentDestination =
+        if (!attachment.isInline) {
+            AttachmentDestination.Inline
+        } else {
+            AttachmentUploadPolicy.destination(attachment.mime, attachment.byteCount, option, uploadAvailable)
+        }
+
+    /** Streams [attachment]'s staged file; the chip carries progress and its remove control cancels. */
+    private fun startUpload(attachment: Attachment) {
+        val file = attachment.localPath?.let(::File) ?: return
+        val directory = boundWorktree ?: return
+        uploadJobs[attachment.id] =
+            scope.launch {
+                val result =
+                    withContext(ioDispatcher) {
+                        attachmentUploads.upload(file, attachment.filename, directory) { sent, total ->
+                            applyUploadProgress(attachment.id, sent, total)
+                        }
+                    }
+                uploadJobs.remove(attachment.id)
+                finishUpload(attachment, result)
+            }
+    }
+
+    private fun applyUploadProgress(
+        id: String,
+        sent: Long,
+        total: Long,
+    ) {
+        val percent = (sent * 100 / total).toInt().coerceIn(0, 100)
+        updateAttachment(id) { current ->
+            val upload = current.upload as? AttachmentUpload.Uploading ?: return@updateAttachment current
+            if (upload.percent == percent) current else current.copy(upload = AttachmentUpload.Uploading(percent))
         }
     }
 
-    fun removeAttachment(id: String) {
+    private fun finishUpload(
+        attachment: Attachment,
+        result: AttachmentUploadResult,
+    ) {
+        if (_state.value.composer.attachments
+                .none { it.id == attachment.id }
+        ) {
+            return
+        }
+        when (result) {
+            is AttachmentUploadResult.Uploaded ->
+                updateAttachment(attachment.id) { it.copy(upload = AttachmentUpload.Uploaded(result.serverPath)) }
+            AttachmentUploadResult.ContractMiss -> {
+                // The route is not what the contract promised: stop trying it and send this file the old way.
+                attachmentUploads.onContractMiss()
+                val option =
+                    _state.value.composer.selectedModel
+                        ?.option
+                when (AttachmentUploadPolicy.inlineRejection(attachment, option)) {
+                    null -> updateAttachment(attachment.id) { it.copy(upload = AttachmentUpload.Inline) }
+                    InlineRejection.TooLarge -> {
+                        dropAttachment(attachment.id)
+                        reportAttachmentError(AttachmentLimits.TOO_LARGE_ERROR)
+                    }
+                    InlineRejection.Unsupported -> {
+                        dropAttachment(attachment.id)
+                        reportAttachmentError(unsupportedAttachmentMessage(listOf(attachment)))
+                    }
+                }
+            }
+            AttachmentUploadResult.TransportFailure -> {
+                dropAttachment(attachment.id)
+                reportAttachmentError(AttachmentUploadPolicy.UPLOAD_FAILED_ERROR)
+            }
+        }
+    }
+
+    private fun updateAttachment(
+        id: String,
+        transform: (Attachment) -> Attachment,
+    ) {
+        _state.update { state ->
+            val index = state.composer.attachments.indexOfFirst { it.id == id }
+            if (index < 0) return@update state
+            val updated = transform(state.composer.attachments[index])
+            if (updated == state.composer.attachments[index]) return@update state
+            val attachments =
+                state.composer.attachments
+                    .toMutableList()
+                    .also { it[index] = updated }
+            state.copy(composer = state.composer.copy(attachments = attachments))
+        }
+    }
+
+    private fun dropAttachment(id: String) {
         val removed =
             _state.value.composer.attachments
                 .filter { it.id == id }
         attachmentRevisions.remove(id)
         updateComposer { composer -> composer.copy(attachments = composer.attachments.filterNot { it.id == id }) }
         discardStoredAttachments(removed)
+    }
+
+    private fun cancelUploads() {
+        uploadJobs.values.forEach { it.cancel() }
+        uploadJobs.clear()
+    }
+
+    fun removeAttachment(id: String) {
+        // Removing a chip that is still uploading is the cancel control: abort quietly.
+        uploadJobs.remove(id)?.cancel()
+        dropAttachment(id)
     }
 
     fun reportAttachmentError(message: String) {
@@ -903,12 +1064,13 @@ class SessionChatComposer(
     fun selectModel(option: ModelSelectionOption) {
         val dropped =
             _state.value.composer.attachments
-                .filterNot { option.acceptsAttachmentKind(it.kind) }
+                .filterNot { !it.isInline || option.acceptsAttachmentKind(it.kind) }
         dropped.forEach { attachmentRevisions.remove(it.id) }
         updateComposer { composer ->
             val previousVariant = composer.selectedVariant
             val variant = previousVariant?.takeIf { it in option.variants }
-            val keptAttachments = composer.attachments.filter { option.acceptsAttachmentKind(it.kind) }
+            val keptAttachments =
+                composer.attachments.filter { !it.isInline || option.acceptsAttachmentKind(it.kind) }
             composer.copy(
                 selectedModel = ModelSelection(option, variant),
                 selectedVariant = variant,
@@ -1029,6 +1191,7 @@ class SessionChatComposer(
         val selectedModel = composer.selectedModel ?: return
         if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
         if ((prompt.isEmpty() && attachments.isEmpty()) || _state.value.isSending || !composer.isModelSelectionReady) return
+        if (composer.hasPendingUploads) return
 
         val collapsedDisplay =
             CommandInvocationCollapser.collapseSkillMentions(prompt, skillsForSend)
@@ -1068,6 +1231,7 @@ class SessionChatComposer(
                             role = dev.opencode.mobile.domain.message.MessageRole.User,
                             text = display.text,
                             metadataLabel = composerMetadataLabel(composer),
+                            sentAtEpochMs = System.currentTimeMillis(),
                             pendingDelivery =
                                 composer.followUpDelivery.takeIf { supportsFollowUp && isSessionBusy },
                             isPending = true,
@@ -1085,14 +1249,7 @@ class SessionChatComposer(
                                             ),
                                         )
                                     }
-                                    attachmentItems.forEach { item ->
-                                        add(
-                                            SessionChatTimelineBlock.Attachment(
-                                                blockID = PresentationBlockId.direct(item.id),
-                                                attachment = item,
-                                            ),
-                                        )
-                                    }
+                                    addAll(SessionChatTimelineBlocks.attachmentBlocks(attachmentItems))
                                 },
                         ),
                     )
@@ -1137,6 +1294,7 @@ class SessionChatComposer(
                         fileMentions: List<FileMention>,
                     ) {
                         beforePrompt()
+
                         suspend fun send(delivery: FollowUpDelivery) {
                             messageRepository.sendPromptAsync(
                                 sessionId = sessionId,
@@ -1944,6 +2102,7 @@ class SessionChatComposer(
         return when (kinds) {
             setOf(AttachmentKind.Image) -> "This model does not support image attachments."
             setOf(AttachmentKind.Pdf) -> "This model does not support PDF attachments."
+            setOf(AttachmentKind.File) -> AttachmentIngestionService.UNSUPPORTED_ERROR
             else -> "This model does not support some of the selected attachments."
         }
     }

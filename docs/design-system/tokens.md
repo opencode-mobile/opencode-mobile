@@ -170,45 +170,50 @@ Tables below show Porcelain, the default preset.
 | `syntax-comment` | `#8F8F8F` | `#707070` |
 | `syntax-keyword` | `#1456F7` | `#8BA8FF` |
 | `syntax-string` | `#087466` | `#4EC9B8` |
-| `syntax-primitive` | `#1456F7` | `#8BA8FF` |
-| `syntax-property` | `#5A5A8A` | `#C4B08A` |
+| `syntax-number` | `#D8119C` | `#7AD4E0` |
+| `syntax-constant` | `#D8119C` | `#7AD4E0` |
 | `syntax-type` | `#8A6508` | `#E0B04A` |
-| `syntax-constant` | `#1A7A80` | `#7AD4E0` |
+| `syntax-function` | `#0B8A0B` | `#3CEF3C` |
+| `syntax-property` | `#5A5A8A` | `#C4B08A` |
+| `syntax-attribute` | `#852743` | `#F045F0` |
 | `syntax-variable` | `#CB321C` | `#E06C75` |
 | `syntax-operator` | `#3A7A82` | `#56B6C2` |
-| `syntax-punctuation` | `text-strong` | `text-strong` |
+| `syntax-punctuation` | `#171717` | `#EDEDED` |
 | `syntax-critical` | resolved from `primary` | resolved from `primary` |
 | `syntax-diff-delete` | resolved from `primary` | resolved from `primary` |
 | `syntax-diff-unknown` | resolved from `info` | resolved from `info` |
 
+A code color preset (`shared/syntax-presets/`) replaces these values and may
+add `syntax-background` and `syntax-foreground`, the editor background and
+plain code text of the editor theme it comes from. Match theme keeps the UI
+theme's values and leaves both out.
+
 ### Syntax role mapping (code blocks)
 
-Rendered Markdown maps shared `CodeTokenRole` values to syntax tokens using the
-same buckets as the web client:
+Every code surface (chat code fences, tool results, the File Viewer, settings
+previews, and the Component Gallery) maps shared `CodeTokenRole` values through
+one table, `CodeRoleTokens` on Android and `OpenCodeCodeColors` on iOS:
 
-| `CodeTokenRole` | Syntax token | Web appearance |
-|---|---|---|
-| `Comment` | `syntax-comment` | Gray |
-| `Keyword` | `syntax-keyword` | Pink / magenta |
-| `Type` | `syntax-type` | Yellow / gold class names |
-| `Function` | `syntax-primitive` | Sky blue builtins (`Map`, `Object.entries`) |
-| `Property`, `Constant` | `syntax-constant` | Cyan / teal members, keys, `this` |
-| `String` | `syntax-string` | Mint / teal string literals |
-| `Number`, `Attribute` | `syntax-property` | Peach / orange numeric literals |
-| `Variable` | `syntax-variable` | Red / rose parameters and locals |
-| `Operator` | `syntax-operator` | Teal operators |
-| `Punctuation` | `syntax-punctuation` | Strong punctuation |
-| `Plain` | `text-primary` | Off-white fallback text |
-| `Tag` | `syntax-info` | Info accent |
-| `Inserted` | `diff-add` | Diff added lines |
-| `Deleted` | `diff-delete` | Diff deleted lines |
-| `Warning` | `syntax-diff-unknown` | Diff headers / unknown |
-| `Critical` | `syntax-critical` | Invalid / error emphasis |
+| `CodeTokenRole` | Syntax token |
+|---|---|
+| `Keyword`, `Tag` | `syntax-keyword` |
+| `String` | `syntax-string` |
+| `Number` | `syntax-number` |
+| `Constant` | `syntax-constant` |
+| `Comment` | `syntax-comment` |
+| `Type` | `syntax-type` |
+| `Function` | `syntax-function` |
+| `Property` | `syntax-property` |
+| `Attribute` | `syntax-attribute` |
+| `Variable`, `Operator`, `Punctuation`, `Plain` | plain code text: `syntax-foreground`, else `text-strong` |
+| `Inserted` | `diff-add` |
+| `Deleted` | `diff-delete` |
+| `Warning` | `syntax-diff-unknown` |
+| `Critical` | `syntax-critical` |
 
-Private field declarations (`#baseUrl;`) intentionally stay plain. Member access
-(`this.#baseUrl`) uses `Property` and renders with `syntax-constant`. JavaScript
-`this` and expression keywords such as `new` are normalized to web roles before
-rendering.
+Variables, operators, and punctuation stay plain, as in most editor themes, so
+the colored roles stand out. Code blocks draw on `syntax-background` when the
+preset has one, else on the surface's own background.
 
 ### Markdown (rendered markdown colors)
 
@@ -367,21 +372,6 @@ as documented in `docs/design-system/components/action-pill.md`.
 | `actionPill.iconSpacing` | 6 (logical px) |
 | `actionPill.shadowElevation` | 4 (logical px; Android / pre–iOS 26 fallback only) |
 
-### Syncing pill
-
-Non-interactive floating status pill for quiet cache→network sync over the
-timeline. Reuses Action pill geometry; materials follow the same floating glass
-capsule family as documented in `docs/design-system/components/syncing-pill.md`.
-
-| Token | Value |
-| --- | --- |
-| `syncingPill.minHeight` | 36 (logical px; same as `actionPill.minHeight`) |
-| `syncingPill.paddingHorizontal` | 14 (logical px) |
-| `syncingPill.paddingVertical` | 8 (logical px) |
-| `syncingPill.spinnerSize` | 14 (logical px) |
-| `syncingPill.iconSpacing` | 6 (logical px) |
-| `syncingPill.shadowElevation` | 4 (logical px; Android / pre–iOS 26 fallback only) |
-
 ### Review changes pill
 
 Contextual floating entry point for reviewing the latest completed turn's
@@ -394,22 +384,6 @@ same floating glass capsule geometry.
 | `reviewChangesPill.paddingHorizontal` | 14 (logical px) |
 | `reviewChangesPill.paddingVertical` | 8 (logical px) |
 | `reviewChangesPill.shadowElevation` | 4 (logical px; Android / pre–iOS 26 fallback only) |
-
-### Session todos pill
-
-Contextual floating entry point for the live Session Todo List. Shares the
-floating glass capsule language with Action / Review Changes pills and adds a
-max width so the active preview can truncate.
-
-| Token | Value |
-| --- | --- |
-| `sessionTodosPill.minHeight` | 36 (logical px; enforced via vertical padding) |
-| `sessionTodosPill.paddingHorizontal` | 14 (logical px) |
-| `sessionTodosPill.paddingVertical` | 8 (logical px) |
-| `sessionTodosPill.shadowElevation` | 4 (logical px; Android / pre–iOS 26 fallback only) |
-| `sessionTodosPill.statusDotSize` | 8 (logical px) |
-| `sessionTodosPill.contentSpacing` | 8 (logical px) |
-| `sessionTodosPill.maxWidth` | 320 (logical px) |
 
 ### Session todo item
 

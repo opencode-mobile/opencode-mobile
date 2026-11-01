@@ -60,9 +60,10 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 @Composable
 fun SettingsScreen(
     onComponentGalleryClick: () -> Unit,
-    onTextMateLanguagesClick: () -> Unit,
     onFeatureFlagsClick: () -> Unit = {},
-    onTextMateLogbookClick: () -> Unit,
+    /** Lab builds only; null hides the Highlighting Lab row. */
+    onHighlightingLabClick: (() -> Unit)? = null,
+    onSessionChatPlaygroundClick: () -> Unit = {},
     onDiagnosticLogsClick: () -> Unit,
     onNavigateBack: () -> Unit,
     onServersClick: () -> Unit,
@@ -90,8 +91,6 @@ fun SettingsScreen(
     followUpDelivery: FollowUpDelivery,
     onFollowUpDeliveryChange: (FollowUpDelivery) -> Unit,
     supportsFollowUpDelivery: Boolean,
-    textMateEnabled: Boolean,
-    onTextMateEnabledChange: (Boolean) -> Unit,
     productAnalyticsConsented: Boolean,
     onProductAnalyticsConsentedChange: (Boolean) -> Unit,
     appLockEnabled: Boolean = false,
@@ -455,44 +454,20 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                OpenCodeListItem(
+                    title = "Source Code",
+                    subtitle = "GPL-3.0 on GitHub",
+                    style = OpenCodeListItemStyle.Card,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Code, "Source Code"),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SourceCode.URL)))
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+
                 if (DeveloperToolsPreferences.unlocked) {
                     OpenCodeSectionHeader(title = "Developer Tools")
-
-                    // Hidden behind Developer Tools until the repository is public.
-                    OpenCodeListItem(
-                        title = "Source Code",
-                        subtitle = "GPL-3.0 on GitHub",
-                        style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Code, "Source Code"),
-                        accessory = OpenCodeListItemAccessory.Disclosure,
-                        onClick = {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SourceCode.URL)))
-                        },
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-
-                    OpenCodeListItem(
-                        title = "TextMate Highlighting",
-                        subtitle = "On by default for all packaged languages; semantic fallback otherwise (can disable)",
-                        style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Highlighting"),
-                        accessory =
-                            OpenCodeListItemAccessory.Toggle(
-                                checked = textMateEnabled,
-                                onCheckedChange = onTextMateEnabledChange,
-                            ),
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
-
-                    OpenCodeListItem(
-                        title = "TextMate Languages",
-                        selected = selectedDetail == SettingsDetail.TextMateLanguages,
-                        subtitle = "Opt out of any packaged language (all default on)",
-                        style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "TextMate Languages"),
-                        onClick = onTextMateLanguagesClick,
-                        modifier = Modifier.padding(horizontal = 16.dp),
-                    )
 
                     OpenCodeListItem(
                         title = "Component Gallery",
@@ -505,14 +480,26 @@ fun SettingsScreen(
                     )
 
                     OpenCodeListItem(
-                        title = "TextMate Logbook",
-                        selected = selectedDetail == SettingsDetail.TextMateLogbook,
-                        subtitle = "Persisted code-fence parsing measurements",
+                        title = "Session Chat Playground",
+                        subtitle = "The real chat over fake scenarios, no server",
                         style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "TextMate Logbook"),
-                        onClick = onTextMateLogbookClick,
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Session Chat Playground"),
+                        accessory = OpenCodeListItemAccessory.Disclosure,
+                        onClick = onSessionChatPlaygroundClick,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
+
+                    if (onHighlightingLabClick != null) {
+                        OpenCodeListItem(
+                            title = "Highlighting Lab",
+                            subtitle = "Data sets and on-device benchmarks",
+                            style = OpenCodeListItemStyle.Card,
+                            startDecorator = StartDecorator.Icon(OpenCodeIcons.Code, "Highlighting Lab"),
+                            accessory = OpenCodeListItemAccessory.Disclosure,
+                            onClick = onHighlightingLabClick,
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                        )
+                    }
 
                     OpenCodeListItem(
                         title = "Feature Flags",
@@ -764,8 +751,6 @@ private fun SettingsScreenLightPreview() {
     OpenCodeTheme(darkTheme = false) {
         SettingsScreen(
             onComponentGalleryClick = {},
-            onTextMateLanguagesClick = {},
-            onTextMateLogbookClick = {},
             onDiagnosticLogsClick = {},
             onNavigateBack = {},
             onServersClick = {},
@@ -788,8 +773,6 @@ private fun SettingsScreenLightPreview() {
             followUpDelivery = FollowUpDelivery.Steer,
             onFollowUpDeliveryChange = {},
             supportsFollowUpDelivery = true,
-            textMateEnabled = false,
-            onTextMateEnabledChange = {},
             productAnalyticsConsented = false,
             onProductAnalyticsConsentedChange = {},
         )
@@ -802,8 +785,6 @@ private fun SettingsScreenDarkPreview() {
     OpenCodeTheme(darkTheme = true) {
         SettingsScreen(
             onComponentGalleryClick = {},
-            onTextMateLanguagesClick = {},
-            onTextMateLogbookClick = {},
             onDiagnosticLogsClick = {},
             onNavigateBack = {},
             onServersClick = {},
@@ -826,8 +807,6 @@ private fun SettingsScreenDarkPreview() {
             followUpDelivery = FollowUpDelivery.Steer,
             onFollowUpDeliveryChange = {},
             supportsFollowUpDelivery = true,
-            textMateEnabled = false,
-            onTextMateEnabledChange = {},
             productAnalyticsConsented = false,
             onProductAnalyticsConsentedChange = {},
         )
