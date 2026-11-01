@@ -7,8 +7,8 @@
   "composition": "full",
   "moment": "code",
   "copy": {
-    "headline": "Your opencode\nsessions,\non your phone.",
-    "subline": "",
+    "headline": "Built for opencode.\nBeautifully native.",
+    "subline": "An unofficial client for your own opencode server.",
     "label": "",
     "brand": "",
     "appStore": "",
@@ -16,9 +16,9 @@
     "disclaimer": ""
   },
   "text": {
-    "size": 1.4,
-    "width": 600,
-    "x": 427
+    "size": 1.3,
+    "width": 790,
+    "x": 339
   },
   "devices": {
     "iphone": {
@@ -26,7 +26,7 @@
       "anchor": "full",
       "shot": "02-chat-code",
       "scale": 0.78,
-      "x": -55
+      "x": -67
     }
   }
 }
