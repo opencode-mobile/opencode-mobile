@@ -50,6 +50,13 @@ X header and LinkedIn banner keep the left quarter free for the profile avatar;
 the editor can show that safe area, and it is never exported. Full device and
 Triple fall back to another composition on banners, with a note.
 
+**Store art.** `play-feature` is the Play feature graphic. `app-store-header-wide`
+and `app-store-header-strip` are the App Store product page header at half
+size, so the 2× render is 5244×2950 and 3840×1646. Keep phone and copy inside
+the middle 60% × 70% (iPhone and iPad crop the header differently; `text.x` and
+device `x` move them there), and drop the alpha channel before upload:
+`magick in.png -alpha off out.png`.
+
 Colors come only from `shared/theme-presets/porcelain.json`; fonts are the
 bundled IBM Plex packages. Do not commit rendered PNGs or screenshots.
 `npm run graphics:test` covers spec validation and layout rules.

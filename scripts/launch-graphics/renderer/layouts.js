@@ -477,6 +477,9 @@ export function computeLayout(spec, { format = spec.format, measure = estimateTe
     const y = box.y + box.h + gb;
     ctx.A = { x: 0, y, w: W, h: H - y };
   } else ctx.A = { x: 0, y: 0, w: W, h: box.y - gb };
+  // x/y nudge the text block only, like a device's x/y; the device area stays where the text put it
+  box.x += ov.text.x || 0;
+  box.y += ov.text.y || 0;
 
   const specs = IMPL[comp].devices(ctx);
   const bases = DEVICE_IDS.map((id) => baseGeometry(id, specs[id], ov.devices[id], ctx));

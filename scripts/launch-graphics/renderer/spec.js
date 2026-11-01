@@ -128,7 +128,9 @@ function checkText(errors, path, text) {
       if (typeof v !== "number" || !(v >= 120 && v <= FORMAT_MAX)) errors.push(`${path}.width must be a number 120–${FORMAT_MAX}`);
     } else if (k === "size") {
       if (typeof v !== "number" || !(v >= 0.5 && v <= 2.5)) errors.push(`${path}.size must be a number 0.5–2.5`);
-    } else errors.push(`${path}.${k} is not a text setting (position, align, width, size)`);
+    } else if (k === "x" || k === "y") {
+      Number.isFinite(v) || errors.push(`${path}.${k} must be a number`);
+    } else errors.push(`${path}.${k} is not a text setting (position, align, width, size, x, y)`);
   }
 }
 
