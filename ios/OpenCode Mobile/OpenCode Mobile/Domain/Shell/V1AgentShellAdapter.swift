@@ -39,9 +39,18 @@ nonisolated enum V1AgentShellAdapter {
     static func status(of tool: ToolPart) -> AgentShellStatus {
         switch tool.status {
         case .pending, .running: .running
-        case .completed: .exited(code: int(tool.metadata?["exit"]))
+        case .completed: completedStatus(of: tool)
         case .error: tool.isInterrupted ? .stopped : .failed
         }
+    }
+
+    /// v1 ends an aborted or timed-out call as `completed` with no exit code and says why in a
+    /// trailing `<shell_metadata>` block of `output`.
+    private static func completedStatus(of tool: ToolPart) -> AgentShellStatus {
+        let notice = tool.output?.components(separatedBy: "<shell_metadata>").dropFirst().last ?? ""
+        if notice.contains("User aborted the command") { return .stopped }
+        if notice.contains("terminated command after exceeding timeout") { return .timedOut }
+        return .exited(code: int(tool.metadata?["exit"]))
     }
 
     private static func bashParts(in messages: [Message]) -> [ToolPart] {

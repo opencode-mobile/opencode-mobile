@@ -306,10 +306,10 @@ object ProductAnalytics {
         const val SESSION_TOOL_GROUP_BACK = "session_tool_group_back"
         const val TODOS_DISMISS = "todos_dismiss"
         const val SUBAGENTS_DISMISS = "subagents_dismiss"
-        const val SHELL_OUTPUT_OPEN = "shell_output_open"
+        const val CHAT_OPEN_SHELL_OUTPUT = "chat_open_shell_output"
         const val SHELL_OUTPUT_DISMISS = "shell_output_dismiss"
         const val SHELL_OUTPUT_COPY = "shell_output_copy"
-        const val SHELL_OUTPUT_STOP = "shell_output_stop"
+        const val SHELL_STOP = "shell_stop"
 
         // Session context / changes
         const val SESSION_CONTEXT_BACK = "session_context_back"

@@ -90,6 +90,21 @@ struct V1AgentShellAdapterTests {
         #expect(shells.allSatisfy { $0.finishedAtMs == 1_700_000_005_000 && !$0.canStop })
     }
 
+    @Test func abortedAndTimedOutCallsEndAsCompletedWithANotice() {
+        let aborted = "line 1\n\n<shell_metadata>\nUser aborted the command\n</shell_metadata>"
+        let timedOut = "line 1\n\n<shell_metadata>\nshell tool terminated command after exceeding timeout 1000 ms.\n</shell_metadata>"
+        let shells = V1AgentShellAdapter.shells(
+            in: transcript([
+                bash("prt-1", status: .completed, output: aborted, metadata: ["exit": .null]),
+                bash("prt-2", status: .completed, output: timedOut, metadata: ["exit": .null]),
+                bash("prt-3", status: .completed, output: "User aborted the command\n", metadata: ["exit": .int(0)]),
+            ]),
+            sessionID: "ses-1"
+        )
+
+        #expect(shells.map(\.status) == [.stopped, .timedOut, .exited(code: 0)])
+    }
+
     @Test func runningOutputComesFromMetadataThenTheFinalOutput() {
         let running = V1AgentShellAdapter.output(
             shellID: "prt-1",

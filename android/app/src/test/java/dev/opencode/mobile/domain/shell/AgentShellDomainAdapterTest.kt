@@ -74,6 +74,26 @@ class AgentShellDomainAdapterTest {
     }
 
     @Test
+    fun v1AbortedAndTimedOutCallsEndAsCompletedWithANotice() {
+        val aborted = "line 1\n\n<shell_metadata>\nUser aborted the command\n</shell_metadata>"
+        val timedOut =
+            "line 1\n\n<shell_metadata>\nshell tool terminated command after exceeding timeout 1000 ms.\n</shell_metadata>"
+
+        assertEquals(
+            AgentShellStatus.Stopped,
+            adapter.fromBashPart(bash("prt_1", ToolStatus.Completed, finalOutput = aborted), "ses_test")?.status,
+        )
+        assertEquals(
+            AgentShellStatus.TimedOut,
+            adapter.fromBashPart(bash("prt_1", ToolStatus.Completed, finalOutput = timedOut), "ses_test")?.status,
+        )
+        assertEquals(
+            AgentShellStatus.Exited(0),
+            adapter.fromBashPart(bash("prt_1", ToolStatus.Completed, finalOutput = "User aborted the command\n", exit = 0), "ses_test")?.status,
+        )
+    }
+
+    @Test
     fun v1OutputIsLiveMetadataWhileRunningThenFinalOutput() {
         assertEquals(
             AgentShellOutput("line 1\nline 2\n"),

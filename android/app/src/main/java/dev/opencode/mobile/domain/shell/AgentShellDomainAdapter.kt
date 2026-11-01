@@ -57,7 +57,7 @@ class AgentShellDomainAdapter(
         val status =
             when (part.status) {
                 ToolStatus.Pending, ToolStatus.Running -> AgentShellStatus.Running
-                ToolStatus.Completed -> AgentShellStatus.Exited(int(part.metadata, "exit"))
+                ToolStatus.Completed -> v1CompletedStatus(part)
                 ToolStatus.Error -> if (part.isInterrupted) AgentShellStatus.Stopped else AgentShellStatus.Failed
             }
         return AgentShell(
@@ -70,6 +70,19 @@ class AgentShellDomainAdapter(
             finishedAtMs = if (status == AgentShellStatus.Running) null else ToolStartTime.normalizeEpochMs(part.timeEndEpochMs),
             canStop = false,
         )
+    }
+
+    /**
+     * v1 ends an aborted or timed-out call as `completed` with no exit code and says why in a
+     * trailing `<shell_metadata>` block of `output`.
+     */
+    private fun v1CompletedStatus(part: MessagePart.Tool): AgentShellStatus {
+        val notice = part.output?.substringAfterLast("<shell_metadata>", missingDelimiterValue = "").orEmpty()
+        return when {
+            V1_ABORTED in notice -> AgentShellStatus.Stopped
+            V1_TIMED_OUT in notice -> AgentShellStatus.TimedOut
+            else -> AgentShellStatus.Exited(int(part.metadata, "exit"))
+        }
     }
 
     /**
@@ -168,6 +181,8 @@ class AgentShellDomainAdapter(
         const val BASH_TOOL = "bash"
         const val SHELL_CREATED = "shell.created"
         const val SHELL_EXITED = "shell.exited"
+        private const val V1_ABORTED = "User aborted the command"
+        private const val V1_TIMED_OUT = "terminated command after exceeding timeout"
         const val SHELL_DELETED = "shell.deleted"
     }
 }

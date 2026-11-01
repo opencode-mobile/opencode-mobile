@@ -745,7 +745,7 @@ class SessionChatViewModel
 
         /** A row in the Shells section: opens its output sheet. */
         fun openShellOutput(id: String) {
-            logAction(ProductAnalytics.Action.SHELL_OUTPUT_OPEN, screenId = ProductAnalytics.Screen.SESSION_SUBAGENTS)
+            logAction(ProductAnalytics.Action.CHAT_OPEN_SHELL_OUTPUT, screenId = ProductAnalytics.Screen.SESSION_SUBAGENTS)
             shells.open(id)
         }
 
@@ -761,7 +761,7 @@ class SessionChatViewModel
 
         /** Stop shell in the output sheet; only offered where the server can stop it. */
         fun stopShell(id: String) {
-            logAction(ProductAnalytics.Action.SHELL_OUTPUT_STOP, screenId = ProductAnalytics.Screen.SESSION_SHELL_OUTPUT)
+            logAction(ProductAnalytics.Action.SHELL_STOP, screenId = ProductAnalytics.Screen.SESSION_SHELL_OUTPUT)
             shells.stop(id)
         }
 
