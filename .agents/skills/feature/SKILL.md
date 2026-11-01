@@ -97,11 +97,15 @@ Fixes #<number>
    `gh` first on PATH may be older):
 
    ```bash
-   gh pr comment <pr> --body-file <scratchpad>/evidence/comment.md
+   cd <scratchpad>/evidence
+   "$(brew --prefix)/bin/gh" pr comment <pr> --body-file comment.md \
+     --attach ./ios-01-<step>.png --attach ./android-01-<step>.png
    ```
 
-   gh uploads the referenced images and rewrites the paths. Never push an
-   `evidence/` branch. Start the comment with one line naming the platforms,
+   Pass every file with its own `--attach`; a reference in the body alone
+   posts a broken `./` path. gh uploads the images and rewrites the paths to
+   `user-attachments` URLs; check the posted comment, and fix it with
+   `--edit-last` plus the same flags. Never push an `evidence/` branch. Start the comment with one line naming the platforms,
    protocol, and data source (harness or mocks) above the table. Keep captions
    short; an empty platform cell is a gap to name under Risks / Follow-ups.
    With nothing

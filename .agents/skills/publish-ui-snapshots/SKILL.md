@@ -35,10 +35,12 @@ Defaults: subject = assistant message; platforms = iOS and Android; frames =
    both platforms), resize to at most 1000 px with `sips -Z 1000`, and write
    a Markdown table in `<dir>/comment.md` that references them as
    `![alt](./ios-NN-...png)`. Post it with a recent gh (2.102+, e.g.
-   `$(brew --prefix)/bin/gh`):
-   `gh pr comment <pr> --body-file <dir>/comment.md` (or `gh issue comment`
-   when there is no pull request yet). gh uploads the images and rewrites
-   the paths. Paste the comment URL.
+   `$(brew --prefix)/bin/gh`), passing every PNG with its own `--attach`:
+   `gh pr comment <pr> --body-file <dir>/comment.md --attach <dir>/ios-01-….png
+   --attach <dir>/android-01-….png` (or `gh issue comment` when there is no
+   pull request yet). A reference in the body alone posts a broken `./` path.
+   gh uploads the images and rewrites the paths to `user-attachments` URLs;
+   check the posted comment, then paste its URL.
 
 Throwaway tests, PNGs, HTML, and Paparazzi goldens stay out of commits; commit
 durable mock or host changes only when asked. Remove the generated iOS test
