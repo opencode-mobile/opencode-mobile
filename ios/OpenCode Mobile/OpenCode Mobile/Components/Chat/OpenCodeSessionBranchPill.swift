@@ -117,8 +117,9 @@ struct OpenCodeSessionBranchSummary: Equatable {
 }
 
 /// Session Chat context pill for the session's branch: an icon and the line counts, or the
-/// icon alone with no changes. Tapping it opens a popover with the branch details, the
-/// most-changed files, View all changes and Copy branch name. Placement is up to the caller.
+/// icon alone with no changes. Tapping it opens a card under the pill (leading edges lined up,
+/// no arrow) with the branch details, the most-changed files, View all changes and Copy branch
+/// name. Placement is up to the caller.
 struct OpenCodeSessionBranchPill: View {
     let summary: OpenCodeSessionBranchSummary
     let onViewAllChanges: () -> Void
@@ -139,14 +140,15 @@ struct OpenCodeSessionBranchPill: View {
     }
 
     var body: some View {
-        OpenCodeFloatingPill(
-            layout: summary.pillLayout,
-            state: .ready,
-            accessibilityLabel: summary.accessibilityLabel,
-            action: { isPopoverPresented = true }
-        )
-        .accessibilityHint("Shows branch details")
-        .popover(isPresented: $isPopoverPresented) {
+        OpenCodeAnchoredCardHost(isPresented: $isPopoverPresented, preferredWidth: Self.popoverWidth) {
+            OpenCodeFloatingPill(
+                layout: summary.pillLayout,
+                state: .ready,
+                accessibilityLabel: summary.accessibilityLabel,
+                action: { isPopoverPresented = true }
+            )
+            .accessibilityHint("Shows branch details")
+        } card: {
             OpenCodeSessionBranchPopoverContent(
                 summary: summary,
                 onViewAllChanges: {
@@ -159,10 +161,11 @@ struct OpenCodeSessionBranchPill: View {
                     onBranchNameCopied()
                 }
             )
-            .presentationCompactAdaptation(.popover)
-            .presentationBackground(OpenCodeColors.surfaceRaisedBase)
         }
     }
+
+    /// Popover width when the screen allows it; narrower screens keep the corner slot's inset.
+    static let popoverWidth: CGFloat = 320
 }
 
 /// Body of the branch popover. Public so the Component Gallery can show it open.
@@ -191,7 +194,7 @@ struct OpenCodeSessionBranchPopoverContent: View {
             }
             .padding(.vertical, Self.actionsPaddingVertical)
         }
-        .frame(width: Self.width, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var header: some View {
@@ -271,7 +274,6 @@ struct OpenCodeSessionBranchPopoverContent: View {
         .buttonStyle(.plain)
     }
 
-    private static let width: CGFloat = 288
     private static let paddingHorizontal: CGFloat = 16
     private static let sectionPaddingVertical: CGFloat = 12
     private static let actionsPaddingVertical: CGFloat = 4

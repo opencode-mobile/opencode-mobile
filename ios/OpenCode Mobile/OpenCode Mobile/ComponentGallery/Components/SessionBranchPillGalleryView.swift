@@ -21,11 +21,18 @@ struct SessionBranchPillGalleryView: View {
                 }
             }
 
-            HStack {
+            // As in the Session Chat top-left corner: the branch first, then todos.
+            HStack(spacing: OpenCodeAnchoredCardLayout.gap) {
                 OpenCodeSessionBranchPill(
                     summary: sample.summary,
                     onViewAllChanges: {},
                     onBranchNameCopied: { copiedCount += 1 }
+                )
+                OpenCodeFloatingPill(
+                    layout: .iconLabel(icon: .list, label: "2/5"),
+                    state: .ready,
+                    accessibilityLabel: "Todos, 2 of 5 done",
+                    action: {}
                 )
                 Spacer()
             }
@@ -50,8 +57,15 @@ struct SessionBranchPillGalleryView: View {
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .padding(.top, 8)
             OpenCodeSessionBranchPopoverContent(summary: sample.summary, onViewAllChanges: {}, onCopyBranchName: {})
-                .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: OpenCodeRadius.medium))
-                .overlay(RoundedRectangle(cornerRadius: OpenCodeRadius.medium).strokeBorder(OpenCodeColors.borderWeakBase))
+                .frame(maxWidth: OpenCodeSessionBranchPill.popoverWidth)
+                .background(
+                    OpenCodeColors.surfaceRaisedBase,
+                    in: RoundedRectangle(cornerRadius: OpenCodeAnchoredCardLayout.cornerRadius, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: OpenCodeAnchoredCardLayout.cornerRadius, style: .continuous)
+                        .strokeBorder(OpenCodeColors.borderWeakBase)
+                )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

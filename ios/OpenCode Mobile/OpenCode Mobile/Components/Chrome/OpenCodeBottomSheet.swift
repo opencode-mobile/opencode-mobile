@@ -719,8 +719,9 @@ extension UIResponder {
 }
 
 /// Hosts the sheet overlay. It carries the Escape command and takes first
-/// responder when nothing else holds it, so Escape reaches the sheet.
-private final class OpenCodeBottomSheetHostingController<Content: View>: UIHostingController<Content> {
+/// responder when nothing else holds it, so Escape reaches the sheet. The
+/// anchored card overlay reuses it for the same Escape handling.
+final class OpenCodeBottomSheetHostingController<Content: View>: UIHostingController<Content> {
     private let escapeCommand = OpenCodeBottomSheetEscape.makeCommand()
 
     override var canBecomeFirstResponder: Bool { true }

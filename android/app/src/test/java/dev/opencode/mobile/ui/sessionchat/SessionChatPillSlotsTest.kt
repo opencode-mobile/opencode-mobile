@@ -173,13 +173,13 @@ class SessionChatPillSlotsTest {
     // Context
 
     @Test
-    fun contextShowsTodosThenBranchAtMostTwo() {
+    fun contextShowsBranchInTheCornerThenTodosAtMostTwo() {
         val branch = SessionBranchPillUiState(
                 OpenCodeSessionBranchSummary("main", files = listOf(OpenCodeSessionBranchChangedFile("a.kt", 1, 2))),
             )
 
         assertEquals(
-            listOf(SessionChatContextItem.Todos(2, 5), SessionChatContextItem.Branch(branch)),
+            listOf(SessionChatContextItem.Branch(branch), SessionChatContextItem.Todos(2, 5)),
             SessionChatPillSlots.context(2, 5, branch),
         )
         assertEquals(

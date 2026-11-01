@@ -132,17 +132,17 @@ enum SessionChatPillSlots {
         .min()
     }
 
-    /// Top left: todos, then the branch, at most two.
+    /// Top left: the branch in the corner, then todos, at most two.
     static func context(
         todos: (completed: Int, total: Int)?,
         branch: SessionChatBranchPillUiState?
     ) -> [SessionChatContextItem] {
         var items: [SessionChatContextItem] = []
-        if let todos, todos.total > 0 {
-            items.append(.todos(completed: min(max(todos.completed, 0), todos.total), total: todos.total))
-        }
         if let branch {
             items.append(.branch(branch))
+        }
+        if let todos, todos.total > 0 {
+            items.append(.todos(completed: min(max(todos.completed, 0), todos.total), total: todos.total))
         }
         return Array(items.prefix(maxContextPills))
     }
