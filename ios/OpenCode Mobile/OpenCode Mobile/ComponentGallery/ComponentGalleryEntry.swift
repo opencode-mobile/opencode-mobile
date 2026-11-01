@@ -31,6 +31,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case messageNote
     case timelineNotice
     case childSessionRow
+    case shellRow
     case stepRail
     case activityCard
     case workingIndicator
@@ -171,7 +172,7 @@ let componentGalleryEntries = [
     ComponentGalleryEntry(
         id: .backgroundWorkPill,
         title: "Background Work Pill",
-        description: "Session Chat subagent counter on the floating pill, amber when a subagent needs input, and the Subagents panel with live timers.",
+        description: "Session Chat counter of running subagents and shells on the floating pill, amber when a subagent needs input, and the background work panel with live timers.",
         category: .session
     ),
     ComponentGalleryEntry(
@@ -382,6 +383,12 @@ let componentGalleryEntries = [
         id: .childSessionRow,
         title: "Child Session Row",
         description: "Quiet person/thread row for a child session in Session Chat.",
+        category: .chat
+    ),
+    ComponentGalleryEntry(
+        id: .shellRow,
+        title: "Shell Row",
+        description: "A running shell command in the background work panel: terminal glyph, monospace command, description, live timer.",
         category: .chat
     ),
     ComponentGalleryEntry(
