@@ -105,17 +105,23 @@ final class StoreScreenshotUITests: XCTestCase {
 
     @MainActor
     private func waitForHome(in app: XCUIApplication) {
+        let seedFailure = app.staticTexts["storeScreenshotSeedFailed"]
         XCTAssertTrue(
             waitForAny(
                 [
                     app.descendants(matching: .any)["homeContent"].firstMatch,
                     app.buttons["New session"],
                     app.staticTexts["Code samples request"],
+                    seedFailure,
                 ],
                 timeout: 30
             ),
             "Home session list did not appear."
         )
+        if seedFailure.exists {
+            XCTFail("\(seedFailure.label). Keychain status -34018 means the test build is unsigned.")
+            return
+        }
         XCTAssertTrue(
             waitForAny(
                 [
