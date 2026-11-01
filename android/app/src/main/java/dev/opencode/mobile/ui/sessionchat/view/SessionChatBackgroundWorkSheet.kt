@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeChildSessionRow
 import dev.opencode.mobile.ui.components.OpenCodeChildSessionRowStatus
@@ -20,7 +21,6 @@ import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeaderInset
 import dev.opencode.mobile.ui.components.OpenCodeShellRow
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
-import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.ui.sessionchat.SessionChatBackgroundWorkPill
 import dev.opencode.mobile.ui.sessionchat.SessionChatChildSessionElapsed
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagent

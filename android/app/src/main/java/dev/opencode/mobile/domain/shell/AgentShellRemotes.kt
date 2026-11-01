@@ -40,7 +40,14 @@ internal class ProtocolSelectedAgentShellRemote(
     private val v2: AgentShellRemote,
     private val activeConnectionManager: ActiveConnectionManager?,
 ) : AgentShellRemote {
-    private suspend fun selected(): AgentShellRemote = if (activeConnectionManager?.currentProtocolOrProbe() == ServerProtocol.V2) v2 else v1
+    private suspend fun selected(): AgentShellRemote =
+        if (activeConnectionManager?.currentProtocolOrProbe() ==
+            ServerProtocol.V2
+        ) {
+            v2
+        } else {
+            v1
+        }
 
     override fun shells(session: AgentShellSession): Flow<List<AgentShell>> = flow { emitAll(selected().shells(session)) }
 

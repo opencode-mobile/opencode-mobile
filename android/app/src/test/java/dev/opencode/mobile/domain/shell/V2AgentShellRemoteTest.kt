@@ -93,7 +93,12 @@ class V2AgentShellRemoteTest {
     @Test
     fun exitedEventKeepsTheExitCode() {
         val adapter = AgentShellDomainAdapter(json)
-        val info = json.decodeFromString(dev.opencode.mobile.data.remote.dto.ShellInfoDto.serializer(), AgentShellFixtures.shellInfo(id = AgentShellFixtures.EXITED_ID))
+        val info =
+            json.decodeFromString(
+                dev.opencode.mobile.data.remote.dto.ShellInfoDto
+                    .serializer(),
+                AgentShellFixtures.shellInfo(id = AgentShellFixtures.EXITED_ID),
+            )
         val list =
             V2ShellList()
                 .apply(AgentShellEvent.Created(info), "ses_test", adapter)

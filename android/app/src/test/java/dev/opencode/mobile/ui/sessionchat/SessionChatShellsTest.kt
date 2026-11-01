@@ -34,7 +34,11 @@ class SessionChatShellsTest {
             repository.shells.value = listOf(shell("sh_1"), shell("sh_2").copy(status = AgentShellStatus.Exited(0)))
             runCurrent()
 
-            assertEquals(listOf("sh_1"), region.state.value.shells.map { it.id })
+            assertEquals(
+                listOf("sh_1"),
+                region.state.value.shells
+                    .map { it.id },
+            )
             assertEquals(AgentShellSession("ses_test", "/tmp/project", emptyFlow()).sessionId, repository.boundSession?.sessionId)
             assertEquals("/tmp/project", repository.boundSession?.directory)
         }
@@ -55,13 +59,23 @@ class SessionChatShellsTest {
             assertEquals(1, repository.activeOutputs)
             repository.output.value = AgentShellOutput("line 1\n")
             runCurrent()
-            assertEquals("line 1\n", region.state.value.output?.output?.text)
+            assertEquals(
+                "line 1\n",
+                region.state.value.output
+                    ?.output
+                    ?.text,
+            )
 
             // Backgrounded: polling stops, the text stays.
             region.setOutputObserved(false)
             runCurrent()
             assertEquals(0, repository.activeOutputs)
-            assertEquals("line 1\n", region.state.value.output?.output?.text)
+            assertEquals(
+                "line 1\n",
+                region.state.value.output
+                    ?.output
+                    ?.text,
+            )
 
             region.setOutputObserved(true)
             runCurrent()
@@ -93,7 +107,12 @@ class SessionChatShellsTest {
 
             repository.shells.value = emptyList()
             runCurrent()
-            assertEquals(AgentShellStatus.Exited(1), region.state.value.output?.shell?.status)
+            assertEquals(
+                AgentShellStatus.Exited(1),
+                region.state.value.output
+                    ?.shell
+                    ?.status,
+            )
         }
 
     @Test
@@ -103,16 +122,25 @@ class SessionChatShellsTest {
             repository.shells.value = listOf(shell("sh_1"))
             runCurrent()
             region.open("sh_1")
-            assertTrue(region.state.value.output!!.showsStop)
+            assertTrue(
+                region.state.value.output!!
+                    .showsStop,
+            )
 
             region.stop("sh_1")
             runCurrent()
-            assertTrue(region.state.value.output!!.isStopping)
+            assertTrue(
+                region.state.value.output!!
+                    .isStopping,
+            )
             assertEquals(listOf("sh_1"), repository.stopped)
 
             repository.stopResult.complete(Unit)
             runCurrent()
-            assertTrue(region.state.value.output!!.isStopping)
+            assertTrue(
+                region.state.value.output!!
+                    .isStopping,
+            )
 
             repository.shells.value = listOf(shell("sh_1").copy(status = AgentShellStatus.Stopped, canStop = false))
             runCurrent()
@@ -148,7 +176,10 @@ class SessionChatShellsTest {
             runCurrent()
             region.open("prt_1")
 
-            assertFalse(region.state.value.output!!.showsStop)
+            assertFalse(
+                region.state.value.output!!
+                    .showsStop,
+            )
             region.stop("prt_1")
             runCurrent()
             assertEquals(emptyList<String>(), repository.stopped)
@@ -211,9 +242,10 @@ class SessionChatShellsTest {
             session: AgentShellSession,
         ): Flow<AgentShellOutput> {
             outputRunningFlags += shell.isRunning
-            return kotlinx.coroutines.flow.flow {
-                output.collect { value -> if (value != null) emit(value) }
-            }.onStart { activeOutputs++ }
+            return kotlinx.coroutines.flow
+                .flow {
+                    output.collect { value -> if (value != null) emit(value) }
+                }.onStart { activeOutputs++ }
                 .onCompletion { activeOutputs-- }
         }
 

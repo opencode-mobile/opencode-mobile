@@ -21,8 +21,8 @@ import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.sessionchat.SessionChatBackgroundWork
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagent
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus
-import dev.opencode.mobile.ui.sessionchat.view.SessionChatBackgroundWorkPill
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatBackgroundWorkList
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatBackgroundWorkPill
 
 @Composable
 fun BackgroundWorkPillGalleryScreen(modifier: Modifier = Modifier) {
@@ -33,7 +33,8 @@ fun BackgroundWorkPillGalleryScreen(modifier: Modifier = Modifier) {
     var log by remember { mutableStateOf("Tap the pill or a row") }
     // Fixed so the running timers tick instead of restarting on every recomposition.
     val openedAtMs = remember { System.currentTimeMillis() }
-    val subagents = remember(needsInput, showSubagents) { if (showSubagents) gallerySubagents(needsInput, openedAtMs) else emptyList() }
+    val subagents =
+        remember(needsInput, showSubagents) { if (showSubagents) gallerySubagents(needsInput, openedAtMs) else emptyList() }
     val shells = remember(showShells) { if (showShells) galleryShells(openedAtMs) else emptyList() }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(20.dp)) {

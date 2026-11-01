@@ -25,11 +25,25 @@ class V1AgentShellRemoteTest {
     @Test
     fun shellsFollowTheBashParts() =
         runTest {
-            assertEquals(AgentShellStatus.Running, remote.shells(session).first().single().status)
+            assertEquals(
+                AgentShellStatus.Running,
+                remote
+                    .shells(session)
+                    .first()
+                    .single()
+                    .status,
+            )
 
             messages.value = listOf(message(bash(ToolStatus.Completed, output = "line 1\nline 2\n", exit = 0)))
 
-            assertEquals(AgentShellStatus.Exited(0), remote.shells(session).first().single().status)
+            assertEquals(
+                AgentShellStatus.Exited(0),
+                remote
+                    .shells(session)
+                    .first()
+                    .single()
+                    .status,
+            )
         }
 
     @Test

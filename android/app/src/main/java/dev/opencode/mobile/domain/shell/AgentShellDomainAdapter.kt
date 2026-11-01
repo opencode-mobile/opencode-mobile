@@ -102,8 +102,16 @@ class AgentShellDomainAdapter(
             command = info.command,
             description = string(info.metadata, "description"),
             status = status,
-            startedAtMs = info.time?.started?.toLong()?.let(ToolStartTime::normalizeEpochMs),
-            finishedAtMs = info.time?.completed?.toLong()?.let(ToolStartTime::normalizeEpochMs),
+            startedAtMs =
+                info.time
+                    ?.started
+                    ?.toLong()
+                    ?.let(ToolStartTime::normalizeEpochMs),
+            finishedAtMs =
+                info.time
+                    ?.completed
+                    ?.toLong()
+                    ?.let(ToolStartTime::normalizeEpochMs),
             canStop = canStop && status == AgentShellStatus.Running,
         )
     }

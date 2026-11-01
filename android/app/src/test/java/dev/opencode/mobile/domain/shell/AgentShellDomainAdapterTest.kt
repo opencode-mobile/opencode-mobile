@@ -45,7 +45,8 @@ class AgentShellDomainAdapterTest {
     @Test
     fun v1OtherToolsAreNotShells() {
         val read = MessagePart.Tool(toolName = "read", status = ToolStatus.Running, id = "prt_2")
-        val message = Message(id = "msg_1", role = MessageRole.Assistant, text = "", parts = listOf(read, bash("prt_1", ToolStatus.Running)))
+        val message =
+            Message(id = "msg_1", role = MessageRole.Assistant, text = "", parts = listOf(read, bash("prt_1", ToolStatus.Running)))
 
         assertEquals(listOf("prt_1"), adapter.shellsFromMessages(listOf(message), "ses_test").map { it.id })
     }

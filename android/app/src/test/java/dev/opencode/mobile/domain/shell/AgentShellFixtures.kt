@@ -24,7 +24,8 @@ internal object AgentShellFixtures {
         truncated: Boolean = false,
     ): String {
         val escaped = output.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
-        return """{"location":{"directory":"/tmp/project"},"data":{"output":"$escaped","cursor":$cursor,"size":$size,"truncated":$truncated}}"""
+        return """{"location":{"directory":"/tmp/project"},""" +
+            """"data":{"output":"$escaped","cursor":$cursor,"size":$size,"truncated":$truncated}}"""
     }
 
     const val NOT_FOUND_BODY =
