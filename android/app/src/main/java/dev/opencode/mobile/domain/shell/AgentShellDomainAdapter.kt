@@ -87,7 +87,7 @@ class AgentShellDomainAdapter(
 
     /**
      * What a bash part printed: the live `metadata.output` while it runs (the server keeps the
-     * latest 30,000 characters), then the final `output`.
+     * latest 30,000 characters), then the final `output`. Output at the cap counts as truncated.
      */
     fun outputFromBashPart(part: MessagePart.Tool): AgentShellOutput {
         val live = string(part.metadata, "output", allowEmpty = true)
@@ -96,7 +96,8 @@ class AgentShellDomainAdapter(
                 ToolStatus.Pending, ToolStatus.Running -> live
                 ToolStatus.Completed, ToolStatus.Error -> part.output?.takeIf { it.isNotEmpty() } ?: live
             }.orEmpty()
-        return AgentShellOutput.capped(text)
+        // The server cuts the text to exactly 30,000 characters, so a full one was cut.
+        return AgentShellOutput.capped(text, truncated = text.length >= AgentShellOutput.MAX_CHARS)
     }
 
     // v2: /api/shell and shell.* events

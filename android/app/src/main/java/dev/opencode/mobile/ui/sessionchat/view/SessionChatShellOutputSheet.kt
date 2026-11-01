@@ -120,7 +120,12 @@ private fun SessionChatShellOutputHeader(sheet: SessionChatShellOutputUiState) {
         Text(
             text = SessionChatShellsCopy.status(sheet.shell, nowMs),
             style = MaterialTheme.typography.bodySmall,
-            color = openCodeColor("text-weak"),
+            color =
+                if (SessionChatShellsCopy.isProblem(sheet.shell.status)) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    openCodeColor("text-weak")
+                },
             maxLines = 1,
         )
     }

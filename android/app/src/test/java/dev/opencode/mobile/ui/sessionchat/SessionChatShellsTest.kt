@@ -186,6 +186,26 @@ class SessionChatShellsTest {
         }
 
     @Test
+    fun aShellThatLeavesWithoutAnEndReadsAsExited() =
+        runTest {
+            val region = region(nowMs = 7_000)
+            repository.shells.value = listOf(shell("sh_1"))
+            runCurrent()
+            region.open("sh_1")
+            region.setOutputObserved(true)
+            runCurrent()
+
+            repository.shells.value = emptyList()
+            runCurrent()
+
+            val sheet = region.state.value.output!!
+            assertEquals(AgentShellStatus.Exited(null), sheet.shell.status)
+            assertEquals(7_000L, sheet.shell.finishedAtMs)
+            assertFalse(sheet.shell.canStop)
+            assertFalse(sheet.showsStop)
+        }
+
+    @Test
     fun aShellRemovedWhileStoppingReadsAsStopped() =
         runTest {
             val region = region(nowMs = 5_000)

@@ -4,7 +4,9 @@ import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.domain.shell.AgentShellStatus
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellsCopy
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SessionChatBackgroundWorkShellsTest {
@@ -90,7 +92,23 @@ class SessionChatBackgroundWorkShellsTest {
         assertEquals("Timed out · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.TimedOut), nowMs = 0))
         assertEquals("Stopped · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Stopped), nowMs = 0))
         assertEquals("Failed · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Failed), nowMs = 0))
-        assertEquals("2 h 5 min", SessionChatShellsCopy.duration((2 * 3600 + 5 * 60) * 1000L))
+        assertEquals("12 s", SessionChatShellsCopy.duration(12_000))
+        assertEquals("0 s", SessionChatShellsCopy.duration(0))
+        assertEquals("1 min 12 s", SessionChatShellsCopy.duration(72_000))
+        assertEquals("2 min", SessionChatShellsCopy.duration(120_000))
+        assertEquals("1 h 5 min", SessionChatShellsCopy.duration((3600 + 5 * 60) * 1000L))
+        assertEquals("1 h", SessionChatShellsCopy.duration(3600 * 1000L + 30_000))
+    }
+
+    @Test
+    fun problemStatusesReadAsErrors() {
+        assertTrue(SessionChatShellsCopy.isProblem(AgentShellStatus.Failed))
+        assertTrue(SessionChatShellsCopy.isProblem(AgentShellStatus.TimedOut))
+        assertTrue(SessionChatShellsCopy.isProblem(AgentShellStatus.Exited(1)))
+        assertFalse(SessionChatShellsCopy.isProblem(AgentShellStatus.Exited(0)))
+        assertFalse(SessionChatShellsCopy.isProblem(AgentShellStatus.Exited(null)))
+        assertFalse(SessionChatShellsCopy.isProblem(AgentShellStatus.Stopped))
+        assertFalse(SessionChatShellsCopy.isProblem(AgentShellStatus.Running))
     }
 
     private fun shell(

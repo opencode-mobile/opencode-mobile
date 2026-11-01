@@ -45,18 +45,26 @@ object SessionChatShellsCopy {
         return "$state · ${duration(end - start)}"
     }
 
-    /** "12 s", "1 min 12 s", "2 h 5 min". */
+    /** "12 s", "1 min 12 s", "2 min", "1 h 5 min", "1 h": zero parts are dropped. */
     fun duration(elapsedMs: Long): String {
         val total = (elapsedMs / 1000).coerceAtLeast(0)
         val hours = total / 3600
         val minutes = (total % 3600) / 60
         val seconds = total % 60
         return when {
-            hours > 0 -> "$hours h $minutes min"
-            minutes > 0 -> "$minutes min $seconds s"
+            hours > 0 -> if (minutes > 0) "$hours h $minutes min" else "$hours h"
+            minutes > 0 -> if (seconds > 0) "$minutes min $seconds s" else "$minutes min"
             else -> "$seconds s"
         }
     }
+
+    /** Failed, timed out, or exited with a non-zero code: the status line reads as an error. */
+    fun isProblem(status: AgentShellStatus): Boolean =
+        when (status) {
+            AgentShellStatus.Failed, AgentShellStatus.TimedOut -> true
+            is AgentShellStatus.Exited -> status.code != null && status.code != 0
+            AgentShellStatus.Running, AgentShellStatus.Stopped -> false
+        }
 }
 
 /** The shell output sheet: one shell, its latest output, and the Stop action's progress. */
@@ -169,9 +177,14 @@ class SessionChatShells(
                     val shell =
                         when {
                             latest != null -> latest
-                            // Removed right after a stop, before its end reached the app.
-                            open.isStopping && open.shell.isRunning ->
-                                open.shell.copy(status = AgentShellStatus.Stopped, finishedAtMs = nowMs(), canStop = false)
+                            // Gone without an end the app saw (removed after a stop, or ended while
+                            // the stream was down): end it here so the sheet does not run forever.
+                            open.shell.isRunning ->
+                                open.shell.copy(
+                                    status = if (open.isStopping) AgentShellStatus.Stopped else AgentShellStatus.Exited(null),
+                                    finishedAtMs = nowMs(),
+                                    canStop = false,
+                                )
                             else -> open.shell
                         }
                     open.copy(shell = shell, isStopping = open.isStopping && shell.isRunning)

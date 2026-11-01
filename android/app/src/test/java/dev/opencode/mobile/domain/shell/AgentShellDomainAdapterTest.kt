@@ -89,7 +89,11 @@ class AgentShellDomainAdapterTest {
         )
         assertEquals(
             AgentShellStatus.Exited(0),
-            adapter.fromBashPart(bash("prt_1", ToolStatus.Completed, finalOutput = "User aborted the command\n", exit = 0), "ses_test")?.status,
+            adapter
+                .fromBashPart(
+                    bash("prt_1", ToolStatus.Completed, finalOutput = "User aborted the command\n", exit = 0),
+                    "ses_test",
+                )?.status,
         )
     }
 
@@ -114,6 +118,15 @@ class AgentShellDomainAdapterTest {
 
         assertEquals("b".repeat(AgentShellOutput.MAX_CHARS), output.text)
         assertTrue(output.isTruncated)
+    }
+
+    @Test
+    fun v1OutputAtTheServerCapIsTruncated() {
+        val atCap = adapter.outputFromBashPart(bash("prt_1", ToolStatus.Running, output = "c".repeat(AgentShellOutput.MAX_CHARS)))
+        val below = adapter.outputFromBashPart(bash("prt_1", ToolStatus.Running, output = "c".repeat(AgentShellOutput.MAX_CHARS - 1)))
+
+        assertTrue(atCap.isTruncated)
+        assertFalse(below.isTruncated)
     }
 
     // v2: ShellInfo and shell.* events

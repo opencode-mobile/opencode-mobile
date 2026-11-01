@@ -15,7 +15,6 @@ import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.update
@@ -108,13 +107,17 @@ internal class V2AgentShellRemote(
     private val supported: () -> Boolean,
     private val pollIntervalMs: Long = OUTPUT_POLL_INTERVAL_MS,
 ) : AgentShellRemote {
-    override fun shells(session: AgentShellSession): Flow<List<AgentShell>> {
-        if (!supported()) return flowOf(emptyList())
-        return channelFlow {
+    /**
+     * Support is read on start and again on every (re)connect: a cold start can reach Session
+     * Chat before the server's API contract is probed, so the first answer may be "no".
+     */
+    override fun shells(session: AgentShellSession): Flow<List<AgentShell>> =
+        channelFlow {
             val known = MutableStateFlow(V2ShellList())
             // Events first, so a shell created while the list loads is not lost.
             launch(start = CoroutineStart.UNDISPATCHED) {
                 eventStream.events.collect { event ->
+                    if (!supported()) return@collect
                     val shellEvent = adapter.shellEvent(event) ?: return@collect
                     known.update { it.apply(shellEvent, session.sessionId, adapter) }
                 }
@@ -130,12 +133,16 @@ internal class V2AgentShellRemote(
             launch { refresh(known, session) }
             known.collect { send(it.shells) }
         }.distinctUntilChanged()
-    }
 
     private suspend fun refresh(
         known: MutableStateFlow<V2ShellList>,
         session: AgentShellSession,
     ) {
+        if (!supported()) {
+            known.value = V2ShellList()
+            return
+        }
+        known.update { it.startRefresh() }
         val listed =
             try {
                 api
@@ -144,8 +151,10 @@ internal class V2AgentShellRemote(
                     .map { adapter.fromInfo(it, canStop = true) }
                     .filter { it.isRunning }
             } catch (cancelled: CancellationException) {
+                known.update { it.endRefresh() }
                 throw cancelled
             } catch (_: Throwable) {
+                known.update { it.endRefresh() }
                 return
             }
         known.update { it.replaceRunning(listed) }
@@ -157,16 +166,20 @@ internal class V2AgentShellRemote(
     ): Flow<AgentShellOutput> =
         flow {
             val reader = V2ShellOutputReader { cursor -> api.outputV2(shell.id, session.directory, cursor) }
+            var emitted: AgentShellOutput? = null
             while (true) {
-                val changed =
-                    try {
-                        reader.poll()
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Throwable) {
-                        false
-                    }
-                if (changed) emit(reader.output)
+                try {
+                    reader.poll()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    // Pages read before the failure are already in the reader's output.
+                }
+                val output = reader.output
+                if (output != emitted && (output.text.isNotEmpty() || output.isTruncated || emitted != null)) {
+                    emit(output)
+                    emitted = output
+                }
                 if (reader.removed || !shell.isRunning) return@flow
                 delay(pollIntervalMs)
             }
@@ -190,8 +203,10 @@ internal class V2AgentShellRemote(
  */
 internal data class V2ShellList(
     val byId: Map<String, AgentShell> = emptyMap(),
-    /** Shells `shell.created` added since the last list was applied; that list may predate them. */
+    /** Shells `shell.created` added while a list request was in flight; that answer may predate them. */
     val createdDuringRefresh: Set<String> = emptySet(),
+    /** List requests in flight. */
+    val refreshes: Int = 0,
 ) {
     val shells: List<AgentShell>
         get() = byId.values.toList()
@@ -207,7 +222,10 @@ internal data class V2ShellList(
                     this
                 } else {
                     val shell = adapter.fromInfo(event.info, canStop = true)
-                    copy(byId = byId + (shell.id to shell), createdDuringRefresh = createdDuringRefresh + shell.id)
+                    copy(
+                        byId = byId + (shell.id to shell),
+                        createdDuringRefresh = if (refreshes > 0) createdDuringRefresh + shell.id else createdDuringRefresh,
+                    )
                 }
             }
             is AgentShellEvent.Exited -> {
@@ -227,6 +245,16 @@ internal data class V2ShellList(
             is AgentShellEvent.Deleted -> copy(byId = byId - event.id, createdDuringRefresh = createdDuringRefresh - event.id)
         }
 
+    /** A list request starts: only shells created from now on may be missing from its answer. */
+    fun startRefresh(): V2ShellList =
+        copy(createdDuringRefresh = if (refreshes == 0) emptySet() else createdDuringRefresh, refreshes = refreshes + 1)
+
+    /** A list request failed. */
+    fun endRefresh(): V2ShellList {
+        val left = (refreshes - 1).coerceAtLeast(0)
+        return copy(refreshes = left, createdDuringRefresh = if (left == 0) emptySet() else createdDuringRefresh)
+    }
+
     /**
      * The list holds every running shell. A running shell missing from it ended or went away
      * while the app was not listening; ended shells and ones created meanwhile stay.
@@ -242,6 +270,6 @@ internal data class V2ShellList(
             if (merged[shell.id]?.isRunning == false) continue
             merged[shell.id] = shell
         }
-        return copy(byId = merged, createdDuringRefresh = emptySet())
+        return copy(byId = merged).endRefresh()
     }
 }

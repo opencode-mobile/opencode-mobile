@@ -39,17 +39,22 @@ internal class V2ShellOutputReader(
                 removed = true
                 break
             }
+            var pageChanged = false
             if (answer.truncated && !truncated) {
                 truncated = true
+                pageChanged = true
+            }
+            if (append(answer.output)) pageChanged = true
+            if (pageChanged) {
+                // Kept page by page, so a later page that fails does not lose this one.
+                output = AgentShellOutput(text.toString(), isTruncated = truncated)
                 changed = true
             }
-            if (append(answer.output)) changed = true
             if (answer.cursor <= from) break
             from = answer.cursor
             cursor = from
             if (from >= answer.size) break
         }
-        if (changed) output = AgentShellOutput(text.toString(), isTruncated = truncated)
         return changed
     }
 

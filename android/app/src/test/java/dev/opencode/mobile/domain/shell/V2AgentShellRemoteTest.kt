@@ -148,6 +148,90 @@ class V2AgentShellRemoteTest {
         }
 
     @Test
+    fun supportIsReadAgainOnReconnect() =
+        runTest { scope ->
+            // Cold start: Session Chat opens before the server's API contract is probed.
+            var supported = false
+            val stream = FakeEventStream(EventStreamConnectionState.Connecting)
+            var requests = 0
+            val remote =
+                remote(stream, isSupported = { supported }) {
+                    requests++
+                    respondJson(AgentShellFixtures.listBody(AgentShellFixtures.shellInfo()))
+                }
+            val latest = collectShells(scope, remote)
+            kotlinx.coroutines.delay(50)
+            assertEquals(emptyList<AgentShell>(), latest.value)
+            assertEquals(0, requests)
+
+            supported = true
+            stream.connection.value = EventStreamConnectionState.Connected
+
+            assertEquals(listOf(AgentShellFixtures.RUNNING_ID), latest.first { it.isNotEmpty() }.map { it.id })
+        }
+
+    @Test
+    fun aShellThatEndedWhileDisconnectedLeavesOnTheReconnectList() =
+        runTest { scope ->
+            val stream = FakeEventStream(EventStreamConnectionState.Connected)
+            var listed = 0
+            val remote =
+                remote(stream) {
+                    listed++
+                    respondJson(AgentShellFixtures.listBody())
+                }
+            val latest = collectShells(scope, remote)
+            stream.awaitSubscriber()
+            while (listed == 0) kotlinx.coroutines.delay(5)
+            kotlinx.coroutines.delay(50)
+
+            // Created after the first list, then exited and deleted while the stream was down.
+            stream.send(AgentShellFixtures.createdEvent())
+            latest.first { it.isNotEmpty() }
+            stream.connection.value = EventStreamConnectionState.Reconnecting
+            kotlinx.coroutines.delay(50)
+            stream.connection.value = EventStreamConnectionState.Connected
+
+            assertEquals(emptyList<AgentShell>(), latest.first { it.isEmpty() })
+            assertEquals(2, listed)
+        }
+
+    @Test
+    fun aShellCreatedWhileTheListLoadsSurvivesTheAnswer() {
+        val adapter = AgentShellDomainAdapter(json)
+        val info =
+            json.decodeFromString(
+                dev.opencode.mobile.data.remote.dto.ShellInfoDto
+                    .serializer(),
+                AgentShellFixtures.shellInfo(),
+            )
+        val created = AgentShellEvent.Created(info)
+
+        val inFlight = V2ShellList().startRefresh().apply(created, "ses_test", adapter).replaceRunning(emptyList())
+        val afterList = V2ShellList().startRefresh().replaceRunning(emptyList()).apply(created, "ses_test", adapter)
+
+        assertEquals(listOf(AgentShellFixtures.RUNNING_ID), inFlight.shells.map { it.id })
+        // Created after the list answered: the next list is the authority.
+        assertEquals(emptyList<AgentShell>(), afterList.startRefresh().replaceRunning(emptyList()).shells)
+    }
+
+    @Test
+    fun outputKeepsPagesReadBeforeALaterPageFails() =
+        runTest {
+            val remote =
+                remote(FakeEventStream()) { request ->
+                    when (request.url.parameters["cursor"]) {
+                        V2ShellOutputReader.PROBE_CURSOR.toString() -> respondJson(AgentShellFixtures.outputBody("", 20, 20))
+                        "0" -> respondJson(AgentShellFixtures.outputBody("page 1\n", 10, 20))
+                        "10" -> respond("", HttpStatusCode.InternalServerError)
+                        else -> respondJson(AgentShellFixtures.outputBody("", 20, 20))
+                    }
+                }
+
+            assertEquals("page 1\n", remote.output(running(), session).first().text)
+        }
+
+    @Test
     fun outputReadsTheWholeShortOutput() =
         runTest {
             val cursors = Collections.synchronizedList(mutableListOf<String?>())
@@ -302,12 +386,13 @@ class V2AgentShellRemoteTest {
     private fun remote(
         stream: FakeEventStream,
         supported: Boolean = true,
+        isSupported: () -> Boolean = { supported },
         handler: MockRequestHandler,
     ) = V2AgentShellRemote(
         api = ShellApi(client(handler), json),
         adapter = AgentShellDomainAdapter(json),
         eventStream = stream,
-        supported = { supported },
+        supported = isSupported,
         pollIntervalMs = 1,
     )
 
