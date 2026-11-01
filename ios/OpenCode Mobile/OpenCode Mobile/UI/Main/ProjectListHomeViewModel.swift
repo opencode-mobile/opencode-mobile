@@ -1647,20 +1647,33 @@ final class ProjectListHomeViewModel {
             seeded = await sessionCache.seedSessions(worktree: worktree)
             cachedActivity = await sessionCache.seedActivity(directory: worktree) ?? []
         }
-        let activityByID = Dictionary(cachedActivity.map { ($0.sessionId, $0) }, uniquingKeysWith: { _, latest in latest })
+        let family = (seeded ?? []).activeSessions()
+        let cachedSnapshot = SessionActivitySnapshot(
+            entries: Dictionary(
+                cachedActivity.map { entry in
+                    (
+                        entry.sessionId,
+                        SessionActivityEntry(activity: entry.activity, source: .cached, observedAtMs: entry.observedAtMs)
+                    )
+                },
+                uniquingKeysWith: { _, latest in latest }
+            ),
+            seeded: false,
+            fromCache: true
+        )
         let sessions =
-            (seeded ?? [])
-                .activeSessions()
+            family
                 .rootSessions()
                 .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
         let items =
             sessions.map { session in
-                let cached = activityByID[session.id]
+                let sourceID = cachedSnapshot.homeActivitySessionID(rootID: session.id, sessions: family) ?? session.id
+                let label = cachedSnapshot.statusLabel(for: sourceID)
                 return sessionAdapter.listItem(
                     from: session,
                     worktree: worktree,
-                    statusLabel: cached?.activity.statusLabel,
-                    statusIsStale: cached != nil && cached?.activity.statusLabel != nil
+                    statusLabel: label,
+                    statusIsStale: label != nil && cachedSnapshot.statusIsStale(for: sourceID)
                 )
             }
         let name = ProjectDomainAdapter.displayName(from: worktree)
@@ -1695,24 +1708,27 @@ final class ProjectListHomeViewModel {
     private func loadSection(worktree: String) async -> ProjectSectionItem {
         do {
             _ = try await projectRepository.getCurrentProject(directory: worktree)
-            let sessions =
+            let family =
                 try await sessionRepository.listSessions(directory: worktree)
                     .activeSessions()
+            let sessions =
+                family
                     .rootSessions()
                     .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
             let items =
                 sessions.map { session in
-                    sessionAdapter.listItem(
+                    let status = homeStatus(for: session.id, family: family, directory: worktree)
+                    return sessionAdapter.listItem(
                         from: session,
                         worktree: worktree,
-                        statusLabel: statusLabel(for: session.id, directory: worktree),
+                        statusLabel: status.label,
                         isReady: isReady(
                             sessionID: session.id,
                             directory: worktree,
                             readyIds: liveReadyIdsByWorktree[worktree] ?? []
                         ),
                         unreadOutcome: unreadOutcome(for: session, directory: worktree),
-                        statusIsStale: statusIsStale(for: session.id, directory: worktree)
+                        statusIsStale: status.stale
                     )
                 }
             let name = ProjectDomainAdapter.displayName(from: worktree)
@@ -2233,19 +2249,20 @@ final class ProjectListHomeViewModel {
     ) {
         guard case let .loaded(sections, showAdd, addProjectSheet, createError) = state else { return }
         guard let section = sections.first(where: { $0.worktree == worktree }) else { return }
+        let family = sessions.activeSessions()
         let items =
-            sessions
-                .activeSessions()
+            family
                 .rootSessions()
                 .sorted { ($0.updatedAtEpochMs ?? 0) > ($1.updatedAtEpochMs ?? 0) }
                 .map { session in
-                    sessionAdapter.listItem(
+                    let status = homeStatus(for: session.id, family: family, directory: worktree)
+                    return sessionAdapter.listItem(
                         from: session,
                         worktree: worktree,
-                        statusLabel: statusLabel(for: session.id, directory: worktree),
+                        statusLabel: status.label,
                         isReady: isReady(sessionID: session.id, directory: worktree, readyIds: readyIds),
                         unreadOutcome: unreadOutcome(for: session, directory: worktree),
-                        statusIsStale: statusIsStale(for: session.id, directory: worktree)
+                        statusIsStale: status.stale
                     )
                 }
         let updatedSection = ProjectSectionItem(
@@ -2273,12 +2290,15 @@ final class ProjectListHomeViewModel {
         )
     }
 
-    private func statusLabel(for sessionID: String, directory: String) -> String? {
-        liveStatusesByWorktree[directory]?.statusLabel(for: sessionID)
-    }
-
-    private func statusIsStale(for sessionID: String, directory: String) -> Bool {
-        liveStatusesByWorktree[directory]?.statusIsStale(for: sessionID) == true
+    /// Own activity, or a descendant's when that is busier. Matches the desktop home row.
+    private func homeStatus(
+        for sessionID: String,
+        family: [Session],
+        directory: String
+    ) -> (label: String?, stale: Bool) {
+        guard let snapshot = liveStatusesByWorktree[directory] else { return (nil, false) }
+        let sourceID = snapshot.homeActivitySessionID(rootID: sessionID, sessions: family) ?? sessionID
+        return (snapshot.statusLabel(for: sourceID), snapshot.statusIsStale(for: sourceID))
     }
 
     /// v1 only: the local per-device Ready ids. v2 reads unread state from the server instead.

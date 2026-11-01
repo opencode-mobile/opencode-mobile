@@ -224,6 +224,73 @@ struct SessionActivitySnapshot: Sendable, Equatable {
     func statusIsStale(for sessionID: String) -> Bool {
         entries[sessionID]?.source == .cached
     }
+
+    /// Session whose activity Home should show for a root row.
+    ///
+    /// The opencode desktop home row is working when the session or any
+    /// descendant is in the active set. A parent blocked on a child is working
+    /// even when its own step is idle. Nil when nobody in the family is busy;
+    /// the caller keeps the root's own idle path.
+    func homeActivitySessionID(rootID: String, sessions: [Session]) -> String? {
+        var bestID: String?
+        var bestRank = 0
+        var bestFresh = false
+        for id in SessionFamily.memberIDs(of: rootID, in: sessions) {
+            guard let entry = visibleEntry(id), entry.activity.isBusy else { continue }
+            let rank = entry.activity.homeRank
+            let fresh = entry.source != .cached
+            let preferRoot = id == rootID && fresh == bestFresh
+            if rank > bestRank || (rank == bestRank && fresh && !bestFresh) || (rank == bestRank && preferRoot) {
+                bestRank = rank
+                bestFresh = fresh
+                bestID = id
+            }
+        }
+        return bestID
+    }
+
+    private func visibleEntry(_ sessionID: String) -> SessionActivityEntry? {
+        guard let entry = entries[sessionID] else { return nil }
+        guard seeded || entry.source == .cached else { return nil }
+        return entry
+    }
+}
+
+enum SessionFamily {
+    /// The root and every non-archived descendant whose parent chain resolves to it.
+    static func memberIDs(of rootID: String, in sessions: [Session]) -> [String] {
+        let parentByID = Dictionary(sessions.map { ($0.id, $0.parentID) }, uniquingKeysWith: { _, latest in latest })
+        var members = [rootID]
+        for session in sessions where session.id != rootID && !session.isArchived {
+            if resolveRoot(session.id, parentByID: parentByID) == rootID {
+                members.append(session.id)
+            }
+        }
+        return members
+    }
+
+    /// Walk `parentID` to the furthest known ancestor. A missing parent stops the walk.
+    static func resolveRoot(_ sessionID: String, parentByID: [String: String?]) -> String {
+        var current = sessionID
+        var seen: Set<String> = [sessionID]
+        while let parent = parentByID[current] ?? nil {
+            if parent.isEmpty || seen.contains(parent) { break }
+            seen.insert(parent)
+            current = parent
+        }
+        return current
+    }
+}
+
+private extension SessionActivity {
+    /// Running outranks a retry; both outrank idle.
+    var homeRank: Int {
+        switch self {
+        case .running: 2
+        case .retrying: 1
+        case .idle: 0
+        }
+    }
 }
 
 struct SessionActivityCacheEntry: Sendable, Equatable {

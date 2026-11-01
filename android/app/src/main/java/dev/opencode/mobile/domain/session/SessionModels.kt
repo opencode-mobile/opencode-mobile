@@ -155,7 +155,82 @@ data class SessionActivitySnapshot(
     val entries: Map<String, SessionActivityEntry> = emptyMap(),
     val seeded: Boolean = false,
     val fromCache: Boolean = false,
-)
+) {
+    /**
+     * Session whose activity Home should show for a root row.
+     *
+     * The opencode desktop home row is working when the session or any
+     * descendant is in the active set. A parent blocked on a child is working
+     * even when its own step is idle. Null when nobody in the family is busy;
+     * the caller keeps the root's own idle path.
+     */
+    fun homeActivitySessionId(
+        rootId: String,
+        sessions: List<Session>,
+    ): String? {
+        var bestId: String? = null
+        var bestRank = 0
+        var bestFresh = false
+        for (id in SessionFamily.memberIds(rootId, sessions)) {
+            val entry = visibleEntry(id) ?: continue
+            if (!entry.activity.isBusy()) continue
+            val rank = entry.activity.homeRank()
+            val fresh = entry.source != SessionActivitySource.Cached
+            val preferRoot = id == rootId && fresh == bestFresh
+            if (rank > bestRank || (rank == bestRank && fresh && !bestFresh) || (rank == bestRank && preferRoot)) {
+                bestRank = rank
+                bestFresh = fresh
+                bestId = id
+            }
+        }
+        return bestId
+    }
+
+    private fun visibleEntry(sessionId: String): SessionActivityEntry? {
+        val entry = entries[sessionId] ?: return null
+        if (seeded || fromCache || entry.source == SessionActivitySource.Cached) return entry
+        return null
+    }
+}
+
+/** Parent links used to roll a running child up to the home row. */
+object SessionFamily {
+    /** The root and every non-archived descendant whose parent chain resolves to it. */
+    fun memberIds(
+        rootId: String,
+        sessions: List<Session>,
+    ): List<String> {
+        val parentById = sessions.associate { it.id to it.parentId }
+        val members = mutableListOf(rootId)
+        for (session in sessions) {
+            if (session.id == rootId || session.isArchived) continue
+            if (resolveRoot(session.id, parentById) == rootId) members += session.id
+        }
+        return members
+    }
+
+    /** Walk parentId to the furthest known ancestor. A missing parent stops the walk. */
+    fun resolveRoot(
+        sessionId: String,
+        parentById: Map<String, String?>,
+    ): String {
+        var current = sessionId
+        val seen = mutableSetOf(sessionId)
+        while (true) {
+            val parent = parentById[current] ?: break
+            if (parent.isEmpty() || !seen.add(parent)) break
+            current = parent
+        }
+        return current
+    }
+}
+
+private fun SessionActivity.homeRank(): Int =
+    when (this) {
+        SessionActivity.Running -> 2
+        is SessionActivity.Retrying -> 1
+        SessionActivity.Idle -> 0
+    }
 
 fun SessionStatus.toSessionActivity(): SessionActivity =
     when (raw["type"]?.lowercase()) {
