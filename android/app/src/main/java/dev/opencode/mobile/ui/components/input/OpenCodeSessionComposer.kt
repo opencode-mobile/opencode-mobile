@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,10 +19,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -31,6 +36,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -66,6 +72,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -84,6 +91,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.domain.message.FollowUpDelivery
@@ -1296,7 +1304,7 @@ private fun PermissionFileLine(file: OpenCodeSessionComposerState.PermissionFile
 }
 
 @Composable
-private fun QuestionRequestContent(
+private fun ColumnScope.QuestionRequestContent(
     state: OpenCodeSessionComposerState.Question,
     onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
@@ -1310,7 +1318,15 @@ private fun QuestionRequestContent(
         )
     state.attribution?.let { RequestAttributionRow(it, onAction) }
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                // The action row measures first; the body takes what is left, up to half the window.
+                .weight(1f, fill = false)
+                .heightIn(max = questionBodyMaxHeight())
+                // Each question and request opens at its top, not where the previous one was left.
+                .verticalScroll(remember(state.requestId, state.questionIndex) { ScrollState(0) })
+                .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1463,6 +1479,22 @@ private fun QuestionRequestContent(
     }
     RequestPageDots(position = state.requestPosition, count = state.requestCount)
 }
+
+/**
+ * The question body scrolls inside half of the window above the keyboard, so long option lists
+ * keep the action row below it reachable. No minimum: with little room (landscape with the
+ * keyboard up) a short scrolling body beats pushing Submit off screen.
+ */
+@Composable
+private fun questionBodyMaxHeight(): Dp {
+    val density = LocalDensity.current
+    val windowHeight = LocalWindowInfo.current.containerSize.height
+    val imeHeight = WindowInsets.ime.getBottom(density)
+    val visible = with(density) { (windowHeight - imeHeight).coerceAtLeast(0).toDp() }
+    return visible * QuestionBodyMaxHeightFraction
+}
+
+private const val QuestionBodyMaxHeightFraction = 0.5f
 
 private fun questionSelectionDecorator(selected: Boolean): StartDecorator =
     StartDecorator.Icon(
