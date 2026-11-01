@@ -42,6 +42,62 @@ struct SessionChatPillSlotsTests {
         #expect(SessionChatActivityItem.syncing(label: "Syncing").priority == .running)
     }
 
+    // MARK: Background work (subagents)
+
+    private let runningSubagents = SessionChatBackgroundWorkPill(
+        label: "3 subagents", needsInput: false, accessibilityLabel: "3 subagents running"
+    )
+    private let waitingSubagent = SessionChatBackgroundWorkPill(
+        label: "general needs input · 2 running",
+        needsInput: true,
+        accessibilityLabel: "general needs input, 2 subagents running"
+    )
+
+    @Test func runningSubagentsRankAsRunningWork() {
+        let slot = SessionChatPillSlots.activity(
+            items: [.queued(count: 1), .subagents(runningSubagents), .sideQuestionsReady(count: 1)],
+            keyboardVisible: false,
+            now: now
+        )
+
+        #expect(SessionChatActivityItem.subagents(runningSubagents).priority == .running)
+        #expect(slot.primary == .sideQuestionsReady(count: 1))
+        #expect(slot.overflow == [.subagents(runningSubagents), .queued(count: 1)])
+    }
+
+    @Test func waitingSubagentNeedsInputAndStaysFullWithTheKeyboardUp() {
+        let slot = SessionChatPillSlots.activity(
+            items: [.sideQuestionsFailed(count: 1), .subagents(waitingSubagent)],
+            keyboardVisible: true,
+            now: now
+        )
+
+        #expect(slot.primary == .subagents(waitingSubagent))
+        #expect(!slot.primaryCompact)
+    }
+
+    @Test func subagentsPillUsesTheCounterWithThePulsingDotWhileWaiting() {
+        #expect(SessionChatActivitySlotView.layout(.subagents(runningSubagents)) == .counter(label: "3 subagents", waiting: false))
+        #expect(SessionChatActivitySlotView.state(.subagents(runningSubagents)) == .live)
+        #expect(
+            SessionChatActivitySlotView.layout(.subagents(waitingSubagent))
+                == .counter(label: "general needs input · 2 running", waiting: true)
+        )
+        #expect(SessionChatActivitySlotView.state(.subagents(waitingSubagent)) == .needsAttention)
+        #expect(
+            OpenCodeFloatingPillStyle.leading(
+                layout: SessionChatActivitySlotView.layout(.subagents(waitingSubagent)),
+                state: SessionChatActivitySlotView.state(.subagents(waitingSubagent))
+            ) == .pulsingDot
+        )
+        #expect(SessionChatActivitySlotView.isTappable(.subagents(runningSubagents)))
+        #expect(!SessionChatActivitySlotView.isClosable(.subagents(runningSubagents)))
+        #expect(
+            SessionChatActivitySlotView.accessibilityLabel(.subagents(waitingSubagent))
+                == "general needs input, 2 subagents running. Open subagents"
+        )
+    }
+
     @Test func equalPrioritiesKeepTheCallersOrder() {
         let slot = SessionChatPillSlots.activity(
             items: [.sideQuestionsRunning(count: 2), .syncing(label: "Syncing")],

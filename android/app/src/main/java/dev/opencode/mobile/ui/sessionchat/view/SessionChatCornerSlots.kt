@@ -145,6 +145,8 @@ internal object SessionChatActivityPillCopy {
                 OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.ArrowUpward, "Review permission")
             SessionChatActivityItem.AnswerQuestion ->
                 OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.ArrowUpward, "Answer question")
+            is SessionChatActivityItem.Subagents ->
+                OpenCodeFloatingPillLayout.Counter(item.pill.label, waiting = item.pill.needsInput)
             is SessionChatActivityItem.RequestFailed -> OpenCodeFloatingPillLayout.Closable("Request failed")
             is SessionChatActivityItem.SideQuestionsFailed ->
                 OpenCodeFloatingPillLayout.Closable("/btw failed${countSuffix(item.count)} · Retry")
@@ -182,6 +184,7 @@ internal object SessionChatActivityPillCopy {
         when (item) {
             SessionChatActivityItem.ReviewPermission -> "Review permission request"
             SessionChatActivityItem.AnswerQuestion -> "Answer question"
+            is SessionChatActivityItem.Subagents -> "${item.pill.accessibilityLabel}. Open subagents"
             is SessionChatActivityItem.RequestFailed -> "Request failed. Show in chat"
             is SessionChatActivityItem.SideQuestionsFailed ->
                 if (item.count > 1) "${item.count} side questions failed. Retry" else "Side question failed. Retry"

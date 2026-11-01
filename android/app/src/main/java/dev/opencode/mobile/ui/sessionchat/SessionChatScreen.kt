@@ -152,6 +152,7 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatSkillsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineStylePickerSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineView
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTimelineViewProps
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatSubagentsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
@@ -275,6 +276,7 @@ private fun SessionChatScreenBody(
     var toolDetailTarget by remember { mutableStateOf<SessionChatToolDetailTarget?>(null) }
     var skillsTarget by remember { mutableStateOf<SessionChatSkillsTarget?>(null) }
     var showSessionTodosSheet by rememberSaveable { mutableStateOf(false) }
+    var showSubagentsSheet by rememberSaveable { mutableStateOf(false) }
     var holdingFinishedTodos by remember { mutableStateOf(false) }
     var sawUnfinishedTodos by remember { mutableStateOf(false) }
     var composerOverlayHeightPx by remember { mutableStateOf(0) }
@@ -935,7 +937,7 @@ private fun SessionChatScreenBody(
                             sessionTodoCompletedCount = uiState.sessionTodoCompletedCount,
                             sessionTodoTotalCount = uiState.sessionTodoTotalCount,
                             sessionTodoActivePreview = uiState.sessionTodoActivePreview?.content,
-                            hideFloatStack = showSessionTodosSheet,
+                            hideFloatStack = showSessionTodosSheet || showSubagentsSheet,
                             hideLiveRetryFailures = uiState.retryCard != null,
                             hideRetryCountdown = uiState.isRetrying,
                             noticeModelNames = noticeModelNames,
@@ -957,6 +959,10 @@ private fun SessionChatScreenBody(
                                 when (item) {
                                     SessionChatActivityItem.ReviewPermission -> viewModel.showPermissionDock()
                                     SessionChatActivityItem.AnswerQuestion -> viewModel.showQuestionDock()
+                                    is SessionChatActivityItem.Subagents -> {
+                                        logChatAction(ProductAnalytics.Action.CHAT_OPEN_SUBAGENTS)
+                                        showSubagentsSheet = true
+                                    }
                                     is SessionChatActivityItem.SideQuestionsFailed -> viewModel.retrySideQuestions()
                                     is SessionChatActivityItem.SideQuestionsReady -> viewModel.openSideQuestionAnswer()
                                     is SessionChatActivityItem.Queued -> showPendingPromptsSheet = true
@@ -1552,6 +1558,7 @@ private fun SessionChatScreenBody(
                 toolDetailTarget != null ||
                 skillsTarget != null ||
                 showSessionTodosSheet ||
+                showSubagentsSheet ||
                 showAttachmentSource ||
                 activePicker != null ||
                 showDeleteConfirmation
@@ -1567,6 +1574,23 @@ private fun SessionChatScreenBody(
             options = uiState.timelineStylePickerOptions,
             onUse = viewModel::chooseTimelineStyleFromPicker,
             onDismiss = viewModel::dismissTimelineStylePicker,
+        )
+
+        SessionChatSubagentsSheet(
+            visible = showSubagentsSheet,
+            subagents = uiState.subagents,
+            onOpen = { subagent ->
+                val childId = subagent.childSessionId ?: return@SessionChatSubagentsSheet
+                logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHILD_SESSION)
+                onChildSessionClick(
+                    ChildSessionNavigationTarget(
+                        sessionId = childId,
+                        sessionTitle = subagent.title ?: subagent.agentName,
+                        worktree = currentWorktree,
+                    ),
+                )
+            },
+            onDismiss = { showSubagentsSheet = false },
         )
 
         SessionChatTodosSheet(
@@ -2010,7 +2034,7 @@ private fun InboxRequestAttribution.toComposerAttribution(summary: String) =
     OpenCodeSessionComposerState.RequestAttribution(sessionId = sessionId, letter = letter, summary = summary)
 
 /**
- * Bottom-left activity the screen owns: collapsed requests, `/btw` side questions and queued prompts.
+ * Bottom-left activity the screen owns: collapsed requests, subagents, `/btw` side questions and queued prompts.
  * Collapsed requests show whatever the composer shows, so a child session's lockout cannot strand one.
  */
 internal fun sessionChatActivityItems(
@@ -2020,6 +2044,7 @@ internal fun sessionChatActivityItems(
     buildList {
         if (uiState.permissionDockHidden) add(SessionChatActivityItem.ReviewPermission)
         if (uiState.questionDockHidden) add(SessionChatActivityItem.AnswerQuestion)
+        uiState.backgroundWorkPill?.let { add(SessionChatActivityItem.Subagents(it)) }
         if (composerKind == SessionChatComposerKind.Prompt) {
             val sideQuestions = uiState.sideQuestions
             if (sideQuestions.failedCount > 0) add(SessionChatActivityItem.SideQuestionsFailed(sideQuestions.failedCount))

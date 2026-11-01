@@ -20,6 +20,9 @@ enum SessionChatActivityItem: Equatable, Identifiable {
     case reviewPermission
     /// A collapsed question panel; tapping brings it back.
     case answerQuestion
+    /// Subagents of this session at work: "3 subagents", or "general needs input · 2 running"
+    /// while one waits. Tapping opens the Subagents panel.
+    case subagents(SessionChatBackgroundWorkPill)
     /// The last turn failed. `rowID` is the timeline row to scroll to; `blockID` identifies the failure.
     case requestFailed(rowID: String, blockID: String)
     /// `/btw` side questions that failed; tapping asks them again.
@@ -39,6 +42,7 @@ enum SessionChatActivityItem: Equatable, Identifiable {
         switch self {
         case .reviewPermission: "review-permission"
         case .answerQuestion: "answer-question"
+        case .subagents: "subagents"
         case let .requestFailed(_, blockID): "failed:\(blockID)"
         case .sideQuestionsFailed: "btw-failed"
         case .sideQuestionsReady: "btw-ready"
@@ -52,6 +56,7 @@ enum SessionChatActivityItem: Equatable, Identifiable {
     var priority: SessionChatActivityPriority {
         switch self {
         case .reviewPermission, .answerQuestion: .needsInput
+        case let .subagents(pill): pill.needsInput ? .needsInput : .running
         case .requestFailed, .sideQuestionsFailed: .error
         case .sideQuestionsReady: .answerReady
         case .sideQuestionsRunning, .syncing: .running
