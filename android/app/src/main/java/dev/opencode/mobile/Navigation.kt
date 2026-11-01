@@ -99,7 +99,6 @@ import dev.opencode.mobile.ui.componentgallery.components.ModalGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.PageIndicatorGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.PendingPromptsStripGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReasoningRowGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReorderableListGalleryScreen
@@ -115,14 +114,11 @@ import dev.opencode.mobile.ui.componentgallery.components.SessionListGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.SessionListSkeletonGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionStatusBarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionTodoItemGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.SessionTodosPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SkeletonIllustrationGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SnackbarGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SplitPaneGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StatusStackGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.StepRailGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.SideQuestionPillGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.SyncingPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TagGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TextInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.TimelineNoticeGalleryScreen
@@ -715,8 +711,6 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.Attachment -> AttachmentGalleryScreen()
                                                         ComponentGalleryEntryId.ImageGallery -> ImageGalleryGalleryScreen()
                                                         ComponentGalleryEntryId.OutgoingMessage -> OutgoingMessageGalleryScreen()
-                                                        ComponentGalleryEntryId.PendingPromptsStrip ->
-                                                            PendingPromptsStripGalleryScreen()
                                                         ComponentGalleryEntryId.AssistantMessage -> AssistantMessageGalleryScreen()
                                                         ComponentGalleryEntryId.ToolCallCard -> ToolCallCardGalleryScreen()
                                                         ComponentGalleryEntryId.ToolChip -> ToolChipGalleryScreen()
@@ -747,8 +741,6 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.FilterTabs -> FilterTabsGalleryScreen()
                                                         ComponentGalleryEntryId.ActionPill -> ActionPillGalleryScreen()
                                                         ComponentGalleryEntryId.ActionTile -> ActionTileGalleryScreen()
-                                                        ComponentGalleryEntryId.SyncingPill -> SyncingPillGalleryScreen()
-                                                        ComponentGalleryEntryId.SideQuestionPill -> SideQuestionPillGalleryScreen()
                                                         ComponentGalleryEntryId.FloatingPill -> FloatingPillGalleryScreen()
                                                         ComponentGalleryEntryId.BackgroundWorkPill -> BackgroundWorkPillGalleryScreen()
                                                         ComponentGalleryEntryId.ComposerSuggestionOverlay ->
@@ -756,7 +748,6 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ReviewChangesPill -> ReviewChangesPillGalleryScreen()
                                                         ComponentGalleryEntryId.SessionBranchPill ->
                                                             SessionBranchPillGalleryScreen()
-                                                        ComponentGalleryEntryId.SessionTodosPill -> SessionTodosPillGalleryScreen()
                                                         ComponentGalleryEntryId.SessionTodoItem -> SessionTodoItemGalleryScreen()
                                                         ComponentGalleryEntryId.HunkNavigationPill -> HunkNavigationPillGalleryScreen()
                                                         ComponentGalleryEntryId.UnifiedDiff -> UnifiedDiffGalleryScreen()

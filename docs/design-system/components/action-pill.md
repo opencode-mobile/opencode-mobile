@@ -36,8 +36,8 @@ emphasis and block interaction.
 
 The pill is designed to float centered above content (for example above the
 composer). Callers position it with platform layout; the component supplies
-capsule geometry and floating glass chrome shared with Review Changes and
-Session Todos pills.
+capsule geometry and floating glass chrome shared with the Floating and
+Review Changes pills.
 
 Callers should hide the pill while the user is actively scrolling and reveal
 it again after scrolling settles when the distance threshold is still met.
