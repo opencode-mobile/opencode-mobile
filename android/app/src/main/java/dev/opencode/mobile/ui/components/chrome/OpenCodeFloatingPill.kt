@@ -242,7 +242,8 @@ fun OpenCodeFloatingPill(
             OpenCodeFloatingPillTone.Warning -> openCodeColor("warning")
             OpenCodeFloatingPillTone.Error -> MaterialTheme.colorScheme.error
         }
-    val borderColor = if (floatingPillHasRing(state)) openCodeColor("warning") else openCodeColor("border-weaker-base")
+    val border =
+        if (floatingPillHasRing(state)) BorderStroke(1.dp, openCodeColor("warning")) else OpenCodeFloatingPillStyle.border()
     val description = floatingPillDescription(layout, state, accessibilityLabel)
     val announcesUpdates = floatingPillAnnouncesUpdates(layout, state)
     val round = compact || layout is OpenCodeFloatingPillLayout.IconOnly
@@ -257,8 +258,8 @@ fun OpenCodeFloatingPill(
         Surface(
             modifier = Modifier.matchParentSize(),
             shape = FloatingPillShape,
-            color = openCodeColor("surface-raised-base").copy(alpha = 0.95f),
-            border = BorderStroke(1.dp, borderColor),
+            color = OpenCodeFloatingPillStyle.fill(),
+            border = border,
             tonalElevation = 2.dp,
             shadowElevation = FloatingPillShadowElevation,
         ) {}

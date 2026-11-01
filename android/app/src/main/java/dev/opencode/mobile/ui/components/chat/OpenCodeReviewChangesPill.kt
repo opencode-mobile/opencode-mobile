@@ -1,6 +1,5 @@
 package dev.opencode.mobile.ui.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.defaultMinSize
@@ -129,7 +128,6 @@ fun OpenCodeReviewChangesPill(
             enabled = enabled,
             separator = OpenCodeDiffStatSeparator.Wide,
         )
-    val surfaceRaised = openCodeColor("surface-raised-base")
 
     Surface(
         onClick = onClick,
@@ -138,9 +136,9 @@ fun OpenCodeReviewChangesPill(
             modifier
                 .semantics { contentDescription = summary.accessibilityLabel },
         shape = ReviewChangesPillShape,
-        color = surfaceRaised.copy(alpha = if (enabled) 0.95f else 0.7f),
+        color = OpenCodeFloatingPillStyle.fill(enabled),
         contentColor = contentColor,
-        border = BorderStroke(1.dp, openCodeColor("border-weaker-base")),
+        border = OpenCodeFloatingPillStyle.border(),
         tonalElevation = 2.dp,
         shadowElevation = if (enabled) 4.dp else 0.dp,
         interactionSource = interactionSource,
