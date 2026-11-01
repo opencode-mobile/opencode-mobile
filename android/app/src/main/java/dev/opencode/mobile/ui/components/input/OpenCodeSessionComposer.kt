@@ -9,6 +9,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1320,7 +1321,8 @@ private fun QuestionRequestContent(
             Modifier
                 .fillMaxWidth()
                 .heightIn(max = questionBodyMaxHeight())
-                .verticalScroll(rememberScrollState())
+                // Each question and request opens at its top, not where the previous one was left.
+                .verticalScroll(remember(state.requestId, state.questionIndex) { ScrollState(0) })
                 .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -1477,7 +1479,8 @@ private fun QuestionRequestContent(
 
 /**
  * The question body scrolls inside half of the window above the keyboard, so long option lists
- * keep the header in view and the action row below it reachable.
+ * keep the action row below it reachable. No minimum: with little room (landscape with the
+ * keyboard up) a short scrolling body beats pushing Submit off screen.
  */
 @Composable
 private fun questionBodyMaxHeight(): Dp {
@@ -1485,11 +1488,10 @@ private fun questionBodyMaxHeight(): Dp {
     val windowHeight = LocalWindowInfo.current.containerSize.height
     val imeHeight = WindowInsets.ime.getBottom(density)
     val visible = with(density) { (windowHeight - imeHeight).coerceAtLeast(0).toDp() }
-    return (visible * QuestionBodyMaxHeightFraction).coerceAtLeast(QuestionBodyMinHeight)
+    return visible * QuestionBodyMaxHeightFraction
 }
 
 private const val QuestionBodyMaxHeightFraction = 0.5f
-private val QuestionBodyMinHeight = 160.dp
 
 private fun questionSelectionDecorator(selected: Boolean): StartDecorator =
     StartDecorator.Icon(

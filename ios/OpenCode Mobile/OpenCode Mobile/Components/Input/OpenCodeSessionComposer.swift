@@ -977,6 +977,8 @@ struct OpenCodeSessionComposer: View {
                 questionBody(question, selectionHint: selectionHint)
             }
             .scrollBounceBehavior(.basedOnSize)
+            // Each question and request opens at its top, not where the previous one was left.
+            .id("\(question.requestID)#\(question.questionIndex)")
         }
 
         HStack {
@@ -1367,10 +1369,10 @@ private struct QuestionCustomTextField: View {
 
 /// Sizes the question body to its content, up to half the height the composer is offered
 /// (the space above the keyboard), so long option lists scroll instead of leaving the screen.
+/// No minimum: with little room a short scrolling body beats pushing Submit off screen.
 private struct QuestionBodyHeightLayout: Layout {
     private static let maxHeightFraction: CGFloat = 0.5
     private static let fallbackMaxHeight: CGFloat = 360
-    private static let minHeight: CGFloat = 160
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         guard let body = subviews.first else { return .zero }
@@ -1378,7 +1380,7 @@ private struct QuestionBodyHeightLayout: Layout {
         let contentHeight = body.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
         let cap: CGFloat
         if let offered = proposal.height, offered.isFinite {
-            cap = max(offered * Self.maxHeightFraction, Self.minHeight)
+            cap = offered * Self.maxHeightFraction
         } else {
             cap = Self.fallbackMaxHeight
         }
