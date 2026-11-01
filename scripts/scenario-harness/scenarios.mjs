@@ -7,14 +7,16 @@
 // protocols, model (a harness model id), setup (steps run before arming),
 // automation (steps run as another client), variants ({name: steps | {automation,
 // modelCalls, summary, prompt}}), summary (steps for a compaction request),
-// appOnly (needs a device to judge), checkVariant (variant check.mjs runs).
+// appOnly (needs a device to judge), checkVariant (variant check.mjs runs),
+// serverChecks ({v1, v2} lists of named assertions in check.mjs), checkTimeoutMs.
 //
 // Automation steps: { on: "<event type>" | [...], delayMs, do, ... } or { at: ms, do }.
 // Actions: createSession{title, as, model}, prompt{text, session, model},
 //   seedTurns{session, count, text}, wait{ms}, abort, replyPermission{reply},
 //   replyQuestion{answers}, rejectQuestion, release{gate}, touch{path}, rename{title},
 //   remove, compact, revert{userTurn}, revertCommit, revertClear, dropStreams,
-//   offline{ms}, rejectSseAuth{ms}, stall, unstall, heartbeatOnly{value}, clearFaults.
+//   offline{ms}, rejectSseAuth{ms}, stall, unstall, heartbeatOnly{value}, clearFaults,
+//   listShells, readShellOutputs, stopShells (v2 /api/shell for the session; no-ops on v1).
 // session: a name from setup (`as`), "latest", or omitted for the run's session.
 
 import { P1 } from "./scenarios-p1.mjs";

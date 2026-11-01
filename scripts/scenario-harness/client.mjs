@@ -161,6 +161,39 @@ export function createClient({ getServer, password, emit }) {
       if (protocol === "v1") return call("GET", "/permission");
       return unwrap(await call("GET", "/api/permission/request"));
     },
+    // Agent-run shells (v2 only; v1 shells are just running bash tool parts).
+    // GET /api/shell lists running shells; keep the given session's when sessionID is set.
+    async listShells({ sessionID } = {}) {
+      const { protocol, project } = base();
+      if (protocol === "v1") return { skipped: "v1 has no shell API; shells are running bash tool parts" };
+      const list = unwrap(await call("GET", "/api/shell", undefined, { query: { "location[directory]": project } })) ?? [];
+      return sessionID ? list.filter((shell) => shell.metadata?.sessionID === sessionID) : list;
+    },
+    async shellOutput({ id, cursor, limit }) {
+      const { protocol, project } = base();
+      if (protocol === "v1") return { skipped: "v1 has no shell API" };
+      const query = { "location[directory]": project };
+      if (cursor !== undefined) query.cursor = String(cursor);
+      if (limit !== undefined) query.limit = String(limit);
+      return unwrap(await call("GET", `/api/shell/${id}/output`, undefined, { query }));
+    },
+    async stopShell({ id }) {
+      const { protocol, project } = base();
+      if (protocol === "v1") return { skipped: "v1 cannot stop one shell; abort the session instead" };
+      return call("DELETE", `/api/shell/${id}`, undefined, { query: { "location[directory]": project } });
+    },
+    // Reads each running shell of the session from the start (one page each).
+    async readShellOutputs({ sessionID }) {
+      const shells = await actions.listShells({ sessionID });
+      if (!Array.isArray(shells)) return shells;
+      return Promise.all(shells.map(async (shell) => ({ id: shell.id, ...(await actions.shellOutput({ id: shell.id })) })));
+    },
+    async stopShells({ sessionID }) {
+      const shells = await actions.listShells({ sessionID });
+      if (!Array.isArray(shells)) return shells;
+      for (const shell of shells) await actions.stopShell({ id: shell.id });
+      return { stopped: shells.map((shell) => shell.id) };
+    },
     busySessions() {
       return [...busy.entries()].filter(([, value]) => value).map(([id]) => id);
     },

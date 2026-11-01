@@ -37,7 +37,61 @@ async function api(path, body) {
 }
 
 const NOISE = /message\.part\.delta|session\.(text|reasoning|tool\.input)\.delta|heartbeat|^sync$/;
-const KEEP = /^(message|session|permission|question|form|todo)\./;
+const KEEP = /^(message|session|permission|question|form|todo|shell)\./;
+
+// Named server-side assertions a scenario lists in serverChecks: (history, run session) => true | reason.
+const serverEvents = (history, type) =>
+  history.filter((e) => e.type === "server.event" && e.data.type === type && !e.data.source.includes("/global/event")).map((e) => ({ seq: e.seq, ...e.data.props }));
+const okCalls = (history, pattern) => history.filter((e) => e.type === "client.call" && e.data.method === "GET" && pattern.test(e.data.path) && e.data.status === 200);
+const runningShells = (call, sessionID) => (call.data.response?.data ?? []).filter((x) => x.status === "running" && (!sessionID || x.metadata?.sessionID === sessionID));
+const bashParts = (history) => serverEvents(history, "message.part.updated").map((p) => p.part).filter((part) => part?.type === "tool" && part.tool === "bash");
+const SERVER_CHECKS = {
+  // v1: a running bash part whose metadata.output grows through message.part.updated.
+  bashOutputGrows(history) {
+    const sizes = bashParts(history).filter((p) => p.state?.status === "running").map((p) => p.state.metadata?.output?.length ?? 0);
+    const distinct = [...new Set(sizes)].filter((n) => n > 0);
+    if (distinct.length < 5) return `only ${distinct.length} distinct running output sizes`;
+    return distinct.every((n, i) => i === 0 || n > distinct[i - 1]) || `output sizes not increasing: ${distinct.slice(0, 8).join(",")}`;
+  },
+  bashCompleted(history) {
+    return bashParts(history).some((p) => p.state?.status === "completed") || "no completed bash part";
+  },
+  // v2: GET /api/shell listed a running shell of the run's session.
+  shellListed(history, sessionID) {
+    return okCalls(history, /^\/api\/shell$/).some((c) => runningShells(c, sessionID).length > 0) || `no running shell of ${sessionID} in GET /api/shell`;
+  },
+  twoShellsListed(history, sessionID) {
+    const most = Math.max(0, ...okCalls(history, /^\/api\/shell$/).map((c) => runningShells(c, sessionID).length));
+    return most >= 2 || `GET /api/shell listed at most ${most} running shell(s) of the session`;
+  },
+  // Two output reads of the same shell, the later one larger.
+  shellOutputGrows(history) {
+    const sizes = new Map();
+    for (const c of okCalls(history, /^\/api\/shell\/[^/]+\/output$/)) {
+      const id = c.data.path.split("/")[3];
+      sizes.set(id, [...(sizes.get(id) ?? []), c.data.response?.data?.size ?? 0]);
+    }
+    for (const list of sizes.values()) if (list.length >= 2 && list.at(-1) > list[0]) return true;
+    return `output did not grow: ${JSON.stringify([...sizes.entries()])}`;
+  },
+  shellExited(history) {
+    return serverEvents(history, "shell.exited").some((p) => p.status === "exited") || "no shell.exited {status: exited}";
+  },
+  // DELETE /api/shell/:id gives shell.exited {status: killed}, then shell.deleted for the same id.
+  shellKilled(history) {
+    const deleted = new Set(serverEvents(history, "shell.deleted").map((p) => p.id));
+    const killed = serverEvents(history, "shell.exited").filter((p) => p.status === "killed");
+    if (!killed.length) return "no shell.exited {status: killed}";
+    return killed.every((p) => deleted.has(p.id)) || "a killed shell was not followed by shell.deleted";
+  },
+  // The turn ended (session idle) while its shell was still running.
+  idleWhileShellRuns(history, sessionID) {
+    const idle = serverEvents(history, "session.execution.succeeded").find((p) => p.sessionID === sessionID);
+    if (!idle) return "the session never went idle";
+    const exited = serverEvents(history, "shell.exited")[0];
+    return !exited || idle.seq < exited.seq || "the shell exited before the session went idle";
+  },
+};
 
 const state = await api("/harness/state");
 const protocol = state.server?.protocol;
@@ -66,7 +120,7 @@ for (const { scenario, variant } of plays) {
   let gateSince = null;
   const actions = [];
   const answered = new Set();
-  while (Date.now() - startedAt < 75_000) {
+  while (Date.now() - startedAt < (scenario.checkTimeoutMs ?? 75_000)) {
     await sleep(500);
     const s = await api("/harness/state");
     const autoSteps = s.automation?.steps ?? [];
@@ -146,13 +200,24 @@ for (const { scenario, variant } of plays) {
     ),
   ];
   const harnessSteps = history.filter((e) => e.type === "automation.step" || e.type === "harness.setup").map((e) => e.data.do);
-  const ok = outcome === "settled" || outcome.startsWith("finished");
+  const sessionID = (await api("/harness/state")).model.runs.find((r) => r.scenario === scenario.id && r.startedAt >= startedAt - 100)?.sessionID;
+  const failedChecks = [];
+  const passedChecks = [];
+  for (const check of scenario.serverChecks?.[protocol] ?? []) {
+    const verdict = SERVER_CHECKS[check]?.(history, sessionID) ?? "unknown check";
+    if (verdict === true) passedChecks.push(check);
+    else failedChecks.push(`${check}: ${verdict}`);
+  }
+  if (failedChecks.length && (outcome === "settled" || outcome.startsWith("finished"))) outcome = `${outcome}, server checks failed`;
+  const ok = (outcome === "settled" || outcome.startsWith("finished")) && !failedChecks.length;
   results.push({ name, outcome, ok, appOnly: scenario.appOnly });
   console.log(`■ ${name}: ${outcome}${scenario.appOnly ? " (needs a device to judge)" : ""}`);
   console.log(`  model: ${calls.join(" | ") || "(no calls)"}`);
   if (harnessSteps.length) console.log(`  harness: ${harnessSteps.join(", ")}`);
   if (actions.length) console.log(`  check: ${[...new Set(actions)].join(", ")}`);
   if (tools.length) console.log(`  tools: ${tools.join(", ")}`);
+  if (passedChecks.length) console.log(`  server checks ok: ${passedChecks.join(", ")}`);
+  if (failedChecks.length) console.log(`  server checks failed:\n    ${failedChecks.join("\n    ")}`);
   console.log(`  events: ${[...counts.entries()].map(([k, v]) => `${k}×${v}`).join(" ") || "-"}`);
   if (errors.length) console.log(`  errors:\n    ${[...new Set(errors)].join("\n    ")}`);
   console.log("");

@@ -80,7 +80,7 @@ Run `adb shell pm clear dev.opencode.mobile` before seeding. Always pass
 ## Run scenarios
 
 Scenarios live in `scenarios.mjs` (P0), `scenarios-p1.mjs` and
-`scenarios-p2.mjs`; `GET /harness/state` lists all 40 with priority, expected
+`scenarios-p2.mjs`; `GET /harness/state` lists all 47 with priority, expected
 app behaviour, variants and whether they need a device (`appOnly`). Three ways
 to start one:
 
@@ -102,6 +102,13 @@ v1 only (v2 has no todo tool); the run endpoint refuses scenarios a protocol
 cannot play. `tool-patch-multifile` needs the `gpt-5-scripted` harness model
 (both servers only offer the patch tool to `gpt-*` ids); pick it in the app's
 model picker when you type the prompt yourself.
+Agent-run shells for the background work pill: `shell-foreground-stream`
+(both protocols; a 60s foreground shell, a line every 0.5s), `shell-background`
+(v2; a 3-minute background shell that outlives the turn) and
+`shell-two-running` (v2; two background shells plus a subagent, "1 subagent ·
+2 shells"). Their check variants (`probe`, `stop-from-outside`, `quick`) read
+`/api/shell` and stop the shells as another client; play the base scenario to
+try Stop from the app.
 Scenarios with `automation` act as another client on server events (answer a
 permission, abort, cut SSE) when started with Run; marker prompts do not run
 automation, so trigger those steps yourself.
@@ -113,6 +120,7 @@ Useful control calls (all `POST`, JSON body):
 | Answer a pending ask as another client | `/harness/action {"name":"replyPermission","sessionID","requestID","reply":"once\|always\|reject"}`; pending ids in `GET /harness/state` → `pending` |
 | Answer a question | `/harness/action {"name":"replyQuestion","sessionID","requestID","answers":[["<label>"]]}` |
 | Abort, rename, delete | `/harness/action` with `abort`, `rename`, `remove` |
+| List, read or stop a session's shells (v2) | `/harness/action` with `listShells`, `readShellOutputs` or `stopShells` and `sessionID`; one shell: `shellOutput {id, cursor}`, `stopShell {id}` |
 | Release a hang or gate | `/harness/release {}` |
 | Slow down or speed up streams | `/harness/pacing {"value":2}` |
 | Drop app SSE now / offline / 401 | `/harness/fault/drop`, `/harness/fault {"offlineMs":4000}`, `/harness/fault {"rejectAuthMs":10000}`; 401 on event streams only: `{"rejectSseAuthMs":30000}` (state's `proxy.sseAttempts` counts reconnects) |
@@ -156,7 +164,9 @@ shared helpers (`run`, `path`, `subagent`, ...). In short: `prompt`, `expect`,
 `argDelayMs` for pacing), `child` lanes (subagent prompts bind automatically;
 extra sessions get a static prompt in `lanes`), `summary` (compaction reply),
 `setup`, `automation`, `variants`, `protocols`, `model`, `optionalCalls`,
-`appOnly`, `checkVariant`, and `{v1, v2}` values where tool names or inputs
+`appOnly`, `checkVariant`, `serverChecks` (`{v1, v2}` lists of named
+assertions in `check.mjs`, such as `bashOutputGrows` or `shellKilled`),
+`checkTimeoutMs`, and `{v1, v2}` values where tool names or inputs
 differ (`bash`/`shell`, `task`/`subagent`, `apply_patch`/`patch`, absolute
 `filePath` vs relative `path`). Then run `check.mjs <id> --variants` on v1 and
 v2.
@@ -177,6 +187,12 @@ v2.
   the start of the next step, from the last reported usage.
 - v1 background subagents need `OPENCODE_EXPERIMENTAL_BACKGROUND_SUBAGENTS=true`
   (the launcher sets it).
+- v1 has no background shells. Aborting a running v1 `bash` call leaves the
+  part `completed` with `metadata.exit: null` and `<shell_metadata>User aborted
+  the command</shell_metadata>` appended to `output` (seen on 1.19.5).
+- v2 wakes the session when a background shell ends, also when it is stopped
+  (a `synthetic` inbox item with `metadata.source: "shell"`), so one more model
+  call follows and answers `ok`.
 - Gates are latched: a named release that arrives before its gate opens still
   lets it through, so release timings are safe to schedule early.
 - `POST /harness/run` returns only after `setup` finishes, so opening "the
