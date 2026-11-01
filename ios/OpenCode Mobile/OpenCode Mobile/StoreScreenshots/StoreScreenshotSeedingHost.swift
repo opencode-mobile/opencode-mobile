@@ -33,10 +33,19 @@ enum StoreScreenshotLaunchEnvironment {
 /// Wipes leftover app state, seeds a fixture Connection Profile, then shows Home.
 struct StoreScreenshotSeedingHost: View {
     @State private var isReady = false
+    @State private var seedFailure: String?
 
     var body: some View {
         Group {
-            if isReady {
+            if let seedFailure {
+                // Surfaced so StoreScreenshotUITests can fail with the cause instead of timing out.
+                Text("Store screenshot seed failed: \(seedFailure)")
+                    .font(OpenCodeTypography.caption)
+                    .foregroundStyle(OpenCodeColors.textBase)
+                    .multilineTextAlignment(.center)
+                    .padding(24)
+                    .accessibilityIdentifier("storeScreenshotSeedFailed")
+            } else if isReady {
                 AppRootView()
             } else {
                 OpenCodeStatusStack(
@@ -47,7 +56,7 @@ struct StoreScreenshotSeedingHost: View {
             }
         }
         .task {
-            await StoreScreenshotSeeder.seed()
+            seedFailure = await StoreScreenshotSeeder.seed()
             isReady = true
         }
     }
@@ -55,11 +64,14 @@ struct StoreScreenshotSeedingHost: View {
 
 @MainActor
 enum StoreScreenshotSeeder {
-    static func seed() async {
-        guard let serverURL = StoreScreenshotLaunchEnvironment.serverURL else { return }
+    /// Returns a description of the failure, or nil when the fixture profile was seeded.
+    static func seed() async -> String? {
+        guard let serverURL = StoreScreenshotLaunchEnvironment.serverURL else { return nil }
         await wipePriorState()
         ThemeManager.shared.clearAll()
         AppOnboardingPreferences.shared.markCompleted()
+        // Past onboarding reads as an existing install, which would get the Timeline Style picker.
+        SessionChatDisplayPreferences.shared.setTimelineStyle(.activityCard)
         AnalyticsConsentPreferences.shared.setProductAnalyticsConsented(true)
         // A fresh install starts on Activity Card; the seeded profile would otherwise read as an existing install.
         SessionChatDisplayPreferences.shared.setTimelineStyle(.activityCard)
@@ -94,8 +106,10 @@ enum StoreScreenshotSeeder {
                 ]
                 : worktrees
             await store.setAddedWorktrees(serverBaseURL: saved.normalizedBaseURL, worktrees: seeded)
+            return nil
         } catch {
             DiagnosticLog.error(.connection, "store screenshot seed failed: \(error)")
+            return String(describing: error)
         }
     }
 
