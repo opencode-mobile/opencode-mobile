@@ -1,0 +1,46 @@
+name: String Checks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "android/app/src/main/**"
+      - "ios/OpenCode Mobile/OpenCode Mobile/**"
+      - "scripts/check-string-keys.mjs"
+      - "scripts/check-hardcoded-text.mjs"
+      - ".github/workflows/string-checks.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  strings:
+    # GitHub-hosted on purpose: plain Node scripts with no dependencies or secrets.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Fails when a key exists on one platform but not the other (#886).
+      - name: String key parity
+        run: node scripts/check-string-keys.mjs
+
+      # Warning only while existing text is extracted; becomes --strict once done (#886).
+      - name: Hardcoded text (warning only)
+        run: |
+          node scripts/check-hardcoded-text.mjs | tee hardcoded-text.txt
+          total=$(sed -n 's/^Total: //p' hardcoded-text.txt)
+          echo "::warning title=Hardcoded text::${total} user-facing literal(s) still in feature code"
+          {
+            echo '### Hardcoded text'
+            echo '```'
+            cat hardcoded-text.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

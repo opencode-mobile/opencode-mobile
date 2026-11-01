@@ -8,14 +8,14 @@ enum OpenCodeChoiceBadgeVariant: Hashable {
 }
 
 struct OpenCodeChoiceBadge: View {
-    let label: String
+    let label: OpenCodeText
     let selected: Bool
     let enabled: Bool
     let variant: OpenCodeChoiceBadgeVariant
     let action: () -> Void
 
     init(
-        label: String,
+        label: OpenCodeText,
         selected: Bool,
         enabled: Bool = true,
         variant: OpenCodeChoiceBadgeVariant = .standard,
@@ -39,7 +39,7 @@ struct OpenCodeChoiceBadge: View {
 
     private var standardBadge: some View {
         Button(action: action) {
-            Text(label)
+            Text(openCode: label)
                 .font(OpenCodeTypography.button)
                 .foregroundStyle(standardLabelColor)
                 .padding(.horizontal, 12)
@@ -58,7 +58,7 @@ struct OpenCodeChoiceBadge: View {
 
     private var glassBadge: some View {
         Button(action: action) {
-            Text(label)
+            Text(openCode: label)
                 .font(OpenCodeTypography.button)
                 .foregroundStyle(glassLabelColor)
                 .lineLimit(1)

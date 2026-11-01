@@ -160,7 +160,7 @@ struct ListItemGalleryView: View {
                 HStack(spacing: 8) {
                     ForEach(GallerySubtitleKind.allCases) { kind in
                         OpenCodeChoiceBadge(
-                            label: kind.label,
+                            label: .verbatim(kind.label),
                             selected: subtitleKind == kind,
                             action: { subtitleKind = kind }
                         )
@@ -176,7 +176,7 @@ struct ListItemGalleryView: View {
                     HStack(spacing: 8) {
                         ForEach(GalleryFooterKind.allCases) { kind in
                             OpenCodeChoiceBadge(
-                                label: kind.label,
+                                label: .verbatim(kind.label),
                                 selected: footerKind == kind,
                                 action: { footerKind = kind }
                             )
@@ -194,7 +194,7 @@ struct ListItemGalleryView: View {
                         HStack(spacing: 8) {
                             ForEach(GalleryStatusTone.allCases) { tone in
                                 OpenCodeChoiceBadge(
-                                    label: tone.label,
+                                    label: .verbatim(tone.label),
                                     selected: statusTone == tone,
                                     action: { statusTone = tone }
                                 )
@@ -221,7 +221,7 @@ struct ListItemGalleryView: View {
                 HStack(spacing: 8) {
                     ForEach(GalleryDecoratorKind.allCases) { kind in
                         OpenCodeChoiceBadge(
-                            label: kind.label,
+                            label: .verbatim(kind.label),
                             selected: decoratorKind == kind,
                             action: { decoratorKind = kind }
                         )
@@ -238,7 +238,7 @@ struct ListItemGalleryView: View {
                         HStack(spacing: 8) {
                             ForEach(LetterAccent.allCases, id: \.self) { accent in
                                 OpenCodeChoiceBadge(
-                                    label: String(describing: accent).capitalized,
+                                    label: .verbatim(String(describing: accent).capitalized),
                                     selected: letterAccent == accent,
                                     action: { letterAccent = accent }
                                 )
@@ -250,11 +250,11 @@ struct ListItemGalleryView: View {
 
             OpenCodeListItem(
                 title: "Material Design Icons integration plan",
-                subtitle: subtitle,
+                subtitle: .verbatim(ifPresent: subtitle),
                 subtitleSegments: subtitleSegments,
                 detailSegments: detailSegments,
                 status: status,
-                caption: caption,
+                caption: .verbatim(ifPresent: caption),
                 selected: selected,
                 enabled: enabled,
                 style: cardStyle ? .card : .plain,

@@ -13,11 +13,11 @@ enum OpenCodeInlineNoticeVariant {
 }
 
 struct OpenCodeInlineNoticeAction {
-    let title: String
+    let title: OpenCodeText
     let action: () -> Void
 
-    init(title: String, action: @escaping () -> Void) {
-        precondition(!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    init(title: OpenCodeText, action: @escaping () -> Void) {
+        precondition(!title.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         self.title = title
         self.action = action
     }
@@ -25,18 +25,18 @@ struct OpenCodeInlineNoticeAction {
 
 /// Tonal inline message. An optional trailing action sits on the same row.
 struct OpenCodeInlineNotice: View {
-    let message: String
+    let message: OpenCodeText
     var tone: OpenCodeInlineNoticeTone
     var variant: OpenCodeInlineNoticeVariant
     var action: OpenCodeInlineNoticeAction?
 
     init(
-        message: String,
+        message: OpenCodeText,
         tone: OpenCodeInlineNoticeTone = .neutral,
         variant: OpenCodeInlineNoticeVariant = .plain,
         action: OpenCodeInlineNoticeAction? = nil
     ) {
-        precondition(!message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        precondition(!message.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         self.message = message
         self.tone = tone
         self.variant = variant
@@ -45,7 +45,7 @@ struct OpenCodeInlineNotice: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Text(message)
+            Text(openCode: message)
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(foreground)
                 .frame(maxWidth: .infinity, alignment: .leading)

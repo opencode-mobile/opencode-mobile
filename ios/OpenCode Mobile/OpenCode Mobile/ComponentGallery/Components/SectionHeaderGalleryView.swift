@@ -20,7 +20,7 @@ struct SectionHeaderGalleryView: View {
                     trailing: .count(3)
                 )
                 OpenCodeListGroup(["SessionChatView.swift", "SessionChatViewModel.swift", "Timeline.swift"], id: \.self) { path in
-                    OpenCodeListItem(title: path)
+                    OpenCodeListItem(title: .verbatim(path))
                 }
                 .padding(.horizontal, 16)
             }

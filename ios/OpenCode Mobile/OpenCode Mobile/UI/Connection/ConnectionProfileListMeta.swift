@@ -11,7 +11,7 @@ enum ConnectionProfileListMeta {
             return OpenCodeListItemStatus(text: "Active", tone: .interactive)
         }
         if let serverProtocol = profile.serverProtocol {
-            return OpenCodeListItemStatus(text: serverProtocol.shortLabel, tone: .info)
+            return OpenCodeListItemStatus(text: .verbatim(serverProtocol.shortLabel), tone: .info)
         }
         return nil
     }

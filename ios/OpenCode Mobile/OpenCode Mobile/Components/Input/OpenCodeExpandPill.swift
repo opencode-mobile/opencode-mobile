@@ -4,17 +4,17 @@ import SwiftUI
 /// "3 worktrees ⌄" on a project. It is its own tap target inside the row; the
 /// chevron turns over while expanded. Disabled keeps it visible but inert.
 struct OpenCodeExpandPill: View {
-    let title: String
+    let title: OpenCodeText
     let isExpanded: Bool
     let enabled: Bool
-    let accessibilityLabel: String
+    let accessibilityLabel: OpenCodeText
     let action: () -> Void
 
     init(
-        title: String,
+        title: OpenCodeText,
         isExpanded: Bool,
         enabled: Bool = true,
-        accessibilityLabel: String,
+        accessibilityLabel: OpenCodeText,
         action: @escaping () -> Void
     ) {
         self.title = title
@@ -27,7 +27,7 @@ struct OpenCodeExpandPill: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: Self.iconSpacing) {
-                Text(title)
+                Text(openCode: title)
                     .font(OpenCodeTypography.caption.weight(.semibold))
                     .lineLimit(1)
                 OpenCodeIconImage(icon: .keyboardArrowDown, size: Self.iconSize)
@@ -45,8 +45,8 @@ struct OpenCodeExpandPill: View {
         .buttonStyle(.plain)
         .disabled(!enabled)
         .fixedSize()
-        .accessibilityLabel(accessibilityLabel)
-        .accessibilityValue(title)
+        .accessibilityLabel(openCode: accessibilityLabel)
+        .accessibilityValue(Text(openCode: title))
     }
 
     private static let iconSize: CGFloat = 14

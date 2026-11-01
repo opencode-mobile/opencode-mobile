@@ -143,8 +143,8 @@ private struct FeedbackSheetModifier: ViewModifier {
     }
 
     /// Listening while the orb owns the sheet; otherwise the page title. Close still dismisses.
-    private var title: String {
-        model?.uiState.sheetTitle ?? page.title
+    private var title: OpenCodeText {
+        .unlocalized(model?.uiState.sheetTitle ?? page.title)
     }
 
     /// Back arrow on the Hide parts and Diagnostic log pages.
@@ -294,7 +294,7 @@ private struct FeedbackSheetPinnedTop: View {
             HStack(spacing: 8) {
                 ForEach(FeedbackKind.allCases, id: \.self) { kind in
                     OpenCodeChoiceBadge(
-                        label: kind.label,
+                        label: .unlocalized(kind.label),
                         selected: model.uiState.kind == kind,
                         enabled: model.uiState.phase != .sending,
                         action: { model.selectKind(kind) }
@@ -322,11 +322,11 @@ private struct FeedbackSheetBody: View {
             } else {
                 if let error = model.uiState.errorBanner {
                     OpenCodeInlineNotice(
-                        message: error.message,
+                        message: .unlocalized(error.message),
                         tone: .error,
                         variant: .banner,
                         action: error.action.map { action in
-                            OpenCodeInlineNoticeAction(title: action.title) {
+                            OpenCodeInlineNoticeAction(title: .unlocalized(action.title)) {
                                 Task {
                                     switch action {
                                     case .tryAgain: await model.retry()
@@ -345,14 +345,14 @@ private struct FeedbackSheetBody: View {
                         // Dictation inserts at the cursor; the field doesn't report it, so keep it at the end.
                         set: { model.updateMessage($0, cursor: $0.count) }
                     ),
-                    hint: model.uiState.placeholder,
+                    hint: .unlocalized(model.uiState.placeholder),
                     enabled: !isSending,
                     minLines: 4,
                     maxLines: 8,
                     maxLength: FeedbackDraft.messageLimit
                 )
                 .accessibilityIdentifier("feedbackMessage")
-                OpenCodeInlineNotice(message: Self.privacyNote)
+                OpenCodeInlineNotice(message: .unlocalized(Self.privacyNote))
             }
         }
         .padding(.horizontal, 20)
@@ -410,7 +410,7 @@ private struct FeedbackSheetBody: View {
         VStack(spacing: 12) {
             OpenCodeEmptyState(
                 title: "Thanks — report sent",
-                message: model.uiState.kind.sentBody,
+                message: .unlocalized(model.uiState.kind.sentBody),
                 icon: .check,
                 fillsAvailableSpace: false
             )

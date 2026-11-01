@@ -11,6 +11,8 @@
     "themes:check": "node scripts/check-theme-presets.mjs",
     "icons:check": "node scripts/check-icons.mjs",
     "icons:audit": "node scripts/audit-icon-usage.mjs",
+    "strings:check": "node scripts/check-string-keys.mjs",
+    "strings:hardcoded": "node scripts/check-hardcoded-text.mjs",
     "api:fetch": "node scripts/fetch-openapi.mjs",
     "api:generate": "node scripts/generate-api-clients.mjs",
     "api:sync": "npm run api:fetch && npm run api:generate",

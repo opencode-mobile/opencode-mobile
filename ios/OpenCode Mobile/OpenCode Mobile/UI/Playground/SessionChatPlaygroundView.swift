@@ -110,7 +110,7 @@ struct SessionChatPlaygroundView: View {
         return OpenCodeTopBarOverflowHost(isPresented: $menuExpanded, entries: menuEntries(current: scenario.id)) {
             OpenCodeTopBar(
                 title: "Playground",
-                subtitle: scenario.id.title + (scenario.isScripted ? " · \(playbackLabel(player))" : ""),
+                subtitle: .verbatim(scenario.id.title + (scenario.isScripted ? " · \(playbackLabel(player))" : "")),
                 leading: .back(action: { dismiss() }),
                 actions: playbackActions(player, scripted: scenario.isScripted) + [
                     .icon(.moreVert, accessibilityLabel: "Scenarios", action: { menuExpanded = true }),
@@ -150,8 +150,8 @@ struct SessionChatPlaygroundView: View {
         ] + PlaygroundScenarioID.allCases.map { id in
             OpenCodeOverflowMenuEntry(
                 id: id.rawValue,
-                title: id.title,
-                subtitle: id.summary,
+                title: .verbatim(id.title),
+                subtitle: .verbatim(id.summary),
                 icon: id == current ? .check : nil,
                 accessibilityIdentifier: "playgroundScenario.\(id.rawValue)",
                 action: {

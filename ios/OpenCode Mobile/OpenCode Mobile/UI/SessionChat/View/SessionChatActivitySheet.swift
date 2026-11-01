@@ -79,7 +79,7 @@ private struct SessionChatActivitySheetModifier: ViewModifier {
                 get: { resolved != nil },
                 set: { presented in if !presented { onDismiss() } }
             ),
-            title: title,
+            title: .unlocalized(title),
             titleState: titleState,
             leadingAction: detail == nil ? nil : OpenCodeBottomSheetHeaderAction(
                 icon: .arrowBack,

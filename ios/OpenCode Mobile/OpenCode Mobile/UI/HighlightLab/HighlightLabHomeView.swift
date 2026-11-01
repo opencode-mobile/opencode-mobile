@@ -21,7 +21,7 @@ struct HighlightLabHomeView: View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: "Highlighting Lab",
-                subtitle: HighlightLabEnvironment.buildLabel,
+                subtitle: .verbatim(HighlightLabEnvironment.buildLabel),
                 leading: OpenCodeSplitPane.detailLeading(detailControl, back: { dismiss() }),
                 showDivider: true
             )
@@ -57,10 +57,10 @@ struct HighlightLabHomeView: View {
 
     private func entry(_ title: String, _ subtitle: String, icon: OpenCodeIcon, route: HighlightLabRoute) -> some View {
         OpenCodeListItem(
-            title: title,
-            subtitle: subtitle,
+            title: .verbatim(title),
+            subtitle: .verbatim(subtitle),
             style: .card,
-            startDecorator: .icon(icon, accessibilityLabel: title),
+            startDecorator: .icon(icon, accessibilityLabel: .verbatim(title)),
             accessory: .disclosure,
             action: {
                 if route == .benchmark, benchmarkModel == nil {
@@ -92,10 +92,10 @@ struct HighlightLabChipRow<ID: Hashable>: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     if let allLabel {
-                        OpenCodeChoiceBadge(label: allLabel, selected: selected == nil, enabled: enabled) { onSelect(nil) }
+                        OpenCodeChoiceBadge(label: .verbatim(allLabel), selected: selected == nil, enabled: enabled) { onSelect(nil) }
                     }
                     ForEach(options, id: \.id) { option in
-                        OpenCodeChoiceBadge(label: option.label, selected: selected == option.id, enabled: enabled) {
+                        OpenCodeChoiceBadge(label: .verbatim(option.label), selected: selected == option.id, enabled: enabled) {
                             onSelect(option.id)
                         }
                     }
@@ -140,7 +140,7 @@ struct HighlightLabTimingStrip: View {
     }
 
     private func cell(_ label: String, _ value: String?) -> some View {
-        OpenCodeKeyValueRow(label: label, value: value ?? "–", style: .stacked)
+        OpenCodeKeyValueRow(label: .verbatim(label), value: value ?? "–", style: .stacked)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

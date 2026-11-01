@@ -65,16 +65,16 @@ struct FeatureFlagsView: View {
     private func flagRow(_ flag: FeatureFlag) -> some View {
         let resolution = featureFlags.resolution(flag)
         OpenCodeListItem(
-            title: flag.title,
-            subtitle: Self.subtitle(for: flag, resolution: resolution),
+            title: .verbatim(flag.title),
+            subtitle: .verbatim(Self.subtitle(for: flag, resolution: resolution)),
             style: .card,
-            startDecorator: .icon(.settings, accessibilityLabel: flag.title),
+            startDecorator: .icon(.settings, accessibilityLabel: .verbatim(flag.title)),
             accessory: .toggle(
                 isOn: Binding(
                     get: { featureFlags.resolution(flag).value },
                     set: { featureFlags.setOverride(flag, $0) }
                 ),
-                accessibilityLabel: flag.title
+                accessibilityLabel: .verbatim(flag.title)
             )
         )
         .padding(.horizontal, 16)

@@ -19,9 +19,9 @@ private let optionCardSubtitleMaxLines = 3
 /// description and a preview: a bordered card with a radio, title, optional
 /// tag, subtitle, and a trailing preview.
 struct OpenCodeOptionCard: View {
-    let title: String
-    let subtitle: String?
-    let tag: String?
+    let title: OpenCodeText
+    let subtitle: OpenCodeText?
+    let tag: OpenCodeText?
     let tagTone: OpenCodeTagTone
     let preview: OpenCodeOptionCardPreview
     let selected: Bool
@@ -29,16 +29,16 @@ struct OpenCodeOptionCard: View {
     let action: () -> Void
 
     init(
-        title: String,
-        subtitle: String? = nil,
-        tag: String? = nil,
+        title: OpenCodeText,
+        subtitle: OpenCodeText? = nil,
+        tag: OpenCodeText? = nil,
         tagTone: OpenCodeTagTone = .neutral,
         preview: OpenCodeOptionCardPreview = .none,
         selected: Bool,
         enabled: Bool = true,
         action: @escaping () -> Void
     ) {
-        precondition(!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        precondition(!title.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         self.title = title
         self.subtitle = subtitle
         self.tag = tag
@@ -60,7 +60,7 @@ struct OpenCodeOptionCard: View {
                 VStack(alignment: .leading, spacing: 2) {
                     titleLine
                     if let subtitle, !subtitle.isEmpty {
-                        Text(subtitle)
+                        Text(openCode: subtitle)
                             .font(OpenCodeTypography.caption)
                             .foregroundStyle(OpenCodeColors.textWeak)
                             .lineLimit(optionCardSubtitleMaxLines)
@@ -85,7 +85,7 @@ struct OpenCodeOptionCard: View {
         .buttonStyle(OpenCodeSubtleControlPressStyle(shape: shape))
         .disabled(!enabled)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel([title, subtitle, tag].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", "))
+        .accessibilityLabel([title, subtitle, tag].compactMap { $0?.resolved }.filter { !$0.isEmpty }.joined(separator: ", "))
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
@@ -93,7 +93,7 @@ struct OpenCodeOptionCard: View {
     /// the title so the title never wraps to make room for it.
     @ViewBuilder
     private var titleLine: some View {
-        let titleText = Text(title)
+        let titleText = Text(openCode: title)
             .font(OpenCodeTypography.heading)
             .foregroundStyle(OpenCodeColors.textStrong)
             .multilineTextAlignment(.leading)

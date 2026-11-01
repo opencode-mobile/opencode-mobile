@@ -135,7 +135,7 @@ struct DiagnosticLogsView: View {
                         )
                         OpenCodeListItem(
                             title: "Export",
-                            subtitle: model.exportWindow.label,
+                            subtitle: .unlocalized(model.exportWindow.label),
                             style: .card,
                             action: { showExportWindowPicker = true }
                         )
@@ -154,21 +154,21 @@ struct DiagnosticLogsView: View {
                         if let oldest = model.oldestTimestampLabel, let newest = model.newestTimestampLabel {
                             OpenCodeListItem(
                                 title: "Range",
-                                subtitle: oldest == newest ? oldest : "\(oldest) → \(newest)",
+                                subtitle: .verbatim(oldest == newest ? oldest : "\(oldest) → \(newest)"),
                                 style: .card
                             )
                         }
                         if !model.areaCounts.isEmpty {
                             OpenCodeListItem(
                                 title: "Areas",
-                                subtitle: model.areaCounts
+                                subtitle: .verbatim(model.areaCounts
                                     .map { "\($0.area) \($0.count)" }
-                                    .joined(separator: " · "),
+                                    .joined(separator: " · ")),
                                 style: .card
                             )
                         }
                         if let shareError = model.shareError {
-                            OpenCodeInlineNotice(message: shareError, tone: .error)
+                            OpenCodeInlineNotice(message: .unlocalized(shareError), tone: .error)
                                 .padding(.top, 4)
                         }
                     }
@@ -224,7 +224,7 @@ struct DiagnosticLogsView: View {
         .openCodeBottomSheet(isPresented: $showExportWindowPicker, title: "Export window") {
             ForEach(DiagnosticLogExportWindow.allCases, id: \.self) { window in
                 OpenCodeBottomSheetEntry(
-                    title: window.label,
+                    title: .unlocalized(window.label),
                     selected: window == model.exportWindow,
                     action: {
                         model.setExportWindow(window)

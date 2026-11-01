@@ -1,19 +1,13 @@
 import SwiftUI
 
-func openCodeNonBlank(_ message: String?, fallback: String) -> String {
-    let trimmed = message?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    if trimmed.isEmpty { return fallback }
-    return message ?? fallback
-}
-
 struct OpenCodeEmptyStateAction {
-    let title: String
+    let title: OpenCodeText
     let action: () -> Void
 }
 
 struct OpenCodeEmptyState: View {
-    var title: String
-    var message: String
+    var title: OpenCodeText
+    var message: OpenCodeText
     var icon: OpenCodeIcon?
     var primaryAction: OpenCodeEmptyStateAction?
     var secondaryAction: OpenCodeEmptyStateAction?
@@ -21,15 +15,15 @@ struct OpenCodeEmptyState: View {
     var fillsAvailableSpace: Bool
 
     init(
-        title: String,
-        message: String,
+        title: OpenCodeText,
+        message: OpenCodeText,
         icon: OpenCodeIcon? = nil,
         fillsAvailableSpace: Bool = true,
         primaryAction: OpenCodeEmptyStateAction? = nil,
         secondaryAction: OpenCodeEmptyStateAction? = nil
     ) {
-        precondition(!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        precondition(!message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        precondition(!title.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        precondition(!message.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         self.title = title
         self.message = message
         self.icon = icon
@@ -45,12 +39,12 @@ struct OpenCodeEmptyState: View {
                     .foregroundStyle(OpenCodeColors.textBase)
                 Spacer().frame(height: 16)
             }
-            Text(title)
+            Text(openCode: title)
                 .font(OpenCodeTypography.heading)
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .multilineTextAlignment(.center)
             Spacer().frame(height: 12)
-            Text(message)
+            Text(openCode: message)
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .multilineTextAlignment(.center)

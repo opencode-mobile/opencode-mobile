@@ -73,7 +73,7 @@ struct SessionChatBackgroundWorkSheetModifier: ViewModifier {
         content
             .openCodeBottomSheet(
                 isPresented: presentedBinding,
-                title: Self.title,
+                title: .unlocalized(Self.title),
                 content: {
                     SessionChatBackgroundWorkList(
                         subagents: subagents,

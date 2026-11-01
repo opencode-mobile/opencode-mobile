@@ -52,7 +52,7 @@ struct SessionContextView: View {
         case let .error(message):
             OpenCodeEmptyState(
                 title: "Unable to load session context",
-                message: openCodeNonBlank(message, fallback: "The context didn't load."),
+                message: .verbatim(message, fallback: "The context didn't load."),
                 primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                     logAction(ProductAnalytics.Action.sessionContextRetry)
                     Task { await viewModel.load() }
@@ -62,7 +62,7 @@ struct SessionContextView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     if let refreshErrorMessage = viewModel.refreshErrorMessage {
-                        OpenCodeInlineNotice(message: refreshErrorMessage, tone: .neutral)
+                        OpenCodeInlineNotice(message: .unlocalized(refreshErrorMessage), tone: .neutral)
                     }
                     statsGrid(displayState.stats)
                     if !displayState.breakdown.isEmpty {
@@ -87,7 +87,7 @@ struct SessionContextView: View {
     private func statsGrid(_ stats: [SessionContextStatItem]) -> some View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 20) {
             ForEach(stats) { stat in
-                OpenCodeKeyValueRow(label: stat.label, value: stat.value, style: .stacked)
+                OpenCodeKeyValueRow(label: .unlocalized(stat.label), value: stat.value, style: .stacked)
             }
         }
     }

@@ -15,7 +15,7 @@ struct SessionTodoItemGalleryView: View {
             HStack(spacing: 8) {
                 ForEach(OpenCodeSessionTodoItemStatus.allCases, id: \.self) { option in
                     OpenCodeChoiceBadge(
-                        label: option.galleryLabel,
+                        label: .verbatim(option.galleryLabel),
                         selected: status == option
                     ) {
                         status = option

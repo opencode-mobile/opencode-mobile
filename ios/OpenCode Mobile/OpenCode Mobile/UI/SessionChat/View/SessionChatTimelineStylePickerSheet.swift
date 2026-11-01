@@ -71,8 +71,8 @@ struct SessionChatTimelineStylePickerModifier: ViewModifier {
             VStack(spacing: 8) {
                 ForEach(orderedStyles, id: \.self) { style in
                     OpenCodeOptionCard(
-                        title: style.title,
-                        subtitle: style.subtitle,
+                        title: .unlocalized(style.title),
+                        subtitle: .unlocalized(style.subtitle),
                         tag: tag(for: style),
                         tagTone: style == .activityCard ? .accent : .neutral,
                         preview: .illustration(style.pickerIllustration),
@@ -90,7 +90,7 @@ struct SessionChatTimelineStylePickerModifier: ViewModifier {
         styles.filter { $0 == .activityCard } + styles.filter { $0 != .activityCard }
     }
 
-    private func tag(for style: SessionChatTimelineStyle) -> String? {
+    private func tag(for style: SessionChatTimelineStyle) -> OpenCodeText? {
         if style == .activityCard { return "Recommended" }
         if style == currentStyle { return "Current" }
         return nil

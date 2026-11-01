@@ -77,7 +77,7 @@ struct SessionChatToolDetailSheetModifier: ViewModifier {
         content
             .openCodeBottomSheet(
                 isPresented: sheetPresentedBinding,
-                title: sheetTitle,
+                title: .unlocalized(sheetTitle),
                 pinnedTop: {
                     if let presentation = inspector {
                         ToolResultPinnedHeader(presentation: presentation)
@@ -228,7 +228,7 @@ private struct SessionChatToolDetailSheetActions: View {
                let label = target?.sheetActionLabel?.trimmingCharacters(in: .whitespacesAndNewlines),
                !label.isEmpty
             {
-                OpenCodeButton(variant: .fullWidthText(title: label)) {
+                OpenCodeButton(variant: .fullWidthText(title: .unlocalized(label))) {
                     switch action {
                     case .copyCaption:
                         UIPasteboard.general.string = target?.title
@@ -243,7 +243,7 @@ private struct SessionChatToolDetailSheetActions: View {
                !label.isEmpty,
                let url = ExternalLinkPolicy.openableURL(target?.sheetLink)
             {
-                OpenCodeButton(variant: .fullWidthText(title: label)) {
+                OpenCodeButton(variant: .fullWidthText(title: .unlocalized(label))) {
                     onOpenLink(url)
                 }
             }
