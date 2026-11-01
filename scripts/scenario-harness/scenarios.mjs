@@ -21,6 +21,27 @@ import { P1 } from "./scenarios-p1.mjs";
 import { P2 } from "./scenarios-p2.mjs";
 import { shell, path, say, CLEAN_DIST, CURRENCY_QUESTION } from "./scenario-kit.mjs";
 
+// Twelve options with descriptions: taller than a phone screen.
+const MANY_OPTIONS_QUESTION = {
+  header: "Currency source",
+  question: "Where should formatMoney get the currency from? Pick the source that fits how invoices are created today.",
+  multiple: false,
+  options: [
+    { label: "Argument", description: "Pass a currency code on every call" },
+    { label: "Invoice field", description: "Read invoice.currency, default USD" },
+    { label: "Env config", description: "Use ACME_CURRENCY for the whole app" },
+    { label: "Customer record", description: "Look up the billing currency on the customer" },
+    { label: "Account settings", description: "Use the account-wide default currency" },
+    { label: "Locale", description: "Derive the currency from the user's locale" },
+    { label: "Price list", description: "Take the currency from the active price list" },
+    { label: "Tax region", description: "Map the tax region to its local currency" },
+    { label: "Payment provider", description: "Ask the payment provider which currency it settles in" },
+    { label: "Feature flag", description: "Roll out per-tenant currencies behind a flag" },
+    { label: "Request header", description: "Read an X-Currency header on API requests" },
+    { label: "Hard-code USD", description: "Keep USD everywhere for now and revisit later" },
+  ],
+};
+
 const LONG_MARKDOWN = `## How formatting works
 
 \`formatMoney(cents, currency)\` in \`src/format.ts\` divides by 100 and calls \`toFixed(2)\`. Three things go wrong:
@@ -197,6 +218,20 @@ const P0 = [
       },
       { steps: [say("Got it. I'll go with that and fall back to `USD`.")] },
     ],
+    variants: {
+      // More options than fit on a phone screen: the card must scroll and keep Submit reachable.
+      "many-options": {
+        modelCalls: [
+          {
+            steps: [
+              say("Before I change the API, one question:"),
+              { op: "tool", name: "question", input: { questions: [MANY_OPTIONS_QUESTION] } },
+            ],
+          },
+          { steps: [say("Got it. I'll go with that and fall back to `USD`.")] },
+        ],
+      },
+    },
   },
   {
     id: "todo-list-progress",

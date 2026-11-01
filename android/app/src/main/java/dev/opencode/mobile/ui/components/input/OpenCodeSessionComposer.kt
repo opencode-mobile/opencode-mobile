@@ -20,8 +20,11 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -31,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -66,6 +70,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -84,6 +89,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.mobile.domain.message.FollowUpDelivery
@@ -1310,7 +1316,12 @@ private fun QuestionRequestContent(
         )
     state.attribution?.let { RequestAttributionRow(it, onAction) }
     Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = questionBodyMaxHeight())
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1463,6 +1474,22 @@ private fun QuestionRequestContent(
     }
     RequestPageDots(position = state.requestPosition, count = state.requestCount)
 }
+
+/**
+ * The question body scrolls inside half of the window above the keyboard, so long option lists
+ * keep the header in view and the action row below it reachable.
+ */
+@Composable
+private fun questionBodyMaxHeight(): Dp {
+    val density = LocalDensity.current
+    val windowHeight = LocalWindowInfo.current.containerSize.height
+    val imeHeight = WindowInsets.ime.getBottom(density)
+    val visible = with(density) { (windowHeight - imeHeight).coerceAtLeast(0).toDp() }
+    return (visible * QuestionBodyMaxHeightFraction).coerceAtLeast(QuestionBodyMinHeight)
+}
+
+private const val QuestionBodyMaxHeightFraction = 0.5f
+private val QuestionBodyMinHeight = 160.dp
 
 private fun questionSelectionDecorator(selected: Boolean): StartDecorator =
     StartDecorator.Icon(

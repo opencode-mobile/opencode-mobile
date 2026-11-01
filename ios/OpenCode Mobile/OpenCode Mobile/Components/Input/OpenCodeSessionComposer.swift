@@ -856,19 +856,10 @@ struct OpenCodeSessionComposer: View {
             .textSelection(.enabled)
     }
 
-    @ViewBuilder
-    private func questionRequestContent(_ question: OpenCodeSessionComposerState.Question) -> some View {
-        let showBack = question.questionIndex > 0
-        let showNext = question.questionIndex < question.questionCount - 1
-        let selectionHint = Self.questionSelectionHint(
-            multiple: question.multiple,
-            minSelections: question.minSelections,
-            maxSelections: question.maxSelections
-        )
-
-        if let attribution = question.attribution {
-            requestAttributionRow(attribution)
-        }
+    private func questionBody(
+        _ question: OpenCodeSessionComposerState.Question,
+        selectionHint: String
+    ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(question.header.isEmpty ? "Question" : question.header)
@@ -965,6 +956,28 @@ struct OpenCodeSessionComposer: View {
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 4)
+    }
+
+    @ViewBuilder
+    private func questionRequestContent(_ question: OpenCodeSessionComposerState.Question) -> some View {
+        let showBack = question.questionIndex > 0
+        let showNext = question.questionIndex < question.questionCount - 1
+        let selectionHint = Self.questionSelectionHint(
+            multiple: question.multiple,
+            minSelections: question.minSelections,
+            maxSelections: question.maxSelections
+        )
+
+        if let attribution = question.attribution {
+            requestAttributionRow(attribution)
+        }
+        // A long question scrolls inside its card so the header and the action row stay on screen.
+        QuestionBodyHeightLayout {
+            ScrollView(.vertical) {
+                questionBody(question, selectionHint: selectionHint)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
 
         HStack {
             OpenCodeButton(
@@ -1350,4 +1363,35 @@ private struct QuestionCustomTextField: View {
     )
     .openCodeTheme()
     .environment(\.colorScheme, .dark)
+}
+
+/// Sizes the question body to its content, up to half the height the composer is offered
+/// (the space above the keyboard), so long option lists scroll instead of leaving the screen.
+private struct QuestionBodyHeightLayout: Layout {
+    private static let maxHeightFraction: CGFloat = 0.5
+    private static let fallbackMaxHeight: CGFloat = 360
+    private static let minHeight: CGFloat = 160
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let body = subviews.first else { return .zero }
+        let width = proposal.width
+        let contentHeight = body.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        let cap: CGFloat
+        if let offered = proposal.height, offered.isFinite {
+            cap = max(offered * Self.maxHeightFraction, Self.minHeight)
+        } else {
+            cap = Self.fallbackMaxHeight
+        }
+        let height = min(contentHeight, cap)
+        let resolvedWidth = width ?? body.sizeThatFits(ProposedViewSize(width: nil, height: height)).width
+        return CGSize(width: resolvedWidth, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(
+            at: bounds.origin,
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: bounds.width, height: bounds.height)
+        )
+    }
 }
