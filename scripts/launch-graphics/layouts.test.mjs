@@ -40,6 +40,18 @@ test("text x/y move the text block and leave the devices alone", () => {
   assert.deepEqual(b.devices, a.devices);
 });
 
+test("text x/y on band text leave the device area alone", () => {
+  for (const position of ["top", "bottom"]) {
+    const base = { format: "1600x900", composition: "pair", moment: "code", text: { position } };
+    const a = computeLayout(normalize(base));
+    const b = computeLayout(normalize({ ...base, text: { position, x: 40, y: 60 } }));
+    assert.ok(a.text.band, `${position} is band text`);
+    assert.equal(b.text.box.y, a.text.box.y + 60);
+    assert.deepEqual(b.area, a.area, `${position}: device area moved`);
+    assert.deepEqual(b.devices, a.devices, `${position}: devices moved`);
+  }
+});
+
 test("layout edits survive a moment switch", () => {
   const base = { format: "1600x900", composition: "pair", formats: { "1600x900": { devices: { iphone: { x: 40, scale: 0.9, anchor: "bottom" } } } } };
   const a = computeLayout(normalize({ ...base, moment: "approval" }));
