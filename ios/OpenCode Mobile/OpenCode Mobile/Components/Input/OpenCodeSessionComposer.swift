@@ -461,12 +461,12 @@ struct OpenCodeSessionComposer: View {
                     OpenCodeButton(
                         variant: .iconCircle(
                             prompt.followUpDelivery == .steer && !prompt.sideQuestionMode ? .arrowWarmUp : .arrowUpward,
-                            accessibilityLabel: Self.sendLabel(
+                            accessibilityLabel: .unlocalized(Self.sendLabel(
                                 followUpDelivery: prompt.followUpDelivery,
                                 hasActiveWork: prompt.showStop,
                                 shellMode: prompt.shellMode,
                                 sideQuestionMode: prompt.sideQuestionMode
-                            )
+                            ))
                         ),
                         enabled: prompt.sendEnabled,
                         // A side question is not a prompt, so its Send does not look like one.
@@ -608,20 +608,20 @@ struct OpenCodeSessionComposer: View {
                     .accessibilityHint("Leave shell mode")
                 } else {
                     OpenCodeChoiceBadge(
-                        label: prompt.selectedModelLabel,
+                        label: .verbatim(prompt.selectedModelLabel),
                         selected: false,
                         variant: .glass,
                         action: { onAction(.selectModel) }
                     )
                     OpenCodeChoiceBadge(
-                        label: prompt.selectedModeLabel,
+                        label: .verbatim(prompt.selectedModeLabel),
                         selected: false,
                         variant: .glass,
                         action: { onAction(.selectMode) }
                     )
                     if prompt.showVariant {
                         OpenCodeChoiceBadge(
-                            label: prompt.selectedVariantLabel,
+                            label: .unlocalized(prompt.selectedVariantLabel),
                             selected: false,
                             variant: .glass,
                             action: { onAction(.selectVariant) }
@@ -904,8 +904,8 @@ struct OpenCodeSessionComposer: View {
                 ForEach(question.options) { option in
                     let optionSelected = question.selectedLabels.contains(option.label)
                     OpenCodeListItem(
-                        title: option.label,
-                        subtitle: option.description.isEmpty ? nil : option.description,
+                        title: .verbatim(option.label),
+                        subtitle: .verbatim(ifPresent: option.description.isEmpty ? nil : option.description),
                         selected: optionSelected,
                         enabled: !question.submitting,
                         style: .card,
@@ -925,9 +925,9 @@ struct OpenCodeSessionComposer: View {
                 if question.customAllowed {
                     OpenCodeListItem(
                         title: "Type your own answer",
-                        subtitle: question.customSelected || question.customText.isEmpty
+                        subtitle: .verbatim(ifPresent: question.customSelected || question.customText.isEmpty
                             ? nil
-                            : question.customText,
+                            : question.customText),
                         selected: question.customSelected,
                         enabled: !question.submitting,
                         style: .card,

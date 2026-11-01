@@ -38,8 +38,8 @@ struct SessionChatToolGroupView: View {
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: target.title,
-                subtitle: target.subtitle,
+                title: .unlocalized(target.title),
+                subtitle: .unlocalized(ifPresent: target.subtitle),
                 leading: .back(action: {
                     ProductAnalytics.logUserAction(
                         screenId: ProductAnalytics.Screen.sessionToolGroup,

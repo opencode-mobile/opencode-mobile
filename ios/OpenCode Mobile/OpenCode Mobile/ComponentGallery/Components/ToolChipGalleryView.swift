@@ -51,7 +51,7 @@ struct ToolChipGalleryView: View {
                 OpenCodeChipFlowLayout(spacing: 8, lineSpacing: 8) {
                     ForEach(VariantChoice.allCases) { choice in
                         OpenCodeChoiceBadge(
-                            label: choice.label,
+                            label: .verbatim(choice.label),
                             selected: variant == choice,
                             action: { variant = choice }
                         )
@@ -66,7 +66,7 @@ struct ToolChipGalleryView: View {
                 HStack(spacing: 8) {
                     ForEach(OpenCodeToolChipStatus.allCases, id: \.self) { value in
                         OpenCodeChoiceBadge(
-                            label: value.rawValue.capitalized,
+                            label: .verbatim(value.rawValue.capitalized),
                             selected: status == value,
                             action: { status = value }
                         )

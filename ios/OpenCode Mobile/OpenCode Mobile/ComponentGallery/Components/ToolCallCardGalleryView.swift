@@ -43,7 +43,7 @@ struct ToolCallCardGalleryView: View {
                 HStack(spacing: 8) {
                     ForEach(OpenCodeToolCallCardStatus.allCases, id: \.self) { value in
                         OpenCodeChoiceBadge(
-                            label: value.rawValue.capitalized,
+                            label: .verbatim(value.rawValue.capitalized),
                             selected: status == value,
                             action: {
                                 status = value

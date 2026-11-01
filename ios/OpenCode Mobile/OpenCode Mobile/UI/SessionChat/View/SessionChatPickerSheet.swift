@@ -30,7 +30,7 @@ struct SessionChatPickerSheetModifier: ViewModifier {
         content
             .openCodeBottomSheet(
                 isPresented: pickerPresentedBinding,
-                title: modelPickerSheetTitle,
+                title: .unlocalized(modelPickerSheetTitle),
                 leadingAction: modelPickerHeaderLeadingAction,
                 scrollTargetID: modelPickerScrollTargetID,
                 height: showsModelFilter ? .half : .fitContent,
@@ -152,7 +152,7 @@ struct SessionChatPickerSheetModifier: ViewModifier {
             } else {
                 ForEach(filtered) { model in
                     OpenCodeBottomSheetEntry(
-                        title: model.modelLabel,
+                        title: .verbatim(model.modelLabel),
                         selected: model == composer.selectedModel?.option,
                         action: {
                             onSelectModel(model)
@@ -167,7 +167,7 @@ struct SessionChatPickerSheetModifier: ViewModifier {
         } else {
             ForEach(modelSelectionCatalog.providers) { provider in
                 OpenCodeBottomSheetEntry(
-                    title: provider.label,
+                    title: .verbatim(provider.label),
                     selected: provider.id == composer.selectedModel?.option.providerID,
                     action: {
                         ProductAnalytics.logUserAction(
@@ -190,7 +190,7 @@ struct SessionChatPickerSheetModifier: ViewModifier {
         case .mode:
             ForEach(composer.selectableAgents) { agent in
                 OpenCodeBottomSheetEntry(
-                    title: agent.displayName,
+                    title: .verbatim(agent.displayName),
                     selected: agent.id.compare(composer.selectedMode, options: .caseInsensitive) == .orderedSame,
                     action: {
                         onSelectMode(agent.id)
@@ -201,7 +201,7 @@ struct SessionChatPickerSheetModifier: ViewModifier {
         case .variant:
             ForEach(composer.variantOptions, id: \.self) { level in
                 OpenCodeBottomSheetEntry(
-                    title: TitleCaseIdentifier.displayName(for: level),
+                    title: .verbatim(TitleCaseIdentifier.displayName(for: level)),
                     selected: level.compare(
                         composer.selectedVariant ?? ModelSelection.defaultVariantLabel,
                         options: .caseInsensitive

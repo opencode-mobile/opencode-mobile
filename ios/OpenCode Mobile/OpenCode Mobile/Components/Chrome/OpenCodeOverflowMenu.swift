@@ -17,24 +17,24 @@ private let overflowMenuRailItemSpacing: CGFloat = 8
 
 struct OpenCodeOverflowMenuEntry: Identifiable {
     let id: String
-    let title: String
+    let title: OpenCodeText
     /// Secondary line under the title, such as why a disabled entry is unavailable.
-    let subtitle: String?
+    let subtitle: OpenCodeText?
     let icon: OpenCodeIcon?
     let enabled: Bool
     let destructive: Bool
-    let accessibilityLabel: String?
+    let accessibilityLabel: OpenCodeText?
     let accessibilityIdentifier: String?
     let action: () -> Void
 
     init(
         id: String = UUID().uuidString,
-        title: String,
-        subtitle: String? = nil,
+        title: OpenCodeText,
+        subtitle: OpenCodeText? = nil,
         icon: OpenCodeIcon?,
         enabled: Bool = true,
         destructive: Bool = false,
-        accessibilityLabel: String? = nil,
+        accessibilityLabel: OpenCodeText? = nil,
         accessibilityIdentifier: String? = nil,
         action: @escaping () -> Void
     ) {
@@ -51,9 +51,9 @@ struct OpenCodeOverflowMenuEntry: Identifiable {
 
     /// Spoken label: the title (or override), then the subtitle.
     var spokenLabel: String {
-        let label = accessibilityLabel ?? title
+        let label = (accessibilityLabel ?? title).resolved
         guard let subtitle else { return label }
-        return "\(label), \(subtitle)"
+        return "\(label), \(subtitle.resolved)"
     }
 }
 
@@ -339,12 +339,12 @@ private struct OpenCodeOverflowMenuPanel: View {
                             .accessibilityHidden(true)
                         }
                         VStack(alignment: .leading, spacing: overflowMenuEntrySubtitleSpacing) {
-                            Text(entry.title)
+                            Text(openCode: entry.title)
                                 .font(OpenCodeTypography.body)
                                 .foregroundStyle(overflowEntryTextColor(entry))
                                 .lineLimit(1)
                             if let subtitle = entry.subtitle {
-                                Text(subtitle)
+                                Text(openCode: subtitle)
                                     .font(OpenCodeTypography.caption)
                                     .foregroundStyle(OpenCodeColors.textWeak)
                                     .lineLimit(2)

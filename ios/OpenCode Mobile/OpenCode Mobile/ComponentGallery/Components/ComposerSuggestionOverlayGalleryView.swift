@@ -29,7 +29,7 @@ struct ComposerSuggestionOverlayGalleryView: View {
             HStack(spacing: 8) {
                 ForEach(ComposerSuggestionOverlayGalleryScenario.allCases) { option in
                     OpenCodeChoiceBadge(
-                        label: option.label,
+                        label: .verbatim(option.label),
                         selected: scenario == option,
                         action: { scenario = option }
                     )

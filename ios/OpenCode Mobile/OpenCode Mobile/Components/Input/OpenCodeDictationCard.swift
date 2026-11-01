@@ -244,7 +244,7 @@ struct OpenCodeDictationCardActions: View {
                 .accessibilityLabel("Insert transcript")
             case let .unavailable(reason):
                 OpenCodeButton(
-                    variant: .fullWidthText(title: reason.actionTitle),
+                    variant: .fullWidthText(title: .unlocalized(reason.actionTitle)),
                     enabled: reason.actionEnabled,
                     action: onUnavailableAction
                 )

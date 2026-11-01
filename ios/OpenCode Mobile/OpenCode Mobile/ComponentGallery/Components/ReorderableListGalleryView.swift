@@ -60,8 +60,8 @@ struct ReorderableListGalleryView: View {
                 supportsContextAction: { !$0.isAll }
             ) { item in
                 OpenCodeListItem(
-                    title: item.title,
-                    subtitle: item.path,
+                    title: .verbatim(item.title),
+                    subtitle: .verbatim(item.path),
                     startDecorator: item.isAll
                         ? .iconCircle(.widgets, accessibilityLabel: nil)
                         : .letter(item.title.first ?? "?", item.accent)

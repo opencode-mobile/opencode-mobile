@@ -306,7 +306,7 @@ private struct DecoratorControls: View {
             HStack(spacing: 8) {
                 ForEach(GalleryBottomSheetDecoratorKind.allCases) { kind in
                     OpenCodeChoiceBadge(
-                        label: kind.label,
+                        label: .verbatim(kind.label),
                         selected: selected == kind,
                         action: { onSelect(kind) }
                     )
@@ -331,7 +331,7 @@ private struct GalleryChoiceRow<Value: Equatable>: View {
             HStack(spacing: 8) {
                 ForEach(options.indices, id: \.self) { index in
                     OpenCodeChoiceBadge(
-                        label: options[index].label,
+                        label: .verbatim(options[index].label),
                         selected: options[index].value == selected,
                         action: { onSelect(options[index].value) }
                     )

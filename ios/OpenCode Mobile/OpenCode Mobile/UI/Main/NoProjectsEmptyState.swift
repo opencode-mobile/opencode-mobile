@@ -8,8 +8,8 @@ enum NoProjectsEmptyCopy {
 struct NoProjectsEmptyState: View {
     var body: some View {
         OpenCodeEmptyState(
-            title: NoProjectsEmptyCopy.title,
-            message: NoProjectsEmptyCopy.message,
+            title: .unlocalized(NoProjectsEmptyCopy.title),
+            message: .unlocalized(NoProjectsEmptyCopy.message),
             icon: .createNewFolder
         )
     }

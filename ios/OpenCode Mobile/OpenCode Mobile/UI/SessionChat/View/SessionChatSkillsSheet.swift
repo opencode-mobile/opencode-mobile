@@ -17,8 +17,8 @@ struct SessionChatSkillsSheetModifier: ViewModifier {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(target?.skills ?? []) { skill in
                             OpenCodeListItem(
-                                title: skill.label,
-                                subtitle: skill.directory,
+                                title: .verbatim(skill.label),
+                                subtitle: .verbatim(ifPresent: skill.directory),
                                 status: skill.listItemStatus
                             )
                         }

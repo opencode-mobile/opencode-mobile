@@ -504,10 +504,10 @@ struct SessionList<EmptyContent: View>: View {
             } else if let worktreeClear {
                 ScrollView {
                     OpenCodeEmptyState(
-                        title: SessionListWorktreeEmptyCopy.title,
-                        message: worktreeClear.message,
+                        title: .unlocalized(SessionListWorktreeEmptyCopy.title),
+                        message: .unlocalized(worktreeClear.message),
                         icon: .callSplit,
-                        primaryAction: OpenCodeEmptyStateAction(title: SessionListWorktreeEmptyCopy.action) {
+                        primaryAction: OpenCodeEmptyStateAction(title: .unlocalized(SessionListWorktreeEmptyCopy.action)) {
                             onFilterSelected(worktreeClear.filterId)
                         }
                     )
@@ -564,7 +564,7 @@ struct SessionList<EmptyContent: View>: View {
         switch load {
         case let .loading(isSlow):
             VStack(alignment: .leading, spacing: 0) {
-                OpenCodeSectionHeader(title: tab.title)
+                OpenCodeSectionHeader(title: .unlocalized(tab.title))
                 OpenCodeSessionListSkeleton(
                     accent: tab.accent,
                     caption: isSlow ? SessionListScopeLoad.slowListCaption : nil
@@ -572,11 +572,11 @@ struct SessionList<EmptyContent: View>: View {
             }
         case .failed:
             OpenCodeEmptyState(
-                title: SessionListScopeLoad.failedListTitle(projectTitle: tab.title),
-                message: SessionListScopeLoad.failedListMessage,
+                title: .unlocalized(SessionListScopeLoad.failedListTitle(projectTitle: tab.title)),
+                message: .unlocalized(SessionListScopeLoad.failedListMessage),
                 fillsAvailableSpace: false,
                 primaryAction: onRetryScopeLoad.map { retry in
-                    OpenCodeEmptyStateAction(title: SessionListScopeLoad.retryTitle) { retry(tab.id) }
+                    OpenCodeEmptyStateAction(title: .unlocalized(SessionListScopeLoad.retryTitle)) { retry(tab.id) }
                 }
             )
             .padding(.top, 64)
@@ -595,7 +595,7 @@ struct SessionList<EmptyContent: View>: View {
 
     @ViewBuilder
     private func dayOrWeekSection(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
-        OpenCodeSectionHeader(title: section.title)
+        OpenCodeSectionHeader(title: .unlocalized(section.title))
 
         ForEach(section.items, id: \.id) { session in
             sessionRow(session, showStatusDot: false)
@@ -630,11 +630,11 @@ struct SessionList<EmptyContent: View>: View {
         let row = session.compactRow
         return OpenCodeListItem(
             variant: .compact,
-            title: session.title,
+            title: .verbatim(session.title),
             emphasized: row.emphasized,
             path: row.path,
             status: row.status,
-            caption: session.caption.isEmpty ? nil : session.caption,
+            caption: .unlocalized(ifPresent: session.caption.isEmpty ? nil : session.caption),
             selected: selectedSessionId == session.id,
             startDecorator: .compactLetter(
                 session.letter,
@@ -650,17 +650,17 @@ struct SessionList<EmptyContent: View>: View {
     private func classicSessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
         let lines = session.locationLines
         return OpenCodeListItem(
-            title: session.title,
-            subtitle: lines == nil
+            title: .verbatim(session.title),
+            subtitle: .verbatim(ifPresent: lines == nil
                 ? compactHomePath(
                     session.subtitle,
                     hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
                 )
-                : nil,
+                : nil),
             subtitleSegments: lines?.subtitle,
             detailSegments: lines?.detail,
             status: listItemStatus(session.status, isStale: session.statusIsStale),
-            caption: session.caption.isEmpty ? nil : session.caption,
+            caption: .unlocalized(ifPresent: session.caption.isEmpty ? nil : session.caption),
             selected: selectedSessionId == session.id,
             startDecorator: .letter(
                 session.letter,

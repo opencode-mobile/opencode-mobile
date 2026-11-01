@@ -1,4 +1,22 @@
 <resources>
     <string name="app_name">OpenCode Mobile</string>
     <string name="bottom_sheet_close">Close</string>
+
+    <!-- Keys match iOS Localizable.xcstrings: iOS `area.name` is Android `area_name`.
+         scripts/check-string-keys.mjs checks both sides. -->
+
+    <string name="common_cancel">Cancel</string>
+    <string name="common_remove">Remove</string>
+
+    <string name="servers_title">Servers</string>
+    <plurals name="servers_profile_count">
+        <item quantity="one">%1$d Connection Profile</item>
+        <item quantity="other">%1$d Connection Profiles</item>
+    </plurals>
+    <string name="servers_saved">Saved</string>
+    <string name="servers_add">Add server</string>
+    <string name="servers_remove_profile">Remove %1$s</string>
+    <string name="servers_remove_dialog_title">Remove server?</string>
+    <string name="servers_remove_dialog_title_named">Remove “%1$s”?</string>
+    <string name="servers_remove_dialog_message">This device forgets the Connection Profile. Sessions stay on that server. If it’s the active server, you’ll pick another — or land on Connect if none remain.</string>
 </resources>

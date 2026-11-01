@@ -11,10 +11,10 @@ struct SessionListWorktreeEmptySnapshotHost: View {
 
     var body: some View {
         OpenCodeEmptyState(
-            title: SessionListWorktreeEmptyCopy.title,
-            message: message,
+            title: .verbatim(SessionListWorktreeEmptyCopy.title),
+            message: .verbatim(message),
             icon: .callSplit,
-            primaryAction: OpenCodeEmptyStateAction(title: SessionListWorktreeEmptyCopy.action) {}
+            primaryAction: OpenCodeEmptyStateAction(title: .verbatim(SessionListWorktreeEmptyCopy.action)) {}
         )
         .frame(maxWidth: .infinity, minHeight: 420)
         .background(OpenCodeColors.backgroundBase)

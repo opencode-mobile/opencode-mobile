@@ -26,7 +26,7 @@ struct ConnectionProfileListMetaTests {
     @Test func otherWithProtocol_compactInfoPill() {
         let profile = profile(api: .v1)
         #expect(ConnectionProfileListMeta.caption(profile, isActive: false) == nil)
-        #expect(ConnectionProfileListMeta.status(profile, isActive: false)?.text == "v1")
+        #expect(ConnectionProfileListMeta.status(profile, isActive: false)?.text == .verbatim("v1"))
     }
 
     @Test func unknownProtocol_omitsApiIndicator() {

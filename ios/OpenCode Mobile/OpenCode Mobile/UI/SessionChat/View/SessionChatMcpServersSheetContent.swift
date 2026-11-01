@@ -18,7 +18,7 @@ struct SessionChatMcpServersSheetContent: View {
         } else if let errorMessage, servers.isEmpty {
             OpenCodeEmptyState(
                 title: "Couldn't load MCP servers",
-                message: openCodeNonBlank(errorMessage, fallback: "The MCP server list didn't load."),
+                message: .verbatim(errorMessage, fallback: "The MCP server list didn't load."),
                 icon: .plug
             )
         } else if servers.isEmpty {
@@ -29,12 +29,12 @@ struct SessionChatMcpServersSheetContent: View {
             )
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                OpenCodeSectionHeader(title: summary.headline, variant: .plain)
+                OpenCodeSectionHeader(title: .unlocalized(summary.headline), variant: .plain)
                 ForEach(servers, id: \.name) { server in
                     OpenCodeListItem(
-                        title: server.name,
-                        subtitle: server.errorMessage,
-                        status: OpenCodeListItemStatus(text: server.status.label, tone: server.status.listItemTone)
+                        title: .verbatim(server.name),
+                        subtitle: .verbatim(ifPresent: server.errorMessage),
+                        status: OpenCodeListItemStatus(text: .unlocalized(server.status.label), tone: server.status.listItemTone)
                     )
                 }
             }

@@ -123,7 +123,7 @@ struct ChangesView: View {
             OpenCodeTopBarOverflowHost(isPresented: $sourceMenuPresented, entries: sourceMenuEntries) {
                 OpenCodeTopBar(
                     title: "Changes",
-                    subtitle: viewModel.state.selectedSource.displayName,
+                    subtitle: .unlocalized(viewModel.state.selectedSource.displayName),
                     leading: .back(action: exitChanges),
                     actions: [
                         .icon(.moreVert, accessibilityLabel: "Choose change source") {
@@ -180,13 +180,13 @@ struct ChangesView: View {
         case .noTurn:
             refreshableMessage("No completed turn", detail: "Send a prompt and wait for it to complete, then try again.")
         case .noChanges:
-            refreshableMessage(viewModel.state.selectedSource.emptyTitle, detail: viewModel.state.selectedSource.emptyDetail)
+            refreshableMessage(.unlocalized(viewModel.state.selectedSource.emptyTitle), detail: .unlocalized(viewModel.state.selectedSource.emptyDetail))
         case let .content(changeSet):
             changedFiles(changeSet, selectedPath: selectedPath, onOpenFile: onOpenFile)
         case let .error(error):
             OpenCodeEmptyState(
                 title: "Unable to load changes",
-                message: openCodeNonBlank(error, fallback: "The changes didn't load."),
+                message: .verbatim(error, fallback: "The changes didn't load."),
                 primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                     logAction(ProductAnalytics.Action.changesRetry)
                     Task { await viewModel.retry() }
@@ -200,9 +200,9 @@ struct ChangesView: View {
             let selected = source == viewModel.state.selectedSource
             return OpenCodeOverflowMenuEntry(
                 id: source.rawValue,
-                title: source.displayName,
+                title: .unlocalized(source.displayName),
                 icon: selected ? .check : nil,
-                accessibilityLabel: selected ? "\(source.displayName), selected" : source.displayName,
+                accessibilityLabel: .unlocalized(selected ? "\(source.displayName), selected" : source.displayName),
                 action: {
                     splitSelection = nil
                     pushedPath = nil
@@ -253,7 +253,7 @@ struct ChangesView: View {
                     ForEach(changeSet.fileGroups) { group in
                         VStack(alignment: .leading, spacing: 8) {
                             OpenCodeSectionHeader(
-                                title: group.directory,
+                                title: .verbatim(group.directory),
                                 variant: .plain,
                                 trailing: .count(group.files.count),
                                 inset: .flush
@@ -312,7 +312,7 @@ struct ChangesView: View {
         selectedPath: String?,
         onOpenFile: @escaping (String) -> Void
     ) -> some View {
-        OpenCodeListItem(title: changedFileName(file.path), selected: file.path == selectedPath, accessory: .disclosure, action: {
+        OpenCodeListItem(title: .verbatim(changedFileName(file.path)), selected: file.path == selectedPath, accessory: .disclosure, action: {
             logAction(ProductAnalytics.Action.changesOpenFile)
             onOpenFile(file.path)
         },         trailing: {
@@ -328,11 +328,11 @@ struct ChangesView: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private func message(_ title: String, detail: String) -> some View {
+    private func message(_ title: OpenCodeText, detail: OpenCodeText) -> some View {
         OpenCodeEmptyState(title: title, message: detail)
     }
 
-    private func refreshableMessage(_ title: String, detail: String) -> some View {
+    private func refreshableMessage(_ title: OpenCodeText, detail: OpenCodeText) -> some View {
         ScrollView {
             message(title, detail: detail)
                 .frame(minHeight: 360)
@@ -375,7 +375,7 @@ private struct FileViewerView: View {
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: state.file.path,
+                title: .verbatim(state.file.path),
                 leading: OpenCodeSplitPane.detailLeading(detailControl, back: {
                     Self.logAction(ProductAnalytics.Action.fileViewerBack)
                     dismiss()

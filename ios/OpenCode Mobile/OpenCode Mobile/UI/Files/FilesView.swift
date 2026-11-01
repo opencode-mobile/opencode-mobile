@@ -95,7 +95,7 @@ struct FilesView: View {
             OpenCodeTopBarOverflowHost(isPresented: $treeMenuPresented, entries: treeMenuEntries) {
                 OpenCodeTopBar(
                     title: "Files",
-                    subtitle: viewModel.state.projectName,
+                    subtitle: .verbatim(viewModel.state.projectName),
                     leading: .back(action: exitFiles),
                     actions: [
                         .icon(.moreVert, accessibilityLabel: "More options") {
@@ -344,8 +344,8 @@ private struct FilesTabbedViewer: View {
                 entries: active.map { FileViewerMenu.entries(viewModel: viewModel, relativePath: $0.relativePath, dismissMenu: { menuPresented = false }) } ?? []
             ) {
                 OpenCodeTopBar(
-                    title: active?.name ?? "Files",
-                    subtitle: active?.relativePath,
+                    title: active.map { OpenCodeText.verbatim($0.name) } ?? "Files",
+                    subtitle: .verbatim(ifPresent: active?.relativePath),
                     leading: OpenCodeSplitPane.detailLeading(detailControl, back: {}),
                     actions: active == nil ? [] : [
                         .icon(.moreVert, accessibilityLabel: "More options") { menuPresented = true },

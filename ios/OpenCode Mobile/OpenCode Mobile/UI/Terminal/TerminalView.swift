@@ -38,7 +38,7 @@ struct TerminalView: View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: "Terminal",
-                subtitle: projectTitle,
+                subtitle: .verbatim(projectTitle),
                 subtitleLeading: .letter(
                     letterCharacter(for: projectTitle),
                     letterAccent(for: worktree)
@@ -111,10 +111,10 @@ struct TerminalView: View {
         viewModel.sendInput(text)
     }
 
-    private func errorContent(title: String, message: String) -> some View {
+    private func errorContent(title: OpenCodeText, message: OpenCodeText) -> some View {
         OpenCodeEmptyState(
             title: title,
-            message: openCodeNonBlank(message, fallback: "The terminal didn't open."),
+            message: message,
             primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
                 Task { await viewModel.retry() }
             }

@@ -18,15 +18,15 @@ struct WorktreeCreateForm: View {
 
     private func form(_ state: WorktreeCreateFormState) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            OpenCodeSectionHeader(title: WorktreeCreateCopy.nameLabel)
+            OpenCodeSectionHeader(title: .unlocalized(WorktreeCreateCopy.nameLabel))
             OpenCodeTextInput(
                 text: Binding(
                     get: { model.state?.name ?? "" },
                     set: { model.updateName($0) }
                 ),
-                hint: WorktreeCreateCopy.nameLabel,
+                hint: .unlocalized(WorktreeCreateCopy.nameLabel),
                 enabled: !state.submitting,
-                errorMessage: state.nameError,
+                errorMessage: .unlocalized(ifPresent: state.nameError),
                 submitAction: .go,
                 onSubmit: {
                     if state.canSubmit { onSubmit() }
@@ -34,18 +34,18 @@ struct WorktreeCreateForm: View {
             )
             .accessibilityIdentifier("worktreeCreateName")
             .padding(.horizontal, 16)
-            OpenCodeSectionHeader(title: WorktreeCreateCopy.branchLabel)
+            OpenCodeSectionHeader(title: .unlocalized(WorktreeCreateCopy.branchLabel))
             OpenCodeListItem(
-                title: state.branchValue,
-                subtitle: state.branchNote,
+                title: .unlocalized(state.branchValue),
+                subtitle: .unlocalized(state.branchNote),
                 enabled: false,
                 startDecorator: .icon(.callSplit)
             )
             .accessibilityIdentifier("worktreeCreateBranch")
-            OpenCodeSectionHeader(title: WorktreeCreateCopy.baseLabel)
+            OpenCodeSectionHeader(title: .unlocalized(WorktreeCreateCopy.baseLabel))
             OpenCodeListItem(
-                title: state.baseValue,
-                subtitle: state.baseNote,
+                title: .unlocalized(state.baseValue),
+                subtitle: .unlocalized(state.baseNote),
                 enabled: state.baseSelectable && !state.submitting,
                 startDecorator: .icon(.callSplit),
                 accessory: state.baseSelectable ? .disclosure : nil,
@@ -54,11 +54,11 @@ struct WorktreeCreateForm: View {
             .accessibilityIdentifier("worktreeCreateBase")
             VStack(alignment: .leading, spacing: 12) {
                 if let error = state.errorMessage {
-                    OpenCodeInlineNotice(message: error, tone: .error, variant: .banner)
+                    OpenCodeInlineNotice(message: .unlocalized(error), tone: .error, variant: .banner)
                         .accessibilityIdentifier("worktreeCreateError")
                 }
                 OpenCodeButton(
-                    variant: .fullWidthText(title: state.submitTitle),
+                    variant: .fullWidthText(title: .unlocalized(state.submitTitle)),
                     enabled: state.canSubmit,
                     action: onSubmit
                 )
@@ -77,10 +77,10 @@ struct WorktreeCreateForm: View {
         baseRow(rows[0])
         switch state.baseOptionsState {
         case .loading:
-            OpenCodeListItem(title: WorktreeCreateCopy.baseLoading, enabled: false)
+            OpenCodeListItem(title: .unlocalized(WorktreeCreateCopy.baseLoading), enabled: false)
                 .accessibilityIdentifier("worktreeCreateBaseLoading")
         case .failed:
-            OpenCodeListItem(title: WorktreeCreateCopy.baseFailed, enabled: false)
+            OpenCodeListItem(title: .unlocalized(WorktreeCreateCopy.baseFailed), enabled: false)
                 .accessibilityIdentifier("worktreeCreateBaseFailed")
         case .loaded:
             ForEach(rows.dropFirst()) { row in
@@ -91,7 +91,7 @@ struct WorktreeCreateForm: View {
 
     private func baseRow(_ row: WorktreeCreateBaseOption) -> some View {
         OpenCodeListItem(
-            title: row.title,
+            title: .unlocalized(row.title),
             selected: row.isSelected,
             startDecorator: .icon(.callSplit),
             action: { model.selectBase(row.ref) }
@@ -113,7 +113,7 @@ enum WorktreeCreateSheetChrome {
         guard let state = model.state else { return nil }
         return OpenCodeBottomSheetHeaderAction(
             icon: .arrowBack,
-            accessibilityLabel: WorktreeCreateCopy.back,
+            accessibilityLabel: .unlocalized(WorktreeCreateCopy.back),
             enabled: !state.submitting,
             accessibilityIdentifier: "worktreeCreateBack",
             action: { model.back() }
@@ -135,8 +135,8 @@ struct NewWorktreeRow: View {
 
     var body: some View {
         OpenCodeListItem(
-            title: WorktreeCreateCopy.newWorktreeRow,
-            subtitle: availability.subtitle,
+            title: .unlocalized(WorktreeCreateCopy.newWorktreeRow),
+            subtitle: .unlocalized(ifPresent: availability.subtitle),
             enabled: availability.enabled,
             startDecorator: .icon(.add),
             action: availability.enabled ? action : nil

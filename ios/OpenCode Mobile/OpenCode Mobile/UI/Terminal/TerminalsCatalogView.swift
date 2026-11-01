@@ -138,8 +138,8 @@ struct TerminalsCatalogView: View {
                             VStack(spacing: 0) {
                                 ForEach(viewModel.rows, id: \.worktreeAndId) { row in
                                     OpenCodeListItem(
-                                        title: row.title,
-                                        subtitle: row.projectTitle,
+                                        title: .verbatim(row.title),
+                                        subtitle: .verbatim(row.projectTitle),
                                         selected: row.id == selectedID,
                                         startDecorator: .letter(
                                             letterCharacter(for: row.projectTitle),
@@ -201,7 +201,7 @@ struct TerminalsCatalogView: View {
             } else {
                 ForEach(viewModel.projects, id: \.worktree) { project in
                     OpenCodeListItem(
-                        title: project.title,
+                        title: .verbatim(project.title),
                         startDecorator: .letter(
                             letterCharacter(for: project.title),
                             letterAccent(for: project.worktree)

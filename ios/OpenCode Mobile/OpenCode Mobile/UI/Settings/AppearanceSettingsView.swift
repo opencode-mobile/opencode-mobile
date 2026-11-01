@@ -182,7 +182,7 @@ private struct ThemePreviewCard: View {
     let action: () -> Void
 
     var body: some View {
-        OpenCodeSelectableCard(title: name, blurb: blurb, selected: selected, action: action) {
+        OpenCodeSelectableCard(title: .unlocalized(name), blurb: .unlocalized(blurb), selected: selected, action: action) {
             HStack(spacing: 8) {
                 MiniThemePane(label: "Light", tokens: light)
                 MiniThemePane(label: "Dark", tokens: dark)
@@ -236,7 +236,7 @@ private struct SyntaxPreviewCard: View {
     let action: () -> Void
 
     var body: some View {
-        OpenCodeSelectableCard(title: preset.name, blurb: preset.blurb, selected: selected, action: action) {
+        OpenCodeSelectableCard(title: .unlocalized(preset.name), blurb: .unlocalized(preset.blurb), selected: selected, action: action) {
             OpenCodeCodeSnippet(syntaxSnippet(tokens), surface: .syntaxPreset(tokens))
         }
     }

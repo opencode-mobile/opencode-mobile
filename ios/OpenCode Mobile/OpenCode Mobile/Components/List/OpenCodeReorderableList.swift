@@ -541,8 +541,8 @@ private struct ReorderablePreviewItem: Identifiable {
                 supportsContextAction: { !$0.pinned }
             ) { item in
                 OpenCodeListItem(
-                    title: item.title,
-                    subtitle: item.pinned ? "3 projects" : "~/Projects/\(item.title)",
+                    title: .verbatim(item.title),
+                    subtitle: .verbatim(item.pinned ? "3 projects" : "~/Projects/\(item.title)"),
                     startDecorator: item.pinned ? .iconCircle(.widgets) : .letter(item.title.first ?? "?", .violet)
                 )
             }

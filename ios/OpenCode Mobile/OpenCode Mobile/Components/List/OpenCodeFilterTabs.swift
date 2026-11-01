@@ -2,10 +2,10 @@ import SwiftUI
 
 struct OpenCodeFilterTab: Identifiable, Hashable {
     let id: String
-    let title: String
+    let title: OpenCodeText
     let count: Int?
 
-    init(id: String, title: String, count: Int? = nil) {
+    init(id: String, title: OpenCodeText, count: Int? = nil) {
         self.id = id
         self.title = title
         self.count = count
@@ -39,7 +39,7 @@ struct OpenCodeFilterTabs: View {
             onTabSelected(tab.id)
         } label: {
             HStack(spacing: 6) {
-                Text(tab.title)
+                Text(openCode: tab.title)
                     .font(OpenCodeTypography.button)
                     .foregroundStyle(selected ? OpenCodeColors.textStrong : OpenCodeColors.textBase)
                     .lineLimit(1)
@@ -71,9 +71,9 @@ struct OpenCodeFilterTabs: View {
 
     private func accessibilityLabel(for tab: OpenCodeFilterTab) -> String {
         if let count = tab.count {
-            return "\(tab.title), \(count)"
+            return "\(tab.title.resolved), \(count)"
         }
-        return tab.title
+        return tab.title.resolved
     }
 }
 

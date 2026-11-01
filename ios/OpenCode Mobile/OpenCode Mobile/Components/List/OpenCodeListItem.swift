@@ -108,7 +108,7 @@ enum OpenCodeListItemStatusTone: Equatable {
 }
 
 struct OpenCodeListItemStatus: Equatable {
-    let text: String
+    let text: OpenCodeText
     let tone: OpenCodeListItemStatusTone
 }
 
@@ -117,24 +117,24 @@ enum OpenCodeListItemAccessory {
     /// Navigation chevron. The row action owns the tap.
     case disclosure
     /// Switch. The row should not also take a tap action.
-    case toggle(isOn: Binding<Bool>, accessibilityLabel: String)
+    case toggle(isOn: Binding<Bool>, accessibilityLabel: OpenCodeText)
 }
 
 struct OpenCodeListItem<Trailing: View>: View {
     let variant: OpenCodeListItemVariant
-    let title: String
+    let title: OpenCodeText
     /// Compact rows: semibold title, such as an unread finish. Standard titles are always semibold.
     let emphasized: Bool
-    let subtitle: String?
+    let subtitle: OpenCodeText?
     let subtitleSegments: [OpenCodeListItemSubtitleSegment]?
     /// Optional third line under the subtitle, such as a branch. Truncates on its own.
     let detailSegments: [OpenCodeListItemSubtitleSegment]?
     /// Compact rows: line 2 as `primary / secondary`, in place of the subtitle.
     let path: OpenCodeListItemPath?
     let status: OpenCodeListItemStatus?
-    let caption: String?
+    let caption: OpenCodeText?
     /// Small tag after the title, such as "git". The title truncates first; the tag stays.
-    let titleTag: String?
+    let titleTag: OpenCodeText?
     let selected: Bool
     let enabled: Bool
     let style: OpenCodeListItemStyle
@@ -149,15 +149,15 @@ struct OpenCodeListItem<Trailing: View>: View {
 
     init(
         variant: OpenCodeListItemVariant = .standard,
-        title: String,
+        title: OpenCodeText,
         emphasized: Bool = false,
-        subtitle: String? = nil,
+        subtitle: OpenCodeText? = nil,
         subtitleSegments: [OpenCodeListItemSubtitleSegment]? = nil,
         detailSegments: [OpenCodeListItemSubtitleSegment]? = nil,
         path: OpenCodeListItemPath? = nil,
         status: OpenCodeListItemStatus? = nil,
-        caption: String? = nil,
-        titleTag: String? = nil,
+        caption: OpenCodeText? = nil,
+        titleTag: OpenCodeText? = nil,
         selected: Bool = false,
         enabled: Bool = true,
         style: OpenCodeListItemStyle = .plain,
@@ -302,13 +302,13 @@ struct OpenCodeListItem<Trailing: View>: View {
 
             VStack(alignment: .leading, spacing: listItemCompactLineSpacing) {
                 HStack(spacing: 8) {
-                    Text(title)
+                    Text(openCode: title)
                         .font(emphasized ? listItemCompactEmphasizedTitleFont : listItemCompactTitleFont)
                         .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
                         .lineLimit(1)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     if let caption, !caption.isEmpty {
-                        Text(caption)
+                        Text(openCode: caption)
                             .font(OpenCodeTypography.caption.monospacedDigit())
                             .foregroundStyle(enabled ? OpenCodeColors.textWeak : OpenCodeColors.textWeaker)
                             .lineLimit(1)
@@ -342,7 +342,7 @@ struct OpenCodeListItem<Trailing: View>: View {
                 .font(listItemCompactPathFont)
                 .lineLimit(1)
         } else if let subtitle {
-            Text(subtitle)
+            Text(openCode: subtitle)
                 .font(listItemCompactPathFont)
                 .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
                 .lineLimit(1)
@@ -355,7 +355,7 @@ struct OpenCodeListItem<Trailing: View>: View {
 
             VStack(alignment: .leading, spacing: listItemTitleSubtitleSpacing) {
                 HStack(spacing: 6) {
-                    Text(title)
+                    Text(openCode: title)
                         .font(OpenCodeTypography.body.weight(.semibold))
                         .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
                         .lineLimit(1)
@@ -369,7 +369,7 @@ struct OpenCodeListItem<Trailing: View>: View {
                         .font(OpenCodeTypography.caption)
                         .lineLimit(1)
                 } else if let subtitle {
-                    Text(subtitle)
+                    Text(openCode: subtitle)
                         .font(OpenCodeTypography.caption)
                         .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
                         .lineLimit(1)
@@ -398,7 +398,7 @@ struct OpenCodeListItem<Trailing: View>: View {
     private var metaColumn: some View {
         VStack(alignment: .trailing, spacing: listItemMetaSpacing) {
             if let caption, !caption.isEmpty {
-                Text(caption)
+                Text(openCode: caption)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
                     .lineLimit(1)
@@ -414,7 +414,7 @@ struct OpenCodeListItem<Trailing: View>: View {
     }
 
     private func statusPill(_ status: OpenCodeListItemStatus) -> some View {
-        Text(status.text)
+        Text(openCode: status.text)
             .font(OpenCodeTypography.caption.weight(.semibold))
             .foregroundStyle(statusForeground(status.tone))
             .lineLimit(1)
@@ -425,7 +425,7 @@ struct OpenCodeListItem<Trailing: View>: View {
 
     /// Compact rows show the status as coloured text, without the pill's capsule.
     private func compactStatusLabel(_ status: OpenCodeListItemStatus) -> some View {
-        Text(status.text)
+        Text(openCode: status.text)
             .font(listItemCompactStatusFont)
             .foregroundStyle(statusForeground(status.tone))
             .lineLimit(1)
@@ -516,7 +516,7 @@ struct OpenCodeListItem<Trailing: View>: View {
                 .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
                 .accessibilityHidden(true)
         case let .toggle(isOn, accessibilityLabel):
-            Toggle(accessibilityLabel, isOn: isOn)
+            Toggle(isOn: isOn) { Text(openCode: accessibilityLabel) }
                 .labelsHidden()
                 .tint(OpenCodeColors.interactive)
                 .disabled(!enabled)
@@ -579,14 +579,14 @@ struct OpenCodeListItem<Trailing: View>: View {
             OpenCodeIconImage(icon: icon, size: listItemIconDecoratorSize)
                 .foregroundStyle(OpenCodeColors.iconStrongBase)
                 .accessibilityHidden(accessibilityLabel == nil)
-                .accessibilityLabel(accessibilityLabel ?? "")
+                .accessibilityLabel(openCode: accessibilityLabel ?? .empty)
         case let .iconCircle(icon, accessibilityLabel):
             OpenCodeIconImage(icon: icon, size: listItemIconCircleGlyphSize)
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .frame(width: listItemLetterBadgeSize, height: listItemLetterBadgeSize)
                 .background(OpenCodeColors.textStrong.opacity(0.10), in: Circle())
                 .accessibilityHidden(accessibilityLabel == nil)
-                .accessibilityLabel(accessibilityLabel ?? "")
+                .accessibilityLabel(openCode: accessibilityLabel ?? .empty)
         }
     }
 }

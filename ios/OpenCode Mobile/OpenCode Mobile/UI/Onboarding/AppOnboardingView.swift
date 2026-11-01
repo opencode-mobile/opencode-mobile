@@ -132,7 +132,7 @@ private struct AppOnboardingPageView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 20))
 
                 if let badge = page.badge {
-                    OpenCodeTag(badge)
+                    OpenCodeTag(.unlocalized(badge))
                 }
 
                 Text(page.title)
@@ -147,16 +147,16 @@ private struct AppOnboardingPageView: View {
                             .foregroundStyle(OpenCodeColors.textBase)
                     }
                     if let setupLink = page.setupLink {
-                        OpenCodeButton(variant: .link(title: setupLink), action: onNeedServerFirst)
+                        OpenCodeButton(variant: .link(title: .unlocalized(setupLink)), action: onNeedServerFirst)
                     }
                 } else {
                     OpenCodeListGroup(page.features, id: \.id) { row in
                         OpenCodeListItem(
-                            title: row.title,
-                            subtitle: row.detail,
+                            title: .unlocalized(row.title),
+                            subtitle: .unlocalized(row.detail),
                             startDecorator: .icon(
                                 AppOnboardingCopy.featureIcon(for: row.id),
-                                accessibilityLabel: row.title
+                                accessibilityLabel: .unlocalized(row.title)
                             )
                         )
                     }

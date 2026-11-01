@@ -29,7 +29,7 @@ struct ConnectionSetupView: View {
             ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 OpenCodeTopBar(
-                    title: viewModel.screenTitle,
+                    title: .unlocalized(viewModel.screenTitle),
                     leading: .back(action: {
                         ProductAnalytics.logUserAction(
                             screenId: ProductAnalytics.Screen.connectionSetup,
@@ -146,8 +146,8 @@ struct ConnectionSetupView: View {
                 get: { viewModel.cleartextWarningHosts != nil },
                 set: { shown in if !shown { viewModel.dismissCleartextWarning() } }
             ),
-            title: CleartextPolicy.warningTitle,
-            subtitle: viewModel.cleartextWarningMessage,
+            title: .unlocalized(CleartextPolicy.warningTitle),
+            subtitle: .unlocalized(viewModel.cleartextWarningMessage),
             primaryOption: OpenCodeDialogOption(title: "Connect anyway") {
                 Task {
                     if await viewModel.confirmCleartextWarning() {
@@ -335,7 +335,7 @@ struct ConnectionSetupView: View {
             if viewModel.addressRecovery != nil {
                 OpenCodeCodeSnippet("opencode pair --remote")
                 OpenCodeButton(
-                    variant: .fullWidthText(title: viewModel.primaryActionLabel),
+                    variant: .fullWidthText(title: .unlocalized(viewModel.primaryActionLabel)),
                     enabled: !viewModel.isBusy,
                     action: openPairingScanner
                 )
@@ -366,7 +366,7 @@ struct ConnectionSetupView: View {
                 }
                 if viewModel.showsPrimaryAction {
                     OpenCodeButton(
-                        variant: .fullWidthText(title: viewModel.primaryActionLabel),
+                        variant: .fullWidthText(title: .unlocalized(viewModel.primaryActionLabel)),
                         enabled: viewModel.primaryEnabled
                     ) {
                         Task {

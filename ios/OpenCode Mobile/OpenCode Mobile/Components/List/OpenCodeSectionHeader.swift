@@ -19,7 +19,7 @@ enum OpenCodeSectionHeaderTrailing {
     /// Quiet item count for the group below.
     case count(Int)
     /// Compact text action scoped to the group below.
-    case action(String, () -> Void)
+    case action(OpenCodeText, () -> Void)
 }
 
 /// Horizontal inset relative to the container edge.
@@ -32,13 +32,13 @@ enum OpenCodeSectionHeaderInset {
 
 /// Caption-level title above a group of rows or a region, with an optional trailing count or action.
 struct OpenCodeSectionHeader: View {
-    let title: String
+    let title: OpenCodeText
     var variant: OpenCodeSectionHeaderVariant = .label
     var trailing: OpenCodeSectionHeaderTrailing? = nil
     var inset: OpenCodeSectionHeaderInset = .standard
 
     init(
-        title: String,
+        title: OpenCodeText,
         variant: OpenCodeSectionHeaderVariant = .label,
         trailing: OpenCodeSectionHeaderTrailing? = nil,
         inset: OpenCodeSectionHeaderInset = .standard
@@ -66,13 +66,13 @@ struct OpenCodeSectionHeader: View {
     private var titleText: some View {
         switch variant {
         case .label:
-            Text(title.uppercased())
+            Text(verbatim: title.resolved.uppercased())
                 .font(OpenCodeTypography.caption.weight(.semibold))
                 .foregroundStyle(OpenCodeColors.textBase)
                 .tracking(sectionHeaderLabelTracking)
                 .lineLimit(1)
         case .plain:
-            Text(title)
+            Text(openCode: title)
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .lineLimit(1)
@@ -90,12 +90,12 @@ struct OpenCodeSectionHeader: View {
                 .monospacedDigit()
         case let .action(label, action):
             Button(action: action) {
-                Text(label)
+                Text(openCode: label)
                     .font(OpenCodeTypography.caption.weight(.medium))
                     .foregroundStyle(OpenCodeColors.interactive)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(label)
+            .accessibilityLabel(openCode: label)
         case nil:
             EmptyView()
         }
@@ -115,9 +115,9 @@ struct OpenCodeSectionHeader: View {
 
     private var accessibilityLabel: String {
         if case let .count(count) = trailing {
-            return "\(title), \(count) \(count == 1 ? "item" : "items")"
+            return "\(title.resolved), \(count) \(count == 1 ? "item" : "items")"
         }
-        return title
+        return title.resolved
     }
 }
 

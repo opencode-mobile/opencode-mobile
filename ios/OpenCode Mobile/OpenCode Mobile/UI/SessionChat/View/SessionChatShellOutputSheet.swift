@@ -128,7 +128,7 @@ struct SessionChatShellOutputActions: View {
             }
             HStack(spacing: 8) {
                 OpenCodeButton(
-                    variant: .fullWidthText(title: SessionChatShellPresentation.copyLabel),
+                    variant: .fullWidthText(title: .unlocalized(SessionChatShellPresentation.copyLabel)),
                     enabled: !state.output.text.isEmpty,
                     contrast: .low
                 ) {
@@ -139,9 +139,9 @@ struct SessionChatShellOutputActions: View {
                 if state.canStop {
                     OpenCodeButton(
                         variant: .fullWidthText(
-                            title: state.isStopping
+                            title: .unlocalized(state.isStopping
                                 ? SessionChatShellPresentation.stoppingLabel
-                                : SessionChatShellPresentation.stopLabel
+                                : SessionChatShellPresentation.stopLabel)
                         ),
                         enabled: !state.isStopping,
                         contrast: .destructive

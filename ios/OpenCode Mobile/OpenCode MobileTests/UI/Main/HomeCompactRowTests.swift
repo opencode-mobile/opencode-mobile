@@ -135,7 +135,9 @@ struct HomeCompactRowTests {
 
     @Test func activeRowsKeepTodaysLabelsAndTones() {
         #expect(compactRow(.running).status == OpenCodeListItemStatus(text: "Running", tone: .interactive))
-        #expect(compactRow(.retrying(attempt: 2)).status == OpenCodeListItemStatus(text: "Retrying \u{00B7} 2", tone: .warning))
+        // An interpolated label is a localised format with an argument; compare what is shown.
+        #expect(compactRow(.retrying(attempt: 2)).status?.text.resolved == "Retrying \u{00B7} 2")
+        #expect(compactRow(.retrying(attempt: 2)).status?.tone == .warning)
         #expect(compactRow(.ready).status == OpenCodeListItemStatus(text: "Ready", tone: .success))
         #expect(compactRow(.done).status == OpenCodeListItemStatus(text: "Done", tone: .success))
         #expect(compactRow(.failed).status == OpenCodeListItemStatus(text: "Failed", tone: .error))
