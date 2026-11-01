@@ -188,15 +188,30 @@ areas, status column, fold, system bars, simulator pose control) lives in
 - Cover both platforms. Name what was not checked under Risks / Follow-ups.
 - Save each verification screenshot as `ios-NN-<step>.png` /
   `android-NN-<step>.png` as you go. Resize them to at most 1000 px with
-  `sips -Z 1000` first. Then attach them with a recent `gh` (2.102 or newer,
-  e.g. `$(brew --prefix)/bin/gh`; check `gh pr comment --help` lists
-  `--attach`): write a Markdown table in a scratch `--body-file` that
-  references the files as `![alt](./ios-NN-<step>.png)`, and run
-  `gh pr comment <pr> --body-file <file>`. `gh` uploads each referenced file
-  and rewrites the path to a GitHub `user-attachments` URL. Use
-  `gh issue comment` when there is no pull request yet. Never push an
-  `evidence/` branch or commit evidence to a feature branch. If the upload
-  fails, say so in the pull request instead.
+  `sips -Z 1000` first.
+- Push evidence as a pull request comment with the latest `gh` CLI, never a
+  branch:
+  - Use `gh` 2.102 or newer. The `gh` first on `PATH` can be older; call
+    `$(brew --prefix)/bin/gh` and check that `gh pr comment --help` lists
+    `--attach`.
+  - Write a Markdown table in a scratch `--body-file` that references the
+    files as `![alt](./ios-NN-<step>.png)`.
+  - Pass every file with its own `--attach` flag. A reference in the body
+    alone posts the literal `./` path as a broken image:
+
+    ```bash
+    "$(brew --prefix)/bin/gh" pr comment <pr> --body-file evidence.md \
+      --attach ./ios-01-<step>.png --attach ./android-01-<step>.png
+    ```
+
+  - `gh` uploads each file and rewrites its reference to a GitHub
+    `user-attachments` URL. Check that the posted comment shows those URLs;
+    fix a broken one with `gh pr comment <pr> --edit-last --body-file
+    evidence.md --attach …`.
+  - Use `gh issue comment` when there is no pull request yet.
+  - Never push an `evidence/` branch, commit evidence to a feature branch, or
+    link images from a branch (`blob/<branch>/…?raw=true`). If the upload
+    fails, say so in the pull request instead.
 - Capture only harness or mock data: no real passwords or personal
   transcripts.
 

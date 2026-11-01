@@ -126,7 +126,9 @@ function checkText(errors, path, text) {
     else if (k === "align") checkEnum(errors, `${path}.align`, v, TEXT_ALIGNS);
     else if (k === "width") {
       if (typeof v !== "number" || !(v >= 120 && v <= FORMAT_MAX)) errors.push(`${path}.width must be a number 120–${FORMAT_MAX}`);
-    } else errors.push(`${path}.${k} is not a text setting (position, align, width)`);
+    } else if (k === "size") {
+      if (typeof v !== "number" || !(v >= 0.5 && v <= 2.5)) errors.push(`${path}.size must be a number 0.5–2.5`);
+    } else errors.push(`${path}.${k} is not a text setting (position, align, width, size)`);
   }
 }
 

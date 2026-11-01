@@ -409,6 +409,9 @@ const formatLabel = (key) => {
   return f ? `${f.ratio} ${f.use}` : key.replace("x", "×");
 };
 
+/** Type scale times `size`, in whole px; `subw` is a width, not a size. */
+const scaleType = (t, size) => Object.fromEntries(Object.entries(t).map(([n, v]) => [n, n === "subw" ? v : Math.round(v * size)]));
+
 /** Text block config for a composition + format (position/band/compact/width), before measuring. */
 export function textConfig(ctx, compId, textOv) {
   const def = IMPL[compId].text(ctx);
@@ -425,7 +428,7 @@ export function textConfig(ctx, compId, textOv) {
     wide: band && M.r > 1.2, // one-line headline
     align: textOv.align || def.align || "left",
     width,
-    type: M.type[band ? "band" : "col"],
+    type: textOv.size ? scaleType(M.type[band ? "band" : "col"], textOv.size) : M.type[band ? "band" : "col"],
   };
 }
 

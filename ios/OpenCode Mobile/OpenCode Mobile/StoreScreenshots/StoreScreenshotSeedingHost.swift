@@ -61,6 +61,8 @@ enum StoreScreenshotSeeder {
         ThemeManager.shared.clearAll()
         AppOnboardingPreferences.shared.markCompleted()
         AnalyticsConsentPreferences.shared.setProductAnalyticsConsented(true)
+        // A fresh install starts on Activity Card; the seeded profile would otherwise read as an existing install.
+        SessionChatDisplayPreferences.shared.setTimelineStyle(.activityCard)
 
         let profile = ConnectionProfile(
             baseURL: serverURL,

@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "name": "Play feature graphic",
+  "description": "1024x500 Google Play feature graphic: one big Android phone on the code chat, its composer in view, short headline, no store badges.",
+  "format": "1024x500",
+  "mode": "dark",
+  "composition": "closeup",
+  "moment": "code",
+  "copy": {
+    "headline": "Built for opencode.\nBeautifully native.",
+    "subline": "An unofficial client for your own opencode server.",
+    "label": "",
+    "brand": "",
+    "appStore": "",
+    "googlePlay": "",
+    "disclaimer": ""
+  },
+  "text": {
+    "size": 1.45,
+    "width": 480
+  },
+  "devices": {
+    "iphone": {
+      "visible": false
+    },
+    "android": {
+      "visible": true,
+      "anchor": "bottom",
+      "shot": "02-chat-code",
+      "x": -29,
+      "y": -137,
+      "scale": 1.65
+    }
+  }
+}

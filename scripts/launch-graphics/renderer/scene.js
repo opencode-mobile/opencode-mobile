@@ -53,6 +53,16 @@ function fillText(el, copy, T) {
     if (node.dataset.k === "headline" && T.wide) v = collapse(v);
     if (node.textContent !== v) node.textContent = v;
   });
+  // an empty copy field hides its element (a badge or the brand goes with its name)
+  const empty = (sel) => !el.querySelector(sel).textContent;
+  el.querySelector(".brand").classList.toggle("gone", empty('[data-k="brand"]'));
+  el.querySelectorAll(".badge").forEach((b) => b.classList.toggle("gone", !b.querySelector("b").textContent));
+  for (const k of ["label", "subline", "disclaimer"]) el.querySelector(`[data-k="${k}"]`).classList.toggle("gone", empty(`[data-k="${k}"]`));
+  for (const sel of [".badges", ".tb-head", ".tb-foot"]) { // inner first: the foot holds the badges
+    const box = el.querySelector(sel);
+    box.classList.toggle("gone", !box.querySelector(":scope > :not(.gone)"));
+  }
+  el.classList.toggle("solo", !!el.querySelector(".tb-head.gone") && !!el.querySelector(".tb-foot.gone"));
 }
 
 function grainUrl() {

@@ -131,6 +131,9 @@ textarea.inp { font: 10.5px/1.45 "IBM Plex Mono", monospace; height: 76px; resiz
 
 .tb { position: absolute; z-index: 20; display: flex; flex-direction: column; }
 .tb.col:not(.compact) { justify-content: space-between; }
+.tb.col.solo:not(.compact) { justify-content: center; }
+.tb .gone { display: none; }
+.tb .kick.gone + .hl { margin-top: 0; }
 .tb-head { display: flex; align-items: center; justify-content: space-between; gap: 24px; }
 .tb-foot { display: flex; flex-direction: column; align-items: flex-start; gap: calc(var(--g) * .7); }
 .tb.band .copy, .tb.compact .copy { margin-top: calc(var(--g) * 1.15); }
