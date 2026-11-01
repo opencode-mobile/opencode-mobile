@@ -42,6 +42,16 @@ const MANY_OPTIONS_QUESTION = {
   ],
 };
 
+// Twelve locales, multi-select: the second page of the two-step variant.
+const MANY_LOCALES_QUESTION = {
+  header: "Locales",
+  question: "Which locales must formatMoney support at launch?",
+  multiple: true,
+  options: ["en-US", "en-GB", "de-DE", "fr-FR", "es-ES", "it-IT", "nl-NL", "pt-BR", "ja-JP", "ko-KR", "zh-CN", "hi-IN"].map(
+    (label) => ({ label, description: `Format amounts the way ${label} expects` }),
+  ),
+};
+
 const LONG_MARKDOWN = `## How formatting works
 
 \`formatMoney(cents, currency)\` in \`src/format.ts\` divides by 100 and calls \`toFixed(2)\`. Three things go wrong:
@@ -229,6 +239,18 @@ const P0 = [
             ],
           },
           { steps: [say("Got it. I'll go with that and fall back to `USD`.")] },
+        ],
+      },
+      // Two long questions, the second multi-select: paging opens each one at its top.
+      "many-options-two-step": {
+        modelCalls: [
+          {
+            steps: [
+              say("Before I change the API, two questions:"),
+              { op: "tool", name: "question", input: { questions: [MANY_OPTIONS_QUESTION, MANY_LOCALES_QUESTION] } },
+            ],
+          },
+          { steps: [say("Got it. I'll use that source and support the locales you picked.")] },
         ],
       },
     },

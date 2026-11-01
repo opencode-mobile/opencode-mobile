@@ -856,6 +856,18 @@ struct OpenCodeSessionComposer: View {
             .textSelection(.enabled)
     }
 
+    private static let questionCustomAnswerID = "questionCustomAnswer"
+
+    private func revealQuestionCustomAnswer(
+        _ question: OpenCodeSessionComposerState.Question,
+        proxy: ScrollViewProxy
+    ) {
+        guard question.customSelected else { return }
+        withAnimation(.easeOut(duration: 0.2)) {
+            proxy.scrollTo(Self.questionCustomAnswerID, anchor: .bottom)
+        }
+    }
+
     private func questionBody(
         _ question: OpenCodeSessionComposerState.Question,
         selectionHint: String
@@ -944,6 +956,7 @@ struct OpenCodeSessionComposer: View {
                                 )
                             }
                         )
+                        .id(Self.questionCustomAnswerID)
                     }
                 }
             }
@@ -973,10 +986,23 @@ struct OpenCodeSessionComposer: View {
         }
         // A long question scrolls inside its card so the header and the action row stay on screen.
         QuestionBodyHeightLayout {
-            ScrollView(.vertical) {
-                questionBody(question, selectionHint: selectionHint)
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    questionBody(question, selectionHint: selectionHint)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                // Keep the custom answer in view while it is chosen, the keyboard shrinks the
+                // body, or the answer grows a line.
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { _ in
+                    revealQuestionCustomAnswer(question, proxy: proxy)
+                }
+                .onChange(of: question.customSelected) { _, _ in
+                    revealQuestionCustomAnswer(question, proxy: proxy)
+                }
+                .onChange(of: question.customText) { _, _ in
+                    revealQuestionCustomAnswer(question, proxy: proxy)
+                }
             }
-            .scrollBounceBehavior(.basedOnSize)
             // Each question and request opens at its top, not where the previous one was left.
             .id("\(question.requestID)#\(question.questionIndex)")
         }

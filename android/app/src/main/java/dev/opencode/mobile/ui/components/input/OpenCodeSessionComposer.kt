@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -1303,7 +1304,7 @@ private fun PermissionFileLine(file: OpenCodeSessionComposerState.PermissionFile
 }
 
 @Composable
-private fun QuestionRequestContent(
+private fun ColumnScope.QuestionRequestContent(
     state: OpenCodeSessionComposerState.Question,
     onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
@@ -1320,6 +1321,8 @@ private fun QuestionRequestContent(
         modifier =
             Modifier
                 .fillMaxWidth()
+                // The action row measures first; the body takes what is left, up to half the window.
+                .weight(1f, fill = false)
                 .heightIn(max = questionBodyMaxHeight())
                 // Each question and request opens at its top, not where the previous one was left.
                 .verticalScroll(remember(state.requestId, state.questionIndex) { ScrollState(0) })
