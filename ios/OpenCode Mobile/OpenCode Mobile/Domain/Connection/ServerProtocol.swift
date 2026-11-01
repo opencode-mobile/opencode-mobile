@@ -41,6 +41,9 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
     /// The server records agent and model switches as timeline notices (v2). Without them
     /// (v1) Session Chat derives the same notices from consecutive user messages.
     var recordsTimelineChangeNotices: Bool = false
+    /// Session Chat can list the shells the agent runs. v1 reads them from the transcript's
+    /// bash calls; v2 needs a release whose contract declares `GET /api/shell`.
+    var supportsAgentShells: Bool = false
 
     static func forProtocol(_ serverProtocol: ServerProtocol, v2Features: V2ServerFeatures = V2ServerFeatures()) -> ServerCapabilities {
         switch serverProtocol {
@@ -51,7 +54,8 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
                 supportsFollowUpDelivery: false,
                 supportsSessionViewed: false,
                 supportsSessionMove: false,
-                commandKeepsClientMessageID: true
+                commandKeepsClientMessageID: true,
+                supportsAgentShells: true
             )
         case .v2:
             return ServerCapabilities(
@@ -62,7 +66,8 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
                 supportsSessionMove: true,
                 supportsSideQuestion: v2Features.sessionGenerate,
                 supportsStreamedUpload: v2Features.streamedUpload,
-                recordsTimelineChangeNotices: true
+                recordsTimelineChangeNotices: true,
+                supportsAgentShells: v2Features.agentShells
             )
         }
     }

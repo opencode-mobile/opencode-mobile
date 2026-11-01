@@ -95,6 +95,36 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvents_passesV2ShellEventsThroughWithTheirData() {
+        val created =
+            adapter.parseEvents(
+                """{"id":"evt_1","created":1793548740025,"type":"shell.created","location":{"directory":"/tmp/project"},""" +
+                    """"data":{"info":{"id":"sh_1","status":"running","command":"ls","metadata":{"sessionID":"ses_test"},""" +
+                    """"time":{"started":1793548739990}}}}""",
+            )
+        val exited =
+            adapter.parseEvents(
+                """{"id":"evt_2","created":1793548742191,"type":"shell.exited","location":{"directory":"/tmp/project"},""" +
+                    """"data":{"id":"sh_1","exit":3,"status":"exited"}}""",
+            )
+        val deleted =
+            adapter.parseEvents(
+                """{"id":"evt_3","created":1793548743748,"type":"shell.deleted","location":{"directory":"/tmp/project"},""" +
+                    """"data":{"id":"sh_1"}}""",
+            )
+
+        // Shell events are not transcript events: one pass-through event each, nothing for the message store.
+        assertEquals(listOf("shell.created"), created.map { it.type })
+        val info = created.single().rawProperties?.get("info") as JsonObject
+        assertEquals("sh_1", (info["id"] as JsonPrimitive).content)
+        assertEquals(listOf("shell.exited"), exited.map { it.type })
+        assertEquals("3", (exited.single().rawProperties?.get("exit") as JsonPrimitive).content)
+        assertEquals("1793548742191", (exited.single().rawProperties?.get("created") as JsonPrimitive).content)
+        assertEquals(listOf("shell.deleted"), deleted.map { it.type })
+        assertEquals("sh_1", (deleted.single().rawProperties?.get("id") as JsonPrimitive).content)
+    }
+
+    @Test
     fun parseEvent_projectsV2TextDeltaIntoMessagePartDelta() {
         val event =
             adapter.parseEvent(

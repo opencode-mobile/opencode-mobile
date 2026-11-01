@@ -7,6 +7,7 @@ import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
+import dev.opencode.mobile.domain.shell.AgentShell
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -57,7 +58,7 @@ data class SessionChatSubagent(
 
 /** What the background work pill says. */
 data class SessionChatBackgroundWorkPill(
-    /** "3 subagents", or "general needs input · 2 running". */
+    /** "3 subagents", "1 subagent · 2 shells", or "general needs input · 2 running". */
     val label: String,
     /** A subagent waits for input: amber pill with a pulsing dot. */
     val needsInput: Boolean,
@@ -161,15 +162,35 @@ object SessionChatBackgroundWork {
             .firstOrNull { it >= start }
     }
 
-    /** The pill for these rows; null when no subagent is working or waiting. */
-    fun pill(subagents: List<SessionChatSubagent>): SessionChatBackgroundWorkPill? {
+    /**
+     * Running shells in panel order: oldest first, shells with no start time last. Ended
+     * shells leave the list.
+     */
+    fun runningShells(shells: List<AgentShell>): List<AgentShell> =
+        shells
+            .filter { it.isRunning }
+            .sortedWith(compareBy(nullsLast()) { it.startedAtMs })
+
+    /**
+     * The pill for these rows; null when nothing is working or waiting. Running shells count
+     * beside running subagents: "1 subagent · 2 shells", "general needs input · 3 running".
+     */
+    fun pill(
+        subagents: List<SessionChatSubagent>,
+        shells: List<AgentShell> = emptyList(),
+    ): SessionChatBackgroundWorkPill? {
         val waiting = subagents.filter { it.status == SessionChatSubagentStatus.WaitingForInput }
         val running = subagents.count { it.status == SessionChatSubagentStatus.Running }
+        val runningShells = shells.count { it.isRunning }
         val firstWaiting = waiting.firstOrNull()
         if (firstWaiting == null) {
-            if (running == 0) return null
-            val label = subagentCount(running)
-            return SessionChatBackgroundWorkPill(label, needsInput = false, accessibilityLabel = "$label running")
+            if (running == 0 && runningShells == 0) return null
+            val label = listOfNotNull(subagentCount(running), shellCount(runningShells)).joinToString(" · ")
+            return SessionChatBackgroundWorkPill(
+                label,
+                needsInput = false,
+                accessibilityLabel = "${runningPhrase(running, runningShells)} running",
+            )
         }
         val asking =
             if (waiting.size == 1) {
@@ -177,8 +198,9 @@ object SessionChatBackgroundWork {
             } else {
                 "${subagentCount(waiting.size)} need input"
             }
-        val label = if (running > 0) "$asking · $running running" else asking
-        val spoken = if (running > 0) "$asking, ${subagentCount(running)} running" else asking
+        val busy = running + runningShells
+        val label = if (busy > 0) "$asking · $busy running" else asking
+        val spoken = if (busy > 0) "$asking, ${runningPhrase(running, runningShells)} running" else asking
         return SessionChatBackgroundWorkPill(label, needsInput = true, accessibilityLabel = spoken)
     }
 
@@ -234,7 +256,25 @@ object SessionChatBackgroundWork {
         return next
     }
 
-    private fun subagentCount(count: Int): String = if (count == 1) "1 subagent" else "$count subagents"
+    private fun subagentCount(count: Int): String? =
+        when (count) {
+            0 -> null
+            1 -> "1 subagent"
+            else -> "$count subagents"
+        }
+
+    private fun shellCount(count: Int): String? =
+        when (count) {
+            0 -> null
+            1 -> "1 shell"
+            else -> "$count shells"
+        }
+
+    /** "2 subagents", "1 shell", "1 subagent and 2 shells". */
+    private fun runningPhrase(
+        subagents: Int,
+        shells: Int,
+    ): String = listOfNotNull(subagentCount(subagents), shellCount(shells)).joinToString(" and ")
 
     private fun rank(status: SessionChatSubagentStatus): Int =
         when (status) {

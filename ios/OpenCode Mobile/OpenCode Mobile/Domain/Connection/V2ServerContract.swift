@@ -5,6 +5,8 @@ nonisolated struct V2ServerFeatures: Equatable, Sendable {
     var sessionArchive = false
     var sessionTurnDiff = false
     var sessionGenerate = false
+    /// `GET /api/shell`: agent-run shells can be listed, followed and stopped (#907).
+    var agentShells = false
     /// `POST /api/experimental/fs/write` matches the shape the upload sends (#644). The flag only
     /// turns on together with `uploadDirectory`, the server's `paths.tmp` from `/api/info`.
     var streamedUploadRoute = false
@@ -32,6 +34,7 @@ nonisolated enum V2ServerContract {
     private static let sessionDiffPath = "/api/session/{sessionID}/diff"
     private static let sessionGeneratePath = "/api/session/{sessionID}/generate"
     private static let fsWritePath = "/api/experimental/fs/write"
+    private static let shellListPath = "/api/shell"
 
     static func features(data: Data) throws -> V2ServerFeatures {
         guard let document = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -45,6 +48,7 @@ nonisolated enum V2ServerContract {
             sessionArchive: declaresSessionArchive(document),
             sessionTurnDiff: declaresSessionTurnDiff(document),
             sessionGenerate: declaresSessionGenerate(document),
+            agentShells: declaresShellList(document),
             streamedUploadRoute: declaresStreamedUpload(document)
         )
     }
@@ -71,6 +75,12 @@ nonisolated enum V2ServerContract {
         object(document["paths"])
             .flatMap { object($0[sessionGeneratePath]) }
             .flatMap { object($0["post"]) } != nil
+    }
+
+    static func declaresShellList(_ document: [String: Any]) -> Bool {
+        object(document["paths"])
+            .flatMap { object($0[shellListPath]) }
+            .flatMap { object($0["get"]) } != nil
     }
 
     /// The upload route still has the shape we send: a required `path` query parameter, an

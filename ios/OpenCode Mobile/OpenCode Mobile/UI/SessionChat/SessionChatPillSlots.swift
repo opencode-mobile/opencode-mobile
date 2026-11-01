@@ -20,8 +20,9 @@ enum SessionChatActivityItem: Equatable, Identifiable {
     case reviewPermission
     /// A collapsed question panel; tapping brings it back.
     case answerQuestion
-    /// Subagents of this session at work: "3 subagents", or "general needs input · 2 running"
-    /// while one waits. Tapping opens the waiting request, else the Subagents panel.
+    /// Subagents and shells of this session at work: "3 subagents", "1 subagent · 2 shells",
+    /// or "general needs input · 2 running" while a subagent waits. Tapping opens the waiting
+    /// request, else the background work panel.
     case subagents(SessionChatBackgroundWorkPill)
     /// The last turn failed. `rowID` is the timeline row to scroll to; `blockID` identifies the failure.
     case requestFailed(rowID: String, blockID: String)

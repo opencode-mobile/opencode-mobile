@@ -57,6 +57,27 @@ class V2ServerContractTest {
     }
 
     @Test
+    fun agentShellsDeclaredWhenShellListRouteExists() {
+        val doc = parse("""{"paths":{"/api/shell":{"get":{}},"/api/shell/{id}":{"delete":{}}}}""")
+
+        assertTrue(V2ServerContract.declaresAgentShells(doc))
+        assertEquals(V2ServerFeatures(agentShells = true), V2ServerContract.features(doc))
+        val capabilities = ServerCapabilities.forProtocol(ServerProtocol.V2, V2ServerContract.features(doc))
+        assertTrue(capabilities.supportsAgentShells)
+        assertTrue(capabilities.supportsAgentShellStop)
+    }
+
+    @Test
+    fun agentShellsNotDeclaredWithoutShellListRoute() {
+        assertFalse(V2ServerContract.declaresAgentShells(parse("""{"paths":{"/api/pty":{"get":{}}}}""")))
+        assertFalse(V2ServerContract.declaresAgentShells(parse("""{"paths":{"/api/shell":{"post":{}}}}""")))
+        assertFalse(ServerCapabilities.forProtocol(ServerProtocol.V2).supportsAgentShells)
+        // v1 reads shells from bash tool parts and cannot stop one.
+        assertTrue(ServerCapabilities.forProtocol(ServerProtocol.V1).supportsAgentShells)
+        assertFalse(ServerCapabilities.forProtocol(ServerProtocol.V1).supportsAgentShellStop)
+    }
+
+    @Test
     fun sessionGenerateNotDeclaredWithoutRoute() {
         assertFalse(V2ServerContract.declaresSessionGenerate(parse("""{"paths":{"/api/experimental/generate":{"post":{}}}}""")))
         assertFalse(V2ServerContract.declaresSessionGenerate(parse("""{}""")))
