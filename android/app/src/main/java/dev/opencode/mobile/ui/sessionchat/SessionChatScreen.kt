@@ -14,26 +14,22 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.union
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -83,8 +79,6 @@ import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.ComposerDictationCardModel
 import dev.opencode.mobile.ui.components.LocalOpenCodeAttachmentImageLoader
-import dev.opencode.mobile.ui.components.OpenCodeActionPill
-import dev.opencode.mobile.ui.components.OpenCodeActionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeActionTile
 import dev.opencode.mobile.ui.components.OpenCodeActionTileBadge
 import dev.opencode.mobile.ui.components.OpenCodeActionTileGrid
@@ -110,15 +104,12 @@ import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeVariant
 import dev.opencode.mobile.ui.components.OpenCodeLayout
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
-import dev.opencode.mobile.ui.components.OpenCodePendingPromptsStrip
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposer
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerAction
 import dev.opencode.mobile.ui.components.OpenCodeSessionComposerState
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSessionStatusBar
-import dev.opencode.mobile.ui.components.OpenCodeSideQuestionPill
-import dev.opencode.mobile.ui.components.OpenCodeSideQuestionPillVariant
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
@@ -145,14 +136,12 @@ import dev.opencode.mobile.ui.sessionchat.dictation.cardPhase
 import dev.opencode.mobile.ui.sessionchat.dictation.dictationLanguageLabel
 import dev.opencode.mobile.ui.sessionchat.dictation.formatDictationElapsed
 import dev.opencode.mobile.ui.sessionchat.dictation.probeDictationSupport
-import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveCopy
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveTags
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 import dev.opencode.mobile.ui.sessionchat.view.ComposerPickerKind
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatChipTimelineIntroModal
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMcpServersSheetContent
-import dev.opencode.mobile.ui.sessionchat.view.SessionToolGroupImages
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatMessageActionsTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatPendingPromptsSheet
@@ -167,6 +156,7 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionChatTodosSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.SessionRetryCountdown
+import dev.opencode.mobile.ui.sessionchat.view.SessionToolGroupImages
 import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
 import dev.opencode.mobile.ui.sessionchat.view.toRoute
@@ -232,7 +222,7 @@ fun SessionChatScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun SessionChatScreenBody(
     sessionId: String,
@@ -952,6 +942,32 @@ private fun SessionChatScreenBody(
                             // Composer (+ shown snackbar) + 16 end-pin gap; Scroll to end
                             // uses this as-is (no extra scrollToEndPillBottomPadding).
                             bottomOverlayInset = timelineBottomInset + animatedSnackbarOverlayHeight,
+                            activityItems =
+                                sessionChatActivityItems(
+                                    uiState = uiState,
+                                    composerKind =
+                                        SessionChatComposerKind.resolve(
+                                            isChildSession = isChildSession,
+                                            hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
+                                            hasQuestion = uiState.questionRequest != null && !uiState.questionDockHidden,
+                                        ),
+                                ),
+                            keyboardVisible = WindowInsets.isImeVisible,
+                            onActivityClick = { item ->
+                                when (item) {
+                                    SessionChatActivityItem.ReviewPermission -> viewModel.showPermissionDock()
+                                    SessionChatActivityItem.AnswerQuestion -> viewModel.showQuestionDock()
+                                    is SessionChatActivityItem.SideQuestionsFailed -> viewModel.retrySideQuestions()
+                                    is SessionChatActivityItem.SideQuestionsReady -> viewModel.openSideQuestionAnswer()
+                                    is SessionChatActivityItem.Queued -> showPendingPromptsSheet = true
+                                    else -> Unit
+                                }
+                            },
+                            onActivityClose = { item ->
+                                if (item is SessionChatActivityItem.SideQuestionsFailed) {
+                                    viewModel.dismissFailedSideQuestions()
+                                }
+                            },
                             onRefresh = viewModel::refreshMessages,
                             onRetry = viewModel::retryFailedTimeline,
                             onLoadOlder = viewModel::loadOlderMessages,
@@ -1139,46 +1155,19 @@ private fun SessionChatScreenBody(
                                     WindowInsets.ime.union(WindowInsets.navigationBars),
                                 ),
                     ) {
-                        // Suggestions float above this column. Keep the pending strip
-                        // in the measured height so the timeline inset does not jump.
-                        hiddenRequestPillVariant(uiState.permissionDockHidden, uiState.questionDockHidden)?.let { variant ->
-                            OpenCodeActionPill(
-                                variant = variant,
-                                onClick =
-                                    if (variant == OpenCodeActionPillVariant.ReviewPermission) {
-                                        viewModel::showPermissionDock
-                                    } else {
-                                        viewModel::showQuestionDock
-                                    },
-                                modifier =
-                                    Modifier
-                                        .align(Alignment.CenterHorizontally)
-                                        .padding(bottom = 6.dp),
-                            )
-                        }
+                        // Suggestions float above this column. Corner pills float over the
+                        // timeline, which reserves their row (SessionChatCornerSlotsLayout).
                         if (overlayComposerKind == SessionChatComposerKind.Prompt) {
-                            SessionChatSideQuestionRow(
-                                state = uiState.sideQuestions,
-                                onOpenAnswer = viewModel::openSideQuestionAnswer,
-                                onRetry = { viewModel.retrySideQuestions() },
-                                onDismissFailed = viewModel::dismissFailedSideQuestions,
-                                modifier =
-                                    Modifier
-                                        .padding(horizontal = 12.dp)
-                                        .padding(bottom = 6.dp),
-                            )
-                        }
-                        if (overlayComposerKind == SessionChatComposerKind.Prompt &&
-                            uiState.pendingPrompts.isNotEmpty()
-                        ) {
-                            OpenCodePendingPromptsStrip(
-                                prompts = uiState.pendingPrompts,
-                                onClick = { showPendingPromptsSheet = true },
-                                modifier =
-                                    Modifier
-                                        .padding(horizontal = 12.dp)
-                                        .padding(bottom = 6.dp),
-                            )
+                            uiState.sideQuestions.unsupportedNotice?.let { notice ->
+                                OpenCodeInlineNotice(
+                                    message = notice,
+                                    variant = OpenCodeInlineNoticeVariant.Banner,
+                                    modifier =
+                                        Modifier
+                                            .padding(horizontal = 12.dp)
+                                            .padding(bottom = 6.dp),
+                                )
+                            }
                         }
 
                         val sideQuestionMode = uiState.sideQuestions.composerMode
@@ -2016,56 +2005,25 @@ private fun SessionChatMoveToWorktreeRows(
     )
 }
 
-/** `/btw` chips and the notice for a `/btw` this server cannot answer, above the composer. */
-@Composable
-private fun SessionChatSideQuestionRow(
-    state: SessionChatSideQuestionsUiState,
-    onOpenAnswer: () -> Unit,
-    onRetry: () -> Unit,
-    onDismissFailed: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    if (state.unsupportedNotice == null && !state.hasChips) return
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        state.unsupportedNotice?.let { notice ->
-            OpenCodeInlineNotice(message = notice, variant = OpenCodeInlineNoticeVariant.Banner)
-        }
-        if (state.hasChips) {
-            Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()).padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                if (state.pendingCount > 0) {
-                    OpenCodeSideQuestionPill(OpenCodeSideQuestionPillVariant.Pending(state.pendingCount))
-                }
-                if (state.readyCount > 0) {
-                    OpenCodeSideQuestionPill(OpenCodeSideQuestionPillVariant.AnswerReady(state.readyCount), onClick = onOpenAnswer)
-                }
-                if (state.failedCount > 0) {
-                    OpenCodeSideQuestionPill(
-                        OpenCodeSideQuestionPillVariant.Failed(state.failedCount),
-                        onClick = onRetry,
-                        onDismiss = onDismissFailed,
-                    )
-                }
-            }
-        }
-    }
-}
-
 private fun InboxRequestAttribution.toComposerAttribution(summary: String) =
     OpenCodeSessionComposerState.RequestAttribution(sessionId = sessionId, letter = letter, summary = summary)
 
 /**
- * The pill that reopens a collapsed permission or question panel. It shows whatever the composer
- * shows, so a child session's lockout cannot strand a hidden request.
+ * Bottom-left activity the screen owns: collapsed requests, `/btw` side questions and queued prompts.
+ * Collapsed requests show whatever the composer shows, so a child session's lockout cannot strand one.
  */
-internal fun hiddenRequestPillVariant(
-    permissionDockHidden: Boolean,
-    questionDockHidden: Boolean,
-): OpenCodeActionPillVariant? =
-    when {
-        permissionDockHidden -> OpenCodeActionPillVariant.ReviewPermission
-        questionDockHidden -> OpenCodeActionPillVariant.AnswerQuestion
-        else -> null
+internal fun sessionChatActivityItems(
+    uiState: SessionChatUiState,
+    composerKind: SessionChatComposerKind,
+): List<SessionChatActivityItem> =
+    buildList {
+        if (uiState.permissionDockHidden) add(SessionChatActivityItem.ReviewPermission)
+        if (uiState.questionDockHidden) add(SessionChatActivityItem.AnswerQuestion)
+        if (composerKind == SessionChatComposerKind.Prompt) {
+            val sideQuestions = uiState.sideQuestions
+            if (sideQuestions.failedCount > 0) add(SessionChatActivityItem.SideQuestionsFailed(sideQuestions.failedCount))
+            if (sideQuestions.readyCount > 0) add(SessionChatActivityItem.SideQuestionsReady(sideQuestions.readyCount))
+            if (sideQuestions.pendingCount > 0) add(SessionChatActivityItem.SideQuestionsRunning(sideQuestions.pendingCount))
+            if (uiState.pendingPrompts.isNotEmpty()) add(SessionChatActivityItem.Queued(uiState.pendingPrompts.size))
+        }
     }

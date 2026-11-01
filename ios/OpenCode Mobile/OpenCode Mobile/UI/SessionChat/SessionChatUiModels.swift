@@ -555,47 +555,12 @@ enum SessionBranchPillVisibility {
     }
 }
 
-/// The one pill shown at the top of the Session Chat timeline.
-/// Priority: Syncing, then ToDo, then Branch / Changes.
-enum SessionChatTopPill: Equatable {
-    case syncing(label: String)
-    case todos
-    case branch(SessionChatBranchPillUiState)
-
-    /// Syncing waits this long before it takes the slot, so a fast catch-up
-    /// does not flash the ToDo or Branch pill out and back in.
-    static let syncingShowDelay: Duration = .milliseconds(400)
-    /// Once shown, Syncing keeps the slot at least this long.
-    static let syncingMinimumVisible: Duration = .milliseconds(600)
-
-    static func resolve(
-        syncingLabel: String?,
-        todosVisible: Bool,
-        todoTotalCount: Int,
-        branchPill: SessionChatBranchPillUiState?,
-        hideFloatStack: Bool
-    ) -> SessionChatTopPill? {
-        if let syncingLabel {
-            return .syncing(label: syncingLabel)
-        }
-        if !hideFloatStack, todosVisible, todoTotalCount > 0 {
-            return .todos
-        }
-        if SessionBranchPillVisibility.shouldShow(pill: branchPill, hideFloatStack: hideFloatStack),
-           let branchPill {
-            return .branch(branchPill)
-        }
-        return nil
-    }
-
-    /// Stable per pill kind so label or count updates do not re-run the swap transition.
-    var kind: Int {
-        switch self {
-        case .syncing: 0
-        case .todos: 1
-        case .branch: 2
-        }
-    }
+/// Timing of the Syncing pill in the bottom-left activity slot.
+enum SessionChatSyncingPillTiming {
+    /// Syncing waits this long before it shows, so a fast catch-up does not flash.
+    static let showDelay: Duration = .milliseconds(400)
+    /// Once shown, Syncing stays at least this long.
+    static let minimumVisible: Duration = .milliseconds(600)
 }
 
 struct ReviewChangesSummary: Equatable {
