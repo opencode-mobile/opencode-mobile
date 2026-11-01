@@ -7403,11 +7403,11 @@ final class FakeAgentShellRepository: AgentShellRepository, @unchecked Sendable 
 
     func yieldOutput(_ output: AgentShellOutput) { outputs.continuation.yield(output) }
 
-    func shells(sessionID _: String, directory _: String, transcript _: AsyncStream<[Message]>) -> AsyncStream<[AgentShell]> {
+    func shells(sessionID _: String, directory _: String, transcript _: @escaping AgentShellTranscript) -> AsyncStream<[AgentShell]> {
         lists.stream
     }
 
-    func output(shell _: AgentShell, directory _: String, transcript _: AsyncStream<[Message]>) -> AsyncStream<AgentShellOutput> {
+    func output(shell _: AgentShell, directory _: String, transcript _: @escaping AgentShellTranscript) -> AsyncStream<AgentShellOutput> {
         outputs.stream
     }
 

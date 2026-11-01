@@ -11,19 +11,20 @@ nonisolated enum SessionChatShellPresentation {
     static let stoppingLabel = "Stopping…"
     static let stopFailedMessage = "Couldn't stop the shell. Try again."
 
-    /// Row timer: live while running, the run time once ended.
+    /// Row timer: live while running, the run time once ended; nil when the end is unknown.
     static func elapsed(_ shell: AgentShell, nowMs: Int64) -> String? {
-        SessionChatChildSessionElapsed.format(
-            startEpochMs: shell.startedAtMs,
-            nowEpochMs: shell.status.isRunning ? nowMs : (shell.finishedAtMs ?? nowMs)
-        )
+        let end = shell.status.isRunning ? nowMs : shell.finishedAtMs
+        guard let end else { return nil }
+        return SessionChatChildSessionElapsed.format(startEpochMs: shell.startedAtMs, nowEpochMs: end)
     }
 
-    /// "Running · 1 min 12 s", "Exited with code 1 · 4 s", "Stopped · 2 min".
+    /// "Running · 1 min 12 s", "Exited with code 1 · 4 s", "Stopped · 2 min". An ended shell
+    /// with no known end shows its state alone ("Stopped"), never a ticking time.
     static func statusLine(_ shell: AgentShell, nowMs: Int64) -> String {
         let status = statusLabel(shell.status)
         guard let start = ToolStartTime.normalizeEpochMs(shell.startedAtMs) else { return status }
-        let end = shell.status.isRunning ? nowMs : (ToolStartTime.normalizeEpochMs(shell.finishedAtMs) ?? nowMs)
+        let end = shell.status.isRunning ? nowMs : ToolStartTime.normalizeEpochMs(shell.finishedAtMs)
+        guard let end else { return status }
         return "\(status) · \(duration(ms: max(0, end - start)))"
     }
 

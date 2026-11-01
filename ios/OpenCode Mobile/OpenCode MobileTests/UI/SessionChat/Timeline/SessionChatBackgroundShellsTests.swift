@@ -109,6 +109,13 @@ struct SessionChatBackgroundShellsTests {
         #expect(SessionChatShellPresentation.statusLine(shell, nowMs: 5) == "Running")
     }
 
+    @Test func endedShellWithoutAnEndTimeShowsItsStateAlone() {
+        let shell = AgentShell(id: "sh", sessionID: "ses-1", command: "ls", status: .stopped, startedAtMs: 1_700_000_000_000)
+
+        #expect(SessionChatShellPresentation.statusLine(shell, nowMs: 1_700_000_072_000) == "Stopped")
+        #expect(SessionChatShellPresentation.elapsed(shell, nowMs: 1_700_000_072_000) == nil)
+    }
+
     @Test func durationFormats() {
         #expect(SessionChatShellPresentation.duration(ms: 0) == "0 s")
         #expect(SessionChatShellPresentation.duration(ms: 59_999) == "59 s")
