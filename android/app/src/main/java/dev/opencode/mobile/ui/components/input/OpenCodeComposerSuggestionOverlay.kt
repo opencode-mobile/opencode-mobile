@@ -128,7 +128,8 @@ private fun ComposerSuggestionRow(
                 .semantics {
                     role = Role.Button
                     contentDescription = accessibilityLabel
-                }.clickable(onClick = onClick)
+                }.openCodeFocusRing()
+                .clickable(onClick = onClick)
                 .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {

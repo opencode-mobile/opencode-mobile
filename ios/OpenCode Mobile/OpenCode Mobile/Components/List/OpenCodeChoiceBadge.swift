@@ -54,6 +54,7 @@ struct OpenCodeChoiceBadge: View {
         .buttonStyle(.plain)
         .disabled(!enabled)
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: 16), enabled: enabled, activate: action)
     }
 
     private var glassBadge: some View {
@@ -75,6 +76,7 @@ struct OpenCodeChoiceBadge: View {
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.5)
         .accessibilityAddTraits(selected ? .isSelected : [])
+        .openCodeKeyboardFocusable(.capsule, enabled: enabled, activate: action)
     }
 
     private var standardLabelColor: Color {

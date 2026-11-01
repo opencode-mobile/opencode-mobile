@@ -82,6 +82,7 @@ struct OpenCodeReviewChangesPill: View {
         .openCodeFloatingPillChrome(enabled: enabled)
         .disabled(!enabled)
         .accessibilityLabel(summary.accessibilityLabel)
+        .openCodeKeyboardFocusable(.capsule, enabled: enabled, activate: action)
     }
 
     static func fileLabel(changedFileCount: Int) -> String {

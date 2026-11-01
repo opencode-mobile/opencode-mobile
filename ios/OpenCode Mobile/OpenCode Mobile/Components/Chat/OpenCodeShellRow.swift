@@ -28,6 +28,7 @@ struct OpenCodeShellRow: View {
                     rowContent
                 }
                 .buttonStyle(.plain)
+                .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: Self.cornerRadius), activate: action)
             } else {
                 rowContent
             }

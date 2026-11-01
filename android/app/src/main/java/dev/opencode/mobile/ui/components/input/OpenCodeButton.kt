@@ -107,7 +107,10 @@ fun OpenCodeButton(
     if (variant is OpenCodeButtonVariant.Link) {
         Text(
             text = variant.title,
-            modifier = modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick),
+            modifier =
+                modifier
+                    .openCodeFocusRing(OpenCodeButtonCornerRadius)
+                    .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
             style =
                 MaterialTheme.typography.bodyMedium.copy(
                     fontWeight = FontWeight.SemiBold,
@@ -240,6 +243,7 @@ fun OpenCodeButton(
                     scaleX = accentScale
                     scaleY = accentScale
                 }.clip(shape)
+                .openCodeFocusRing(shape)
                 .then(interaction),
         shape = shape,
         color = containerColor,

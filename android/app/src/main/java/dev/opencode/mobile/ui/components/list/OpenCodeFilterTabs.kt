@@ -107,6 +107,7 @@ private fun FilterTabItem(
         modifier =
             Modifier
                 .heightIn(min = FilterTabsTabMinHeight)
+                .openCodeFocusRing(FilterTabsTabShape)
                 .semantics {
                     this.selected = selected
                     contentDescription = accessibilityLabel

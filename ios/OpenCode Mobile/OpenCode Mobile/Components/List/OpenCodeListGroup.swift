@@ -25,6 +25,7 @@ struct OpenCodeListGroup<Data: RandomAccessCollection, ID: Hashable, RowContent:
                     }
                 }
             }
+            .openCodeFocusGroup(.vertical)
             .background(OpenCodeColors.surfaceBase)
             .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
             .overlay {

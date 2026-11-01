@@ -76,6 +76,7 @@ struct OpenCodeTimelineNotice: View {
         .accessibilityLabel(accessibilityText)
         .accessibilityAddTraits(toggles ? .isButton : [])
         .accessibilityHint(toggles ? (isExpanded ? "Shows one line" : "Shows the full value") : "")
+        .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: OpenCodeRadius.small), enabled: toggles, activate: onToggle)
     }
 
     private var accessibilityText: String {

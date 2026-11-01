@@ -127,7 +127,8 @@ fun OpenCodeOptionCard(
                     width = if (selected) 2.dp else 1.dp,
                     color = openCodeColor(if (selected) "interactive" else "border-weak-base"),
                     shape = shape,
-                ).clickable(
+                ).openCodeFocusRing(shape)
+                .clickable(
                     interactionSource = interactionSource,
                     indication = ripple(bounded = true),
                     enabled = enabled,

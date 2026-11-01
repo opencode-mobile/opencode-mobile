@@ -154,7 +154,7 @@ fun OpenCodeTreeRow(
                 .background(if (selected) openCodeColor("surface-raised-base") else Color.Transparent, shape)
                 .then(
                     if (onClick != null) {
-                        Modifier.clickable(role = Role.Button, onClick = onClick)
+                        Modifier.openCodeFocusRing(shape).clickable(role = Role.Button, onClick = onClick)
                     } else {
                         Modifier
                     },

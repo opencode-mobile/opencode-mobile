@@ -15,6 +15,7 @@ struct OpenCodeSessionStatusBar: View {
             }
             .buttonStyle(OpenCodeSessionStatusCircleButtonStyle())
             .accessibilityLabel(contextAccessibilityLabel)
+            .openCodeKeyboardFocusable(.circle, activate: onContextClick)
         }
         .frame(height: 36)
         .padding(.horizontal, 16)

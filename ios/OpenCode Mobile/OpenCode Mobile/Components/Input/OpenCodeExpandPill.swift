@@ -47,6 +47,7 @@ struct OpenCodeExpandPill: View {
         .fixedSize()
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(title)
+        .openCodeKeyboardFocusable(.capsule, enabled: enabled, activate: action)
     }
 
     private static let iconSize: CGFloat = 14

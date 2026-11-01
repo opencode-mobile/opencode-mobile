@@ -2,7 +2,7 @@ import XCTest
 
 /// Bottom sheet behavior on the `OPENCODE_UI_TEST_BOTTOM_SHEET` fixture: height
 /// choice and latch, dismiss by Close, scrim and drag, and modal accessibility.
-/// Hardware Escape is covered by `OpenCodeBottomSheetEscapeTests`: XCUITest only
+/// Hardware Escape is covered by `OpenCodeOverlayEscapeTests`: XCUITest only
 /// delivers hardware keys with the simulator's hardware keyboard connected.
 final class BottomSheetUITests: XCTestCase {
     private var app: XCUIApplication!

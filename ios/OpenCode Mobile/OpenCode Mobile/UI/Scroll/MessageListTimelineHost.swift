@@ -93,6 +93,9 @@ where Item.ID == String {
     var canLoadOlder = false
     var onNearOldestVisible: (() -> Void)?
     var itemContent: (Item) -> ItemContent
+    /// One keyboard focus group across every row: the timeline is a single Tab
+    /// stop and the arrow keys move between its controls.
+    private let focusGroup = OpenCodeFocusGroupModel(axis: .vertical)
 
     private let horizontalContentPadding: CGFloat
     private let topContentPadding: CGFloat
@@ -971,8 +974,10 @@ where Item.ID == String {
             cell.itemID = itemID
             cell.heightCache = self.rowHeightCache
             cell.estimatedHeightSeed = self.estimatedHeightSeed(for: item)
+            let focusGroup = self.focusGroup
             cell.contentConfiguration = UIHostingConfiguration {
                 self.itemContent(item)
+                    .openCodeFocusGroup(focusGroup)
             }
             .margins(.all, 0)
             .minSize(width: 0, height: 0)

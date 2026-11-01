@@ -96,6 +96,7 @@ private fun StandardChoiceBadge(
             modifier
                 .clip(StandardShape)
                 .semantics { this.selected = selected }
+                .openCodeFocusRing(StandardShape)
                 .clickable(enabled = enabled, onClick = onClick),
         shape = StandardShape,
         color = containerColor,
@@ -138,6 +139,7 @@ private fun GlassChoiceBadge(
                 .semantics { this.selected = selected }
                 .clip(GlassShape)
                 .background(fill)
+                .openCodeFocusRing(GlassShape)
                 .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
                 .heightIn(min = 36.dp)
                 .padding(horizontal = BadgePaddingHorizontal, vertical = BadgePaddingVertical),

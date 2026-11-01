@@ -87,14 +87,21 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusManager
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusTarget
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
@@ -332,9 +339,20 @@ fun OpenCodeBottomSheet(
         )
     }
 
+    // A sheet opened from a keyboard-focused control hands focus back to it when it closes.
+    val inputFocusRegistry = LocalOpenCodeInputFocusRegistry.current
+    val returnFocus = remember { arrayOfNulls<FocusRequester>(1) }
     LaunchedEffect(visible, keyboard) {
         if (visible && keyboard == OpenCodeBottomSheetKeyboard.Dismiss) {
-            focusManager.clearFocus(force = true)
+            val opener = inputFocusRegistry?.focusedControl
+            val park = inputFocusRegistry?.parkFocus
+            if (opener != null && park != null) {
+                returnFocus[0] = opener
+                // A plain clear would let Android move keyboard focus to the first control.
+                park()
+            } else {
+                focusManager.clearFocus(force = true)
+            }
             keyboardController?.hide()
         }
     }
@@ -400,7 +418,21 @@ fun OpenCodeBottomSheet(
     }
 
     BackHandler(enabled = sheetVisible, onBack = requestDismiss)
-    BottomSheetWindowOverlay(paneTitle = shown.title) {
+    val sheetFocus = remember { BottomSheetKeyFocus() }
+    BottomSheetWindowOverlay(
+        paneTitle = shown.title,
+        trapFocus = shownKeyboard == OpenCodeBottomSheetKeyboard.Dismiss,
+        onRemoved = {
+            val opener = returnFocus[0]
+            returnFocus[0] = null
+            // Not while another sheet has taken over (one sheet opening the next).
+            if (opener != null && inputFocusRegistry?.hasModalSurface != true) {
+                runCatching { opener.requestFocus() }
+            }
+        },
+    ) {
+        val overlayFocusManager = LocalFocusManager.current
+        val overlayView = LocalView.current
         BoxWithConstraints(
             modifier =
                 Modifier
@@ -408,6 +440,9 @@ fun OpenCodeBottomSheet(
                     .consumeWindowInsets(WindowInsets.systemBars.union(WindowInsets.displayCutout))
                     .semantics { dialog() }
                     .onPreviewKeyEvent { event ->
+                        if (event.key == Key.Tab) {
+                            return@onPreviewKeyEvent sheetFocus.moveWithinSheet(event, overlayFocusManager, overlayView)
+                        }
                         if (event.key != Key.Escape) return@onPreviewKeyEvent false
                         if (event.type == KeyEventType.KeyUp) requestDismiss()
                         true
@@ -469,6 +504,10 @@ fun OpenCodeBottomSheet(
                             .padding(start = BottomSheetInset, end = BottomSheetInset, bottom = sheetBottomInset)
                             .then(modifier)
                             .offset { IntOffset(x = 0, y = dragOffsetPx.roundToInt()) }
+                            .onFocusChanged {
+                                sheetFocus.surfaceFocused = it.isFocused
+                                sheetFocus.contentHasFocus = it.hasFocus
+                            }
                             .focusRequester(keyFocus)
                             .focusTarget(),
                     shape =
@@ -1134,16 +1173,56 @@ private tailrec fun Context.findActivity(): Activity? =
         else -> null
     }
 
+/**
+ * Keyboard focus of a sheet's own surface. The surface takes focus when the sheet opens so Esc
+ * reaches it, but it is not a Tab stop: Tab and Shift+Tab step past it to the next control, and
+ * wrap around inside the sheet.
+ */
+private class BottomSheetKeyFocus {
+    var surfaceFocused = false
+    var contentHasFocus = false
+
+    /**
+     * Tab / Shift+Tab inside the sheet. Past the last (or first) control Compose hands focus to
+     * the overlay view; [composeView] then takes it back in the same direction, which lands on
+     * the first (or last) control. The surface itself is skipped.
+     */
+    fun moveWithinSheet(
+        event: androidx.compose.ui.input.key.KeyEvent,
+        focusManager: FocusManager,
+        composeView: View,
+    ): Boolean {
+        if (event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) return false
+        if (event.type == KeyEventType.KeyDown) {
+            val forward = !event.isShiftPressed
+            val direction = if (forward) FocusDirection.Next else FocusDirection.Previous
+            focusManager.moveFocus(direction)
+            if (!contentHasFocus) composeView.requestFocus(if (forward) View.FOCUS_FORWARD else View.FOCUS_BACKWARD)
+            if (surfaceFocused) focusManager.moveFocus(direction)
+        }
+        return true
+    }
+}
+
 /** Window-level surface so a sheet or full-screen cover is not clipped to a split pane. */
 @Composable
 internal fun BottomSheetWindowOverlay(
     paneTitle: String,
+    /**
+     * Keeps Tab and Shift+Tab inside the overlay: the window content behind cannot take focus
+     * while it shows, so Compose wraps around within the overlay instead of leaving it.
+     */
+    trapFocus: Boolean = false,
+    /** Runs once the overlay has left the window (posted, so focus can move again). */
+    onRemoved: () -> Unit = {},
     content: @Composable () -> Unit,
 ) {
     val view = LocalView.current
     val activity = remember(view) { view.context.findActivity() }
     val parentComposition = rememberCompositionContext()
     val currentContent = rememberUpdatedState(content)
+    val currentOnRemoved = rememberUpdatedState(onRemoved)
+    val overlayHolder = remember { arrayOfNulls<View>(1) }
 
     if (activity == null) {
         Box(modifier = Modifier.fillMaxSize()) { content() }
@@ -1157,8 +1236,12 @@ internal fun BottomSheetWindowOverlay(
                 setParentCompositionContext(parentComposition)
                 setContent { currentContent.value() }
                 elevation = 8f
+                // Focusable, so a keyboard focus search leaving the sheet content ends here (the
+                // sheet then pulls focus back in; see BottomSheetKeyFocus). No grey default
+                // highlight when it briefly holds focus.
                 isFocusable = true
                 isFocusableInTouchMode = true
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) defaultFocusHighlightEnabled = false
                 fitsSystemWindows = false
                 importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_YES
                 // setAccessibilityPaneTitle is API 28. ViewCompat keeps the
@@ -1179,7 +1262,9 @@ internal fun BottomSheetWindowOverlay(
             ),
         )
         overlay.requestFocus()
+        overlayHolder[0] = overlay
         onDispose {
+            overlayHolder[0] = null
             restoreDecorSiblingAccessibility(hiddenSiblings)
             // Removing the focused overlay makes Android hand focus to the first
             // focusable view; Compose forwards it to the first text field (the
@@ -1188,8 +1273,38 @@ internal fun BottomSheetWindowOverlay(
             root.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
             root.removeView(overlay)
             root.descendantFocusability = descendantFocusability
+            root.post { currentOnRemoved.value() }
         }
     }
+
+    // Declared after the overlay effect, so it starts after the overlay is added and is
+    // disposed before the overlay is removed.
+    DisposableEffect(activity, trapFocus) {
+        val overlay = overlayHolder[0]
+        val root = activity.window.decorView as ViewGroup
+        val blocked =
+            if (trapFocus && overlay != null) blockDecorSiblingFocus(root, overlay) else emptyList()
+        onDispose { restoreDecorSiblingFocus(blocked) }
+    }
+}
+
+/** Siblings of [overlay] stop offering focus, so keyboard focus search cannot leave the overlay. */
+private fun blockDecorSiblingFocus(
+    root: ViewGroup,
+    overlay: View,
+): List<Pair<ViewGroup, Int>> {
+    val blocked = mutableListOf<Pair<ViewGroup, Int>>()
+    for (index in 0 until root.childCount) {
+        val child = root.getChildAt(index)
+        if (child === overlay || child !is ViewGroup) continue
+        blocked += child to child.descendantFocusability
+        child.descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+    }
+    return blocked
+}
+
+private fun restoreDecorSiblingFocus(blocked: List<Pair<ViewGroup, Int>>) {
+    blocked.forEach { (group, focusability) -> group.descendantFocusability = focusability }
 }
 
 private fun hideDecorSiblingsFromAccessibility(
@@ -1268,6 +1383,7 @@ fun OpenCodeBottomSheetEntry(
                         Color.Transparent
                     },
                 ).defaultMinSize(minHeight = BottomSheetEntryMinHeight)
+                .openCodeFocusRing(entryShape)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = ripple(bounded = true),

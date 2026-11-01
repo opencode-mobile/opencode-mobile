@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 /** "Thinking" while a thought is streaming, or "Thought · Ns" once it settles. */
@@ -47,6 +48,7 @@ fun OpenCodeReasoningRow(
                         collapsed -> Modifier.semantics { hideFromAccessibility() }
                         onClick != null ->
                             Modifier
+                                .openCodeFocusRing(OpenCodeSmallShape)
                                 .clickable(role = Role.Button, onClick = onClick)
                                 .semantics { contentDescription = label }
                         else -> Modifier.semantics { contentDescription = label }
