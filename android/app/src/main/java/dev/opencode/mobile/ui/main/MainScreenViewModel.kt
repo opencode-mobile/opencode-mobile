@@ -1597,16 +1597,17 @@ class MainScreenViewModel
         ): List<SessionSummary> {
             // v2 servers own read state; the local per-device Ready ids stay a v1 fallback.
             val serverReadState = supportsSessionViewed()
-            return sessions
-                .activeSessions()
+            val family = sessions.activeSessions()
+            return family
                 .rootSessions()
                 .sortedByDescending { it.updatedAtEpochMs ?: 0L }
                 .map { session ->
+                    val sourceId = snapshot.homeActivitySessionId(session.id, family) ?: session.id
                     sessionDomainAdapter.toSessionSummary(
                         session,
                         statusLabel =
                             if (snapshot.seeded || snapshot.fromCache) {
-                                snapshot.entries[session.id]?.activity?.statusLabel()
+                                snapshot.entries[sourceId]?.activity?.statusLabel()
                             } else {
                                 null
                             },

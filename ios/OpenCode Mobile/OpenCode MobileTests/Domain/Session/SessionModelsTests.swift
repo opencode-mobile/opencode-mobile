@@ -69,4 +69,73 @@ struct SessionModelsTests {
         #expect(child.parentID == "ses_1")
         #expect([child].rootSessions().isEmpty)
     }
+
+    @Test func homeActivity_runningChildMarksIdleRoot() {
+        let sessions = [
+            session("root"),
+            session("child", parentID: "root"),
+            session("other"),
+            session("other-child", parentID: "other"),
+        ]
+        let snapshot = busySnapshot(["child": .running, "other-child": .running])
+
+        #expect(snapshot.homeActivitySessionID(rootID: "root", sessions: sessions) == "child")
+        #expect(snapshot.homeActivitySessionID(rootID: "other", sessions: sessions) == "other-child")
+        #expect(snapshot.statusLabel(for: "child") == "Working")
+    }
+
+    @Test func homeActivity_nestedChildRollsUpToRoot() {
+        let sessions = [
+            session("root"),
+            session("child", parentID: "root"),
+            session("grandchild", parentID: "child"),
+        ]
+        let snapshot = busySnapshot(["grandchild": .running])
+
+        #expect(snapshot.homeActivitySessionID(rootID: "root", sessions: sessions) == "grandchild")
+    }
+
+    @Test func homeActivity_keepsOwnLabelWhenRootIsBusiest() {
+        let sessions = [session("root"), session("child", parentID: "root")]
+        let snapshot = busySnapshot([
+            "root": .retrying(attempt: 2, nextAtMs: nil, message: nil, errorType: nil, actionLabel: nil, actionLink: nil),
+            "child": .retrying(attempt: 1, nextAtMs: nil, message: nil, errorType: nil, actionLabel: nil, actionLink: nil),
+        ])
+
+        #expect(snapshot.homeActivitySessionID(rootID: "root", sessions: sessions) == "root")
+    }
+
+    @Test func homeActivity_runningChildOutranksRetryingRoot() {
+        let sessions = [session("root"), session("child", parentID: "root")]
+        let snapshot = busySnapshot([
+            "root": .retrying(attempt: 2, nextAtMs: nil, message: nil, errorType: nil, actionLabel: nil, actionLink: nil),
+            "child": .running,
+        ])
+
+        #expect(snapshot.homeActivitySessionID(rootID: "root", sessions: sessions) == "child")
+    }
+
+    @Test func homeActivity_ignoresArchivedChildAndUnseededStatus() {
+        var archived = session("child", parentID: "root")
+        archived.archivedAtEpochMs = 10
+        let sessions = [session("root"), archived]
+        let unseeded = SessionActivitySnapshot(
+            entries: ["child": SessionActivityEntry(activity: .running, source: .server, observedAtMs: 1)],
+            seeded: false
+        )
+
+        #expect(unseeded.homeActivitySessionID(rootID: "root", sessions: sessions) == nil)
+        #expect(busySnapshot(["child": .running]).homeActivitySessionID(rootID: "root", sessions: sessions) == nil)
+    }
+}
+
+private func session(_ id: String, parentID: String? = nil) -> Session {
+    Session(id: id, title: id, slug: nil, projectID: nil, directory: nil, parentID: parentID, updatedAtEpochMs: 1)
+}
+
+private func busySnapshot(_ activities: [String: SessionActivity]) -> SessionActivitySnapshot {
+    SessionActivitySnapshot(
+        entries: activities.mapValues { SessionActivityEntry(activity: $0, source: .server, observedAtMs: 1) },
+        seeded: true
+    )
 }

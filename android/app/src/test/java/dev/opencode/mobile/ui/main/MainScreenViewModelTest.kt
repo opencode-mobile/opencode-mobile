@@ -2263,6 +2263,43 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun home_runningChildMarksIdleRoot() =
+        runTest(testDispatcher) {
+            val sessions =
+                listOf(
+                    Session(id = "root", title = "Issue", updatedAtEpochMs = 2L),
+                    Session(id = "child", title = "Subagent", parentId = "root", updatedAtEpochMs = 1L),
+                )
+            val activity =
+                MutableStateFlow(
+                    SessionActivitySnapshot(
+                        entries =
+                            mapOf(
+                                "child" to
+                                    SessionActivityEntry(
+                                        activity = SessionActivity.Running,
+                                        source = SessionActivitySource.Server,
+                                        observedAtMs = 1L,
+                                    ),
+                            ),
+                        seeded = true,
+                    ),
+                )
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = mapOf("/repo" to sessions),
+                    statusLiveStoreOverride = FakeHomeStatusLiveStore(activity),
+                )
+            advanceUntilIdle()
+
+            val byId = homeSummaries(viewModel)
+            assertEquals("Working", byId.getValue("root").statusLabel)
+            assertEquals(SessionListStatus.Running, byId.getValue("root").toSessionListStatus())
+            assertNull(byId["child"])
+        }
+
+    @Test
     fun v2Home_unreadOutcomeWaitsForSeededStatus() =
         runTest(testDispatcher) {
             // Running again, but an older run's `time.idle` is still unviewed.

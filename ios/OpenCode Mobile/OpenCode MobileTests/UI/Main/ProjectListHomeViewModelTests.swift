@@ -1903,6 +1903,37 @@ struct ProjectListHomeViewModelTests {
         #expect(homeSession(viewModel, id: "ses-1")?.isReady == true)
     }
 
+    @Test func liveStatus_runningChildMarksIdleRoot() async {
+        let sessions = [
+            Session(id: "root", title: "Issue", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 2),
+            Session(id: "child", title: "Subagent", slug: nil, projectID: nil, directory: "/repo", parentID: "root", updatedAtEpochMs: 1),
+        ]
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        sessionLive.emit(directory: "/repo", sessions: sessions)
+        readyLive.emit(directory: "/repo", ids: [])
+        statusLive.emit(
+            directory: "/repo",
+            statuses: ["child": SessionStatus(sessionID: "child", raw: ["type": "busy"])]
+        )
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            sessionRepository: FakeSessionRepository(sessions: sessions),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive
+        )
+        await viewModel.refresh()
+
+        let working = await waitUntil {
+            homeSession(viewModel, id: "root")?.statusLabel == "Working"
+        }
+        #expect(working)
+        #expect(homeSession(viewModel, id: "child") == nil)
+    }
+
     @Test func liveStatus_mapsRetryingAndHidesUntilSeeded() async {
         let sessions = [
             Session(id: "ses-1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),
