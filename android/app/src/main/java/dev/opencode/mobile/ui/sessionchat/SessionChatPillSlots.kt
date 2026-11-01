@@ -34,6 +34,18 @@ sealed interface SessionChatActivityItem {
         override val priority = SessionChatActivityPriority.NeedsInput
     }
 
+    /**
+     * Subagents of this session at work: "3 subagents", or "general needs input · 2 running"
+     * while one waits. Tapping opens the Subagents panel.
+     */
+    data class Subagents(
+        val pill: SessionChatBackgroundWorkPill,
+    ) : SessionChatActivityItem {
+        override val id = "subagents"
+        override val priority =
+            if (pill.needsInput) SessionChatActivityPriority.NeedsInput else SessionChatActivityPriority.Running
+    }
+
     /** The last turn failed. [messageId] is the timeline row to scroll to; [blockId] identifies the failure. */
     data class RequestFailed(
         val messageId: String,

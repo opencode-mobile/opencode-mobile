@@ -235,6 +235,10 @@ data class SessionChatUiState(
     val sessionTodoActivePreview: SessionTodo? = null,
     val sessionTodoCompletedCount: Int = 0,
     val sessionTodoTotalCount: Int = 0,
+    /** Subagents this session started, in background work panel order. */
+    val subagents: List<SessionChatSubagent> = emptyList(),
+    /** The background work pill; null when no subagent works or waits. */
+    val backgroundWorkPill: SessionChatBackgroundWorkPill? = null,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val canMutate: Boolean = false,
     val composerEnabled: Boolean = false,
@@ -662,6 +666,8 @@ data class SessionInfoRegionState(
     val retryCard: SessionRetryCard? = null,
     val isRetrying: Boolean = false,
     val hasResolvedSessionStatus: Boolean = false,
+    /** Sessions in this directory the server reports running, so subagent rows follow their child sessions. */
+    val busySessionIds: Set<String> = emptySet(),
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val canMutate: Boolean = false,
     val composerEnabled: Boolean = false,

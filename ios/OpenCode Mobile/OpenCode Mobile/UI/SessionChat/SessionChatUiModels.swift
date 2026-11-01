@@ -315,6 +315,10 @@ struct SessionChatUiState: Equatable {
     var sessionTodoActivePreview: SessionTodo?
     var sessionTodoCompletedCount: Int = 0
     var sessionTodoTotalCount: Int = 0
+    /// Subagents this session started, in background work panel order.
+    var subagents: [SessionChatSubagent] = []
+    /// The background work pill; nil when no subagent works or waits.
+    var backgroundWorkPill: SessionChatBackgroundWorkPill? = nil
     var connectionStatus: SessionConnectionStatus = .offline
     var canMutate = false
     var composerEnabled = false
@@ -841,6 +845,8 @@ struct SessionInfoRegionState: Equatable {
     var retryCard: SessionRetryCard?
     var isRetrying = false
     var hasResolvedSessionStatus = false
+    /// Sessions in this directory the server reports running, so subagent rows follow their child sessions.
+    var busySessionIDs: Set<String> = []
     var connectionStatus: SessionConnectionStatus = .offline
     var canMutate = false
     var composerEnabled = false

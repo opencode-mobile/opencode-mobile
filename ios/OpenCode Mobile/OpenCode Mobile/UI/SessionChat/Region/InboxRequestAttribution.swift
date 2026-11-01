@@ -2,7 +2,7 @@ import Foundation
 
 /// The descendant subagent session a permission or question request comes from.
 /// Requests from the bound session itself have no attribution.
-struct InboxRequestAttribution: Equatable {
+nonisolated struct InboxRequestAttribution: Equatable {
     let sessionID: String
     /// The asking session's parent, so Open pushes it as a child session.
     let parentID: String

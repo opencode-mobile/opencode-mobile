@@ -43,6 +43,7 @@ struct SessionChatView: View {
     @State private var attachmentDropSummary: AttachmentDropSummary?
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var showSessionTodosSheet = false
+    @State private var showSubagentsSheet = false
     @State private var holdingFinishedTodos = false
     @State private var sawUnfinishedTodos = false
     @State private var finishedHoldTask: Task<Void, Never>?
@@ -327,7 +328,7 @@ struct SessionChatView: View {
                     sessionTodoCompletedCount: viewModel.uiState.sessionTodoCompletedCount,
                     sessionTodoTotalCount: viewModel.uiState.sessionTodoTotalCount,
                     sessionTodoActivePreview: viewModel.uiState.sessionTodoActivePreview?.content,
-                    hideFloatStack: showSessionTodosSheet,
+                    hideFloatStack: showSessionTodosSheet || showSubagentsSheet,
                     hideLiveRetryFailures: viewModel.uiState.retryCard != nil,
                     hideRetryCountdown: viewModel.uiState.isRetrying,
                     // Composer (+ shown snackbar) + 16 end-pin gap; Scroll to end
@@ -544,6 +545,9 @@ struct SessionChatView: View {
         if viewModel.uiState.questionDockHidden {
             items.append(.answerQuestion)
         }
+        if let pill = viewModel.uiState.backgroundWorkPill {
+            items.append(.subagents(pill))
+        }
         let sideQuestions = viewModel.uiState.sideQuestions
         if sideQuestions.failedCount > 0 {
             items.append(.sideQuestionsFailed(count: sideQuestions.failedCount))
@@ -570,6 +574,14 @@ struct SessionChatView: View {
             viewModel.showPermissionDock()
         case .answerQuestion:
             viewModel.showQuestionDock()
+        case .subagents:
+            logChatAction(ProductAnalytics.Action.chatOpenSubagents)
+            ProductAnalytics.logScreenView(
+                screenId: ProductAnalytics.Screen.sessionSubagents,
+                presentation: ProductAnalytics.Presentation.sheet,
+                trigger: ProductAnalytics.Trigger.present
+            )
+            showSubagentsSheet = true
         case .sideQuestionsFailed:
             viewModel.retrySideQuestions()
         case .sideQuestionsReady:
@@ -649,6 +661,20 @@ struct SessionChatView: View {
                 onUse: { viewModel.chooseTimelineStyleFromPicker($0) },
                 onDismiss: { viewModel.dismissTimelineStylePicker() }
             )
+            .sessionChatSubagentsSheet(
+                isPresented: $showSubagentsSheet,
+                subagents: viewModel.uiState.subagents
+            ) { subagent in
+                guard let childID = subagent.childSessionID else { return }
+                logChatAction(ProductAnalytics.Action.chatOpenChildSession)
+                childSessionTarget = ChildSessionNavigationTarget(
+                    sessionID: childID,
+                    sessionTitle: subagent.title ?? subagent.agentName,
+                    worktree: boundSession.worktree,
+                    optimisticNavigationInstanceID: nil,
+                    parentID: session.id
+                )
+            }
             .sessionChatTodosSheet(
                 isPresented: $showSessionTodosSheet,
                 todos: viewModel.uiState.sessionTodos,
@@ -1001,6 +1027,7 @@ struct SessionChatView: View {
             || toolDetailTarget != nil
             || skillsTarget != nil
             || showSessionTodosSheet
+            || showSubagentsSheet
             || showAttachmentSources
             || activePicker != nil
             || showDeleteConfirmation

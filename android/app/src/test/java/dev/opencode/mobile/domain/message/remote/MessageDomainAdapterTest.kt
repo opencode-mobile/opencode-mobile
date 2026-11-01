@@ -614,6 +614,25 @@ class MessageDomainAdapterTest {
         val dto = MessagePartDto(id = "prt-1", type = "tool", tool = "task", state = state)
         val tool = adapter.toMessagePart(dto) as MessagePart.Tool
         assertEquals(1_710_000_000_000, tool.timeStartEpochMs)
+        assertEquals(null, tool.timeEndEpochMs)
+    }
+
+    @Test
+    fun toMessagePart_completedMapsTimeEnd() {
+        val state =
+            buildJsonObject {
+                put("status", "completed")
+                put(
+                    "time",
+                    buildJsonObject {
+                        put("start", 1_710_000_000_000)
+                        put("end", 1_710_000_045_000)
+                    },
+                )
+            }
+        val dto = MessagePartDto(id = "prt-1", type = "tool", tool = "task", state = state)
+        val tool = adapter.toMessagePart(dto) as MessagePart.Tool
+        assertEquals(1_710_000_045_000, tool.timeEndEpochMs)
     }
 
     @Test
@@ -1300,7 +1319,7 @@ class MessageDomainAdapterTest {
                           "input":{"agent":"explore","description":"Find git projects"},
                           "metadata":{"sessionID":"ses_child","status":"completed"}
                         },
-                        "time":{"created":10}
+                        "time":{"created":10,"completed":42}
                       }
                     ],
                     "time":{"created":3}
@@ -1329,6 +1348,7 @@ class MessageDomainAdapterTest {
                 ?.content,
         )
         assertEquals(10L, tool.timeStartEpochMs)
+        assertEquals(42L, tool.timeEndEpochMs)
     }
 
     @Test

@@ -1752,6 +1752,32 @@ class EventDomainAdapterTest {
     }
 
     @Test
+    fun parseEvent_settledToolStampsItsEventTimeAsTheEnd() {
+        fun time(line: String) =
+            adapter
+                .parseEvent(line)
+                ?.rawProperties
+                ?.get("part")
+                ?.jsonObject
+                ?.get("state")
+                ?.jsonObject
+                ?.get("time")
+                ?.jsonObject
+
+        val success =
+            time(
+                """{"type":"session.tool.success","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","created":1710000045000}}""",
+            )
+        val progress =
+            time(
+                """{"type":"session.tool.progress","data":{"sessionID":"ses-1","assistantMessageID":"msg-2","id":"prt-1","created":1710000001000}}""",
+            )
+
+        assertEquals("1710000045000", success?.get("end")?.jsonPrimitive?.content)
+        assertEquals(null, progress?.get("end"))
+    }
+
+    @Test
     fun parseEvent_infersWebsearchToolFromInputQuery() {
         val event =
             adapter.parseEvent(

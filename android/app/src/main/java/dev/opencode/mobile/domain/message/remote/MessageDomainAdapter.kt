@@ -175,6 +175,7 @@ class MessageDomainAdapter(
             metadata = state?.metadata,
             id = id,
             timeStartEpochMs = state?.time?.start,
+            timeEndEpochMs = state?.time?.end,
             isInterrupted =
                 status == ToolStatus.Error &&
                     (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error)),
@@ -851,6 +852,7 @@ class MessageDomainAdapter(
                     metadata = metadata,
                     id = content.id ?: fallbackId,
                     timeStartEpochMs = content.time?.created,
+                    timeEndEpochMs = content.time?.completed,
                     isInterrupted = status == ToolStatus.Error && ToolInterruption.isAbortedType(state?.error?.type),
                     isMalformed =
                         SessionFailure.isMalformedTool(

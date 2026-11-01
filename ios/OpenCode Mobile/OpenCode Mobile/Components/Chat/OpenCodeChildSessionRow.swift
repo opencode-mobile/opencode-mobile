@@ -1,10 +1,41 @@
 import SwiftUI
 
+/// Where a child session row's subagent is, shown beside the elapsed time.
+enum OpenCodeChildSessionRowStatus: CaseIterable, Equatable {
+    case running
+    /// Amber: the subagent waits on a permission or question.
+    case waitingForInput
+    case done
+    /// Error token: the subagent's call failed.
+    case failed
+    /// The run was stopped before the subagent finished.
+    case stopped
+
+    var label: String {
+        switch self {
+        case .running: "running"
+        case .waitingForInput: "waiting for input"
+        case .done: "done"
+        case .failed: "failed"
+        case .stopped: "stopped"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .waitingForInput: OpenCodeColors.warning
+        case .failed: OpenCodeColors.error
+        case .running, .done, .stopped: OpenCodeColors.textWeaker
+        }
+    }
+}
+
 struct OpenCodeChildSessionRow: View {
     let title: String
     let caption: String?
     let subtitle: String?
     let elapsed: String?
+    let status: OpenCodeChildSessionRowStatus?
     let action: (() -> Void)?
 
     init(
@@ -12,12 +43,14 @@ struct OpenCodeChildSessionRow: View {
         caption: String? = nil,
         subtitle: String? = nil,
         elapsed: String? = nil,
+        status: OpenCodeChildSessionRowStatus? = nil,
         action: (() -> Void)? = nil
     ) {
         self.title = title
         self.caption = caption
         self.subtitle = subtitle
         self.elapsed = elapsed
+        self.status = status
         self.action = action
     }
 
@@ -63,6 +96,12 @@ struct OpenCodeChildSessionRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: Self.trailingSpacing) {
+                if let status {
+                    Text(status.label)
+                        .font(OpenCodeTypography.caption)
+                        .foregroundStyle(status.color)
+                        .lineLimit(1)
+                }
                 if let elapsed, !elapsed.isEmpty {
                     Text(elapsed)
                         .font(OpenCodeTypography.caption.monospacedDigit())
@@ -74,6 +113,8 @@ struct OpenCodeChildSessionRow: View {
                         .accessibilityHidden(true)
                 }
             }
+            // Status and time stay whole; the subtitle truncates first.
+            .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.horizontal, Self.paddingHorizontal)
         .padding(.vertical, Self.paddingVertical)
@@ -101,7 +142,8 @@ struct OpenCodeChildSessionRow: View {
             title: title,
             caption: caption,
             subtitle: subtitle,
-            elapsed: elapsed
+            elapsed: elapsed,
+            status: status?.label
         )
     }
 
@@ -126,11 +168,13 @@ func buildChildSessionRowAccessibilityLabel(
     title: String,
     caption: String?,
     subtitle: String?,
-    elapsed: String?
+    elapsed: String?,
+    status: String? = nil
 ) -> String {
     var parts = [title]
     if let caption, !caption.isEmpty { parts.append(caption) }
     if let subtitle, !subtitle.isEmpty { parts.append(subtitle) }
+    if let status, !status.isEmpty { parts.append(status) }
     if let elapsed, !elapsed.isEmpty { parts.append(elapsed) }
     return parts.joined(separator: ", ")
 }

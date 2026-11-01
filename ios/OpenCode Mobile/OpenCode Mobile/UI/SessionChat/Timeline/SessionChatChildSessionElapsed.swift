@@ -1,6 +1,6 @@
 import Foundation
 
-enum SessionChatChildSessionElapsed {
+nonisolated enum SessionChatChildSessionElapsed {
     static func format(startEpochMs: Int64?, nowEpochMs: Int64) -> String? {
         guard let startEpochMs = ToolStartTime.normalizeEpochMs(startEpochMs) else { return nil }
         let elapsedMs = max(0, nowEpochMs - startEpochMs)

@@ -404,6 +404,19 @@ struct MessageDomainAdapterTests {
             return
         }
         #expect(t.timeStartEpochMs == 1_710_000_000_000)
+        #expect(t.timeEndEpochMs == nil)
+    }
+
+    @Test func messagePart_completedMapsTimeEnd() throws {
+        let dto = try decoder.decode(
+            MessagePartDTO.self,
+            from: #"{"id":"prt-1","type":"tool","tool":"task","state":{"status":"completed","time":{"start":1710000000000,"end":1710000045000}}}"#.data(using: .utf8)!
+        )
+        guard case .tool(let t) = adapter.messagePart(from: dto) else {
+            Issue.record("Expected tool part")
+            return
+        }
+        #expect(t.timeEndEpochMs == 1_710_000_045_000)
     }
 
     @Test func messagePart_errorPreservesErrorText() throws {
@@ -1097,7 +1110,7 @@ struct MessageDomainAdapterTests {
                           "input":{"agent":"explore","description":"Find git projects"},
                           "metadata":{"sessionID":"ses_child","status":"completed"}
                         },
-                        "time":{"created":10}
+                        "time":{"created":10,"completed":42}
                       }
                     ],
                     "time":{"created":3}
@@ -1122,6 +1135,7 @@ struct MessageDomainAdapterTests {
         #expect(tool.input?["agent"]?.stringValue == "explore")
         #expect(tool.metadata?["sessionID"]?.stringValue == "ses_child")
         #expect(tool.timeStartEpochMs == 10)
+        #expect(tool.timeEndEpochMs == 42)
     }
 
     @Test func projectV2UserSkillAndFile_keepsArgumentsAndSkillRefWithoutSkillBody() throws {

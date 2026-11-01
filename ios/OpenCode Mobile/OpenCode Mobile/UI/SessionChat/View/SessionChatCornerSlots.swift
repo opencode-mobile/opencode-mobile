@@ -72,6 +72,8 @@ struct SessionChatActivitySlotView: View {
             .iconLabel(icon: .arrowUpward, label: "Review permission")
         case .answerQuestion:
             .iconLabel(icon: .arrowUpward, label: "Answer question")
+        case let .subagents(pill):
+            .counter(label: pill.label, waiting: pill.needsInput)
         case .requestFailed:
             .closable(label: "Request failed")
         case let .sideQuestionsFailed(count):
@@ -101,7 +103,8 @@ struct SessionChatActivitySlotView: View {
 
     static func isTappable(_ item: SessionChatActivityItem) -> Bool {
         switch item {
-        case .reviewPermission, .answerQuestion, .requestFailed, .sideQuestionsFailed, .sideQuestionsReady, .queued: true
+        case .reviewPermission, .answerQuestion, .subagents, .requestFailed, .sideQuestionsFailed, .sideQuestionsReady, .queued:
+            true
         case .sideQuestionsRunning, .syncing, .finished: false
         }
     }
@@ -119,6 +122,8 @@ struct SessionChatActivitySlotView: View {
             "Review permission request"
         case .answerQuestion:
             "Answer question"
+        case let .subagents(pill):
+            "\(pill.accessibilityLabel). Open subagents"
         case .requestFailed:
             "Request failed. Show in chat"
         case let .sideQuestionsFailed(count):

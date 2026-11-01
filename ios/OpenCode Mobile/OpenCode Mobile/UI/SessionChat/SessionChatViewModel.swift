@@ -35,6 +35,13 @@ final class SessionChatViewModel {
     private var lastWorkingLamp: String?
     private var workingChrome = WorkingTurnIndicator.Chrome.unmounted
     private var workingHold: WorkingTurnIndicator.Hold?
+    /// When subagents seen working finished live, keyed by tool part id, for rows with no server time.
+    private var subagentFinishTimes: [String: Int64] = [:]
+    /// When the connection last became live; nil while it is not. Rows published before it
+    /// were seen before a gap, so a finish found after it is not stamped locally.
+    private var subagentLiveSinceMs: Int64?
+    /// When the published subagent rows were computed.
+    private var subagentsSeenAtMs: Int64?
     private var workingHoldTask: Task<Void, Never>?
     private var pendingPromptsGate = PendingPromptsStripGate()
     private var pendingPromptsWakeTask: Task<Void, Never>?
@@ -1458,6 +1465,49 @@ final class SessionChatViewModel {
         await inbox.dismissQuestion(requestID: requestID, sessionID: sessionID)
     }
 
+    /// Subagent rows from the linked timeline, live session activity and the pending
+    /// requests of the session tree; remembers when rows seen working finish.
+    private func resolveSubagents(
+        inboxState: SessionChatInboxRegionState,
+        infoState: SessionInfoRegionState
+    ) -> [SessionChatSubagent] {
+        let nowMs = clock.nowMs()
+        let isLive = infoState.connectionStatus == .live
+        if !isLive {
+            subagentLiveSinceMs = nil
+        } else if subagentLiveSinceMs == nil {
+            subagentLiveSinceMs = nowMs
+        }
+        let seenLive = isLive
+            && subagentsSeenAtMs.map { seen in subagentLiveSinceMs.map { seen >= $0 } ?? false } == true
+        subagentsSeenAtMs = nowMs
+        let messages = SessionChatChildSessionLinker.link(
+            timeline.loadedMessages(),
+            children: timeline.childSessions
+        )
+        func rows(_ finishTimes: [String: Int64]) -> [SessionChatSubagent] {
+            SessionChatBackgroundWork.subagents(
+                messages: messages,
+                sessions: inboxState.permissionSessions + inboxState.questionSessions,
+                busySessionIDs: infoState.busySessionIDs,
+                requestSessionIDs: inboxState.permissionRequests.map(\.sessionID)
+                    + inboxState.questionRequests.map(\.sessionID),
+                localFinishedAtMs: finishTimes
+            )
+        }
+        let current = rows(subagentFinishTimes)
+        let finishTimes = SessionChatBackgroundWork.finishTimes(
+            previous: uiState.subagents,
+            current: current,
+            known: subagentFinishTimes,
+            nowMs: nowMs,
+            seenLive: seenLive
+        )
+        guard finishTimes != subagentFinishTimes else { return current }
+        subagentFinishTimes = finishTimes
+        return rows(finishTimes)
+    }
+
     nonisolated static func orderedPermissionRequests(
         rootSessionID: String,
         sessions: [Session],
@@ -1935,6 +1985,7 @@ final class SessionChatViewModel {
             nowMs: clock.nowMs()
         )
         schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
+        let subagents = resolveSubagents(inboxState: inboxState, infoState: infoState)
         uiState = SessionChatUiState(
             sessionID: infoState.sessionID.isEmpty ? sessionID : infoState.sessionID,
             sessionTitle: infoState.sessionTitle.isEmpty ? sessionTitle : infoState.sessionTitle,
@@ -1975,6 +2026,8 @@ final class SessionChatViewModel {
             sessionTodoActivePreview: SessionTodoList.activePreview(in: inboxState.sessionTodos),
             sessionTodoCompletedCount: SessionTodoList.completedCount(in: inboxState.sessionTodos),
             sessionTodoTotalCount: inboxState.sessionTodos.count,
+            subagents: subagents,
+            backgroundWorkPill: SessionChatBackgroundWork.pill(for: subagents),
             connectionStatus: infoState.connectionStatus,
             canMutate: infoState.canMutate,
             composerEnabled: infoState.composerEnabled,

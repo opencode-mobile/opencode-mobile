@@ -196,6 +196,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
             output: state?.output,
             metadata: state?.metadata,
             timeStartEpochMs: state?.time?.start,
+            timeEndEpochMs: state?.time?.end,
             isInterrupted: status == .error
                 && (state?.interrupted == true || ToolInterruption.isUserInterruption(state?.error)),
             isMalformed: state?.malformed == true,
@@ -801,6 +802,7 @@ nonisolated struct MessageDomainAdapter: Sendable {
                     output: toolOutput(state),
                     metadata: metadata,
                     timeStartEpochMs: content.time?.created,
+                    timeEndEpochMs: content.time?.completed,
                     isInterrupted: status == .error && ToolInterruption.isAbortedType(state?.error?.type),
                     isMalformed: SessionFailure.isMalformedTool(type: state?.error?.type, executed: state?.executed),
                     images: v2ToolImages(state, ownerID: content.id ?? fallbackID)

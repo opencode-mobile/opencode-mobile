@@ -1,8 +1,13 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLayout
+import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLeading
+import dev.opencode.mobile.ui.components.OpenCodeFloatingPillState
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchChangedFile
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchSummary
+import dev.opencode.mobile.ui.components.floatingPillLeading
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatActivityPillCopy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -259,4 +264,68 @@ class SessionChatPillSlotsTest {
         blockId: String,
         neutral: Boolean = false,
     ) = SessionChatTimelineBlock.FailureLine(blockID = blockId, text = "HTTP 500 · Server error", isNeutral = neutral)
+
+    // Background work (subagents)
+
+    private val runningSubagents =
+        SessionChatBackgroundWorkPill("3 subagents", needsInput = false, accessibilityLabel = "3 subagents running")
+    private val waitingSubagent =
+        SessionChatBackgroundWorkPill(
+            "general needs input · 2 running",
+            needsInput = true,
+            accessibilityLabel = "general needs input, 2 subagents running",
+        )
+
+    @Test
+    fun runningSubagentsRankAsRunningWork() {
+        val subagents = SessionChatActivityItem.Subagents(runningSubagents)
+        val slot =
+            SessionChatPillSlots.activity(
+                items = listOf(SessionChatActivityItem.Queued(1), subagents, SessionChatActivityItem.SideQuestionsReady(1)),
+                keyboardVisible = false,
+                nowEpochMs = now,
+            )
+
+        assertEquals(SessionChatActivityPriority.Running, subagents.priority)
+        assertEquals(SessionChatActivityItem.SideQuestionsReady(1), slot.primary)
+        assertEquals(listOf(subagents, SessionChatActivityItem.Queued(1)), slot.overflow)
+    }
+
+    @Test
+    fun waitingSubagentNeedsInputAndStaysFullWithTheKeyboardUp() {
+        val subagents = SessionChatActivityItem.Subagents(waitingSubagent)
+        val slot =
+            SessionChatPillSlots.activity(
+                items = listOf(SessionChatActivityItem.SideQuestionsFailed(1), subagents),
+                keyboardVisible = true,
+                nowEpochMs = now,
+            )
+
+        assertEquals(subagents, slot.primary)
+        assertFalse(slot.primaryCompact)
+    }
+
+    @Test
+    fun subagentsPillUsesTheCounterWithThePulsingDotWhileWaiting() {
+        val running = SessionChatActivityItem.Subagents(runningSubagents)
+        val waiting = SessionChatActivityItem.Subagents(waitingSubagent)
+
+        assertEquals(OpenCodeFloatingPillLayout.Counter("3 subagents", waiting = false), SessionChatActivityPillCopy.layout(running))
+        assertEquals(OpenCodeFloatingPillState.Live, SessionChatActivityPillCopy.state(running))
+        assertEquals(
+            OpenCodeFloatingPillLayout.Counter("general needs input · 2 running", waiting = true),
+            SessionChatActivityPillCopy.layout(waiting),
+        )
+        assertEquals(OpenCodeFloatingPillState.NeedsAttention, SessionChatActivityPillCopy.state(waiting))
+        assertEquals(
+            OpenCodeFloatingPillLeading.PulsingDot,
+            floatingPillLeading(SessionChatActivityPillCopy.layout(waiting), SessionChatActivityPillCopy.state(waiting)),
+        )
+        assertTrue(SessionChatActivityPillCopy.isClickable(running))
+        assertFalse(SessionChatActivityPillCopy.isClosable(running))
+        assertEquals(
+            "general needs input, 2 subagents running. Open subagents",
+            SessionChatActivityPillCopy.accessibilityLabel(waiting),
+        )
+    }
 }

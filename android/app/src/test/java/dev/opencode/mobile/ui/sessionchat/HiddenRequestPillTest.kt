@@ -28,6 +28,16 @@ class HiddenRequestPillTest {
     }
 
     @Test
+    fun subagentsShowUnderAnyComposer() {
+        val pill = SessionChatBackgroundWorkPill("1 subagent", needsInput = false, accessibilityLabel = "1 subagent running")
+
+        assertEquals(
+            listOf(SessionChatActivityItem.Subagents(pill)),
+            sessionChatActivityItems(base.copy(backgroundWorkPill = pill), SessionChatComposerKind.ChildLockout),
+        )
+    }
+
+    @Test
     fun nothingHidden_showsNoPill() {
         assertEquals(emptyList<SessionChatActivityItem>(), sessionChatActivityItems(base, SessionChatComposerKind.Prompt))
     }

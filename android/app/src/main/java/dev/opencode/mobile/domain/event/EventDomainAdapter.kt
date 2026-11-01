@@ -1032,7 +1032,14 @@ class EventDomainAdapter(
                 error?.let { put("error", it) }
                 metadata?.let { put("metadata", it) }
                 properties.long("created")?.let { created ->
-                    put("time", buildJsonObject { put("start", created) })
+                    put(
+                        "time",
+                        buildJsonObject {
+                            put("start", created)
+                            // A settled call's event time is when it ended; the store keeps the first start.
+                            if (status == "completed" || status == "error") put("end", created)
+                        },
+                    )
                 }
             }
         val part =

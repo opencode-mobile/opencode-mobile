@@ -181,6 +181,8 @@ sealed class MessagePart {
         val metadata: JsonObject? = null,
         val id: String? = null,
         val timeStartEpochMs: Long? = null,
+        /** When the call settled on the server (v1 `state.time.end`, v2 completion time); null while running. */
+        val timeEndEpochMs: Long? = null,
         /** Failed because the user stopped the run or declined the call, not a real failure. */
         val isInterrupted: Boolean = false,
         /** The model emitted a tool call the server could not run (`executed: false`). */

@@ -72,6 +72,7 @@ object ProductAnalytics {
         const val SESSION_CHIP_TIMELINE_INTRO = "session_chip_timeline_intro"
         const val SESSION_TIMELINE_STYLE_PICKER = "session_timeline_style_picker"
         const val SESSION_TODOS = "session_todos"
+        const val SESSION_SUBAGENTS = "session_subagents"
         const val SESSION_CONTEXT = "session_context"
         const val CHANGES = "changes"
         const val CHANGES_FILE_VIEWER = "changes_file_viewer"
@@ -166,6 +167,7 @@ object ProductAnalytics {
         const val CHAT_OPEN_CHANGES_FROM_TOOL = "chat_open_changes_from_tool"
         const val CHAT_OPEN_CHILD_SESSION = "chat_open_child_session"
         const val CHAT_OPEN_TODOS = "chat_open_todos"
+        const val CHAT_OPEN_SUBAGENTS = "chat_open_subagents"
         const val CHAT_SCROLL_TO_END = "chat_scroll_to_end"
         const val CHAT_OPEN_MESSAGE_ACTIONS = "chat_open_message_actions"
         const val CHAT_OPEN_TOOL_DETAIL = "chat_open_tool_detail"
@@ -278,6 +280,7 @@ object ProductAnalytics {
         const val TIMELINE_STYLE_PICKER_DISMISS = "timeline_style_picker_dismiss"
         const val SESSION_TOOL_GROUP_BACK = "session_tool_group_back"
         const val TODOS_DISMISS = "todos_dismiss"
+        const val SUBAGENTS_DISMISS = "subagents_dismiss"
 
         // Session context / changes
         const val SESSION_CONTEXT_BACK = "session_context_back"

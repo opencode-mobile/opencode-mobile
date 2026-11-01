@@ -705,6 +705,7 @@ private extension MessagePart {
                 output: part.output,
                 metadata: part.metadata,
                 timeStartEpochMs: part.timeStartEpochMs,
+                timeEndEpochMs: part.timeEndEpochMs,
                 isInterrupted: part.isInterrupted,
                 isMalformed: part.isMalformed
             )
@@ -843,6 +844,7 @@ private extension CachedMessagePartPayload {
                     output: output,
                     metadata: metadata,
                     timeStartEpochMs: timeStartEpochMs,
+                    timeEndEpochMs: timeEndEpochMs,
                     isInterrupted: isInterrupted,
                     isMalformed: isMalformed
                 )

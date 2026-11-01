@@ -717,6 +717,74 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun backgroundWorkPill_countsRunningSubagentsAndFlagsTheOneWaitingForInput() =
+        runTest(testDispatcher) {
+            fun subagent(
+                id: String,
+                child: String,
+                agent: String,
+            ) = MessagePart.Tool(
+                toolName = "task",
+                status = ToolStatus.Running,
+                id = id,
+                input =
+                    buildJsonObject {
+                        put("description", "Look around")
+                        put("subagent_type", agent)
+                    },
+                metadata = buildJsonObject { put("sessionId", child) },
+            )
+            val sessionRepository =
+                FakeSessionRepository(
+                    sessions =
+                        listOf(
+                            Session(id = "ses-1", title = "Title"),
+                            Session(id = "child-a", title = "Look around (@general subagent)", parentId = "ses-1"),
+                            Session(id = "child-b", title = "Look around (@explore subagent)", parentId = "ses-1"),
+                            Session(id = "child-c", title = "Look around (@explore subagent)", parentId = "ses-1"),
+                        ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(id = "msg-0", role = MessageRole.User, text = "Go"),
+                                    Message(
+                                        id = "msg-1",
+                                        role = MessageRole.Assistant,
+                                        text = "",
+                                        parts =
+                                            listOf(
+                                                subagent("prt-a", "child-a", "general"),
+                                                subagent("prt-b", "child-b", "explore"),
+                                                subagent("prt-c", "child-c", "explore"),
+                                            ),
+                                    ),
+                                ),
+                        ),
+                    sessionRepository = sessionRepository,
+                    permissionLiveStore = FakePermissionLiveStore(listOf(permissionRequest("permission-a", "child-a"))),
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(
+                SessionChatBackgroundWorkPill(
+                    label = "general needs input · 2 running",
+                    needsInput = true,
+                    accessibilityLabel = "general needs input, 2 subagents running",
+                ),
+                state.backgroundWorkPill,
+            )
+            assertEquals(listOf("prt-a", "prt-b", "prt-c"), state.subagents.map { it.id })
+            assertEquals("child-a", state.subagents.first().childSessionId)
+        }
+
+    @Test
     fun questionPaging_keepsEachRequestsAnswersAndCollapses() =
         runTest(testDispatcher) {
             val sessionRepository =
