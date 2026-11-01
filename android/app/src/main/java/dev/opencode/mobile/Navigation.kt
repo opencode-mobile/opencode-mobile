@@ -153,6 +153,7 @@ import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
 import dev.opencode.mobile.ui.main.MainScreen
 import dev.opencode.mobile.ui.main.SessionOpenTarget
 import dev.opencode.mobile.ui.onboarding.AppOnboardingScreen
+import dev.opencode.mobile.ui.playground.SessionChatPlaygroundScreen
 import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
 import dev.opencode.mobile.ui.settings.AppearanceSettingsScreen
@@ -499,6 +500,12 @@ fun MainNavigation() {
                                                     // A full-screen route, also on wide windows; null in release builds.
                                                     onHighlightingLabClick =
                                                         HighlightingLabSeam.homeRoute?.let { route -> { backStack.add(route) } },
+                                                    // A full-screen route, also on wide windows.
+                                                    onSessionChatPlaygroundClick = {
+                                                        if (backStack.lastOrNull() != SessionChatPlaygroundHome) {
+                                                            backStack.add(SessionChatPlaygroundHome)
+                                                        }
+                                                    },
                                                     onDiagnosticLogsClick = {
                                                         openSettingsDetail(SettingsDetail.DiagnosticLogs)
                                                     },
@@ -666,6 +673,11 @@ fun MainNavigation() {
                                             settingsDetailContent(SettingsDetail.DiagnosticLogs, null) {
                                                 backStack.popRouteUnlessRoot()
                                             }
+                                        }
+                                    }
+                                    entry<SessionChatPlaygroundHome> {
+                                        RouteSurface(edgeToEdgeBottom = true) {
+                                            SessionChatPlaygroundScreen(onNavigateBack = { backStack.popRouteUnlessRoot() })
                                         }
                                     }
                                     entry<ComponentGalleryHome> {
