@@ -133,7 +133,7 @@ struct V1AgentShellAdapterTests {
 
     @Test func remoteKeepsAShellSeenRunningAfterItEnds() async {
         let (transcript, continuation) = AsyncStream.makeStream(of: [Message].self)
-        var updates = V1AgentShellRemote().shells(sessionID: "ses-1", directory: "/tmp/project", transcript: transcript)
+        var updates = V1AgentShellRemote().shells(sessionID: "ses-1", directory: "/tmp/project", transcript: { transcript })
             .makeAsyncIterator()
 
         continuation.yield(self.transcript([bash("old", status: .completed), bash("prt-1", status: .running)]))

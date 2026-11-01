@@ -1,55 +1,107 @@
 import Foundation
 
+/// Subscribes to the open session's loaded messages; each new transcript is yielded as the
+/// messages change. Only remotes that read the transcript (v1) call it, so other protocols
+/// never hold a subscription.
+typealias AgentShellTranscript = @Sendable () async -> AsyncStream<[Message]>
+
 /// One protocol's way to find, follow and stop the shells an agent runs for a session.
-/// `transcript` yields the open session's loaded messages each time they change; only
-/// protocols that derive shells from the transcript (v1) read it.
 nonisolated protocol AgentShellRemote: Sendable {
     /// The session's running shells, live while iterated. A shell seen running that ends
     /// stays in the list with its end state until the server forgets it.
-    func shells(sessionID: String, directory: String, transcript: AsyncStream<[Message]>) -> AsyncStream<[AgentShell]>
+    func shells(sessionID: String, directory: String, transcript: @escaping AgentShellTranscript) -> AsyncStream<[AgentShell]>
     /// The shell's latest output, live while iterated. Finishes once the output is gone.
-    func output(shell: AgentShell, directory: String, transcript: AsyncStream<[Message]>) -> AsyncStream<AgentShellOutput>
+    func output(shell: AgentShell, directory: String, transcript: @escaping AgentShellTranscript) -> AsyncStream<AgentShellOutput>
     func stop(shell: AgentShell, directory: String) async throws
 }
 
 /// Picks the remote for the active server: v1 reads the transcript, v2 the shell API
 /// when its contract declares `GET /api/shell`, and a v2 server without it has no shells.
+///
+/// The shell list picks again on every stream (re)connect: on a cold start the v2 contract
+/// is read only after the screen bound, so the first pick can be "no shells".
 nonisolated struct ProtocolSelectedAgentShellRemote: AgentShellRemote {
+    enum Source: Equatable, Sendable {
+        case v1
+        case v2
+        case unavailable
+    }
+
+    static let reconnectEvents: Set<String> = ["server.connected", "stream.reconnected"]
+
     private let v1: any AgentShellRemote
     private let v2: any AgentShellRemote
     private let unavailable: any AgentShellRemote = UnavailableAgentShellRemote()
     private let activeConnectionManager: ActiveConnectionManager?
+    private let eventStream: (any ForegroundEventStream)?
 
-    init(v1: any AgentShellRemote, v2: any AgentShellRemote, activeConnectionManager: ActiveConnectionManager?) {
+    init(
+        v1: any AgentShellRemote,
+        v2: any AgentShellRemote,
+        activeConnectionManager: ActiveConnectionManager?,
+        eventStream: (any ForegroundEventStream)? = nil
+    ) {
         self.v1 = v1
         self.v2 = v2
         self.activeConnectionManager = activeConnectionManager
+        self.eventStream = eventStream
     }
 
-    private func selected() async -> any AgentShellRemote {
-        guard let activeConnectionManager else { return v1 }
+    private func source() async -> Source {
+        guard let activeConnectionManager else { return .v1 }
         switch await activeConnectionManager.currentProtocolOrProbe() {
-        case .v1: return v1
-        case .v2: return activeConnectionManager.capabilities.supportsAgentShells ? v2 : unavailable
+        case .v1: return .v1
+        case .v2:
+            let supported = await MainActor.run { activeConnectionManager.capabilities.supportsAgentShells }
+            return supported ? .v2 : .unavailable
         }
     }
 
-    func shells(sessionID: String, directory: String, transcript: AsyncStream<[Message]>) -> AsyncStream<[AgentShell]> {
-        forwarding { await selected().shells(sessionID: sessionID, directory: directory, transcript: transcript) }
+    private func remote(for source: Source) -> any AgentShellRemote {
+        switch source {
+        case .v1: v1
+        case .v2: v2
+        case .unavailable: unavailable
+        }
     }
 
-    func output(shell: AgentShell, directory: String, transcript: AsyncStream<[Message]>) -> AsyncStream<AgentShellOutput> {
-        forwarding { await selected().output(shell: shell, directory: directory, transcript: transcript) }
+    func shells(sessionID: String, directory: String, transcript: @escaping AgentShellTranscript) -> AsyncStream<[AgentShell]> {
+        let eventStream = eventStream
+        return AsyncStream { continuation in
+            let task = Task {
+                // Subscribe first so a reconnect during the first pick is not missed.
+                let events = eventStream?.events()
+                var current = await source()
+                var inner = forward(remote(for: current).shells(sessionID: sessionID, directory: directory, transcript: transcript), to: continuation)
+                if let events {
+                    for await event in events {
+                        guard Self.reconnectEvents.contains(event.type) else { continue }
+                        let next = await source()
+                        guard next != current else { continue }
+                        inner.cancel()
+                        current = next
+                        inner = forward(remote(for: next).shells(sessionID: sessionID, directory: directory, transcript: transcript), to: continuation)
+                    }
+                } else {
+                    let only = inner
+                    await withTaskCancellationHandler {
+                        await only.value
+                    } onCancel: {
+                        only.cancel()
+                    }
+                }
+                inner.cancel()
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 
-    func stop(shell: AgentShell, directory: String) async throws {
-        try await selected().stop(shell: shell, directory: directory)
-    }
-
-    private func forwarding<T: Sendable>(_ make: @escaping @Sendable () async -> AsyncStream<T>) -> AsyncStream<T> {
+    func output(shell: AgentShell, directory: String, transcript: @escaping AgentShellTranscript) -> AsyncStream<AgentShellOutput> {
         AsyncStream { continuation in
             let task = Task {
-                for await value in await make() {
+                let stream = remote(for: await source()).output(shell: shell, directory: directory, transcript: transcript)
+                for await value in stream {
                     continuation.yield(value)
                 }
                 continuation.finish()
@@ -57,16 +109,29 @@ nonisolated struct ProtocolSelectedAgentShellRemote: AgentShellRemote {
             continuation.onTermination = { _ in task.cancel() }
         }
     }
+
+    func stop(shell: AgentShell, directory: String) async throws {
+        try await remote(for: await source()).stop(shell: shell, directory: directory)
+    }
+
+    /// Copies `stream` into `continuation` without finishing it, so another source can take over.
+    private func forward<T: Sendable>(_ stream: AsyncStream<T>, to continuation: AsyncStream<T>.Continuation) -> Task<Void, Never> {
+        Task {
+            for await value in stream {
+                continuation.yield(value)
+            }
+        }
+    }
 }
 
 /// v1: shells are the session's `bash` tool calls; output is the call's live metadata.
 nonisolated struct V1AgentShellRemote: AgentShellRemote {
-    func shells(sessionID: String, directory _: String, transcript: AsyncStream<[Message]>) -> AsyncStream<[AgentShell]> {
+    func shells(sessionID: String, directory _: String, transcript: @escaping AgentShellTranscript) -> AsyncStream<[AgentShell]> {
         AsyncStream { continuation in
             let task = Task {
                 var seenRunning: Set<String> = []
                 var last: [AgentShell]?
-                for await messages in transcript {
+                for await messages in await transcript() {
                     let all = V1AgentShellAdapter.shells(in: messages, sessionID: sessionID)
                     seenRunning.formUnion(all.filter(\.status.isRunning).map(\.id))
                     let visible = all.filter { seenRunning.contains($0.id) }
@@ -80,11 +145,11 @@ nonisolated struct V1AgentShellRemote: AgentShellRemote {
         }
     }
 
-    func output(shell: AgentShell, directory _: String, transcript: AsyncStream<[Message]>) -> AsyncStream<AgentShellOutput> {
+    func output(shell: AgentShell, directory _: String, transcript: @escaping AgentShellTranscript) -> AsyncStream<AgentShellOutput> {
         AsyncStream { continuation in
             let task = Task {
                 var last: AgentShellOutput?
-                for await messages in transcript {
+                for await messages in await transcript() {
                     guard let output = V1AgentShellAdapter.output(shellID: shell.id, in: messages), output != last else {
                         continue
                     }
@@ -117,7 +182,7 @@ nonisolated struct V2AgentShellRemote: AgentShellRemote {
         self.pollInterval = pollInterval
     }
 
-    func shells(sessionID: String, directory: String, transcript _: AsyncStream<[Message]>) -> AsyncStream<[AgentShell]> {
+    func shells(sessionID: String, directory: String, transcript _: @escaping AgentShellTranscript) -> AsyncStream<[AgentShell]> {
         let api = api
         let eventStream = eventStream
         return AsyncStream { continuation in
@@ -144,7 +209,7 @@ nonisolated struct V2AgentShellRemote: AgentShellRemote {
         }
     }
 
-    func output(shell: AgentShell, directory: String, transcript _: AsyncStream<[Message]>) -> AsyncStream<AgentShellOutput> {
+    func output(shell: AgentShell, directory: String, transcript _: @escaping AgentShellTranscript) -> AsyncStream<AgentShellOutput> {
         let api = api
         let pollInterval = pollInterval
         return AsyncStream { continuation in
@@ -196,14 +261,14 @@ nonisolated struct V2AgentShellRemote: AgentShellRemote {
 
 /// A server with no shell support: no shells, no output, no Stop.
 nonisolated struct UnavailableAgentShellRemote: AgentShellRemote {
-    func shells(sessionID _: String, directory _: String, transcript _: AsyncStream<[Message]>) -> AsyncStream<[AgentShell]> {
+    func shells(sessionID _: String, directory _: String, transcript _: @escaping AgentShellTranscript) -> AsyncStream<[AgentShell]> {
         AsyncStream { continuation in
             continuation.yield([])
             continuation.finish()
         }
     }
 
-    func output(shell _: AgentShell, directory _: String, transcript _: AsyncStream<[Message]>) -> AsyncStream<AgentShellOutput> {
+    func output(shell _: AgentShell, directory _: String, transcript _: @escaping AgentShellTranscript) -> AsyncStream<AgentShellOutput> {
         AsyncStream { $0.finish() }
     }
 
