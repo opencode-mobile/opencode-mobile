@@ -165,18 +165,18 @@ object SessionChatPillSlots {
             .filter { it > nowEpochMs }
             .minOrNull()
 
-    /** Top left: todos, then the branch, at most two. */
+    /** Top left: the branch in the corner, then todos, at most two. */
     fun context(
         todosCompleted: Int?,
         todosTotal: Int?,
         branch: SessionBranchPillUiState?,
     ): List<SessionChatContextItem> {
         val items = mutableListOf<SessionChatContextItem>()
-        if (todosTotal != null && todosTotal > 0) {
-            items += SessionChatContextItem.Todos((todosCompleted ?: 0).coerceIn(0, todosTotal), todosTotal)
-        }
         if (branch != null && branch.branch.isNotEmpty()) {
             items += SessionChatContextItem.Branch(branch)
+        }
+        if (todosTotal != null && todosTotal > 0) {
+            items += SessionChatContextItem.Todos((todosCompleted ?: 0).coerceIn(0, todosTotal), todosTotal)
         }
         return items.take(MAX_CONTEXT_PILLS)
     }

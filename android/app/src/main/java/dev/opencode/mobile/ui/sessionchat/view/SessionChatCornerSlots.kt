@@ -206,6 +206,7 @@ internal fun SessionChatContextSlotView(
     onTodosClick: () -> Unit,
     onBranchClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onBranchCopied: () -> Unit = {},
 ) {
     Row(
         modifier = modifier,
@@ -223,10 +224,9 @@ internal fun SessionChatContextSlotView(
                     )
                 is SessionChatContextItem.Branch ->
                     OpenCodeSessionBranchPill(
-                        branch = item.pill.branch,
-                        additions = item.pill.additions,
-                        deletions = item.pill.deletions,
-                        onClick = onBranchClick,
+                        summary = item.pill.summary,
+                        onViewAllChanges = onBranchClick,
+                        onBranchNameCopied = onBranchCopied,
                     )
             }
         }

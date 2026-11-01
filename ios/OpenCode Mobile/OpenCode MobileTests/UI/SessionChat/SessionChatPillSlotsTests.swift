@@ -93,7 +93,10 @@ struct SessionChatPillSlotsTests {
     }
 
     @Test func keyboardHidesContextAndNavigation() {
-        let branch = SessionChatBranchPillUiState(branch: "main", additions: 1, deletions: 2)
+        let branch = SessionChatBranchPillUiState(summary: OpenCodeSessionBranchSummary(
+            branch: "main",
+            files: [OpenCodeSessionBranchChangedFile(path: "a.kt", additions: 1, deletions: 2)]
+        ))
         #expect(!SessionChatPillSlots.showsContext(keyboardVisible: true))
         #expect(SessionChatPillSlots.showsContext(keyboardVisible: false))
         // The items stay, so the top row keeps its measured inset while hidden.
@@ -139,12 +142,15 @@ struct SessionChatPillSlotsTests {
 
     // MARK: Context
 
-    @Test func contextShowsTodosThenBranchAtMostTwo() {
-        let branch = SessionChatBranchPillUiState(branch: "main", additions: 1, deletions: 2)
+    @Test func contextShowsBranchInTheCornerThenTodosAtMostTwo() {
+        let branch = SessionChatBranchPillUiState(summary: OpenCodeSessionBranchSummary(
+            branch: "main",
+            files: [OpenCodeSessionBranchChangedFile(path: "a.kt", additions: 1, deletions: 2)]
+        ))
 
         #expect(SessionChatPillSlots.context(todos: (2, 5), branch: branch) == [
-            .todos(completed: 2, total: 5),
             .branch(branch),
+            .todos(completed: 2, total: 5),
         ])
         #expect(SessionChatPillSlots.context(todos: (0, 0), branch: branch) == [.branch(branch)])
         #expect(SessionChatPillSlots.context(todos: nil, branch: nil).isEmpty)

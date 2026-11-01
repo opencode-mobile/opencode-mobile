@@ -207,6 +207,7 @@ internal data class SessionChatTimelineViewProps(
     val onRetry: () -> Unit = {},
     val onLoadOlder: () -> Unit = {},
     val onSessionBranchClick: () -> Unit = {},
+    val onSessionBranchCopied: () -> Unit = {},
     val onSessionTodosClick: () -> Unit = {},
     val onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     val onToolDetailTap: (SessionChatToolDetailTarget) -> Unit = {},
@@ -370,6 +371,7 @@ private fun SessionChatTimelineStateContent(
                 onRefresh = props.onRefresh,
                 onLoadOlder = props.onLoadOlder,
                 onSessionBranchClick = props.onSessionBranchClick,
+                onSessionBranchCopied = props.onSessionBranchCopied,
                 onSessionTodosClick = props.onSessionTodosClick,
                 onMessageActionsTap = props.onMessageActionsTap,
                 onToolDetailTap = props.onToolDetailTap,
@@ -428,6 +430,7 @@ private fun SessionChatTimelineReadyView(
     onRefresh: () -> Unit,
     onLoadOlder: () -> Unit,
     onSessionBranchClick: () -> Unit,
+    onSessionBranchCopied: () -> Unit,
     onSessionTodosClick: () -> Unit,
     onMessageActionsTap: (SessionChatMessageActionsTarget) -> Unit,
     onToolDetailTap: (SessionChatToolDetailTarget) -> Unit,
@@ -735,6 +738,7 @@ private fun SessionChatTimelineReadyView(
                 todosActivePreview = sessionTodoActivePreview,
                 onTodosClick = onSessionTodosClick,
                 onBranchClick = onSessionBranchClick,
+                onBranchCopied = onSessionBranchCopied,
                 modifier =
                     Modifier
                         .align(Alignment.TopStart)

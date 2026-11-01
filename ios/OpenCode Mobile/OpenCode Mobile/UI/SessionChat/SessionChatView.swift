@@ -347,6 +347,7 @@ struct SessionChatView: View {
                         logChatAction(ProductAnalytics.Action.chatOpenChanges)
                         changesTarget = viewModel.uiState.changesNavigationTarget(worktree: boundSession.worktree)
                     },
+                    onSessionBranchCopied: { viewModel.branchNameCopied() },
                     onSessionTodosTap: {
                         guard !blocksSessionTodosSheet else { return }
                         logChatAction(ProductAnalytics.Action.chatOpenTodos)

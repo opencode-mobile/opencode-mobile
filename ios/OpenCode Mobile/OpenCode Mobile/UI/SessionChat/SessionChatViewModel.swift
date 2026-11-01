@@ -72,6 +72,7 @@ final class SessionChatViewModel {
     private var moveInFlight = false
     private var moveErrorMessage: String?
     private var moveNotice: String?
+    private var branchCopiedNotice: String?
     /// Shown instead of opening Changes when the last turn moved folders.
     private var turnDiffNotice: String?
     private var movedDirectory: String?
@@ -235,6 +236,7 @@ final class SessionChatViewModel {
         suppressedSnackbarKey = nil
         snackbarSequence = 0
         turnDiffNotice = nil
+        branchCopiedNotice = nil
         OpenCodeLog.sessionChat.info("bind session=\(sessionID) worktree=\(worktree) title=\(sessionTitle)")
         sessionInfo.bind(sessionID: sessionID, sessionTitle: sessionTitle)
         timeline.onChange = { [weak self] in self?.publishUiState() }
@@ -922,6 +924,17 @@ final class SessionChatViewModel {
         publishUiState()
     }
 
+    /// The branch pill copied the branch name; confirm it with a snackbar.
+    func branchNameCopied() {
+        branchCopiedNotice = Self.branchCopiedMessage
+        // A repeat copy shows the snackbar again even if the last one was dismissed.
+        lastSnackbarKey = nil
+        suppressedSnackbarKey = nil
+        publishUiState()
+    }
+
+    static let branchCopiedMessage = "Branch name copied"
+
     func consumeSnackbar() {
         if uiState.snackbar != nil {
             logChatAction(ProductAnalytics.Action.chatDismissSnackbar)
@@ -931,6 +944,7 @@ final class SessionChatViewModel {
         timelineStylePickerNotice = nil
         moveErrorMessage = nil
         moveNotice = nil
+        branchCopiedNotice = nil
         turnDiffNotice = nil
         commands.clearActionFeedback()
         sideQuestions.clearNotice()
@@ -1866,6 +1880,7 @@ final class SessionChatViewModel {
             successNotice: composerState.followUpNotice
                 ?? commandsState.actionSuccessMessage
                 ?? moveNotice
+                ?? branchCopiedNotice
                 ?? chipTimelineIntroNotice
                 ?? timelineStylePickerNotice
         )
@@ -1927,7 +1942,10 @@ final class SessionChatViewModel {
             projectLetter: projectIdentity.letter,
             projectLetterAccent: projectIdentity.accent,
             worktreeCheckout: projectIdentity.isWorktreeCheckout,
-            sessionBranchPill: SessionChatBranchPillUiState.resolved(from: repoStripState),
+            sessionBranchPill: SessionChatBranchPillUiState.resolved(
+                from: repoStripState,
+                isWorktree: projectIdentity.isWorktreeCheckout
+            ),
             timeline: timelineState.timeline,
             messages: timelineState.messages,
             pendingPrompts: pendingResolution.prompts,

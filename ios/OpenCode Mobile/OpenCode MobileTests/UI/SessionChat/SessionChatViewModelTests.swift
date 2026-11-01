@@ -3834,6 +3834,24 @@ struct SessionChatViewModelTests {
         #expect(viewModel.uiState.snackbar?.tone == .default)
     }
 
+    @Test func branchNameCopied_confirmsWithSnackbarEachTime() async {
+        let viewModel = makeViewModel(sessionRepository: FakeChatSessionRepository(), serverProtocol: .v2)
+        defer { viewModel.stopObserving() }
+        await viewModel.loadMessages()
+
+        viewModel.branchNameCopied()
+        #expect(viewModel.uiState.snackbar?.message == SessionChatViewModel.branchCopiedMessage)
+        #expect(viewModel.uiState.snackbar?.tone == .default)
+        let firstID = viewModel.uiState.snackbar?.id
+
+        viewModel.consumeSnackbar()
+        #expect(viewModel.uiState.snackbar == nil)
+
+        viewModel.branchNameCopied()
+        #expect(viewModel.uiState.snackbar?.message == SessionChatViewModel.branchCopiedMessage)
+        #expect(viewModel.uiState.snackbar?.id != firstID)
+    }
+
     @Test func moveToWorktree_failureShowsTheServerMessage() async {
         let sessionRepository = FakeChatSessionRepository()
         sessionRepository.moveSessionError = .http(statusCode: 400, message: "Destination is not a directory")

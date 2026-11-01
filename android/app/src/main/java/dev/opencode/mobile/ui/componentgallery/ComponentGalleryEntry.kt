@@ -481,7 +481,7 @@ val ComponentGalleryEntries =
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.SessionBranchPill,
             title = "Session Branch Pill",
-            description = "Floating worktree branch and uncommitted line counts.",
+            description = "Floating branch pill with uncommitted line counts and a branch details popover.",
             category = ComponentGalleryCategory.Session,
         ),
         ComponentGalleryEntry(

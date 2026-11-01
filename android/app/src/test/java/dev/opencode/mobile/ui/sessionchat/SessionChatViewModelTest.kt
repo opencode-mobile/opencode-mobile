@@ -127,6 +127,7 @@ import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -6744,6 +6745,25 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
             assertNull(viewModel.uiState.value.sessionStatusLabel)
             assertNull(viewModel.uiState.value.snackbar)
+        }
+
+    @Test
+    fun branchNameCopied_confirmsWithSnackbarEachTime() =
+        runTest(testDispatcher) {
+            val viewModel = createViewModel(repository = FakeMessageRepository())
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            viewModel.branchNameCopied()
+            assertEquals(SessionChatViewModel.BRANCH_COPIED_MESSAGE, viewModel.uiState.value.snackbar?.message)
+            val firstId = viewModel.uiState.value.snackbar?.id
+
+            viewModel.consumeSnackbar()
+            assertNull(viewModel.uiState.value.snackbar)
+
+            viewModel.branchNameCopied()
+            assertEquals(SessionChatViewModel.BRANCH_COPIED_MESSAGE, viewModel.uiState.value.snackbar?.message)
+            assertNotEquals(firstId, viewModel.uiState.value.snackbar?.id)
         }
 
     @Test

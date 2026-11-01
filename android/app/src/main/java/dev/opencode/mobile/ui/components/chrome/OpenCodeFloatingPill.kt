@@ -63,7 +63,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 private val FloatingPillShape = RoundedCornerShape(percent = 50)
 private val FloatingPillPaddingHorizontal = 14.dp
 private val FloatingPillPaddingVertical = 8.dp
-private val FloatingPillMinHeight = 36.dp
+internal val FloatingPillMinHeight = 36.dp
 private val FloatingPillIconSize = 16.dp
 private val FloatingPillSpinnerSize = 14.dp
 private val FloatingPillDotSize = 8.dp

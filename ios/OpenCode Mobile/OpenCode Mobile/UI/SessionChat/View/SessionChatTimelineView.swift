@@ -39,6 +39,7 @@ struct SessionChatTimelineViewProps {
     let onRetry: () async -> Void
     let onLoadOlder: () -> Void
     let onSessionBranchTap: () -> Void
+    let onSessionBranchCopied: () -> Void
     let onSessionTodosTap: () -> Void
     let onMessageActionsTap: (SessionChatMessageActionsTarget) -> Void
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
@@ -103,6 +104,7 @@ struct SessionChatTimelineViewProps {
         onRetry: @escaping () async -> Void = {},
         onLoadOlder: @escaping () -> Void = {},
         onSessionBranchTap: @escaping () -> Void = {},
+        onSessionBranchCopied: @escaping () -> Void = {},
         onSessionTodosTap: @escaping () -> Void = {},
         onMessageActionsTap: @escaping (SessionChatMessageActionsTarget) -> Void,
         onToolDetailTap: @escaping (SessionChatToolDetailTarget) -> Void = { _ in },
@@ -157,6 +159,7 @@ struct SessionChatTimelineViewProps {
         self.onRetry = onRetry
         self.onLoadOlder = onLoadOlder
         self.onSessionBranchTap = onSessionBranchTap
+        self.onSessionBranchCopied = onSessionBranchCopied
         self.onSessionTodosTap = onSessionTodosTap
         self.onMessageActionsTap = onMessageActionsTap
         self.onToolDetailTap = onToolDetailTap
@@ -583,7 +586,8 @@ private struct SessionChatTimelineReadyView: View {
                 activePreview: props.sessionTodoActivePreview
             ),
             onTodosTap: props.onSessionTodosTap,
-            onBranchTap: props.onSessionBranchTap
+            onBranchTap: props.onSessionBranchTap,
+            onBranchCopied: props.onSessionBranchCopied
         )
 
         if #available(iOS 26, *) {

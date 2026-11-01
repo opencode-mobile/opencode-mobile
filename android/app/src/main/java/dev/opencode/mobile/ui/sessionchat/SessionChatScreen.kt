@@ -975,6 +975,7 @@ private fun SessionChatScreenBody(
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_CHANGES)
                                 onReviewChangesClick(uiState.changesNavigationTarget(currentWorktree))
                             },
+                            onSessionBranchCopied = viewModel::branchNameCopied,
                             onSessionTodosClick = {
                                 logChatAction(ProductAnalytics.Action.CHAT_OPEN_TODOS)
                                 if (!blocksSessionTodosSheet) {

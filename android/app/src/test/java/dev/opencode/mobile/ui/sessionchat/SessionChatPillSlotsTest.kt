@@ -1,6 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.ui.components.OpenCodeSessionBranchChangedFile
+import dev.opencode.mobile.ui.components.OpenCodeSessionBranchSummary
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -117,7 +119,9 @@ class SessionChatPillSlotsTest {
 
     @Test
     fun keyboardHidesContextAndNavigation() {
-        val branch = SessionBranchPillUiState("main", 1, 2)
+        val branch = SessionBranchPillUiState(
+                OpenCodeSessionBranchSummary("main", files = listOf(OpenCodeSessionBranchChangedFile("a.kt", 1, 2))),
+            )
         assertFalse(SessionChatPillSlots.showsContext(keyboardVisible = true))
         assertTrue(SessionChatPillSlots.showsContext(keyboardVisible = false))
         // The items stay, so the top row keeps its measured inset while hidden.
@@ -169,11 +173,13 @@ class SessionChatPillSlotsTest {
     // Context
 
     @Test
-    fun contextShowsTodosThenBranchAtMostTwo() {
-        val branch = SessionBranchPillUiState("main", 1, 2)
+    fun contextShowsBranchInTheCornerThenTodosAtMostTwo() {
+        val branch = SessionBranchPillUiState(
+                OpenCodeSessionBranchSummary("main", files = listOf(OpenCodeSessionBranchChangedFile("a.kt", 1, 2))),
+            )
 
         assertEquals(
-            listOf(SessionChatContextItem.Todos(2, 5), SessionChatContextItem.Branch(branch)),
+            listOf(SessionChatContextItem.Branch(branch), SessionChatContextItem.Todos(2, 5)),
             SessionChatPillSlots.context(2, 5, branch),
         )
         assertEquals(

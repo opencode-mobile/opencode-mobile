@@ -468,7 +468,7 @@ let componentGalleryEntries = [
     ComponentGalleryEntry(
         id: .sessionBranchPill,
         title: "Session Branch Pill",
-        description: "Floating branch and working-tree line totals over Session Chat.",
+        description: "Floating branch pill with working-tree line counts and a branch details popover.",
         category: .session
     ),
     ComponentGalleryEntry(

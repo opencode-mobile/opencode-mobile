@@ -962,17 +962,26 @@ struct SessionChatRepoStripRegionState: Equatable {
 
 /// Floating session branch pill. Nil when the worktree branch is unknown.
 struct SessionChatBranchPillUiState: Equatable {
-    let branch: String
-    let additions: Int
-    let deletions: Int
+    let summary: OpenCodeSessionBranchSummary
 
-    static func resolved(from region: SessionChatRepoStripRegionState) -> SessionChatBranchPillUiState? {
+    var branch: String { summary.branch }
+    var additions: Int { summary.additions }
+    var deletions: Int { summary.deletions }
+
+    /// `isWorktree` is the worktree-checkout mark the title chrome already uses.
+    static func resolved(
+        from region: SessionChatRepoStripRegionState,
+        isWorktree: Bool = false
+    ) -> SessionChatBranchPillUiState? {
         guard region.isAvailable, !region.branch.isEmpty else { return nil }
-        return SessionChatBranchPillUiState(
+        return SessionChatBranchPillUiState(summary: OpenCodeSessionBranchSummary(
             branch: region.branch,
-            additions: max(0, region.files.reduce(0) { $0 + $1.additions }),
-            deletions: max(0, region.files.reduce(0) { $0 + $1.deletions })
-        )
+            baseBranch: region.defaultBranch,
+            isWorktree: isWorktree,
+            files: region.files.map {
+                OpenCodeSessionBranchChangedFile(path: $0.path, additions: max(0, $0.additions), deletions: max(0, $0.deletions))
+            }
+        ))
     }
 }
 

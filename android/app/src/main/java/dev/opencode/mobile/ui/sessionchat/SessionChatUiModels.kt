@@ -33,6 +33,8 @@ import dev.opencode.mobile.ui.changes.ChangeSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentImageSource
 import dev.opencode.mobile.ui.components.OpenCodeAttachmentVariant
 import dev.opencode.mobile.ui.components.OpenCodeComposerSuggestionLeadingIcon
+import dev.opencode.mobile.ui.components.OpenCodeSessionBranchChangedFile
+import dev.opencode.mobile.ui.components.OpenCodeSessionBranchSummary
 import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
@@ -697,18 +699,32 @@ data class SessionChatRepoStripRegionState(
     val isExpanded: Boolean = false,
 )
 
+/** Floating session branch pill. Null when the worktree branch is unknown. */
 data class SessionBranchPillUiState(
-    val branch: String,
-    val additions: Int,
-    val deletions: Int,
-)
+    val summary: OpenCodeSessionBranchSummary,
+) {
+    val branch: String get() = summary.branch
+    val additions: Int get() = summary.additions
+    val deletions: Int get() = summary.deletions
+}
 
-fun SessionChatRepoStripRegionState.toSessionBranchPill(): SessionBranchPillUiState? {
+/** [isWorktree] is the worktree-checkout mark the title chrome already uses. */
+fun SessionChatRepoStripRegionState.toSessionBranchPill(isWorktree: Boolean = false): SessionBranchPillUiState? {
     if (!isAvailable || branch.isEmpty()) return null
     return SessionBranchPillUiState(
-        branch = branch,
-        additions = files.sumOf { it.additions }.coerceAtLeast(0),
-        deletions = files.sumOf { it.deletions }.coerceAtLeast(0),
+        OpenCodeSessionBranchSummary(
+            branch = branch,
+            baseBranch = defaultBranch,
+            isWorktree = isWorktree,
+            files =
+                files.map {
+                    OpenCodeSessionBranchChangedFile(
+                        path = it.path,
+                        additions = it.additions.coerceAtLeast(0),
+                        deletions = it.deletions.coerceAtLeast(0),
+                    )
+                },
+        ),
     )
 }
 

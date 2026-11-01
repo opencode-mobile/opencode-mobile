@@ -147,6 +147,7 @@ struct SessionChatContextSlotView: View {
     let todosAccessibilityLabel: String
     let onTodosTap: () -> Void
     let onBranchTap: () -> Void
+    var onBranchCopied: () -> Void = {}
 
     var body: some View {
         HStack(spacing: SessionChatActivitySlotView.spacing) {
@@ -162,10 +163,9 @@ struct SessionChatContextSlotView: View {
                     .transition(.opacity)
                 case let .branch(branch):
                     OpenCodeSessionBranchPill(
-                        branch: branch.branch,
-                        additions: branch.additions,
-                        deletions: branch.deletions,
-                        action: onBranchTap
+                        summary: branch.summary,
+                        onViewAllChanges: onBranchTap,
+                        onBranchNameCopied: onBranchCopied
                     )
                     .transition(.opacity)
                 }
