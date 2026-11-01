@@ -97,6 +97,7 @@ object ProductAnalytics {
         const val SESSION_TIMELINE_STYLE_PICKER = "session_timeline_style_picker"
         const val SESSION_TODOS = "session_todos"
         const val SESSION_SUBAGENTS = "session_subagents"
+        const val SESSION_SHELL_OUTPUT = "session_shell_output"
         const val SESSION_CONTEXT = "session_context"
         const val CHANGES = "changes"
         const val CHANGES_FILE_VIEWER = "changes_file_viewer"
@@ -305,6 +306,10 @@ object ProductAnalytics {
         const val SESSION_TOOL_GROUP_BACK = "session_tool_group_back"
         const val TODOS_DISMISS = "todos_dismiss"
         const val SUBAGENTS_DISMISS = "subagents_dismiss"
+        const val SHELL_OUTPUT_OPEN = "shell_output_open"
+        const val SHELL_OUTPUT_DISMISS = "shell_output_dismiss"
+        const val SHELL_OUTPUT_COPY = "shell_output_copy"
+        const val SHELL_OUTPUT_STOP = "shell_output_stop"
 
         // Session context / changes
         const val SESSION_CONTEXT_BACK = "session_context_back"

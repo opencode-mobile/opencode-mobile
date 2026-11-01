@@ -785,6 +785,74 @@ class SessionChatViewModelTest {
         }
 
     @Test
+    fun backgroundWorkPill_countsRunningShellsAndOpensTheirOutput() =
+        runTest(testDispatcher) {
+            fun bash(
+                id: String,
+                status: ToolStatus,
+            ) = MessagePart.Tool(
+                toolName = "bash",
+                status = status,
+                id = id,
+                input =
+                    buildJsonObject {
+                        put("command", "npm test")
+                        put("description", "Run the tests")
+                    },
+                metadata = buildJsonObject { put("output", "line 1\n") },
+                timeStartEpochMs = 1_793_548_739_990L,
+            )
+            val shells =
+                dev.opencode.mobile.domain.shell.DefaultAgentShellRepository(
+                    dev.opencode.mobile.domain.shell.V1AgentShellRemote(
+                        dev.opencode.mobile.domain.shell
+                            .AgentShellDomainAdapter(),
+                    ),
+                )
+            val viewModel =
+                createViewModel(
+                    repository =
+                        FakeMessageRepository(
+                            messages =
+                                listOf(
+                                    Message(id = "msg-0", role = MessageRole.User, text = "Go"),
+                                    Message(
+                                        id = "msg-1",
+                                        role = MessageRole.Assistant,
+                                        text = "",
+                                        parts = listOf(bash("prt-1", ToolStatus.Running), bash("prt-2", ToolStatus.Completed)),
+                                    ),
+                                ),
+                        ),
+                    agentShellRepository = shells,
+                )
+
+            viewModel.bind("ses-1", "Title", "/repo")
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(listOf("prt-1"), state.shells.map { it.id })
+            assertEquals(
+                SessionChatBackgroundWorkPill("1 shell", needsInput = false, accessibilityLabel = "1 shell running"),
+                state.backgroundWorkPill,
+            )
+
+            viewModel.openShellOutput("prt-1")
+            viewModel.setShellOutputObserved(true)
+            advanceUntilIdle()
+
+            val sheet = viewModel.uiState.value.shellOutput!!
+            assertEquals("npm test", sheet.shell.command)
+            assertEquals("line 1\n", sheet.output?.text)
+            // v1 cannot stop one shell.
+            assertFalse(sheet.showsStop)
+
+            viewModel.closeShellOutput()
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.shellOutput)
+        }
+
+    @Test
     fun openWaitingSubagentRequest_expandsAndPagesToTheSubagentsRequestAndPulses() =
         runTest(testDispatcher) {
             val sessionRepository =
@@ -8021,6 +8089,8 @@ class SessionChatViewModelTest {
         sideQuestionsSupported: Boolean = false,
         sideQuestionStore: SideQuestionStore? = null,
         attachmentUploads: AttachmentUploadService = UnavailableAttachmentUploadService,
+        agentShellRepository: dev.opencode.mobile.domain.shell.AgentShellRepository =
+            dev.opencode.mobile.domain.shell.EmptyAgentShellRepository,
     ): SessionChatViewModel {
         val eventStream = repository.eventStream
         val liveStoreScope = LiveStoreScope(CoroutineScope(SupervisorJob() + testDispatcher))
@@ -8105,6 +8175,7 @@ class SessionChatViewModelTest {
                     scope = liveStoreScope.coroutineScope,
                 ),
             attachmentUploads = attachmentUploads,
+            agentShellRepository = agentShellRepository,
         ).apply {
             ioDispatcher = testDispatcher
             nowMs = { testDispatcher.scheduler.currentTime }
