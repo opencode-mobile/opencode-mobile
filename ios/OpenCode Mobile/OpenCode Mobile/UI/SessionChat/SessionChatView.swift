@@ -75,16 +75,22 @@ struct SessionChatView: View {
     private let detailControl: OpenCodeSplitPaneDetailControl?
     /// Replaces `dismiss()` when the chat is a split-view root with nothing to pop to.
     private let onLeaveSession: (() -> Void)?
+    /// Set only by the Session Chat Playground: screens that load from a server (Changes,
+    /// a child chat, Terminal, Files, Session context, tool groups) do not open; their name
+    /// is passed here instead.
+    private let onUnavailableRoute: ((String) -> Void)?
 
     init(
         session: SessionListItem,
         viewModel: SessionChatViewModel? = nil,
         detailControl: OpenCodeSplitPaneDetailControl? = nil,
-        onLeaveSession: (() -> Void)? = nil
+        onLeaveSession: (() -> Void)? = nil,
+        onUnavailableRoute: ((String) -> Void)? = nil
     ) {
         self.session = session
         self.detailControl = detailControl
         self.onLeaveSession = onLeaveSession
+        self.onUnavailableRoute = onUnavailableRoute
         // Do not construct the ViewModel in `State(initialValue:)` — SwiftUI re-runs
         // View.init (and that expression) whenever the parent body refreshes, while
         // keeping one live `@State`. Eager make() was spawning bind storms and
@@ -769,10 +775,10 @@ struct SessionChatView: View {
 
     private func sessionChatDestinations(_ content: some View) -> some View {
         content
-            .navigationDestination(isPresented: $showSessionContext) {
+            .navigationDestination(isPresented: availableRoute($showSessionContext)) {
                 SessionContextView(sessionID: viewModel.uiState.sessionID, worktree: boundSession.worktree)
             }
-            .navigationDestination(item: $changesTarget) { target in
+            .navigationDestination(item: availableRoute($changesTarget)) { target in
                 ChangesView(
                     sessionID: target.sessionID,
                     worktree: target.worktree,
@@ -781,7 +787,7 @@ struct SessionChatView: View {
                     initialFilePath: target.initialFilePath
                 )
             }
-            .navigationDestination(item: $toolGroupTarget) { target in
+            .navigationDestination(item: availableRoute($toolGroupTarget)) { target in
                 SessionChatToolGroupView(
                     target: target,
                     worktree: boundSession.worktree,
@@ -797,9 +803,42 @@ struct SessionChatView: View {
                     lastTurnDiffUnavailable: lastTurnDiffUnavailable(assistantMessageID: target.messageID)
                 )
             }
-            .navigationDestination(item: $childSessionTarget) { target in
+            .navigationDestination(item: availableRoute($childSessionTarget)) { target in
                 SessionChatView(session: target.sessionListItem)
             }
+            .onChange(of: showSessionContext) { _, open in
+                if open { refuseRoute("Session context") { showSessionContext = false } }
+            }
+            .onChange(of: changesTarget != nil) { _, open in
+                if open { refuseRoute("Changes") { changesTarget = nil } }
+            }
+            .onChange(of: toolGroupTarget != nil) { _, open in
+                if open { refuseRoute("Tool groups") { toolGroupTarget = nil } }
+            }
+            .onChange(of: childSessionTarget != nil) { _, open in
+                if open { refuseRoute("Opening a subagent") { childSessionTarget = nil } }
+            }
+            .onChange(of: terminalRoute != nil) { _, open in
+                if open { refuseRoute("Terminal") { terminalRoute = nil } }
+            }
+            .onChange(of: filesRoute != nil) { _, open in
+                if open { refuseRoute("Files") { filesRoute = nil } }
+            }
+    }
+
+    /// The route as is, or one that never presents while the playground refuses routes.
+    private func availableRoute<Target>(_ route: Binding<Target?>) -> Binding<Target?> {
+        onUnavailableRoute == nil ? route : .constant(nil)
+    }
+
+    private func availableRoute(_ route: Binding<Bool>) -> Binding<Bool> {
+        onUnavailableRoute == nil ? route : .constant(false)
+    }
+
+    private func refuseRoute(_ name: String, reset: () -> Void) {
+        guard let onUnavailableRoute else { return }
+        reset()
+        onUnavailableRoute(name)
     }
 
     private func sessionChatObservers(_ content: some View) -> some View {
@@ -1000,7 +1039,7 @@ struct SessionChatView: View {
                     viewModel.consumePendingTerminalOpen()
                 }
             }
-            .navigationDestination(item: $terminalRoute) { route in
+            .navigationDestination(item: availableRoute($terminalRoute)) { route in
                 TerminalView(worktree: route.worktree, projectTitle: route.projectTitle, ptyId: route.ptyId)
             }
             .onChange(of: viewModel.uiState.pendingFilesOpen) { _, _ in
@@ -1009,7 +1048,7 @@ struct SessionChatView: View {
                     viewModel.consumePendingFilesOpen()
                 }
             }
-            .navigationDestination(item: $filesRoute) { route in
+            .navigationDestination(item: availableRoute($filesRoute)) { route in
                 FilesView(worktree: route.worktree)
             }
     }

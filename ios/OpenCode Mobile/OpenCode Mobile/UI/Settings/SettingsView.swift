@@ -45,6 +45,7 @@ struct SettingsView: View {
     /// Trailing-pane sub-screen in the regular-width split view. Unused on compact.
     @State private var selectedDetail: SettingsDetail = .servers
     @State private var showComponentGallery = false
+    @State private var showSessionChatPlayground = false
     @State private var showDiagnosticLogs = false
     @State private var showFeatureFlags = false
     #if HIGHLIGHT_LAB
@@ -100,6 +101,10 @@ struct SettingsView: View {
         .onDisappear { isOnScreen = false }
         .navigationDestination(isPresented: $showComponentGallery) {
             ComponentGalleryHomeView()
+        }
+        // Full screen, also in the split layout: it hosts the whole Session Chat screen.
+        .fullScreenCover(isPresented: $showSessionChatPlayground) {
+            SessionChatPlaygroundView()
         }
         .navigationDestination(isPresented: $showFeatureFlags) {
             FeatureFlagsView()
@@ -623,6 +628,17 @@ struct SettingsView: View {
                             action: { open(.componentGallery) }
                         )
                         .padding(.horizontal, 16)
+
+                        OpenCodeListItem(
+                            title: "Session Chat Playground",
+                            subtitle: "The real chat over fake scenarios, no server",
+                            style: .card,
+                            startDecorator: .icon(.widgets, accessibilityLabel: "Session Chat Playground"),
+                            accessory: .disclosure,
+                            action: { showSessionChatPlayground = true }
+                        )
+                        .padding(.horizontal, 16)
+                        .accessibilityIdentifier("settings.sessionChatPlayground")
 
                         #if HIGHLIGHT_LAB
                         OpenCodeListItem(
