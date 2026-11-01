@@ -43,6 +43,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import dev.opencode.mobile.theme.OpenCodeRadius
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -260,6 +261,7 @@ private fun OverflowMenuEntryRow(
             Modifier
                 .widthIn(min = OverflowMenuMinWidth)
                 .defaultMinSize(minHeight = OverflowMenuEntryMinHeight)
+                .openCodeFocusRing(OpenCodeSmallShape)
                 .clickable(
                     enabled = entry.enabled,
                     interactionSource = interactionSource,

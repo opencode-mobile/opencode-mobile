@@ -27,6 +27,7 @@ struct OpenCodeFilterTabs: View {
                         filterTab(tab)
                     }
                 }
+                .openCodeFocusGroup(.horizontal)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
             }
@@ -67,6 +68,7 @@ struct OpenCodeFilterTabs: View {
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? .isSelected : [])
         .accessibilityLabel(accessibilityLabel(for: tab))
+        .openCodeKeyboardFocusable(.capsule, activate: { onTabSelected(tab.id) })
     }
 
     private func accessibilityLabel(for tab: OpenCodeFilterTab) -> String {

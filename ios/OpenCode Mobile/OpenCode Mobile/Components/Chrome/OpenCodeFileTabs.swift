@@ -94,6 +94,7 @@ struct OpenCodeFileTabs: View {
             .buttonStyle(.plain)
             .accessibilityLabel(tab.title)
             .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+            .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: OpenCodeRadius.small), activate: { onSelect(tab.id) })
 
             Button {
                 onClose(tab.id)
@@ -105,6 +106,7 @@ struct OpenCodeFileTabs: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Close \(tab.title)")
+            .openCodeKeyboardFocusable(.circle, activate: { onClose(tab.id) })
         }
         .background(selected ? OpenCodeColors.surfaceRaisedBase : Color.clear, in: shape)
         .overlay(shape.strokeBorder(selected ? OpenCodeColors.borderWeakBase : Color.clear, lineWidth: 1))

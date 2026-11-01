@@ -14,6 +14,9 @@ enum OpenCodeSessionComposerState {
         let selectedVariantLabel: String
         let showVariant: Bool
         let sendEnabled: Bool
+        /// When hardware-keyboard Return sends, decided from the live draft text.
+        /// Defaults to exactly `sendEnabled`.
+        let returnKeyRule: OpenCodeReturnKeyRule
         let attachEnabled: Bool
         let showStop: Bool
         let stopEnabled: Bool
@@ -41,6 +44,7 @@ enum OpenCodeSessionComposerState {
             selectedVariantLabel: String,
             showVariant: Bool,
             sendEnabled: Bool,
+            returnKeyRule: OpenCodeReturnKeyRule? = nil,
             attachEnabled: Bool = true,
             showStop: Bool,
             stopEnabled: Bool,
@@ -61,6 +65,7 @@ enum OpenCodeSessionComposerState {
             self.selectedVariantLabel = selectedVariantLabel
             self.showVariant = showVariant
             self.sendEnabled = sendEnabled
+            self.returnKeyRule = returnKeyRule ?? .fixed(sendEnabled)
             self.attachEnabled = attachEnabled
             self.showStop = showStop
             self.stopEnabled = stopEnabled
@@ -288,6 +293,12 @@ struct OpenCodeSessionComposerDictation: Equatable {
     var languageLabel: String = ""
 }
 
+/// Named keyboard focus targets in the prompt composer.
+enum OpenCodeComposerFocusTarget: Hashable {
+    /// The first chip after the prompt field, where Tab out of the field goes.
+    case afterPrompt
+}
+
 /// UIKit text input owned by the composer prompt. Lets keyboard-shortcut focus
 /// gating tell the composer apart from every other text field.
 protocol OpenCodeComposerTextInput: AnyObject {}
@@ -305,8 +316,19 @@ struct OpenCodeSessionComposer: View {
     /// True while an image or file is dragged over the screen that hosts the composer: the prompt
     /// leaves the drop to that screen instead of taking it as text.
     let attachmentDragActive: Bool
+    /// "Esc again to interrupt": the first Esc armed an interrupt of the running turn.
+    let interruptHintVisible: Bool
     let onAction: (OpenCodeSessionComposerAction) -> Void
     private let status: AnyView?
+
+    /// Keyboard focus inside permission and question prompts.
+    @State private var focusRequester = OpenCodeFocusRequester()
+    @State private var promptEntryOwner = UUID()
+    @State private var customAnswerFocused = false
+    /// `OpenCodeKeyboardFocusState.navigationKeyCount` when the current request arrived.
+    @State private var navigationKeysAtArrival = 0
+    /// A control of the current request had keyboard focus.
+    @State private var focusWasInPrompt = false
 
     init(
         state: OpenCodeSessionComposerState,
@@ -314,6 +336,7 @@ struct OpenCodeSessionComposer: View {
         onInputFocusChange: ((Bool) -> Void)? = nil,
         dictation: OpenCodeSessionComposerDictation? = nil,
         attachmentDragActive: Bool = false,
+        interruptHintVisible: Bool = false,
         onAction: @escaping (OpenCodeSessionComposerAction) -> Void,
         status: AnyView? = nil
     ) {
@@ -322,6 +345,7 @@ struct OpenCodeSessionComposer: View {
         self.onInputFocusChange = onInputFocusChange
         self.dictation = dictation
         self.attachmentDragActive = attachmentDragActive
+        self.interruptHintVisible = interruptHintVisible
         self.onAction = onAction
         self.status = status
     }
@@ -335,16 +359,25 @@ struct OpenCodeSessionComposer: View {
                     .frame(height: 1)
             }
             VStack(alignment: .leading, spacing: 10) {
-                switch state {
-                case let .permission(permission):
-                    permissionApprovalContent(permission)
-                case let .question(question):
-                    questionRequestContent(question)
-                case let .childLockout(lockout):
-                    childLockoutContent(lockout)
-                case let .prompt(prompt):
-                    promptEntryContent(prompt)
+                if interruptHintVisible {
+                    OpenCodeKeyboardHint(OpenCodeInterruptKeyboardHint.text, tone: .warning)
+                        .accessibilityIdentifier("sessionChatInterruptHint")
                 }
+                // A new identity per request: nothing (focus, the custom answer draft)
+                // carries over from one queued request to the next.
+                VStack(alignment: .leading, spacing: 10) {
+                    switch state {
+                    case let .permission(permission):
+                        permissionApprovalContent(permission)
+                    case let .question(question):
+                        questionRequestContent(question)
+                    case let .childLockout(lockout):
+                        childLockoutContent(lockout)
+                    case let .prompt(prompt):
+                        promptEntryContent(prompt)
+                    }
+                }
+                .id(promptRequestID ?? contentKind)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
@@ -364,6 +397,125 @@ struct OpenCodeSessionComposer: View {
         .animation(.easeInOut(duration: 0.24), value: contentKind)
         .animation(.easeInOut(duration: 0.24), value: dictation != nil)
         .accessibilityIdentifier(composerAccessibilityIdentifier)
+        .openCodeFocusRequester(focusRequester)
+        .onChange(of: promptInitialTarget, initial: true) { _, target in
+            publishPromptEntry(target)
+        }
+        .onChange(of: focusRequester.focusedKey) { _, key in
+            if key != nil, promptRequestID != nil { focusWasInPrompt = true }
+        }
+        .onChange(of: promptRequestID) { previous, requestID in
+            let leftWithFocus = OpenCodePromptFocus.clearsFocusOnLeave(
+                previousRequestID: previous,
+                requestID: requestID,
+                focusWasInPrompt: focusWasInPrompt
+            )
+            focusWasInPrompt = false
+            if leftWithFocus, requestID == nil {
+                OpenCodeKeyboardAnchor.clearAutomaticFocus()
+            }
+            guard OpenCodePromptFocus.clearsFocusOnRequestChange(
+                previousRequestID: previous,
+                requestID: requestID
+            ) else { return }
+            navigationKeysAtArrival = OpenCodeKeyboardFocusState.shared.navigationKeyCount
+            clearFocusForArrivingPrompt()
+        }
+        .onChange(of: customAnswerSelected) { _, selected in
+            // Picking "Type your own answer" with the keyboard moves into its field,
+            // which iPadOS cannot reach with Tab.
+            if selected,
+               OpenCodeKeyboardFocusState.shared.hardwareKeyboardConnected,
+               focusRequester.focusedKey == AnyHashable(OpenCodePromptFocusTarget.customOption) {
+                customAnswerFocused = true
+            }
+        }
+        .onDisappear {
+            OpenCodeKeyboardFocusState.shared.setPromptEntry(promptEntryOwner, key: OpenCodePromptFocusTarget?.none)
+        }
+    }
+
+    /// iPadOS cannot move focus in code out of the UIKit answer field: stop editing
+    /// and make `target` the next Tab stop.
+    private func leaveCustomAnswer(toward target: OpenCodePromptFocusTarget) {
+        OpenCodeKeyboardFocusState.shared.setNextTabTarget(target)
+        customAnswerFocused = false
+        OpenCodeKeyboardAnchor.takeFocus()
+    }
+
+    /// The permission or question request on screen; nil for the prompt and lockout.
+    private var promptRequestID: String? {
+        switch state {
+        case let .permission(permission): permission.requestID
+        case let .question(question): question.requestID
+        case .prompt, .childLockout: nil
+        }
+    }
+
+    private var customAnswerSelected: Bool {
+        if case let .question(question) = state { return question.customSelected }
+        return false
+    }
+
+    /// While a prompt waits and nothing has keyboard focus, the first Tab moves
+    /// focus to this target. Nothing in the prompt is focused before that, so a
+    /// stray Return or Space cannot answer it.
+    private var promptInitialTarget: OpenCodePromptFocusTarget? {
+        switch state {
+        case let .permission(permission):
+            let enabled = permission.actionsEnabled && !permission.submitting
+            return OpenCodePromptFocus.initialTarget(
+                optionCount: 0,
+                customAllowed: false,
+                optionsEnabled: false,
+                actionsEnabled: [enabled]
+            )
+        case let .question(question):
+            return OpenCodePromptFocus.initialTarget(
+                optionCount: question.options.count,
+                customAllowed: question.customAllowed,
+                optionsEnabled: !question.submitting,
+                actionsEnabled: [!question.submitting]
+            )
+        case .prompt, .childLockout:
+            return nil
+        }
+    }
+
+    private func publishPromptEntry(_ target: OpenCodePromptFocusTarget?) {
+        OpenCodeKeyboardFocusState.shared.setPromptEntry(promptEntryOwner, key: target)
+    }
+
+    /// iPadOS refocuses on its own when the focused composer control goes away;
+    /// check again once that has happened. Focus counts as the user's only if a Tab
+    /// or arrow key moved it after the request arrived.
+    private func clearFocusForArrivingPrompt() {
+        for delay in [0.0, 0.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                let focusState = OpenCodeKeyboardFocusState.shared
+                guard OpenCodePromptFocus.clearsFocusOnArrival(
+                    hardwareKeyboardConnected: focusState.hardwareKeyboardConnected,
+                    focusInsidePrompt: OpenCodePromptFocus.focusEnteredByKeyboard(
+                        focusInPrompt: focusRequester.focusedKey != nil || customAnswerFocused,
+                        navigationKeysSinceArrival: focusState.navigationKeyCount > navigationKeysAtArrival
+                    ),
+                    otherTextFieldFocused: OpenCodeTextInputFocusMonitor.shared.focus == .otherTextField
+                ) else { return }
+                OpenCodeKeyboardAnchor.takeFocus()
+            }
+        }
+    }
+
+    /// "Press Tab to answer with the keyboard", until focus is inside the prompt.
+    @ViewBuilder
+    private var promptKeyboardHint: some View {
+        if OpenCodePromptKeyboardHint.isVisible(
+            hardwareKeyboardConnected: OpenCodeKeyboardFocusState.shared.hardwareKeyboardConnected,
+            focusInsidePrompt: focusRequester.focusedKey != nil || customAnswerFocused
+        ) {
+            OpenCodeKeyboardHint(OpenCodePromptKeyboardHint.text)
+                .accessibilityIdentifier("sessionChatPromptKeyboardHint")
+        }
     }
 
     private var composerAccessibilityIdentifier: String {
@@ -413,6 +565,15 @@ struct OpenCodeSessionComposer: View {
                 onDeleteBackwardWhenEmpty: prompt.sideQuestionMode ? { onAction(.exitSideQuestionMode) } : nil,
                 onPasteAttachments: prompt.attachEnabled ? { onAction(.pasteAttachments($0)) } : nil,
                 acceptsTextDrops: !attachmentDragActive,
+                returnKey: OpenCodeHardwareReturnKey(rule: prompt.returnKeyRule) { onAction(.send) },
+                onTabOut: { backward in
+                    // iPadOS cannot move focus in code out of the UIKit prompt field:
+                    // stop editing and make the first chip after it the next Tab stop.
+                    if !backward {
+                        OpenCodeKeyboardFocusState.shared.setNextTabTarget(OpenCodeComposerFocusTarget.afterPrompt)
+                    }
+                    OpenCodeKeyboardAnchor.takeFocus()
+                },
                 onChange: { text, selectionStart, selectionEnd in
                     onAction(.textChanged(text: text, selectionStart: selectionStart, selectionEnd: selectionEnd))
                 }
@@ -594,6 +755,7 @@ struct OpenCodeSessionComposer: View {
                         variant: .glass,
                         action: { onAction(.exitSideQuestionMode) }
                     )
+                    .openCodeFocusKey(OpenCodeComposerFocusTarget.afterPrompt)
                     .accessibilityLabel("Side question mode")
                     .accessibilityHint("Leave side question mode")
                 } else if prompt.shellMode {
@@ -604,6 +766,7 @@ struct OpenCodeSessionComposer: View {
                         variant: .glass,
                         action: { onAction(.exitShellMode) }
                     )
+                    .openCodeFocusKey(OpenCodeComposerFocusTarget.afterPrompt)
                     .accessibilityLabel("Shell mode")
                     .accessibilityHint("Leave shell mode")
                 } else {
@@ -613,6 +776,7 @@ struct OpenCodeSessionComposer: View {
                         variant: .glass,
                         action: { onAction(.selectModel) }
                     )
+                    .openCodeFocusKey(OpenCodeComposerFocusTarget.afterPrompt)
                     OpenCodeChoiceBadge(
                         label: prompt.selectedModeLabel,
                         selected: false,
@@ -742,6 +906,7 @@ struct OpenCodeSessionComposer: View {
                     onAction(.denyPermission(requestID: permission.requestID, sessionID: permission.sessionID))
                 }
             )
+            .openCodeFocusKey(OpenCodePromptFocusTarget.action(0))
             Spacer(minLength: 0)
             if permission.submitting {
                 ProgressView().controlSize(.small)
@@ -755,6 +920,7 @@ struct OpenCodeSessionComposer: View {
                         onAction(.alwaysAllowPermission(requestID: permission.requestID, sessionID: permission.sessionID))
                     }
                 )
+                .openCodeFocusKey(OpenCodePromptFocusTarget.action(1))
             }
             OpenCodeButton(
                 variant: .compactText(title: "Allow once"),
@@ -763,8 +929,11 @@ struct OpenCodeSessionComposer: View {
                     onAction(.allowPermissionOnce(requestID: permission.requestID, sessionID: permission.sessionID))
                 }
             )
+            .openCodeFocusKey(OpenCodePromptFocusTarget.primaryAction)
         }
+        .openCodeFocusGroup(.horizontal)
         requestPageDots(position: permission.queuePosition, count: permission.queueCount)
+        promptKeyboardHint
     }
 
     /// Light amber row naming the subagent that asks, with Open to show its session.
@@ -901,7 +1070,7 @@ struct OpenCodeSessionComposer: View {
                 .foregroundStyle(OpenCodeColors.textBase)
 
             VStack(spacing: 8) {
-                ForEach(question.options) { option in
+                ForEach(Array(question.options.enumerated()), id: \.element.id) { index, option in
                     let optionSelected = question.selectedLabels.contains(option.label)
                     OpenCodeListItem(
                         title: option.label,
@@ -920,6 +1089,7 @@ struct OpenCodeSessionComposer: View {
                             )
                         }
                     )
+                    .openCodeFocusKey(OpenCodePromptFocusTarget.option(index))
                 }
 
                 if question.customAllowed {
@@ -941,11 +1111,31 @@ struct OpenCodeSessionComposer: View {
                             )
                         }
                     )
+                    .openCodeFocusKey(OpenCodePromptFocusTarget.customOption)
 
                     if question.customSelected {
                         QuestionCustomTextField(
                             text: question.customText,
                             enabled: !question.submitting,
+                            isFocused: $customAnswerFocused,
+                            onReturn: {
+                                // Return saves (the text is already saved as typed) and moves on.
+                                let primaryEnabled = (question.questionIndex < question.questionCount - 1
+                                    ? question.nextEnabled
+                                    : question.submitEnabled) && !question.submitting
+                                guard let target = OpenCodePromptFocus.targetAfterCustomAnswerReturn(
+                                    primaryActionEnabled: primaryEnabled
+                                ) else { return }
+                                leaveCustomAnswer(toward: target)
+                            },
+                            onEscape: {
+                                // Leave the field without answering; Tab goes back to its option.
+                                leaveCustomAnswer(toward: .customOption)
+                            },
+                            onTabOut: { backward in
+                                // The field sits between its option and the action buttons.
+                                leaveCustomAnswer(toward: backward ? .customOption : .primaryAction)
+                            },
                             onChange: { text in
                                 onAction(
                                     .questionCustomTextChanged(
@@ -960,6 +1150,7 @@ struct OpenCodeSessionComposer: View {
                     }
                 }
             }
+            .openCodeFocusGroup(.vertical)
 
             if let errorMessage = question.errorMessage {
                 Text(errorMessage)
@@ -1016,6 +1207,7 @@ struct OpenCodeSessionComposer: View {
                     onAction(.dismissQuestion(requestID: question.requestID, sessionID: question.sessionID))
                 }
             )
+            .openCodeFocusKey(OpenCodePromptFocusTarget.action(0))
             Spacer(minLength: 0)
             HStack(spacing: 8) {
                 if question.submitting {
@@ -1030,6 +1222,7 @@ struct OpenCodeSessionComposer: View {
                             onAction(.questionBack(requestID: question.requestID, sessionID: question.sessionID))
                         }
                     )
+                    .openCodeFocusKey(OpenCodePromptFocusTarget.action(1))
                 }
                 if showNext {
                     OpenCodeButton(
@@ -1039,6 +1232,7 @@ struct OpenCodeSessionComposer: View {
                             onAction(.questionNext(requestID: question.requestID, sessionID: question.sessionID))
                         }
                     )
+                    .openCodeFocusKey(OpenCodePromptFocusTarget.primaryAction)
                 } else {
                     OpenCodeButton(
                         variant: .compactText(title: "Submit"),
@@ -1047,11 +1241,14 @@ struct OpenCodeSessionComposer: View {
                             onAction(.submitQuestion(requestID: question.requestID, sessionID: question.sessionID))
                         }
                     )
+                    .openCodeFocusKey(OpenCodePromptFocusTarget.primaryAction)
                 }
             }
         }
+        .openCodeFocusGroup(.horizontal)
         .accessibilityElement(children: .contain)
         requestPageDots(position: question.requestPosition, count: question.requestCount)
+        promptKeyboardHint
     }
 
     private var pagesRequests: Bool {
@@ -1129,6 +1326,10 @@ struct OpenCodeSessionComposer: View {
 private struct QuestionCustomTextField: View {
     let text: String
     let enabled: Bool
+    @Binding var isFocused: Bool
+    let onReturn: () -> Void
+    let onEscape: () -> Void
+    let onTabOut: (Bool) -> Void
     let onChange: (String) -> Void
 
     /// Custom answer grows from 3 lines up to 5, then scrolls.
@@ -1148,8 +1349,12 @@ private struct QuestionCustomTextField: View {
             ),
             hint: "Enter a custom answer",
             enabled: enabled,
+            isFocused: $isFocused,
             minLines: Self.minLines,
-            maxLines: Self.maxLines
+            maxLines: Self.maxLines,
+            onHardwareReturn: onReturn,
+            onEscape: onEscape,
+            onTabOut: onTabOut
         )
         .onAppear { draft = text }
         .onChange(of: text) { _, newValue in

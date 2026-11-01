@@ -56,6 +56,7 @@ fun OpenCodeMessageImage(
                 Modifier
                     .size(width = width, height = height)
                     .clip(OpenCodeSmallShape)
+                    .openCodeFocusRing(OpenCodeSmallShape)
                     .clickable(onClickLabel = "View full screen", role = Role.Button) {
                         if (onOpen != null) onOpen() else viewerOpen = true
                     },

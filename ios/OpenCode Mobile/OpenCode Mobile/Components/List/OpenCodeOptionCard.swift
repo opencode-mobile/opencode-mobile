@@ -87,6 +87,7 @@ struct OpenCodeOptionCard: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel([title, subtitle, tag].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", "))
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: optionCardCornerRadius), enabled: enabled, activate: action)
     }
 
     /// Title and tag on one line when both fit; otherwise the tag moves under

@@ -91,6 +91,7 @@ fun OpenCodeServerAddressInput(
     }
     var showSchemeSheet by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
+    val leaveTextInput = rememberOpenCodeLeaveTextInput()
     val hostInteractionSource = remember { MutableInteractionSource() }
     val schemeInteractionSource = remember { MutableInteractionSource() }
     val hostFocused by hostInteractionSource.collectIsFocusedAsState()
@@ -153,6 +154,7 @@ fun OpenCodeServerAddressInput(
                         .semantics {
                             contentDescription = "Scheme ${scheme.label}. Opens scheme picker"
                         }.clip(SchemeStartShape)
+                        .openCodeFocusRing(SchemeStartShape)
                         .clickable(
                             enabled = enabled,
                             interactionSource = schemeInteractionSource,
@@ -234,7 +236,7 @@ fun OpenCodeServerAddressInput(
                     keyboardActions =
                         KeyboardActions(
                             onNext = { focusManager.moveFocus(FocusDirection.Next) },
-                            onDone = { focusManager.clearFocus() },
+                            onDone = { leaveTextInput() },
                         ),
                     interactionSource = hostInteractionSource,
                     modifier = Modifier.fillMaxWidth().onFocusChanged { reportFocus(it.isFocused) },

@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 
@@ -75,7 +76,13 @@ fun OpenCodeTimelineNotice(
         modifier =
             modifier
                 .fillMaxWidth()
-                .then(if (toggle != null) Modifier.clickable(role = Role.Button, onClick = toggle) else Modifier)
+                .then(
+                    if (toggle != null) {
+                        Modifier.openCodeFocusRing(OpenCodeSmallShape).clickable(role = Role.Button, onClick = toggle)
+                    } else {
+                        Modifier
+                    },
+                )
                 .padding(horizontal = TimelineNoticeInsetHorizontal, vertical = TimelineNoticeInsetVertical)
                 .clearAndSetSemantics {
                     contentDescription = description

@@ -105,6 +105,10 @@ struct OpenCodeSnackbarHost: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(actionLabel)
+                .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: OpenCodeRadius.small)) {
+                    onAction(message)
+                    dismissPresented()
+                }
             }
         }
             .padding(.horizontal, OpenCodeSnackbarMetrics.paddingHorizontal)

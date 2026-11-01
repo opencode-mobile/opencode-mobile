@@ -71,6 +71,7 @@ fun OpenCodeShellRow(
                     if (onClick != null) {
                         Modifier
                             .clip(shape)
+                            .openCodeFocusRing(shape)
                             .clickable(onClick = onClick)
                     } else {
                         Modifier

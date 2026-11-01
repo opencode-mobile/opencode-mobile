@@ -268,7 +268,15 @@ fun OpenCodeFloatingPill(
                     modifier =
                         Modifier
                             .clip(FloatingPillShape)
-                            .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
+                            .then(
+                                if (onClick != null) {
+                                    Modifier
+                                        .openCodeFocusRing(FloatingPillShape)
+                                        .clickable(role = Role.Button, onClick = onClick)
+                                } else {
+                                    Modifier
+                                },
+                            )
                             // Only the description is spoken: clearing drops the visible label and
                             // spinner below it, so TalkBack doesn't repeat them after a custom label.
                             // The click action and role above stay on the same node.
@@ -316,6 +324,7 @@ private fun FloatingPillClose(
         modifier =
             Modifier
                 .floatingPillTouchTarget(FloatingPillCloseSlotWidth, FloatingPillMinHeight, FloatingPillCloseTouchTarget)
+                .openCodeFocusRing(FloatingPillShape)
                 .clickable(
                     interactionSource = null,
                     indication = ripple(bounded = false, radius = FloatingPillMinHeight / 2),

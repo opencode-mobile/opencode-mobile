@@ -209,18 +209,21 @@ struct OpenCodeOutgoingMessage: View {
                 .accessibilityLabel("Outgoing message")
                 .accessibilityValue(accessibilityValue)
                 .accessibilityHint("Shows message actions")
+                .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: OpenCodeRadius.small), activate: onTap)
         case (nil, let onLongPress?):
             textPill(text: text)
                 .onLongPressGesture(perform: onLongPress)
                 .accessibilityLabel("Outgoing message")
                 .accessibilityValue(accessibilityValue)
                 .accessibilityHint("Long press to show message actions")
+                .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: OpenCodeRadius.small), activate: onLongPress)
         case (let onTap?, nil):
             textPill(text: text)
                 .onTapGesture(perform: onTap)
                 .accessibilityLabel("Outgoing message")
                 .accessibilityValue(accessibilityValue)
                 .accessibilityHint("Shows message actions")
+                .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: OpenCodeRadius.small), activate: onTap)
         case (nil, nil):
             textPill(text: text)
                 .accessibilityValue(accessibilityValue)

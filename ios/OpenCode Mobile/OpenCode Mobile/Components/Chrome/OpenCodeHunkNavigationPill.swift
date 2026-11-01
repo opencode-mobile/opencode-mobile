@@ -53,6 +53,7 @@ struct OpenCodeHunkNavigationPill: View {
         .buttonStyle(OpenCodeHunkNavigationButtonStyle(enabled: enabled))
         .disabled(!enabled)
         .accessibilityLabel(label)
+        .openCodeKeyboardFocusable(.circle, enabled: enabled, activate: action)
     }
 
     private static let width: CGFloat = 132

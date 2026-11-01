@@ -192,6 +192,7 @@ struct OpenCodeSessionBranchPopoverContent: View {
                 }
                 actionRow(title: "Copy branch name", icon: .contentCopy, action: onCopyBranchName)
             }
+            .openCodeFocusGroup(.vertical)
             .padding(.vertical, Self.actionsPaddingVertical)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -272,6 +273,7 @@ struct OpenCodeSessionBranchPopoverContent: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: OpenCodeRadius.small, horizontalInset: 4), activate: action)
     }
 
     private static let paddingHorizontal: CGFloat = 16

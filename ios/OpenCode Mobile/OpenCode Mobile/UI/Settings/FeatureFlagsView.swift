@@ -54,6 +54,7 @@ struct FeatureFlagsView: View {
                 }
                 .padding(.bottom, 24)
             }
+            .openCodeFocusGroup(.vertical)
             .openCodeReadableColumn()
         }
         .navigationBarBackButtonHidden(true)

@@ -111,6 +111,7 @@ fun OpenCodeAttachmentChip(
                         if (onClick != null) {
                             Modifier
                                 .clip(AttachmentShape)
+                                .openCodeFocusRing(AttachmentShape)
                                 .clickable(enabled = enabled, onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)
                         } else {
                             Modifier
