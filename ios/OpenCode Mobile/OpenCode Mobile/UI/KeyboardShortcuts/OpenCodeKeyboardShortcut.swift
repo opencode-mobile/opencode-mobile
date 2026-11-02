@@ -12,12 +12,12 @@ nonisolated enum OpenCodeKeyboardShortcut: CaseIterable, Sendable {
     /// Put the caret in the visible Session Chat prompt.
     case focusComposer
 
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
-        case .toggleSidebar: "Toggle Sidebar"
-        case .nextSession: "Next Session"
-        case .previousSession: "Previous Session"
-        case .focusComposer: "Focus Composer"
+        case .toggleSidebar: LocalizedStringResource("keyboard_shortcuts.toggle_sidebar", defaultValue: "Toggle Sidebar")
+        case .nextSession: LocalizedStringResource("keyboard_shortcuts.next_session", defaultValue: "Next Session")
+        case .previousSession: LocalizedStringResource("keyboard_shortcuts.previous_session", defaultValue: "Previous Session")
+        case .focusComposer: LocalizedStringResource("keyboard_shortcuts.focus_composer", defaultValue: "Focus Composer")
         }
     }
 

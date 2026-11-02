@@ -144,7 +144,7 @@ private struct FeedbackSheetModifier: ViewModifier {
 
     /// Listening while the orb owns the sheet; otherwise the page title. Close still dismisses.
     private var title: OpenCodeText {
-        .unlocalized(model?.uiState.sheetTitle ?? page.title)
+        model?.uiState.sheetTitle ?? page.title
     }
 
     /// Back arrow on the Hide parts and Diagnostic log pages.
@@ -154,11 +154,11 @@ private struct FeedbackSheetModifier: ViewModifier {
         case .compose:
             return nil
         case .hideParts:
-            return OpenCodeBottomSheetHeaderAction(icon: .arrowBack, accessibilityLabel: "Back") {
+            return OpenCodeBottomSheetHeaderAction(icon: .arrowBack, accessibilityLabel: "top_bar.back") {
                 model.closeHideParts()
             }
         case .logPreview:
-            return OpenCodeBottomSheetHeaderAction(icon: .arrowBack, accessibilityLabel: "Back") {
+            return OpenCodeBottomSheetHeaderAction(icon: .arrowBack, accessibilityLabel: "top_bar.back") {
                 model.closeLogPreview()
             }
         }
@@ -208,7 +208,7 @@ private struct FeedbackSheetModifier: ViewModifier {
         case .hidden:
             return
         case .permissionDenied:
-            model.beginDictationUnavailable(.permissionDenied, message: "Microphone access is off")
+            model.beginDictationUnavailable(.permissionDenied, message: Self.microphoneOffMessage)
         case let .modelNotInstalled(languageLabel):
             model.beginDictationUnavailable(.modelNotInstalled, languageLabel: languageLabel)
         case let .modelDownloading(languageLabel):
@@ -220,7 +220,7 @@ private struct FeedbackSheetModifier: ViewModifier {
             }
             guard granted else {
                 dictationSupport = .permissionDenied
-                model.beginDictationUnavailable(.permissionDenied, message: "Microphone access is off")
+                model.beginDictationUnavailable(.permissionDenied, message: Self.microphoneOffMessage)
                 return
             }
             resignKeyboard()
@@ -250,7 +250,7 @@ private struct FeedbackSheetModifier: ViewModifier {
             guard model.uiState.dictation?.phase == .listening else { return }
             startDictationSession(model)
         case .permissionDenied:
-            model.beginDictationUnavailable(.permissionDenied, message: "Microphone access is off")
+            model.beginDictationUnavailable(.permissionDenied, message: Self.microphoneOffMessage)
         case .modelNotInstalled, .modelDownloading:
             model.dictationModelDownload(.modelDownloadFailed)
         case .hidden:
@@ -268,7 +268,7 @@ private struct FeedbackSheetModifier: ViewModifier {
             },
             onError: { message in
                 if AVAudioApplication.shared.recordPermission == .denied {
-                    model.beginDictationUnavailable(.permissionDenied, message: "Microphone access is off")
+                    model.beginDictationUnavailable(.permissionDenied, message: Self.microphoneOffMessage)
                 } else {
                     model.beginDictationUnavailable(.recognizerError, message: message)
                 }
@@ -278,6 +278,10 @@ private struct FeedbackSheetModifier: ViewModifier {
 
     private func resignKeyboard() {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    }
+
+    private static var microphoneOffMessage: String {
+        String(localized: "feedback.dictation.microphone_off", defaultValue: "Microphone access is off")
     }
 }
 
@@ -294,7 +298,7 @@ private struct FeedbackSheetPinnedTop: View {
             HStack(spacing: 8) {
                 ForEach(FeedbackKind.allCases, id: \.self) { kind in
                     OpenCodeChoiceBadge(
-                        label: .unlocalized(kind.label),
+                        label: kind.badgeLabel,
                         selected: model.uiState.kind == kind,
                         enabled: model.uiState.phase != .sending,
                         action: { model.selectKind(kind) }
@@ -310,9 +314,6 @@ private struct FeedbackSheetPinnedTop: View {
 
 /// Error banner, attachments, message and privacy note, or the sent confirmation.
 private struct FeedbackSheetBody: View {
-    static let privacyNote = "Goes to the OpenCode Mobile team only. Never includes your server address, "
-        + "username or password. Logs are redacted on this phone."
-
     let model: FeedbackViewModel
 
     var body: some View {
@@ -322,11 +323,11 @@ private struct FeedbackSheetBody: View {
             } else {
                 if let error = model.uiState.errorBanner {
                     OpenCodeInlineNotice(
-                        message: .unlocalized(error.message),
+                        message: error.message,
                         tone: .error,
                         variant: .banner,
                         action: error.action.map { action in
-                            OpenCodeInlineNoticeAction(title: .unlocalized(action.title)) {
+                            OpenCodeInlineNoticeAction(title: action.title) {
                                 Task {
                                     switch action {
                                     case .tryAgain: await model.retry()
@@ -345,14 +346,14 @@ private struct FeedbackSheetBody: View {
                         // Dictation inserts at the cursor; the field doesn't report it, so keep it at the end.
                         set: { model.updateMessage($0, cursor: $0.count) }
                     ),
-                    hint: .unlocalized(model.uiState.placeholder),
+                    hint: model.uiState.placeholder,
                     enabled: !isSending,
                     minLines: 4,
                     maxLines: 8,
                     maxLength: FeedbackDraft.messageLimit
                 )
                 .accessibilityIdentifier("feedbackMessage")
-                OpenCodeInlineNotice(message: .unlocalized(Self.privacyNote))
+                OpenCodeInlineNotice(message: "feedback.privacy_note")
             }
         }
         .padding(.horizontal, 20)
@@ -372,12 +373,10 @@ private struct FeedbackSheetBody: View {
                     OpenCodeAttachmentChip(
                         attachment: OpenCodeAttachmentPresentation(
                             id: FeedbackSheetAttachment.screenshot,
-                            filename: "Screenshot",
+                            filename: String(localized: "feedback.attachment.screenshot", defaultValue: "Screenshot"),
                             variant: .image,
                             image: preview,
-                            detail: state.hiddenAreaCount == 0
-                                ? "Tap to hide parts"
-                                : "\(state.hiddenAreaCount) hidden"
+                            detail: Self.screenshotDetail(hiddenAreaCount: state.hiddenAreaCount)
                         ),
                         onOpen: isSending ? nil : { _ in open { model.openHideParts() } },
                         onRemove: { _ in model.removeScreenshot() }
@@ -390,7 +389,7 @@ private struct FeedbackSheetBody: View {
                             id: FeedbackSheetAttachment.logs,
                             filename: state.logsChipTitle,
                             variant: .text,
-                            detail: "Tap to preview"
+                            detail: String(localized: "feedback.attachment.tap_to_preview", defaultValue: "Tap to preview")
                         ),
                         onOpen: isSending ? nil : { _ in open { model.openLogPreview() } },
                         onRemove: { _ in model.removeLogs() }
@@ -401,6 +400,13 @@ private struct FeedbackSheetBody: View {
         }
     }
 
+    private static func screenshotDetail(hiddenAreaCount: Int) -> String {
+        guard hiddenAreaCount > 0 else {
+            return String(localized: "feedback.attachment.tap_to_hide", defaultValue: "Tap to hide parts")
+        }
+        return String(localized: "feedback.attachment.hidden_count", defaultValue: "\(hiddenAreaCount) hidden")
+    }
+
     private func open(_ page: () -> Void) {
         UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
         page()
@@ -409,12 +415,13 @@ private struct FeedbackSheetBody: View {
     private func sent(reference: String) -> some View {
         VStack(spacing: 12) {
             OpenCodeEmptyState(
-                title: "Thanks — report sent",
-                message: .unlocalized(model.uiState.kind.sentBody),
+                title: "feedback.sent.title",
+                message: model.uiState.kind.sentMessage,
                 icon: .check,
                 fillsAvailableSpace: false
             )
-            Text("Ref \(reference)")
+            // The reference is the server's report id and stays an argument.
+            Text(LocalizedStringResource("feedback.sent.reference", defaultValue: "Ref \(reference)"))
                 .font(OpenCodeTypography.code)
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .textSelection(.enabled)
@@ -447,7 +454,7 @@ private struct FeedbackSheetPinnedBottom: View {
 
     var body: some View {
         if case .sent = model.uiState.phase {
-            OpenCodeButton(variant: .fullWidthText(title: "Done"), action: onDone)
+            OpenCodeButton(variant: .fullWidthText(title: "feedback.done"), action: onDone)
         } else {
             actions
         }
@@ -463,14 +470,14 @@ private struct FeedbackSheetPinnedBottom: View {
                 entries: [
                     OpenCodeOverflowMenuEntry(
                         id: FeedbackSheetAttachment.screenshot,
-                        title: "Screenshot",
+                        title: "feedback.attachment.screenshot",
                         icon: nil,
                         enabled: state.screenshotPreview == nil,
                         action: { model.addScreenshot() }
                     ),
                     OpenCodeOverflowMenuEntry(
                         id: FeedbackSheetAttachment.logs,
-                        title: "Logs",
+                        title: "feedback.attachment.logs",
                         icon: nil,
                         enabled: !state.includeLogs,
                         action: { model.addLogs() }
@@ -478,7 +485,7 @@ private struct FeedbackSheetPinnedBottom: View {
                 ]
             ) {
                 OpenCodeButton(
-                    variant: .iconCircle(.add, accessibilityLabel: "Add attachment"),
+                    variant: .iconCircle(.add, accessibilityLabel: "feedback.add_attachment"),
                     enabled: !isSending && (state.screenshotPreview == nil || !state.includeLogs),
                     contrast: .low,
                     action: { addMenuOpen = true }
@@ -486,7 +493,7 @@ private struct FeedbackSheetPinnedBottom: View {
             }
             if showsMic {
                 OpenCodeButton(
-                    variant: .iconCircle(.mic, accessibilityLabel: "Dictate"),
+                    variant: .iconCircle(.mic, accessibilityLabel: "feedback.dictate"),
                     enabled: !isSending,
                     contrast: .low,
                     action: { onDictationAction(.begin) }
@@ -503,10 +510,10 @@ private struct FeedbackSheetPinnedBottom: View {
             ProgressView()
                 .controlSize(.regular)
                 .frame(width: 44, height: 44)
-                .accessibilityLabel("Sending report")
+                .accessibilityLabel(Text("feedback.sending"))
         } else {
             OpenCodeButton(
-                variant: .iconCircle(.arrowUpward, accessibilityLabel: "Send report"),
+                variant: .iconCircle(.arrowUpward, accessibilityLabel: "feedback.send"),
                 enabled: model.uiState.canSend,
                 contrast: .accent,
                 action: {
@@ -579,9 +586,7 @@ private struct FeedbackDictationTakeover: View {
             committed: state.committed,
             volatileText: state.volatile,
             level: state.level,
-            status: state.onDevice
-                ? "Listening · \(state.languageLabel) · on-device"
-                : "Listening · \(state.languageLabel)",
+            status: Self.listeningStatus(state),
             elapsed: elapsed,
             languageLabel: state.languageLabel,
             onCancel: { onDictationAction(.cancel) },
@@ -589,6 +594,18 @@ private struct FeedbackDictationTakeover: View {
             onUnavailableAction: { onDictationAction(Self.unavailableAction(variant)) },
             showsActions: false
         )
+    }
+
+    /// The language label comes from the recognizer and stays an argument.
+    static func listeningStatus(_ state: ComposerDictationUiState) -> String {
+        let language = state.languageLabel
+        if state.onDevice {
+            return String(
+                localized: "feedback.dictation.listening_on_device",
+                defaultValue: "Listening · \(language) · on-device"
+            )
+        }
+        return String(localized: "feedback.dictation.listening", defaultValue: "Listening · \(language)")
     }
 
     static func cardVariant(_ state: ComposerDictationUiState) -> OpenCodeDictationCardVariant {

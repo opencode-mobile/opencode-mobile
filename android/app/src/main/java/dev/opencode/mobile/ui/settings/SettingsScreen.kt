@@ -21,11 +21,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.PrivacyPolicy
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.SourceCode
 import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.message.FollowUpDelivery
@@ -56,6 +58,8 @@ import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.components.openCodeBottomSheetScrollTarget
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.resolve
 
 @Composable
 fun SettingsScreen(
@@ -71,7 +75,7 @@ fun SettingsScreen(
     onSendFeedbackClick: () -> Unit = {},
     onClearData: () -> Unit,
     onClearSessionCache: () -> Unit,
-    sessionCacheSizeLabel: String,
+    sessionCacheSizeLabel: UiText,
     onRefreshSessionCacheSize: () -> Unit,
     version: String,
     build: String,
@@ -133,7 +137,7 @@ fun SettingsScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
-            title = "Settings",
+            title = stringResource(R.string.settings_title),
             leading =
                 OpenCodeTopBarLeading.Back(
                     onClick = {
@@ -153,12 +157,12 @@ fun SettingsScreen(
                         .padding(top = 16.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                OpenCodeSectionHeader(title = "Server")
+                OpenCodeSectionHeader(title = stringResource(R.string.settings_section_server))
 
                 OpenCodeListItem(
-                    title = "Servers",
+                    title = stringResource(R.string.servers_title),
                     selected = selectedDetail == SettingsDetail.Servers,
-                    subtitle = serversSummary.subtitle,
+                    subtitle = serversSummary.subtitle.resolve(),
                     style = OpenCodeListItemStyle.Card,
                     startDecorator =
                         StartDecorator.Letter(
@@ -173,25 +177,28 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
-                OpenCodeSectionHeader(title = "Help & Feedback")
+                OpenCodeSectionHeader(title = stringResource(R.string.settings_section_help_feedback))
 
+                val sendFeedbackTitle = stringResource(R.string.settings_send_feedback_title)
                 OpenCodeListItem(
-                    title = "Send Feedback",
-                    subtitle = "Report a bug or share an idea",
+                    title = sendFeedbackTitle,
+                    subtitle = stringResource(R.string.settings_send_feedback_subtitle),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Edit, "Send Feedback"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Edit, sendFeedbackTitle),
                     onClick = onSendFeedbackClick,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
-                OpenCodeSectionHeader(title = "Appearance")
+                OpenCodeSectionHeader(title = stringResource(R.string.settings_section_appearance))
 
+                val appearanceTitle = stringResource(R.string.appearance_title)
                 OpenCodeListItem(
-                    title = "Appearance",
+                    title = appearanceTitle,
                     selected = selectedDetail == SettingsDetail.Appearance,
-                    subtitle = "${currentTheme.name} · ${currentSyntax.name}",
+                    // Preset names are theme data, shown as is.
+                    subtitle = listOf(currentTheme.name, currentSyntax.name).joinToString(" · "),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Appearance"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, appearanceTitle),
                     accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = {
                         logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_APPEARANCE)
@@ -200,11 +207,12 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                val hideUserDirectoryTitle = stringResource(R.string.settings_hide_user_directory_title)
                 OpenCodeListItem(
-                    title = "Hide User Directory",
-                    subtitle = "Show ~/Projects/… instead of /Users/you/Projects/…",
+                    title = hideUserDirectoryTitle,
+                    subtitle = stringResource(R.string.settings_hide_user_directory_subtitle),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, "Hide User Directory"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, hideUserDirectoryTitle),
                     accessory =
                         OpenCodeListItemAccessory.Toggle(
                             checked = hideUserDirectoryPrefix,
@@ -219,11 +227,12 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                val recentWindowTitle = stringResource(R.string.settings_recent_window_title)
                 OpenCodeListItem(
-                    title = "Recent Window",
-                    subtitle = HomeSessionLadder.formatWindowHoursLabel(recentWindowHours),
+                    title = recentWindowTitle,
+                    subtitle = recentWindowHoursLabel(recentWindowHours).resolve(),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.List, "Recent Window"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.List, recentWindowTitle),
                     onClick = {
                         logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_RECENT_WINDOW_PICKER)
                         showRecentWindowPicker = true
@@ -231,12 +240,13 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                val collapseToolCallsTitle = stringResource(R.string.settings_collapse_tool_calls_title)
                 OpenCodeListItem(
-                    title = "Collapse Consecutive Tool Calls",
-                    subtitle = "Group back-to-back tools into one summary card",
+                    title = collapseToolCallsTitle,
+                    subtitle = stringResource(R.string.settings_collapse_tool_calls_subtitle),
                     style = OpenCodeListItemStyle.Card,
                     startDecorator =
-                        StartDecorator.Icon(OpenCodeIcons.CollapseContent, "Collapse Consecutive Tool Calls"),
+                        StartDecorator.Icon(OpenCodeIcons.CollapseContent, collapseToolCallsTitle),
                     accessory =
                         OpenCodeListItemAccessory.Toggle(
                             checked = collapseConsecutiveToolCalls,
@@ -251,25 +261,28 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                val timelineStyleTitle = stringResource(R.string.settings_timeline_style_title)
                 OpenCodeListItem(
-                    title = "Timeline Style",
-                    subtitle = timelineStyle.title,
+                    title = timelineStyleTitle,
+                    subtitle = stringResource(timelineStyle.settingsTitleRes()),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Timeline Style"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, timelineStyleTitle),
                     accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = { showTimelineStylePicker = true },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                val followUpTitle = stringResource(R.string.settings_follow_up_title)
                 OpenCodeListItem(
-                    title = "Follow-up send",
+                    title = followUpTitle,
                     subtitle =
-                        if (supportsFollowUpDelivery) {
-                            val label = if (followUpDelivery == FollowUpDelivery.Steer) "Steer" else "Queue"
-                            "$label · V2 servers only. V1 does not support this."
-                        } else {
-                            "Not supported on V1. This server always sends immediately."
-                        },
+                        stringResource(
+                            when {
+                                !supportsFollowUpDelivery -> R.string.settings_follow_up_unsupported
+                                followUpDelivery == FollowUpDelivery.Steer -> R.string.settings_follow_up_subtitle_steer
+                                else -> R.string.settings_follow_up_subtitle_queue
+                            },
+                        ),
                     style = OpenCodeListItemStyle.Card,
                     enabled = supportsFollowUpDelivery,
                     startDecorator =
@@ -279,7 +292,7 @@ fun SettingsScreen(
                             } else {
                                 OpenCodeIcons.ArrowUpward
                             },
-                            "Follow-up send",
+                            followUpTitle,
                         ),
                     accessory = if (supportsFollowUpDelivery) OpenCodeListItemAccessory.Disclosure else null,
                     onClick =
@@ -299,13 +312,14 @@ fun SettingsScreen(
                     )
                 }
 
-                OpenCodeSectionHeader(title = "Home")
+                OpenCodeSectionHeader(title = stringResource(R.string.settings_section_home))
 
+                val worktreesTitle = stringResource(R.string.settings_worktrees_title)
                 OpenCodeListItem(
-                    title = "Worktrees",
-                    subtitle = WORKTREES_SETTING_SUBTITLE,
+                    title = worktreesTitle,
+                    subtitle = stringResource(R.string.settings_worktrees_subtitle),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, "Worktrees"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, worktreesTitle),
                     accessory =
                         OpenCodeListItemAccessory.Toggle(
                             checked = showsWorktrees,
@@ -317,11 +331,12 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp).testTag("settingsWorktreesToggle"),
                 )
 
+                val sessionRowsTitle = stringResource(R.string.settings_session_rows_title)
                 OpenCodeListItem(
-                    title = "Session rows",
-                    subtitle = sessionRowStyle.settingsTitle(),
+                    title = sessionRowsTitle,
+                    subtitle = stringResource(sessionRowStyle.settingsTitleRes()),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.List, "Session rows"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.List, sessionRowsTitle),
                     accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = {
                         logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_SESSION_ROWS_PICKER)
@@ -330,21 +345,23 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp).testTag("settingsSessionRows"),
                 )
 
-                OpenCodeSectionHeader(title = "Session Cache")
+                OpenCodeSectionHeader(title = stringResource(R.string.settings_section_session_cache))
 
                 OpenCodeListItem(
-                    title = "Size",
-                    subtitle = sessionCacheSizeLabel,
+                    title = stringResource(R.string.settings_session_cache_size),
+                    subtitle = sessionCacheSizeLabel.resolve(),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Archive, "Session Cache Size"),
+                    startDecorator =
+                        StartDecorator.Icon(OpenCodeIcons.Archive, stringResource(R.string.settings_session_cache_size_label)),
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                val clearSessionCacheTitle = stringResource(R.string.settings_clear_session_cache_title)
                 OpenCodeListItem(
-                    title = "Clear Session Cache",
-                    subtitle = "Remove cached sessions and messages",
+                    title = clearSessionCacheTitle,
+                    subtitle = stringResource(R.string.settings_clear_session_cache_subtitle),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear Session Cache"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, clearSessionCacheTitle),
                     onClick = {
                         logSettingsAction(ProductAnalytics.Action.SETTINGS_CLEAR_SESSION_CACHE)
                         showClearSessionCacheConfirmation = true
@@ -352,18 +369,21 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
-                OpenCodeSectionHeader(title = "Privacy")
+                OpenCodeSectionHeader(title = stringResource(R.string.settings_section_privacy))
 
+                val appLockTitle = stringResource(R.string.settings_app_lock_title)
                 OpenCodeListItem(
-                    title = "App Lock",
+                    title = appLockTitle,
                     subtitle =
-                        if (appLockAvailable) {
-                            "Require your fingerprint, face or device PIN when the app returns from the background"
-                        } else {
-                            "Set a screen lock on this device to use App Lock"
-                        },
+                        stringResource(
+                            if (appLockAvailable) {
+                                R.string.settings_app_lock_subtitle_available
+                            } else {
+                                R.string.settings_app_lock_subtitle_unavailable
+                            },
+                        ),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Lock, "App Lock"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Lock, appLockTitle),
                     accessory =
                         OpenCodeListItemAccessory.Toggle(
                             checked = appLockEnabled,
@@ -376,11 +396,12 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                val privacyPolicyTitle = stringResource(R.string.settings_privacy_policy_title)
                 OpenCodeListItem(
-                    title = "Privacy Policy",
-                    subtitle = "How the apps handle data",
+                    title = privacyPolicyTitle,
+                    subtitle = stringResource(R.string.settings_privacy_policy_subtitle),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Privacy Policy"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, privacyPolicyTitle),
                     accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = {
                         logSettingsAction(ProductAnalytics.Action.SETTINGS_OPEN_PRIVACY_POLICY)
@@ -392,10 +413,11 @@ fun SettingsScreen(
                 )
 
                 OpenCodeListItem(
-                    title = "Analytics & crash reports",
-                    subtitle = "Allow optional product usage events and crash reports. Off sends nothing to Firebase.",
+                    title = stringResource(R.string.settings_analytics_title),
+                    subtitle = stringResource(R.string.settings_analytics_subtitle),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Product Analytics"),
+                    startDecorator =
+                        StartDecorator.Icon(OpenCodeIcons.Description, stringResource(R.string.settings_analytics_label)),
                     accessory =
                         OpenCodeListItemAccessory.Toggle(
                             checked = productAnalyticsConsented,
@@ -412,21 +434,23 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                val diagnosticLogsTitle = stringResource(R.string.diagnostics_title)
                 OpenCodeListItem(
-                    title = "Diagnostic Logs",
+                    title = diagnosticLogsTitle,
                     selected = selectedDetail == SettingsDetail.DiagnosticLogs,
-                    subtitle = "Share a redacted rolling runtime log window",
+                    subtitle = stringResource(R.string.settings_diagnostic_logs_subtitle),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Diagnostic Logs"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, diagnosticLogsTitle),
                     onClick = onDiagnosticLogsClick,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                val clearAllDataTitle = stringResource(R.string.settings_clear_all_data_title)
                 OpenCodeListItem(
-                    title = "Clear All Data",
-                    subtitle = "Remove connection and cache",
+                    title = clearAllDataTitle,
+                    subtitle = stringResource(R.string.settings_clear_all_data_subtitle),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, "Clear All Data"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Close, clearAllDataTitle),
                     onClick = {
                         logSettingsAction(ProductAnalytics.Action.SETTINGS_CLEAR_ALL_DATA)
                         showClearConfirmation = true
@@ -434,31 +458,34 @@ fun SettingsScreen(
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
-                OpenCodeSectionHeader(title = "About")
+                OpenCodeSectionHeader(title = stringResource(R.string.settings_section_about))
 
+                val versionTitle = stringResource(R.string.settings_version)
                 OpenCodeListItem(
-                    title = "Version",
+                    title = versionTitle,
                     subtitle = version,
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Version"),
-                    onClick = { copyAboutValueToClipboard(context, label = "Version", value = version) },
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, versionTitle),
+                    onClick = { copyAboutValueToClipboard(context, label = versionTitle, value = version) },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                val buildTitle = stringResource(R.string.settings_build)
                 OpenCodeListItem(
-                    title = "Build",
+                    title = buildTitle,
                     subtitle = build,
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, "Build"),
-                    onClick = { copyAboutValueToClipboard(context, label = "Build", value = build) },
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, buildTitle),
+                    onClick = { copyAboutValueToClipboard(context, label = buildTitle, value = build) },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
 
+                val sourceCodeTitle = stringResource(R.string.settings_source_code_title)
                 OpenCodeListItem(
-                    title = "Source Code",
-                    subtitle = "GPL-3.0 on GitHub",
+                    title = sourceCodeTitle,
+                    subtitle = stringResource(R.string.settings_source_code_subtitle),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Code, "Source Code"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Code, sourceCodeTitle),
                     accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = {
                         context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(SourceCode.URL)))
@@ -467,23 +494,23 @@ fun SettingsScreen(
                 )
 
                 if (DeveloperToolsPreferences.unlocked) {
-                    OpenCodeSectionHeader(title = "Developer Tools")
+                    OpenCodeSectionHeader(title = DeveloperToolsCopy.SECTION)
 
                     OpenCodeListItem(
-                        title = "Component Gallery",
+                        title = DeveloperToolsCopy.COMPONENT_GALLERY,
                         selected = selectedDetail == SettingsDetail.ComponentGallery,
-                        subtitle = "Design-system foundations and reusable components",
+                        subtitle = DeveloperToolsCopy.COMPONENT_GALLERY_SUBTITLE,
                         style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, "Component Gallery"),
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Architecture, DeveloperToolsCopy.COMPONENT_GALLERY),
                         onClick = onComponentGalleryClick,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
 
                     OpenCodeListItem(
-                        title = "Session Chat Playground",
-                        subtitle = "The real chat over fake scenarios, no server",
+                        title = DeveloperToolsCopy.PLAYGROUND,
+                        subtitle = DeveloperToolsCopy.PLAYGROUND_SUBTITLE,
                         style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Session Chat Playground"),
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, DeveloperToolsCopy.PLAYGROUND),
                         accessory = OpenCodeListItemAccessory.Disclosure,
                         onClick = onSessionChatPlaygroundClick,
                         modifier = Modifier.padding(horizontal = 16.dp),
@@ -491,10 +518,10 @@ fun SettingsScreen(
 
                     if (onHighlightingLabClick != null) {
                         OpenCodeListItem(
-                            title = "Highlighting Lab",
-                            subtitle = "Data sets and on-device benchmarks",
+                            title = DeveloperToolsCopy.HIGHLIGHTING_LAB,
+                            subtitle = DeveloperToolsCopy.HIGHLIGHTING_LAB_SUBTITLE,
                             style = OpenCodeListItemStyle.Card,
-                            startDecorator = StartDecorator.Icon(OpenCodeIcons.Code, "Highlighting Lab"),
+                            startDecorator = StartDecorator.Icon(OpenCodeIcons.Code, DeveloperToolsCopy.HIGHLIGHTING_LAB),
                             accessory = OpenCodeListItemAccessory.Disclosure,
                             onClick = onHighlightingLabClick,
                             modifier = Modifier.padding(horizontal = 16.dp),
@@ -502,20 +529,20 @@ fun SettingsScreen(
                     }
 
                     OpenCodeListItem(
-                        title = "Feature Flags",
+                        title = DeveloperToolsCopy.FEATURE_FLAGS,
                         selected = selectedDetail == SettingsDetail.FeatureFlags,
-                        subtitle = "Remote flags with device overrides",
+                        subtitle = DeveloperToolsCopy.FEATURE_FLAGS_SUBTITLE,
                         style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, "Feature Flags"),
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, DeveloperToolsCopy.FEATURE_FLAGS),
                         onClick = onFeatureFlagsClick,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )
 
                     OpenCodeListItem(
-                        title = "Performance Overlay",
-                        subtitle = "Live FPS and frame-time spikes",
+                        title = DeveloperToolsCopy.PERFORMANCE_OVERLAY,
+                        subtitle = DeveloperToolsCopy.PERFORMANCE_OVERLAY_SUBTITLE,
                         style = OpenCodeListItemStyle.Card,
-                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, "Performance Overlay"),
+                        startDecorator = StartDecorator.Icon(OpenCodeIcons.Settings, DeveloperToolsCopy.PERFORMANCE_OVERLAY),
                         accessory =
                             OpenCodeListItemAccessory.Toggle(
                                 checked = PerformanceOverlayPreferences.enabled,
@@ -530,7 +557,7 @@ fun SettingsScreen(
 
     OpenCodeBottomSheet(
         visible = showRecentWindowPicker,
-        title = "Recent Window",
+        title = stringResource(R.string.settings_recent_window_title),
         scrollTargetKey = recentWindowHours,
         onDismissRequest = {
             ProductAnalytics.logUserAction(
@@ -541,14 +568,14 @@ fun SettingsScreen(
         },
     ) {
         Text(
-            text = "Sessions stay in Recent while Running or Ready, or when updated within this window.",
+            text = stringResource(R.string.settings_recent_window_message),
             style = MaterialTheme.typography.bodySmall,
             color = openCodeColor("text-base"),
             modifier = Modifier.openCodeBottomSheetContentInset().padding(bottom = 8.dp),
         )
         HomeSessionLadder.ALLOWED_WINDOW_HOURS.forEach { hours ->
             OpenCodeBottomSheetEntry(
-                title = HomeSessionLadder.formatWindowHoursLabel(hours),
+                title = recentWindowHoursLabel(hours).resolve(),
                 selected = hours == recentWindowHours,
                 modifier = Modifier.openCodeBottomSheetScrollTarget(hours),
                 onClick = {
@@ -566,15 +593,15 @@ fun SettingsScreen(
 
     OpenCodeBottomSheet(
         visible = showTimelineStylePicker,
-        title = "Timeline Style",
+        title = stringResource(R.string.settings_timeline_style_title),
         onDismissRequest = { showTimelineStylePicker = false },
     ) {
         SessionChatTimelineStyle
             .available(chipTimelineAvailable)
             .forEach { style ->
                 OpenCodeBottomSheetEntry(
-                    title = style.title,
-                    subtitle = style.subtitle,
+                    title = stringResource(style.settingsTitleRes()),
+                    subtitle = stringResource(style.settingsSubtitleRes()),
                     selected = style == timelineStyle,
                     onClick = {
                         // Chips keeps the existing toggle event; leaving Chips logs it disabled.
@@ -593,13 +620,13 @@ fun SettingsScreen(
 
     OpenCodeBottomSheet(
         visible = showSessionRowStylePicker,
-        title = "Session rows",
+        title = stringResource(R.string.settings_session_rows_title),
         onDismissRequest = { showSessionRowStylePicker = false },
     ) {
         HomeSessionRowStyle.entries.forEach { style ->
             OpenCodeBottomSheetEntry(
-                title = style.settingsTitle(),
-                subtitle = style.settingsSubtitle(),
+                title = stringResource(style.settingsTitleRes()),
+                subtitle = stringResource(style.settingsSubtitleRes()),
                 selected = style == sessionRowStyle,
                 onClick = {
                     ProductAnalytics.logUserAction(
@@ -616,12 +643,15 @@ fun SettingsScreen(
 
     OpenCodeBottomSheet(
         visible = showFollowUpPicker,
-        title = "Follow-up send",
+        title = stringResource(R.string.settings_follow_up_title),
         onDismissRequest = { showFollowUpPicker = false },
     ) {
         FollowUpDelivery.entries.forEach { mode ->
             OpenCodeBottomSheetEntry(
-                title = if (mode == FollowUpDelivery.Steer) "Steer" else "Queue",
+                title =
+                    stringResource(
+                        if (mode == FollowUpDelivery.Steer) R.string.settings_follow_up_steer else R.string.settings_follow_up_queue,
+                    ),
                 startDecorator =
                     BottomSheetEntryDecorator.Icon(
                         if (mode ==
@@ -643,11 +673,11 @@ fun SettingsScreen(
 
     OpenCodeDialog(
         visible = showClearSessionCacheConfirmation,
-        title = "Clear session cache?",
-        subtitle = "Removes cached sessions and messages. Your connection and credentials stay.",
+        title = stringResource(R.string.settings_clear_session_cache_dialog_title),
+        subtitle = stringResource(R.string.settings_clear_session_cache_dialog_message),
         primaryOption =
             OpenCodeDialogOption(
-                title = "Clear",
+                title = stringResource(R.string.settings_clear),
                 onClick = {
                     ProductAnalytics.logUserAction(
                         screenId = ProductAnalytics.Screen.SETTINGS_CLEAR_CACHE_CONFIRM,
@@ -659,7 +689,7 @@ fun SettingsScreen(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = "Cancel",
+                title = stringResource(R.string.common_cancel),
                 onClick = {
                     ProductAnalytics.logUserAction(
                         screenId = ProductAnalytics.Screen.SETTINGS_CLEAR_CACHE_CONFIRM,
@@ -673,11 +703,11 @@ fun SettingsScreen(
 
     OpenCodeDialog(
         visible = showClearConfirmation,
-        title = "Clear all data?",
-        subtitle = "This cannot be undone.",
+        title = stringResource(R.string.settings_clear_all_data_dialog_title),
+        subtitle = stringResource(R.string.settings_clear_all_data_dialog_message),
         primaryOption =
             OpenCodeDialogOption(
-                title = "Clear",
+                title = stringResource(R.string.settings_clear),
                 onClick = {
                     // Clearing all data also clears consent, so this must be logged first.
                     ProductAnalytics.logUserAction(
@@ -690,7 +720,7 @@ fun SettingsScreen(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = "Cancel",
+                title = stringResource(R.string.common_cancel),
                 onClick = {
                     ProductAnalytics.logUserAction(
                         screenId = ProductAnalytics.Screen.SETTINGS_CLEAR_ALL_DATA_CONFIRM,
@@ -703,17 +733,54 @@ fun SettingsScreen(
     )
 }
 
-private fun HomeSessionRowStyle.settingsTitle(): String =
+private fun HomeSessionRowStyle.settingsTitleRes(): Int =
     when (this) {
-        HomeSessionRowStyle.Compact -> "Compact"
-        HomeSessionRowStyle.Classic -> "Classic"
+        HomeSessionRowStyle.Compact -> R.string.settings_session_rows_compact_title
+        HomeSessionRowStyle.Classic -> R.string.settings_session_rows_classic_title
     }
 
-private fun HomeSessionRowStyle.settingsSubtitle(): String =
+private fun HomeSessionRowStyle.settingsSubtitleRes(): Int =
     when (this) {
-        HomeSessionRowStyle.Compact -> "Two lines: title and time, then project / worktree"
-        HomeSessionRowStyle.Classic -> "Project and worktree on their own lines"
+        HomeSessionRowStyle.Compact -> R.string.settings_session_rows_compact_subtitle
+        HomeSessionRowStyle.Classic -> R.string.settings_session_rows_classic_subtitle
     }
+
+internal fun SessionChatTimelineStyle.settingsTitleRes(): Int =
+    when (this) {
+        SessionChatTimelineStyle.Standard -> R.string.settings_timeline_style_standard_title
+        SessionChatTimelineStyle.Chips -> R.string.settings_timeline_style_chips_title
+        SessionChatTimelineStyle.StepRail -> R.string.settings_timeline_style_step_rail_title
+        SessionChatTimelineStyle.ActivityCard -> R.string.settings_timeline_style_activity_card_title
+    }
+
+internal fun SessionChatTimelineStyle.settingsSubtitleRes(): Int =
+    when (this) {
+        SessionChatTimelineStyle.Standard -> R.string.settings_timeline_style_standard_subtitle
+        SessionChatTimelineStyle.Chips -> R.string.settings_timeline_style_chips_subtitle
+        SessionChatTimelineStyle.StepRail -> R.string.settings_timeline_style_step_rail_subtitle
+        SessionChatTimelineStyle.ActivityCard -> R.string.settings_timeline_style_activity_card_subtitle
+    }
+
+/** "4 hours" for the Recent Window picker and its row. */
+internal fun recentWindowHoursLabel(hours: Int): UiText {
+    val sanitized = HomeSessionLadder.sanitizeWindowHours(hours)
+    return UiText.plural(R.plurals.settings_recent_window_hours, sanitized)
+}
+
+/** Developer Tools rows are developer-only and stay English. */
+private object DeveloperToolsCopy {
+    const val SECTION = "Developer Tools"
+    const val COMPONENT_GALLERY = "Component Gallery"
+    const val COMPONENT_GALLERY_SUBTITLE = "Design-system foundations and reusable components"
+    const val PLAYGROUND = "Session Chat Playground"
+    const val PLAYGROUND_SUBTITLE = "The real chat over fake scenarios, no server"
+    const val HIGHLIGHTING_LAB = "Highlighting Lab"
+    const val HIGHLIGHTING_LAB_SUBTITLE = "Data sets and on-device benchmarks"
+    const val FEATURE_FLAGS = "Feature Flags"
+    const val FEATURE_FLAGS_SUBTITLE = "Remote flags with device overrides"
+    const val PERFORMANCE_OVERLAY = "Performance Overlay"
+    const val PERFORMANCE_OVERLAY_SUBTITLE = "Live FPS and frame-time spikes"
+}
 
 private fun logSettingsAction(actionId: String) {
     ProductAnalytics.logUserAction(
@@ -730,9 +797,6 @@ private fun copyAboutValueToClipboard(
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
     clipboard.setPrimaryClip(ClipData.newPlainText(label, value))
 }
-
-internal const val WORKTREES_SETTING_SUBTITLE =
-    "Show each project\u2019s worktrees and branches on Home, and let New session pick a worktree when you hold it."
 
 private fun logSettingsToggle(
     actionId: String,
@@ -757,7 +821,7 @@ private fun SettingsScreenLightPreview() {
             onAppearanceClick = {},
             onClearData = {},
             onClearSessionCache = {},
-            sessionCacheSizeLabel = "Empty",
+            sessionCacheSizeLabel = UiText.resource(R.string.settings_session_cache_empty),
             onRefreshSessionCacheSize = {},
             version = "1.0",
             build = "1",
@@ -791,7 +855,7 @@ private fun SettingsScreenDarkPreview() {
             onAppearanceClick = {},
             onClearData = {},
             onClearSessionCache = {},
-            sessionCacheSizeLabel = "Empty",
+            sessionCacheSizeLabel = UiText.resource(R.string.settings_session_cache_empty),
             onRefreshSessionCacheSize = {},
             version = "1.0",
             build = "1",

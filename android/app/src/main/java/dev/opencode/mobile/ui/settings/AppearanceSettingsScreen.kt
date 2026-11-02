@@ -18,11 +18,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.R
 import dev.opencode.mobile.markdown.CodeTokenRole
 import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
 import dev.opencode.mobile.theme.ResolvedTokens
@@ -57,7 +59,7 @@ fun AppearanceSettingsScreen(
     val syntax = ThemeManager.currentSyntaxPreset
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
-            title = "Appearance",
+            title = stringResource(R.string.appearance_title),
             leading = openCodeDetailLeading(detailControl, onNavigateBack),
             showDivider = true,
         )
@@ -70,11 +72,13 @@ fun AppearanceSettingsScreen(
                         .padding(top = 16.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
+                val themeTitle = stringResource(R.string.appearance_theme_title)
                 OpenCodeListItem(
-                    title = "Theme",
-                    subtitle = "${theme.name} · ${themeBlurb(theme.id)}",
+                    title = themeTitle,
+                    // The preset name is theme data, shown as is.
+                    subtitle = stringResource(R.string.appearance_theme_subtitle, theme.name, themeBlurb(theme.id)),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, "Theme"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Widgets, themeTitle),
                     accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = {
                         ProductAnalytics.logUserAction(
@@ -85,11 +89,13 @@ fun AppearanceSettingsScreen(
                     },
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
+                val codeHighlightTitle = stringResource(R.string.appearance_code_highlight_title)
                 OpenCodeListItem(
-                    title = "Code highlight",
-                    subtitle = "${syntax.name} · ${syntax.blurb}",
+                    title = codeHighlightTitle,
+                    // Syntax preset name and blurb are preset data, shown as is.
+                    subtitle = listOf(syntax.name, syntax.blurb).joinToString(" · "),
                     style = OpenCodeListItemStyle.Card,
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, "Code highlight"),
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Description, codeHighlightTitle),
                     accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = {
                         ProductAnalytics.logUserAction(
@@ -118,7 +124,7 @@ fun ThemePickerScreen(
         }
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
-            title = "Theme",
+            title = stringResource(R.string.appearance_theme_title),
             leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
             showDivider = true,
         )
@@ -167,7 +173,7 @@ fun SyntaxHighlightPickerScreen(
     val isDark = LocalOpenCodeDarkTheme.current
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
-            title = "Code highlight",
+            title = stringResource(R.string.appearance_code_highlight_title),
             leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
             showDivider = true,
         )
@@ -220,8 +226,8 @@ private fun ThemePreviewCard(
         modifier = modifier,
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MiniThemePane(label = "Light", tokens = light, modifier = Modifier.weight(1f))
-            MiniThemePane(label = "Dark", tokens = dark, modifier = Modifier.weight(1f))
+            MiniThemePane(label = stringResource(R.string.appearance_preview_light), tokens = light, modifier = Modifier.weight(1f))
+            MiniThemePane(label = stringResource(R.string.appearance_preview_dark), tokens = dark, modifier = Modifier.weight(1f))
         }
     }
 }
@@ -254,7 +260,12 @@ private fun MiniThemePane(
                     .background(wash)
                     .padding(horizontal = 6.dp, vertical = 5.dp),
         ) {
-            Text("Walk the token store.", color = ink, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+            Text(
+                stringResource(R.string.appearance_preview_sample_message),
+                color = ink,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+            )
         }
         Box(
             modifier =
@@ -265,7 +276,12 @@ private fun MiniThemePane(
                     .background(raised)
                     .padding(horizontal = 6.dp, vertical = 5.dp),
         ) {
-            Text("Refreshing once, then retry.", color = ink, style = MaterialTheme.typography.labelSmall, maxLines = 2)
+            Text(
+                stringResource(R.string.appearance_preview_sample_reply),
+                color = ink,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 2,
+            )
         }
     }
 }
@@ -345,14 +361,17 @@ private fun syntaxSnippet(colors: CodeColors) =
         }
     }
 
+/** A blurb from the preset file is theme data and shows as is; built-in presets use the app's own. */
+@Composable
 private fun ThemePreset.displayBlurb(): String = blurb.ifBlank { themeBlurb(id) }
 
+@Composable
 private fun themeBlurb(id: String): String =
     when (id) {
-        "porcelain" -> "Near-white / near-black"
-        "linen" -> "Warm paper / espresso"
-        "signal" -> "True white / true black"
-        "hotline" -> "Neutral chrome, loud pink"
-        "phosphor" -> "Neutral chrome, CRT green"
+        "porcelain" -> stringResource(R.string.appearance_theme_blurb_porcelain)
+        "linen" -> stringResource(R.string.appearance_theme_blurb_linen)
+        "signal" -> stringResource(R.string.appearance_theme_blurb_signal)
+        "hotline" -> stringResource(R.string.appearance_theme_blurb_hotline)
+        "phosphor" -> stringResource(R.string.appearance_theme_blurb_phosphor)
         else -> id
     }

@@ -10,16 +10,19 @@ enum FeedbackSendError: Equatable {
     case unverified
     case failed
 
-    var message: String {
+    var message: OpenCodeText {
         switch self {
         case .offline:
-            "You're offline. Your report is kept here — try again when you're connected."
+            "feedback.error.offline"
         case let .rateLimited(seconds):
-            "You just sent a report. Try again in \(seconds) s."
+            OpenCodeText(LocalizedStringResource(
+                "feedback.error.rate_limited",
+                defaultValue: "You just sent a report. Try again in \(seconds) s."
+            ))
         case .unverified:
-            "Couldn't verify this copy of the app. Reports can only be sent from an App Store, TestFlight or Play install."
+            "feedback.error.unverified"
         case .failed:
-            "Couldn't send the report."
+            "feedback.error.failed"
         }
     }
 
@@ -36,10 +39,35 @@ enum FeedbackErrorAction: Equatable {
     case tryAgain
     case shareInstead
 
-    var title: String {
+    var title: OpenCodeText {
         switch self {
-        case .tryAgain: "Try Again"
-        case .shareInstead: "Share Instead"
+        case .tryAgain: "feedback.action.try_again"
+        case .shareInstead: "feedback.action.share_instead"
+        }
+    }
+}
+
+/// Report copy shown in the sheet. The domain `label` stays English: it names the
+/// report in the share subject.
+extension FeedbackKind {
+    var badgeLabel: OpenCodeText {
+        switch self {
+        case .bug: "feedback.kind.bug"
+        case .feedback: "feedback.kind.idea"
+        }
+    }
+
+    var composePlaceholder: OpenCodeText {
+        switch self {
+        case .bug: "feedback.placeholder.bug"
+        case .feedback: "feedback.placeholder.idea"
+        }
+    }
+
+    var sentMessage: OpenCodeText {
+        switch self {
+        case .bug: "feedback.sent.bug"
+        case .feedback: "feedback.sent.idea"
         }
     }
 }
@@ -49,11 +77,11 @@ enum FeedbackSheetPage: Equatable {
     case hideParts
     case logPreview
 
-    var title: String {
+    var title: OpenCodeText {
         switch self {
-        case .compose: "Report a problem"
-        case .hideParts: "Hide parts"
-        case .logPreview: "Diagnostic log"
+        case .compose: "feedback.title.report"
+        case .hideParts: "feedback.title.hide_parts"
+        case .logPreview: "feedback.title.log_preview"
         }
     }
 }
@@ -97,7 +125,7 @@ struct FeedbackUiState {
     /// Set when "+ Screenshot" needs the photo picker (no captured screen to restore).
     var photoPickerRequested = false
 
-    var placeholder: String { kind.placeholder }
+    var placeholder: OpenCodeText { kind.composePlaceholder }
 
     /// Page the sheet shows: the composer, Hide parts or the Diagnostic log.
     var page: FeedbackSheetPage {
@@ -117,14 +145,17 @@ struct FeedbackUiState {
 
     var hiddenAreaCount: Int { screenshot?.hiddenRects.count ?? 0 }
 
-    var logsChipTitle: String { "Logs · \(logWindow.minutes) min" }
+    var logsChipTitle: String {
+        let minutes = logWindow.minutes
+        return String(localized: "feedback.attachment.logs_minutes", defaultValue: "Logs · \(minutes) min")
+    }
 
     /// Sheet title. Listening replaces the report title while the orb is up.
-    var sheetTitle: String {
+    var sheetTitle: OpenCodeText {
         switch page {
-        case .hideParts: "Hide parts"
-        case .logPreview: "Diagnostic log"
-        case .compose: showsListeningTitle ? "Listening" : "Report a problem"
+        case .hideParts: "feedback.title.hide_parts"
+        case .logPreview: "feedback.title.log_preview"
+        case .compose: showsListeningTitle ? "feedback.title.listening" : "feedback.title.report"
         }
     }
 

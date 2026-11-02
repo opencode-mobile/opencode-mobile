@@ -7,7 +7,7 @@ struct FeedbackHidePartsContent: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            Text("Tap an area to cover it.")
+            Text("feedback.hide_parts.instructions")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -45,9 +45,16 @@ struct FeedbackHidePartsContent: View {
             }
             .frame(maxHeight: 420)
             .frame(maxWidth: .infinity)
-            .accessibilityLabel("Screenshot, \(model.uiState.hiddenAreaCount) areas hidden")
+            .accessibilityLabel(Text(Self.imageLabel(hiddenAreaCount: model.uiState.hiddenAreaCount)))
             .accessibilityAddTraits(.allowsDirectInteraction)
             .accessibilityIdentifier("feedbackHidePartsImage")
+    }
+
+    private static func imageLabel(hiddenAreaCount: Int) -> LocalizedStringResource {
+        LocalizedStringResource(
+            "feedback.hide_parts.image_hidden",
+            defaultValue: "Screenshot, \(hiddenAreaCount) areas hidden"
+        )
     }
 }
 
@@ -58,13 +65,13 @@ struct FeedbackHidePartsActions: View {
     var body: some View {
         HStack(spacing: 8) {
             OpenCodeButton(
-                variant: .compactText(title: "Undo"),
+                variant: .compactText(title: "feedback.undo"),
                 enabled: model.uiState.hiddenAreaCount > 0,
                 contrast: .low,
                 action: { model.undoHiddenPart() }
             )
             Spacer(minLength: 0)
-            OpenCodeButton(variant: .compactText(title: "Done"), action: { model.closeHideParts() })
+            OpenCodeButton(variant: .compactText(title: "feedback.done"), action: { model.closeHideParts() })
         }
     }
 }
