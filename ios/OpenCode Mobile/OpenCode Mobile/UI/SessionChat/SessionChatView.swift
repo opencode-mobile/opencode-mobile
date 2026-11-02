@@ -202,14 +202,11 @@ struct SessionChatView: View {
         let sheets = sessionChatPickerSheets(sessionChatSheets(sessionChatLayout))
         let observed = sessionChatObservers(sessionChatDestinations(sheets))
         return sessionChatMoveToWorktree(sessionChatRoutes(sessionChatDialogs(sessionChatLifecycle(observed))))
-            .onDrop(
-                of: [.item],
-                delegate: SessionChatAttachmentDropDelegate(
-                    isEnabled: attachmentDropEnabled,
-                    context: { attachmentDropContext },
-                    summary: $attachmentDropSummary,
-                    onDrop: { attachItemProviders($0, source: .drop) }
-                )
+            .sessionChatAttachmentDrop(
+                isEnabled: attachmentDropEnabled,
+                context: { attachmentDropContext },
+                summary: $attachmentDropSummary,
+                onDrop: { attachItemProviders($0, source: .drop) }
             )
             .overlay {
                 if let summary = attachmentDropSummary {
