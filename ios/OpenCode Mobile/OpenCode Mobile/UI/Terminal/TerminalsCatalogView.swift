@@ -51,12 +51,12 @@ struct TerminalsCatalogView: View {
                 get: { viewModel.pendingClose != nil },
                 set: { if !$0 { viewModel.dismissClose() } }
             ),
-            title: viewModel.pendingClose.map { "Close “\($0.title)”?" } ?? "Close this shell?",
-            subtitle: "This ends the shell on the server.",
-            primaryOption: OpenCodeDialogOption(title: "Close", destructive: true) {
+            title: Self.closeDialogTitle(shellTitle: viewModel.pendingClose?.title),
+            subtitle: "terminal.close_dialog.message",
+            primaryOption: OpenCodeDialogOption(title: "terminal.close", destructive: true) {
                 Task { await viewModel.confirmClose() }
             },
-            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+            secondaryOption: OpenCodeDialogOption(title: "common.cancel") {
                 viewModel.dismissClose()
             }
         )
@@ -65,10 +65,19 @@ struct TerminalsCatalogView: View {
                 get: { viewModel.isProjectPickerVisible },
                 set: { if !$0 { viewModel.dismissProjectPicker() } }
             ),
-            title: "New shell"
+            title: "terminal.new_shell"
         ) {
             projectPicker
         }
+    }
+
+    /// The shell title comes from the server and stays verbatim inside the text.
+    private static func closeDialogTitle(shellTitle: String?) -> OpenCodeText {
+        guard let shellTitle else { return "terminal.close_dialog.title" }
+        return OpenCodeText(LocalizedStringResource(
+            "terminal.close_dialog.title_named",
+            defaultValue: "Close “\(shellTitle)”?"
+        ))
     }
 
     private var contentSplit: some View {
@@ -94,12 +103,12 @@ struct TerminalsCatalogView: View {
             } else {
                 VStack(spacing: 0) {
                     OpenCodeTopBar(
-                        title: "Terminal",
+                        title: "terminal.title",
                         leading: OpenCodeSplitPane.detailLeading(control, back: {})
                     )
                     OpenCodeEmptyState(
-                        title: "Select a shell",
-                        message: "Choose a shell from the list.",
+                        title: "terminal.select.title",
+                        message: "terminal.select.message",
                         icon: .terminal
                     )
                 }
@@ -116,21 +125,21 @@ struct TerminalsCatalogView: View {
     ) -> some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: "Terminals",
+                title: "terminal.catalog.title",
                 leading: .back(action: { dismiss() }),
                 showDivider: true
             )
             VStack(spacing: 0) {
                 if viewModel.isLoading {
                     OpenCodeStatusStack(
-                        title: "Loading terminals",
-                        subtitle: "Checking server…"
+                        title: "terminal.catalog.loading",
+                        subtitle: "common.checking_server"
                     )
                 } else {
                     if viewModel.rows.isEmpty {
                         OpenCodeEmptyState(
-                            title: "No running shells",
-                            message: "Start one for a project. It is not tied to a chat session."
+                            title: "terminal.catalog.empty.title",
+                            message: "terminal.catalog.empty.message"
                         )
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
@@ -150,7 +159,7 @@ struct TerminalsCatalogView: View {
                                         },
                                         trailing: {
                                             OpenCodeButton(
-                                                variant: .iconCircle(.close, accessibilityLabel: "Close"),
+                                                variant: .iconCircle(.close, accessibilityLabel: "terminal.close"),
                                                 contrast: .low,
                                                 action: {
                                                     viewModel.requestClose(row)
@@ -164,7 +173,7 @@ struct TerminalsCatalogView: View {
                         }
                     }
                     OpenCodeButton(
-                        variant: .fullWidthText(title: "New shell"),
+                        variant: .fullWidthText(title: "terminal.new_shell"),
                         action: { viewModel.showProjectPicker() }
                     )
                     .padding(.horizontal, 20)
@@ -194,8 +203,8 @@ struct TerminalsCatalogView: View {
             }
             if viewModel.projects.isEmpty {
                 OpenCodeEmptyState(
-                    title: "No projects yet",
-                    message: "Add a project on home, then start a shell here.",
+                    title: "terminal.projects_empty.title",
+                    message: "terminal.projects_empty.message",
                     fillsAvailableSpace: false
                 )
             } else {

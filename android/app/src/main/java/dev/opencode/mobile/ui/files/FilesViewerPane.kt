@@ -32,9 +32,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ProductRouteScreenViewEffect
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeCodeFile
@@ -54,6 +56,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.withContext
@@ -76,6 +79,9 @@ internal fun FilesViewerPane(
 ) {
     var menuExpanded by rememberSaveable { mutableStateOf(false) }
     ProductRouteScreenViewEffect(screenId = ProductAnalytics.Screen.FILES_VIEWER)
+    val copyPathTitle = stringResource(R.string.file_viewer_copy_path)
+    val wrapLinesTitle = stringResource(R.string.file_viewer_wrap_lines)
+    val wrapLinesLabel = stringResource(if (wrapLines) R.string.file_viewer_wrap_lines_on else R.string.file_viewer_wrap_lines_off)
     Column(Modifier.fillMaxSize()) {
         tabs?.invoke()
         OpenCodeTopBarOverflowHost(
@@ -84,7 +90,7 @@ internal fun FilesViewerPane(
             entries =
                 listOf(
                     OpenCodeOverflowMenuEntry(
-                        title = "Copy path",
+                        title = copyPathTitle,
                         icon = OpenCodeIcons.ContentCopy,
                         onClick = {
                             menuExpanded = false
@@ -92,9 +98,9 @@ internal fun FilesViewerPane(
                         },
                     ),
                     OpenCodeOverflowMenuEntry(
-                        title = "Wrap lines",
+                        title = wrapLinesTitle,
                         icon = if (wrapLines) OpenCodeIcons.Check else null,
-                        accessibilityLabel = if (wrapLines) "Wrap lines, on" else "Wrap lines, off",
+                        accessibilityLabel = wrapLinesLabel,
                         onClick = {
                             menuExpanded = false
                             onToggleWrap()
@@ -110,7 +116,7 @@ internal fun FilesViewerPane(
                     listOf(
                         OpenCodeTopBarAction.Icon(
                             imageVector = OpenCodeIcons.MoreVert,
-                            contentDescription = "File options",
+                            contentDescription = stringResource(R.string.file_viewer_options),
                             onClick = { menuExpanded = true },
                         ),
                     ),
@@ -132,7 +138,7 @@ private fun highlightingLabEntries(
     if (onOpen == null) return emptyList()
     return listOf(
         OpenCodeOverflowMenuEntry(
-            title = "Open in Highlighting Lab",
+            title = HIGHLIGHTING_LAB_ENTRY_TITLE,
             icon = OpenCodeIcons.Code,
             onClick = {
                 dismissMenu()
@@ -153,7 +159,7 @@ private fun FilesViewerBody(
     when (val content = viewer.content) {
         FilesViewerContent.Loading ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                OpenCodeStatusStack(title = "Opening file", style = OpenCodeStatusStackStyle.Spinner)
+                OpenCodeStatusStack(title = stringResource(R.string.file_viewer_opening), style = OpenCodeStatusStackStyle.Spinner)
             }
         is FilesViewerContent.Text -> TextContent(viewer, content, wrapLines, onToggleMarkdownSource, onVisibleLinesChange)
         is FilesViewerContent.Image -> ImageContent(content)
@@ -161,25 +167,25 @@ private fun FilesViewerBody(
         is FilesViewerContent.TooLarge ->
             Centered {
                 OpenCodeEmptyState(
-                    title = content.title,
-                    message = content.message,
+                    title = content.title.resolve(),
+                    message = content.message.resolve(),
                     icon = OpenCodeIcons.Description,
                 )
             }
         FilesViewerContent.Empty ->
             Centered {
                 OpenCodeEmptyState(
-                    title = "Empty file",
-                    message = "This file has no content.",
+                    title = stringResource(R.string.file_viewer_empty_title),
+                    message = stringResource(R.string.file_viewer_empty_message),
                     icon = OpenCodeIcons.Description,
                 )
             }
         is FilesViewerContent.Failed ->
             Centered {
                 OpenCodeEmptyState(
-                    title = "Couldn't open file",
-                    message = content.message,
-                    primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = onRetry),
+                    title = stringResource(R.string.file_viewer_error_title),
+                    message = content.message.resolve(),
+                    primaryAction = OpenCodeEmptyStateAction(title = stringResource(R.string.files_retry), onClick = onRetry),
                 )
             }
     }
@@ -196,7 +202,7 @@ private fun TextContent(
     Column(Modifier.fillMaxSize()) {
         if (content.isTruncated) {
             OpenCodeInlineNotice(
-                message = "Showing the first 1 MB of this file.",
+                message = stringResource(R.string.file_viewer_truncated),
                 variant = OpenCodeInlineNoticeVariant.Banner,
                 modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 8.dp),
             )
@@ -253,7 +259,7 @@ private fun TextContent(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = content.metaLabel,
+                text = content.metaLabel.resolve(),
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.labelMedium,
                 color = openCodeColor("text-weak"),
@@ -262,7 +268,7 @@ private fun TextContent(
             )
             if (hasModeTabs) {
                 OpenCodeFilterTabs(
-                    tabs = MarkdownModeTabs,
+                    tabs = markdownModeTabs(),
                     selectedTabId = if (viewer.showsMarkdownSource) MARKDOWN_SOURCE_TAB else MARKDOWN_PREVIEW_TAB,
                     onTabSelected = { id ->
                         if ((id == MARKDOWN_SOURCE_TAB) != viewer.showsMarkdownSource) onToggleMarkdownSource()
@@ -295,12 +301,12 @@ private fun ImageContent(content: FilesViewerContent.Image) {
     when (val image = decoded) {
         DecodedImage.Decoding ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                OpenCodeStatusStack(title = "Opening image", style = OpenCodeStatusStackStyle.Spinner)
+                OpenCodeStatusStack(title = stringResource(R.string.file_viewer_opening_image), style = OpenCodeStatusStackStyle.Spinner)
             }
         is DecodedImage.Ready ->
             Image(
                 bitmap = image.bitmap,
-                contentDescription = "Image preview",
+                contentDescription = stringResource(R.string.file_viewer_image_preview),
                 contentScale = ContentScale.Fit,
                 modifier =
                     Modifier
@@ -328,18 +334,24 @@ private const val MAX_IMAGE_DIMENSION = 4096
 private const val MARKDOWN_PREVIEW_TAB = "preview"
 private const val MARKDOWN_SOURCE_TAB = "source"
 
-private val MarkdownModeTabs =
+/** Lab builds only. Developer tools are not translated. */
+private const val HIGHLIGHTING_LAB_ENTRY_TITLE = "Open in Highlighting Lab"
+
+@Composable
+private fun markdownModeTabs(): List<OpenCodeFilterTab> =
     listOf(
-        OpenCodeFilterTab(id = MARKDOWN_PREVIEW_TAB, title = "Preview"),
-        OpenCodeFilterTab(id = MARKDOWN_SOURCE_TAB, title = "Source"),
+        OpenCodeFilterTab(id = MARKDOWN_PREVIEW_TAB, title = stringResource(R.string.file_viewer_tab_preview)),
+        OpenCodeFilterTab(id = MARKDOWN_SOURCE_TAB, title = stringResource(R.string.file_viewer_tab_source)),
     )
 
 @Composable
 private fun BinaryPlaceholder(mimeType: String?) {
     Centered {
         OpenCodeEmptyState(
-            title = "Binary file",
-            message = listOfNotNull(mimeType?.takeIf { it.isNotBlank() }, "No preview for this file type.").joinToString("\n"),
+            title = stringResource(R.string.file_viewer_binary_title),
+            message =
+                mimeType?.takeIf { it.isNotBlank() }?.let { stringResource(R.string.file_viewer_binary_message_type, it) }
+                    ?: stringResource(R.string.file_viewer_binary_message),
             icon = OpenCodeIcons.Description,
         )
     }

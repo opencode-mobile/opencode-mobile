@@ -37,7 +37,7 @@ struct TerminalView: View {
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: "Terminal",
+                title: "terminal.title",
                 subtitle: .verbatim(projectTitle),
                 subtitleLeading: .letter(
                     letterCharacter(for: projectTitle),
@@ -78,16 +78,16 @@ struct TerminalView: View {
     private var content: some View {
         switch viewModel.state {
         case .connecting:
-            OpenCodeStatusStack(title: "Connecting", subtitle: "Starting shell…")
+            OpenCodeStatusStack(title: "terminal.connecting.title", subtitle: "terminal.connecting.subtitle")
         case .live, .reconnecting:
             livePane
         case .connectFailed:
             errorContent(
-                title: "Connect failed",
-                message: "Could not start a shell for this project."
+                title: "terminal.connect_failed.title",
+                message: "terminal.connect_failed.message"
             )
         case .exited:
-            errorContent(title: "Shell ended", message: "Shell ended")
+            errorContent(title: "terminal.exited", message: "terminal.exited")
         }
     }
 
@@ -115,7 +115,7 @@ struct TerminalView: View {
         OpenCodeEmptyState(
             title: title,
             message: message,
-            primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
+            primaryAction: OpenCodeEmptyStateAction(title: "terminal.retry") {
                 Task { await viewModel.retry() }
             }
         )

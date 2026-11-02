@@ -27,7 +27,7 @@ struct FileViewerScreen: View {
                         dismiss()
                     }),
                     actions: [
-                        .icon(.moreVert, accessibilityLabel: "More options") { menuPresented = true },
+                        .icon(.moreVert, accessibilityLabel: "files.more_options") { menuPresented = true },
                     ],
                     showDivider: true
                 )
@@ -59,7 +59,7 @@ enum FileViewerMenu {
         let entries = [
             OpenCodeOverflowMenuEntry(
                 id: "files-copy-path",
-                title: "Copy path",
+                title: "file_viewer.copy_path",
                 icon: .contentCopy,
                 action: {
                     log(ProductAnalytics.Action.filesViewerCopyPath)
@@ -69,9 +69,9 @@ enum FileViewerMenu {
             ),
             OpenCodeOverflowMenuEntry(
                 id: "files-wrap-lines",
-                title: "Wrap lines",
+                title: "file_viewer.wrap_lines",
                 icon: wraps ? .check : nil,
-                accessibilityLabel: wraps ? "Wrap lines, on" : "Wrap lines, off",
+                accessibilityLabel: wraps ? "file_viewer.wrap_lines_on" : "file_viewer.wrap_lines_off",
                 action: {
                     log(ProductAnalytics.Action.filesViewerToggleWrap)
                     dismissMenu()
@@ -84,7 +84,8 @@ enum FileViewerMenu {
         return entries + [
             OpenCodeOverflowMenuEntry(
                 id: "files-open-in-highlighting-lab",
-                title: "Open in Highlighting Lab",
+                // Lab builds only. Developer tools are not translated.
+                title: .verbatim("Open in Highlighting Lab"),
                 icon: .code,
                 action: {
                     dismissMenu()
@@ -117,7 +118,7 @@ struct FileViewerContent: View {
             if let viewer = viewModel.state.viewers[relativePath] {
                 content(viewer)
             } else {
-                OpenCodeStatusStack(spinner: "Loading file")
+                OpenCodeStatusStack(spinner: "file_viewer.loading")
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -127,24 +128,24 @@ struct FileViewerContent: View {
     private func content(_ viewer: ProjectFileViewerState) -> some View {
         switch viewer.body {
         case .loading:
-            OpenCodeStatusStack(spinner: "Loading file")
+            OpenCodeStatusStack(spinner: "file_viewer.loading")
         case .failed:
             OpenCodeEmptyState(
-                title: "Couldn't open file",
-                message: "Check the connection and try again.",
-                primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
+                title: "file_viewer.error_title",
+                message: "files.error.check_connection",
+                primaryAction: OpenCodeEmptyStateAction(title: "files.retry") {
                     FileViewerMenu.log(ProductAnalytics.Action.filesViewerRetry)
                     viewModel.retryFile(relativePath)
                 }
             )
         case .empty:
-            OpenCodeEmptyState(title: "Empty file", message: "This file has no content.", icon: .description)
+            OpenCodeEmptyState(title: "file_viewer.empty.title", message: "file_viewer.empty.message", icon: .description)
         case let .binary(mimeType):
             Self.binaryPlaceholder(mimeType: mimeType)
         case let .tooLarge(byteCount):
             OpenCodeEmptyState(
-                title: .unlocalized(FileViewerCopy.tooLargeTitle),
-                message: .unlocalized(FileViewerCopy.tooLargeDetail(byteCount: byteCount)),
+                title: FileViewerCopy.tooLargeTitle,
+                message: FileViewerCopy.tooLargeDetail(byteCount: byteCount),
                 icon: .description
             )
         case let .image(data, mimeType):
@@ -156,8 +157,8 @@ struct FileViewerContent: View {
 
     static func binaryPlaceholder(mimeType: String?) -> some View {
         OpenCodeEmptyState(
-            title: "Binary file",
-            message: .unlocalized([mimeType, "No preview for this file type."].compactMap { $0 }.joined(separator: "\n")),
+            title: "file_viewer.binary.title",
+            message: FileViewerCopy.binaryDetail(mimeType: mimeType),
             icon: .description
         )
     }
@@ -165,7 +166,7 @@ struct FileViewerContent: View {
     private func textContent(_ viewer: ProjectFileViewerState, document: FileTextDocument) -> some View {
         VStack(spacing: 0) {
             if document.isTruncated {
-                OpenCodeInlineNotice(message: "Showing the first 1 MB of this file.", variant: .banner)
+                OpenCodeInlineNotice(message: "file_viewer.truncated", variant: .banner)
                     .padding(.horizontal, 12)
                     .padding(.top, 8)
             }
@@ -177,7 +178,7 @@ struct FileViewerContent: View {
                                 .padding(16)
                         }
                     } else {
-                        OpenCodeStatusStack(spinner: "Rendering preview")
+                        OpenCodeStatusStack(spinner: "file_viewer.rendering_preview")
                     }
                 } else {
                     codeFile(viewer, document: document)
@@ -209,8 +210,8 @@ struct FileViewerContent: View {
                 if viewer.isMarkdown {
                     OpenCodeFilterTabs(
                         tabs: [
-                            OpenCodeFilterTab(id: Self.previewTabID, title: "Preview"),
-                            OpenCodeFilterTab(id: Self.sourceTabID, title: "Source"),
+                            OpenCodeFilterTab(id: Self.previewTabID, title: "file_viewer.tab.preview"),
+                            OpenCodeFilterTab(id: Self.sourceTabID, title: "file_viewer.tab.source"),
                         ],
                         selectedTabId: viewer.showsMarkdownSource ? Self.sourceTabID : Self.previewTabID,
                         onTabSelected: { id in
@@ -254,11 +255,11 @@ private struct FileImagePreview: View {
                     .scaledToFit()
                     .padding(16)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel("Image preview")
+                    .accessibilityLabel(openCode: "file_viewer.image_preview")
             } else if decodeFailed {
                 FileViewerContent.binaryPlaceholder(mimeType: mimeType)
             } else {
-                OpenCodeStatusStack(spinner: "Loading image")
+                OpenCodeStatusStack(spinner: "file_viewer.loading_image")
             }
         }
         // Path and size identify the bytes without comparing up to 10 MB of data per update.
