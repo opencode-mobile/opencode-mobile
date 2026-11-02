@@ -722,16 +722,14 @@ private fun SessionChatTimelineReadyView(
             }
         }
 
+        // Stays up while a sheet is open: the pill that opened it should not vanish,
+        // and its measured top inset keeps the timeline from shifting under the sheet.
         val contextItems =
-            if (hideFloatStack) {
-                emptyList()
-            } else {
-                SessionChatPillSlots.context(
-                    todosCompleted = sessionTodoCompletedCount.takeIf { sessionTodosVisible },
-                    todosTotal = sessionTodoTotalCount.takeIf { sessionTodosVisible },
-                    branch = sessionBranchPill,
-                )
-            }
+            SessionChatPillSlots.context(
+                todosCompleted = sessionTodoCompletedCount.takeIf { sessionTodosVisible },
+                todosTotal = sessionTodoTotalCount.takeIf { sessionTodosVisible },
+                branch = sessionBranchPill,
+            )
         LaunchedEffect(contextItems.isEmpty()) {
             if (contextItems.isEmpty()) {
                 topOverlayInsetPx = 0
