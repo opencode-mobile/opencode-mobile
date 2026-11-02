@@ -555,7 +555,7 @@ struct SessionChatActivityCardTests {
         let shell = try #require(card.steps.first { $0.id == "b1" }?.card)
         let detail = SessionChatActivityCardPresentation.detail(stepID: "b1", in: card, supportsSessionMessageDiff: true)
         #expect(shell.detailText != nil)
-        #expect(english(detail?.target.title) == shell.title)
+        #expect(english(detail?.target.title) == english(shell.title))
         #expect(detail?.target.body == shell.detailText)
         #expect(detail?.target.bodyIsMarkdown == shell.detailIsMarkdown)
     }

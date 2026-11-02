@@ -33,7 +33,7 @@ final class SessionListStatusMappingTests: XCTestCase {
 
     func testStaleToneUsesMutedChip() {
         let stale = SessionListStatus.running.listItemStatus(isStale: true)
-        XCTAssertEqual(stale.text, "Running")
+        XCTAssertEqual(stale.text.resolved, "Running")
         XCTAssertEqual(stale.tone, .stale)
         let live = SessionListStatus.running.listItemStatus(isStale: false)
         XCTAssertEqual(live.tone, .interactive)
@@ -55,13 +55,13 @@ final class SessionListStatusMappingTests: XCTestCase {
 
     func testUnreadStatusesCopyToneAndAttention() {
         let done = SessionListStatus.done.listItemStatus()
-        XCTAssertEqual(done.text, "Done")
+        XCTAssertEqual(done.text.resolved, "Done")
         XCTAssertEqual(done.tone, .success)
         let failed = SessionListStatus.failed.listItemStatus()
-        XCTAssertEqual(failed.text, "Failed")
+        XCTAssertEqual(failed.text.resolved, "Failed")
         XCTAssertEqual(failed.tone, .error)
         let stopped = SessionListStatus.stopped.listItemStatus()
-        XCTAssertEqual(stopped.text, "Stopped")
+        XCTAssertEqual(stopped.text.resolved, "Stopped")
         XCTAssertEqual(stopped.tone, .warning)
         for status in [SessionListStatus.ready, .done, .failed, .stopped] {
             XCTAssertTrue(status.isAttention)

@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
