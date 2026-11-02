@@ -20,7 +20,7 @@ struct ConnectionProfileListMetaTests {
     @Test func activeWithProtocol_captionAndActivePill() {
         let profile = profile(api: .v2)
         #expect(ConnectionProfileListMeta.caption(profile, isActive: true) == "API v2")
-        #expect(ConnectionProfileListMeta.status(profile, isActive: true)?.text == "Active")
+        #expect(ConnectionProfileListMeta.status(profile, isActive: true)?.text.resolved == "Active")
     }
 
     @Test func otherWithProtocol_compactInfoPill() {
@@ -33,7 +33,7 @@ struct ConnectionProfileListMetaTests {
         let profile = profile(api: nil)
         #expect(ConnectionProfileListMeta.caption(profile, isActive: true) == nil)
         #expect(ConnectionProfileListMeta.caption(profile, isActive: false) == nil)
-        #expect(ConnectionProfileListMeta.status(profile, isActive: true)?.text == "Active")
+        #expect(ConnectionProfileListMeta.status(profile, isActive: true)?.text.resolved == "Active")
         #expect(ConnectionProfileListMeta.status(profile, isActive: false) == nil)
     }
 

@@ -8,7 +8,7 @@ enum ConnectionProfileListMeta {
 
     static func status(_ profile: ConnectionProfile, isActive: Bool) -> OpenCodeListItemStatus? {
         if isActive {
-            return OpenCodeListItemStatus(text: "Active", tone: .interactive)
+            return OpenCodeListItemStatus(text: "servers.status_active", tone: .interactive)
         }
         if let serverProtocol = profile.serverProtocol {
             return OpenCodeListItemStatus(text: .verbatim(serverProtocol.shortLabel), tone: .info)

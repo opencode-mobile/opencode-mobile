@@ -28,7 +28,7 @@ enum OpenCodeTopBarSubtitleLeading {
 enum OpenCodeTopBarLeading {
     case none
     case back(
-        accessibilityLabel: OpenCodeText = "Back",
+        accessibilityLabel: OpenCodeText = "top_bar.back",
         consumesInteractivePop: Bool = false,
         action: () -> Void
     )
@@ -59,6 +59,7 @@ struct OpenCodeTopBar: View {
     let onTitleClick: (() -> Void)?
     let titleMenuExpanded: Bool
 
+    @Environment(\.layoutDirection) private var layoutDirection
     /// Set by the vertical bar layer while it draws the rail items (iPhone Duo).
     @State private var verticalBarActive = false
     /// Set while the bar sits where iPhone Duo uses a vertical bar, rail items or not.
@@ -258,6 +259,7 @@ struct OpenCodeTopBar: View {
                 icon: .arrowBack,
                 accessibilityLabel: accessibilityLabel,
                 enabled: true,
+                mirrorsInRightToLeft: true,
                 action: action
             )
         case let .close(accessibilityLabel, action):
@@ -457,11 +459,14 @@ struct OpenCodeTopBar: View {
         icon: OpenCodeIcon,
         accessibilityLabel: OpenCodeText,
         enabled: Bool,
+        mirrorsInRightToLeft: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
+        // Back points toward the leading edge, so it flips in right-to-left layouts.
         if #available(iOS 26, *) {
             Button(action: action) {
                 OpenCodeIconImage(icon: icon, size: 18)
+                    .scaleEffect(x: mirrorsIcon(mirrorsInRightToLeft) ? -1 : 1, y: 1)
                     .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textBase)
                     .frame(width: topBarIconButtonSize, height: topBarIconButtonSize)
                     .contentShape(Circle())
@@ -478,7 +483,12 @@ struct OpenCodeTopBar: View {
                 contrast: .low,
                 action: action
             )
+            .scaleEffect(x: mirrorsIcon(mirrorsInRightToLeft) ? -1 : 1, y: 1)
         }
+    }
+
+    private func mirrorsIcon(_ mirrorsInRightToLeft: Bool) -> Bool {
+        mirrorsInRightToLeft && layoutDirection == .rightToLeft
     }
 }
 
