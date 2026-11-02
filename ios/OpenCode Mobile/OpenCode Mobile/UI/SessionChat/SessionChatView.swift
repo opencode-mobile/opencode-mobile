@@ -1057,7 +1057,7 @@ struct SessionChatView: View {
                 primaryOption: OpenCodeDialogOption(title: "session_chat.fork_result.open") {
                     viewModel.chooseForkOpen()
                 },
-                secondaryOption: OpenCodeDialogOption(title: "session_chat.fork_result.stay") {
+                secondaryOption: OpenCodeDialogOption(title: "session_chat.fork_result.stay_here") {
                     viewModel.chooseForkStay()
                 }
             )
@@ -1076,8 +1076,8 @@ struct SessionChatView: View {
     private var forkResultMessage: OpenCodeText {
         let title = viewModel.uiState.forkedSessionTitle
         return OpenCodeText(LocalizedStringResource(
-            "session_chat.fork_result.message_forked_as",
-            defaultValue: "Forked as “\(title)”."
+            "session_chat.fork_result.message_ready",
+            defaultValue: "“\(title)” is ready."
         ))
     }
 

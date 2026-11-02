@@ -310,19 +310,19 @@ internal object SessionChatActivityPillCopy {
         return UiText.resource(R.string.session_chat_activity_status_action, statusText, UiText.resource(tapAction))
     }
 
-    /** The round pill that stands for [count] items: its primary's state plus what a tap does. */
+    /** The round pill that stands for [count] items: its primary's state, then that a tap shows or hides them. */
     fun collapsedAccessibilityLabel(
         primary: SessionChatActivityItem,
         count: Int,
         stackOpen: Boolean,
     ): UiText {
-        val lead = status(primary)
-        return when {
-            count > 1 && stackOpen -> UiText.resource(R.string.session_chat_activity_collapsed_count_hide_activity, lead, count)
-            count > 1 -> UiText.resource(R.string.session_chat_activity_collapsed_count_show_activity, lead, count)
-            stackOpen -> UiText.resource(R.string.session_chat_activity_collapsed_hide_activity, lead)
-            else -> UiText.resource(R.string.session_chat_activity_collapsed_show_activity, lead)
-        }
+        val toggle =
+            if (stackOpen) {
+                UiText.plural(R.plurals.session_chat_activity_collapsed_hide_count, count)
+            } else {
+                UiText.plural(R.plurals.session_chat_activity_collapsed_show_count, count)
+            }
+        return UiText.resource(R.string.session_chat_activity_status_action, status(primary), toggle)
     }
 
     /** The item's state, as read aloud. */

@@ -185,19 +185,15 @@ struct SessionChatActivitySlotView: View {
         )
     }
 
-    /// The round pill that stands for every item: hide them, or show them and read the primary.
+    /// The round pill that stands for every item: the primary's state, then that a tap shows or hides them.
     static func collapsedAccessibilityLabel(_ primary: SessionChatActivityItem, count: Int, stackOpen: Bool) -> String {
-        if stackOpen {
-            return String(
-                localized: "session_chat.activity.collapsed.hide_count",
-                defaultValue: "Hide \(count) activities"
-            )
-        }
-        let label = accessibilityLabel(primary)
-        guard count > 1 else { return label }
+        let statusText = Self.status(primary)
+        let toggleText = stackOpen
+            ? String(localized: "session_chat.activity.collapsed.hide_count", defaultValue: "Hide \(count) activities")
+            : String(localized: "session_chat.activity.collapsed.show_count", defaultValue: "Show \(count) activities")
         return String(
-            localized: "session_chat.activity.collapsed.show_count",
-            defaultValue: "Show \(count) activities. \(label)"
+            localized: "session_chat.activity.status_action",
+            defaultValue: "\(statusText). \(toggleText)"
         )
     }
 

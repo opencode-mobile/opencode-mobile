@@ -132,7 +132,7 @@ struct FileViewerContent: View {
         case .failed:
             OpenCodeEmptyState(
                 title: "file_viewer.error_title",
-                message: "files.error.check_connection",
+                message: "files.error.check_server_connection",
                 primaryAction: OpenCodeEmptyStateAction(title: "files.retry") {
                     FileViewerMenu.log(ProductAnalytics.Action.filesViewerRetry)
                     viewModel.retryFile(relativePath)

@@ -28,6 +28,7 @@ struct SettingsTextTests {
 
     @Test func diagnosticsLabels() {
         #expect(DiagnosticLogsView.lastMinutesLabel(15).resolved == "Last 15 minutes")
+        #expect(DiagnosticLogsView.lastMinutesLabel(1).resolved == "Last 1 minute")
         #expect(DiagnosticLogsView.rangeLabel(oldest: "a", newest: "a").resolved == "a")
         #expect(DiagnosticLogsView.rangeLabel(oldest: "a", newest: "b").resolved == "a → b")
     }

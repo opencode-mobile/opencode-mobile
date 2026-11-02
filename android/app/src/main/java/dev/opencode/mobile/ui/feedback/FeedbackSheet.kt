@@ -563,7 +563,8 @@ private fun HidePartsBody(
         remember(screenshot.jpeg) {
             BitmapFactory.decodeByteArray(screenshot.jpeg, 0, screenshot.jpeg.size)?.asImageBitmap()
         } ?: return
-    val imageLabel = stringResource(R.string.feedback_hide_parts_image_label)
+    val hidden = screenshot.hiddenRects.size
+    val imageLabel = pluralStringResource(R.plurals.feedback_hide_parts_image_hidden, hidden, hidden)
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -628,7 +629,12 @@ private fun LogPreviewBody(state: FeedbackUiState) {
             text =
                 when {
                     lines == null -> stringResource(R.string.feedback_log_preview_loading)
-                    lines.isEmpty() -> stringResource(R.string.feedback_log_preview_empty)
+                    lines.isEmpty() ->
+                        pluralStringResource(
+                            R.plurals.feedback_log_preview_empty_message,
+                            state.logWindow.minutes,
+                            state.logWindow.minutes,
+                        )
                     // Redacted log lines are log content, shown as is.
                     else -> lines.joinToString("\n")
                 },

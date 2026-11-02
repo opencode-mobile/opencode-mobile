@@ -322,9 +322,16 @@ struct SessionChatPillSlotsTests {
         #expect(SessionChatActivitySlotView.accessibilityLabel(.queued(count: 1)) == "1 queued prompt. Open Up next")
         #expect(
             SessionChatActivitySlotView.collapsedAccessibilityLabel(.reviewPermission, count: 2, stackOpen: false)
-                == "Show 2 activities. Review permission request"
+                == "Review permission request. Show 2 activities"
         )
-        #expect(SessionChatActivitySlotView.collapsedAccessibilityLabel(.reviewPermission, count: 2, stackOpen: true) == "Hide 2 activities")
+        #expect(
+            SessionChatActivitySlotView.collapsedAccessibilityLabel(.reviewPermission, count: 2, stackOpen: true)
+                == "Review permission request. Hide 2 activities"
+        )
+        #expect(
+            SessionChatActivitySlotView.collapsedAccessibilityLabel(.reviewPermission, count: 1, stackOpen: false)
+                == "Review permission request. Show 1 activity"
+        )
     }
 
     private func user(_ id: String) -> SessionChatRow {

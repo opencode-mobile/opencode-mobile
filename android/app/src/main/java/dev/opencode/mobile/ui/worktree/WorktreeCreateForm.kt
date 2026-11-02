@@ -96,7 +96,7 @@ object WorktreeName {
         return when {
             trimmed.isEmpty() -> UiText.resource(R.string.worktree_name_empty)
             !allowed.matches(trimmed) -> UiText.resource(R.string.worktree_name_chars)
-            trimmed.length > MAX_LENGTH -> UiText.resource(R.string.worktree_name_long, MAX_LENGTH)
+            trimmed.length > MAX_LENGTH -> UiText.plural(R.plurals.worktree_name_long, MAX_LENGTH)
             else -> null
         }
     }

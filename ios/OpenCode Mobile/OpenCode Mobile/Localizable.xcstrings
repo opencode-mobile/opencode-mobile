@@ -314,9 +314,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Showing the first %lld folders. Type more of the name to narrow the list."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Showing the first %lld folder. Type more of the name to narrow the list."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Showing the first %lld folders. Type more of the name to narrow the list."
+                }
+              }
+            }
           }
         }
       }
@@ -3334,7 +3346,7 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld redacted lines in the kept window"
+                  "value" : "%lld redacted line in the kept window"
                 }
               },
               "other" : {
@@ -3467,7 +3479,7 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Last %lld minutes"
+                  "value" : "Last %lld minute"
                 }
               },
               "other" : {
@@ -4253,7 +4265,7 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Screenshot, %lld areas hidden"
+                  "value" : "Screenshot, %lld area hidden"
                 }
               },
               "other" : {
@@ -4263,17 +4275,6 @@
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "feedback.hide_parts.image_label" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Screenshot. Tap an area to cover it."
           }
         }
       }
@@ -4311,17 +4312,6 @@
         }
       }
     },
-    "feedback.log_preview.empty" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No log lines in this window."
-          }
-        }
-      }
-    },
     "feedback.log_preview.empty_message" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4331,7 +4321,7 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Nothing was logged in the last %lld minutes."
+                  "value" : "Nothing was logged in the last %lld minute."
                 }
               },
               "other" : {
@@ -4376,7 +4366,7 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "Last %lld minutes · gzipped on upload. Redacted on this phone."
+                  "value" : "Last %lld minute · gzipped on upload. Redacted on this phone."
                 }
               },
               "other" : {
@@ -4722,39 +4712,6 @@
         }
       }
     },
-    "file_viewer.opening" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Opening file"
-          }
-        }
-      }
-    },
-    "file_viewer.opening_image" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Opening image"
-          }
-        }
-      }
-    },
-    "file_viewer.options" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "File options"
-          }
-        }
-      }
-    },
     "file_viewer.rendering_preview" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4906,17 +4863,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This project has no files to show."
-          }
-        }
-      }
-    },
-    "files.error.check_connection" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Check the connection and try again."
           }
         }
       }
@@ -5302,7 +5248,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Forked as “%@”."
+            "value" : "“%@” is ready."
           }
         }
       }
@@ -5313,7 +5259,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Stay"
+            "value" : "Stay here"
           }
         }
       }
@@ -6640,57 +6586,25 @@
         }
       }
     },
-    "session_chat.activity.collapsed.count_hide_activity" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, %2$lld activities. Hide activity"
-          }
-        }
-      }
-    },
-    "session_chat.activity.collapsed.count_show_activity" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@, %2$lld activities. Show activity"
-          }
-        }
-      }
-    },
-    "session_chat.activity.collapsed.hide_activity" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@. Hide activity"
-          }
-        }
-      }
-    },
     "session_chat.activity.collapsed.hide_count" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hide %lld activities"
-          }
-        }
-      }
-    },
-    "session_chat.activity.collapsed.show_activity" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@. Show activity"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Hide %lld activity"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Hide %lld activities"
+                }
+              }
+            }
           }
         }
       }
@@ -6699,9 +6613,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show %1$lld activities. %2$@"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Show %lld activity"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Show %lld activities"
+                }
+              }
+            }
           }
         }
       }
@@ -7339,17 +7265,6 @@
         }
       }
     },
-    "session_chat.fork_result.message_forked_as" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Forked as “%@”."
-          }
-        }
-      }
-    },
     "session_chat.fork_result.message_ready" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7368,17 +7283,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Open"
-          }
-        }
-      }
-    },
-    "session_chat.fork_result.stay" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Stay"
           }
         }
       }
@@ -8838,7 +8742,7 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld files"
+                  "value" : "%lld file"
                 }
               },
               "other" : {
@@ -8873,7 +8777,7 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld lines"
+                  "value" : "%lld line"
                 }
               },
               "other" : {
@@ -8896,7 +8800,7 @@
               "one" : {
                 "stringUnit" : {
                   "state" : "translated",
-                  "value" : "%lld matches"
+                  "value" : "%lld match"
                 }
               },
               "other" : {
@@ -9693,7 +9597,7 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Require Face ID, Touch ID or your passcode when the app returns from the background"
+            "value" : "Require your face, fingerprint or device passcode when the app returns from the background"
           }
         }
       }
@@ -10642,17 +10546,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Could not start a shell."
-          }
-        }
-      }
-    },
-    "terminal.error.fallback" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The terminal didn't open."
           }
         }
       }
@@ -12886,9 +12779,21 @@
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Use at most %lld characters"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Use at most %lld character"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Use at most %lld characters"
+                }
+              }
+            }
           }
         }
       }

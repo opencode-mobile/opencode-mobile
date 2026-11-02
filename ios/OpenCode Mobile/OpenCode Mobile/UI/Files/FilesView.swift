@@ -171,7 +171,7 @@ struct FilesView: View {
         case .failed:
             OpenCodeEmptyState(
                 title: "files.folder_error",
-                message: "files.error.check_connection",
+                message: "files.error.check_server_connection",
                 primaryAction: OpenCodeEmptyStateAction(title: "files.retry") {
                     logAction(ProductAnalytics.Action.filesRetry)
                     viewModel.retryRoot()
@@ -257,7 +257,7 @@ struct FilesView: View {
         case .failed:
             OpenCodeEmptyState(
                 title: "files.find_error",
-                message: "files.error.check_connection",
+                message: "files.error.check_server_connection",
                 primaryAction: OpenCodeEmptyStateAction(title: "files.retry") {
                     logAction(ProductAnalytics.Action.filesRetry)
                     viewModel.retryFind()

@@ -38,4 +38,14 @@ class SettingsTextTest {
         assertEquals("2 hours", recentWindowHoursLabel(1).english())
         assertEquals("1 hour", UiText.plural(R.plurals.settings_recent_window_hours, 1).english())
     }
+
+    @Test
+    fun diagnosticsCounts_useSingularForOne() {
+        assertEquals("Last 1 minute", UiText.plural(R.plurals.diagnostics_last_minutes, 1).english())
+        assertEquals("Last 15 minutes", UiText.plural(R.plurals.diagnostics_last_minutes, 15).english())
+        assertEquals(
+            "1 redacted line in the kept window",
+            UiText.plural(R.plurals.diagnostics_entries_count, 1).english(),
+        )
+    }
 }

@@ -140,7 +140,7 @@ private fun TerminalErrorContent(
     ) {
         OpenCodeEmptyState(
             title = title,
-            message = message.ifBlank { stringResource(R.string.terminal_error_fallback) },
+            message = message,
             primaryAction = OpenCodeEmptyStateAction(title = stringResource(R.string.terminal_retry), onClick = onRetry),
         )
     }

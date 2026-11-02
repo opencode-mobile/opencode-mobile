@@ -245,7 +245,10 @@
     </plurals>
     <string name="add_project_no_subfolders">No subfolders</string>
     <string name="add_project_nothing_starts_with">Nothing in %1$s starts with “%2$s”</string>
-    <string name="add_project_truncation_hint">Showing the first %1$d folders. Type more of the name to narrow the list.</string>
+    <plurals name="add_project_truncation_hint">
+        <item quantity="one">Showing the first %1$d folder. Type more of the name to narrow the list.</item>
+        <item quantity="other">Showing the first %1$d folders. Type more of the name to narrow the list.</item>
+    </plurals>
     <string name="add_project_in_folder">In %1$s</string>
     <string name="add_project_root_home">Home</string>
     <string name="add_project_error_add_failed">Unable to add this directory</string>
@@ -272,7 +275,10 @@
     <string name="worktree_base_failed">Couldn\'t load branches</string>
     <string name="worktree_name_empty">Enter a name</string>
     <string name="worktree_name_chars">Use letters, numbers, dots, dashes or underscores</string>
-    <string name="worktree_name_long">Use at most %1$d characters</string>
+    <plurals name="worktree_name_long">
+        <item quantity="one">Use at most %1$d character</item>
+        <item quantity="other">Use at most %1$d characters</item>
+    </plurals>
     <string name="worktree_submit_run_in">Create and start</string>
     <string name="worktree_submit_move">Create and move</string>
     <string name="worktree_submitting">Creating…</string>
@@ -297,19 +303,15 @@
     <string name="files_find_error">Couldn\'t search files</string>
     <string name="files_find_no_match">No files match “%1$s”</string>
     <string name="files_find_no_match_detail">Server search skips ignored folders.</string>
-    <string name="files_error_check_connection">Check the connection and try again.</string>
     <string name="files_error_check_server_connection">Check the connection to the server and try again.</string>
     <string name="files_no_file_title">Open a file from the tree</string>
     <string name="files_no_file_message">Opened files stay as tabs</string>
     <string name="files_path_copied">Path copied</string>
-    <string name="file_viewer_options">File options</string>
     <string name="file_viewer_copy_path">Copy path</string>
     <string name="file_viewer_wrap_lines">Wrap lines</string>
     <string name="file_viewer_wrap_lines_on">Wrap lines, on</string>
     <string name="file_viewer_wrap_lines_off">Wrap lines, off</string>
-    <string name="file_viewer_opening">Opening file</string>
     <string name="file_viewer_loading">Loading file</string>
-    <string name="file_viewer_opening_image">Opening image</string>
     <string name="file_viewer_loading_image">Loading image</string>
     <string name="file_viewer_rendering_preview">Rendering preview</string>
     <string name="file_viewer_image_preview">Image preview</string>
@@ -354,7 +356,6 @@
     <string name="terminal_connect_failed_title">Connect failed</string>
     <string name="terminal_connect_failed_message">Could not start a shell for this project.</string>
     <string name="terminal_exited">Shell ended</string>
-    <string name="terminal_error_fallback">The terminal didn\'t open.</string>
     <string name="terminal_retry">Retry</string>
     <string name="terminal_key_ctrl_c">Ctrl-C</string>
     <string name="terminal_key_esc">Esc</string>
@@ -387,10 +388,8 @@
     <string name="session_chat_fork_dialog_error_failed">Couldn\'t fork session.</string>
     <string name="session_chat_fork_result_title">Session forked</string>
     <string name="session_chat_fork_result_message_ready">“%1$s” is ready.</string>
-    <string name="session_chat_fork_result_message_forked_as">Forked as “%1$s”.</string>
     <string name="session_chat_fork_result_open">Open</string>
     <string name="session_chat_fork_result_stay_here">Stay here</string>
-    <string name="session_chat_fork_result_stay">Stay</string>
     <string name="session_chat_attachment_source_title">Add attachment</string>
     <string name="session_chat_attachment_source_photos">Photos</string>
     <string name="session_chat_attachment_source_files">Files</string>
@@ -461,12 +460,14 @@
     <string name="session_chat_activity_action_retry">Retry</string>
     <string name="session_chat_activity_action_open">Open</string>
     <string name="session_chat_activity_action_open_up_next">Open Up next</string>
-    <string name="session_chat_activity_collapsed_show_activity">%1$s. Show activity</string>
-    <string name="session_chat_activity_collapsed_hide_activity">%1$s. Hide activity</string>
-    <string name="session_chat_activity_collapsed_count_show_activity">%1$s, %2$d activities. Show activity</string>
-    <string name="session_chat_activity_collapsed_count_hide_activity">%1$s, %2$d activities. Hide activity</string>
-    <string name="session_chat_activity_collapsed_show_count">Show %1$d activities. %2$s</string>
-    <string name="session_chat_activity_collapsed_hide_count">Hide %1$d activities</string>
+    <plurals name="session_chat_activity_collapsed_show_count">
+        <item quantity="one">Show %1$d activity</item>
+        <item quantity="other">Show %1$d activities</item>
+    </plurals>
+    <plurals name="session_chat_activity_collapsed_hide_count">
+        <item quantity="one">Hide %1$d activity</item>
+        <item quantity="other">Hide %1$d activities</item>
+    </plurals>
     <string name="session_chat_activity_show_more">Show %1$d more</string>
     <string name="session_chat_activity_hide_more">Hide %1$d more</string>
     <string name="session_chat_navigation_scroll_to_end">Scroll to end</string>
@@ -822,15 +823,15 @@
     <!-- Process exit code of a tool command. -->
     <string name="session_chat_sheet_tool_result_exit_code">exit %1$d</string>
     <plurals name="session_chat_sheet_tool_result_matches">
-        <item quantity="one">%1$d matches</item>
+        <item quantity="one">%1$d match</item>
         <item quantity="other">%1$d matches</item>
     </plurals>
     <plurals name="session_chat_sheet_tool_result_files">
-        <item quantity="one">%1$d files</item>
+        <item quantity="one">%1$d file</item>
         <item quantity="other">%1$d files</item>
     </plurals>
     <plurals name="session_chat_sheet_tool_result_lines">
-        <item quantity="one">%1$d lines</item>
+        <item quantity="one">%1$d line</item>
         <item quantity="other">%1$d lines</item>
     </plurals>
     <!-- Android accessibility label. %1$s is a pull request URL. -->
@@ -961,8 +962,8 @@
     <string name="settings_clear_session_cache_dialog_message">Removes cached sessions and messages. Your connection and credentials stay.</string>
     <string name="settings_clear">Clear</string>
     <string name="settings_app_lock_title">App Lock</string>
-    <string name="settings_app_lock_subtitle_available">Require your fingerprint, face or device PIN when the app returns from the background</string>
-    <string name="settings_app_lock_subtitle_unavailable">Set a screen lock on this device to use App Lock</string>
+    <string name="settings_app_lock_subtitle_available">Require your face, fingerprint or device passcode when the app returns from the background</string>
+    <string name="settings_app_lock_subtitle_unavailable">Set a device passcode to use App Lock</string>
     <string name="settings_privacy_policy_title">Privacy Policy</string>
     <string name="settings_privacy_policy_subtitle">How the apps handle data</string>
     <string name="settings_analytics_title">Analytics &amp; crash reports</string>
@@ -981,13 +982,13 @@
     <string name="diagnostics_loading">Loading diagnostic logs</string>
     <string name="diagnostics_entries_title">Entries</string>
     <plurals name="diagnostics_entries_count">
-        <item quantity="one">%1$d redacted lines in the kept window</item>
+        <item quantity="one">%1$d redacted line in the kept window</item>
         <item quantity="other">%1$d redacted lines in the kept window</item>
     </plurals>
     <string name="diagnostics_entries_empty">No entries in the kept window yet</string>
     <string name="diagnostics_kept_title">Kept</string>
     <plurals name="diagnostics_last_minutes">
-        <item quantity="one">Last %1$d minutes</item>
+        <item quantity="one">Last %1$d minute</item>
         <item quantity="other">Last %1$d minutes</item>
     </plurals>
     <string name="diagnostics_export_title">Export</string>
@@ -1053,8 +1054,8 @@
     <string name="feedback_done">Done</string>
     <string name="feedback_add_attachment">Add attachment</string>
     <string name="feedback_dictate">Dictate</string>
-    <string name="feedback_send">Send</string>
-    <string name="feedback_sending">Sending</string>
+    <string name="feedback_send">Send report</string>
+    <string name="feedback_sending">Sending report</string>
     <string name="feedback_attachment_screenshot">Screenshot</string>
     <plurals name="feedback_attachment_screenshot_hidden">
         <item quantity="one">Screenshot · %1$d hidden</item>
@@ -1076,20 +1077,18 @@
         <item quantity="other">%1$d min</item>
     </plurals>
     <string name="feedback_hide_parts_instructions">Tap an area to cover it.</string>
-    <string name="feedback_hide_parts_image_label">Screenshot. Tap an area to cover it.</string>
     <plurals name="feedback_hide_parts_image_hidden">
-        <item quantity="one">Screenshot, %1$d areas hidden</item>
+        <item quantity="one">Screenshot, %1$d area hidden</item>
         <item quantity="other">Screenshot, %1$d areas hidden</item>
     </plurals>
     <plurals name="feedback_log_preview_summary">
-        <item quantity="one">Last %1$d minutes · gzipped on upload. Redacted on this phone.</item>
+        <item quantity="one">Last %1$d minute · gzipped on upload. Redacted on this phone.</item>
         <item quantity="other">Last %1$d minutes · gzipped on upload. Redacted on this phone.</item>
     </plurals>
     <string name="feedback_log_preview_loading">Loading…</string>
-    <string name="feedback_log_preview_empty">No log lines in this window.</string>
     <string name="feedback_log_preview_empty_title">No log lines</string>
     <plurals name="feedback_log_preview_empty_message">
-        <item quantity="one">Nothing was logged in the last %1$d minutes.</item>
+        <item quantity="one">Nothing was logged in the last %1$d minute.</item>
         <item quantity="other">Nothing was logged in the last %1$d minutes.</item>
     </plurals>
     <string name="feedback_sent_title">Thanks — report sent</string>

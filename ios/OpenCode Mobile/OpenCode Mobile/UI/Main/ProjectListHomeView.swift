@@ -768,7 +768,7 @@ struct ProjectListHomeView: View {
     }
 
     private static func forkResultMessage(_ title: String) -> OpenCodeText {
-        OpenCodeText(LocalizedStringResource("home.fork_result.message", defaultValue: "Forked as \u{201C}\(title)\u{201D}."))
+        OpenCodeText(LocalizedStringResource("home.fork_result.message", defaultValue: "\u{201C}\(title)\u{201D} is ready."))
     }
 
     private static func deleteSessionMessage(_ title: String) -> OpenCodeText {

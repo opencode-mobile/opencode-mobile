@@ -59,7 +59,7 @@ data class AddProjectSheetUi(
         val PATH_NOT_FOUND: UiText = UiText.resource(R.string.add_project_path_not_found)
         val NO_SUBFOLDERS: UiText = UiText.resource(R.string.add_project_no_subfolders)
         val TRUNCATION_HINT: UiText =
-            UiText.resource(R.string.add_project_truncation_hint, DirectoryListingPolicy.MAX_VISIBLE_DIRECTORIES)
+            UiText.plural(R.plurals.add_project_truncation_hint, DirectoryListingPolicy.MAX_VISIBLE_DIRECTORIES)
 
         /** Listing failures never show server text, which can carry paths or HTML. */
         val LIST_ERROR_MESSAGE: UiText = UiText.resource(R.string.add_project_list_error_message)

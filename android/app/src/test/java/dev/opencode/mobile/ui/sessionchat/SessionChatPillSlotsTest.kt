@@ -397,13 +397,13 @@ class SessionChatPillSlotsTest {
         assertEquals("2 side questions failed. Retry", SessionChatActivityPillCopy.accessibilityLabel(failedTwice).english())
         assertEquals("1 queued prompt. Open Up next", SessionChatActivityPillCopy.accessibilityLabel(queuedOne).english())
         assertEquals(
-            "Request failed, 3 activities. Hide activity",
+            "Request failed. Hide 3 activities",
             SessionChatActivityPillCopy
                 .collapsedAccessibilityLabel(SessionChatActivityItem.RequestFailed("m1", "m1:failure"), count = 3, stackOpen = true)
                 .english(),
         )
         assertEquals(
-            "Review permission request. Show activity",
+            "Review permission request. Show 1 activity",
             SessionChatActivityPillCopy.collapsedAccessibilityLabel(SessionChatActivityItem.ReviewPermission, count = 1, stackOpen = false).english(),
         )
     }

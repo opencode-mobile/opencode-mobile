@@ -116,7 +116,7 @@ internal fun FilesViewerPane(
                     listOf(
                         OpenCodeTopBarAction.Icon(
                             imageVector = OpenCodeIcons.MoreVert,
-                            contentDescription = stringResource(R.string.file_viewer_options),
+                            contentDescription = stringResource(R.string.files_more_options),
                             onClick = { menuExpanded = true },
                         ),
                     ),
@@ -159,7 +159,7 @@ private fun FilesViewerBody(
     when (val content = viewer.content) {
         FilesViewerContent.Loading ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                OpenCodeStatusStack(title = stringResource(R.string.file_viewer_opening), style = OpenCodeStatusStackStyle.Spinner)
+                OpenCodeStatusStack(title = stringResource(R.string.file_viewer_loading), style = OpenCodeStatusStackStyle.Spinner)
             }
         is FilesViewerContent.Text -> TextContent(viewer, content, wrapLines, onToggleMarkdownSource, onVisibleLinesChange)
         is FilesViewerContent.Image -> ImageContent(content)
@@ -301,7 +301,7 @@ private fun ImageContent(content: FilesViewerContent.Image) {
     when (val image = decoded) {
         DecodedImage.Decoding ->
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                OpenCodeStatusStack(title = stringResource(R.string.file_viewer_opening_image), style = OpenCodeStatusStackStyle.Spinner)
+                OpenCodeStatusStack(title = stringResource(R.string.file_viewer_loading_image), style = OpenCodeStatusStackStyle.Spinner)
             }
         is DecodedImage.Ready ->
             Image(
