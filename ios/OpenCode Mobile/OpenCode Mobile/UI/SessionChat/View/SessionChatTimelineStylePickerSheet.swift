@@ -10,6 +10,27 @@ extension SessionChatTimelineStyle {
         case .activityCard: .timelineActivityCard
         }
     }
+
+    /// Picker name of this style.
+    var pickerTitle: LocalizedStringResource {
+        switch self {
+        case .standard: LocalizedStringResource("session_chat_sheet.timeline_style_picker.standard.title", defaultValue: "Standard")
+        case .chips: LocalizedStringResource("session_chat_sheet.timeline_style_picker.chips.title", defaultValue: "Chips")
+        case .stepRail: LocalizedStringResource("session_chat_sheet.timeline_style_picker.step_rail.title", defaultValue: "Step Rail")
+        case .activityCard:
+            LocalizedStringResource("session_chat_sheet.timeline_style_picker.activity_card.title", defaultValue: "Activity Card")
+        }
+    }
+
+    /// Picker description of this style.
+    var pickerSubtitle: OpenCodeText {
+        switch self {
+        case .standard: "session_chat_sheet.timeline_style_picker.standard.subtitle"
+        case .chips: "session_chat_sheet.timeline_style_picker.chips.subtitle"
+        case .stepRail: "session_chat_sheet.timeline_style_picker.step_rail.subtitle"
+        case .activityCard: "session_chat_sheet.timeline_style_picker.activity_card.subtitle"
+        }
+    }
 }
 
 /// One-time Timeline Style picker for updated installs (#805): a bottom sheet
@@ -30,17 +51,17 @@ struct SessionChatTimelineStylePickerModifier: ViewModifier {
         return content
             .openCodeBottomSheet(
                 isPresented: presentedBinding,
-                title: "New: choose your timeline",
+                title: "session_chat_sheet.timeline_style_picker.title",
                 // Every option stays in view; the 50% detent hid the last one.
                 height: .fitAllContent,
                 pinnedTop: { EmptyView() },
                 content: { sheetContent(selected: selected) },
                 pinnedBottom: {
                     VStack(spacing: 10) {
-                        OpenCodeButton(variant: .fullWidthText(title: "Use \(selected.title)")) {
+                        OpenCodeButton(variant: .fullWidthText(title: useTitle(selected))) {
                             onUse(selected)
                         }
-                        Text("You can change this any time in Settings → Timeline Style.")
+                        Text("session_chat_sheet.timeline_style_picker.footnote")
                             .font(OpenCodeTypography.caption)
                             .foregroundStyle(OpenCodeColors.textWeak)
                             .multilineTextAlignment(.center)
@@ -61,7 +82,7 @@ struct SessionChatTimelineStylePickerModifier: ViewModifier {
 
     private func sheetContent(selected: SessionChatTimelineStyle) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("This update adds new ways to follow what the agent is doing.")
+            Text("session_chat_sheet.timeline_style_picker.explainer")
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -71,8 +92,8 @@ struct SessionChatTimelineStylePickerModifier: ViewModifier {
             VStack(spacing: 8) {
                 ForEach(orderedStyles, id: \.self) { style in
                     OpenCodeOptionCard(
-                        title: .unlocalized(style.title),
-                        subtitle: .unlocalized(style.subtitle),
+                        title: OpenCodeText(style.pickerTitle),
+                        subtitle: style.pickerSubtitle,
                         tag: tag(for: style),
                         tagTone: style == .activityCard ? .accent : .neutral,
                         preview: .illustration(style.pickerIllustration),
@@ -91,9 +112,18 @@ struct SessionChatTimelineStylePickerModifier: ViewModifier {
     }
 
     private func tag(for style: SessionChatTimelineStyle) -> OpenCodeText? {
-        if style == .activityCard { return "Recommended" }
-        if style == currentStyle { return "Current" }
+        if style == .activityCard { return "session_chat_sheet.timeline_style_picker.recommended" }
+        if style == currentStyle { return "session_chat_sheet.timeline_style_picker.current" }
         return nil
+    }
+
+    /// "Use Activity Card".
+    private func useTitle(_ style: SessionChatTimelineStyle) -> OpenCodeText {
+        let name = String(localized: style.pickerTitle)
+        return OpenCodeText(LocalizedStringResource(
+            "session_chat_sheet.timeline_style_picker.use",
+            defaultValue: "Use \(name)"
+        ))
     }
 
     private var presentedBinding: Binding<Bool> {

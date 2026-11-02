@@ -1,22 +1,27 @@
 package dev.opencode.mobile.ui.sessioncontext
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.sessioncontext.SessionContextBreakdownItem
 import dev.opencode.mobile.domain.sessioncontext.SessionContextRepository
 import dev.opencode.mobile.domain.sessioncontext.SessionContextSnapshot
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
 import java.text.NumberFormat
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 import java.util.Locale
+
 import javax.inject.Inject
 
 @HiltViewModel
@@ -57,7 +62,7 @@ class SessionContextViewModel
                         _uiState.value =
                             SessionContextUiState(
                                 timeline = SessionContextTimelineState.Error,
-                                errorMessage = throwable.message ?: "Unable to load session context",
+                                errorMessage = errorText(throwable, R.string.session_context_load_failed),
                             )
                     }
             }
@@ -80,7 +85,7 @@ class SessionContextViewModel
                         _uiState.update {
                             it.copy(
                                 isRefreshing = false,
-                                errorMessage = throwable.message ?: "Unable to refresh session context",
+                                errorMessage = errorText(throwable, R.string.session_context_refresh_failed),
                             )
                         }
                     }
@@ -92,30 +97,100 @@ class SessionContextViewModel
             return SessionContextDisplayState(
                 stats =
                     listOf(
-                        SessionContextStatItem("session", "Session", snapshot.sessionTitle),
-                        SessionContextStatItem("messages", "Messages", number(snapshot.messageCounts.total)),
-                        SessionContextStatItem("provider", "Provider", snapshot.providerLabel ?: "—"),
-                        SessionContextStatItem("model", "Model", snapshot.modelLabel ?: "—"),
-                        SessionContextStatItem("limit", "Context Limit", number(tokenStats?.contextLimit)),
-                        SessionContextStatItem("total", "Total Tokens", number(tokenStats?.total)),
-                        SessionContextStatItem("usage", "Usage", percent(tokenStats?.usagePercent)),
-                        SessionContextStatItem("input", "Input Tokens", number(tokenStats?.input)),
-                        SessionContextStatItem("output", "Output Tokens", number(tokenStats?.output)),
-                        SessionContextStatItem("reasoning", "Reasoning Tokens", number(tokenStats?.reasoning)),
+                        SessionContextStatItem(
+                            "session",
+                            label(R.string.session_context_stat_session),
+                            snapshot.sessionTitle,
+                        ),
+                        SessionContextStatItem(
+                            "messages",
+                            label(R.string.session_context_stat_messages),
+                            number(snapshot.messageCounts.total),
+                        ),
+                        SessionContextStatItem(
+                            "provider",
+                            label(R.string.session_context_stat_provider),
+                            snapshot.providerLabel ?: "—",
+                        ),
+                        SessionContextStatItem(
+                            "model",
+                            label(R.string.session_context_stat_model),
+                            snapshot.modelLabel ?: "—",
+                        ),
+                        SessionContextStatItem(
+                            "limit",
+                            label(R.string.session_context_stat_context_limit),
+                            number(tokenStats?.contextLimit),
+                        ),
+                        SessionContextStatItem(
+                            "total",
+                            label(R.string.session_context_stat_total_tokens),
+                            number(tokenStats?.total),
+                        ),
+                        SessionContextStatItem(
+                            "usage",
+                            label(R.string.session_context_stat_usage),
+                            percent(tokenStats?.usagePercent),
+                        ),
+                        SessionContextStatItem(
+                            "input",
+                            label(R.string.session_context_stat_input_tokens),
+                            number(tokenStats?.input),
+                        ),
+                        SessionContextStatItem(
+                            "output",
+                            label(R.string.session_context_stat_output_tokens),
+                            number(tokenStats?.output),
+                        ),
+                        SessionContextStatItem(
+                            "reasoning",
+                            label(R.string.session_context_stat_reasoning_tokens),
+                            number(tokenStats?.reasoning),
+                        ),
                         SessionContextStatItem(
                             "cache",
-                            "Cache Tokens (read/write)",
+                            label(R.string.session_context_stat_cache_tokens),
                             "${number(tokenStats?.cacheRead)} / ${number(tokenStats?.cacheWrite)}",
                         ),
-                        SessionContextStatItem("user", "User Messages", number(snapshot.messageCounts.user)),
-                        SessionContextStatItem("assistant", "Assistant Messages", number(snapshot.messageCounts.assistant)),
-                        SessionContextStatItem("cost", "Total Cost", currency(snapshot.totalCost)),
-                        SessionContextStatItem("created", "Session Created", time(snapshot.createdAtEpochMs)),
-                        SessionContextStatItem("activity", "Last Activity", time(snapshot.lastActivityEpochMs)),
+                        SessionContextStatItem(
+                            "user",
+                            label(R.string.session_context_stat_user_messages),
+                            number(snapshot.messageCounts.user),
+                        ),
+                        SessionContextStatItem(
+                            "assistant",
+                            label(R.string.session_context_stat_assistant_messages),
+                            number(snapshot.messageCounts.assistant),
+                        ),
+                        SessionContextStatItem(
+                            "cost",
+                            label(R.string.session_context_stat_total_cost),
+                            currency(snapshot.totalCost),
+                        ),
+                        SessionContextStatItem(
+                            "created",
+                            label(R.string.session_context_stat_created),
+                            time(snapshot.createdAtEpochMs),
+                        ),
+                        SessionContextStatItem(
+                            "activity",
+                            label(R.string.session_context_stat_last_activity),
+                            time(snapshot.lastActivityEpochMs),
+                        ),
                     ),
                 breakdown = snapshot.breakdown,
             )
         }
+
+        private fun label(
+            @StringRes id: Int,
+        ): UiText = UiText.resource(id)
+
+        /** The server's message when there is one, else the app's [fallback]. */
+        private fun errorText(
+            throwable: Throwable,
+            @StringRes fallback: Int,
+        ): UiText = throwable.message?.let(UiText::verbatim) ?: UiText.resource(fallback)
 
         private fun number(value: Int): String = NumberFormat.getIntegerInstance(Locale.US).format(value)
 
@@ -139,7 +214,8 @@ data class SessionContextUiState(
     val timeline: SessionContextTimelineState = SessionContextTimelineState.Loading,
     val display: SessionContextDisplayState? = null,
     val isRefreshing: Boolean = false,
-    val errorMessage: String? = null,
+    /** Server error text verbatim, or a localised fallback. */
+    val errorMessage: UiText? = null,
 )
 
 enum class SessionContextTimelineState {
@@ -155,6 +231,7 @@ data class SessionContextDisplayState(
 
 data class SessionContextStatItem(
     val id: String,
-    val label: String,
+    val label: UiText,
+    /** Session content and formatted numbers, shown as is. */
     val value: String,
 )

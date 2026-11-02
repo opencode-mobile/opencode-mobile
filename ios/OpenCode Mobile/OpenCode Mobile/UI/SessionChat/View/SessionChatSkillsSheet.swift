@@ -12,7 +12,7 @@ struct SessionChatSkillsSheetModifier: ViewModifier {
         content
             .openCodeBottomSheet(
                 isPresented: sheetPresentedBinding,
-                title: "Skills",
+                title: "session_chat_sheet.skills.title",
                 content: {
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(target?.skills ?? []) { skill in
@@ -47,8 +47,8 @@ private extension SessionChatSkillUse {
     var listItemStatus: OpenCodeListItemStatus? {
         switch status {
         case .completed: nil
-        case .pending, .running: OpenCodeListItemStatus(text: "Loading", tone: .info)
-        case .error: OpenCodeListItemStatus(text: "Failed", tone: .error)
+        case .pending, .running: OpenCodeListItemStatus(text: "session_chat_sheet.skills.status.loading", tone: .info)
+        case .error: OpenCodeListItemStatus(text: "session_chat_sheet.skills.status.failed", tone: .error)
         }
     }
 }

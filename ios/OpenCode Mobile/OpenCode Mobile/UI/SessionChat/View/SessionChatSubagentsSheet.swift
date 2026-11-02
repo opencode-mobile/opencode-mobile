@@ -28,12 +28,21 @@ struct SessionChatBackgroundWorkList: View {
     let onOpen: (SessionChatSubagent) -> Void
     var onOpenShell: (AgentShell) -> Void = { _ in }
 
+    // OpenCodeActivitySectionLabel takes a String, so these resolve when drawn.
+    private static var subagentsTitle: String {
+        String(localized: "session_chat_sheet.background_work.subagents", defaultValue: "Subagents")
+    }
+
+    private static var shellsTitle: String {
+        String(localized: "session_chat_sheet.background_work.shells", defaultValue: "Shells")
+    }
+
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let nowMs = Int64(context.date.timeIntervalSince1970 * 1_000)
             VStack(alignment: .leading, spacing: 8) {
                 if !subagents.isEmpty {
-                    OpenCodeActivitySectionLabel(text: "Subagents")
+                    OpenCodeActivitySectionLabel(text: Self.subagentsTitle)
                     ForEach(subagents) { subagent in
                         OpenCodeChildSessionRow(
                             title: subagent.agentName,
@@ -45,7 +54,7 @@ struct SessionChatBackgroundWorkList: View {
                     }
                 }
                 if !shells.isEmpty {
-                    OpenCodeActivitySectionLabel(text: SessionChatShellPresentation.sectionTitle)
+                    OpenCodeActivitySectionLabel(text: Self.shellsTitle)
                         .padding(.top, subagents.isEmpty ? 0 : 8)
                     ForEach(shells) { shell in
                         OpenCodeShellRow(
@@ -73,7 +82,7 @@ struct SessionChatBackgroundWorkSheetModifier: ViewModifier {
         content
             .openCodeBottomSheet(
                 isPresented: presentedBinding,
-                title: .unlocalized(Self.title),
+                title: OpenCodeText(Self.title),
                 content: {
                     SessionChatBackgroundWorkList(
                         subagents: subagents,
@@ -91,7 +100,7 @@ struct SessionChatBackgroundWorkSheetModifier: ViewModifier {
             )
     }
 
-    static let title = "Background work"
+    static let title = LocalizedStringResource("session_chat_sheet.background_work.title", defaultValue: "Background work")
 
     private var presentedBinding: Binding<Bool> {
         Binding(

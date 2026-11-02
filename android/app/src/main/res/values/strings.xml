@@ -525,4 +525,157 @@
         <item quantity="one">%1$d deleted</item>
         <item quantity="other">%1$d deleted</item>
     </plurals>
+    <!-- Session Chat sheets and Session Context -->
+    <string name="session_chat_sheet_copy">Copy</string>
+    <string name="session_chat_sheet_copy_output">Copy output</string>
+    <string name="session_chat_sheet_message_actions_title">Message</string>
+    <string name="session_chat_sheet_message_actions_revert">Revert message</string>
+    <string name="session_chat_sheet_message_actions_fork">Fork from here</string>
+    <string name="session_chat_sheet_message_actions_copy_code_block">Copy code block</string>
+    <string name="session_chat_sheet_message_actions_copy_message">Copy message</string>
+    <!-- Android clipboard label for a copied code block. -->
+    <string name="session_chat_sheet_message_actions_clip_label_code">Code</string>
+    <string name="session_chat_sheet_mcp_loading_title">Checking MCP servers</string>
+    <string name="session_chat_sheet_mcp_loading_subtitle">Reading status from the opencode server</string>
+    <string name="session_chat_sheet_mcp_error_title">Couldn\'t load MCP servers</string>
+    <string name="session_chat_sheet_mcp_error_message">The MCP server list didn\'t load.</string>
+    <string name="session_chat_sheet_mcp_empty_title">No MCP servers</string>
+    <string name="session_chat_sheet_mcp_empty_message">None are configured on this opencode server.</string>
+    <!-- %1$d connected MCP servers, %2$d configured. -->
+    <string name="session_chat_sheet_mcp_headline">%1$d of %2$d connected</string>
+    <string name="session_chat_sheet_mcp_status_connected">Connected</string>
+    <string name="session_chat_sheet_mcp_status_connecting">Connecting</string>
+    <string name="session_chat_sheet_mcp_status_disabled">Disabled</string>
+    <string name="session_chat_sheet_mcp_status_failed">Failed</string>
+    <string name="session_chat_sheet_mcp_status_needs_sign_in">Needs sign-in</string>
+    <string name="session_chat_sheet_pending_prompts_title">Up next</string>
+    <plurals name="session_chat_sheet_pending_prompts_waiting">
+        <item quantity="one">%1$d waiting</item>
+        <item quantity="other">%1$d waiting</item>
+    </plurals>
+    <string name="session_chat_sheet_pending_prompts_clear_all">Clear all</string>
+    <string name="session_chat_sheet_pending_prompts_sending">Sending…</string>
+    <string name="session_chat_sheet_pending_prompts_move_to_queue">Move to queue</string>
+    <string name="session_chat_sheet_pending_prompts_steer_now">Steer now</string>
+    <string name="session_chat_sheet_pending_prompts_delete">Delete</string>
+    <string name="session_chat_sheet_chip_timeline_intro_glance_title">See the work at a glance</string>
+    <string name="session_chat_sheet_chip_timeline_intro_glance_body">Tool calls show as chips under the sentence that explains them.</string>
+    <string name="session_chat_sheet_chip_timeline_intro_long_runs_title">Long runs, short timeline</string>
+    <string name="session_chat_sheet_chip_timeline_intro_long_runs_body">Twenty tool calls take a few chips instead of a screen of rows.</string>
+    <string name="session_chat_sheet_chip_timeline_intro_details_title">Details stay one tap away</string>
+    <string name="session_chat_sheet_chip_timeline_intro_details_body">Tap a chip for its diffs, command output, or files.</string>
+    <string name="session_chat_sheet_chip_timeline_intro_enable">Turn on Chip timeline</string>
+    <string name="session_chat_sheet_chip_timeline_intro_later">Later</string>
+    <string name="session_chat_sheet_chip_timeline_intro_never">Don\'t show again</string>
+    <string name="session_chat_sheet_side_question_done">Done</string>
+    <string name="session_chat_sheet_side_question_not_added">Not added to the conversation</string>
+    <string name="session_chat_sheet_todos_title">Session todos</string>
+    <!-- %1$d completed todos, %2$d todos in total. The numbers are shown in bold. -->
+    <string name="session_chat_sheet_todos_progress">%1$d of %2$d completed</string>
+    <string name="session_chat_sheet_skills_title">Skills</string>
+    <string name="session_chat_sheet_skills_status_loading">Loading</string>
+    <string name="session_chat_sheet_skills_status_failed">Failed</string>
+    <string name="session_chat_sheet_timeline_style_picker_title">New: choose your timeline</string>
+    <string name="session_chat_sheet_timeline_style_picker_explainer">This update adds new ways to follow what the agent is doing.</string>
+    <string name="session_chat_sheet_timeline_style_picker_footnote">You can change this any time in Settings → Timeline Style.</string>
+    <!-- %1$s is the selected Timeline Style name. -->
+    <string name="session_chat_sheet_timeline_style_picker_use">Use %1$s</string>
+    <string name="session_chat_sheet_timeline_style_picker_recommended">Recommended</string>
+    <string name="session_chat_sheet_timeline_style_picker_current">Current</string>
+    <string name="session_chat_sheet_timeline_style_picker_standard_title">Standard</string>
+    <string name="session_chat_sheet_timeline_style_picker_standard_subtitle">Tool cards and groups between the agent\'s messages</string>
+    <string name="session_chat_sheet_timeline_style_picker_chips_title">Chips</string>
+    <string name="session_chat_sheet_timeline_style_picker_chips_subtitle">Tools as chips under the agent\'s narration</string>
+    <string name="session_chat_sheet_timeline_style_picker_step_rail_title">Step Rail</string>
+    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">One line per step on a rail, live while the agent works</string>
+    <string name="session_chat_sheet_timeline_style_picker_activity_card_title">Activity Card</string>
+    <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Running steps on one live card that folds into a summary</string>
+    <string name="session_chat_sheet_picker_model">Model</string>
+    <string name="session_chat_sheet_picker_agent_mode">Agent mode</string>
+    <string name="session_chat_sheet_picker_variant">Variant</string>
+    <string name="session_chat_sheet_picker_back_to_providers">Back to providers</string>
+    <string name="session_chat_sheet_picker_no_models_match">No models match your filter</string>
+    <string name="session_chat_sheet_picker_filter_models_hint">Filter models...</string>
+    <string name="session_chat_sheet_tool_detail_provider_response">Provider response</string>
+    <string name="session_chat_sheet_tool_detail_tool">Tool</string>
+    <!-- Process exit code of a tool command. -->
+    <string name="session_chat_sheet_tool_result_exit_code">exit %1$d</string>
+    <plurals name="session_chat_sheet_tool_result_matches">
+        <item quantity="one">%1$d matches</item>
+        <item quantity="other">%1$d matches</item>
+    </plurals>
+    <plurals name="session_chat_sheet_tool_result_files">
+        <item quantity="one">%1$d files</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <plurals name="session_chat_sheet_tool_result_lines">
+        <item quantity="one">%1$d lines</item>
+        <item quantity="other">%1$d lines</item>
+    </plurals>
+    <!-- Android accessibility label. %1$s is a pull request URL. -->
+    <string name="session_chat_sheet_tool_result_copy_link">Copy %1$s</string>
+    <!-- iOS accessibility hint on a pull request URL. -->
+    <string name="session_chat_sheet_tool_result_copies_link_hint">Copies the link</string>
+    <!-- iOS accessibility label. %1$d is the line number, %2$s the line's code. -->
+    <string name="session_chat_sheet_tool_result_line_accessibility">Line %1$d, %2$s</string>
+    <string name="session_chat_sheet_shell_title">Shell</string>
+    <!-- iOS accessibility label. %1$s is the shell command. -->
+    <string name="session_chat_sheet_shell_command_accessibility">Command, %1$s</string>
+    <string name="session_chat_sheet_shell_no_output">No output yet</string>
+    <string name="session_chat_sheet_shell_truncated">Showing the latest output</string>
+    <string name="session_chat_sheet_shell_stop">Stop shell</string>
+    <string name="session_chat_sheet_shell_stopping">Stopping…</string>
+    <string name="session_chat_sheet_background_work_title">Background work</string>
+    <string name="session_chat_sheet_background_work_subagents">Subagents</string>
+    <string name="session_chat_sheet_background_work_shells">Shells</string>
+    <!-- Title while a run of steps is live. %1$d is the step count. -->
+    <plurals name="session_chat_sheet_activity_working">
+        <item quantity="one">Working %1$d</item>
+        <item quantity="other">Working %1$d</item>
+    </plurals>
+    <string name="session_chat_sheet_activity_back_to_steps">Back to steps</string>
+    <string name="session_chat_sheet_activity_steps">Steps</string>
+    <plurals name="session_chat_sheet_activity_tools_so_far">
+        <item quantity="one">%1$d tool so far</item>
+        <item quantity="other">%1$d tools so far</item>
+    </plurals>
+    <plurals name="session_chat_sheet_activity_tools">
+        <item quantity="one">%1$d tool</item>
+        <item quantity="other">%1$d tools</item>
+    </plurals>
+    <string name="session_chat_sheet_activity_stopped">Stopped</string>
+    <string name="session_context_title">Session Context</string>
+    <string name="session_context_loading_title">Loading session context</string>
+    <string name="session_context_loading_subtitle">Fetching context…</string>
+    <string name="session_context_load_failed">Unable to load session context</string>
+    <string name="session_context_load_failed_message">The context didn\'t load.</string>
+    <string name="session_context_refresh_failed">Unable to refresh session context</string>
+    <!-- iOS accessibility label of the refresh spinner. -->
+    <string name="session_context_refreshing">Refreshing session context</string>
+    <string name="session_context_retry">Retry</string>
+    <string name="session_context_stat_session">Session</string>
+    <string name="session_context_stat_messages">Messages</string>
+    <string name="session_context_stat_provider">Provider</string>
+    <string name="session_context_stat_model">Model</string>
+    <string name="session_context_stat_context_limit">Context Limit</string>
+    <string name="session_context_stat_total_tokens">Total Tokens</string>
+    <string name="session_context_stat_usage">Usage</string>
+    <string name="session_context_stat_input_tokens">Input Tokens</string>
+    <string name="session_context_stat_output_tokens">Output Tokens</string>
+    <string name="session_context_stat_reasoning_tokens">Reasoning Tokens</string>
+    <string name="session_context_stat_cache_tokens">Cache Tokens (read/write)</string>
+    <string name="session_context_stat_user_messages">User Messages</string>
+    <string name="session_context_stat_assistant_messages">Assistant Messages</string>
+    <string name="session_context_stat_total_cost">Total Cost</string>
+    <string name="session_context_stat_created">Session Created</string>
+    <string name="session_context_stat_last_activity">Last Activity</string>
+    <string name="session_context_breakdown_title">Context Breakdown</string>
+    <string name="session_context_breakdown_system">System</string>
+    <string name="session_context_breakdown_user">User</string>
+    <string name="session_context_breakdown_assistant">Assistant</string>
+    <string name="session_context_breakdown_tool_calls">Tool Calls</string>
+    <string name="session_context_breakdown_other">Other</string>
+    <!-- %1$s is a breakdown part (System, User…), %2$s its share, such as 12.5%. -->
+    <string name="session_context_breakdown_legend">%1$s %2$s</string>
+    <string name="session_context_breakdown_footnote">Approximate breakdown of input tokens. Other includes tool definitions and overhead.</string>
 </resources>

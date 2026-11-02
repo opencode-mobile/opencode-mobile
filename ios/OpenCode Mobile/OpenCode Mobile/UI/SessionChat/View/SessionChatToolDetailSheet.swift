@@ -8,8 +8,11 @@ enum SessionFailureSheetAction: Equatable {
 }
 
 struct SessionChatToolDetailTarget: Equatable {
+    /// Tool or failure text, shown as is unless `localizedTitle` is set.
     let title: String
     let body: String
+    /// App-text title that replaces `title` in the sheet header, such as "Provider response".
+    var localizedTitle: OpenCodeText? = nil
     /// Render `body` as markdown (a compaction summary) instead of plain tool output.
     var bodyIsMarkdown: Bool = false
     /// Provider response: monospace, with a copy button.
@@ -52,8 +55,9 @@ struct SessionChatToolDetailTarget: Equatable {
         let resolvedLinkLabel = nonEmptyTrimmed(linkLabel).flatMap { resolvedLink == nil ? nil : $0 }
         if body == nil, sheetAction == nil, resolvedLinkLabel == nil { return nil }
         return SessionChatToolDetailTarget(
-            title: body == nil ? text : "Provider response",
+            title: text,
             body: body ?? "",
+            localizedTitle: body == nil ? nil : "session_chat_sheet.tool_detail.provider_response",
             monospace: body != nil,
             sheetAction: sheetAction,
             sheetActionLabel: sheetAction == nil ? nil : label,
@@ -77,7 +81,7 @@ struct SessionChatToolDetailSheetModifier: ViewModifier {
         content
             .openCodeBottomSheet(
                 isPresented: sheetPresentedBinding,
-                title: .unlocalized(sheetTitle),
+                title: sheetTitle,
                 pinnedTop: {
                     if let presentation = inspector {
                         ToolResultPinnedHeader(presentation: presentation)
@@ -110,8 +114,12 @@ struct SessionChatToolDetailSheetModifier: ViewModifier {
         target?.inspectorPresentation
     }
 
-    private var sheetTitle: String {
-        inspector?.title ?? target?.title ?? "Tool"
+    /// Inspector and tool titles are already resolved text; the header shows them as is.
+    private var sheetTitle: OpenCodeText {
+        if let title = inspector?.title { return .verbatim(title) }
+        if let localizedTitle = target?.localizedTitle { return localizedTitle }
+        if let title = target?.title { return .verbatim(title) }
+        return "session_chat_sheet.tool_detail.tool"
     }
 
     /// Copy stays off a failure sheet so Compact, Pick a model, and the caption copy are unchanged.
@@ -155,7 +163,7 @@ private struct SessionChatToolDetailBody: View {
                 OpenCodeRenderedMarkdown(document: document, variant: .standalone)
             } else if monospace {
                 VStack(alignment: .leading, spacing: 8) {
-                    Button("Copy") {
+                    Button("session_chat_sheet.copy") {
                         UIPasteboard.general.string = text
                     }
                     .buttonStyle(.plain)
@@ -228,7 +236,8 @@ private struct SessionChatToolDetailSheetActions: View {
                let label = target?.sheetActionLabel?.trimmingCharacters(in: .whitespacesAndNewlines),
                !label.isEmpty
             {
-                OpenCodeButton(variant: .fullWidthText(title: .unlocalized(label))) {
+                // Failure action labels arrive resolved from the failure presentation.
+                OpenCodeButton(variant: .fullWidthText(title: .verbatim(label))) {
                     switch action {
                     case .copyCaption:
                         UIPasteboard.general.string = target?.title
@@ -243,7 +252,7 @@ private struct SessionChatToolDetailSheetActions: View {
                !label.isEmpty,
                let url = ExternalLinkPolicy.openableURL(target?.sheetLink)
             {
-                OpenCodeButton(variant: .fullWidthText(title: .unlocalized(label))) {
+                OpenCodeButton(variant: .fullWidthText(title: .verbatim(label))) {
                     onOpenLink(url)
                 }
             }

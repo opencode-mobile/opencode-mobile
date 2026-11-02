@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRole
@@ -8,6 +9,8 @@ import dev.opencode.mobile.ui.sessionchat.DisplayMessageBody
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -38,7 +41,12 @@ class SessionFailureDetailTargetTest {
                 action = FailureAction.Copy,
                 actionLabel = "Copy",
             )
-        assertEquals("Provider response", target?.title)
+        assertEquals("Something went wrong", target?.title)
+        assertEquals(
+            UiText.resource(R.string.session_chat_sheet_tool_detail_provider_response),
+            target?.localizedTitle,
+        )
+        assertEquals("Provider response", target?.localizedTitle?.english())
         assertEquals(true, target?.monospace)
         assertNull(target?.sheetAction)
     }
@@ -54,6 +62,7 @@ class SessionFailureDetailTargetTest {
             )
         assertEquals(SessionFailureSheetAction.CopyCaption, target?.sheetAction)
         assertEquals("Something went wrong", target?.title)
+        assertNull(target?.localizedTitle)
         assertEquals(false, target?.monospace)
     }
 
@@ -66,7 +75,7 @@ class SessionFailureDetailTargetTest {
                 action = null,
                 actionLabel = null,
             )
-        assertEquals("Provider response", target?.title)
+        assertEquals("Provider response", target?.localizedTitle?.english())
         assertEquals("denied", target?.body)
         assertNull(target?.sheetAction)
         assertNull(target?.sheetLinkLabel)

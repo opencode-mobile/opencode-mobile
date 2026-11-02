@@ -24,7 +24,10 @@ struct SessionFailureDetailTargetTests {
             action: .copy,
             actionLabel: "Copy"
         )
-        #expect(target?.title == "Provider response")
+        let providerResponse: OpenCodeText = "session_chat_sheet.tool_detail.provider_response"
+        #expect(target?.title == "Something went wrong")
+        #expect(target?.localizedTitle == providerResponse)
+        #expect(target?.localizedTitle?.resolved == "Provider response")
         #expect(target?.monospace == true)
         #expect(target?.sheetAction == nil)
     }
@@ -38,6 +41,7 @@ struct SessionFailureDetailTargetTests {
         )
         #expect(target?.sheetAction == .copyCaption)
         #expect(target?.title == "Something went wrong")
+        #expect(target?.localizedTitle == nil)
         #expect(target?.monospace == false)
     }
 
@@ -48,7 +52,7 @@ struct SessionFailureDetailTargetTests {
             action: nil,
             actionLabel: nil
         )
-        #expect(target?.title == "Provider response")
+        #expect(target?.localizedTitle?.resolved == "Provider response")
         #expect(target?.body == "denied")
         #expect(target?.sheetAction == nil)
         #expect(target?.sheetLinkLabel == nil)

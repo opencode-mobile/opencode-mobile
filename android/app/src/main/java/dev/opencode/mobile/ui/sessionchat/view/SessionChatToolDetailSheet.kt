@@ -11,10 +11,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
@@ -25,6 +27,8 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdown
 import dev.opencode.mobile.ui.components.OpenCodeRenderedMarkdownVariant
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -36,6 +40,7 @@ internal enum class SessionFailureSheetAction {
 }
 
 internal data class SessionChatToolDetailTarget(
+    /** Tool or failure text, shown as is unless [localizedTitle] is set. */
     val title: String,
     val body: String,
     /** Render [body] as markdown (a compaction summary) instead of plain tool output. */
@@ -49,6 +54,8 @@ internal data class SessionChatToolDetailTarget(
     /** Live retry link, shown when this sheet was opened from the composer status. */
     val sheetLinkLabel: String? = null,
     val sheetLink: String? = null,
+    /** App-text title that replaces [title] in the sheet header, such as "Provider response". */
+    val localizedTitle: UiText? = null,
 )
 
 /**
@@ -78,13 +85,14 @@ internal fun sessionFailureDetailTarget(
     val resolvedLinkLabel = linkLabel?.trim()?.takeIf { it.isNotEmpty() && resolvedLink != null }
     if (body == null && sheetAction == null && resolvedLinkLabel == null) return null
     return SessionChatToolDetailTarget(
-        title = if (body != null) "Provider response" else text,
+        title = text,
         body = body.orEmpty(),
         monospace = body != null,
         sheetAction = sheetAction,
         sheetActionLabel = if (sheetAction != null) label else null,
         sheetLinkLabel = resolvedLinkLabel,
         sheetLink = if (resolvedLinkLabel != null) resolvedLink else null,
+        localizedTitle = if (body != null) UiText.resource(R.string.session_chat_sheet_tool_detail_provider_response) else null,
     )
 }
 
@@ -113,7 +121,11 @@ internal fun SessionChatToolDetailSheet(
 
     OpenCodeBottomSheet(
         visible = target != null,
-        title = presentation?.title ?: target?.title ?: "Tool",
+        title =
+            presentation?.title
+                ?: target?.localizedTitle?.resolve()
+                ?: target?.title
+                ?: stringResource(R.string.session_chat_sheet_tool_detail_tool),
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.SESSION_TOOL_DETAIL,
@@ -130,7 +142,7 @@ internal fun SessionChatToolDetailSheet(
             if (copies) {
                 {
                     OpenCodeButton(
-                        variant = OpenCodeButtonVariant.FullWidthText("Copy output"),
+                        variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.session_chat_sheet_copy_output)),
                         onClick = { clipboard.setText(AnnotatedString(presentation.raw)) },
                     )
                 }

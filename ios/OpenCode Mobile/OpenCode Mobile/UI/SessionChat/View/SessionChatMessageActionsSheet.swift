@@ -19,7 +19,7 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
         content
             .openCodeBottomSheet(
                 isPresented: sheetPresentedBinding,
-                title: "Message",
+                title: "session_chat_sheet.message_actions.title",
                 content: { sheetEntries }
             )
     }
@@ -40,7 +40,7 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
     private var sheetEntries: some View {
         if target?.showsRevertMessage == true {
             OpenCodeBottomSheetEntry(
-                title: "Revert message",
+                title: "session_chat_sheet.message_actions.revert",
                 startDecorator: .icon(.undo),
                 action: {
                     logAction(ProductAnalytics.Action.messageActionsRevert)
@@ -51,7 +51,7 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
                 }
             )
             OpenCodeBottomSheetEntry(
-                title: "Fork from here",
+                title: "session_chat_sheet.message_actions.fork",
                 startDecorator: .icon(.callSplit),
                 action: {
                     logAction(ProductAnalytics.Action.messageActionsFork)
@@ -65,7 +65,7 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
         }
         if let codeBlock = target?.codeBlock {
             OpenCodeBottomSheetEntry(
-                title: "Copy code block",
+                title: "session_chat_sheet.message_actions.copy_code_block",
                 startDecorator: .icon(.code),
                 action: {
                     logAction(ProductAnalytics.Action.messageActionsCopyCodeBlock)
@@ -75,7 +75,7 @@ struct SessionChatMessageActionsSheetModifier: ViewModifier {
             )
         }
         OpenCodeBottomSheetEntry(
-            title: "Copy message",
+            title: "session_chat_sheet.message_actions.copy_message",
             startDecorator: .icon(.contentCopy),
             action: {
                 logAction(ProductAnalytics.Action.messageActionsCopy)

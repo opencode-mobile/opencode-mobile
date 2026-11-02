@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeListItem
@@ -31,7 +33,7 @@ internal fun SessionChatSkillsSheet(
 
     OpenCodeBottomSheet(
         visible = target != null,
-        title = "Skills",
+        title = stringResource(R.string.session_chat_sheet_skills_title),
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.SESSION_SKILLS,
@@ -52,9 +54,18 @@ internal fun SessionChatSkillsSheet(
     }
 }
 
+@Composable
 private fun ToolStatus.toListItemStatus(): OpenCodeListItemStatus? =
     when (this) {
         ToolStatus.Completed -> null
-        ToolStatus.Pending, ToolStatus.Running -> OpenCodeListItemStatus("Loading", OpenCodeListItemStatusTone.Info)
-        ToolStatus.Error -> OpenCodeListItemStatus("Failed", OpenCodeListItemStatusTone.Error)
+        ToolStatus.Pending, ToolStatus.Running ->
+            OpenCodeListItemStatus(
+                stringResource(R.string.session_chat_sheet_skills_status_loading),
+                OpenCodeListItemStatusTone.Info,
+            )
+        ToolStatus.Error ->
+            OpenCodeListItemStatus(
+                stringResource(R.string.session_chat_sheet_skills_status_failed),
+                OpenCodeListItemStatusTone.Error,
+            )
     }

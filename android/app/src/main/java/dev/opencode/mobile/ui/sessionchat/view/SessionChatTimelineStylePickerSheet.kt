@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -13,11 +14,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -32,10 +35,6 @@ import dev.opencode.mobile.ui.components.OpenCodeTagTone
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineStyleOption
 
-internal const val TIMELINE_STYLE_PICKER_TITLE = "New: choose your timeline"
-internal const val TIMELINE_STYLE_PICKER_EXPLAINER = "This update adds new ways to follow what the agent is doing."
-internal const val TIMELINE_STYLE_PICKER_FOOTNOTE = "You can change this any time in Settings → Timeline Style."
-
 /** Skeleton illustration that previews each Timeline Style. */
 internal val SessionChatTimelineStyle.illustrationTopic: OpenCodeSkeletonIllustrationTopic
     get() =
@@ -44,6 +43,38 @@ internal val SessionChatTimelineStyle.illustrationTopic: OpenCodeSkeletonIllustr
             SessionChatTimelineStyle.Chips -> OpenCodeSkeletonIllustrationTopic.TimelineChips
             SessionChatTimelineStyle.StepRail -> OpenCodeSkeletonIllustrationTopic.TimelineStepRail
             SessionChatTimelineStyle.ActivityCard -> OpenCodeSkeletonIllustrationTopic.TimelineActivityCard
+        }
+
+/** Picker name of each Timeline Style. */
+@get:StringRes
+internal val SessionChatTimelineStyle.pickerTitle: Int
+    get() =
+        when (this) {
+            SessionChatTimelineStyle.Standard -> R.string.session_chat_sheet_timeline_style_picker_standard_title
+            SessionChatTimelineStyle.Chips -> R.string.session_chat_sheet_timeline_style_picker_chips_title
+            SessionChatTimelineStyle.StepRail -> R.string.session_chat_sheet_timeline_style_picker_step_rail_title
+            SessionChatTimelineStyle.ActivityCard -> R.string.session_chat_sheet_timeline_style_picker_activity_card_title
+        }
+
+/** Picker description of each Timeline Style. */
+@get:StringRes
+internal val SessionChatTimelineStyle.pickerSubtitle: Int
+    get() =
+        when (this) {
+            SessionChatTimelineStyle.Standard -> R.string.session_chat_sheet_timeline_style_picker_standard_subtitle
+            SessionChatTimelineStyle.Chips -> R.string.session_chat_sheet_timeline_style_picker_chips_subtitle
+            SessionChatTimelineStyle.StepRail -> R.string.session_chat_sheet_timeline_style_picker_step_rail_subtitle
+            SessionChatTimelineStyle.ActivityCard -> R.string.session_chat_sheet_timeline_style_picker_activity_card_subtitle
+        }
+
+/** Tag text for the option's [SessionChatTimelineStyleOption.tag] marker; null when untagged. */
+@get:StringRes
+internal val SessionChatTimelineStyleOption.tagText: Int?
+    get() =
+        when (tag) {
+            SessionChatTimelineStyleOption.RECOMMENDED_TAG -> R.string.session_chat_sheet_timeline_style_picker_recommended
+            SessionChatTimelineStyleOption.CURRENT_TAG -> R.string.session_chat_sheet_timeline_style_picker_current
+            else -> null
         }
 
 /** "Recommended" draws the eye with the accent tone; "Current" stays neutral. */
@@ -74,18 +105,24 @@ internal fun SessionChatTimelineStylePickerSheet(
 
     OpenCodeBottomSheet(
         visible = visible,
-        title = TIMELINE_STYLE_PICKER_TITLE,
+        title = stringResource(R.string.session_chat_sheet_timeline_style_picker_title),
         onDismissRequest = onDismiss,
         // Every style stays on screen; only a window too short for all of them scrolls.
         height = OpenCodeBottomSheetHeight.FitAllContent,
         pinnedBottom = {
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.FullWidthText("Use ${selected.title}"),
+                variant =
+                    OpenCodeButtonVariant.FullWidthText(
+                        stringResource(
+                            R.string.session_chat_sheet_timeline_style_picker_use,
+                            stringResource(selected.pickerTitle),
+                        ),
+                    ),
                 onClick = { onUse(selected) },
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                text = TIMELINE_STYLE_PICKER_FOOTNOTE,
+                text = stringResource(R.string.session_chat_sheet_timeline_style_picker_footnote),
                 style = MaterialTheme.typography.bodySmall,
                 color = openCodeColor("text-weak"),
                 textAlign = TextAlign.Center,
@@ -94,7 +131,7 @@ internal fun SessionChatTimelineStylePickerSheet(
         },
     ) {
         Text(
-            text = TIMELINE_STYLE_PICKER_EXPLAINER,
+            text = stringResource(R.string.session_chat_sheet_timeline_style_picker_explainer),
             style = MaterialTheme.typography.bodySmall,
             color = openCodeColor("text-base"),
             modifier = Modifier.openCodeBottomSheetContentInset().padding(bottom = 8.dp),
@@ -105,9 +142,9 @@ internal fun SessionChatTimelineStylePickerSheet(
         ) {
             options.forEach { option ->
                 OpenCodeOptionCard(
-                    title = option.style.title,
-                    subtitle = option.style.subtitle,
-                    tag = option.tag,
+                    title = stringResource(option.style.pickerTitle),
+                    subtitle = stringResource(option.style.pickerSubtitle),
+                    tag = option.tagText?.let { stringResource(it) },
                     tagTone = option.tagTone,
                     preview = OpenCodeOptionCardPreview.Illustration(option.style.illustrationTopic),
                     selected = option.style == selected,

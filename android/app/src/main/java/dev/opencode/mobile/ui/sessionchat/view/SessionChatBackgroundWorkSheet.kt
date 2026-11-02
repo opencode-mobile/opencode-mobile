@@ -7,9 +7,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeChildSessionRow
@@ -25,7 +27,6 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatBackgroundWorkPill
 import dev.opencode.mobile.ui.sessionchat.SessionChatChildSessionElapsed
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagent
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus
-import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellsCopy
 import kotlinx.coroutines.delay
 
 /**
@@ -75,7 +76,10 @@ fun SessionChatBackgroundWorkList(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (subagents.isNotEmpty()) {
-            OpenCodeSectionHeader(title = SUBAGENTS_SECTION_TITLE, inset = OpenCodeSectionHeaderInset.Flush)
+            OpenCodeSectionHeader(
+                title = stringResource(R.string.session_chat_sheet_background_work_subagents),
+                inset = OpenCodeSectionHeaderInset.Flush,
+            )
             subagents.forEach { subagent ->
                 OpenCodeChildSessionRow(
                     title = subagent.agentName,
@@ -87,7 +91,10 @@ fun SessionChatBackgroundWorkList(
             }
         }
         if (shells.isNotEmpty()) {
-            OpenCodeSectionHeader(title = SessionChatShellsCopy.SECTION_TITLE, inset = OpenCodeSectionHeaderInset.Flush)
+            OpenCodeSectionHeader(
+                title = stringResource(R.string.session_chat_sheet_background_work_shells),
+                inset = OpenCodeSectionHeaderInset.Flush,
+            )
             shells.forEach { shell ->
                 OpenCodeShellRow(
                     command = shell.command,
@@ -118,7 +125,7 @@ internal fun SessionChatBackgroundWorkSheet(
 
     OpenCodeBottomSheet(
         visible = visible,
-        title = BACKGROUND_WORK_TITLE,
+        title = stringResource(R.string.session_chat_sheet_background_work_title),
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.SESSION_SUBAGENTS,
@@ -142,9 +149,6 @@ internal fun SessionChatBackgroundWorkSheet(
         )
     }
 }
-
-internal const val BACKGROUND_WORK_TITLE = "Background work"
-private const val SUBAGENTS_SECTION_TITLE = "Subagents"
 
 internal val SessionChatSubagentStatus.rowStatus: OpenCodeChildSessionRowStatus
     get() =
