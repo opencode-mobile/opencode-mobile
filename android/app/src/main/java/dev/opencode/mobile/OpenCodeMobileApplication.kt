@@ -19,6 +19,7 @@ import dev.opencode.mobile.domain.preferences.PerformanceOverlayPreferences
 import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
 import dev.opencode.mobile.domain.preferences.SplitPanePreferences
 import dev.opencode.mobile.domain.textmate.TextMateProcessPressureObserver
+import dev.opencode.mobile.platform.ComposeFoundationWorkarounds
 import dev.opencode.mobile.platform.FrameworkSdkLevel
 import dev.opencode.mobile.theme.ThemeManager
 
@@ -31,6 +32,7 @@ class OpenCodeMobileApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        ComposeFoundationWorkarounds.apply()
         ThemeManager.initialize(this)
         HomeDisplayPreferences.initialize(this)
         AnalyticsConsentPreferences.initialize(this)
