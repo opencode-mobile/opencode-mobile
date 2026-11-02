@@ -2,6 +2,8 @@ package dev.opencode.mobile.ui.main
 
 import dev.opencode.mobile.domain.filesystem.DirectoryNode
 import dev.opencode.mobile.domain.project.Project
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -25,7 +27,7 @@ class AddProjectSheetModelTest {
         added: List<String> = emptyList(),
         serverProjects: List<Project> = emptyList(),
         isValidating: Boolean = false,
-        openError: String? = null,
+        openError: UiText? = null,
     ) = AddProjectSheetSession(
         home = "/Users/me",
         isOpening = false,
@@ -49,7 +51,7 @@ class AddProjectSheetModelTest {
         assertEquals(AddProjectSheetUi.ADD_THIS_FOLDER to false, loading.addTitle to loading.addEnabled)
 
         val failed =
-            build(session("/Users/me/code/", listings = mapOf("/Users/me/code" to AddProjectListing.Failed("x"))))
+            build(session("/Users/me/code/", listings = mapOf("/Users/me/code" to AddProjectListing.Failed(UiText.verbatim("x")))))
         assertEquals(AddProjectSheetUi.ADD_THIS_FOLDER to false, failed.addTitle to failed.addEnabled)
 
         val nothingTyped = build(session(""))
@@ -60,11 +62,11 @@ class AddProjectSheetModelTest {
         assertEquals(AddProjectSheetUi.PICK_A_FOLDER to false, pick.addTitle to pick.addEnabled)
 
         val noMatch = build(session("/Users/me/zz"))
-        assertEquals("No folder named “zz”" to false, noMatch.addTitle to noMatch.addEnabled)
+        assertEquals("No folder named “zz”" to false, noMatch.addTitle.english() to noMatch.addEnabled)
 
         val onHome = build(session("/Users/me/app", added = listOf("/Users/me/app")))
         assertEquals(AddProjectSheetUi.ALREADY_ON_HOME to false, onHome.addTitle to onHome.addEnabled)
-        assertEquals("Already on Home", onHome.addTitle)
+        assertEquals("Already on Home", onHome.addTitle.english())
 
         val home = build(session("/Users/me/"))
         assertEquals(AddProjectSheetUi.ADD_HOME_FOLDER to true, home.addTitle to home.addEnabled)
@@ -153,7 +155,7 @@ class AddProjectSheetModelTest {
 
         assertEquals(listOf("app", "code", "code-old"), sheet.entries.map { it.name })
         assertEquals(listOf(1, 2, null), sheet.entries.map { it.folderCount })
-        assertEquals(listOf("1 folder", "On Home · 2 folders", "On Home"), sheet.entries.map { it.subtitle })
+        assertEquals(listOf("1 folder", "On Home · 2 folders", "On Home"), sheet.entries.map { it.subtitle?.english() })
         assertEquals(listOf(true, false, true), sheet.entries.map { it.isGitRepository })
 
         val empty =
@@ -167,6 +169,6 @@ class AddProjectSheetModelTest {
                         ),
                 ),
             )
-        assertEquals("Empty", empty.entries.first().subtitle)
+        assertEquals("Empty", empty.entries.first().subtitle?.english())
     }
 }

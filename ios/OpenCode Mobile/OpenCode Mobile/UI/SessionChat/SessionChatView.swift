@@ -1337,7 +1337,7 @@ struct SessionChatView: View {
         content
             .openCodeBottomSheet(
                 isPresented: moveSheetBinding,
-                title: .unlocalized(viewModel.worktreeCreate.state?.title ?? SessionChatMoveToWorktree.sheetTitle),
+                title: viewModel.worktreeCreate.state?.title ?? .unlocalized(SessionChatMoveToWorktree.sheetTitle),
                 leadingAction: WorktreeCreateSheetChrome.backAction(viewModel.worktreeCreate),
                 keyboard: WorktreeCreateSheetChrome.keyboard(viewModel.worktreeCreate)
             ) {

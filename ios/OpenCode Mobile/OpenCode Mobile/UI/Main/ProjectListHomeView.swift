@@ -178,7 +178,7 @@ struct ProjectListHomeView: View {
             }
             .openCodeBottomSheet(
                 isPresented: addProjectPresentedBinding,
-                title: "Add project",
+                title: "add_project.title",
                 height: .fitContent
             ) {
                 AddProjectSuggestions(
@@ -207,7 +207,7 @@ struct ProjectListHomeView: View {
             // behavior until #680 revisits it.
             .openCodeBottomSheet(
                 isPresented: projectPickerBinding,
-                title: "Filter by project",
+                title: "home.filter_sheet.title",
                 trailingAction: projectPickerEditAction,
                 height: .half,
                 keyboard: .keep
@@ -247,7 +247,7 @@ struct ProjectListHomeView: View {
             }
             .openCodeBottomSheet(
                 isPresented: newSessionPickerBinding,
-                title: .unlocalized(viewModel.worktreeCreate.state?.title ?? "New session"),
+                title: newSessionSheetTitle,
                 leadingAction: WorktreeCreateSheetChrome.backAction(viewModel.worktreeCreate),
                 keyboard: WorktreeCreateSheetChrome.keyboard(viewModel.worktreeCreate)
             ) {
@@ -255,11 +255,11 @@ struct ProjectListHomeView: View {
             }
             .openCodeBottomSheet(
                 isPresented: serversSheetBinding,
-                title: "Servers"
+                title: "servers.title"
             ) {
                 VStack(alignment: .leading, spacing: 0) {
                     if let active = viewModel.serversChrome.active {
-                        OpenCodeSectionHeader(title: "Using now")
+                        OpenCodeSectionHeader(title: "home.servers_sheet.using_now")
                         OpenCodeListItem(
                             title: .verbatim(active.displayName),
                             subtitle: .verbatim(active.baseURL.trimmingCharacters(in: CharacterSet(charactersIn: "/"))),
@@ -274,7 +274,7 @@ struct ProjectListHomeView: View {
                         )
                     }
                     if !viewModel.serversChrome.others.isEmpty {
-                        OpenCodeSectionHeader(title: "Switch to")
+                        OpenCodeSectionHeader(title: "home.servers_sheet.switch_to")
                         ForEach(viewModel.serversChrome.others, id: \.id) { profile in
                             OpenCodeListItem(
                                 title: .verbatim(profile.displayName),
@@ -299,11 +299,11 @@ struct ProjectListHomeView: View {
                 .padding(.horizontal, 16)
             } pinnedBottom: {
                 VStack(spacing: 8) {
-                    OpenCodeButton(variant: .fullWidthText(title: "Add server")) {
+                    OpenCodeButton(variant: .fullWidthText(title: "servers.add")) {
                         viewModel.dismissServersSheet()
                         presentConnectionSetup(mode: .add)
                     }
-                    OpenCodeButton(variant: .fullWidthText(title: "Manage in Settings"), contrast: .low) {
+                    OpenCodeButton(variant: .fullWidthText(title: "home.servers_sheet.manage"), contrast: .low) {
                         viewModel.dismissServersSheet()
                         showSettings = true
                     }
@@ -311,28 +311,28 @@ struct ProjectListHomeView: View {
             }
             .openCodeBottomSheet(
                 isPresented: sessionActionsSheetBinding,
-                title: "Session actions"
+                title: "home.session_actions.title"
             ) {
                 OpenCodeBottomSheetEntry(
-                    title: "Rename session",
+                    title: "home.session_actions.rename",
                     startDecorator: .icon(.edit),
                     action: { viewModel.openSessionRename() }
                 )
                 OpenCodeBottomSheetEntry(
-                    title: "Fork session",
+                    title: "home.session_actions.fork",
                     startDecorator: .icon(.contentCopy),
                     action: { viewModel.openSessionFork() }
                 )
                 if viewModel.sessionActionsCanArchive {
                     OpenCodeBottomSheetEntry(
-                        title: "Archive",
+                        title: "home.session_actions.archive",
                         enabled: !viewModel.sessionActionInFlight,
                         startDecorator: .icon(.archive),
                         action: { Task { await viewModel.archiveSessionAction() } }
                     )
                 }
                 OpenCodeBottomSheetEntry(
-                    title: "Delete",
+                    title: "common.delete",
                     enabled: !viewModel.sessionActionInFlight,
                     destructive: true,
                     startDecorator: .icon(.close),
@@ -352,32 +352,30 @@ struct ProjectListHomeView: View {
             }
             .openCodeDialog(
                 isPresented: projectRemovalBinding,
-                title: "Remove from home?",
-                subtitle: pendingProjectRemoval.map { project -> OpenCodeText in
-                    "Remove \"\(project.displayName)\" from home? Its sessions stay on the server."
-                },
+                title: "home.remove_project.title",
+                subtitle: pendingProjectRemoval.map { project in Self.removeProjectMessage(project.displayName) },
                 primaryOption: OpenCodeDialogOption(
-                    title: "Remove",
+                    title: "common.remove",
                     destructive: true
                 ) {
                     showProjectPicker = false
                     Task { await viewModel.confirmRemoveProject() }
                 },
-                secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+                secondaryOption: OpenCodeDialogOption(title: "common.cancel") {
                     viewModel.dismissProjectRemoval()
                 }
             )
             .openCodeDialog(
                 isPresented: sessionRenameDialogBinding,
-                title: "Rename session",
+                title: "home.rename.title",
                 primaryOption: OpenCodeDialogOption(
-                    title: "Save",
+                    title: "common.save",
                     enabled: !viewModel.sessionRenameDialog.isSubmitting
                 ) {
                     Task { await viewModel.confirmSessionRename() }
                 },
                 secondaryOption: OpenCodeDialogOption(
-                    title: "Cancel",
+                    title: "common.cancel",
                     enabled: !viewModel.sessionRenameDialog.isSubmitting,
                     action: viewModel.cancelSessionRename
                 ),
@@ -386,23 +384,23 @@ struct ProjectListHomeView: View {
                         get: { viewModel.sessionRenameDialog.draftTitle },
                         set: viewModel.updateSessionRenameDraft
                     ),
-                    hint: "Title",
+                    hint: "home.session_title_hint",
                     enabled: !viewModel.sessionRenameDialog.isSubmitting,
-                    errorMessage: .unlocalized(ifPresent: viewModel.sessionRenameDialog.errorMessage)
+                    errorMessage: viewModel.sessionRenameDialog.errorMessage
                 )
             )
             .openCodeDialog(
                 isPresented: sessionForkDialogBinding,
-                title: "Fork session",
+                title: "home.fork.title",
                 primaryOption: OpenCodeDialogOption(
-                    title: "Fork",
+                    title: "home.fork.confirm",
                     enabled: !viewModel.sessionForkDialog.isSubmitting
                         && viewModel.sessionForkDialog.blockedMessage == nil
                 ) {
                     Task { await viewModel.confirmSessionFork() }
                 },
                 secondaryOption: OpenCodeDialogOption(
-                    title: "Cancel",
+                    title: "common.cancel",
                     enabled: !viewModel.sessionForkDialog.isSubmitting,
                     action: viewModel.cancelSessionFork
                 ),
@@ -411,38 +409,35 @@ struct ProjectListHomeView: View {
                         get: { viewModel.sessionForkDialog.draftTitle },
                         set: viewModel.updateSessionForkDraft
                     ),
-                    hint: "Title",
+                    hint: "home.session_title_hint",
                     enabled: !viewModel.sessionForkDialog.isSubmitting,
-                    errorMessage: .unlocalized(
-                        ifPresent: viewModel.sessionForkDialog.errorMessage
-                            ?? viewModel.sessionForkDialog.blockedMessage
-                    )
+                    errorMessage: forkDialogError
                 )
             )
             .openCodeDialog(
                 isPresented: sessionForkResultBinding,
-                title: "Session forked",
-                subtitle: "Forked as “\(viewModel.sessionForkResult.forkedTitle)”.",
-                primaryOption: OpenCodeDialogOption(title: "Open") {
+                title: "home.fork_result.title",
+                subtitle: Self.forkResultMessage(viewModel.sessionForkResult.forkedTitle),
+                primaryOption: OpenCodeDialogOption(title: "common.open") {
                     viewModel.chooseSessionForkOpen()
                 },
-                secondaryOption: OpenCodeDialogOption(title: "Stay") {
+                secondaryOption: OpenCodeDialogOption(title: "home.fork_result.stay") {
                     viewModel.chooseSessionForkStay()
                 }
             )
             .openCodeDialog(
                 isPresented: sessionDeleteConfirmBinding,
-                title: "Delete session",
-                subtitle: viewModel.sessionActionsTarget.map { "Delete session “\($0.title)”?" },
+                title: "home.delete.title",
+                subtitle: viewModel.sessionActionsTarget.map { target in Self.deleteSessionMessage(target.title) },
                 primaryOption: OpenCodeDialogOption(
-                    title: "Delete",
+                    title: "common.delete",
                     enabled: !viewModel.sessionActionInFlight,
                     destructive: true
                 ) {
                     Task { await viewModel.confirmDeleteSessionAction() }
                 },
                 secondaryOption: OpenCodeDialogOption(
-                    title: "Cancel",
+                    title: "common.cancel",
                     enabled: !viewModel.sessionActionInFlight,
                     action: viewModel.cancelDeleteSessionAction
                 )
@@ -649,7 +644,7 @@ struct ProjectListHomeView: View {
     private var homePane: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: .verbatim(viewModel.serversChrome.title),
+                title: viewModel.serversChrome.title,
                 subtitleAccessory: showsLiveUpdatesStatus
                     ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
                     : nil,
@@ -703,8 +698,8 @@ struct ProjectListHomeView: View {
                             leading: OpenCodeSplitPane.detailLeading(control, back: {})
                         )
                         OpenCodeEmptyState(
-                            title: "No session selected",
-                            message: "Choose a session from the list",
+                            title: "home.no_session_selected.title",
+                            message: "home.no_session_selected.message",
                             icon: .list
                         )
                         .openCodeReadableColumn()
@@ -754,6 +749,32 @@ struct ProjectListHomeView: View {
         selectedSession?.navigationID ?? "none"
     }
 
+    /// The New worktree form's title while it shows, else "New session".
+    private var newSessionSheetTitle: OpenCodeText {
+        guard let formTitle = viewModel.worktreeCreate.state?.title else { return "home.new_session" }
+        return formTitle
+    }
+
+    private var forkDialogError: OpenCodeText? {
+        viewModel.sessionForkDialog.errorMessage ?? viewModel.sessionForkDialog.blockedMessage
+    }
+
+    /// Project and session names stay arguments, never looked up.
+    private static func removeProjectMessage(_ name: String) -> OpenCodeText {
+        OpenCodeText(LocalizedStringResource(
+            "home.remove_project.message",
+            defaultValue: "Remove \"\(name)\" from home? Its sessions stay on the server."
+        ))
+    }
+
+    private static func forkResultMessage(_ title: String) -> OpenCodeText {
+        OpenCodeText(LocalizedStringResource("home.fork_result.message", defaultValue: "Forked as \u{201C}\(title)\u{201D}."))
+    }
+
+    private static func deleteSessionMessage(_ title: String) -> OpenCodeText {
+        OpenCodeText(LocalizedStringResource("home.delete.message", defaultValue: "Delete session \u{201C}\(title)\u{201D}?"))
+    }
+
     private var showsTerminalAction: Bool {
         SessionListHomeChrome.terminalAction(projects: viewModel.homeProjects) == .openCatalog
     }
@@ -762,11 +783,11 @@ struct ProjectListHomeView: View {
         var actions: [OpenCodeTopBarAction] = []
         if showsTerminalAction {
             actions.append(
-                .icon(.terminal, accessibilityLabel: "Terminal", action: handleTerminalTap)
+                .icon(.terminal, accessibilityLabel: "common.terminal", action: handleTerminalTap)
             )
         }
         actions.append(
-            .icon(.settings, accessibilityLabel: "Settings", action: {
+            .icon(.settings, accessibilityLabel: "common.settings", action: {
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.home,
                     actionId: ProductAnalytics.Action.homeOpenSettings
@@ -802,12 +823,12 @@ struct ProjectListHomeView: View {
         } else if case let .runIn(projectKey, _) = newSessionSheetMode,
            let runIn = projects.first(where: { $0.key == projectKey })
         {
-            OpenCodeSectionHeader(title: .unlocalized(HomeProjectCopy.runInTitle))
+            OpenCodeSectionHeader(title: "home.run_in")
             ForEach(HomeRunInOption.options(for: runIn, sessions: homeSessions)) { option in
                 OpenCodeListItem(
-                    title: .unlocalized(option.title),
-                    subtitle: .unlocalized(option.subtitle),
-                    caption: .unlocalized(ifPresent: option.trailing),
+                    title: .verbatim(option.title),
+                    subtitle: option.subtitle,
+                    caption: option.trailing,
                     startDecorator: .icon(.callSplit),
                     action: {
                         ProductAnalytics.logUserAction(
@@ -827,11 +848,11 @@ struct ProjectListHomeView: View {
             )
             let others = SessionListHomeChrome.otherProjects(projects, mode: newSessionSheetMode)
             if !others.isEmpty {
-                OpenCodeSectionHeader(title: .unlocalized(HomeProjectCopy.otherProjectsTitle))
+                OpenCodeSectionHeader(title: "home.other_projects")
                 newSessionProjectEntries(others, holdPick: true, worktreesEnabled: worktreesEnabled)
             }
         } else if projects.isEmpty {
-            OpenCodeBottomSheetEntry(title: "No projects", enabled: false, action: {})
+            OpenCodeBottomSheetEntry(title: "home.no_projects", enabled: false, action: {})
         } else {
             newSessionProjectEntries(projects, holdPick: newSessionSheetMode.isHoldPick, worktreesEnabled: worktreesEnabled)
         }
@@ -924,7 +945,7 @@ struct ProjectListHomeView: View {
     private var projectPickerEditAction: OpenCodeBottomSheetHeaderAction {
         let editing = projectPickerState.isEditing
         return OpenCodeBottomSheetHeaderAction(
-            text: editing ? "Done" : "Edit",
+            text: editing ? "common.done" : "common.edit",
             enabled: editing || viewModel.homeProjects.count >= 2,
             accessibilityIdentifier: "projectPickerEditButton",
             action: {
@@ -1001,8 +1022,8 @@ struct ProjectListHomeView: View {
         switch viewModel.state {
         case .probing, .loading:
             OpenCodeStatusStack(
-                title: "Loading sessions",
-                subtitle: "Checking server…",
+                title: "common.loading_sessions",
+                subtitle: "common.checking_server",
                 accessibilityIdentifier: "homeLoading"
             )
         case .disconnected:
@@ -1030,12 +1051,12 @@ struct ProjectListHomeView: View {
 
     private func probeFailed(_ message: String) -> some View {
         OpenCodeEmptyState(
-            title: "Unable to connect",
-            message: .verbatim(message, fallback: "Unable to connect."),
-            primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
+            title: "home.probe_failed.title",
+            message: .verbatim(message, fallback: "home.probe_failed.message"),
+            primaryAction: OpenCodeEmptyStateAction(title: "common.retry") {
                 Task { await viewModel.retryProbe() }
             },
-            secondaryAction: OpenCodeEmptyStateAction(title: "Edit connection") {
+            secondaryAction: OpenCodeEmptyStateAction(title: "home.probe_failed.edit_connection") {
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.homeProbeFailed,
                     actionId: ProductAnalytics.Action.homeEditConnection
@@ -1423,8 +1444,11 @@ private struct PreviewConnectionProfileStore: ConnectionProfileStore {
 }
 
 private struct PreviewSessionRepository: SessionRepository {
+    /// Preview fixture data, not app text.
+    private static let sampleTitle = "Alpha"
+
     func listSessions(directory: String?) async throws -> [Session] {
-        [Session(id: "1", title: "Alpha", slug: nil, projectID: nil, directory: directory, parentID: nil, updatedAtEpochMs: 1)]
+        [Session(id: "1", title: Self.sampleTitle, slug: nil, projectID: nil, directory: directory, parentID: nil, updatedAtEpochMs: 1)]
     }
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session { fatalError() }
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus] { [] }

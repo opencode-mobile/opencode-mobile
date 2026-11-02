@@ -178,10 +178,12 @@ data class SessionListFilterTab(
     val dockTitle: String? = null,
     /** Dock subtitle when it differs from the picker row. */
     val dockSubtitle: String? = null,
+    /** Picker row title when it differs from [title] (a localised "All projects"); as on iOS. */
+    val pickerTitleOverride: String? = null,
 ) {
     val isAll: Boolean get() = id == ALL_ID
     val isWorktree: Boolean get() = parentId != null
-    val pickerTitle: String get() = if (isAll) PICKER_ALL_TITLE else title
+    val pickerTitle: String get() = pickerTitleOverride ?: if (isAll) PICKER_ALL_TITLE else title
 
     companion object {
         const val ALL_ID = "all"

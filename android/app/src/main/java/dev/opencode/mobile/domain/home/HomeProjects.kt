@@ -285,25 +285,13 @@ object HomeCompactRowPath {
     fun shortBranch(branch: String): String = branch.replace(BRANCH_PREFIX, "").ifEmpty { branch }
 }
 
-/** Copy shared by the scope picker, dock, and Run in chooser. */
+/**
+ * Worktree labels from server content, shared by the scope picker, dock, Run in and Move.
+ * Home shows the keyed "main checkout" (`HomeText`); Session Chat's Move list still uses
+ * [worktreeSubtitle] until its own localisation slice.
+ */
 object HomeWorktreeCopy {
     const val MAIN_CHECKOUT = "main checkout"
-    const val RUN_IN = "Run in"
-    const val OTHER_PROJECTS = "Other projects"
-    const val SHOW_FEWER = "Show fewer"
-    const val EDIT = "Edit"
-    const val DONE = "Done"
-    const val REORDER_NOTE = "Drag to reorder. Worktrees stay with their project."
-
-    fun showAll(count: Int): String = "Show all $count"
-
-    fun worktreeCount(count: Int): String = "$count worktrees"
-
-    fun allWorktrees(count: Int): String = "All $count worktrees"
-
-    fun runningCount(count: Int): String = "$count running"
-
-    fun joinedProject(displayName: String): String = "Same repo as $displayName. Showing it as a worktree there."
 
     fun worktreeTitle(worktree: HomeWorktree): String = worktree.branch ?: worktree.folderName
 
@@ -348,15 +336,6 @@ data class HomeProjectPickerState(
         } else {
             worktrees.take(COLLAPSED_WORKTREE_LIMIT)
         }
-
-    /** "Show all N" / "Show fewer" under expanded project [key] with more than the limit; null otherwise. */
-    fun showAllLabel(
-        key: String,
-        worktreeCount: Int,
-    ): String? {
-        if (worktreeCount <= COLLAPSED_WORKTREE_LIMIT) return null
-        return if (key in showAllProjectKeys) HomeWorktreeCopy.SHOW_FEWER else HomeWorktreeCopy.showAll(worktreeCount)
-    }
 
     companion object {
         const val COLLAPSED_WORKTREE_LIMIT = 5

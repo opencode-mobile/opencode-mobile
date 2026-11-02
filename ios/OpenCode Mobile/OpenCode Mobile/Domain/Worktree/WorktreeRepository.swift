@@ -64,7 +64,7 @@ struct UnavailableWorktreeRepository: WorktreeRepository {
     func onDisconnected() {}
     func onConnection(key: String) {}
     func create(_ request: CreateWorktreeRequest) async throws -> CreatedWorktree {
-        throw WorktreeCreateError(message: WorktreeCreateCopy.unsupported)
+        throw WorktreeCreateError(message: WorktreeCreateCopy.unsupportedError)
     }
     func baseBranches(directory: String) async throws -> [String] { [] }
     var canCreateWorktrees: Bool { false }

@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.main
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.home.HomeProjectPickerState
 import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.home.HomeWorktree
@@ -7,6 +8,9 @@ import dev.opencode.mobile.domain.home.HomeWorktreeCopy
 import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListProjectPickerRow
 import dev.opencode.mobile.ui.components.SessionListScopeLoad
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.UiTextLookup
+import dev.opencode.mobile.ui.text.resolve
 
 object SessionListHomeChrome {
     data class Project(
@@ -36,8 +40,9 @@ object SessionListHomeChrome {
         val scopeId: String = HomeScope.worktreeId("", worktree.directory),
     ) {
         val directory: String get() = worktree.directory
+        /** Branch, else folder name; server content. */
         val title: String get() = HomeWorktreeCopy.worktreeTitle(worktree)
-        val subtitle: String get() = HomeWorktreeCopy.worktreeSubtitle(worktree)
+        val subtitle: UiText get() = HomeText.worktreeSubtitle(worktree)
     }
 
     sealed class NewSessionAction {
@@ -79,22 +84,32 @@ object SessionListHomeChrome {
         data object OpenCatalog : TerminalAction()
     }
 
-    /** Scopes the picker and the dock walk: All (with two or more projects) and each project. */
+    /**
+     * Scopes the picker and the dock walk: All (with two or more projects) and each project.
+     * [text] resolves the app text (All, project and worktree counts).
+     */
     fun filterTabs(
         projects: List<Project>,
         sessionCount: Int,
+        text: UiTextLookup,
         worktreesEnabled: Boolean = true,
     ): List<SessionListFilterTab> {
-        val projectTabs = projects.map { projectTab(it, worktreesEnabled) }
+        val projectTabs = projects.map { projectTab(it, worktreesEnabled, text) }
         if (projects.size < 2) {
             return projectTabs
         }
         val loading = projects.mapNotNull { it.load as? SessionListScopeLoad.Loading }
-        return listOf(
+        val all =
             SessionListFilterTab.all(
                 projectCount = projects.size,
                 sessionCount = sessionCount,
                 load = loading.takeIf { it.isNotEmpty() }?.let { SessionListScopeLoad.Loading(isSlow = it.any { load -> load.isSlow }) },
+            )
+        return listOf(
+            all.copy(
+                title = UiText.resource(R.string.home_all).resolve(text),
+                subtitle = HomeText.projectCount(projects.size).resolve(text),
+                pickerTitleOverride = UiText.resource(R.string.home_all_projects).resolve(text),
             ),
         ) + projectTabs
     }
@@ -102,6 +117,7 @@ object SessionListHomeChrome {
     private fun projectTab(
         project: Project,
         worktreesEnabled: Boolean,
+        text: UiTextLookup,
     ): SessionListFilterTab {
         val base =
             SessionListFilterTab
@@ -112,22 +128,23 @@ object SessionListHomeChrome {
                     load = project.load,
                 ).copy(id = project.id)
         if (!worktreesEnabled || !project.hasManyWorktrees) return base
-        return base.copy(dockSubtitle = HomeWorktreeCopy.allWorktrees(project.worktrees.size))
+        return base.copy(dockSubtitle = HomeText.allWorktrees(project.worktrees.size).resolve(text))
     }
 
     /** [project]'s worktree scopes, listed under it in the picker; none while worktrees are off. */
     fun worktreeTabs(
         project: Project,
+        text: UiTextLookup,
         worktreesEnabled: Boolean = true,
     ): List<SessionListFilterTab> {
         if (!worktreesEnabled || !project.hasManyWorktrees) return emptyList()
-        val base = projectTab(project, worktreesEnabled)
+        val base = projectTab(project, worktreesEnabled, text)
         return project.worktrees.map { worktree ->
             SessionListFilterTab(
                 id = worktree.scopeId,
                 title = worktree.title,
                 count = worktree.sessionCount,
-                subtitle = worktree.subtitle,
+                subtitle = worktree.subtitle.resolve(text),
                 letter = base.letter,
                 letterAccent = base.letterAccent,
                 parentId = project.id,
@@ -140,8 +157,9 @@ object SessionListHomeChrome {
     /** Every worktree scope across [projects]; the dock shows one while it is selected. */
     fun worktreeTabs(
         projects: List<Project>,
+        text: UiTextLookup,
         worktreesEnabled: Boolean = true,
-    ): List<SessionListFilterTab> = projects.flatMap { worktreeTabs(it, worktreesEnabled) }
+    ): List<SessionListFilterTab> = projects.flatMap { worktreeTabs(it, text, worktreesEnabled) }
 
     /**
      * Rows of the project picker: the reorder note while editing, All and the projects
@@ -152,25 +170,36 @@ object SessionListHomeChrome {
         projects: List<Project>,
         sessionCount: Int,
         state: HomeProjectPickerState,
+        text: UiTextLookup,
         worktreesEnabled: Boolean = true,
     ): List<SessionListProjectPickerRow> {
         val byId = projects.associateBy { it.id }
         return buildList {
-            if (state.isEditing) add(SessionListProjectPickerRow.Note(HomeWorktreeCopy.REORDER_NOTE))
-            filterTabs(projects, sessionCount, worktreesEnabled).forEach { tab ->
+            if (state.isEditing) add(SessionListProjectPickerRow.Note(HomeText.reorderNote.resolve(text)))
+            filterTabs(projects, sessionCount, text, worktreesEnabled).forEach { tab ->
                 val project = byId[tab.id]
                 val worktreeCount = if (worktreesEnabled && project != null && project.hasManyWorktrees) project.worktrees.size else 0
                 val expanded = worktreeCount > 0 && state.isExpanded(tab.id)
                 add(SessionListProjectPickerRow.Scope(tab, worktreeCount = worktreeCount, expanded = expanded))
                 if (project == null || !expanded) return@forEach
-                state.visibleWorktrees(project.id, worktreeTabs(project, worktreesEnabled)).forEach {
+                state.visibleWorktrees(project.id, worktreeTabs(project, text, worktreesEnabled)).forEach {
                     add(SessionListProjectPickerRow.Worktree(it))
                 }
-                state.showAllLabel(project.id, project.worktrees.size)?.let { title ->
-                    add(SessionListProjectPickerRow.ShowAll(projectId = project.id, title = title))
+                showAllLabel(state, project.id, project.worktrees.size)?.let { title ->
+                    add(SessionListProjectPickerRow.ShowAll(projectId = project.id, title = title.resolve(text)))
                 }
             }
         }
+    }
+
+    /** "Show all N" / "Show fewer" under expanded project [key] with more than the limit; null otherwise. */
+    fun showAllLabel(
+        state: HomeProjectPickerState,
+        key: String,
+        worktreeCount: Int,
+    ): UiText? {
+        if (worktreeCount <= HomeProjectPickerState.COLLAPSED_WORKTREE_LIMIT) return null
+        return if (key in state.showAllProjectKeys) HomeText.showFewer else HomeText.showAll(worktreeCount)
     }
 
     /** [selectedId] when it names a scope in [tabs] or [worktreeTabs], else the first scope. */

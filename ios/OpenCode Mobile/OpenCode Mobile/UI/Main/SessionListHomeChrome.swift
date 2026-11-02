@@ -53,11 +53,18 @@ enum SessionListHomeChrome {
                 if case let .loading(isSlow) = loads[project.key] { return isSlow }
                 return nil
             }
+            let projectCount = projects.count
             tabs.append(
-                .all(
-                    projectCount: projects.count,
-                    sessionCount: sessions.count,
-                    load: loading.isEmpty ? nil : .loading(isSlow: loading.contains(true))
+                SessionListFilterTab(
+                    id: SessionListFilterTab.allId,
+                    title: String(localized: "home.all", defaultValue: "All"),
+                    count: sessions.count,
+                    subtitle: String(localized: LocalizedStringResource(
+                        "home.project_count",
+                        defaultValue: "\(projectCount) projects"
+                    )),
+                    load: loading.isEmpty ? nil : .loading(isSlow: loading.contains(true)),
+                    pickerTitle: String(localized: "home.all_projects", defaultValue: "All projects")
                 )
             )
         }
@@ -233,12 +240,16 @@ enum SessionListHomeChrome {
 struct HomeRunInOption: Identifiable, Equatable {
     var id: String { directory }
     let directory: String
+    /// Branch, else folder name; server content.
     let title: String
-    let subtitle: String
+    /// "main checkout", else the folder name.
+    let subtitle: OpenCodeText
     let runningCount: Int
 
-    var trailing: String? {
-        runningCount > 0 ? HomeProjectCopy.running(runningCount) : nil
+    var trailing: OpenCodeText? {
+        guard runningCount > 0 else { return nil }
+        let count = runningCount
+        return OpenCodeText(LocalizedStringResource("home.running_count", defaultValue: "\(count) running"))
     }
 
     static func options(for project: HomeProject, sessions: [SessionListSession]) -> [HomeRunInOption] {
@@ -255,7 +266,7 @@ struct HomeRunInOption: Identifiable, Equatable {
             return HomeRunInOption(
                 directory: worktree.directory,
                 title: worktree.title,
-                subtitle: worktree.subtitle,
+                subtitle: worktree.isMain ? "home.main_checkout" : .verbatim(worktree.folderName),
                 runningCount: running
             )
         }

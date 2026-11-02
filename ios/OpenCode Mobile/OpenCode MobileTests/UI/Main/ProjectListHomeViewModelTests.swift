@@ -592,7 +592,7 @@ struct ProjectListHomeViewModelTests {
         let loadsBefore = worktrees.loadedPaths.count
 
         viewModel.openNewWorktree(projectKey: "prj_repo")
-        #expect(viewModel.worktreeCreate.state?.branchValue.hasPrefix("opencode/") == true)
+        #expect(viewModel.worktreeCreate.state?.branchValue.resolved.hasPrefix("opencode/") == true)
         #expect(await viewModel.submitNewWorktree())
 
         #expect(worktrees.loadedPaths.count >= loadsBefore + 1)
@@ -621,7 +621,7 @@ struct ProjectListHomeViewModelTests {
         #expect(!closes)
         #expect(viewModel.pendingSessionOpen == nil)
         #expect(worktrees.refetchedProjectIDs.isEmpty)
-        #expect(viewModel.worktreeCreate.state?.errorMessage == "Couldn't create the worktree: fatal: invalid reference: nope")
+        #expect(viewModel.worktreeCreate.state?.errorMessage?.resolved == "Couldn't create the worktree: fatal: invalid reference: nope")
     }
 
     @Test func removingAMergedProjectRemovesEveryMemberPath() async {
@@ -738,8 +738,8 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.showSuggestions)
         #expect(sheet.suggestions.map(\.path) == ["/Users/me/app", "/Users/me/web"])
         #expect(sheet.suggestions.first?.activityLabel != nil)
-        #expect(sheet.folderSectionTitle == "In me")
-        #expect(sheet.roots.map(\.label) == ["Home", "/", "Backup"])
+        #expect(sheet.folderSectionTitle?.resolved == "In me")
+        #expect(sheet.roots.map(\.label.resolved) == ["Home", "/", "Backup"])
         #expect(sheet.roots.map(\.path) == ["/Users/me", "/", "/Volumes/Backup"])
         #expect(sheet.roots.map(\.selected) == [true, false, false])
     }
@@ -830,7 +830,7 @@ struct ProjectListHomeViewModelTests {
 
         viewModel.updateAddProjectField("/home/zz")
         #expect(viewModel.addProjectSheet.entries.isEmpty)
-        #expect(viewModel.addProjectSheet.emptyMessage == "Nothing in home starts with \u{201C}zz\u{201D}")
+        #expect(viewModel.addProjectSheet.emptyMessage?.resolved == "Nothing in home starts with \u{201C}zz\u{201D}")
 
         viewModel.updateAddProjectField("/home/Code")
         #expect(viewModel.addProjectSheet.addTarget == nil)
@@ -863,7 +863,7 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.entries.count == DirectoryListingPolicy.maxVisibleDirectories)
         #expect(sheet.entries.first?.name == "f000")
         #expect(sheet.entries.last?.name == "f199")
-        #expect(sheet.truncationHint == "Showing the first 200 folders. Type more of the name to narrow the list.")
+        #expect(sheet.truncationHint?.resolved == "Showing the first 200 folders. Type more of the name to narrow the list.")
         #expect(sheet.truncationHint == AddProjectSheetState.truncatedListingHint)
         #expect(sheet.emptyMessage == nil)
 
@@ -900,7 +900,7 @@ struct ProjectListHomeViewModelTests {
         sheet = viewModel.addProjectSheet
         #expect(sheet.entries.isEmpty)
         #expect(sheet.truncationHint == nil)
-        #expect(sheet.emptyMessage == "Nothing in home starts with \u{201C}f3\u{201D}")
+        #expect(sheet.emptyMessage?.resolved == "Nothing in home starts with \u{201C}f3\u{201D}")
         #expect(filesystem.requestedPaths.filter { $0 == "/home" }.count == 1)
     }
 
@@ -1010,7 +1010,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.showAddProjectSheet()
         var sheet = viewModel.addProjectSheet
         #expect(sheet.fieldText == #"C:\Users\me\"#)
-        #expect(sheet.roots.map(\.label) == ["Home", "C:", "D:", "E:"])
+        #expect(sheet.roots.map(\.label.resolved) == ["Home", "C:", "D:", "E:"])
         #expect(sheet.roots.map(\.path) == [#"C:\Users\me"#, #"C:\"#, #"D:\"#, #"E:\"#])
         #expect(filesystem.requestedPaths.contains("/Volumes") == false)
 
@@ -1021,7 +1021,7 @@ struct ProjectListHomeViewModelTests {
         #expect(sheet.directory == #"C:\"#)
         #expect(sheet.entries.map(\.name) == ["Users"])
         #expect(sheet.upTarget == nil)
-        #expect(sheet.roots.first { $0.label == "C:" }?.selected == true)
+        #expect(sheet.roots.first { $0.label.resolved == "C:" }?.selected == true)
     }
 
     @Test func windowsField_typedDriveListsItAndAddsAChip() async {
@@ -1039,7 +1039,7 @@ struct ProjectListHomeViewModelTests {
         )
         await viewModel.refresh()
         await viewModel.showAddProjectSheet()
-        #expect(viewModel.addProjectSheet.roots.map(\.label) == ["Home", "C:"])
+        #expect(viewModel.addProjectSheet.roots.map(\.label.resolved) == ["Home", "C:"])
 
         viewModel.updateAddProjectField("d:")
         let listed = await waitUntil { viewModel.addProjectSheet.entries.map(\.name) == ["code"] }
@@ -1047,7 +1047,7 @@ struct ProjectListHomeViewModelTests {
         var sheet = viewModel.addProjectSheet
         #expect(sheet.directory == #"D:\"#)
         #expect(sheet.upTarget == nil)
-        #expect(sheet.roots.map(\.label) == ["Home", "C:", "D:"])
+        #expect(sheet.roots.map(\.label.resolved) == ["Home", "C:", "D:"])
         #expect(sheet.roots.last?.selected == true)
 
         viewModel.updateAddProjectField(#"D:\CODE"#)
@@ -1086,7 +1086,7 @@ struct ProjectListHomeViewModelTests {
         #expect(failed)
         sheet = viewModel.addProjectSheet
         #expect(sheet.listError == AddProjectSheetState.listErrorMessage)
-        #expect(sheet.roots.map(\.label) == ["Home", "C:"])
+        #expect(sheet.roots.map(\.label.resolved) == ["Home", "C:"])
     }
 
     @Test func addTarget_alreadyOnHomeIsDisabled() async {
@@ -1139,7 +1139,7 @@ struct ProjectListHomeViewModelTests {
         viewModel.browseAddProjectFolders()
 
         var rows = viewModel.addProjectSheet.entries
-        #expect(rows.map(\.subtitle) == ["On Home", nil, nil])
+        #expect(rows.map { $0.subtitle?.resolved } == ["On Home", nil, nil])
         // A server project tracked by git shows its tag before its listing loads.
         #expect(rows.map(\.isGitRepository) == [false, false, true])
 
@@ -1147,7 +1147,7 @@ struct ProjectListHomeViewModelTests {
         #expect(await waitUntil { viewModel.addProjectSheet.entries.allSatisfy { $0.folderCount != nil } })
         rows = viewModel.addProjectSheet.entries
         #expect(rows.map(\.folderCount) == [2, 0, 1])
-        #expect(rows.map(\.subtitle) == ["On Home \u{00B7} 2 folders", "Empty", "1 folder"])
+        #expect(rows.map { $0.subtitle?.resolved } == ["On Home \u{00B7} 2 folders", "Empty", "1 folder"])
         #expect(rows.map(\.isGitRepository) == [true, false, true])
 
         // Seen again, or entered, the folder comes from the cache.
@@ -1290,26 +1290,26 @@ struct ProjectListHomeViewModelTests {
         viewModel.updateAddProjectField("/home/co")
         sheet = viewModel.addProjectSheet
         #expect(sheet.barTarget?.path == "/home")
-        #expect(sheet.addTitle == "Pick a folder")
+        #expect(sheet.addTitle.resolved == "Pick a folder")
         #expect(!sheet.addEnabled)
 
         viewModel.updateAddProjectField("/home/zz")
         sheet = viewModel.addProjectSheet
-        #expect(sheet.addTitle == "No folder named \u{201C}zz\u{201D}")
-        #expect(sheet.emptyMessage == "Nothing in home starts with \u{201C}zz\u{201D}")
+        #expect(sheet.addTitle.resolved == "No folder named \u{201C}zz\u{201D}")
+        #expect(sheet.emptyMessage?.resolved == "Nothing in home starts with \u{201C}zz\u{201D}")
         #expect(!sheet.addEnabled)
 
         viewModel.updateAddProjectField("/home/code")
         sheet = viewModel.addProjectSheet
         #expect(sheet.barTarget == AddProjectBarTarget(name: "code", path: "/home/code", isGitRepository: false))
-        #expect(sheet.addTitle == "Add this folder")
+        #expect(sheet.addTitle.resolved == "Add this folder")
         #expect(sheet.addEnabled)
 
         // While a folder lists, the button keeps its title but waits.
         filesystem.heldPaths = ["/home/Codex"]
         viewModel.updateAddProjectField("/home/Codex/")
         #expect(viewModel.addProjectSheet.isLoading)
-        #expect(viewModel.addProjectSheet.addTitle == "Add this folder")
+        #expect(viewModel.addProjectSheet.addTitle.resolved == "Add this folder")
         #expect(!viewModel.addProjectSheet.addEnabled)
         filesystem.release("/home/Codex")
     }
@@ -1332,7 +1332,7 @@ struct ProjectListHomeViewModelTests {
         viewModel.updateAddProjectField("/srv/apps/")
         #expect(await waitUntil { viewModel.addProjectSheet.pathNotFound })
         var sheet = viewModel.addProjectSheet
-        #expect(sheet.emptyMessage == "Path not found")
+        #expect(sheet.emptyMessage?.resolved == "Path not found")
         #expect(sheet.listError == nil)
         #expect(sheet.isLoading == false)
         #expect(sheet.entries.isEmpty)
@@ -1448,7 +1448,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.showAddProjectSheet()
         await viewModel.confirmAddProject()
         #expect(viewModel.isAddProjectPresented)
-        #expect(viewModel.addProjectSheet.fieldError == "Not a project")
+        #expect(viewModel.addProjectSheet.fieldError == .verbatim("Not a project"))
         #expect(viewModel.addProjectSheet.isValidating == false)
         #expect(viewModel.addProjectSheet.addEnabled)
         #expect(await store.addedWorktrees(serverBaseURL: "http://127.0.0.1:4096/") == ["/one"])
@@ -1643,7 +1643,7 @@ struct ProjectListHomeViewModelTests {
         viewModel.onSessionLongPress(sessionId: "s1", title: "Alpha", worktree: "/repo")
         viewModel.openSessionFork()
 
-        #expect(await waitUntil { viewModel.sessionForkDialog.blockedMessage == "Nothing to fork yet" })
+        #expect(await waitUntil { viewModel.sessionForkDialog.blockedMessage?.resolved == "Nothing to fork yet" })
         #expect(viewModel.sessionForkDialog.isVisible)
         await viewModel.confirmSessionFork()
         #expect(sessionRepository.forkedIDs.isEmpty)
@@ -1663,7 +1663,7 @@ struct ProjectListHomeViewModelTests {
 
         #expect(sessionRepository.forkedIDs.isEmpty)
         #expect(viewModel.sessionForkDialog.isSubmitting == false)
-        #expect(viewModel.sessionForkDialog.blockedMessage == "Nothing to fork yet")
+        #expect(viewModel.sessionForkDialog.blockedMessage?.resolved == "Nothing to fork yet")
     }
 
     @Test func openSessionFork_checkFailureLeavesForkToServer() async {
@@ -1732,7 +1732,7 @@ struct ProjectListHomeViewModelTests {
 
         #expect(sessionRepository.updatedTitles.isEmpty)
         #expect(viewModel.sessionRenameDialog.isVisible)
-        #expect(viewModel.sessionRenameDialog.errorMessage == "Enter a session title")
+        #expect(viewModel.sessionRenameDialog.errorMessage?.resolved == "Enter a session title")
     }
 
     @Test func confirmSessionRename_unchangedTitleClosesWithoutRequest() async {
@@ -1767,7 +1767,7 @@ struct ProjectListHomeViewModelTests {
 
         #expect(viewModel.sessionRenameDialog.isVisible)
         #expect(viewModel.sessionRenameDialog.isSubmitting == false)
-        #expect(viewModel.sessionRenameDialog.errorMessage == "nope")
+        #expect(viewModel.sessionRenameDialog.errorMessage?.resolved == "nope")
     }
 
     @Test func openSessionFork_suggestsForkTitle() async {
@@ -1838,7 +1838,7 @@ struct ProjectListHomeViewModelTests {
         await viewModel.confirmSessionFork()
 
         #expect(viewModel.sessionForkDialog.isVisible)
-        #expect(viewModel.sessionForkDialog.errorMessage == "no fork")
+        #expect(viewModel.sessionForkDialog.errorMessage?.resolved == "no fork")
         #expect(viewModel.sessionForkResult.isVisible == false)
     }
 

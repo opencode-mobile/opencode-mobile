@@ -23,6 +23,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -41,12 +42,10 @@ import dev.opencode.mobile.domain.home.HomeProjectGrouping
 import dev.opencode.mobile.domain.home.HomeProjectPickerState
 import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.home.HomeSessionLocation
-import dev.opencode.mobile.domain.home.HomeWorktreeCopy
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
-import dev.opencode.mobile.domain.worktree.WorktreeCreateCopy
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.letterAccentForWorktree
@@ -93,6 +92,9 @@ import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutRules
 import dev.opencode.mobile.ui.keyboard.SessionStepDirection
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.resolve
 import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
 import dev.opencode.mobile.ui.worktree.NewWorktreeRow
 import dev.opencode.mobile.ui.worktree.WorktreeCreateFormActions
@@ -157,7 +159,7 @@ fun MainScreen(
         uiState = state,
         isRefreshing = isRefreshing,
         liveUpdatesConnectionStatus = liveUpdatesConnectionStatus,
-        removalSnackbar = removalSnackbar,
+        removalSnackbar = removalSnackbar?.toSnackbarMessage(),
         sessionActions = sessionActions,
         revealNewestToken = revealNewestToken,
         pendingScopeRequest = pendingScopeRequest,
@@ -376,7 +378,7 @@ internal fun MainScreen(
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBar(
-                title = serversChrome.title,
+                title = serversChrome.title.resolve(),
                 onTitleClick = if (serversChrome.isSwitcher) onTitleClick else null,
                 titleMenuExpanded = serversChrome.sheetVisible,
                 subtitleAccessory =
@@ -393,7 +395,7 @@ internal fun MainScreen(
                             add(
                                 OpenCodeTopBarAction.Icon(
                                     imageVector = OpenCodeIcons.Terminal,
-                                    contentDescription = "Terminal",
+                                    contentDescription = stringResource(R.string.common_terminal),
                                     onClick = {
                                         ProductAnalytics.logUserAction(
                                             screenId = ProductAnalytics.Screen.HOME,
@@ -407,7 +409,7 @@ internal fun MainScreen(
                         add(
                             OpenCodeTopBarAction.Icon(
                                 imageVector = OpenCodeIcons.Settings,
-                                contentDescription = "Settings",
+                                contentDescription = stringResource(R.string.common_settings),
                                 onClick = {
                                     ProductAnalytics.logUserAction(
                                         screenId = ProductAnalytics.Screen.HOME,
@@ -426,7 +428,7 @@ internal fun MainScreen(
                 transitionSpec = {
                     fadeIn(animationSpec = tween(180)) togetherWith ExitTransition.None
                 },
-                label = "serverSwitch",
+                label = SERVER_SWITCH_ANIMATION_LABEL,
                 modifier = Modifier.weight(1f).fillMaxSize(),
             ) { contentServerId ->
                 // Only the new server's Home fades in. The outgoing one would draw the same new state.
@@ -452,8 +454,8 @@ internal fun MainScreen(
                 MainScreenUiState.Loading,
                 -> {
                     OpenCodeStatusStack(
-                        title = "Loading sessions",
-                        subtitle = "Checking server…",
+                        title = stringResource(R.string.common_loading_sessions),
+                        subtitle = stringResource(R.string.common_checking_server),
                         testTag = "homeLoading",
                         modifier = Modifier.fillMaxSize().navigationBarsPadding(),
                     )
@@ -531,16 +533,16 @@ internal fun MainScreen(
 
     OpenCodeBottomSheet(
         visible = serversChrome.sheetVisible,
-        title = "Servers",
+        title = stringResource(R.string.servers_title),
         onDismissRequest = onDismissServersSheet,
         pinnedBottom = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText("Add server"),
+                    variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.servers_add)),
                     onClick = onAddServerClick,
                 )
                 OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText("Manage in Settings"),
+                    variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.home_servers_sheet_manage)),
                     contrast = OpenCodeButtonContrast.Low,
                     onClick = onManageServersClick,
                 )
@@ -549,7 +551,7 @@ internal fun MainScreen(
     ) {
         val active = serversChrome.active
         if (active != null) {
-            OpenCodeSectionHeader(title = "Using now")
+            OpenCodeSectionHeader(title = stringResource(R.string.home_servers_sheet_using_now))
             OpenCodeListItem(
                 title = active.displayName,
                 subtitle = active.baseUrl.trimEnd('/'),
@@ -566,7 +568,7 @@ internal fun MainScreen(
             )
         }
         if (serversChrome.others.isNotEmpty()) {
-            OpenCodeSectionHeader(title = "Switch to")
+            OpenCodeSectionHeader(title = stringResource(R.string.home_servers_sheet_switch_to))
             serversChrome.others.forEach { profile ->
                 OpenCodeListItem(
                     title = profile.displayName,
@@ -588,14 +590,14 @@ internal fun MainScreen(
     val pendingProjectRemoval = (uiState as? MainScreenUiState.Loaded)?.pendingProjectRemoval
     OpenCodeDialog(
         visible = pendingProjectRemoval != null,
-        title = "Remove from home?",
+        title = stringResource(R.string.home_remove_project_title),
         subtitle =
             pendingProjectRemoval?.let { removal ->
-                "Remove \"${removal.displayName}\" from home? Its sessions stay on the server."
+                stringResource(R.string.home_remove_project_message, removal.displayName)
             },
         primaryOption =
             OpenCodeDialogOption(
-                title = "Remove",
+                title = stringResource(R.string.common_remove),
                 destructive = true,
                 onClick = {
                     onConfirmRemoveProject()
@@ -603,7 +605,7 @@ internal fun MainScreen(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = "Cancel",
+                title = stringResource(R.string.common_cancel),
                 onClick = onDismissProjectRemoval,
             ),
         onDismissRequest = onDismissProjectRemoval,
@@ -637,7 +639,7 @@ internal fun MainScreen(
         }
     OpenCodeBottomSheet(
         visible = newSessionSheetMode != null,
-        title = if (runInForm != null) WorktreeCreateCopy.FORM_TITLE else "New session",
+        title = stringResource(if (runInForm != null) R.string.worktree_form_title else R.string.home_new_session),
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.HOME_NEW_SESSION_PROJECT_PICKER,
@@ -663,12 +665,12 @@ internal fun MainScreen(
         if (runInForm != null) {
             WorktreeCreateFormBody(runInForm, worktreeCreateCallbacks)
         } else if (mode is SessionListHomeChrome.NewSessionSheetMode.RunIn && runIn != null) {
-            OpenCodeSectionHeader(title = HomeWorktreeCopy.RUN_IN)
+            OpenCodeSectionHeader(title = stringResource(R.string.home_run_in))
             runIn.worktrees.forEach { worktree ->
                 OpenCodeListItem(
                     title = worktree.title,
-                    subtitle = worktree.subtitle,
-                    caption = worktree.runningCount.takeIf { it > 0 }?.let(HomeWorktreeCopy::runningCount),
+                    subtitle = worktree.subtitle.resolve(),
+                    caption = worktree.runningCount.takeIf { it > 0 }?.let { HomeText.runningCount(it).resolve() },
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, null),
                     onClick = {
                         ProductAnalytics.logUserAction(
@@ -692,7 +694,7 @@ internal fun MainScreen(
             )
             val others = chromeProjects.filter { it.id != runIn.id }
             if (mode.showsOtherProjects && others.isNotEmpty()) {
-                OpenCodeSectionHeader(title = HomeWorktreeCopy.OTHER_PROJECTS)
+                OpenCodeSectionHeader(title = stringResource(R.string.home_other_projects))
                 others.forEach { project ->
                     OpenCodeBottomSheetEntry(
                         title = project.title,
@@ -702,7 +704,7 @@ internal fun MainScreen(
                 }
             }
         } else if (chromeProjects.isEmpty()) {
-            OpenCodeBottomSheetEntry(title = "No projects", enabled = false, onClick = {})
+            OpenCodeBottomSheetEntry(title = stringResource(R.string.home_no_projects), enabled = false, onClick = {})
         } else {
             val holdPick = (mode as? SessionListHomeChrome.NewSessionSheetMode.Projects)?.holdPick ?: true
             chromeProjects.forEach { project ->
@@ -715,6 +717,13 @@ internal fun MainScreen(
         }
     }
 }
+
+/** The snackbar text in the current language. */
+@Composable
+private fun HomeSnackbar.toSnackbarMessage(): OpenCodeSnackbarMessage = OpenCodeSnackbarMessage(text = text.resolve(), variant = variant, id = id)
+
+/** Animation inspector label, not user-facing. */
+private const val SERVER_SWITCH_ANIMATION_LABEL = "serverSwitch"
 
 /** Test tags of the New session sheet. */
 internal object HomeNewSessionSheetTags {
@@ -779,29 +788,29 @@ private fun HomeSessionActions(
 
     OpenCodeBottomSheet(
         visible = state.sheetVisible,
-        title = "Session actions",
+        title = stringResource(R.string.home_session_actions_title),
         onDismissRequest = callbacks.onDismissSheet,
     ) {
         OpenCodeBottomSheetEntry(
-            title = "Rename session",
+            title = stringResource(R.string.home_session_actions_rename),
             startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Edit),
             onClick = callbacks.onChooseRename,
         )
         OpenCodeBottomSheetEntry(
-            title = "Fork session",
+            title = stringResource(R.string.home_session_actions_fork),
             startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy),
             onClick = callbacks.onChooseFork,
         )
         if (state.canArchive) {
             OpenCodeBottomSheetEntry(
-                title = "Archive",
+                title = stringResource(R.string.home_session_actions_archive),
                 enabled = !state.lifecycleInFlight,
                 startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Archive),
                 onClick = callbacks.onChooseArchive,
             )
         }
         OpenCodeBottomSheetEntry(
-            title = "Delete",
+            title = stringResource(R.string.common_delete),
             enabled = !state.lifecycleInFlight,
             destructive = true,
             startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Close),
@@ -814,16 +823,16 @@ private fun HomeSessionActions(
 
     OpenCodeDialog(
         visible = state.renameVisible,
-        title = "Rename session",
+        title = stringResource(R.string.home_rename_title),
         primaryOption =
             OpenCodeDialogOption(
-                title = "Save",
+                title = stringResource(R.string.common_save),
                 enabled = !state.renameSubmitting,
                 onClick = callbacks.onConfirmRename,
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = "Cancel",
+                title = stringResource(R.string.common_cancel),
                 enabled = !state.renameSubmitting,
                 onClick = callbacks.onCancelRename,
             ),
@@ -831,9 +840,9 @@ private fun HomeSessionActions(
             OpenCodeDialogTextField(
                 value = state.renameDraft,
                 onValueChange = callbacks.onRenameDraftChange,
-                hint = "Title",
+                hint = stringResource(R.string.home_session_title_hint),
                 enabled = !state.renameSubmitting,
-                errorMessage = state.renameError,
+                errorMessage = state.renameError?.resolve(),
             ),
         onDismissRequest = {
             if (!state.renameSubmitting) {
@@ -844,16 +853,16 @@ private fun HomeSessionActions(
 
     OpenCodeDialog(
         visible = state.forkVisible,
-        title = "Fork session",
+        title = stringResource(R.string.home_fork_title),
         primaryOption =
             OpenCodeDialogOption(
-                title = "Fork",
+                title = stringResource(R.string.home_fork_confirm),
                 enabled = !state.forkSubmitting && state.forkBlockedMessage == null,
                 onClick = callbacks.onConfirmFork,
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = "Cancel",
+                title = stringResource(R.string.common_cancel),
                 enabled = !state.forkSubmitting,
                 onClick = callbacks.onCancelFork,
             ),
@@ -861,9 +870,9 @@ private fun HomeSessionActions(
             OpenCodeDialogTextField(
                 value = state.forkDraft,
                 onValueChange = callbacks.onForkDraftChange,
-                hint = "Title",
+                hint = stringResource(R.string.home_session_title_hint),
                 enabled = !state.forkSubmitting,
-                errorMessage = state.forkError ?: state.forkBlockedMessage,
+                errorMessage = (state.forkError ?: state.forkBlockedMessage)?.resolve(),
             ),
         onDismissRequest = {
             if (!state.forkSubmitting) {
@@ -874,27 +883,27 @@ private fun HomeSessionActions(
 
     OpenCodeDialog(
         visible = state.forkResultVisible,
-        title = "Session forked",
-        subtitle = "“${state.forkedTitle}” is ready.",
-        primaryOption = OpenCodeDialogOption(title = "Open", onClick = callbacks.onForkOpen),
-        secondaryOption = OpenCodeDialogOption(title = "Stay here", onClick = callbacks.onForkStay),
+        title = stringResource(R.string.home_fork_result_title),
+        subtitle = stringResource(R.string.home_fork_result_message, state.forkedTitle),
+        primaryOption = OpenCodeDialogOption(title = stringResource(R.string.common_open), onClick = callbacks.onForkOpen),
+        secondaryOption = OpenCodeDialogOption(title = stringResource(R.string.home_fork_result_stay), onClick = callbacks.onForkStay),
         onDismissRequest = callbacks.onForkStay,
     )
 
     OpenCodeDialog(
         visible = state.deleteConfirmVisible,
-        title = "Delete session",
-        subtitle = "Delete session “${target.title}”?",
+        title = stringResource(R.string.home_delete_title),
+        subtitle = stringResource(R.string.home_delete_message, target.title),
         primaryOption =
             OpenCodeDialogOption(
-                title = "Delete",
+                title = stringResource(R.string.common_delete),
                 destructive = true,
                 enabled = !state.lifecycleInFlight,
                 onClick = callbacks.onConfirmDelete,
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = "Cancel",
+                title = stringResource(R.string.common_cancel),
                 enabled = !state.lifecycleInFlight,
                 onClick = callbacks.onDismissDeleteConfirm,
             ),
@@ -904,16 +913,17 @@ private fun HomeSessionActions(
 
 @Composable
 private fun ProbeFailedContent(
-    message: String,
+    message: UiText,
     onRetry: () -> Unit,
     onEditConnection: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     OpenCodeEmptyState(
-        title = "Unable to connect",
-        message = message.ifBlank { "Unable to connect." },
-        primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = onRetry),
-        secondaryAction = OpenCodeEmptyStateAction(title = "Edit connection", onClick = onEditConnection),
+        title = stringResource(R.string.home_probe_failed_title),
+        message = message.resolve().ifBlank { stringResource(R.string.home_probe_failed_message) },
+        primaryAction = OpenCodeEmptyStateAction(title = stringResource(R.string.common_retry), onClick = onRetry),
+        secondaryAction =
+            OpenCodeEmptyStateAction(title = stringResource(R.string.home_probe_failed_edit_connection), onClick = onEditConnection),
         modifier = modifier,
     )
 }
@@ -925,7 +935,7 @@ private fun HomeProjectsContent(
     sessions: List<SessionListSession>,
     chromeProjects: List<SessionListHomeChrome.Project>,
     onRetryProjectLoad: (String) -> Unit,
-    projectSessionCreateError: String?,
+    projectSessionCreateError: UiText?,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     onBrowseProjectsClick: () -> Unit,
@@ -983,13 +993,15 @@ private fun HomeProjectsContent(
         onRefresh = onRefresh,
         modifier = modifier.fillMaxSize(),
     ) {
+        val text = ResourcesUiTextLookup(LocalResources.current)
         val filterTabs =
             SessionListHomeChrome.filterTabs(
                 projects = chromeProjects,
                 sessionCount = sessions.size,
+                text = text,
                 worktreesEnabled = worktreesEnabled,
             )
-        val worktreeTabs = SessionListHomeChrome.worktreeTabs(chromeProjects, worktreesEnabled)
+        val worktreeTabs = SessionListHomeChrome.worktreeTabs(chromeProjects, text, worktreesEnabled)
         var showProjectPicker by rememberSaveable { mutableStateOf(false) }
         var pickerState by remember { mutableStateOf(HomeProjectPickerState()) }
         // An older scope id (an added path) reads as the project that path now belongs to, and
@@ -1027,7 +1039,7 @@ private fun HomeProjectsContent(
             sessions = sessions,
             filterTabs = filterTabs,
             selectedFilterId = resolvedFilterId,
-            createError = projectSessionCreateError,
+            createError = projectSessionCreateError?.resolve(),
             onOpenProjectPicker = {
                 ProductAnalytics.logUserAction(
                     screenId = ProductAnalytics.Screen.HOME,
@@ -1083,14 +1095,14 @@ private fun HomeProjectsContent(
         )
         OpenCodeBottomSheet(
             visible = showProjectPicker,
-            title = "Filter by project",
+            title = stringResource(R.string.home_filter_sheet_title),
             // Half + Keep keeps today's fixed height and keyboard policy; Dismiss would be more
             // natural for this list (#680).
             height = OpenCodeBottomSheetHeight.Half,
             keyboard = OpenCodeBottomSheetKeyboard.Keep,
             headerTrailingAction =
                 OpenCodeBottomSheetHeaderTextAction(
-                    title = if (pickerState.isEditing) HomeWorktreeCopy.DONE else HomeWorktreeCopy.EDIT,
+                    title = stringResource(if (pickerState.isEditing) R.string.common_done else R.string.common_edit),
                     // Reordering needs two projects; the control stays visible either way.
                     enabled = chromeProjects.size >= 2 || pickerState.isEditing,
                     onClick = { pickerState = pickerState.setEditing(!pickerState.isEditing) },
@@ -1110,6 +1122,7 @@ private fun HomeProjectsContent(
                         projects = chromeProjects,
                         sessionCount = sessions.size,
                         state = pickerState,
+                        text = text,
                         worktreesEnabled = worktreesEnabled,
                     ),
                 isEditing = pickerState.isEditing,

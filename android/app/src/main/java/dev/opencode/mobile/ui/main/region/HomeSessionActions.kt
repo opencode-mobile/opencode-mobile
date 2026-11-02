@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.main.region
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.command.ClientSlashActionCatalog
 import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
@@ -12,6 +13,7 @@ import dev.opencode.mobile.ui.main.HomeSessionActionTarget
 import dev.opencode.mobile.ui.main.HomeSessionActionsUiState
 import dev.opencode.mobile.ui.main.SessionOpenTarget
 import dev.opencode.mobile.ui.main.suggestedHomeForkTitle
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +29,7 @@ class HomeSessionActions(
     private val sessionRepository: SessionRepository,
     private val messageRepository: MessageRepository,
     private val scope: CoroutineScope,
-    private val onLifecycleError: (String) -> Unit,
+    private val onLifecycleError: (UiText) -> Unit,
 ) {
     private val _state = MutableStateFlow(HomeSessionActionsUiState())
     val state: StateFlow<HomeSessionActionsUiState> = _state.asStateFlow()
@@ -345,12 +347,13 @@ class HomeSessionActions(
         }
     }
 
-    private fun mutationErrorMessage(throwable: Throwable): String =
+    /** Server text stays verbatim; the app's own fallbacks are keyed. */
+    private fun mutationErrorMessage(throwable: Throwable): UiText =
         when (throwable) {
-            is SessionError.Http -> throwable.message ?: "Request failed"
-            is SessionError.Transport -> "Unable to reach the server"
-            is SessionError.Decoding -> "Unable to read server response"
-            else -> throwable.message ?: "Something went wrong"
+            is SessionError.Http -> throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.home_session_error_request_failed)
+            is SessionError.Transport -> UiText.resource(R.string.connection_error_unreachable)
+            is SessionError.Decoding -> UiText.resource(R.string.home_session_error_unreadable_response)
+            else -> throwable.message?.let(UiText::verbatim) ?: UiText.resource(R.string.home_session_error_generic)
         }
 
     private fun logI(message: String) {
@@ -362,10 +365,10 @@ class HomeSessionActions(
     }
 
     private companion object {
-        const val EMPTY_TITLE_ERROR = "Enter a session title"
-        const val NOTHING_TO_FORK_ERROR = "Nothing to fork yet"
-        const val ARCHIVE_ERROR = "Couldn't archive session."
-        const val DELETE_ERROR = "Couldn't delete session."
+        val EMPTY_TITLE_ERROR = UiText.resource(R.string.home_session_error_empty_title)
+        val NOTHING_TO_FORK_ERROR = UiText.resource(R.string.home_session_error_nothing_to_fork)
+        val ARCHIVE_ERROR = UiText.resource(R.string.home_session_error_archive_failed)
+        val DELETE_ERROR = UiText.resource(R.string.home_session_error_delete_failed)
         const val OUTCOME_BLOCKED = "blocked"
         const val OUTCOME_SUCCESS = "success"
         const val OUTCOME_FAILURE = "failure"

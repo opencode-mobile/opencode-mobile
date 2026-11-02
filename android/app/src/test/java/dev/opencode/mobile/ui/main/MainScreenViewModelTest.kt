@@ -72,6 +72,8 @@ import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.ui.components.SessionListScrollPin
 import dev.opencode.mobile.ui.components.SessionListStatus
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -168,7 +170,7 @@ class MainScreenViewModelTest {
             viewModel.switchProfile("b")
             runCurrent()
 
-            assertEquals("B", viewModel.serversChrome.value.title)
+            assertEquals(UiText.verbatim("B"), viewModel.serversChrome.value.title)
             val first =
                 painted.filterIsInstance<MainScreenUiState.Loaded>().first { state ->
                     state.sections.any { it.worktree == "/b/cached" }
@@ -197,10 +199,10 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             viewModel.switchProfile("b")
-            assertEquals("B", viewModel.serversChrome.value.title)
+            assertEquals(UiText.verbatim("B"), viewModel.serversChrome.value.title)
             advanceUntilIdle()
 
-            assertEquals("A", viewModel.serversChrome.value.title)
+            assertEquals(UiText.verbatim("A"), viewModel.serversChrome.value.title)
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertEquals(listOf("/a"), loaded.sections.map { it.worktree })
         }
@@ -384,7 +386,7 @@ class MainScreenViewModelTest {
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertNull(loaded.pendingProjectRemoval)
             assertEquals(listOf("/two"), loaded.sections.map { it.worktree })
-            assertEquals("Removed \"one\" from home", viewModel.removalSnackbar.value?.text)
+            assertEquals("Removed \"one\" from home", viewModel.removalSnackbar.value?.text?.english())
 
             viewModel.consumeProjectRemovalSnackbar()
             assertNull(viewModel.removalSnackbar.value)
@@ -406,7 +408,7 @@ class MainScreenViewModelTest {
 
             assertEquals(emptyList<String>(), store.added(serverUrl))
             assertTrue(viewModel.uiState.value is MainScreenUiState.Empty)
-            assertEquals("Removed \"one\" from home", viewModel.removalSnackbar.value?.text)
+            assertEquals("Removed \"one\" from home", viewModel.removalSnackbar.value?.text?.english())
         }
 
     @Test
@@ -462,8 +464,8 @@ class MainScreenViewModelTest {
             assertNull(sheet.truncationHint)
             assertTrue(sheet.showSuggestions)
             assertEquals(listOf("/Users/me/web", "/Users/me/app"), sheet.suggestions.map { it.path })
-            assertEquals("In me", sheet.folderSectionTitle)
-            assertEquals(listOf("Home", "/", "Work SSD"), sheet.roots.map { it.label })
+            assertEquals("In me", sheet.folderSectionTitle?.english())
+            assertEquals(listOf("Home", "/", "Work SSD"), sheet.roots.map { it.label.english() })
             assertEquals(listOf("/Users/me", "/", "/Volumes/Work SSD"), sheet.roots.map { it.path })
             assertEquals(listOf(true, false, false), sheet.roots.map { it.selected })
             assertEquals("/Users", sheet.upTarget)
@@ -617,7 +619,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             sheet = requireNotNull(currentSheet(viewModel))
             assertEquals(emptyList<AddProjectFolderUi>(), sheet.entries)
-            assertEquals("Nothing in me starts with \u201Cx\u201D", sheet.emptyMessage)
+            assertEquals("Nothing in me starts with \u201Cx\u201D", sheet.emptyMessage?.english())
             assertEquals(1, filesystem.listCalls.count { it == "/Users/me" })
         }
 
@@ -647,7 +649,7 @@ class MainScreenViewModelTest {
             assertEquals(AddProjectSheetUi.TRUNCATION_HINT, sheet.truncationHint)
             assertEquals(
                 "Showing the first 200 folders. Type more of the name to narrow the list.",
-                sheet.truncationHint,
+                sheet.truncationHint?.english(),
             )
             assertNull(sheet.emptyMessage)
 
@@ -684,7 +686,7 @@ class MainScreenViewModelTest {
             viewModel.updateAddProjectField("/Users/me/f3")
             advanceUntilIdle()
             sheet = requireNotNull(currentSheet(viewModel))
-            assertEquals("Nothing in me starts with \u201Cf3\u201D", sheet.emptyMessage)
+            assertEquals("Nothing in me starts with \u201Cf3\u201D", sheet.emptyMessage?.english())
             assertEquals(1, filesystem.listCalls.count { it == "/Users/me" })
         }
 
@@ -839,7 +841,7 @@ class MainScreenViewModelTest {
                 )
 
             val roots = requireNotNull(currentSheet(viewModel)).roots
-            assertEquals(listOf("Home", "C:", "D:", "\\\\nas\\share"), roots.map { it.label })
+            assertEquals(listOf("Home", "C:", "D:", "\\\\nas\\share"), roots.map { it.label.english() })
             assertEquals(listOf("C:\\Users\\me", "C:\\", "D:\\", "\\\\nas\\share"), roots.map { it.path })
         }
 
@@ -859,12 +861,12 @@ class MainScreenViewModelTest {
             val sheet = requireNotNull(currentSheet(viewModel))
             assertEquals("E:\\", sheet.directory)
             assertEquals(listOf("code"), sheet.entries.map { it.name })
-            assertTrue(sheet.roots.single { it.label == "E:" }.selected)
+            assertTrue(sheet.roots.single { it.label == UiText.verbatim("E:") }.selected)
 
             viewModel.selectAddProjectRoot("C:\\Users\\me")
             advanceUntilIdle()
             assertEquals("C:\\Users\\me\\", currentSheet(viewModel)?.fieldText)
-            assertTrue(currentSheet(viewModel)?.roots?.any { it.label == "E:" } == true)
+            assertTrue(currentSheet(viewModel)?.roots?.any { it.label == UiText.verbatim("E:") } == true)
         }
 
     @Test
@@ -883,12 +885,12 @@ class MainScreenViewModelTest {
             var sheet = requireNotNull(currentSheet(viewModel))
             assertEquals("X:\\", sheet.directory)
             assertEquals(AddProjectSheetUi.LIST_ERROR_MESSAGE, sheet.listError)
-            assertEquals(listOf("Home", "C:"), sheet.roots.map { it.label })
+            assertEquals(listOf("Home", "C:"), sheet.roots.map { it.label.english() })
 
             viewModel.selectAddProjectRoot("C:\\Users\\me")
             advanceUntilIdle()
             sheet = requireNotNull(currentSheet(viewModel))
-            assertEquals(listOf("Home", "C:"), sheet.roots.map { it.label })
+            assertEquals(listOf("Home", "C:"), sheet.roots.map { it.label.english() })
         }
 
     @Test
@@ -1079,14 +1081,14 @@ class MainScreenViewModelTest {
 
             // Before any summary: a server repository shows git right away.
             var rows = requireNotNull(currentSheet(viewModel)).entries
-            assertEquals(listOf(null, "On Home", null), rows.map { it.subtitle })
+            assertEquals(listOf(null, "On Home", null), rows.map { it.subtitle?.english() })
             assertEquals(listOf(false, false, true), rows.map { it.isGitRepository })
 
             rows.forEach { viewModel.addProjectFolderRowAppeared(it.path) }
             advanceUntilIdle()
             rows = requireNotNull(currentSheet(viewModel)).entries
             assertEquals(listOf(1, 0, 2), rows.map { it.folderCount })
-            assertEquals(listOf("1 folder", "On Home · Empty", "2 folders"), rows.map { it.subtitle })
+            assertEquals(listOf("1 folder", "On Home · Empty", "2 folders"), rows.map { it.subtitle?.english() })
             assertEquals(listOf(true, false, true), rows.map { it.isGitRepository })
 
             // Entering a summarised folder reuses its listing.
@@ -1128,12 +1130,12 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             assertEquals(AddProjectSheetModel.FOLDER_SUMMARY_CONCURRENCY, filesystem.maxInFlight)
             val rows = requireNotNull(currentSheet(viewModel)).entries
-            assertEquals(listOf("Empty", "Empty", "Empty", "Empty", null, "Empty"), rows.map { it.subtitle })
+            assertEquals(listOf("Empty", "Empty", "Empty", "Empty", null, "Empty"), rows.map { it.subtitle?.english() })
 
             // Scrolled back into view, the dropped row loads.
             viewModel.addProjectFolderRowAppeared("/home/f5")
             advanceUntilIdle()
-            assertEquals("Empty", currentSheet(viewModel)?.entries?.single { it.name == "f5" }?.subtitle)
+            assertEquals("Empty", currentSheet(viewModel)?.entries?.single { it.name == "f5" }?.subtitle?.english())
             assertEquals(1, filesystem.listCalls.count { it == "/home/f5" })
         }
 
@@ -1336,7 +1338,7 @@ class MainScreenViewModelTest {
             // Disk-first home paints from Session Cache and does not revalidate directories.
             assertTrue(projectRepository.validatedDirectories.isEmpty())
             assertEquals(HomeScopeRequest(filterId = "/two", evenFromAll = false), viewModel.pendingScopeRequest.value)
-            assertEquals("\"two\" is already on home", viewModel.removalSnackbar.value?.text)
+            assertEquals("\"two\" is already on home", viewModel.removalSnackbar.value?.text?.english())
         }
 
     @Test
@@ -1653,7 +1655,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertTrue(loaded.showAddProjectSheet)
-            assertEquals("not a project", loaded.addProjectSheet?.fieldError)
+            assertEquals(UiText.verbatim("not a project"), loaded.addProjectSheet?.fieldError)
             assertFalse(loaded.addProjectSheet?.isValidating == true)
             assertTrue(loaded.addProjectSheet?.addEnabled == true)
             assertNull(viewModel.pendingScopeRequest.value)
@@ -2019,7 +2021,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.sessionActions.value.forkVisible)
-            assertEquals("Nothing to fork yet", viewModel.sessionActions.value.forkBlockedMessage)
+            assertEquals("Nothing to fork yet", viewModel.sessionActions.value.forkBlockedMessage?.english())
 
             viewModel.confirmFork()
             advanceUntilIdle()
@@ -2045,7 +2047,7 @@ class MainScreenViewModelTest {
 
             assertTrue(sessionRepository.forkedIds.isEmpty())
             assertFalse(viewModel.sessionActions.value.forkSubmitting)
-            assertEquals("Nothing to fork yet", viewModel.sessionActions.value.forkBlockedMessage)
+            assertEquals("Nothing to fork yet", viewModel.sessionActions.value.forkBlockedMessage?.english())
         }
 
     @Test
@@ -2113,7 +2115,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.sessionActions.value.renameVisible)
-            assertEquals("Enter a session title", viewModel.sessionActions.value.renameError)
+            assertEquals("Enter a session title", viewModel.sessionActions.value.renameError?.english())
             assertTrue(sessionRepository.renamedTitles.isEmpty())
         }
 
@@ -2137,7 +2139,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             assertEquals(listOf("s1"), sessionRepository.archivedIds)
-            assertEquals("Couldn't archive session.", viewModel.removalSnackbar.value?.text)
+            assertEquals("Couldn't archive session.", viewModel.removalSnackbar.value?.text?.english())
             assertEquals(HomeSessionActionsUiState(), viewModel.sessionActions.value)
             assertTrue(viewModel.uiState.value is MainScreenUiState.Loaded)
         }
@@ -2165,7 +2167,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             assertEquals(listOf("s1"), sessionRepository.deletedIds)
-            assertEquals("Couldn't delete session.", viewModel.removalSnackbar.value?.text)
+            assertEquals("Couldn't delete session.", viewModel.removalSnackbar.value?.text?.english())
             assertEquals(HomeSessionActionsUiState(), viewModel.sessionActions.value)
         }
 
@@ -2686,7 +2688,7 @@ class MainScreenViewModelTest {
             assertEquals(listOf("/repo", "/repo-wt"), store.added(serverUrl))
             val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
             assertEquals(listOf("/repo", "/repo-wt"), loaded.projects.single().memberPaths)
-            assertEquals("Same repo as repo. Showing it as a worktree there.", viewModel.removalSnackbar.value?.text)
+            assertEquals("Same repo as repo. Showing it as a worktree there.", viewModel.removalSnackbar.value?.text?.english())
             assertEquals(HomeScopeRequest(filterId = "/repo-wt", evenFromAll = true), viewModel.pendingScopeRequest.value)
         }
 
@@ -2711,7 +2713,7 @@ class MainScreenViewModelTest {
             advanceUntilIdle()
 
             assertEquals(listOf("/plain"), store.added(serverUrl))
-            assertEquals("Removed \"repo\" from home", viewModel.removalSnackbar.value?.text)
+            assertEquals("Removed \"repo\" from home", viewModel.removalSnackbar.value?.text?.english())
         }
 
     @Test
@@ -2859,7 +2861,7 @@ class MainScreenViewModelTest {
 
             assertEquals(
                 "Couldn't create the worktree: Worktrees are only supported for git projects",
-                viewModel.worktreeCreateForm.value?.errorMessage,
+                viewModel.worktreeCreateForm.value?.errorMessage?.english(),
             )
             assertNull((viewModel.uiState.value as MainScreenUiState.Loaded).pendingOpenSession)
         }

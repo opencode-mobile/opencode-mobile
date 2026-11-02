@@ -1,6 +1,8 @@
 package dev.opencode.mobile.ui.main
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.live.SessionListSnapshot
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -16,11 +18,11 @@ sealed interface ProjectFirstLoad {
     ) : ProjectFirstLoad
 
     data class Failed(
-        val message: String,
+        val message: UiText,
     ) : ProjectFirstLoad
 
     companion object {
-        const val FAILED_MESSAGE = "Couldn't load sessions"
+        val FAILED_MESSAGE: UiText = UiText.resource(R.string.home_error_project_load_failed)
     }
 }
 

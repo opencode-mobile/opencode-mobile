@@ -967,8 +967,8 @@ private fun HomeSessionPane(
                         Column(modifier = Modifier.fillMaxSize()) {
                             OpenCodeTopBar(leading = openCodeDetailLeading(currentDetailControl) {})
                             OpenCodeEmptyState(
-                                title = "No session selected",
-                                message = "Choose a session from the list",
+                                title = stringResource(R.string.home_no_session_selected_title),
+                                message = stringResource(R.string.home_no_session_selected_message),
                                 icon = OpenCodeIcons.List,
                                 modifier =
                                     Modifier

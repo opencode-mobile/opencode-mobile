@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.CommandError
 import dev.opencode.mobile.domain.command.CommandRepository
@@ -97,6 +98,8 @@ import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsCopy
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -4859,7 +4862,7 @@ class SessionChatViewModelTest {
             singlePlain.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
             assertEquals("This project has no other worktrees", singlePlain.uiState.value.moveToWorktree.availability.subtitle)
-            assertEquals("Needs a git repository", singlePlain.uiState.value.moveToWorktree.newWorktree.subtitle)
+            assertEquals("Needs a git repository", singlePlain.uiState.value.moveToWorktree.newWorktree.subtitle?.english())
 
             val v2 =
                 createViewModel(
@@ -4919,7 +4922,7 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
             assertEquals(
-                NewWorktreeAvailability(true, "Create a checkout and move there"),
+                NewWorktreeAvailability(true, UiText.resource(R.string.worktree_move_subtitle)),
                 viewModel.uiState.value.moveToWorktree.newWorktree,
             )
 
@@ -4929,7 +4932,7 @@ class SessionChatViewModelTest {
             val form = viewModel.uiState.value.moveToWorktree.form!!
             assertEquals("/repo", form.sourceDirectory)
             assertEquals("dev", form.sourceBranch)
-            assertEquals("Create and move", form.submitLabel)
+            assertEquals("Create and move", form.submitLabel.english())
             viewModel.updateNewWorktreeName("brave-otter")
             viewModel.selectNewWorktreeBase("main")
             viewModel.submitNewWorktree()
@@ -4970,7 +4973,7 @@ class SessionChatViewModelTest {
             assertTrue(sessionRepository.moveSessionRequests.isEmpty())
             val move = viewModel.uiState.value.moveToWorktree
             assertTrue(move.sheetVisible)
-            assertEquals("Couldn't create the worktree: fatal: invalid reference: nope", move.form?.errorMessage)
+            assertEquals("Couldn't create the worktree: fatal: invalid reference: nope", move.form?.errorMessage?.english())
 
             viewModel.closeNewWorktreeForm()
             advanceUntilIdle()

@@ -1,9 +1,11 @@
 package dev.opencode.mobile.ui.main
 
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.AddressCheck
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
@@ -25,7 +27,6 @@ import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeProjectGrouping
 import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
-import dev.opencode.mobile.domain.home.HomeWorktreeCopy
 import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.SessionListSnapshot
@@ -57,12 +58,12 @@ import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
-import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
 import dev.opencode.mobile.ui.components.SessionListScrollPin
 import dev.opencode.mobile.ui.main.region.HomeSessionActions
 import dev.opencode.mobile.ui.sessionchat.SessionConnectionStatus
 import dev.opencode.mobile.ui.sessionchat.toSessionConnectionStatus
+import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.worktree.WorktreeCreateForm
 import dev.opencode.mobile.ui.worktree.WorktreeCreateFormState
 import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
@@ -111,8 +112,8 @@ class MainScreenViewModel
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
         private val _isRefreshing = MutableStateFlow(false)
         val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
-        private val _removalSnackbar = MutableStateFlow<OpenCodeSnackbarMessage?>(null)
-        val removalSnackbar: StateFlow<OpenCodeSnackbarMessage?> = _removalSnackbar.asStateFlow()
+        private val _removalSnackbar = MutableStateFlow<HomeSnackbar?>(null)
+        val removalSnackbar: StateFlow<HomeSnackbar?> = _removalSnackbar.asStateFlow()
         private val sessionActionsRegion =
             HomeSessionActions(
                 sessionRepository = sessionRepository,
@@ -120,7 +121,7 @@ class MainScreenViewModel
                 scope = viewModelScope,
                 onLifecycleError = { message ->
                     _removalSnackbar.value =
-                        OpenCodeSnackbarMessage(
+                        HomeSnackbar(
                             text = message,
                             variant = OpenCodeSnackbarVariant.Error,
                         )
@@ -318,7 +319,7 @@ class MainScreenViewModel
             val generation = ++switchPaintGeneration
             _serversChrome.value =
                 chrome.copy(
-                    title = target.displayName,
+                    title = UiText.verbatim(target.displayName),
                     isSwitcher = true,
                     active = target,
                     others = (listOfNotNull(chrome.active) + chrome.others).filter { it.id != id },
@@ -396,7 +397,7 @@ class MainScreenViewModel
                     ?: activeConnectionManager.currentProfile()
             _serversChrome.update { current ->
                 current.copy(
-                    title = active?.displayName ?: "Sessions",
+                    title = active?.displayName?.let(UiText::verbatim) ?: UiText.resource(R.string.home_sessions_title),
                     isSwitcher = active != null,
                     active = active,
                     others = profiles.filter { it.id != active?.id },
@@ -614,10 +615,7 @@ class MainScreenViewModel
                     runHomeLoad(skipProbe = true)
                     _pendingScopeRequest.value = HomeScopeRequest(filterId = worktree, evenFromAll = false)
                     _removalSnackbar.value =
-                        OpenCodeSnackbarMessage(
-                            text =
-                                "\"${ProjectDomainAdapter.displayNameFromWorktree(worktree)}\" is already on home",
-                        )
+                        HomeSnackbar(text = HomeText.alreadyOnHome(ProjectDomainAdapter.displayNameFromWorktree(worktree)))
                     return@launch
                 }
                 updateAddProjectSession { it.copy(isValidating = true, fieldError = null) }
@@ -641,13 +639,15 @@ class MainScreenViewModel
                         _pendingScopeRequest.value = HomeScopeRequest(filterId = worktree, evenFromAll = true)
                         if (joined != null) {
                             _removalSnackbar.value =
-                                OpenCodeSnackbarMessage(text = HomeWorktreeCopy.joinedProject(joined.displayName))
+                                HomeSnackbar(text = HomeText.joinedProject(joined.displayName))
                         }
                     }.onFailure { error ->
                         updateAddProjectSession {
                             it.copy(
                                 isValidating = false,
-                                fieldError = error.message ?: "Unable to add this directory",
+                                fieldError =
+                                    error.message?.let(UiText::verbatim)
+                                        ?: UiText.resource(R.string.add_project_error_add_failed),
                             )
                         }
                     }
@@ -657,7 +657,7 @@ class MainScreenViewModel
         fun createSession(worktree: String) {
             logAction(ProductAnalytics.Screen.HOME, ProductAnalytics.Action.HOME_CREATE_SESSION)
             if (!liveUpdates.chrome.value.canMutate) {
-                setProjectSessionCreateError("Reconnect to create a session")
+                setProjectSessionCreateError(UiText.resource(R.string.home_error_reconnect_to_create))
                 return
             }
             clearProjectSessionCreateError()
@@ -668,7 +668,7 @@ class MainScreenViewModel
                         pendingOpenSession =
                             SessionOpenTarget(
                                 sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                                title = "New Session",
+                                title = OptimisticSessionCreate.PLACEHOLDER_TITLE,
                                 worktree = worktree,
                                 optimisticNavigationInstanceId =
                                     java.util.UUID
@@ -831,10 +831,7 @@ class MainScreenViewModel
                 }
                 clearPendingProjectRemoval()
                 runHomeLoad(skipProbe = true)
-                _removalSnackbar.value =
-                    OpenCodeSnackbarMessage(
-                        text = "Removed \"${pending.displayName}\" from home",
-                    )
+                _removalSnackbar.value = HomeSnackbar(text = HomeText.removedProject(pending.displayName))
             }
         }
 
@@ -1082,7 +1079,7 @@ class MainScreenViewModel
                                 MainScreenUiState.ProbeFailed(
                                     when (error) {
                                         is ServerProbeError -> probeErrorMessage(error)
-                                        else -> error.message ?: "Unable to reach the server"
+                                        else -> serverMessage(error, R.string.connection_error_unreachable)
                                     },
                                 )
                         }
@@ -1104,7 +1101,7 @@ class MainScreenViewModel
                 } catch (error: Throwable) {
                     if (preserveContent) return
                     stopLiveObservations()
-                    _uiState.value = MainScreenUiState.ProbeFailed(error.message ?: "Unable to reach the server")
+                    _uiState.value = MainScreenUiState.ProbeFailed(serverMessage(error, R.string.connection_error_unreachable))
                     return
                 }
             }
@@ -1151,7 +1148,7 @@ class MainScreenViewModel
             } catch (error: Throwable) {
                 if (preserveContent) return
                 stopLiveObservations()
-                _uiState.value = MainScreenUiState.ProbeFailed(error.message ?: "Unable to load projects")
+                _uiState.value = MainScreenUiState.ProbeFailed(serverMessage(error, R.string.home_error_load_projects))
             }
         }
 
@@ -1467,7 +1464,14 @@ class MainScreenViewModel
             }
         }
 
-        private fun probeErrorMessage(error: ServerProbeError): String = error.userMessage()
+        /** The domain's probe message, shown as is (the shared domain messages are not keyed yet). */
+        private fun probeErrorMessage(error: ServerProbeError): UiText = UiText.verbatim(error.userMessage())
+
+        /** The error's own text, verbatim, else the keyed [fallback]. */
+        private fun serverMessage(
+            error: Throwable,
+            @StringRes fallback: Int,
+        ): UiText = error.message?.let(UiText::verbatim) ?: UiText.resource(fallback)
 
         private fun startLiveObservations(worktrees: List<String>) {
             if (liveObservationsRunning(worktrees)) return
@@ -1783,7 +1787,7 @@ class MainScreenViewModel
             setProjectSessionCreateError(null)
         }
 
-        private fun setProjectSessionCreateError(message: String?) {
+        private fun setProjectSessionCreateError(message: UiText?) {
             _uiState.update { state ->
                 when (state) {
                     is MainScreenUiState.Empty -> state.copy(projectSessionCreateError = message)
@@ -1796,8 +1800,16 @@ class MainScreenViewModel
 
 fun suggestedHomeForkTitle(currentTitle: String): String = SessionForkTitle.suggested(currentTitle)
 
+/** A Home snackbar; the screen resolves [text] when it shows it. */
+data class HomeSnackbar(
+    val text: UiText,
+    val variant: OpenCodeSnackbarVariant = OpenCodeSnackbarVariant.Default,
+    val id: Long = System.nanoTime(),
+)
+
 data class HomeServersChrome(
-    val title: String = "Sessions",
+    /** The active profile's name, verbatim, else "Sessions". */
+    val title: UiText = UiText.resource(R.string.home_sessions_title),
     val isSwitcher: Boolean = false,
     val active: ConnectionProfile? = null,
     val others: List<ConnectionProfile> = emptyList(),
@@ -1810,7 +1822,7 @@ sealed interface MainScreenUiState {
     data object Probing : MainScreenUiState
 
     data class ProbeFailed(
-        val message: String,
+        val message: UiText,
     ) : MainScreenUiState
 
     data object Loading : MainScreenUiState
@@ -1818,7 +1830,7 @@ sealed interface MainScreenUiState {
     data class Empty(
         val showAddProjectSheet: Boolean = false,
         val addProjectSheet: AddProjectSheetUi? = null,
-        val projectSessionCreateError: String? = null,
+        val projectSessionCreateError: UiText? = null,
     ) : MainScreenUiState
 
     data class Loaded(
@@ -1826,7 +1838,7 @@ sealed interface MainScreenUiState {
         val showAddProjectSheet: Boolean = false,
         val addProjectSheet: AddProjectSheetUi? = null,
         val pendingOpenSession: SessionOpenTarget? = null,
-        val projectSessionCreateError: String? = null,
+        val projectSessionCreateError: UiText? = null,
         val pendingProjectRemoval: ProjectRemovalUi? = null,
         /** Unfinished first loads of projects added this session, keyed by worktree. */
         val projectLoads: Map<String, ProjectFirstLoad> = emptyMap(),
@@ -1867,13 +1879,13 @@ data class HomeSessionActionsUiState(
     val renameVisible: Boolean = false,
     val renameDraft: String = "",
     val renameSubmitting: Boolean = false,
-    val renameError: String? = null,
+    val renameError: UiText? = null,
     val forkVisible: Boolean = false,
     val forkDraft: String = "",
     val forkSubmitting: Boolean = false,
-    val forkError: String? = null,
+    val forkError: UiText? = null,
     /** Set when there is nothing to fork (no user message); disables confirm. */
-    val forkBlockedMessage: String? = null,
+    val forkBlockedMessage: UiText? = null,
     val forkResultVisible: Boolean = false,
     val forkedTitle: String = "",
     val deleteConfirmVisible: Boolean = false,

@@ -18,11 +18,11 @@ struct WorktreeCreateModelTests {
     }
 
     @Test func nameRulesInOrder() {
-        #expect(WorktreeNameRules.error(for: "   ") == "Enter a name")
-        #expect(WorktreeNameRules.error(for: "-lead") == "Use letters, numbers, dots, dashes or underscores")
-        #expect(WorktreeNameRules.error(for: "has space") == "Use letters, numbers, dots, dashes or underscores")
-        #expect(WorktreeNameRules.error(for: "feature/x") == "Use letters, numbers, dots, dashes or underscores")
-        #expect(WorktreeNameRules.error(for: String(repeating: "a", count: 65)) == "Use at most 64 characters")
+        #expect(WorktreeNameRules.error(for: "   ").map { String(localized: $0) } == "Enter a name")
+        #expect(WorktreeNameRules.error(for: "-lead").map { String(localized: $0) } == "Use letters, numbers, dots, dashes or underscores")
+        #expect(WorktreeNameRules.error(for: "has space").map { String(localized: $0) } == "Use letters, numbers, dots, dashes or underscores")
+        #expect(WorktreeNameRules.error(for: "feature/x").map { String(localized: $0) } == "Use letters, numbers, dots, dashes or underscores")
+        #expect(WorktreeNameRules.error(for: String(repeating: "a", count: 65)).map { String(localized: $0) } == "Use at most 64 characters")
         #expect(WorktreeNameRules.error(for: String(repeating: "a", count: 64)) == nil)
         #expect(WorktreeNameRules.error(for: " v1.2_fix-3 ") == nil)
     }
@@ -32,12 +32,12 @@ struct WorktreeCreateModelTests {
         #expect(model.state?.nameError == nil)
 
         model.updateName("bad name")
-        #expect(model.state?.nameError == "Use letters, numbers, dots, dashes or underscores")
+        #expect(model.state?.nameError?.resolved == "Use letters, numbers, dots, dashes or underscores")
         #expect(model.state?.canSubmit == false)
 
         model.updateName("")
-        #expect(model.state?.nameError == "Enter a name")
-        #expect(model.state?.branchValue == "opencode/\u{2026}")
+        #expect(model.state?.nameError?.resolved == "Enter a name")
+        #expect(model.state?.branchValue.resolved == "opencode/\u{2026}")
 
         model.updateName("good")
         #expect(model.state?.nameError == nil)
@@ -51,16 +51,16 @@ struct WorktreeCreateModelTests {
         model.updateName(" fix-login ")
         let state = try #require(model.state)
 
-        #expect(state.title == "New worktree")
-        #expect(state.branchValue == "opencode/fix-login")
-        #expect(state.branchNote == "opencode v1 names it after the worktree")
-        #expect(state.baseValue == "main")
-        #expect(state.baseNote == "opencode v1 uses the current checkout")
+        #expect(state.title.resolved == "New worktree")
+        #expect(state.branchValue.resolved == "opencode/fix-login")
+        #expect(state.branchNote.resolved == "opencode v1 names it after the worktree")
+        #expect(state.baseValue.resolved == "main")
+        #expect(state.baseNote.resolved == "opencode v1 uses the current checkout")
         #expect(!state.baseSelectable)
-        #expect(state.submitTitle == "Create and start")
+        #expect(state.submitTitle.resolved == "Create and start")
 
         let unknown = openV1(sourceBranch: nil)
-        #expect(unknown.state?.baseValue == "Current checkout")
+        #expect(unknown.state?.baseValue.resolved == "Current checkout")
         unknown.showBasePicker()
         #expect(unknown.state?.basePickerVisible == false)
     }
@@ -72,19 +72,19 @@ struct WorktreeCreateModelTests {
 
         let state = try #require(model.state)
         #expect(state.sourceDirectory == "/src/repo-wt")
-        #expect(state.branchValue == "No branch (detached)")
-        #expect(state.branchNote == "opencode v2 checkouts have no branch")
-        #expect(state.baseValue == "feature/x (current)")
-        #expect(state.baseNote == "Tap to pick a branch")
+        #expect(state.branchValue.resolved == "No branch (detached)")
+        #expect(state.branchNote.resolved == "opencode v2 checkouts have no branch")
+        #expect(state.baseValue.resolved == "feature/x (current)")
+        #expect(state.baseNote.resolved == "Tap to pick a branch")
         #expect(state.baseSelectable)
-        #expect(state.submitTitle == "Create and move")
+        #expect(state.submitTitle.resolved == "Create and move")
         #expect(state.baseOptionsState == .loading)
 
         #expect(await waitFor { model.state?.baseOptionsState == .loaded })
         #expect(repository.branchDirectories == ["/src/repo-wt"])
         let rows = try #require(model.state?.baseRows)
         // Default first (the source branch, checked), the source branch is not repeated.
-        #expect(rows.map(\.title) == ["feature/x (current)", "main", "origin/main"])
+        #expect(rows.map(\.title.resolved) == ["feature/x (current)", "main", "origin/main"])
         #expect(rows.map(\.ref) == [nil, "main", "origin/main"])
         #expect(rows.map(\.isSelected) == [true, false, false])
         #expect(rows.map(\.accessibilityIdentifier) == [
@@ -95,8 +95,8 @@ struct WorktreeCreateModelTests {
     @Test func detachedSourceDefaultsToTheCurrentCheckout() {
         let model = WorktreeCreateModel(repository: FormWorktreeRepository(), randomIndex: { _ in 0 })
         model.open(origin: .runIn(projectKey: "prj"), serverProtocol: .v2, projectID: "prj", sourceDirectory: "/src/repo", sourceBranch: "HEAD")
-        #expect(model.state?.baseValue == "Current checkout")
-        #expect(model.state?.baseRows.first?.title == "Current checkout")
+        #expect(model.state?.baseValue.resolved == "Current checkout")
+        #expect(model.state?.baseRows.first?.title.resolved == "Current checkout")
     }
 
     @Test func baseSelectionReturnsToTheFormAndTheSourceBranchIsTheDefault() async {
@@ -108,13 +108,13 @@ struct WorktreeCreateModelTests {
         #expect(model.state?.basePickerVisible == true)
         model.selectBase("feature/x")
         #expect(model.state?.basePickerVisible == false)
-        #expect(model.state?.baseValue == "feature/x")
+        #expect(model.state?.baseValue.resolved == "feature/x")
         #expect(model.state?.request.baseRef == "feature/x")
 
         model.showBasePicker()
         model.selectBase("main")
         #expect(model.state?.selectedBaseRef == nil)
-        #expect(model.state?.baseValue == "main (current)")
+        #expect(model.state?.baseValue.resolved == "main (current)")
         #expect(model.state?.request.baseRef == nil)
 
         model.showBasePicker()
@@ -166,7 +166,7 @@ struct WorktreeCreateModelTests {
         ])
         // Stays on Creating… until the owner closes it.
         #expect(model.state?.submitting == true)
-        #expect(model.state?.submitTitle == "Creating\u{2026}")
+        #expect(model.state?.submitTitle.resolved == "Creating\u{2026}")
         #expect(model.state?.canSubmit == false)
     }
 
@@ -191,7 +191,7 @@ struct WorktreeCreateModelTests {
 
         #expect(created == nil)
         #expect(repository.requests.isEmpty)
-        #expect(model.state?.nameError == "Enter a name")
+        #expect(model.state?.nameError?.resolved == "Enter a name")
     }
 
     @Test func failedCreateKeepsTheValuesAndExplains() async throws {
@@ -205,7 +205,7 @@ struct WorktreeCreateModelTests {
 
         #expect(created == nil)
         let state = try #require(model.state)
-        #expect(state.errorMessage == "Couldn't create the worktree: fatal: invalid reference: nope")
+        #expect(state.errorMessage?.resolved == "Couldn't create the worktree: fatal: invalid reference: nope")
         #expect(state.name == "my-tree")
         #expect(state.selectedBaseRef == "nope")
         #expect(!state.submitting)
@@ -235,12 +235,12 @@ struct WorktreeCreateModelTests {
         func check(_ worktrees: Bool, _ git: Bool, _ id: String?, _ server: Bool) -> NewWorktreeAvailability {
             NewWorktreeAvailability.runIn(worktreesEnabled: worktrees, isRepository: git, projectID: id, serverCanCreate: server)
         }
-        #expect(check(false, false, nil, false) == NewWorktreeAvailability(enabled: false, subtitle: "Turn on Worktrees in Settings"))
-        #expect(check(true, false, nil, false) == NewWorktreeAvailability(enabled: false, subtitle: "Needs a git repository"))
-        #expect(check(true, true, nil, false) == NewWorktreeAvailability(enabled: false, subtitle: "Needs a git repository with a commit"))
-        #expect(check(true, true, "global", false) == NewWorktreeAvailability(enabled: false, subtitle: "Needs a git repository with a commit"))
-        #expect(check(true, true, "prj", false) == NewWorktreeAvailability(enabled: false, subtitle: "This server can't create worktrees"))
-        #expect(check(true, true, "prj", true) == NewWorktreeAvailability(enabled: true, subtitle: "Create a checkout and start there"))
+        #expect(check(false, false, nil, false) == NewWorktreeAvailability(enabled: false, subtitle: WorktreeCreateCopy.turnOnWorktrees))
+        #expect(check(true, false, nil, false) == NewWorktreeAvailability(enabled: false, subtitle: WorktreeCreateCopy.notGit))
+        #expect(check(true, true, nil, false) == NewWorktreeAvailability(enabled: false, subtitle: WorktreeCreateCopy.noCommit))
+        #expect(check(true, true, "global", false) == NewWorktreeAvailability(enabled: false, subtitle: WorktreeCreateCopy.noCommit))
+        #expect(check(true, true, "prj", false) == NewWorktreeAvailability(enabled: false, subtitle: WorktreeCreateCopy.unsupported))
+        #expect(check(true, true, "prj", true) == NewWorktreeAvailability(enabled: true, subtitle: WorktreeCreateCopy.runInRowSubtitle))
     }
 
     @Test func moveRowChecksInOrder() {
@@ -252,14 +252,14 @@ struct WorktreeCreateModelTests {
                 isRepository: git, projectID: id, serverCanCreate: server
             )
         }
-        #expect(check(false, false, false, false, nil, false).subtitle == "Needs an opencode v2 server")
-        #expect(check(true, false, false, false, nil, false).subtitle == "Turn on Worktrees in Settings")
+        #expect(check(false, false, false, false, nil, false).subtitle.map { String(localized: $0) } == "Needs an opencode v2 server")
+        #expect(check(true, false, false, false, nil, false).subtitle.map { String(localized: $0) } == "Turn on Worktrees in Settings")
         #expect(check(true, true, false, false, nil, false) == NewWorktreeAvailability(enabled: false, subtitle: nil))
-        #expect(check(true, true, true, false, nil, false).subtitle == "Needs a git repository")
-        #expect(check(true, true, true, true, "global", false).subtitle == "Needs a git repository with a commit")
-        #expect(check(true, true, true, true, "prj", false).subtitle == "This server can't create worktrees")
+        #expect(check(true, true, true, false, nil, false).subtitle.map { String(localized: $0) } == "Needs a git repository")
+        #expect(check(true, true, true, true, "global", false).subtitle.map { String(localized: $0) } == "Needs a git repository with a commit")
+        #expect(check(true, true, true, true, "prj", false).subtitle.map { String(localized: $0) } == "This server can't create worktrees")
         #expect(check(true, true, true, true, "prj", true) == NewWorktreeAvailability(
-            enabled: true, subtitle: "Create a checkout and move there"
+            enabled: true, subtitle: WorktreeCreateCopy.moveRowSubtitle
         ))
         #expect(!check(true, true, true, true, "prj", false).enabled)
     }

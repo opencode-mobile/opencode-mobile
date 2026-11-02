@@ -1,11 +1,14 @@
 package dev.opencode.mobile.ui.worktree
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
 import dev.opencode.mobile.domain.worktree.CreatedWorktree
 import dev.opencode.mobile.domain.worktree.UnavailableWorktreeRepository
 import dev.opencode.mobile.domain.worktree.WorktreeCreateError
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
@@ -30,11 +33,11 @@ class WorktreeCreateFormTest {
 
     @Test
     fun nameValidationExplainsEmptyCharactersAndLength() {
-        assertEquals("Enter a name", WorktreeName.validate("  "))
-        assertEquals("Use letters, numbers, dots, dashes or underscores", WorktreeName.validate("my tree"))
-        assertEquals("Use letters, numbers, dots, dashes or underscores", WorktreeName.validate("-lead"))
-        assertEquals("Use letters, numbers, dots, dashes or underscores", WorktreeName.validate("a/b"))
-        assertEquals("Use at most 64 characters", WorktreeName.validate("a".repeat(65)))
+        assertEquals("Enter a name", WorktreeName.validate("  ")?.english())
+        assertEquals("Use letters, numbers, dots, dashes or underscores", WorktreeName.validate("my tree")?.english())
+        assertEquals("Use letters, numbers, dots, dashes or underscores", WorktreeName.validate("-lead")?.english())
+        assertEquals("Use letters, numbers, dots, dashes or underscores", WorktreeName.validate("a/b")?.english())
+        assertEquals("Use at most 64 characters", WorktreeName.validate("a".repeat(65))?.english())
         assertNull(WorktreeName.validate("a".repeat(64)))
         assertNull(WorktreeName.validate(" fix_tax.rounding-2 "))
     }
@@ -51,21 +54,21 @@ class WorktreeCreateFormTest {
             val state = form.state.value!!
             assertEquals("calm-maple", state.name)
             assertNull(state.nameError)
-            assertEquals("opencode/calm-maple", state.branchValue)
-            assertEquals("opencode v1 names it after the worktree", state.branchNote)
-            assertEquals("dev", state.baseValue)
-            assertEquals("opencode v1 uses the current checkout", state.baseNote)
+            assertEquals("opencode/calm-maple", state.branchValue.english())
+            assertEquals("opencode v1 names it after the worktree", state.branchNote.english())
+            assertEquals("dev", state.baseValue.english())
+            assertEquals("opencode v1 uses the current checkout", state.baseNote.english())
             assertFalse(state.baseSelectable)
-            assertEquals("Create and start", state.submitLabel)
+            assertEquals("Create and start", state.submitLabel.english())
             assertTrue(repository.branchLists.isEmpty())
 
             form.updateName("")
-            assertEquals("opencode/…", form.state.value!!.branchValue)
+            assertEquals("opencode/…", form.state.value!!.branchValue.english())
             form.showBasePicker()
             assertFalse(form.state.value!!.basePickerVisible)
 
             form.open(WorktreeCreateOrigin.RunIn("proj"), ServerProtocol.V1, "proj", "/repo", sourceBranch = null)
-            assertEquals("Current checkout", form.state.value!!.baseValue)
+            assertEquals("Current checkout", form.state.value!!.baseValue.english())
         }
 
     @Test
@@ -76,23 +79,23 @@ class WorktreeCreateFormTest {
 
             form.open(WorktreeCreateOrigin.Move("ses-1"), ServerProtocol.V2, "proj", "/wt/a", sourceBranch = "dev")
             assertEquals(WorktreeBaseOptions.Loading, form.state.value!!.baseOptions)
-            assertEquals("Loading branches…", form.state.value!!.baseStatus)
+            assertEquals("Loading branches…", form.state.value!!.baseStatus?.english())
             advanceUntilIdle()
 
             val state = form.state.value!!
             assertEquals(listOf("/wt/a"), repository.branchLists)
-            assertEquals("No branch (detached)", state.branchValue)
-            assertEquals("opencode v2 checkouts have no branch", state.branchNote)
-            assertEquals("dev (current)", state.baseValue)
-            assertEquals("Tap to pick a branch", state.baseNote)
+            assertEquals("No branch (detached)", state.branchValue.english())
+            assertEquals("opencode v2 checkouts have no branch", state.branchNote.english())
+            assertEquals("dev (current)", state.baseValue.english())
+            assertEquals("Tap to pick a branch", state.baseNote.english())
             assertTrue(state.baseSelectable)
-            assertEquals("Create and move", state.submitLabel)
+            assertEquals("Create and move", state.submitLabel.english())
             assertNull(state.baseStatus)
             assertEquals(
                 listOf(
-                    WorktreeBaseRow(null, "dev (current)", checked = true),
-                    WorktreeBaseRow("main", "main", checked = false),
-                    WorktreeBaseRow("feature/x", "feature/x", checked = false),
+                    WorktreeBaseRow(null, UiText.resource(R.string.worktree_current_branch, "dev"), checked = true),
+                    WorktreeBaseRow("main", UiText.verbatim("main"), checked = false),
+                    WorktreeBaseRow("feature/x", UiText.verbatim("feature/x"), checked = false),
                 ),
                 state.baseRows,
             )
@@ -109,8 +112,8 @@ class WorktreeCreateFormTest {
 
             val state = form.state.value!!
             assertEquals(WorktreeBaseOptions.Failed, state.baseOptions)
-            assertEquals("Couldn't load branches", state.baseStatus)
-            assertEquals(listOf(WorktreeBaseRow(null, "Current checkout", checked = true)), state.baseRows)
+            assertEquals("Couldn't load branches", state.baseStatus?.english())
+            assertEquals(listOf(WorktreeBaseRow(null, UiText.resource(R.string.worktree_current_checkout), checked = true)), state.baseRows)
         }
 
     @Test
@@ -126,14 +129,14 @@ class WorktreeCreateFormTest {
             form.selectBase("main")
             val picked = form.state.value!!
             assertFalse(picked.basePickerVisible)
-            assertEquals("main", picked.baseValue)
+            assertEquals("main", picked.baseValue.english())
             assertEquals("main", picked.request.baseRef)
             assertEquals(listOf(false, true), picked.baseRows.map { it.checked })
 
             form.selectBase("dev")
             val source = form.state.value!!
             assertNull(source.selectedBaseRef)
-            assertEquals("dev (current)", source.baseValue)
+            assertEquals("dev (current)", source.baseValue.english())
             form.selectBase("main")
             form.selectBase(null)
             assertNull(form.state.value!!.selectedBaseRef)
@@ -147,7 +150,7 @@ class WorktreeCreateFormTest {
             form.open(WorktreeCreateOrigin.RunIn("proj"), ServerProtocol.V1, "proj", "/repo", sourceBranch = null)
 
             form.updateName("bad name")
-            assertEquals("Use letters, numbers, dots, dashes or underscores", form.state.value!!.nameError)
+            assertEquals("Use letters, numbers, dots, dashes or underscores", form.state.value!!.nameError?.english())
             assertFalse(form.state.value!!.canSubmit)
 
             form.open(WorktreeCreateOrigin.RunIn("proj"), ServerProtocol.V1, "proj", "/repo", sourceBranch = null)
@@ -156,7 +159,7 @@ class WorktreeCreateFormTest {
             form.updateName(" ")
             form.submit()
             advanceUntilIdle()
-            assertEquals("Enter a name", form.state.value!!.nameError)
+            assertEquals("Enter a name", form.state.value!!.nameError?.english())
             assertTrue(repository.requests.isEmpty())
         }
 
@@ -184,7 +187,7 @@ class WorktreeCreateFormTest {
             val submitting = form.state.value!!
             assertTrue(submitting.submitting)
             assertFalse(submitting.canSubmit)
-            assertEquals("Creating…", submitting.submitLabel)
+            assertEquals("Creating…", submitting.submitLabel.english())
             form.submit()
             runCurrent()
             assertEquals(listOf(CreateWorktreeRequest("proj", "/repo", "tax-fix", baseRef = null)), repository.requests)
@@ -219,7 +222,12 @@ class WorktreeCreateFormTest {
             advanceUntilIdle()
 
             val state = form.state.value!!
-            assertEquals("Couldn't create the worktree: fatal: invalid reference: nope", state.errorMessage)
+            assertEquals("Couldn't create the worktree: fatal: invalid reference: nope", state.errorMessage?.english())
+            // The server's text is an argument, never looked up.
+            assertEquals(
+                UiText.resource(R.string.worktree_create_failed, UiText.verbatim("fatal: invalid reference: nope")),
+                state.errorMessage,
+            )
             assertFalse(state.submitting)
             assertTrue(state.canSubmit)
             assertEquals("tax-fix", state.name)

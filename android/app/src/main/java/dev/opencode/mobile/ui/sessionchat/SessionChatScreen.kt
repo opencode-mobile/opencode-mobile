@@ -49,6 +49,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -58,6 +59,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.connection.ExternalLinkPolicy
@@ -73,7 +75,6 @@ import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.domain.session.SideQuestion
-import dev.opencode.mobile.domain.worktree.WorktreeCreateCopy
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
@@ -2011,7 +2012,7 @@ private fun SessionChatMoveToWorktreeSheet(
     val form = state.form
     OpenCodeBottomSheet(
         visible = state.sheetVisible,
-        title = if (form != null) WorktreeCreateCopy.FORM_TITLE else SessionChatWorktreeMoveCopy.SHEET_TITLE,
+        title = if (form != null) stringResource(R.string.worktree_form_title) else SessionChatWorktreeMoveCopy.SHEET_TITLE,
         onDismissRequest = onDismiss,
         headerTrailingAction = form?.let { worktreeCreateBackAction(it, formCallbacks) },
         keyboard = if (form != null && !form.basePickerVisible) OpenCodeBottomSheetKeyboard.Keep else OpenCodeBottomSheetKeyboard.Dismiss,

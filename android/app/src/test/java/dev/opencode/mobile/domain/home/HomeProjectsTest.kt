@@ -248,13 +248,6 @@ class HomeProjectsTest {
         assertEquals("dev", HomeWorktreeCopy.worktreePill(main))
         assertEquals("feature/x · repo-723", HomeWorktreeCopy.worktreePill(other))
         assertEquals("repo-9", HomeWorktreeCopy.worktreePill(unknown))
-        assertEquals("3 worktrees", HomeWorktreeCopy.worktreeCount(3))
-        assertEquals("All 3 worktrees", HomeWorktreeCopy.allWorktrees(3))
-        assertEquals("2 running", HomeWorktreeCopy.runningCount(2))
-        assertEquals(
-            "Same repo as opencode-mobile. Showing it as a worktree there.",
-            HomeWorktreeCopy.joinedProject("opencode-mobile"),
-        )
     }
 
     private fun twoWorktreeProject(addedPaths: List<String> = listOf("/Users/me/repo-wt")): HomeProject =
