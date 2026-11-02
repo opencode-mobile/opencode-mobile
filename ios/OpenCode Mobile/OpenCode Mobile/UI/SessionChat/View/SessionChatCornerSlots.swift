@@ -35,27 +35,22 @@ struct SessionChatActivitySlotView: View {
             }
             HStack(spacing: 0) {
                 if let primary = slot.primary {
-                    if slot.isCollapsed {
-                        summaryPill(primary)
-                            .id("summary")
-                            .transition(rowTransition)
-                    } else {
-                        pill(primary, compact: slot.primaryCompact)
-                            .id(primary.id)
-                            .padding(.trailing, Self.spacing)
-                            .transition(rowTransition)
-                        if slot.showsOverflowButton {
-                            OpenCodeFloatingPill(
-                                layout: .label("+\(slot.overflow.count)"),
-                                state: .ready,
-                                accessibilityLabel: stackOpen
-                                    ? "Hide \(slot.overflow.count) more"
-                                    : "Show \(slot.overflow.count) more",
-                                action: { stackOpen.toggle() }
-                            )
-                            .padding(.trailing, Self.spacing)
-                            .transition(rowTransition)
-                        }
+                    // One pill whether collapsed or not, so folding to round shrinks it in place.
+                    primaryPill(primary)
+                        .id(primary.id)
+                        .padding(.trailing, Self.spacing)
+                        .transition(rowTransition)
+                    if slot.showsOverflowButton {
+                        OpenCodeFloatingPill(
+                            layout: .label("+\(slot.overflow.count)"),
+                            state: .ready,
+                            accessibilityLabel: stackOpen
+                                ? "Hide \(slot.overflow.count) more"
+                                : "Show \(slot.overflow.count) more",
+                            action: { stackOpen.toggle() }
+                        )
+                        .padding(.trailing, Self.spacing)
+                        .transition(rowTransition)
                     }
                 }
             }
@@ -74,25 +69,30 @@ struct SessionChatActivitySlotView: View {
         }
     }
 
-    private func summaryPill(_ primary: SessionChatActivityItem) -> some View {
+    /// The row pill. Collapsed, it folds to the round summary of every item and opens their stack.
+    /// No branching on `isCollapsed`, so SwiftUI keeps one view and animates its width.
+    private func primaryPill(_ primary: SessionChatActivityItem) -> some View {
+        let collapsed = slot.isCollapsed
         let count = slot.allItems.count
-        let pending: Bool
-        if case .queued = primary { pending = true } else { pending = false }
+        let pending: Bool = if case .queued = primary { true } else { false }
         let label = Self.accessibilityLabel(primary)
-        return OpenCodeFloatingPill(
-            layout: .summary(count: count, pending: pending),
-            state: Self.state(primary),
-            accessibilityLabel: stackOpen
+        return pill(
+            primary,
+            compact: collapsed || slot.primaryCompact,
+            summary: collapsed ? OpenCodeFloatingPillSummary(count: count, pending: pending) : nil,
+            accessibilityLabel: !collapsed ? nil : stackOpen
                 ? "Hide \(count) activities"
                 : (count > 1 ? "Show \(count) activities. \(label)" : label),
-            action: { stackOpen.toggle() }
+            action: collapsed ? { stackOpen.toggle() } : nil
         )
-        .padding(.trailing, Self.spacing)
     }
 
     private func pill(
         _ item: SessionChatActivityItem,
         compact: Bool,
+        summary: OpenCodeFloatingPillSummary? = nil,
+        accessibilityLabel: String? = nil,
+        action: (() -> Void)? = nil,
         backing: OpenCodeFloatingPillBacking = .glass
     ) -> some View {
         let tap: (() -> Void)? = Self.isTappable(item) ? {
@@ -104,8 +104,9 @@ struct SessionChatActivitySlotView: View {
             layout: Self.layout(item),
             state: Self.state(item),
             compact: compact,
-            accessibilityLabel: Self.accessibilityLabel(item),
-            action: tap,
+            summary: summary,
+            accessibilityLabel: accessibilityLabel ?? Self.accessibilityLabel(item),
+            action: action ?? tap,
             onClose: close,
             backing: backing
         )

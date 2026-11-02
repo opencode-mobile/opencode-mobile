@@ -35,6 +35,15 @@ enum OpenCodeFloatingPillLayout: Equatable {
     }
 }
 
+/// A stack of items a compact pill stands for. The pill keeps its own layout, so folding
+/// to round animates the width, but draws the `.summary` mark and count badge.
+struct OpenCodeFloatingPillSummary: Equatable {
+    var count: Int
+    var pending: Bool = false
+
+    var layout: OpenCodeFloatingPillLayout { .summary(count: count, pending: pending) }
+}
+
 /// Where the thing a floating pill stands for is.
 enum OpenCodeFloatingPillState: CaseIterable, Equatable {
     /// Work is running.
@@ -113,8 +122,14 @@ enum OpenCodeFloatingPillStyle {
         return count
     }
 
-    /// Mark a compact pill draws in its round body: the regular mark, or a state dot when there is none.
-    static func compactLeading(layout: OpenCodeFloatingPillLayout, state: OpenCodeFloatingPillState) -> OpenCodeFloatingPillLeading {
+    /// Mark a compact pill draws in its round body: the summary mark when it stands for a stack,
+    /// else the regular mark, or a state dot when there is none.
+    static func compactLeading(
+        layout: OpenCodeFloatingPillLayout,
+        state: OpenCodeFloatingPillState,
+        summary: OpenCodeFloatingPillSummary? = nil
+    ) -> OpenCodeFloatingPillLeading {
+        if let summary { return leading(layout: summary.layout, state: state) }
         let mark = leading(layout: layout, state: state)
         return mark == .none ? .stateDot : mark
     }
@@ -161,11 +176,13 @@ enum OpenCodeFloatingPillStyle {
 /// Shared floating pill for Session Chat: one look, five layouts, five states.
 /// Without `action` the pill is a status, not a button. `compact` shrinks it to its
 /// round mark (icon, spinner, dot or check) and hides the text and ✕, still speaking
-/// the full label. `accessibilityLabel` replaces the default "label, state" speech.
+/// the full label. With `summary`, compact draws that stack's mark and count badge instead.
+/// `accessibilityLabel` replaces the default "label, state" speech.
 struct OpenCodeFloatingPill: View {
     let layout: OpenCodeFloatingPillLayout
     let state: OpenCodeFloatingPillState
     let compact: Bool
+    let summary: OpenCodeFloatingPillSummary?
     let accessibilityLabelOverride: String?
     let action: (() -> Void)?
     let onClose: (() -> Void)?
@@ -175,6 +192,7 @@ struct OpenCodeFloatingPill: View {
         layout: OpenCodeFloatingPillLayout,
         state: OpenCodeFloatingPillState,
         compact: Bool = false,
+        summary: OpenCodeFloatingPillSummary? = nil,
         accessibilityLabel: String? = nil,
         action: (() -> Void)? = nil,
         onClose: (() -> Void)? = nil,
@@ -184,6 +202,7 @@ struct OpenCodeFloatingPill: View {
         self.layout = layout
         self.state = state
         self.compact = compact
+        self.summary = summary
         self.accessibilityLabelOverride = accessibilityLabel
         self.action = action
         self.onClose = onClose
@@ -202,21 +221,16 @@ struct OpenCodeFloatingPill: View {
                     .accessibilityLabel(accessibilityLabel)
                     .accessibilityAddTraits(updateTraits)
             }
-            if OpenCodeFloatingPillStyle.showsClose(layout: layout, compact: compact, hasCloseAction: onClose != nil),
-               let onClose {
-                Button(action: onClose) {
-                    OpenCodeIconImage(icon: .close, size: Self.iconSize)
-                        .foregroundStyle(OpenCodeColors.iconBase)
-                        .frame(width: Self.closeTouchTarget, height: Self.closeTouchTarget)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(OpenCodeFloatingPillPressStyle())
-                // 44 pt hit area that lays out as the 36 pt visual square.
-                .padding(-(Self.closeTouchTarget - Self.minHeight) / 2)
-                .padding(.leading, -Self.paddingHorizontal / 2)
-                .accessibilityLabel(
-                    OpenCodeFloatingPillStyle.closeAccessibilityLabel(layout: layout, override: accessibilityLabelOverride)
-                )
+            if case .closable = layout, let onClose {
+                // Stays in the tree while compact so the ✕ folds away with the label.
+                let shown = OpenCodeFloatingPillStyle.showsClose(layout: layout, compact: compact, hasCloseAction: true)
+                OpenCodeWidthRevealLayout(progress: shown ? 1 : 0) { closeButton(onClose) }
+                    .opacity(shown ? 1 : 0)
+                    // Clip sideways only, so the 44 pt hit area keeps its height.
+                    .mask { Rectangle().padding(.vertical, -Self.closeTouchTarget) }
+                    .allowsHitTesting(shown)
+                    .accessibilityHidden(!shown)
+                    .animation(reduceMotion ? nil : Self.widthAnimation, value: compact)
             }
         }
         .openCodeFloatingPillChrome(enabled: true, backing: backing)
@@ -230,6 +244,22 @@ struct OpenCodeFloatingPill: View {
         // After the chrome and the attention ring, so the badge sits on top of both instead of
         // being cut by the ring's stroke or the glass.
         .overlay(alignment: .topTrailing) { countBadge }
+    }
+
+    private func closeButton(_ onClose: @escaping () -> Void) -> some View {
+        Button(action: onClose) {
+            OpenCodeIconImage(icon: .close, size: Self.iconSize)
+                .foregroundStyle(OpenCodeColors.iconBase)
+                .frame(width: Self.closeTouchTarget, height: Self.closeTouchTarget)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(OpenCodeFloatingPillPressStyle())
+        // 44 pt hit area that lays out as the 36 pt visual square.
+        .padding(-(Self.closeTouchTarget - Self.minHeight) / 2)
+        .padding(.leading, -Self.paddingHorizontal / 2)
+        .accessibilityLabel(
+            OpenCodeFloatingPillStyle.closeAccessibilityLabel(layout: layout, override: accessibilityLabelOverride)
+        )
     }
 
     @ViewBuilder
@@ -278,7 +308,8 @@ struct OpenCodeFloatingPill: View {
 
     @ViewBuilder
     private var countBadge: some View {
-        if let count = OpenCodeFloatingPillStyle.badgeCount(layout: layout) {
+        let badgeLayout = compact ? summary?.layout ?? layout : layout
+        if let count = OpenCodeFloatingPillStyle.badgeCount(layout: badgeLayout) {
             Text("\(count)")
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textOnBrandBase)
@@ -289,6 +320,7 @@ struct OpenCodeFloatingPill: View {
                 .background(OpenCodeColors.interactive, in: Capsule())
                 .overlay(Capsule().strokeBorder(OpenCodeColors.surfaceRaisedBase, lineWidth: 1.5))
                 .offset(x: 4, y: -4)
+                .transition(.opacity.combined(with: .scale(scale: 0.5)))
                 .accessibilityHidden(true)
         }
     }
@@ -300,7 +332,7 @@ struct OpenCodeFloatingPill: View {
     @ViewBuilder
     private var leadingMark: some View {
         let mark = compact && !layout.isRound
-            ? OpenCodeFloatingPillStyle.compactLeading(layout: layout, state: state)
+            ? OpenCodeFloatingPillStyle.compactLeading(layout: layout, state: state, summary: summary)
             : OpenCodeFloatingPillStyle.leading(layout: layout, state: state)
         switch mark {
         case .none:
