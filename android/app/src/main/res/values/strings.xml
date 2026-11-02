@@ -884,4 +884,54 @@
     <string name="keyboard_shortcuts_next_session">Next Session</string>
     <string name="keyboard_shortcuts_previous_session">Previous Session</string>
     <string name="keyboard_shortcuts_focus_composer">Focus Composer</string>
+    <!-- Changes -->
+    <string name="changes_title">Changes</string>
+    <string name="changes_source_menu_label">Choose change source</string>
+    <!-- Accessibility label of the selected change source. %1$s is the source name. -->
+    <string name="changes_source_menu_selected">%1$s, selected</string>
+    <string name="changes_source_working_tree_name">Git changes</string>
+    <string name="changes_source_working_tree_empty_title">No Git changes</string>
+    <string name="changes_source_working_tree_empty_message">The working tree has no uncommitted changes.</string>
+    <string name="changes_source_last_turn_name">Last turn changes</string>
+    <string name="changes_source_last_turn_empty_title">No changes</string>
+    <string name="changes_source_last_turn_empty_message">The latest completed turn did not change any files.</string>
+    <string name="changes_loading_title">Loading changes</string>
+    <string name="changes_loading_message">Fetching the diff…</string>
+    <string name="changes_no_turn_title">No completed turn</string>
+    <string name="changes_no_turn_message">Send a prompt and wait for it to complete, then try again.</string>
+    <string name="changes_error_title">Unable to load changes</string>
+    <string name="changes_error_fallback">The changes didn\'t load.</string>
+    <!-- Shown when a failed request has no message of its own. -->
+    <string name="changes_error_request_failed">Request failed</string>
+    <string name="changes_error_turn_moved_folders">This turn moved folders, so its changes can\'t be shown together.</string>
+    <!-- %1$s is the error message, often from the server. -->
+    <string name="changes_refresh_failed">Refresh failed: %1$s</string>
+    <string name="changes_filter_hint">Filter</string>
+    <string name="changes_filter_accessibility_label">Filter changed files</string>
+    <string name="changes_no_matches_title">No matching files</string>
+    <string name="changes_no_matches_message">Try another path or clear the filter.</string>
+    <string name="changes_no_matches_clear_filter">Clear filter</string>
+    <string name="changes_select_file_title">Select a file</string>
+    <string name="changes_select_file_message">Choose a changed file to see the diff.</string>
+    <string name="changes_preview_unavailable_title">Preview unavailable</string>
+    <string name="changes_preview_unavailable_message">A text preview is unavailable for this file.</string>
+    <plurals name="changes_summary_changed_files">
+        <item quantity="one">%1$d changed file</item>
+        <item quantity="other">%1$d changed files</item>
+    </plurals>
+    <plurals name="changes_count_additions">
+        <item quantity="one">%1$d addition</item>
+        <item quantity="other">%1$d additions</item>
+    </plurals>
+    <plurals name="changes_count_deletions">
+        <item quantity="one">%1$d deletion</item>
+        <item quantity="other">%1$d deletions</item>
+    </plurals>
+    <string name="changes_file_status_added">Added</string>
+    <string name="changes_file_status_deleted">Deleted</string>
+    <string name="changes_file_status_modified">Modified</string>
+    <!-- Accessibility label of the change summary. %1$s changed files, %2$s additions, %3$s deletions, each with its count. -->
+    <string name="changes_accessibility_summary">%1$s, %2$s, %3$s</string>
+    <!-- Accessibility label of a changed file. %1$s path, %2$s status (Added, Deleted, Modified), %3$d position, %4$d file count, %5$s additions, %6$s deletions. -->
+    <string name="changes_accessibility_file">%1$s, %2$s, file %3$d of %4$d, %5$s, %6$s</string>
 </resources>
