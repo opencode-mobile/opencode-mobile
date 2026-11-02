@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.sessionchat
 import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.domain.shell.AgentShellStatus
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellsCopy
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -59,7 +60,7 @@ class SessionChatBackgroundWorkShellsTest {
         val ended = shell("sh_1").copy(status = AgentShellStatus.Exited(0))
 
         assertNull(SessionChatBackgroundWork.pill(emptyList(), listOf(ended)))
-        assertEquals("1 shell", SessionChatBackgroundWork.pill(emptyList(), listOf(ended, shell("sh_2")))?.label)
+        assertEquals("1 shell", SessionChatBackgroundWork.pill(emptyList(), listOf(ended, shell("sh_2")))?.labelText?.english())
     }
 
     @Test

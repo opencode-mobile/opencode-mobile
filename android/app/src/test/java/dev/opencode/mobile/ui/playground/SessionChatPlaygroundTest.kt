@@ -25,6 +25,7 @@ import dev.opencode.mobile.domain.session.SessionTodoStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.sessionchat.SessionChatBackgroundWork
 import dev.opencode.mobile.ui.sessionchat.pendingPromptsFrom
+import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -256,10 +257,10 @@ class SessionChatPlaygroundTest {
     @Test
     fun subagentsScriptAsksThenFinishes() {
         val scenario = PlaygroundScenarios.build(PlaygroundScenarioId.Subagents, NOW)
-        assertEquals("2 subagents", pill(scenario.initial)?.label)
+        assertEquals("2 subagents", pill(scenario.initial)?.labelText?.english())
 
         val asking = scenario.steps.first().apply(scenario.initial, NOW)
-        assertEquals("explore needs input · 1 running", pill(asking)?.label)
+        assertEquals("explore needs input · 1 running", pill(asking)?.labelText?.english())
 
         val final = scenario.finalState(NOW)
         assertNull(pill(final))
@@ -302,7 +303,7 @@ class SessionChatPlaygroundTest {
 
         fun after(label: String) = states[scenario.steps.indexOfFirst { it.label == label } + 1]
         assertEquals(1, pendingPromptsFrom(after("A prompt is queued").messages(ROOT), emptyList()).size)
-        assertEquals("2 subagents", pill(after("Subagents start"))?.label)
+        assertEquals("2 subagents", pill(after("Subagents start"))?.labelText?.english())
         assertTrue(pill(after("explore needs input"))!!.needsInput)
         assertNull(pill(after("Subagents finish")))
         assertTrue(after("Subagents finish").isBusy(ROOT))
@@ -333,7 +334,7 @@ class SessionChatPlaygroundTest {
         assertTrue(queued.isBusy(queued.rootSessionId))
         assertEquals(2, pendingPromptsFrom(queued.messages(queued.rootSessionId), emptyList()).size)
 
-        assertEquals("2 subagents", pill(build(PlaygroundScenarioId.BackgroundWork).initial)?.label)
+        assertEquals("2 subagents", pill(build(PlaygroundScenarioId.BackgroundWork).initial)?.labelText?.english())
 
         val needsInput = build(PlaygroundScenarioId.NeedsInput)
         assertTrue(needsInput.collapsesPermission)
@@ -470,7 +471,7 @@ class SessionChatPlaygroundTest {
             assertEquals(
                 "2 subagents",
                 viewModel.uiState.value.backgroundWorkPill
-                    ?.label,
+                    ?.labelText?.english(),
             )
 
             advanceTimeBy(3_000)
@@ -478,7 +479,7 @@ class SessionChatPlaygroundTest {
             assertEquals(
                 "explore needs input · 1 running",
                 viewModel.uiState.value.backgroundWorkPill
-                    ?.label,
+                    ?.labelText?.english(),
             )
             assertNotNull(viewModel.uiState.value.permissionRequest)
 

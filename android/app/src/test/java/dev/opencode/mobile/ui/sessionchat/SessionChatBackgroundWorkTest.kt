@@ -10,6 +10,7 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.Done
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.Running
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.WaitingForInput
+import dev.opencode.mobile.ui.text.english
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -29,7 +30,7 @@ class SessionChatBackgroundWorkTest {
             )
 
         assertEquals(listOf(Running, Running, Done), rows.map { it.status })
-        assertEquals("2 subagents", SessionChatBackgroundWork.pill(rows)?.label)
+        assertEquals("2 subagents", SessionChatBackgroundWork.pill(rows)?.labelText?.english())
     }
 
     @Test
@@ -141,7 +142,7 @@ class SessionChatBackgroundWorkTest {
                 requests = listOf("ses-a"),
             )
 
-        assertEquals("explore needs input", SessionChatBackgroundWork.pill(rows)?.label)
+        assertEquals("explore needs input", SessionChatBackgroundWork.pill(rows)?.labelText?.english())
     }
 
     @Test
@@ -154,7 +155,7 @@ class SessionChatBackgroundWorkTest {
                 requests = listOf("ses-a", "ses-b"),
             )
 
-        assertEquals("2 subagents need input · 1 running", SessionChatBackgroundWork.pill(rows)?.label)
+        assertEquals("2 subagents need input · 1 running", SessionChatBackgroundWork.pill(rows)?.labelText?.english())
     }
 
     @Test
@@ -221,7 +222,7 @@ class SessionChatBackgroundWorkTest {
         assertEquals(listOf("prt-2"), rows.map { it.id })
         assertEquals(Running, rows.single().status)
         assertEquals(START + 60_000, rows.single().startedAtMs)
-        assertEquals("1 subagent", SessionChatBackgroundWork.pill(rows)?.label)
+        assertEquals("1 subagent", SessionChatBackgroundWork.pill(rows)?.labelText?.english())
     }
 
     @Test
@@ -234,7 +235,7 @@ class SessionChatBackgroundWorkTest {
                 requests = listOf("ses-a"),
             )
 
-        assertEquals("general needs input", SessionChatBackgroundWork.pill(rows)?.label)
+        assertEquals("general needs input", SessionChatBackgroundWork.pill(rows)?.labelText?.english())
     }
 
     @Test

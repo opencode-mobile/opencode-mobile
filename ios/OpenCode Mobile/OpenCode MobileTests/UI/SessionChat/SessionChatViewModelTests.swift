@@ -4123,7 +4123,7 @@ struct SessionChatViewModelTests {
         viewModel.openMoveToWorktree()
         viewModel.openMoveToNewWorktree(projectID: "prj", sourceDirectory: "/repo-wt", sourceBranch: "feature/x")
         #expect(viewModel.worktreeCreate.state?.origin == .move(sessionID: "ses-1"))
-        #expect(viewModel.worktreeCreate.state?.submitTitle == "Create and move")
+        #expect(viewModel.worktreeCreate.state?.submitTitle.resolved == "Create and move")
         var refreshed: [CreatedWorktree] = []
 
         await viewModel.submitMoveToNewWorktree { refreshed.append($0) }
@@ -4178,7 +4178,7 @@ struct SessionChatViewModelTests {
         #expect(sessionRepository.moveRequests.isEmpty)
         #expect(refreshed == 0)
         #expect(viewModel.uiState.moveSheetVisible)
-        #expect(viewModel.worktreeCreate.state?.errorMessage == "Couldn't create the worktree: Project not found: prj")
+        #expect(viewModel.worktreeCreate.state?.errorMessage?.resolved == "Couldn't create the worktree: Project not found: prj")
 
         viewModel.dismissMoveToWorktree()
         #expect(viewModel.worktreeCreate.state == nil)
