@@ -250,10 +250,13 @@ where Item.ID == String {
         let wasPinned = scrollController?.isPinnedToEnd == true
         // An end-pinned list glides to the new inset (a pill row appearing, the keyboard)
         // instead of jumping. Away from the end nothing may move, so nothing glides.
-        let rowsBefore = repinIfNeeded && wasPinned && abs(additionalSafeAreaInsets.bottom - inset) > 0.5
-            ? visibleRowOffsets()
-            : nil
-        if abs(additionalSafeAreaInsets.bottom - inset) > 0.5 {
+        let insetWillChange = abs(additionalSafeAreaInsets.bottom - inset) > 0.5
+        if repinIfNeeded, wasPinned, insetWillChange, let rows = visibleRowOffsets() {
+            // UIKit applies the new adjusted inset in a later layout turn, so the rows
+            // have not moved yet. Remember where they are and glide once they have.
+            pendingGlide = PendingGlide(rows: rows, adjustedBottom: collectionView.adjustedContentInset.bottom)
+        }
+        if insetWillChange {
             if repinIfNeeded, wasPinned { armRepinOnAdjustedInsetChange() }
             var safe = additionalSafeAreaInsets
             safe.bottom = inset
@@ -262,12 +265,31 @@ where Item.ID == String {
         updateBottomAlignmentInset()
         guard repinIfNeeded, wasPinned || scrollController?.isPinnedToEnd == true else { return }
         performScrollToEnd(animated: false)
-        if let rowsBefore { glideRows(from: rowsBefore) }
+        startPendingGlideIfInsetApplied()
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            defer { self.pendingGlide = nil }
             guard wasPinned || self.scrollController?.isPinnedToEnd == true else { return }
             self.pinToBottomWithoutAnimation()
+            self.startPendingGlideIfInsetApplied()
         }
+    }
+
+    /// Row positions captured before an inset change, and the adjusted bottom inset they had.
+    private struct PendingGlide {
+        let rows: [(cell: UICollectionViewCell, top: CGFloat)]
+        let adjustedBottom: CGFloat
+    }
+
+    private var pendingGlide: PendingGlide?
+
+    /// Runs the glide once UIKit has applied the new adjusted inset and the list is re-pinned.
+    private func startPendingGlideIfInsetApplied() {
+        guard let pending = pendingGlide,
+              abs(collectionView.adjustedContentInset.bottom - pending.adjustedBottom) > 0.5
+        else { return }
+        pendingGlide = nil
+        glideRows(from: pending.rows)
     }
 
     /// Each visible cell's top in the collection view's own coordinates.
@@ -288,18 +310,23 @@ where Item.ID == String {
         for (cell, top) in rows {
             let dy = top - (cell.frame.minY - collectionView.contentOffset.y)
             guard abs(dy) > 0.5, abs(dy) < collectionView.bounds.height else { continue }
-            cell.transform = CGAffineTransform(translationX: 0, y: dy)
+            cell.contentView.transform = CGAffineTransform(translationX: 0, y: dy)
             moved.append(cell)
         }
         guard !moved.isEmpty else { return }
-        UIView.animate(
-            withDuration: MessageListTimelineDefaults.insetGlideDuration,
-            delay: 0,
-            usingSpringWithDamping: MessageListTimelineDefaults.insetGlideDamping,
-            initialSpringVelocity: 0,
-            options: [.allowUserInteraction, .beginFromCurrentState]
-        ) {
-            moved.forEach { $0.transform = .identity }
+        // The inset change arrives inside UIKit's own layout turn, where nested animations
+        // can be suppressed. The offsets above are already set (the rows still draw where
+        // they were); start the spring from a clean turn.
+        DispatchQueue.main.async {
+            UIView.animate(
+                withDuration: MessageListTimelineDefaults.insetGlideDuration,
+                delay: 0,
+                usingSpringWithDamping: MessageListTimelineDefaults.insetGlideDamping,
+                initialSpringVelocity: 0,
+                options: [.allowUserInteraction, .beginFromCurrentState]
+            ) {
+                moved.forEach { $0.contentView.transform = .identity }
+            }
         }
     }
 
@@ -889,6 +916,7 @@ where Item.ID == String {
     func scrollViewDidChangeAdjustedContentInset(_ scrollView: UIScrollView) {
         guard repinOnAdjustedInsetChange, !isCoveredByNavigation, !isHoldingUserScrollPlace else { return }
         pinToBottomWithoutAnimation()
+        startPendingGlideIfInsetApplied()
     }
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {

@@ -169,6 +169,7 @@ struct OpenCodeFloatingPill: View {
     let accessibilityLabelOverride: String?
     let action: (() -> Void)?
     let onClose: (() -> Void)?
+    let backing: OpenCodeFloatingPillBacking
 
     init(
         layout: OpenCodeFloatingPillLayout,
@@ -176,8 +177,10 @@ struct OpenCodeFloatingPill: View {
         compact: Bool = false,
         accessibilityLabel: String? = nil,
         action: (() -> Void)? = nil,
-        onClose: (() -> Void)? = nil
+        onClose: (() -> Void)? = nil,
+        backing: OpenCodeFloatingPillBacking = .glass
     ) {
+        self.backing = backing
         self.layout = layout
         self.state = state
         self.compact = compact
@@ -216,7 +219,7 @@ struct OpenCodeFloatingPill: View {
                 )
             }
         }
-        .openCodeFloatingPillChrome(enabled: true)
+        .openCodeFloatingPillChrome(enabled: true, backing: backing)
         .overlay {
             if OpenCodeFloatingPillStyle.hasRing(state) {
                 Capsule()
@@ -276,11 +279,13 @@ struct OpenCodeFloatingPill: View {
         if let count = OpenCodeFloatingPillStyle.badgeCount(layout: layout) {
             Text("\(count)")
                 .font(OpenCodeTypography.caption)
-                .foregroundStyle(OpenCodeColors.textStrong)
+                .foregroundStyle(OpenCodeColors.textOnBrandBase)
                 .padding(.horizontal, Self.badgePaddingHorizontal)
                 .frame(minWidth: Self.badgeSize, minHeight: Self.badgeSize)
-                .background(OpenCodeColors.surfaceRaisedBase, in: Capsule())
-                .overlay(Capsule().strokeBorder(OpenCodeColors.borderWeakerBase, lineWidth: 1))
+                // Filled in the accent so it reads over any timeline content; the thin
+                // raised-surface ring separates it from the pill body in light and dark.
+                .background(OpenCodeColors.interactive, in: Capsule())
+                .overlay(Capsule().strokeBorder(OpenCodeColors.surfaceRaisedBase, lineWidth: 1.5))
                 .offset(x: 4, y: -4)
                 .accessibilityHidden(true)
         }
