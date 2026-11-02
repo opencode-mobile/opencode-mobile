@@ -20,6 +20,7 @@ import dev.opencode.mobile.ui.playground.PlaygroundContent.image
 import dev.opencode.mobile.ui.playground.PlaygroundContent.read
 import dev.opencode.mobile.ui.playground.PlaygroundContent.reasoning
 import dev.opencode.mobile.ui.playground.PlaygroundContent.session
+import dev.opencode.mobile.ui.playground.PlaygroundContent.childToolCall
 import dev.opencode.mobile.ui.playground.PlaygroundContent.subagentTask
 import dev.opencode.mobile.ui.playground.PlaygroundContent.text
 import dev.opencode.mobile.ui.playground.PlaygroundContent.tool
@@ -258,6 +259,16 @@ object PlaygroundScenarios {
                             if (checkoutDone) ToolStatus.Completed else ToolStatus.Running,
                             start + replyAfterMs + 2_000,
                             output = if (checkoutDone) "Checkout is fine: one coupon, applied after the member discount." else null,
+                            childTools =
+                                listOf(
+                                    childToolCall("pg-audit-t1-c1", "read", buildJsonObject { put("filePath", "src/checkout.ts") }),
+                                    childToolCall(
+                                        "pg-audit-t1-c2",
+                                        "grep",
+                                        buildJsonObject { put("pattern", "applyCoupon") },
+                                        running = !checkoutDone,
+                                    ),
+                                ),
                         ),
                         subagentTask(
                             "pg-audit-t2",
@@ -267,6 +278,10 @@ object PlaygroundScenarios {
                             if (cartDone) ToolStatus.Completed else ToolStatus.Running,
                             start + replyAfterMs + 2_500,
                             output = if (cartDone) "Cart totals round once, at the end. No drift found." else null,
+                            childTools =
+                                listOf(
+                                    childToolCall("pg-audit-t2-c1", "read", buildJsonObject { put("filePath", "src/cart.ts") }, running = !cartDone),
+                                ),
                         ),
                         if (done) text("pg-audit-x2", "Both audits are done. Nothing to fix.") else null,
                     ),

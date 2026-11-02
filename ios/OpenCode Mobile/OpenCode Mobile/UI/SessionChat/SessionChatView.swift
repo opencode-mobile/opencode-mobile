@@ -720,6 +720,8 @@ struct SessionChatView: View {
                 isPresented: $showSubagentsSheet,
                 subagents: viewModel.uiState.subagents,
                 shells: viewModel.uiState.shells,
+                doneUnseen: viewModel.uiState.backgroundWorkDoneUnseen,
+                onDoneVisibleChange: { viewModel.setBackgroundWorkDoneVisible($0) },
                 onOpen: { subagent in
                     guard let childID = subagent.childSessionID else { return }
                     logChatAction(ProductAnalytics.Action.chatOpenChildSession)

@@ -245,6 +245,8 @@ data class SessionChatUiState(
     val shellOutput: SessionChatShellOutputUiState? = null,
     /** The background work pill; null when no subagent or shell works or waits. */
     val backgroundWorkPill: SessionChatBackgroundWorkPill? = null,
+    /** A subagent finished since the background work panel's Done tab was last viewed (#966). */
+    val backgroundWorkDoneUnseen: Boolean = false,
     val connectionStatus: SessionConnectionStatus = SessionConnectionStatus.Offline,
     val canMutate: Boolean = false,
     val composerEnabled: Boolean = false,

@@ -14,10 +14,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeFilterTab
 import dev.opencode.mobile.ui.components.OpenCodeFilterTabs
+import dev.opencode.mobile.ui.components.OpenCodeFilterTabsStyle
 
 @Composable
 fun FilterTabsGalleryScreen(modifier: Modifier = Modifier) {
     var selectedTabId by rememberSaveable { mutableStateOf("all") }
+    var segmentedTabId by rememberSaveable { mutableStateOf("running") }
     Column(modifier = modifier.fillMaxSize()) {
         Text(
             text = "Horizontal single-select filters with optional count badges.",
@@ -29,6 +31,23 @@ fun FilterTabsGalleryScreen(modifier: Modifier = Modifier) {
             tabs = filterTabsGallerySamples,
             selectedTabId = selectedTabId,
             onTabSelected = { selectedTabId = it },
+        )
+        Text(
+            text = "Segmented: equal-width views of one list. A dot marks something new since the tab was last viewed.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        OpenCodeFilterTabs(
+            tabs =
+                listOf(
+                    OpenCodeFilterTab(id = "running", title = "Running", count = 2),
+                    OpenCodeFilterTab(id = "done", title = "Done", count = 5, unseen = segmentedTabId != "done"),
+                ),
+            selectedTabId = segmentedTabId,
+            onTabSelected = { segmentedTabId = it },
+            style = OpenCodeFilterTabsStyle.Segmented,
+            modifier = Modifier.padding(horizontal = 16.dp),
         )
     }
 }

@@ -7,6 +7,8 @@ struct BackgroundWorkPillGalleryView: View {
     @State private var showShells = true
     @State private var openShell: AgentShell?
     @State private var log = "Tap the pill or a row"
+    @State private var tab: SessionChatBackgroundWorkTab = .running
+    @State private var doneSeen = false
     /// Fixed so the running timers tick instead of restarting on every redraw.
     @State private var openedAtMs = Int64(Date().timeIntervalSince1970 * 1_000)
 
@@ -14,16 +16,32 @@ struct BackgroundWorkPillGalleryView: View {
         let now = openedAtMs
         return [
             needsInput
-                ? Self.row("prt-1", "general", "Run the test suite", .waitingForInput, startedAgoMs: 95_000, now: now)
+                ? Self.row("prt-1", "general", "Run the test suite", .waitingForInput, startedAgoMs: 95_000, now: now, toolCount: 4)
                 : nil,
-            Self.row("prt-2", "explore", "Find the session store", .running, startedAgoMs: 42_000, now: now),
-            Self.row("prt-3", "explore", "Map the settings screens", .running, startedAgoMs: 18_000, now: now),
+            Self.row(
+                "prt-2", "explore", "Find the session store", .running, startedAgoMs: 42_000, now: now,
+                currentStep: "Searching SessionStore", toolCount: 7
+            ),
+            Self.row("prt-3", "general", "Map the settings screens", .running, startedAgoMs: 18_000, now: now),
             needsInput
                 ? nil
-                : Self.row("prt-1", "general", "Run the test suite", .running, startedAgoMs: 95_000, now: now),
-            Self.row("prt-4", "review", "Review the diff", .done, startedAgoMs: 300_000, now: now, finishedAgoMs: 220_000),
-            Self.row("prt-5", "general", "Migrate the fixtures", .failed, startedAgoMs: 400_000, now: now, finishedAgoMs: 380_000),
-            Self.row("prt-6", "explore", "Profile the parser", .stopped, startedAgoMs: 500_000, now: now, finishedAgoMs: 470_000),
+                : Self.row(
+                    "prt-1", "general", "Run the test suite", .running, startedAgoMs: 95_000, now: now,
+                    currentStep: "Running npm test", toolCount: 4
+                ),
+            Self.row(
+                "prt-4", "review", "Review the diff", .done, startedAgoMs: 300_000, now: now, finishedAgoMs: 220_000,
+                toolCount: 12, result: "No blocking issues; two nits in the parser"
+            ),
+            Self.row(
+                "prt-5", "general", "Migrate the fixtures", .failed, startedAgoMs: 400_000, now: now, finishedAgoMs: 380_000,
+                result: "Rate limited"
+            ),
+            Self.row(
+                "prt-6", "explore", "Profile the parser", .stopped, startedAgoMs: 500_000, now: now, finishedAgoMs: 470_000,
+                result: "Stopped"
+            ),
+            Self.row("prt-7", "general", "Summarise the README", .done, startedAgoMs: 600_000, now: now, result: "Three sections, no setup steps"),
         ].compactMap { $0 }.filter { _ in showSubagents }
     }
 
@@ -76,6 +94,14 @@ struct BackgroundWorkPillGalleryView: View {
                 SessionChatBackgroundWorkList(
                     subagents: subagents,
                     shells: shells,
+                    tab: Binding(
+                        get: { tab },
+                        set: { selected in
+                            tab = selected
+                            if selected == .done { doneSeen = true }
+                        }
+                    ),
+                    doneUnseen: showSubagents && !doneSeen,
                     onOpen: { subagent in
                         log = "Opened \(subagent.agentName) · \(subagent.title ?? "")"
                     },
@@ -115,7 +141,10 @@ struct BackgroundWorkPillGalleryView: View {
         _ status: SessionChatSubagentStatus,
         startedAgoMs: Int64,
         now: Int64,
-        finishedAgoMs: Int64? = nil
+        finishedAgoMs: Int64? = nil,
+        currentStep: String? = nil,
+        toolCount: Int? = nil,
+        result: String? = nil
     ) -> SessionChatSubagent {
         SessionChatSubagent(
             id: id,
@@ -124,7 +153,11 @@ struct BackgroundWorkPillGalleryView: View {
             title: title,
             status: status,
             startedAtMs: now - startedAgoMs,
-            finishedAtMs: finishedAgoMs.map { now - $0 }
+            finishedAtMs: finishedAgoMs.map { now - $0 },
+            agentTag: SessionChatBackgroundWork.agentTag(agent),
+            currentStep: currentStep,
+            toolCount: toolCount,
+            result: result
         )
     }
 }

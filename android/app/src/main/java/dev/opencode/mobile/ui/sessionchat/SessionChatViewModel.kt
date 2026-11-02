@@ -354,6 +354,15 @@ class SessionChatViewModel
         private var stepEntryDebounce = SessionChatStepEntryDebounce()
         private var activityCardFooters: Map<String, SessionChatActivityFooter> = emptyMap()
 
+        /**
+         * Done rows of the background work panel the user has seen (#966); null until the first
+         * rows of the open session, which count as seen.
+         */
+        private var seenDoneSubagentIds: Set<String>? = null
+
+        /** The background work panel shows its Done tab, so finishes are seen as they land. */
+        private var backgroundWorkDoneVisible = false
+
         /** When subagents seen working finished live, keyed by tool part id, for rows with no server time. */
         private var subagentFinishTimes: Map<String, Long> = emptyMap()
 
@@ -553,6 +562,7 @@ class SessionChatViewModel
             unfoldedStepRails = emptySet()
             imageViewer.dismiss()
             resetActivityCards()
+            resetBackgroundWorkSeen()
             resetChipTimelineIntro()
             resetWorkingFooter()
             worktreeMove.reset()
@@ -653,6 +663,7 @@ class SessionChatViewModel
             unfoldedStepRails = emptySet()
             imageViewer.dismiss()
             resetActivityCards()
+            resetBackgroundWorkSeen()
             resetChipTimelineIntro()
             resetWorkingFooter()
             worktreeMove.reset()
@@ -747,6 +758,21 @@ class SessionChatViewModel
         fun openShellOutput(id: String) {
             logAction(ProductAnalytics.Action.CHAT_OPEN_SHELL_OUTPUT, screenId = ProductAnalytics.Screen.SESSION_SUBAGENTS)
             shells.open(id)
+        }
+
+        /**
+         * The background work panel shows (or stops showing) its Done tab (#966). While it
+         * shows, every finished row counts as seen and the tab's dot clears.
+         */
+        fun setBackgroundWorkDoneVisible(visible: Boolean) {
+            if (backgroundWorkDoneVisible == visible) return
+            backgroundWorkDoneVisible = visible
+            if (visible) publishUiState()
+        }
+
+        private fun resetBackgroundWorkSeen() {
+            seenDoneSubagentIds = null
+            backgroundWorkDoneVisible = false
         }
 
         fun closeShellOutput() {
@@ -2295,6 +2321,8 @@ class SessionChatViewModel
                 )
             schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
             val subagents = resolveSubagents(inboxSnapshot, infoState)
+            val seenDone = SessionChatBackgroundWork.seenDoneIds(seenDoneSubagentIds, subagents, backgroundWorkDoneVisible)
+            seenDoneSubagentIds = seenDone
             val shellsState = shells.state.value
             return SessionChatUiState(
                 sessionId = infoState.sessionId,
@@ -2331,6 +2359,7 @@ class SessionChatViewModel
                 shells = shellsState.shells,
                 shellOutput = shellsState.output,
                 backgroundWorkPill = SessionChatBackgroundWork.pill(subagents, shellsState.shells),
+                backgroundWorkDoneUnseen = SessionChatBackgroundWork.hasUnseenDone(subagents, seenDone),
                 connectionStatus = infoState.connectionStatus,
                 canMutate = infoState.canMutate,
                 composerEnabled = infoState.composerEnabled,

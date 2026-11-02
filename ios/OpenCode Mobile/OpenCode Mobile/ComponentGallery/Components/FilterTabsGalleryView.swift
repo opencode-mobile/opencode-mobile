@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FilterTabsGalleryView: View {
     @State private var selectedTabId = "all"
+    @State private var segmentedTabId = "running"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -15,6 +16,22 @@ struct FilterTabsGalleryView: View {
                 selectedTabId: selectedTabId,
                 onTabSelected: { selectedTabId = $0 }
             )
+
+            Text("Segmented: equal-width views of one list. A dot marks something new since the tab was last viewed.")
+                .font(OpenCodeTypography.bodySecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
+                .padding(.horizontal, 16)
+
+            OpenCodeFilterTabs(
+                tabs: [
+                    OpenCodeFilterTab(id: "running", title: "Running", count: 2),
+                    OpenCodeFilterTab(id: "done", title: "Done", count: 5, unseen: segmentedTabId != "done"),
+                ],
+                selectedTabId: segmentedTabId,
+                style: .segmented,
+                onTabSelected: { segmentedTabId = $0 }
+            )
+            .padding(.horizontal, 16)
             Spacer()
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

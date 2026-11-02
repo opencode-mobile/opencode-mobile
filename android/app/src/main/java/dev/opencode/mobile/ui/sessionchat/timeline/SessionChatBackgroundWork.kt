@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
 import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.ToolStartTime
 import dev.opencode.mobile.domain.message.ToolStatus
@@ -8,10 +9,13 @@ import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.shell.AgentShell
+import dev.opencode.mobile.domain.time.RelativeTimeFormatting
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
 
 /** Where one subagent of the open session is. */
 enum class SessionChatSubagentStatus {
@@ -41,6 +45,14 @@ data class SessionChatSubagent(
     val startedAtMs: Long?,
     /** When it finished: server time when known, else when the app saw it finish live; null when unknown. */
     val finishedAtMs: Long?,
+    /** The agent as a small row tag; null for the default `general` agent or an unknown one. */
+    val agentTag: String? = null,
+    /** The latest child tool call ("Reading format.ts"); null when the server sends no child tool summary. */
+    val currentStep: String? = null,
+    /** Child tool calls so far; null when the server sends no child tool summary. */
+    val toolCount: Int? = null,
+    /** Done: the first line of the result. Failed or stopped: the reason. Null when unknown. */
+    val result: String? = null,
 ) {
     val isActive: Boolean
         get() = status == SessionChatSubagentStatus.Running || status == SessionChatSubagentStatus.WaitingForInput
@@ -48,13 +60,49 @@ data class SessionChatSubagent(
     val letter: String
         get() = SessionChatChildSessionElapsed.letter(agentName)
 
-    /** Live time while it works, the frozen run time once done, null when unknown. */
+    /**
+     * Live time while it works, the real run time once done; null when unknown or under a
+     * second (a call that failed at once never ran), so a done row never reads `0:00`.
+     */
     fun elapsed(nowMs: Long): String? {
         if (isActive) return SessionChatChildSessionElapsed.format(startedAtMs, nowMs)
-        val finished = finishedAtMs ?: return null
-        return SessionChatChildSessionElapsed.format(startedAtMs, finished)
+        val start = ToolStartTime.normalizeEpochMs(startedAtMs) ?: return null
+        val finished = ToolStartTime.normalizeEpochMs(finishedAtMs) ?: return null
+        if (finished - start < 1_000) return null
+        return SessionChatChildSessionElapsed.format(start, finished)
+    }
+
+    /** When a finished subagent ended: "now", "4m ago"; null while active or when unknown. */
+    fun finishedAgo(nowMs: Long): String? {
+        if (isActive) return null
+        val finished = ToolStartTime.normalizeEpochMs(finishedAtMs) ?: return null
+        return RelativeTimeFormatting.format(finished, nowMs)
     }
 }
+
+/** What a background work panel row says, in product words. */
+data class SessionChatSubagentRowText(
+    /** The task title; the agent name when the call named no task. */
+    val title: String,
+    val tag: String?,
+    /** Running: the current step ("Waiting for input" while it waits). Done: the result or failure reason. */
+    val detail: String?,
+    /** Running: "12 tools". Done: when it finished, "4m ago". */
+    val detailCaption: String?,
+    /** Running: the live timer. Done: the real run time; null when unknown. */
+    val time: String?,
+)
+
+/** A tab of the background work panel. The panel opens on [Running]. */
+enum class SessionChatBackgroundWorkTab { Running, Done }
+
+/** The background work panel split into its two tabs. */
+data class SessionChatBackgroundWorkTabs(
+    /** Waiting, then running subagents, each in spawn order. */
+    val running: List<SessionChatSubagent>,
+    /** Finished, failed and stopped subagents, newest first. */
+    val done: List<SessionChatSubagent>,
+)
 
 /** What the background work pill says. */
 data class SessionChatBackgroundWorkPill(
@@ -131,6 +179,7 @@ object SessionChatBackgroundWork {
                     }
                 val isActive =
                     status == SessionChatSubagentStatus.Running || status == SessionChatSubagentStatus.WaitingForInput
+                val summary = childToolSummary(tool)
                 SessionChatSubagent(
                     id = partId,
                     childSessionId = childId,
@@ -139,6 +188,10 @@ object SessionChatBackgroundWork {
                     status = status,
                     startedAtMs = tool.timeStartEpochMs,
                     finishedAtMs = if (isActive) null else finishTime(tool, session, localFinishedAtMs[partId]),
+                    agentTag = agentTag(knownAgentName(tool, session)),
+                    currentStep = summary?.currentStep.takeIf { isActive },
+                    toolCount = summary?.count,
+                    result = if (isActive) null else result(tool, status),
                 )
             }.sortedBy { rank(it.status) }
     }
@@ -146,20 +199,136 @@ object SessionChatBackgroundWork {
     /**
      * Server end time first. A background call settles at spawn while its child keeps
      * working, so its own end time is skipped; the child session's last update stands in.
-     * A finish the app saw live is the last resort. Times before the start are ignored.
+     * A finish the app saw live is the last resort. Times at or before the start are ignored,
+     * so a settle stamped with the start time never reads as a `0:00` run.
      */
     fun finishTime(
         tool: MessagePart.Tool,
         session: Session?,
         local: Long?,
     ): Long? {
-        val start = ToolStartTime.normalizeEpochMs(tool.timeStartEpochMs) ?: 0L
+        val start = ToolStartTime.normalizeEpochMs(tool.timeStartEpochMs)
         return listOf(
             if (isBackground(tool)) null else tool.timeEndEpochMs,
             session?.updatedAtEpochMs,
             local,
         ).mapNotNull { ToolStartTime.normalizeEpochMs(it) }
-            .firstOrNull { it >= start }
+            .firstOrNull { start == null || it > start }
+    }
+
+    /**
+     * The panel tabs: Running holds waiting and running subagents in panel order, Done the
+     * finished, failed and stopped ones, newest first (unknown finish times last, latest
+     * spawned first among them).
+     */
+    fun tabs(subagents: List<SessionChatSubagent>): SessionChatBackgroundWorkTabs {
+        val done =
+            subagents
+                .withIndex()
+                .filter { !it.value.isActive }
+                .sortedWith(
+                    compareByDescending<IndexedValue<SessionChatSubagent>> {
+                        ToolStartTime.normalizeEpochMs(it.value.finishedAtMs) ?: Long.MIN_VALUE
+                    }.thenByDescending { it.index },
+                ).map { it.value }
+        return SessionChatBackgroundWorkTabs(running = subagents.filter { it.isActive }, done = done)
+    }
+
+    /**
+     * Done rows the user has seen, for the Done tab's dot. The first rows of an open Session
+     * Chat count as seen (null until any row shows), and so does everything while the Done
+     * tab is on screen ([viewingDone]). A row that went back to work leaves the set, so its
+     * next finish dots again.
+     */
+    fun seenDoneIds(
+        previous: Set<String>?,
+        subagents: List<SessionChatSubagent>,
+        viewingDone: Boolean,
+    ): Set<String>? {
+        if (previous == null && subagents.isEmpty()) return null
+        val doneIds = subagents.filterNot { it.isActive }.mapTo(mutableSetOf()) { it.id }
+        if (previous == null || viewingDone) return doneIds
+        return previous.intersect(doneIds)
+    }
+
+    /** Whether a subagent finished since the Done tab was last viewed. */
+    fun hasUnseenDone(
+        subagents: List<SessionChatSubagent>,
+        seenDoneIds: Set<String>?,
+    ): Boolean = seenDoneIds != null && subagents.any { !it.isActive && it.id !in seenDoneIds }
+
+    /** The row copy for [subagent] at [nowMs]. Bits the server did not send stay null. */
+    fun rowText(
+        subagent: SessionChatSubagent,
+        nowMs: Long,
+    ): SessionChatSubagentRowText {
+        val title = subagent.title?.takeIf { it.isNotBlank() } ?: subagent.agentName
+        val time = subagent.elapsed(nowMs)
+        if (!subagent.isActive) {
+            return SessionChatSubagentRowText(title, subagent.agentTag, subagent.result, subagent.finishedAgo(nowMs), time)
+        }
+        val detail = if (subagent.status == SessionChatSubagentStatus.WaitingForInput) WAITING_DETAIL else subagent.currentStep
+        return SessionChatSubagentRowText(title, subagent.agentTag, detail, subagent.toolCount?.let(::toolCountLabel), time)
+    }
+
+    /** "1 tool", "12 tools". */
+    fun toolCountLabel(count: Int): String = if (count == 1) "1 tool" else "$count tools"
+
+    /** The agent tag rule: shown only for a named agent other than the default `general`. */
+    fun agentTag(agentName: String?): String? = agentName?.trim()?.takeIf { it.isNotEmpty() && !it.equals(DEFAULT_AGENT, ignoreCase = true) }
+
+    /**
+     * Done: the first line of the task output (v1 `<task_result>`, v2 `<subagent>` body), or
+     * none for a background call, whose output only says it started. Failed or stopped: the
+     * error without its `Subagent failed (task_id: …):` lead, else "Stopped".
+     */
+    fun result(
+        tool: MessagePart.Tool,
+        status: SessionChatSubagentStatus,
+    ): String? =
+        when (status) {
+            SessionChatSubagentStatus.Done -> if (isBackground(tool)) null else SessionChatSubagentResult.firstLine(tool.output)
+            SessionChatSubagentStatus.Failed,
+            SessionChatSubagentStatus.Stopped,
+            ->
+                SessionChatSubagentResult.reason(tool.error)
+                    ?: if (status == SessionChatSubagentStatus.Stopped) STOPPED_REASON else null
+            SessionChatSubagentStatus.Running,
+            SessionChatSubagentStatus.WaitingForInput,
+            -> null
+        }
+
+    /**
+     * The child tool calls a task part reports in `metadata.summary` (classic v1 up to 1.1.x
+     * sends the child's tool parts there; later v1 and v2 send none): the count and the
+     * latest call as a step title. Null when the part carries no summary.
+     */
+    fun childToolSummary(tool: MessagePart.Tool): SessionChatChildToolSummary? {
+        val summary = tool.metadata?.get("summary") as? JsonArray ?: return null
+        val calls =
+            summary.mapIndexedNotNull { index, element ->
+                val part = runCatching { element.jsonObject }.getOrNull() ?: return@mapIndexedNotNull null
+                val state = part["state"] as? JsonObject
+                val name = string(part, "tool") ?: return@mapIndexedNotNull null
+                MessagePart.Tool(
+                    toolName = name,
+                    status =
+                        when (string(state, "status")) {
+                            "pending" -> ToolStatus.Pending
+                            "running" -> ToolStatus.Running
+                            "error" -> ToolStatus.Error
+                            else -> ToolStatus.Completed
+                        },
+                    title = string(state, "title"),
+                    input = state?.get("input") as? JsonObject,
+                    id = string(part, "id") ?: "summary-$index",
+                )
+            }
+        if (calls.isEmpty()) return null
+        // The activity card's rule: the latest running call's running title, else the last call.
+        val activity = SessionChatActivityCard.childActivity(listOf(Message(id = "summary", role = MessageRole.Assistant, text = "", parts = calls)))
+        val step = activity.currentAction ?: activity.steps.lastOrNull()?.title
+        return SessionChatChildToolSummary(count = calls.size, currentStep = step?.takeIf { it.isNotBlank() })
     }
 
     /**
@@ -308,18 +477,26 @@ object SessionChatBackgroundWork {
     private fun agentName(
         tool: MessagePart.Tool,
         session: Session?,
-    ): String =
+    ): String = knownAgentName(tool, session) ?: if (tool.toolName.equals("subagent", ignoreCase = true)) "General" else "Task"
+
+    private fun knownAgentName(
+        tool: MessagePart.Tool,
+        session: Session?,
+    ): String? =
         string(tool.input, "agent")
             ?: string(tool.input, "subagent_type")
             ?: string(tool.metadata, "agent")
             ?: session?.agentName
             ?: session?.let { InboxRequestAttribution.agentName(fromTitle = it.title) }
-            ?: if (tool.toolName.equals("subagent", ignoreCase = true)) "General" else "Task"
 
     private fun isBackground(tool: MessagePart.Tool): Boolean {
         val value = tool.metadata?.get("background") as? JsonPrimitive ?: return false
         return value.booleanOrNull ?: (value.contentOrNull?.let { it.equals("true", ignoreCase = true) || it == "1" } ?: false)
     }
+
+    private const val DEFAULT_AGENT = "general"
+    private const val STOPPED_REASON = "Stopped"
+    private const val WAITING_DETAIL = "Waiting for input"
 
     private fun childSessionId(tool: MessagePart.Tool): String? = string(tool.metadata, "sessionID") ?: string(tool.metadata, "sessionId")
 
@@ -327,4 +504,44 @@ object SessionChatBackgroundWork {
         json: JsonObject?,
         key: String,
     ): String? = (json?.get(key) as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull?.takeIf { it.isNotEmpty() }
+}
+
+/** What a task part says about its child's tool calls: how many, and the latest as a step title. */
+data class SessionChatChildToolSummary(
+    val count: Int,
+    val currentStep: String?,
+)
+
+/** Result and failure lines of a subagent's task part. */
+object SessionChatSubagentResult {
+    /**
+     * First meaningful line of a task output: inside `<task_result>` or `<task_error>` when
+     * present, skipping the `task_id:` header, wrapper tags such as `<subagent sessionID="…">`
+     * and Markdown markers.
+     */
+    fun firstLine(output: String?): String? {
+        val text = output?.takeIf { it.isNotBlank() } ?: return null
+        val body =
+            listOf("task_result", "task_error").firstNotNullOfOrNull { tag ->
+                text.takeIf { "<$tag>" in it }?.substringAfter("<$tag>")?.substringBefore("</$tag>")
+            } ?: text
+        return body
+            .lineSequence()
+            .map { it.trim().trimStart('#', '*', '-', ' ').trimEnd('*') }
+            .firstOrNull { it.isNotEmpty() && !it.startsWith("task_id:") && !it.startsWith("<") }
+    }
+
+    /**
+     * A failure as one line: "Subagent failed (task_id: ses_1): Rate limited" reads "Rate
+     * limited", and "Subagent cancelled (sessionID: ses_1)" reads "Subagent cancelled".
+     */
+    fun reason(error: String?): String? {
+        val line = firstLine(error) ?: return null
+        val failed = FAILED_PREFIX.find(line)
+        if (failed != null) return line.substring(failed.range.last + 1).trim().takeIf { it.isNotEmpty() } ?: line
+        return line.replace(SESSION_REFERENCE, "").trim().takeIf { it.isNotEmpty() }
+    }
+
+    private val FAILED_PREFIX = Regex("""^Subagent failed \((?:task_id|sessionID): [^)]*\):""")
+    private val SESSION_REFERENCE = Regex("""\s*\((?:task_id|sessionID): [^)]*\)""")
 }

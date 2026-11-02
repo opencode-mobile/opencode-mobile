@@ -293,9 +293,13 @@ enum PlaygroundContent {
         description: String,
         _ status: ToolStatus,
         start: Int64,
-        output: String? = nil
+        output: String? = nil,
+        childTools: [AnyCodable] = []
     ) -> MessagePart {
-        tool(
+        var metadata: [String: AnyCodable] = ["sessionId": .string(child)]
+        // Classic v1 lists the child's tool calls here (#966).
+        if !childTools.isEmpty { metadata["summary"] = .array(childTools) }
+        return tool(
             id, "task", status,
             start: start,
             input: [
@@ -304,9 +308,21 @@ enum PlaygroundContent {
                 "subagent_type": .string(agent),
             ],
             output: output,
-            metadata: ["sessionId": .string(child)],
+            metadata: metadata,
             title: description
         )
+    }
+
+    /// One child tool call in a task's `metadata.summary`, as classic v1 reports it.
+    static func childToolCall(_ id: String, _ tool: String, input: [String: AnyCodable], running: Bool = false) -> AnyCodable {
+        .dictionary([
+            "id": .string(id),
+            "tool": .string(tool),
+            "state": .dictionary([
+                "status": .string(running ? "running" : "completed"),
+                "input": .dictionary(input),
+            ]),
+        ])
     }
 
     static func image(_ id: String, _ name: String, _ color: Int) -> FilePart {

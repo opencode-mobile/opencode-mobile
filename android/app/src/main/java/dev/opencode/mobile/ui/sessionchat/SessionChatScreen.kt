@@ -1626,6 +1626,8 @@ private fun SessionChatScreenBody(
                 )
             },
             onDismiss = { showSubagentsSheet = false },
+            doneUnseen = uiState.backgroundWorkDoneUnseen,
+            onDoneVisibleChange = viewModel::setBackgroundWorkDoneVisible,
         )
 
         SessionChatShellOutputSheet(

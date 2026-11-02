@@ -319,6 +319,8 @@ struct SessionChatUiState: Equatable {
     var subagents: [SessionChatSubagent] = []
     /// The background work pill; nil when no subagent or shell works or waits.
     var backgroundWorkPill: SessionChatBackgroundWorkPill? = nil
+    /// A subagent finished since the background work panel's Done tab was last viewed (#966).
+    var backgroundWorkDoneUnseen: Bool = false
     /// Running shells of this session, in start order: the panel's Shells section.
     var shells: [AgentShell] = []
     /// The open shell output sheet; nil when closed.

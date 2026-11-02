@@ -286,12 +286,19 @@ enum PlaygroundScenarios {
             C.subagentTask(
                 "pg-audit-t1", child: childCheckout, agent: "explore", description: "Audit the checkout flow",
                 checkoutDone ? .completed : .running, start: start + replyAfterMs + 2_000,
-                output: checkoutDone ? "Checkout is fine: one coupon, applied after the member discount." : nil
+                output: checkoutDone ? "Checkout is fine: one coupon, applied after the member discount." : nil,
+                childTools: [
+                    C.childToolCall("pg-audit-t1-c1", "read", input: ["filePath": .string("src/checkout.ts")]),
+                    C.childToolCall("pg-audit-t1-c2", "grep", input: ["pattern": .string("applyCoupon")], running: !checkoutDone),
+                ]
             ),
             C.subagentTask(
                 "pg-audit-t2", child: childCart, agent: "general", description: "Audit the cart totals",
                 cartDone ? .completed : .running, start: start + replyAfterMs + 2_500,
-                output: cartDone ? "Cart totals round once, at the end. No drift found." : nil
+                output: cartDone ? "Cart totals round once, at the end. No drift found." : nil,
+                childTools: [
+                    C.childToolCall("pg-audit-t2-c1", "read", input: ["filePath": .string("src/cart.ts")], running: !cartDone),
+                ]
             ),
         ]
         if done { parts.append(C.text("pg-audit-x2", "Both audits are done. Nothing to fix.")) }
