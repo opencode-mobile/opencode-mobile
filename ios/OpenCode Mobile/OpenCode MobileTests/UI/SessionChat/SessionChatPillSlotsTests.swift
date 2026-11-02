@@ -39,7 +39,7 @@ struct SessionChatPillSlotsTests {
         #expect(ranks == ranks.sorted())
         #expect(SessionChatActivityItem.answerQuestion.priority == .needsInput)
         #expect(SessionChatActivityItem.sideQuestionsFailed(count: 1).priority == .error)
-        #expect(SessionChatActivityItem.syncing(label: "Syncing").priority == .running)
+        #expect(SessionChatActivityItem.sideQuestionsRunning(count: 1).priority == .running)
     }
 
     // MARK: Background work (subagents)
@@ -100,13 +100,13 @@ struct SessionChatPillSlotsTests {
 
     @Test func equalPrioritiesKeepTheCallersOrder() {
         let slot = SessionChatPillSlots.activity(
-            items: [.sideQuestionsRunning(count: 2), .syncing(label: "Syncing")],
+            items: [.sideQuestionsRunning(count: 2), .subagents(runningSubagents)],
             keyboardVisible: false,
             now: now
         )
 
         #expect(slot.primary == .sideQuestionsRunning(count: 2))
-        #expect(slot.overflow == [.syncing(label: "Syncing")])
+        #expect(slot.overflow == [.subagents(runningSubagents)])
     }
 
     @Test func singleItemHasNoOverflowButton() {
@@ -219,6 +219,71 @@ struct SessionChatPillSlotsTests {
         #expect(SessionChatPillSlots.navigation(awayFromEnd: false, newCount: 3, keyboardVisible: false) == nil)
         #expect(SessionChatPillSlots.navigation(awayFromEnd: true, newCount: 0, keyboardVisible: false) == .scrollToEnd(newCount: 0))
         #expect(SessionChatPillSlots.navigation(awayFromEnd: true, newCount: 3, keyboardVisible: false) == .scrollToEnd(newCount: 3))
+    }
+
+    @Test func navigationAlwaysCarriesALabel() {
+        #expect(SessionChatNavigationPill.scrollToEnd(newCount: 0).label == "Scroll to end")
+        #expect(SessionChatNavigationPill.scrollToEnd(newCount: 3).label == "3 new")
+        #expect(SessionChatNavigationPill.scrollToEnd(newCount: 0).accessibilityLabel == "Scroll to end")
+        #expect(SessionChatNavigationPill.scrollToEnd(newCount: 1).accessibilityLabel == "Scroll to end, 1 new message")
+        #expect(SessionChatNavigationPill.scrollToEnd(newCount: 2).accessibilityLabel == "Scroll to end, 2 new messages")
+    }
+
+    // MARK: Away from the end
+
+    @Test func awayFromTheEndFoldsEveryItemIntoOneRoundPill() {
+        let items: [SessionChatActivityItem] = [.queued(count: 1), .reviewPermission, .sideQuestionsRunning(count: 1)]
+        let slot = SessionChatPillSlots.activity(items: items, keyboardVisible: false, awayFromEnd: true, now: now)
+
+        #expect(slot.isCollapsed)
+        #expect(slot.primary == .reviewPermission)
+        #expect(!slot.showsOverflowButton)
+        // The stack lists every item, primary first.
+        #expect(slot.allItems == [.reviewPermission, .sideQuestionsRunning(count: 1), .queued(count: 1)])
+    }
+
+    @Test func atTheEndTheSlotIsNotCollapsed() {
+        let slot = SessionChatPillSlots.activity(
+            items: [.queued(count: 1), .reviewPermission], keyboardVisible: false, awayFromEnd: false, now: now
+        )
+        #expect(!slot.isCollapsed)
+        #expect(slot.showsOverflowButton)
+    }
+
+    @Test func keyboardKeepsTheKeyboardRulesInsteadOfCollapsing() {
+        #expect(!SessionChatPillSlots.collapsesActivity(awayFromEnd: true, keyboardVisible: true))
+        #expect(SessionChatPillSlots.collapsesActivity(awayFromEnd: true, keyboardVisible: false))
+        #expect(!SessionChatPillSlots.collapsesActivity(awayFromEnd: false, keyboardVisible: false))
+        let slot = SessionChatPillSlots.activity(
+            items: [.queued(count: 1), .sideQuestionsReady(count: 1)], keyboardVisible: true, awayFromEnd: true, now: now
+        )
+        #expect(!slot.isCollapsed)
+        #expect(slot.primaryCompact)
+        #expect(slot.overflow.isEmpty)
+    }
+
+    @Test func nothingToShowNeverCollapses() {
+        #expect(SessionChatPillSlots.activity(items: [], keyboardVisible: false, awayFromEnd: true, now: now) == .empty)
+    }
+
+    // MARK: Syncing
+
+    @Test func syncingShrinksToTheRoundMarkAwayFromTheEndOrWithTheKeyboard() {
+        #expect(!SessionChatPillSlots.syncingIsCompact(awayFromEnd: false, keyboardVisible: false))
+        #expect(SessionChatPillSlots.syncingIsCompact(awayFromEnd: true, keyboardVisible: false))
+        #expect(SessionChatPillSlots.syncingIsCompact(awayFromEnd: false, keyboardVisible: true))
+    }
+
+    // MARK: Reserve
+
+    @Test func reserveIsThePillRowAloneAndNothingElseReservesRoom() {
+        #expect(SessionChatCornerSlotsLayout.reservedHeight(hasActivity: true) == OpenCodeFloatingPill.minHeight)
+        #expect(SessionChatCornerSlotsLayout.reservedHeight(hasActivity: false) == 0)
+        // Composer, gap, pill, gap, last message: the resting end-pin gap (overhang less the
+        // composer gap) plus the reserve leaves exactly one gap above the pill.
+        let gapAbovePill = OpenCodeBottomFade.overhang - SessionChatCornerSlotsLayout.gapAboveComposer
+            + SessionChatCornerSlotsLayout.reservedHeight(hasActivity: true) - OpenCodeFloatingPill.minHeight
+        #expect(gapAbovePill == SessionChatActivitySlotView.spacing)
     }
 
     @Test func newMessagesCountOnlyRowsAfterTheBaseline() {

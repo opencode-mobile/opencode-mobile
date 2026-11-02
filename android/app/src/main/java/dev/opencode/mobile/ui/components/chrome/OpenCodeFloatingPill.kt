@@ -72,6 +72,7 @@ private val FloatingPillIconSpacing = 6.dp
 private val FloatingPillShadowElevation = 4.dp
 private val FloatingPillCloseSlotWidth = 28.dp
 private val FloatingPillCloseTouchTarget = 48.dp
+private val FloatingPillBadgeSize = 16.dp
 
 // Centring the 16 dp icon in the 28 dp slot puts it 6 dp in; the btw pill draws it 2 dp in.
 private val FloatingPillCloseIconShift = 4.dp
@@ -223,7 +224,8 @@ internal fun floatingPillCloseDescription(
  * Shared floating pill for Session Chat: one look, five layouts, five states.
  * Without [onClick] the pill is a status, not a button. [compact] shrinks it to its round
  * mark (icon, spinner, dot or check) and hides the text and ✕, still speaking the full
- * label. [accessibilityLabel] replaces the default "label, state" speech.
+ * label. [accessibilityLabel] replaces the default "label, state" speech. [badgeCount], when above 1, adds a small count
+ * badge on the pill's top corner (a round pill standing for several items).
  */
 @Composable
 fun OpenCodeFloatingPill(
@@ -232,6 +234,7 @@ fun OpenCodeFloatingPill(
     modifier: Modifier = Modifier,
     compact: Boolean = false,
     accessibilityLabel: String? = null,
+    badgeCount: Int = 0,
     onClick: (() -> Unit)? = null,
     onClose: (() -> Unit)? = null,
 ) {
@@ -251,7 +254,9 @@ fun OpenCodeFloatingPill(
     // The surface sits behind the content instead of wrapping it, so its clip doesn't cut
     // the ✕'s 48 dp touch target down to the 36 dp pill.
     Box(
-        modifier = modifier.defaultMinSize(minWidth = if (round) FloatingPillMinHeight else 0.dp, minHeight = FloatingPillMinHeight),
+        modifier =
+            modifier
+                .defaultMinSize(minWidth = if (round) FloatingPillMinHeight else 0.dp, minHeight = FloatingPillMinHeight),
         contentAlignment = Alignment.Center,
     ) {
         Surface(
@@ -263,6 +268,7 @@ fun OpenCodeFloatingPill(
             shadowElevation = FloatingPillShadowElevation,
         ) {}
         CompositionLocalProvider(LocalContentColor provides contentColor) {
+            // Unbounded, so a width that is still animating crops the content instead of squeezing it.
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Row(
                     modifier =
@@ -303,6 +309,36 @@ fun OpenCodeFloatingPill(
                 }
             }
         }
+        if (badgeCount > 1) {
+            FloatingPillBadge(
+                count = badgeCount,
+                modifier = Modifier.align(Alignment.TopEnd).offset(x = 4.dp, y = (-4).dp),
+            )
+        }
+    }
+}
+
+/** Small count badge on a round pill's corner; speech comes from the pill's own label. */
+@Composable
+private fun FloatingPillBadge(
+    count: Int,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .defaultMinSize(minWidth = FloatingPillBadgeSize, minHeight = FloatingPillBadgeSize)
+                .background(MaterialTheme.colorScheme.primary, CircleShape)
+                .padding(horizontal = 4.dp)
+                .clearAndSetSemantics {},
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = count.toString(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onPrimary,
+            maxLines = 1,
+        )
     }
 }
 

@@ -79,14 +79,6 @@ sealed interface SessionChatActivityItem {
         override val priority = SessionChatActivityPriority.Running
     }
 
-    /** Cached or catching-up messages waiting for the server. */
-    data class Syncing(
-        val label: String,
-    ) : SessionChatActivityItem {
-        override val id = "syncing"
-        override val priority = SessionChatActivityPriority.Running
-    }
-
     /** Prompts waiting to be sent after the current turn. */
     data class Queued(
         val count: Int,
@@ -106,7 +98,10 @@ sealed interface SessionChatActivityItem {
     }
 }
 
-/** What the bottom-left slot draws: one pill, a "+N" button, and the stack "+N" opens. */
+/**
+ * What the bottom-left slot draws: one pill, a "+N" button, and the stack "+N" opens.
+ * Away from the end it is one round pill ([collapsed]) that opens the whole stack.
+ */
 data class SessionChatActivitySlot(
     val primary: SessionChatActivityItem? = null,
     /** The primary pill shrinks to its round mark (keyboard up, unless it needs input). */
@@ -115,7 +110,15 @@ data class SessionChatActivitySlot(
     val overflow: List<SessionChatActivityItem> = emptyList(),
     /** The "+N" button. Hidden with the keyboard up. */
     val showsOverflowButton: Boolean = false,
-)
+    /**
+     * Away from the end: everything folds into one round pill in [primary]'s state, with a count
+     * badge for more than one item. Tapping it opens the stack of [primary] plus [overflow].
+     */
+    val collapsed: Boolean = false,
+) {
+    /** How many items the round pill stands for. */
+    val itemCount: Int get() = if (primary == null) 0 else 1 + overflow.size
+}
 
 /** A top-left context pill. */
 sealed interface SessionChatContextItem {
@@ -129,7 +132,7 @@ sealed interface SessionChatContextItem {
     ) : SessionChatContextItem
 }
 
-/** The bottom-right navigation pill: a round ↓, or "↓ N new" once messages arrive below. */
+/** The bottom-right navigation pill: "↓ Scroll to end", or "↓ N new" once messages arrive below. */
 data class SessionChatNavigationPill(
     val newCount: Int,
 )
@@ -142,17 +145,22 @@ object SessionChatPillSlots {
     /**
      * Bottom left: highest priority first, the rest behind "+N". Finished items
      * older than the fade drop out. With the keyboard up the pill goes compact
-     * unless it needs input, and "+N" hides.
+     * unless it needs input, and "+N" hides. Away from the end (the scroll-to-end pill shows,
+     * keyboard down) everything folds into one round pill ([SessionChatActivitySlot.collapsed]).
      */
     fun activity(
         items: List<SessionChatActivityItem>,
         keyboardVisible: Boolean,
         nowEpochMs: Long,
+        awayFromEnd: Boolean = false,
     ): SessionChatActivitySlot {
         // sortedBy is stable: equal priorities keep the caller's order.
         val sorted = items.filterNot { isFaded(it, nowEpochMs) }.sortedBy { it.priority }
         val primary = sorted.firstOrNull() ?: return SessionChatActivitySlot()
         val overflow = sorted.drop(1)
+        if (collapsesActivity(awayFromEnd, keyboardVisible)) {
+            return SessionChatActivitySlot(primary = primary, primaryCompact = true, overflow = overflow, collapsed = true)
+        }
         return SessionChatActivitySlot(
             primary = primary,
             primaryCompact = keyboardVisible && primary.priority != SessionChatActivityPriority.NeedsInput,
@@ -160,6 +168,21 @@ object SessionChatPillSlots {
             showsOverflowButton = !keyboardVisible && overflow.isNotEmpty(),
         )
     }
+
+    /** Away from the end with the keyboard down, the left side folds into one round pill. */
+    fun collapsesActivity(
+        awayFromEnd: Boolean,
+        keyboardVisible: Boolean,
+    ): Boolean = awayFromEnd && !keyboardVisible
+
+    /**
+     * Syncing is a normal pill at the end of the chat, and a dot-only circle beside the
+     * scroll-to-end pill or with the keyboard up. It never reserves timeline space.
+     */
+    fun syncingCompact(
+        awayFromEnd: Boolean,
+        keyboardVisible: Boolean,
+    ): Boolean = awayFromEnd || keyboardVisible
 
     fun isFaded(
         item: SessionChatActivityItem,
@@ -201,8 +224,9 @@ object SessionChatPillSlots {
 
     /**
      * Whether the timeline reserves the activity pill row. At the end of the chat it follows
-     * the pill; away from the end it keeps [reserved], so a pill coming or going (Syncing)
-     * never moves the rows the reader is looking at.
+     * the pill; away from the end it keeps [reserved], so a pill coming or going
+     * never moves the rows the reader is looking at. Syncing and scroll-to-end are bottom-right
+     * overlays and never reserve.
      */
     fun reservesActivityRow(
         reserved: Boolean,
@@ -210,7 +234,7 @@ object SessionChatPillSlots {
         pinnedToEnd: Boolean,
     ): Boolean = if (pinnedToEnd) hasActivity else reserved
 
-    /** Bottom right: empty at the end of the chat and with the keyboard up. */
+    /** Bottom right scroll-to-end: empty at the end of the chat and with the keyboard up. */
     fun navigation(
         awayFromEnd: Boolean,
         newCount: Int,

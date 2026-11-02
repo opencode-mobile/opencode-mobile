@@ -1,6 +1,7 @@
 import SwiftUI
 
 /// Bottom-left live activity slot: one pill, a "+N" button, and the stack "+N" springs up.
+/// Away from the end the whole slot is one round pill that opens the stack of every item.
 struct SessionChatActivitySlotView: View {
     let slot: SessionChatActivitySlot
     @Binding var stackOpen: Bool
@@ -9,11 +10,21 @@ struct SessionChatActivitySlotView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// Items the stack lists above the row: the rest behind "+N", or every item behind the round pill.
+    private var stackItems: [SessionChatActivityItem] {
+        if slot.isCollapsed { return slot.allItems }
+        return slot.showsOverflowButton ? slot.overflow : []
+    }
+
+    private var rowTransition: AnyTransition {
+        reduceMotion ? .opacity : .openCodePillRow(gapEdge: .trailing)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: Self.spacing) {
-            if stackOpen, slot.showsOverflowButton {
-                // Lowest priority on top, so the next most urgent sits nearest the pill.
-                ForEach(slot.overflow.reversed()) { item in
+            if stackOpen {
+                // Lowest priority on top, so the most urgent sits nearest the row.
+                ForEach(stackItems.reversed()) { item in
                     pill(item, compact: false)
                         .transition(
                             reduceMotion
@@ -22,30 +33,61 @@ struct SessionChatActivitySlotView: View {
                         )
                 }
             }
-            if let primary = slot.primary {
-                HStack(spacing: Self.spacing) {
-                    pill(primary, compact: slot.primaryCompact)
-                        .id(primary.id)
-                        .transition(.opacity)
-                    if slot.showsOverflowButton {
-                        OpenCodeFloatingPill(
-                            layout: .label("+\(slot.overflow.count)"),
-                            state: .ready,
-                            accessibilityLabel: stackOpen
-                                ? "Hide \(slot.overflow.count) more"
-                                : "Show \(slot.overflow.count) more",
-                            action: { stackOpen.toggle() }
-                        )
-                        .transition(.opacity)
+            HStack(spacing: 0) {
+                if let primary = slot.primary {
+                    if slot.isCollapsed {
+                        summaryPill(primary)
+                            .id("summary")
+                            .transition(rowTransition)
+                    } else {
+                        pill(primary, compact: slot.primaryCompact)
+                            .id(primary.id)
+                            .padding(.trailing, Self.spacing)
+                            .transition(rowTransition)
+                        if slot.showsOverflowButton {
+                            OpenCodeFloatingPill(
+                                layout: .label("+\(slot.overflow.count)"),
+                                state: .ready,
+                                accessibilityLabel: stackOpen
+                                    ? "Hide \(slot.overflow.count) more"
+                                    : "Show \(slot.overflow.count) more",
+                                action: { stackOpen.toggle() }
+                            )
+                            .padding(.trailing, Self.spacing)
+                            .transition(rowTransition)
+                        }
                     }
                 }
             }
         }
         .animation(reduceMotion ? .easeInOut(duration: 0.2) : .spring(response: 0.32, dampingFraction: 0.78), value: stackOpen)
-        .animation(.easeInOut(duration: 0.2), value: slot)
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : OpenCodeFloatingPill.widthAnimation, value: slot)
         .onChange(of: slot.showsOverflowButton) { _, shows in
-            if !shows { stackOpen = false }
+            if !shows, !slot.isCollapsed { stackOpen = false }
         }
+        .onChange(of: slot.isCollapsed) { _, _ in
+            // The reader crossed back or away: the stack belongs to the other mode.
+            stackOpen = false
+        }
+        .onChange(of: slot.allItems.isEmpty) { _, isEmpty in
+            if isEmpty { stackOpen = false }
+        }
+    }
+
+    private func summaryPill(_ primary: SessionChatActivityItem) -> some View {
+        let count = slot.allItems.count
+        let pending: Bool
+        if case .queued = primary { pending = true } else { pending = false }
+        let label = Self.accessibilityLabel(primary)
+        return OpenCodeFloatingPill(
+            layout: .summary(count: count, pending: pending),
+            state: Self.state(primary),
+            accessibilityLabel: stackOpen
+                ? "Hide \(count) activities"
+                : (count > 1 ? "Show \(count) activities. \(label)" : label),
+            action: { stackOpen.toggle() }
+        )
+        .padding(.trailing, Self.spacing)
     }
 
     private func pill(_ item: SessionChatActivityItem, compact: Bool) -> some View {
@@ -82,8 +124,6 @@ struct SessionChatActivitySlotView: View {
             .iconLabel(icon: .check, label: "/btw answer ready" + countSuffix(count))
         case let .sideQuestionsRunning(count):
             .counter(label: "/btw" + countSuffix(count))
-        case let .syncing(label):
-            .counter(label: label)
         case let .queued(count):
             .label("\(count) queued")
         case let .finished(_, label, _):
@@ -105,7 +145,7 @@ struct SessionChatActivitySlotView: View {
         switch item {
         case .reviewPermission, .answerQuestion, .subagents, .requestFailed, .sideQuestionsFailed, .sideQuestionsReady, .queued:
             true
-        case .sideQuestionsRunning, .syncing, .finished: false
+        case .sideQuestionsRunning, .finished: false
         }
     }
 
@@ -132,8 +172,6 @@ struct SessionChatActivitySlotView: View {
             count > 1 ? "\(count) side question answers ready. Open" : "Side question answer ready. Open"
         case let .sideQuestionsRunning(count):
             count > 1 ? "\(count) side questions running" : "Side question running"
-        case let .syncing(label):
-            label
         case let .queued(count):
             count == 1 ? "1 queued prompt. Open Up next" : "\(count) queued prompts. Open Up next"
         case let .finished(_, label, _):
@@ -180,28 +218,50 @@ struct SessionChatContextSlotView: View {
     }
 }
 
-/// Bottom-right navigation: a round ↓, or "↓ N new".
-struct SessionChatNavigationSlotView: View {
-    let pill: SessionChatNavigationPill
-    let action: () -> Void
+/// What the bottom-right slot shows: Syncing, then scroll to end.
+struct SessionChatTrailingSlotState: Equatable {
+    var syncingLabel: String?
+    /// Syncing shrinks to its round mark (reader away from the end, or keyboard up).
+    var syncingCompact: Bool
+    var navigation: SessionChatNavigationPill?
+}
+
+/// Bottom-right slot: Syncing beside "↓ Scroll to end" ("↓ N new" once messages arrive below).
+/// Neither reserves room in the timeline; both are overlays that grow in by width.
+struct SessionChatTrailingSlotView: View {
+    let state: SessionChatTrailingSlotState
+    let onNavigate: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var rowTransition: AnyTransition {
+        reduceMotion ? .opacity : .openCodePillRow(gapEdge: .leading)
+    }
 
     var body: some View {
-        switch pill {
-        case let .scrollToEnd(newCount) where newCount > 0:
-            OpenCodeFloatingPill(
-                layout: .iconLabel(icon: .arrowDownward, label: "\(newCount) new"),
-                state: .ready,
-                accessibilityLabel: newCount == 1 ? "Scroll to end, 1 new message" : "Scroll to end, \(newCount) new messages",
-                action: action
-            )
-        case .scrollToEnd:
-            OpenCodeFloatingPill(
-                layout: .iconOnly(icon: .arrowDownward, accessibilityLabel: "Scroll to end"),
-                state: .ready,
-                accessibilityLabel: "Scroll to end",
-                action: action
-            )
+        HStack(spacing: 0) {
+            if let label = state.syncingLabel {
+                OpenCodeFloatingPill(
+                    layout: .counter(label: label),
+                    state: .live,
+                    compact: state.syncingCompact,
+                    accessibilityLabel: label
+                )
+                .padding(.leading, SessionChatActivitySlotView.spacing)
+                .transition(rowTransition)
+            }
+            if let pill = state.navigation {
+                OpenCodeFloatingPill(
+                    layout: .iconLabel(icon: .arrowDownward, label: pill.label),
+                    state: .ready,
+                    accessibilityLabel: pill.accessibilityLabel,
+                    action: onNavigate
+                )
+                .padding(.leading, SessionChatActivitySlotView.spacing)
+                .transition(rowTransition)
+            }
         }
+        .animation(reduceMotion ? .easeInOut(duration: 0.2) : OpenCodeFloatingPill.widthAnimation, value: state)
     }
 }
 
@@ -227,9 +287,11 @@ enum SessionChatCornerSlotsLayout {
     }
 
     /// Extra timeline clearance while an activity pill shows, so it never covers the last message.
-    /// The navigation pill only shows away from the end, so it reserves nothing.
+    /// The pill row only: the end pin's resting gap (the bottom fade overhang less the gap above
+    /// the composer) already supplies the space between the pill and the last message.
+    /// Syncing and the navigation pill are overlays and reserve nothing.
     static func reservedHeight(hasActivity: Bool) -> CGFloat {
-        hasActivity ? OpenCodeFloatingPill.minHeight + gapAboveComposer : 0
+        hasActivity ? OpenCodeFloatingPill.minHeight : 0
     }
 }
 

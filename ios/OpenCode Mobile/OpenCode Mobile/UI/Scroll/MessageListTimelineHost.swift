@@ -248,6 +248,11 @@ where Item.ID == String {
         // Read before the inset moves the offset: the change itself makes the list
         // look unpinned for a frame.
         let wasPinned = scrollController?.isPinnedToEnd == true
+        // An end-pinned list glides to the new inset (a pill row appearing, the keyboard)
+        // instead of jumping. Away from the end nothing may move, so nothing glides.
+        let rowsBefore = repinIfNeeded && wasPinned && abs(additionalSafeAreaInsets.bottom - inset) > 0.5
+            ? visibleRowOffsets()
+            : nil
         if abs(additionalSafeAreaInsets.bottom - inset) > 0.5 {
             if repinIfNeeded, wasPinned { armRepinOnAdjustedInsetChange() }
             var safe = additionalSafeAreaInsets
@@ -257,10 +262,44 @@ where Item.ID == String {
         updateBottomAlignmentInset()
         guard repinIfNeeded, wasPinned || scrollController?.isPinnedToEnd == true else { return }
         performScrollToEnd(animated: false)
+        if let rowsBefore { glideRows(from: rowsBefore) }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             guard wasPinned || self.scrollController?.isPinnedToEnd == true else { return }
             self.pinToBottomWithoutAnimation()
+        }
+    }
+
+    /// Each visible cell's top in the collection view's own coordinates.
+    private func visibleRowOffsets() -> [(cell: UICollectionViewCell, top: CGFloat)]? {
+        guard hasCompletedInitialScroll, !isSettlingInitialLoad,
+              !UIAccessibility.isReduceMotionEnabled,
+              collectionView.bounds.height > 1
+        else { return nil }
+        let rows = collectionView.visibleCells.map { ($0, $0.frame.minY - collectionView.contentOffset.y) }
+        return rows.isEmpty ? nil : rows
+    }
+
+    /// FLIP: the inset change already moved the rows to their final place. Offset each one back
+    /// to where it was and let a spring carry it home. Only a transform moves, so the offset,
+    /// geometry reports and end-pin logic never see the glide.
+    private func glideRows(from rows: [(cell: UICollectionViewCell, top: CGFloat)]) {
+        var moved: [UICollectionViewCell] = []
+        for (cell, top) in rows {
+            let dy = top - (cell.frame.minY - collectionView.contentOffset.y)
+            guard abs(dy) > 0.5, abs(dy) < collectionView.bounds.height else { continue }
+            cell.transform = CGAffineTransform(translationX: 0, y: dy)
+            moved.append(cell)
+        }
+        guard !moved.isEmpty else { return }
+        UIView.animate(
+            withDuration: MessageListTimelineDefaults.insetGlideDuration,
+            delay: 0,
+            usingSpringWithDamping: MessageListTimelineDefaults.insetGlideDamping,
+            initialSpringVelocity: 0,
+            options: [.allowUserInteraction, .beginFromCurrentState]
+        ) {
+            moved.forEach { $0.transform = .identity }
         }
     }
 

@@ -32,8 +32,6 @@ enum SessionChatActivityItem: Equatable, Identifiable {
     case sideQuestionsReady(count: Int)
     /// `/btw` side questions still running.
     case sideQuestionsRunning(count: Int)
-    /// Cached or catching-up messages waiting for the server.
-    case syncing(label: String)
     /// Prompts waiting to be sent after the current turn.
     case queued(count: Int)
     /// Work that just finished, shown until it fades.
@@ -48,7 +46,6 @@ enum SessionChatActivityItem: Equatable, Identifiable {
         case .sideQuestionsFailed: "btw-failed"
         case .sideQuestionsReady: "btw-ready"
         case .sideQuestionsRunning: "btw-running"
-        case .syncing: "syncing"
         case .queued: "queued"
         case let .finished(id, _, _): "finished:\(id)"
         }
@@ -60,7 +57,7 @@ enum SessionChatActivityItem: Equatable, Identifiable {
         case let .subagents(pill): pill.needsInput ? .needsInput : .running
         case .requestFailed, .sideQuestionsFailed: .error
         case .sideQuestionsReady: .answerReady
-        case .sideQuestionsRunning, .syncing: .running
+        case .sideQuestionsRunning: .running
         case .queued: .queued
         case .finished: .finished
         }
@@ -68,14 +65,19 @@ enum SessionChatActivityItem: Equatable, Identifiable {
 }
 
 /// What the bottom-left slot draws: one pill, a "+N" button, and the stack "+N" opens.
+/// Away from the end everything folds into one round pill (`isCollapsed`) whose stack lists every item.
 struct SessionChatActivitySlot: Equatable {
     var primary: SessionChatActivityItem?
     /// The primary pill shrinks to its round mark (keyboard up, unless it needs input).
     var primaryCompact: Bool
     /// The rest, in priority order. Shown only while the stack is open.
     var overflow: [SessionChatActivityItem]
-    /// The "+N" button. Hidden with the keyboard up.
+    /// The "+N" button. Hidden with the keyboard up and while collapsed.
     var showsOverflowButton: Bool
+    /// The reader is away from the end: one round pill stands for the primary and the rest.
+    var isCollapsed = false
+    /// Every live item in priority order, primary first. Only the collapsed pill's stack lists them all.
+    var allItems: [SessionChatActivityItem] = []
 
     static let empty = SessionChatActivitySlot(primary: nil, primaryCompact: false, overflow: [], showsOverflowButton: false)
 }
@@ -86,9 +88,26 @@ enum SessionChatContextItem: Equatable {
     case branch(SessionChatBranchPillUiState)
 }
 
-/// The bottom-right navigation pill: a round ↓, or "↓ N new" once messages arrive below.
+/// The bottom-right navigation pill: "↓ Scroll to end", or "↓ N new" once messages arrive below.
 enum SessionChatNavigationPill: Equatable {
     case scrollToEnd(newCount: Int)
+
+    var label: String {
+        switch self {
+        case let .scrollToEnd(newCount): newCount > 0 ? "\(newCount) new" : "Scroll to end"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case let .scrollToEnd(newCount):
+            switch newCount {
+            case ..<1: "Scroll to end"
+            case 1: "Scroll to end, 1 new message"
+            default: "Scroll to end, \(newCount) new messages"
+            }
+        }
+    }
 }
 
 /// Pure rules for the three Session Chat corner slots.
@@ -98,10 +117,12 @@ enum SessionChatPillSlots {
 
     /// Bottom left: highest priority first, the rest behind "+N". Finished items
     /// older than the fade drop out. With the keyboard up the pill goes compact
-    /// unless it needs input, and "+N" hides.
+    /// unless it needs input, and "+N" hides. Away from the end (keyboard down)
+    /// everything folds into one round pill.
     static func activity(
         items: [SessionChatActivityItem],
         keyboardVisible: Bool,
+        awayFromEnd: Bool = false,
         now: Date
     ) -> SessionChatActivitySlot {
         let live = items.filter { !isFaded($0, now: now) }
@@ -115,12 +136,26 @@ enum SessionChatPillSlots {
             .map(\.element)
         guard let primary = sorted.first else { return .empty }
         let overflow = Array(sorted.dropFirst())
+        let collapsed = collapsesActivity(awayFromEnd: awayFromEnd, keyboardVisible: keyboardVisible)
         return SessionChatActivitySlot(
             primary: primary,
             primaryCompact: keyboardVisible && primary.priority != .needsInput,
             overflow: keyboardVisible ? [] : overflow,
-            showsOverflowButton: !keyboardVisible && !overflow.isEmpty
+            showsOverflowButton: !keyboardVisible && !collapsed && !overflow.isEmpty,
+            isCollapsed: collapsed,
+            allItems: sorted
         )
+    }
+
+    /// Away from the end with the keyboard down, the activity pills fold into one round pill.
+    static func collapsesActivity(awayFromEnd: Bool, keyboardVisible: Bool) -> Bool {
+        awayFromEnd && !keyboardVisible
+    }
+
+    /// Syncing sits beside the navigation pill. It shrinks to its round mark while that pill
+    /// shows (the reader is away from the end) and with the keyboard up.
+    static func syncingIsCompact(awayFromEnd: Bool, keyboardVisible: Bool) -> Bool {
+        awayFromEnd || keyboardVisible
     }
 
     static func isFaded(_ item: SessionChatActivityItem, now: Date) -> Bool {

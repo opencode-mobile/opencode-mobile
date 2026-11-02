@@ -134,4 +134,19 @@ struct OpenCodeFloatingPillOptionsTests {
             }
         }
     }
+
+    @Test func summary_drawsTheLeadItemsMarkAndBadgesACount() {
+        let layout = OpenCodeFloatingPillLayout.summary(count: 3)
+        #expect(OpenCodeFloatingPillStyle.leading(layout: layout, state: .needsAttention) == .icon(.arrowUpward))
+        #expect(OpenCodeFloatingPillStyle.leading(layout: layout, state: .error) == .glyph("!"))
+        #expect(OpenCodeFloatingPillStyle.leading(layout: layout, state: .ready) == .icon(.check))
+        #expect(OpenCodeFloatingPillStyle.leading(layout: layout, state: .live) == .pulsingDot)
+        #expect(OpenCodeFloatingPillStyle.leading(layout: layout, state: .done) == .doneCheck)
+        #expect(OpenCodeFloatingPillStyle.leading(layout: .summary(count: 1, pending: true), state: .ready) == .glyph("⋯"))
+        #expect(OpenCodeFloatingPillStyle.badgeCount(layout: layout) == 3)
+        #expect(OpenCodeFloatingPillStyle.badgeCount(layout: .summary(count: 1)) == nil)
+        #expect(OpenCodeFloatingPillStyle.badgeCount(layout: .label("+2")) == nil)
+        #expect(layout.isRound)
+        #expect(layout.label == "3 activities")
+    }
 }

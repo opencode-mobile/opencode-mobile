@@ -10,6 +10,7 @@ struct FloatingPillGalleryView: View {
         ("Live counter, waiting item", .counter(label: "general needs input · 2 running", waiting: true)),
         ("Label + close", .closable(label: "Request failed")),
         ("Label only", .label("+3")),
+        ("Summary (round, count badge)", .summary(count: 3)),
     ]
 
     var body: some View {

@@ -15,6 +15,10 @@ enum MessageListTimelineDefaults {
     static let programmaticAnimatedSettleMilliseconds = 250
     static let programmaticImmediateSettleMilliseconds = 50
     static let programmaticPinRetryLimit = 3
+    /// Spring a pinned list takes to its new position when the bottom inset changes
+    /// (a pill row appearing, the keyboard): about half a second with a slight overshoot.
+    static let insetGlideDuration: TimeInterval = 0.48
+    static let insetGlideDamping: CGFloat = 0.72
     /// Hold unanimated layout after the first pin while estimated heights settle.
     static let initialLoadSettlingMilliseconds = 400
 }

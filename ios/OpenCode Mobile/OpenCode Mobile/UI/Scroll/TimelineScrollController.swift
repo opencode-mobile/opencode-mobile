@@ -248,7 +248,7 @@ final class TimelineScrollController {
         shouldShowScrollToEnd = ScrollToEndVisibility.shouldShow(
             scrollDistanceFromBottom: distanceFromBottom,
             viewportHeight: viewportHeight,
-            isUserScrolling: isUserScrolling
+            isShowing: shouldShowScrollToEnd
         )
     }
 }

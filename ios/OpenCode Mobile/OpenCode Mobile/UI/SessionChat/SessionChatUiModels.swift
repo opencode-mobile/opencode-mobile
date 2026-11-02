@@ -307,7 +307,7 @@ struct SessionChatUiState: Equatable {
     var workingIndicatorCollapsed: Bool = false
     /// True while the reserved Working lamp/label is fading through the idle hold.
     var workingIndicatorFading: Bool = false
-    /// Top Syncing pill label while cached or catching-up messages wait for network confirmation.
+    /// Bottom-right Syncing pill label while cached or catching-up messages wait for network confirmation.
     var syncingIndicatorLabel: String? = nil
     var sessionTodos: [SessionTodo] = []
     var sessionTodosVisible: Bool = false
@@ -565,7 +565,7 @@ enum SessionBranchPillVisibility {
     }
 }
 
-/// Timing of the Syncing pill in the bottom-left activity slot.
+/// Timing of the Syncing pill in the bottom-right slot.
 enum SessionChatSyncingPillTiming {
     /// Syncing waits this long before it shows, so a fast catch-up does not flash.
     static let showDelay: Duration = .milliseconds(400)

@@ -134,10 +134,31 @@ struct TimelineScrollControllerTests {
         #expect(!controller.isPinnedToEnd)
         #expect(controller.shouldShowScrollToEnd)
 
+        // A drag no longer hides it: the pills around it would flap on every touch.
         controller.beginUserScrolling()
-        #expect(!controller.shouldShowScrollToEnd)
+        #expect(controller.shouldShowScrollToEnd)
         controller.endUserScrolling()
         #expect(controller.shouldShowScrollToEnd)
+    }
+
+    @Test func pillVisibilityHasHysteresisNearTheRevealThreshold() {
+        let controller = TimelineScrollController(initialMessageCount: 2)
+        func move(to distance: CGFloat) {
+            controller.updateGeometry(distanceFromBottom: distance, viewportHeight: 400, contentHeight: 1_000)
+        }
+        // Viewport 400: the reveal threshold is 120.
+        move(to: 110)
+        #expect(!controller.shouldShowScrollToEnd)
+        move(to: 130)
+        #expect(controller.shouldShowScrollToEnd)
+        // Back inside the threshold but not past the hide margin: still showing.
+        move(to: 100)
+        #expect(controller.shouldShowScrollToEnd)
+        move(to: 80)
+        #expect(!controller.shouldShowScrollToEnd)
+        // And it takes the full threshold to show again.
+        move(to: 110)
+        #expect(!controller.shouldShowScrollToEnd)
     }
 
     @Test func shortContentIsAlwaysPinned() {

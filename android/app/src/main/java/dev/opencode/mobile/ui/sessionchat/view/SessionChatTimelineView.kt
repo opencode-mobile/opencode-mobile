@@ -2,18 +2,18 @@ package dev.opencode.mobile.ui.sessionchat.view
 
 import android.os.SystemClock
 import android.util.Log
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -465,7 +465,6 @@ private fun SessionChatTimelineReadyView(
         buildList {
             latestFailure?.takeIf { it.blockId !in dismissedFailureBlockIds }?.let(::add)
             addAll(activityItems)
-            displayedSyncingLabel?.let { add(SessionChatActivityItem.Syncing(it)) }
         }
     val activitySlot = SessionChatPillSlots.activity(allActivityItems, keyboardVisible, activityClockMs)
     val nextFadeMs = SessionChatPillSlots.nextFadeEpochMs(allActivityItems, activityClockMs)
@@ -478,7 +477,14 @@ private fun SessionChatTimelineReadyView(
     // of the chat: with reverseLayout the reserve is before-content padding, so changing it
     // while scrolled away would move every visible row.
     var reservesActivityRow by remember { mutableStateOf(activitySlot.primary != null) }
-    val listBottomInset = bottomOverlayInset + SessionChatCornerSlotsLayout.reservedHeight(hasActivity = reservesActivityRow)
+    // Springs to the new reserve so a pinned list glides instead of jumping. Away from the end
+    // the reserve never changes (reservesActivityRow), so nothing moves.
+    val animatedReserve by animateDpAsState(
+        targetValue = SessionChatCornerSlotsLayout.reservedHeight(hasActivity = reservesActivityRow),
+        animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
+        label = "sessionChatPillReserve",
+    )
+    val listBottomInset = bottomOverlayInset + animatedReserve.coerceAtLeast(0.dp)
     // Only user drag/fling holds applies — not programmatic auto-follow
     // (listState.isScrollInProgress is true for both; iOS holds on isDragging /
     // isDecelerating / isUserScrolling only).
@@ -762,6 +768,12 @@ private fun SessionChatTimelineReadyView(
                     keyboardVisible = keyboardVisible,
                 )
             }
+        // Away from the end the left side folds into one round pill; Syncing shrinks to a circle.
+        val awayFromEnd = timeline.showScrollToEnd && !hideFloatStack
+        val displayedActivitySlot =
+            SessionChatPillSlots.activity(allActivityItems, keyboardVisible, activityClockMs, awayFromEnd = awayFromEnd)
+        val syncingText = remember { mutableStateOf("Syncing") }
+        displayedSyncingLabel?.let { syncingText.value = it }
         Row(
             modifier =
                 Modifier
@@ -773,7 +785,7 @@ private fun SessionChatTimelineReadyView(
             verticalAlignment = Alignment.Bottom,
         ) {
             SessionChatActivitySlotView(
-                slot = activitySlot,
+                slot = displayedActivitySlot,
                 stackOpen = activityStackOpen,
                 onStackOpenChange = { activityStackOpen = it },
                 onClick = { item ->
@@ -803,22 +815,34 @@ private fun SessionChatTimelineReadyView(
                 },
             )
             Spacer(modifier = Modifier.weight(1f))
-            AnimatedVisibility(visible = navigationPill != null, enter = fadeIn(), exit = fadeOut()) {
-                SessionChatNavigationSlotView(
-                    pill = navigationPill ?: SessionChatNavigationPill(0),
-                    onClick = {
-                        ProductAnalytics.logUserAction(
-                            screenId = ProductAnalytics.Screen.SESSION_CHAT,
-                            actionId = ProductAnalytics.Action.CHAT_SCROLL_TO_END,
-                        )
-                        timeline.scrollController.animateToEnd(
-                            messageCount = timeline.messageCount,
-                            tolerancePx = timeline.autoFollowTolerancePx,
-                            bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
-                            autoFollowEnabled = true,
-                        )
-                    },
-                )
+            // Bottom right, overlay only: Syncing left of scroll-to-end. Neither reserves list space.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(SessionChatCornerSlotsLayout.Spacing),
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                SessionChatPillReveal(visible = displayedSyncingLabel != null) {
+                    SessionChatSyncingSlotView(
+                        label = syncingText.value,
+                        compact = SessionChatPillSlots.syncingCompact(awayFromEnd, keyboardVisible),
+                    )
+                }
+                SessionChatPillReveal(visible = navigationPill != null) {
+                    SessionChatNavigationSlotView(
+                        pill = navigationPill ?: SessionChatNavigationPill(0),
+                        onClick = {
+                            ProductAnalytics.logUserAction(
+                                screenId = ProductAnalytics.Screen.SESSION_CHAT,
+                                actionId = ProductAnalytics.Action.CHAT_SCROLL_TO_END,
+                            )
+                            timeline.scrollController.animateToEnd(
+                                messageCount = timeline.messageCount,
+                                tolerancePx = timeline.autoFollowTolerancePx,
+                                bottomAnchorHeightPx = timeline.bottomAnchorHeightPx,
+                                autoFollowEnabled = true,
+                            )
+                        },
+                    )
+                }
             }
         }
     }
@@ -1814,7 +1838,7 @@ private fun FallbackMessageBubble(
 }
 
 /**
- * Syncing label the activity slot shows, lagging [label] by
+ * Syncing label the bottom-right Syncing pill shows, lagging [label] by
  * [SessionChatSyncingPillTiming.SHOW_DELAY_MS] and held for
  * [SessionChatSyncingPillTiming.MINIMUM_VISIBLE_MS] once shown.
  */
