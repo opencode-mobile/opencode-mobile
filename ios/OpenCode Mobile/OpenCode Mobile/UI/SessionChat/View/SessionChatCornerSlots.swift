@@ -25,7 +25,7 @@ struct SessionChatActivitySlotView: View {
             if stackOpen {
                 // Lowest priority on top, so the most urgent sits nearest the row.
                 ForEach(stackItems.reversed()) { item in
-                    pill(item, compact: false)
+                    pill(item, compact: false, backing: .solid)
                         .transition(
                             reduceMotion
                                 ? .opacity
@@ -90,7 +90,11 @@ struct SessionChatActivitySlotView: View {
         .padding(.trailing, Self.spacing)
     }
 
-    private func pill(_ item: SessionChatActivityItem, compact: Bool) -> some View {
+    private func pill(
+        _ item: SessionChatActivityItem,
+        compact: Bool,
+        backing: OpenCodeFloatingPillBacking = .glass
+    ) -> some View {
         let tap: (() -> Void)? = Self.isTappable(item) ? {
             stackOpen = false
             onTap(item)
@@ -102,7 +106,8 @@ struct SessionChatActivitySlotView: View {
             compact: compact,
             accessibilityLabel: Self.accessibilityLabel(item),
             action: tap,
-            onClose: close
+            onClose: close,
+            backing: backing
         )
     }
 
