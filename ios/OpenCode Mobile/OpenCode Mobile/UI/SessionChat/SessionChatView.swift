@@ -68,6 +68,9 @@ struct SessionChatView: View {
     @State private var bottomSafeAreaInset: CGFloat = 0
     /// Keyboard overlap reported by `keyboardOverlapPadding`. Zero when hidden.
     @State private var keyboardOverlap: CGFloat = 0
+    /// Set while the keyboard moves: the end-pinned timeline glides on the keyboard's
+    /// curve, with the composer, instead of the inset spring's overshoot.
+    @State private var keyboardGlideAnimation: Animation?
     /// Bumped by the Focus Composer keyboard shortcut.
     @State private var composerFocusRequest = 0
     /// False while another screen is pushed over this chat.
@@ -312,7 +315,12 @@ struct SessionChatView: View {
             sessionChatTimelineArea
                 .openCodeReadableColumn()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .keyboardOverlapPadding(overlap: $keyboardOverlap)
+                .keyboardOverlapPadding(overlap: $keyboardOverlap) {
+                    keyboardGlideAnimation = KeyboardOverlap.animation
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                        keyboardGlideAnimation = nil
+                    }
+                }
         }
         .background(OpenCodeColors.backgroundBase)
         .background {
@@ -359,7 +367,9 @@ struct SessionChatView: View {
                         + snackbarOverlayHeight
                         + composerHomeIndicatorLift
                         + keyboardOverlap,
-                    bottomOverlayAnimation: composerMorphing ? OpenCodeSessionComposer.morphAnimation : nil,
+                    bottomOverlayAnimation: composerMorphing
+                        ? OpenCodeSessionComposer.morphAnimation
+                        : keyboardGlideAnimation,
                     activityItems: sessionChatActivityItems,
                     keyboardVisible: keyboardOverlap > 0,
                     onActivityTap: handleActivityTap,
@@ -571,6 +581,11 @@ struct SessionChatView: View {
                     }
                 }
             }
+            // The composer animates its own morph, but its frame comes from here: without
+            // this the frame jumps to the new height and the old content animates inside it
+            // from the top. Animating it here keeps the bottom edge still and grows the top.
+            .animation(OpenCodeSessionComposer.morphAnimation, value: composerKind)
+            .animation(OpenCodeSessionComposer.morphAnimation, value: viewModel.uiState.dictation != nil)
             .padding(.bottom, composerHomeIndicatorLift)
         }
     }

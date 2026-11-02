@@ -17,6 +17,10 @@ enum KeyboardOverlap {
         return overlap(of: keyboardFrame, in: hostFrame)
     }
 
+    /// Close match for the system keyboard's own curve (an overdamped spring, about half a
+    /// second). Chrome that follows the keyboard on this curve moves with it, not behind it.
+    static let animation = Animation.interpolatingSpring(mass: 3, stiffness: 1000, damping: 500, initialVelocity: 0)
+
     static func animationDuration(from notification: Notification) -> Double {
         (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? NSNumber)?
             .doubleValue ?? 0.25
@@ -96,6 +100,9 @@ enum KeyboardOverlap {
 /// indicator when the keyboard is hidden; `overlap` is that keyboard inset.
 struct KeyboardOverlapPaddingModifier: ViewModifier {
     @Binding var overlap: CGFloat
+    /// Called just before `overlap` changes with the keyboard, so callers can move
+    /// dependent content on `KeyboardOverlap.animation` too.
+    var onKeyboardMove: (() -> Void)?
 
     func body(content: Content) -> some View {
         GeometryReader { geometry in
@@ -109,17 +116,23 @@ struct KeyboardOverlapPaddingModifier: ViewModifier {
                 .onReceive(
                     NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
                 ) { notification in
-                    // Instant snap — keyboard-matched animation felt laggy; revisit later.
-                    overlap = KeyboardOverlap.amount(
+                    // Follows the keyboard on its own curve. An ease-out of the reported
+                    // duration ran ahead of it and then dragged, which read as lag.
+                    let amount = KeyboardOverlap.amount(
                         from: notification,
                         in: geometry.frame(in: .global)
                     )
+                    guard abs(amount - overlap) > 0.5 else { return }
+                    onKeyboardMove?()
+                    withAnimation(KeyboardOverlap.animation) { overlap = amount }
                 }
                 .onReceive(
                     NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
                 ) { _ in
                     KeyboardOverlap.noteHidden()
-                    overlap = 0
+                    guard overlap > 0.5 else { return }
+                    onKeyboardMove?()
+                    withAnimation(KeyboardOverlap.animation) { overlap = 0 }
                 }
         }
         .ignoresSafeArea(.keyboard)
@@ -128,7 +141,10 @@ struct KeyboardOverlapPaddingModifier: ViewModifier {
 }
 
 extension View {
-    func keyboardOverlapPadding(overlap: Binding<CGFloat>) -> some View {
-        modifier(KeyboardOverlapPaddingModifier(overlap: overlap))
+    func keyboardOverlapPadding(
+        overlap: Binding<CGFloat>,
+        onKeyboardMove: (() -> Void)? = nil
+    ) -> some View {
+        modifier(KeyboardOverlapPaddingModifier(overlap: overlap, onKeyboardMove: onKeyboardMove))
     }
 }

@@ -282,9 +282,17 @@ where Item.ID == String {
         }
     }
 
+    /// A visible row captured before an inset change: its item, frame on screen, and a
+    /// snapshot that stands in for it if the change scrolls it out of the viewport.
+    private struct GlideRow {
+        let indexPath: IndexPath
+        let frameInViewport: CGRect
+        let snapshot: UIView?
+    }
+
     /// Row positions captured before an inset change, and the adjusted bottom inset they had.
     private struct PendingGlide {
-        let rows: [(cell: UICollectionViewCell, top: CGFloat)]
+        let rows: [GlideRow]
         let adjustedBottom: CGFloat
         /// The curve to glide on; nil uses the inset spring.
         let animation: Animation?
@@ -301,42 +309,71 @@ where Item.ID == String {
         glideRows(from: pending.rows, animation: pending.animation)
     }
 
-    /// Each visible cell's top in the collection view's own coordinates.
-    private func visibleRowOffsets() -> [(cell: UICollectionViewCell, top: CGFloat)]? {
+    /// Each visible row's frame in the collection view's viewport, keyed by item, not cell:
+    /// the inset change can hand a cell to another item.
+    private func visibleRowOffsets() -> [GlideRow]? {
         guard hasCompletedInitialScroll, !isSettlingInitialLoad,
               !UIAccessibility.isReduceMotionEnabled,
               collectionView.bounds.height > 1
         else { return nil }
-        let rows = collectionView.visibleCells.map { ($0, $0.frame.minY - collectionView.contentOffset.y) }
+        let offsetY = collectionView.contentOffset.y
+        let rows = collectionView.indexPathsForVisibleItems.compactMap { indexPath -> GlideRow? in
+            guard let cell = collectionView.cellForItem(at: indexPath) else { return nil }
+            return GlideRow(
+                indexPath: indexPath,
+                frameInViewport: cell.frame.offsetBy(dx: 0, dy: -offsetY),
+                snapshot: cell.snapshotView(afterScreenUpdates: false)
+            )
+        }
         return rows.isEmpty ? nil : rows
     }
 
-    /// FLIP: the inset change already moved the rows to their final place. Offset each one back
-    /// to where it was and let a spring carry it home. Only a transform moves, so the offset,
+    /// FLIP: the inset change already moved the rows to their final place. An end-pinned list
+    /// moves as one block, so every row now on screen (including rows the change revealed)
+    /// starts back by the same distance and glides home together. Rows the change scrolled out
+    /// glide out as snapshots instead of vanishing. Only transforms move, so the offset,
     /// geometry reports and end-pin logic never see the glide.
-    private func glideRows(from rows: [(cell: UICollectionViewCell, top: CGFloat)], animation: Animation?) {
-        var moved: [UICollectionViewCell] = []
-        for (cell, top) in rows {
-            let dy = top - (cell.frame.minY - collectionView.contentOffset.y)
-            guard abs(dy) > 0.5, abs(dy) < collectionView.bounds.height else { continue }
-            cell.contentView.transform = CGAffineTransform(translationX: 0, y: dy)
-            moved.append(cell)
+    private func glideRows(from rows: [GlideRow], animation: Animation?) {
+        // Lay out for the new offset first: until then the visible items are still the old
+        // ones, and rows scrolled out would get no stand-in and blink away.
+        collectionView.layoutIfNeeded()
+        let offsetY = collectionView.contentOffset.y
+        let shifts = rows.compactMap { row -> CGFloat? in
+            guard let cell = collectionView.cellForItem(at: row.indexPath) else { return nil }
+            return row.frameInViewport.minY - (cell.frame.minY - offsetY)
+        }.sorted()
+        guard !shifts.isEmpty else { return }
+        let dy = shifts[shifts.count / 2]
+        guard abs(dy) > 0.5, abs(dy) < collectionView.bounds.height else { return }
+
+        let moved = collectionView.visibleCells
+        moved.forEach { $0.contentView.transform = CGAffineTransform(translationX: 0, y: dy) }
+        let visible = Set(collectionView.indexPathsForVisibleItems)
+        let leaving: [UIView] = rows.compactMap { row in
+            guard !visible.contains(row.indexPath), let snapshot = row.snapshot else { return nil }
+            snapshot.frame = row.frameInViewport.offsetBy(dx: 0, dy: offsetY)
+            collectionView.addSubview(snapshot)
+            return snapshot
         }
-        guard !moved.isEmpty else { return }
         // The inset change arrives inside UIKit's own layout turn, where nested animations
         // can be suppressed. The offsets above are already set (the rows still draw where
         // they were); start the spring from a clean turn.
         DispatchQueue.main.async {
-            let settle = { moved.forEach { $0.contentView.transform = .identity } }
+            let settle = {
+                moved.forEach { $0.contentView.transform = .identity }
+                leaving.forEach { $0.transform = CGAffineTransform(translationX: 0, y: -dy) }
+            }
+            let finish = { leaving.forEach { $0.removeFromSuperview() } }
             if let animation {
                 if #available(iOS 18.0, *) {
-                    UIView.animate(animation, changes: settle)
+                    UIView.animate(animation, changes: settle, completion: finish)
                 } else {
                     UIView.animate(
                         withDuration: 0.24,
                         delay: 0,
                         options: [.curveEaseInOut, .allowUserInteraction, .beginFromCurrentState],
-                        animations: settle
+                        animations: settle,
+                        completion: { _ in finish() }
                     )
                 }
                 return
@@ -346,10 +383,10 @@ where Item.ID == String {
                 delay: 0,
                 usingSpringWithDamping: MessageListTimelineDefaults.insetGlideDamping,
                 initialSpringVelocity: 0,
-                options: [.allowUserInteraction, .beginFromCurrentState]
-            ) {
-                moved.forEach { $0.contentView.transform = .identity }
-            }
+                options: [.allowUserInteraction, .beginFromCurrentState],
+                animations: settle,
+                completion: { _ in finish() }
+            )
         }
     }
 
