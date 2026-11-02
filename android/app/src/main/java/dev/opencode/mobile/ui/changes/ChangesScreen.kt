@@ -294,7 +294,8 @@ private fun ChangedFilesScreen(
                         "No completed turn",
                         "Send a prompt and wait for it to complete, then try again.",
                     )
-                ChangesPhase.NoChanges ->
+                ChangesPhase.NoChanges -> {
+                    val hint = state.otherSourceHint
                     RefreshableMessage(
                         state.isRefreshing,
                         {
@@ -302,8 +303,12 @@ private fun ChangedFilesScreen(
                             viewModel.refresh()
                         },
                         state.selectedSource.emptyTitle,
-                        state.selectedSource.emptyDetail,
+                        listOfNotNull(state.selectedSource.emptyDetail, hint?.message).joinToString(" "),
+                        hint?.let {
+                            OpenCodeEmptyStateAction(title = it.actionTitle) { viewModel.selectSource(it.source) }
+                        },
                     )
+                }
                 is ChangesPhase.Content ->
                     ChangedFilesContent(phase.changeSet, state, listResetToken, viewModel, onOpenFile, selectedPath)
                 is ChangesPhase.Error ->
@@ -554,10 +559,11 @@ private fun RefreshableMessage(
     onRefresh: () -> Unit,
     title: String,
     detail: String,
+    action: OpenCodeEmptyStateAction? = null,
 ) {
     PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
         Centered {
-            OpenCodeEmptyState(title = title, message = detail)
+            OpenCodeEmptyState(title = title, message = detail, primaryAction = action)
         }
     }
 }

@@ -17,6 +17,7 @@ import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.VcsDiffMode
+import dev.opencode.mobile.domain.session.VcsFileStatus
 import dev.opencode.mobile.domain.session.VcsInfo
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
 import dev.opencode.mobile.ui.sessionchat.LastTurnReviewChangesStore
@@ -275,6 +276,104 @@ class ChangesViewModelTest {
             assertEquals(emptyList<ChangeSource>(), viewModel.uiState.value.availableSources)
             assertEquals(ChangesPhase.NoChanges, viewModel.uiState.value.phase)
             assertEquals(emptyList<Request>(), repository.requests)
+        }
+
+    @Test fun coldVcsAnswerKeepsGitChanges() =
+        runTest(dispatcher) {
+            val cold = VcsInfo(null, null, isSettled = false)
+            val repository =
+                FakeRepository(
+                    vcsInfoResults = ArrayDeque(listOf(Result.success(cold), Result.success(VcsInfo("main", "main")))),
+                    vcsDiffResults = ArrayDeque(listOf(Result.success(listOf(file("git.kt"))))),
+                )
+            val viewModel = ChangesViewModel(repository, turnDiffV2)
+            viewModel.bind("s", "/w", "m", ChangeSource.WorkingTree)
+            advanceUntilIdle()
+
+            assertEquals(2, repository.vcsInfoRequests)
+            assertEquals(listOf(ChangeSource.WorkingTree, ChangeSource.LastTurn), viewModel.uiState.value.availableSources)
+            assertEquals(ChangeSource.WorkingTree, viewModel.uiState.value.selectedSource)
+            assertEquals(listOf(VcsRequest(VcsDiffMode.WorkingTree, "/w", 12)), repository.vcsRequests)
+        }
+
+    @Test fun folderThatNeverSettlesFallsBackToLastTurn() =
+        runTest(dispatcher) {
+            val cold = Result.success(VcsInfo(null, null, isSettled = false))
+            val repository =
+                FakeRepository(
+                    results = ArrayDeque(listOf(Result.success(listOf(file("last.kt"))))),
+                    vcsInfoResults = ArrayDeque(List(5) { cold }),
+                )
+            val viewModel = ChangesViewModel(repository, turnDiffV2)
+            viewModel.bind("s", "/w", "m", ChangeSource.WorkingTree)
+            advanceUntilIdle()
+
+            assertEquals(5, repository.vcsInfoRequests)
+            assertEquals(listOf(ChangeSource.LastTurn), viewModel.uiState.value.availableSources)
+            assertEquals(ChangeSource.LastTurn, viewModel.uiState.value.selectedSource)
+        }
+
+    @Test fun emptyLastTurnPointsToGitChanges() =
+        runTest(dispatcher) {
+            val repository =
+                FakeRepository(
+                    results = ArrayDeque(listOf(Result.success(emptyList()))),
+                    vcsInfoResults = ArrayDeque(listOf(Result.success(VcsInfo("main", "main")))),
+                    vcsStatusResults = ArrayDeque(listOf(Result.success(List(3) { status("f$it.kt") }))),
+                )
+            val viewModel = ChangesViewModel(repository, turnDiffV2)
+            viewModel.bind("s", "/w", "m", ChangeSource.LastTurn)
+            advanceUntilIdle()
+
+            val state = viewModel.uiState.value
+            assertEquals(ChangesPhase.NoChanges, state.phase)
+            assertEquals(ChangesOtherSourceHint(ChangeSource.WorkingTree, 3), state.otherSourceHint)
+            assertEquals("Git changes has 3 changed files.", state.otherSourceHint?.message)
+            assertEquals("Show Git changes", state.otherSourceHint?.actionTitle)
+        }
+
+    @Test fun emptyGitChangesPointsToLastTurn() =
+        runTest(dispatcher) {
+            val repository =
+                FakeRepository(
+                    results = ArrayDeque(listOf(Result.success(listOf(file("format.ts"))))),
+                    vcsInfoResults = ArrayDeque(listOf(Result.success(VcsInfo("main", "main")))),
+                    vcsDiffResults = ArrayDeque(listOf(Result.success(emptyList()))),
+                )
+            val viewModel = ChangesViewModel(repository, turnDiffV2)
+            viewModel.bind("s", "/w", "m", ChangeSource.WorkingTree)
+            advanceUntilIdle()
+
+            val hint = viewModel.uiState.value.otherSourceHint
+            assertEquals(ChangesOtherSourceHint(ChangeSource.LastTurn, 1), hint)
+            assertEquals("The last turn changed 1 file.", hint?.message)
+            assertEquals(listOf(Request("s", "m", "/w")), repository.requests)
+        }
+
+    @Test fun noHintWhenBothSourcesAreEmptyOrTheLookupFails() =
+        runTest(dispatcher) {
+            val bothEmpty =
+                FakeRepository(
+                    results = ArrayDeque(listOf(Result.success(emptyList()))),
+                    vcsInfoResults = ArrayDeque(listOf(Result.success(VcsInfo("main", "main")))),
+                    vcsStatusResults = ArrayDeque(listOf(Result.success(emptyList()))),
+                )
+            val empty = ChangesViewModel(bothEmpty, turnDiffV2)
+            empty.bind("s", "/w", "m", ChangeSource.LastTurn)
+            advanceUntilIdle()
+            assertEquals(ChangesPhase.NoChanges, empty.uiState.value.phase)
+            assertNull(empty.uiState.value.otherSourceHint)
+
+            val failing =
+                FakeRepository(
+                    results = ArrayDeque(listOf(Result.success(emptyList()))),
+                    vcsInfoResults = ArrayDeque(listOf(Result.success(VcsInfo("main", "main")))),
+                )
+            val failed = ChangesViewModel(failing, turnDiffV2)
+            failed.bind("s", "/w", "m", ChangeSource.LastTurn)
+            advanceUntilIdle()
+            assertEquals(ChangesPhase.NoChanges, failed.uiState.value.phase)
+            assertNull(failed.uiState.value.otherSourceHint)
         }
 
     @Test fun viewerStartsCollapsedNavigatesHunksAndHandlesUnavailablePreview() {
@@ -591,6 +690,10 @@ class ChangesViewModelTest {
         deletions: Int = 1,
         status: FileDiffStatus = FileDiffStatus.Modified,
     ) = FileDiff(path, "@@ -1 +1 @@\n-old\n+new", additions, deletions, status)
+
+    private fun status(path: String) = VcsFileStatus(path, FileDiffStatus.Modified, 1, 1)
+
+    private val turnDiffV2 = ServerCapabilities.forProtocol(ServerProtocol.V2, V2ServerFeatures(sessionTurnDiff = true))
 }
 
 private class TestEventStream : ForegroundEventStream {
@@ -618,9 +721,14 @@ private class FakeRepository(
     private val results: ArrayDeque<Result<List<FileDiff>>> = ArrayDeque(),
     private val vcsInfoResults: ArrayDeque<Result<VcsInfo>> = ArrayDeque(),
     private val vcsDiffResults: ArrayDeque<Result<List<FileDiff>>> = ArrayDeque(),
+    private val vcsStatusResults: ArrayDeque<Result<List<VcsFileStatus>>> = ArrayDeque(),
 ) : SessionRepository {
     val requests = mutableListOf<Request>()
     val vcsRequests = mutableListOf<VcsRequest>()
+    var vcsInfoRequests = 0
+
+    override suspend fun getVcsStatus(directory: String?): List<VcsFileStatus> =
+        if (vcsStatusResults.isEmpty()) throw SessionError.Http(404, "unsupported") else vcsStatusResults.removeFirst().getOrThrow()
 
     override suspend fun getSessionDiff(
         id: String,
@@ -631,8 +739,10 @@ private class FakeRepository(
         return results.removeFirst().getOrThrow()
     }
 
-    override suspend fun getVcsInfo(directory: String?): VcsInfo =
-        if (vcsInfoResults.isEmpty()) throw SessionError.Http(404, "unsupported") else vcsInfoResults.removeFirst().getOrThrow()
+    override suspend fun getVcsInfo(directory: String?): VcsInfo {
+        vcsInfoRequests += 1
+        return if (vcsInfoResults.isEmpty()) throw SessionError.Http(404, "unsupported") else vcsInfoResults.removeFirst().getOrThrow()
+    }
 
     override suspend fun getVcsDiff(
         mode: VcsDiffMode,

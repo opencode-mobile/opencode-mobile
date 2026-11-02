@@ -180,7 +180,17 @@ struct ChangesView: View {
         case .noTurn:
             refreshableMessage("No completed turn", detail: "Send a prompt and wait for it to complete, then try again.")
         case .noChanges:
-            refreshableMessage(viewModel.state.selectedSource.emptyTitle, detail: viewModel.state.selectedSource.emptyDetail)
+            let source = viewModel.state.selectedSource
+            let hint = viewModel.state.otherSourceHint
+            refreshableMessage(
+                source.emptyTitle,
+                detail: [source.emptyDetail, hint?.message].compactMap { $0 }.joined(separator: " "),
+                action: hint.map { hint in
+                    OpenCodeEmptyStateAction(title: hint.actionTitle) {
+                        Task { await viewModel.selectSource(hint.source) }
+                    }
+                }
+            )
         case let .content(changeSet):
             changedFiles(changeSet, selectedPath: selectedPath, onOpenFile: onOpenFile)
         case let .error(error):
@@ -328,13 +338,13 @@ struct ChangesView: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private func message(_ title: String, detail: String) -> some View {
-        OpenCodeEmptyState(title: title, message: detail)
+    private func message(_ title: String, detail: String, action: OpenCodeEmptyStateAction? = nil) -> some View {
+        OpenCodeEmptyState(title: title, message: detail, primaryAction: action)
     }
 
-    private func refreshableMessage(_ title: String, detail: String) -> some View {
+    private func refreshableMessage(_ title: String, detail: String, action: OpenCodeEmptyStateAction? = nil) -> some View {
         ScrollView {
-            message(title, detail: detail)
+            message(title, detail: detail, action: action)
                 .frame(minHeight: 360)
         }
         .refreshable {

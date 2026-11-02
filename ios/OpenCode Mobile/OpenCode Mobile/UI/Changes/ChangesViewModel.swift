@@ -34,6 +34,25 @@ struct ChangesState: Equatable {
     var availableSources: [ChangeSource] = [.lastTurn]
     var isRefreshing = false
     var refreshError: String?
+    /// Set while the selected source is empty but the other source has files.
+    var otherSourceHint: ChangesOtherSourceHint?
+}
+
+/// Points from an empty source to the other one, which has `fileCount` changed files.
+struct ChangesOtherSourceHint: Equatable {
+    let source: ChangeSource
+    let fileCount: Int
+
+    var message: String {
+        switch source {
+        case .workingTree:
+            "Git changes has \(fileCount) \(plural(fileCount, singular: "changed file", plural: "changed files"))."
+        case .lastTurn:
+            "The last turn changed \(fileCount) \(plural(fileCount, singular: "file", plural: "files"))."
+        }
+    }
+
+    var actionTitle: String { "Show \(source.displayName)" }
 }
 
 struct ChangesContentState: Equatable {
@@ -113,6 +132,7 @@ final class ChangesViewModel {
     private let capabilitiesProvider: () -> ServerCapabilities
     private let lastTurnReviewChangesStore: LastTurnReviewChangesStore
     private let foregroundEventStream: (any ForegroundEventStream)?
+    private let vcsSettleDelay: Duration
     private var availableSources: [ChangeSource]
     private var capabilities: ServerCapabilities { capabilitiesProvider() }
     private var filter = ""
@@ -134,7 +154,8 @@ final class ChangesViewModel {
         capabilities: ServerCapabilities = .forProtocol(.v1),
         capabilitiesProvider: (() -> ServerCapabilities)? = nil,
         lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil,
-        foregroundEventStream: (any ForegroundEventStream)? = nil
+        foregroundEventStream: (any ForegroundEventStream)? = nil,
+        vcsSettleDelay: Duration = ChangesViewModel.defaultVcsSettleDelay
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
@@ -144,6 +165,7 @@ final class ChangesViewModel {
         self.capabilitiesProvider = provider
         self.lastTurnReviewChangesStore = lastTurnReviewChangesStore ?? LastTurnReviewChangesStore()
         self.foregroundEventStream = foregroundEventStream
+        self.vcsSettleDelay = vcsSettleDelay
         let sources = Self.capabilitySources(provider())
         self.availableSources = sources
         state = ChangesState(
@@ -161,6 +183,7 @@ final class ChangesViewModel {
         capabilitiesProvider = { .forProtocol(.v1) }
         lastTurnReviewChangesStore = LastTurnReviewChangesStore()
         foregroundEventStream = nil
+        vcsSettleDelay = .zero
         let sources = Self.capabilitySources(.forProtocol(.v1))
         availableSources = sources
         state = ChangesState(selectedSource: initialSource, availableSources: sources)
@@ -266,11 +289,13 @@ final class ChangesViewModel {
             guard !files.isEmpty else {
                 log(source: selectedSource, fileCount: 0, startedAt: startedAt, result: "empty")
                 publishLastTurnSummary(source: selectedSource, files: [], failed: false)
+                let phase: ChangesPhase = selectedSource == .lastTurn && messageID == nil ? .noTurn : .noChanges
                 state = ChangesState(
-                    phase: selectedSource == .lastTurn && messageID == nil ? .noTurn : .noChanges,
+                    phase: phase,
                     selectedSource: selectedSource,
                     availableSources: availableSources
                 )
+                if phase == .noChanges { await publishOtherSourceHint(emptySource: selectedSource, revision: revision) }
                 return
             }
             log(source: selectedSource, fileCount: files.count, startedAt: startedAt, result: "success")
@@ -313,7 +338,7 @@ final class ChangesViewModel {
     private func resolveAvailableSources() async throws -> [ChangeSource] {
         var sources: [ChangeSource] = []
         do {
-            if try await repository.getVcsInfo(directory: worktree).supportsGit {
+            if try await settledVcsInfo().supportsGit {
                 sources.append(.workingTree)
             }
         } catch let SessionError.http(statusCode, _) where statusCode == 404 {
@@ -323,6 +348,44 @@ final class ChangesViewModel {
             sources.append(.lastTurn)
         }
         return sources
+    }
+
+    /// A cold project settles in well under a second; give it about 1.2 s.
+    nonisolated static let defaultVcsSettleDelay: Duration = .milliseconds(300)
+    private static let vcsSettleRetries = 4
+
+    /// A v2 server answers without a branch for a moment after it loads (or reloads) a project.
+    /// Ask again a few times before treating the folder as having no Git, so Git changes stays
+    /// available. A folder that is not a Git repository never settles and ends up without it.
+    private func settledVcsInfo() async throws -> VcsInfo {
+        var info = try await repository.getVcsInfo(directory: worktree)
+        for _ in 0..<Self.vcsSettleRetries {
+            if info.isSettled || info.supportsGit { return info }
+            try await Task.sleep(for: vcsSettleDelay)
+            info = try await repository.getVcsInfo(directory: worktree)
+        }
+        return info
+    }
+
+    /// When the selected source is empty, counts the other source's files so the empty state can
+    /// point there. Lookup failures leave the plain empty state.
+    private func publishOtherSourceHint(emptySource: ChangeSource, revision: Int) async {
+        guard let other = availableSources.first(where: { $0 != emptySource }) else { return }
+        let count: Int
+        do {
+            switch other {
+            case .workingTree:
+                count = try await repository.getVcsStatus(directory: worktree).count
+            case .lastTurn:
+                guard let messageID else { return }
+                count = try await repository.getSessionDiff(id: sessionID, messageID: messageID, directory: worktree).count
+            }
+        } catch {
+            OpenCodeLog.changes.info("hint source=\(other.logValue) session=\(self.sessionID) result=failure")
+            return
+        }
+        guard count > 0, revision == loadRevision, state.phase == .noChanges, state.selectedSource == emptySource else { return }
+        state.otherSourceHint = ChangesOtherSourceHint(source: other, fileCount: count)
     }
 
     private func preferredSource(from requested: ChangeSource) -> ChangeSource {
