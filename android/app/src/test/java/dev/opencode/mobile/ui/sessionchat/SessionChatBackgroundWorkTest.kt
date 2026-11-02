@@ -108,8 +108,8 @@ class SessionChatBackgroundWorkTest {
         val pill = SessionChatBackgroundWork.pill(subagents(task("prt-1", ToolStatus.Running, child = "ses-a")))
 
         assertEquals(
-            SessionChatBackgroundWorkPill("1 subagent", needsInput = false, accessibilityLabel = "1 subagent running"),
-            pill,
+            EnglishPill("1 subagent", needsInput = false, accessibilityLabel = "1 subagent running"),
+            pill.english(),
         )
     }
 
@@ -124,12 +124,12 @@ class SessionChatBackgroundWorkTest {
             )
 
         assertEquals(
-            SessionChatBackgroundWorkPill(
+            EnglishPill(
                 label = "general needs input · 2 running",
                 needsInput = true,
                 accessibilityLabel = "general needs input, 2 subagents running",
             ),
-            SessionChatBackgroundWork.pill(rows),
+            SessionChatBackgroundWork.pill(rows).english(),
         )
     }
 

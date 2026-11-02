@@ -807,29 +807,35 @@ extension ServerCommand {
     func toSlashSuggestion() -> SessionChatSlashSuggestion {
         SessionChatSlashSuggestion(
             id: name,
-            title: "/\(name)",
+            title: Self.commandToken(name),
             subtitle: description,
-            badge: {
+            badge: { () -> String? in
                 switch source {
-                case .skill: "skill"
-                case .mcp: "mcp"
+                case .skill: String(localized: "session_chat.suggestion.badge_skill", defaultValue: "skill")
+                case .mcp: String(localized: "session_chat.suggestion.badge_mcp", defaultValue: "mcp")
                 case .command: nil
                 }
             }(),
             commandName: name
         )
     }
+
+    /// What the user types for a command: `/name`. Syntax, never translated.
+    private static func commandToken(_ name: String) -> String { "/" + name }
 }
 
 extension MentionableAgent {
     func toAtSuggestion() -> SessionChatAtSuggestion {
         SessionChatAtSuggestion(
             id: name,
-            title: "@\(name)",
+            title: Self.mentionToken(name),
             subtitle: description,
             agentName: name
         )
     }
+
+    /// What the user types to mention an agent: `@name`. Syntax, never translated.
+    private static func mentionToken(_ name: String) -> String { "@" + name }
 }
 
 extension ProjectEntry {
@@ -837,7 +843,7 @@ extension ProjectEntry {
         SessionChatAtSuggestion(
             id: "file:\(relativePath)",
             title: relativePath,
-            subtitle: "File",
+            subtitle: String(localized: "session_chat.suggestion.file", defaultValue: "File"),
             filePath: relativePath,
             isDirectory: isDirectory
         )

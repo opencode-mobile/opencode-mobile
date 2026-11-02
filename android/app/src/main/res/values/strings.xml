@@ -363,4 +363,166 @@
     <string name="terminal_key_down">Down</string>
     <string name="terminal_key_left">Left</string>
     <string name="terminal_key_right">Right</string>
+    <!-- Session Chat screen and timeline -->
+    <string name="session_chat_loading">Loading session</string>
+    <string name="session_chat_more_options">More options</string>
+    <string name="session_chat_menu_rename">Rename session</string>
+    <string name="session_chat_menu_review_changes">Review changes</string>
+    <string name="session_chat_menu_fork">Fork session</string>
+    <string name="session_chat_menu_browse_files">Browse files</string>
+    <string name="session_chat_menu_session_context">Session context</string>
+    <string name="session_chat_menu_copy_session_id">Copy session ID</string>
+    <string name="session_chat_menu_archive">Archive</string>
+    <string name="session_chat_menu_report_problem">Report a problem</string>
+    <string name="session_chat_menu_delete">Delete</string>
+    <string name="session_chat_delete_dialog_title">Delete session</string>
+    <string name="session_chat_delete_dialog_message">Delete session “%1$s”?</string>
+    <string name="session_chat_delete_dialog_confirm">Delete</string>
+    <string name="session_chat_rename_dialog_title">Rename session</string>
+    <string name="session_chat_rename_dialog_save">Save</string>
+    <string name="session_chat_title_hint">Title</string>
+    <string name="session_chat_fork_dialog_title">Fork session</string>
+    <string name="session_chat_fork_dialog_confirm">Fork</string>
+    <string name="session_chat_fork_dialog_error_empty_title">Enter a session title</string>
+    <string name="session_chat_fork_dialog_error_failed">Couldn\'t fork session.</string>
+    <string name="session_chat_fork_result_title">Session forked</string>
+    <string name="session_chat_fork_result_message_ready">“%1$s” is ready.</string>
+    <string name="session_chat_fork_result_message_forked_as">Forked as “%1$s”.</string>
+    <string name="session_chat_fork_result_open">Open</string>
+    <string name="session_chat_fork_result_stay_here">Stay here</string>
+    <string name="session_chat_fork_result_stay">Stay</string>
+    <string name="session_chat_attachment_source_title">Add attachment</string>
+    <string name="session_chat_attachment_source_photos">Photos</string>
+    <string name="session_chat_attachment_source_files">Files</string>
+    <string name="session_chat_attachment_source_log_file">Log file</string>
+    <string name="session_chat_commands_title">Commands</string>
+    <string name="session_chat_commands_mcp_title">MCP servers</string>
+    <string name="session_chat_commands_back">Back to commands</string>
+    <string name="session_chat_commands_new_label">New</string>
+    <string name="session_chat_commands_new_description">Start a new session</string>
+    <string name="session_chat_commands_fork_label">Fork</string>
+    <string name="session_chat_commands_fork_description">Fork this session</string>
+    <string name="session_chat_commands_undo_label">Undo</string>
+    <string name="session_chat_commands_undo_description">Undo last message</string>
+    <string name="session_chat_commands_redo_label">Redo</string>
+    <string name="session_chat_commands_redo_description">Redo undone message</string>
+    <string name="session_chat_commands_compact_label">Compact</string>
+    <string name="session_chat_commands_compact_description">Compact session context</string>
+    <string name="session_chat_commands_terminal_label">Terminal</string>
+    <string name="session_chat_commands_terminal_description">Open project shell</string>
+    <string name="session_chat_commands_files_label">Files</string>
+    <string name="session_chat_commands_files_description">Browse project files</string>
+    <string name="session_chat_commands_mcp_label">MCP servers</string>
+    <string name="session_chat_commands_mcp_description">Show MCP server status</string>
+    <string name="session_chat_commands_btw_label">Btw</string>
+    <string name="session_chat_commands_btw_description">Ask a side question</string>
+    <string name="session_chat_suggestion_file">File</string>
+    <string name="session_chat_suggestion_no_matches">No matches</string>
+    <string name="session_chat_suggestion_no_commands">No commands</string>
+    <string name="session_chat_suggestion_badge_skill">skill</string>
+    <string name="session_chat_suggestion_badge_mcp">mcp</string>
+    <string name="session_chat_move_worktree_current">Current worktree</string>
+    <string name="session_chat_activity_review_permission">Review permission</string>
+    <string name="session_chat_activity_review_permission_request">Review permission request</string>
+    <string name="session_chat_activity_answer_question">Answer question</string>
+    <string name="session_chat_activity_request_failed">Request failed</string>
+    <string name="session_chat_activity_btw_failed">/btw failed · Retry</string>
+    <string name="session_chat_activity_btw_failed_count">/btw failed ×%1$d · Retry</string>
+    <string name="session_chat_activity_btw_ready">/btw answer ready</string>
+    <string name="session_chat_activity_btw_ready_count">/btw answer ready ×%1$d</string>
+    <plurals name="session_chat_activity_queued">
+        <item quantity="one">%1$d queued</item>
+        <item quantity="other">%1$d queued</item>
+    </plurals>
+    <plurals name="session_chat_activity_queued_prompts">
+        <item quantity="one">%1$d queued prompt</item>
+        <item quantity="other">%1$d queued prompts</item>
+    </plurals>
+    <string name="session_chat_activity_side_question_failed">Side question failed</string>
+    <plurals name="session_chat_activity_side_questions_failed">
+        <item quantity="one">%1$d side question failed</item>
+        <item quantity="other">%1$d side questions failed</item>
+    </plurals>
+    <string name="session_chat_activity_side_question_ready">Side question answer ready</string>
+    <plurals name="session_chat_activity_side_questions_ready">
+        <item quantity="one">%1$d side question answer ready</item>
+        <item quantity="other">%1$d side question answers ready</item>
+    </plurals>
+    <string name="session_chat_activity_side_question_running">Side question running</string>
+    <plurals name="session_chat_activity_side_questions_running">
+        <item quantity="one">%1$d side question running</item>
+        <item quantity="other">%1$d side questions running</item>
+    </plurals>
+    <string name="session_chat_activity_finished">%1$s, Done</string>
+    <string name="session_chat_activity_status_action">%1$s. %2$s</string>
+    <string name="session_chat_activity_action_open_request">Open request</string>
+    <string name="session_chat_activity_action_open_background_work">Open background work</string>
+    <string name="session_chat_activity_action_show_in_chat">Show in chat</string>
+    <string name="session_chat_activity_action_retry">Retry</string>
+    <string name="session_chat_activity_action_open">Open</string>
+    <string name="session_chat_activity_action_open_up_next">Open Up next</string>
+    <string name="session_chat_activity_collapsed_show_activity">%1$s. Show activity</string>
+    <string name="session_chat_activity_collapsed_hide_activity">%1$s. Hide activity</string>
+    <string name="session_chat_activity_collapsed_count_show_activity">%1$s, %2$d activities. Show activity</string>
+    <string name="session_chat_activity_collapsed_count_hide_activity">%1$s, %2$d activities. Hide activity</string>
+    <string name="session_chat_activity_collapsed_show_count">Show %1$d activities. %2$s</string>
+    <string name="session_chat_activity_collapsed_hide_count">Hide %1$d activities</string>
+    <string name="session_chat_activity_show_more">Show %1$d more</string>
+    <string name="session_chat_activity_hide_more">Hide %1$d more</string>
+    <string name="session_chat_navigation_scroll_to_end">Scroll to end</string>
+    <plurals name="session_chat_navigation_new_count">
+        <item quantity="one">%1$d new</item>
+        <item quantity="other">%1$d new</item>
+    </plurals>
+    <plurals name="session_chat_navigation_scroll_to_end_new_messages">
+        <item quantity="one">Scroll to end, %1$d new message</item>
+        <item quantity="other">Scroll to end, %1$d new messages</item>
+    </plurals>
+    <string name="timeline_state_creating_title">Starting session…</string>
+    <string name="timeline_state_creating_subtitle">Creating on server…</string>
+    <string name="timeline_state_loading_title">Loading messages</string>
+    <string name="timeline_state_loading_subtitle">Fetching timeline…</string>
+    <string name="timeline_state_error_title">Unable to load messages</string>
+    <string name="timeline_state_error_fallback">The timeline didn\'t load.</string>
+    <string name="timeline_state_retry">Retry</string>
+    <string name="timeline_state_empty">No messages yet. Send a prompt to start.</string>
+    <string name="timeline_state_refreshing">Refreshing messages</string>
+    <string name="timeline_message_assistant">Assistant message</string>
+    <string name="timeline_message_actions_hint_long_press">Long press to show message actions</string>
+    <string name="timeline_message_actions_hint">Shows message actions</string>
+    <string name="timeline_fallback_message">%1$s: %2$s</string>
+    <string name="timeline_step_no_commentary">Worked without commentary</string>
+    <string name="timeline_failure_copy">Copy</string>
+    <string name="timeline_retry_retrying_in">retrying in %1$ds</string>
+    <string name="timeline_retry_attempt_retrying_in">attempt %1$d, retrying in %2$ds</string>
+    <plurals name="timeline_background_work_subagent_count">
+        <item quantity="one">%1$d subagent</item>
+        <item quantity="other">%1$d subagents</item>
+    </plurals>
+    <plurals name="timeline_background_work_shell_count">
+        <item quantity="one">%1$d shell</item>
+        <item quantity="other">%1$d shells</item>
+    </plurals>
+    <string name="timeline_background_work_subagents_and_shells">%1$s · %2$s</string>
+    <string name="timeline_background_work_subagents_and_shells_spoken">%1$s and %2$s</string>
+    <string name="timeline_background_work_running_spoken">%1$s running</string>
+    <string name="timeline_background_work_agent_needs_input">%1$s needs input</string>
+    <plurals name="timeline_background_work_subagents_need_input">
+        <item quantity="one">%1$d subagent needs input</item>
+        <item quantity="other">%1$d subagents need input</item>
+    </plurals>
+    <string name="timeline_background_work_needs_input_running">%1$s · %2$d running</string>
+    <string name="timeline_background_work_needs_input_running_spoken">%1$s, %2$s running</string>
+    <plurals name="timeline_tool_result_files_modified">
+        <item quantity="one">%1$d modified</item>
+        <item quantity="other">%1$d modified</item>
+    </plurals>
+    <plurals name="timeline_tool_result_files_added">
+        <item quantity="one">%1$d added</item>
+        <item quantity="other">%1$d added</item>
+    </plurals>
+    <plurals name="timeline_tool_result_files_deleted">
+        <item quantity="one">%1$d deleted</item>
+        <item quantity="other">%1$d deleted</item>
+    </plurals>
 </resources>

@@ -1,5 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.ToolStartTime
@@ -8,6 +11,8 @@ import dev.opencode.mobile.domain.session.PermissionRequest
 import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.shell.AgentShell
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -56,14 +61,22 @@ data class SessionChatSubagent(
     }
 }
 
-/** What the background work pill says. */
+/** What the background work pill says. Views resolve the text; agent names stay verbatim. */
 data class SessionChatBackgroundWorkPill(
     /** "3 subagents", "1 subagent · 2 shells", or "general needs input · 2 running". */
-    val label: String,
+    val labelText: UiText,
     /** A subagent waits for input: amber pill with a pulsing dot. */
     val needsInput: Boolean,
-    val accessibilityLabel: String,
-)
+    val accessibilityText: UiText,
+) {
+    /** [labelText] in the current language. */
+    val label: String
+        @Composable get() = labelText.resolve()
+
+    /** [accessibilityText] in the current language. */
+    val accessibilityLabel: String
+        @Composable get() = accessibilityText.resolve()
+}
 
 /** The waiting request the background work pill opens when a subagent needs input. */
 sealed interface SessionChatInboxTarget {
@@ -185,23 +198,28 @@ object SessionChatBackgroundWork {
         val firstWaiting = waiting.firstOrNull()
         if (firstWaiting == null) {
             if (running == 0 && runningShells == 0) return null
-            val label = listOfNotNull(subagentCount(running), shellCount(runningShells)).joinToString(" · ")
             return SessionChatBackgroundWorkPill(
-                label,
+                labelText = countLabel(running, runningShells),
                 needsInput = false,
-                accessibilityLabel = "${runningPhrase(running, runningShells)} running",
+                accessibilityText =
+                    UiText.resource(R.string.timeline_background_work_running_spoken, runningPhrase(running, runningShells)),
             )
         }
         val asking =
             if (waiting.size == 1) {
-                "${firstWaiting.agentName} needs input"
+                UiText.resource(R.string.timeline_background_work_agent_needs_input, UiText.verbatim(firstWaiting.agentName))
             } else {
-                "${subagentCount(waiting.size)} need input"
+                UiText.plural(R.plurals.timeline_background_work_subagents_need_input, waiting.size)
             }
         val busy = running + runningShells
-        val label = if (busy > 0) "$asking · $busy running" else asking
-        val spoken = if (busy > 0) "$asking, ${runningPhrase(running, runningShells)} running" else asking
-        return SessionChatBackgroundWorkPill(label, needsInput = true, accessibilityLabel = spoken)
+        val label = if (busy > 0) UiText.resource(R.string.timeline_background_work_needs_input_running, asking, busy) else asking
+        val spoken =
+            if (busy > 0) {
+                UiText.resource(R.string.timeline_background_work_needs_input_running_spoken, asking, runningPhrase(running, runningShells))
+            } else {
+                asking
+            }
+        return SessionChatBackgroundWorkPill(labelText = label, needsInput = true, accessibilityText = spoken)
     }
 
     /**
@@ -256,25 +274,35 @@ object SessionChatBackgroundWork {
         return next
     }
 
-    private fun subagentCount(count: Int): String? =
-        when (count) {
-            0 -> null
-            1 -> "1 subagent"
-            else -> "$count subagents"
-        }
+    private fun subagentCount(count: Int): UiText? =
+        if (count == 0) null else UiText.plural(R.plurals.timeline_background_work_subagent_count, count)
 
-    private fun shellCount(count: Int): String? =
-        when (count) {
-            0 -> null
-            1 -> "1 shell"
-            else -> "$count shells"
-        }
+    private fun shellCount(count: Int): UiText? =
+        if (count == 0) null else UiText.plural(R.plurals.timeline_background_work_shell_count, count)
+
+    /** "2 subagents", "1 shell", "1 subagent · 2 shells". */
+    private fun countLabel(
+        subagents: Int,
+        shells: Int,
+    ): UiText = joined(subagentCount(subagents), shellCount(shells), R.string.timeline_background_work_subagents_and_shells)
 
     /** "2 subagents", "1 shell", "1 subagent and 2 shells". */
     private fun runningPhrase(
         subagents: Int,
         shells: Int,
-    ): String = listOfNotNull(subagentCount(subagents), shellCount(shells)).joinToString(" and ")
+    ): UiText = joined(subagentCount(subagents), shellCount(shells), R.string.timeline_background_work_subagents_and_shells_spoken)
+
+    /** Both counts through [bothRes], or whichever one is present. At least one is non-null. */
+    private fun joined(
+        subagents: UiText?,
+        shells: UiText?,
+        @StringRes bothRes: Int,
+    ): UiText =
+        when {
+            subagents != null && shells != null -> UiText.resource(bothRes, subagents, shells)
+            subagents != null -> subagents
+            else -> shells ?: UiText.verbatim("")
+        }
 
     private fun rank(status: SessionChatSubagentStatus): Int =
         when (status) {

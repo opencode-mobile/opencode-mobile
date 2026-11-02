@@ -517,10 +517,13 @@ nonisolated enum ToolResultInspector {
         let modified = files.filter { $0.tone == .modified }.count
         let added = files.filter { $0.tone == .added }.count
         let deleted = files.filter { $0.tone == .deleted }.count
+        let modifiedLabel = String(localized: "timeline.tool_result.files_modified", defaultValue: "\(modified) modified")
+        let addedLabel = String(localized: "timeline.tool_result.files_added", defaultValue: "\(added) added")
+        let deletedLabel = String(localized: "timeline.tool_result.files_deleted", defaultValue: "\(deleted) deleted")
         return [
-            modified > 0 ? ToolResultPresentation.Count(label: "\(modified) modified", tone: .modified) : nil,
-            added > 0 ? ToolResultPresentation.Count(label: "\(added) added", tone: .added) : nil,
-            deleted > 0 ? ToolResultPresentation.Count(label: "\(deleted) deleted", tone: .deleted) : nil,
+            modified > 0 ? ToolResultPresentation.Count(label: modifiedLabel, tone: .modified) : nil,
+            added > 0 ? ToolResultPresentation.Count(label: addedLabel, tone: .added) : nil,
+            deleted > 0 ? ToolResultPresentation.Count(label: deletedLabel, tone: .deleted) : nil,
         ].compactMap { $0 }
     }
 

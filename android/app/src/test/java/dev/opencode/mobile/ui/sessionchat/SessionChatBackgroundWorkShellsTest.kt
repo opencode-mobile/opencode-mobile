@@ -13,12 +13,12 @@ class SessionChatBackgroundWorkShellsTest {
     @Test
     fun pill_shellsAloneShowThePill() {
         assertEquals(
-            SessionChatBackgroundWorkPill("1 shell", needsInput = false, accessibilityLabel = "1 shell running"),
-            SessionChatBackgroundWork.pill(emptyList(), listOf(shell("sh_1"))),
+            EnglishPill("1 shell", needsInput = false, accessibilityLabel = "1 shell running"),
+            SessionChatBackgroundWork.pill(emptyList(), listOf(shell("sh_1"))).english(),
         )
         assertEquals(
-            SessionChatBackgroundWorkPill("3 shells", needsInput = false, accessibilityLabel = "3 shells running"),
-            SessionChatBackgroundWork.pill(emptyList(), listOf(shell("sh_1"), shell("sh_2"), shell("sh_3"))),
+            EnglishPill("3 shells", needsInput = false, accessibilityLabel = "3 shells running"),
+            SessionChatBackgroundWork.pill(emptyList(), listOf(shell("sh_1"), shell("sh_2"), shell("sh_3"))).english(),
         )
     }
 
@@ -27,12 +27,12 @@ class SessionChatBackgroundWorkShellsTest {
         val pill = SessionChatBackgroundWork.pill(listOf(subagent("prt_1")), listOf(shell("sh_1"), shell("sh_2")))
 
         assertEquals(
-            SessionChatBackgroundWorkPill(
+            EnglishPill(
                 "1 subagent · 2 shells",
                 needsInput = false,
                 accessibilityLabel = "1 subagent and 2 shells running",
             ),
-            pill,
+            pill.english(),
         )
     }
 
@@ -45,12 +45,12 @@ class SessionChatBackgroundWorkShellsTest {
             )
 
         assertEquals(
-            SessionChatBackgroundWorkPill(
+            EnglishPill(
                 "general needs input · 2 running",
                 needsInput = true,
                 accessibilityLabel = "general needs input, 1 subagent and 1 shell running",
             ),
-            pill,
+            pill.english(),
         )
     }
 

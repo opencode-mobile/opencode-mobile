@@ -315,6 +315,18 @@ struct SessionChatPillSlotsTests {
         ) == nil)
     }
 
+    @Test func activityPillTextComesFromTheStringCatalog() {
+        #expect(SessionChatActivitySlotView.layout(.sideQuestionsFailed(count: 2)) == .closable(label: "/btw failed ×2 · Retry"))
+        #expect(SessionChatActivitySlotView.layout(.sideQuestionsFailed(count: 1)) == .closable(label: "/btw failed · Retry"))
+        #expect(SessionChatActivitySlotView.accessibilityLabel(.sideQuestionsFailed(count: 2)) == "2 side questions failed. Retry")
+        #expect(SessionChatActivitySlotView.accessibilityLabel(.queued(count: 1)) == "1 queued prompt. Open Up next")
+        #expect(
+            SessionChatActivitySlotView.collapsedAccessibilityLabel(.reviewPermission, count: 2, stackOpen: false)
+                == "Show 2 activities. Review permission request"
+        )
+        #expect(SessionChatActivitySlotView.collapsedAccessibilityLabel(.reviewPermission, count: 2, stackOpen: true) == "Hide 2 activities")
+    }
+
     private func user(_ id: String) -> SessionChatRow {
         SessionChatRow(id: id, role: .user, text: "Hi", metadataLabel: "")
     }

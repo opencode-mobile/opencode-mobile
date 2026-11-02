@@ -776,12 +776,12 @@ class SessionChatViewModelTest {
 
             val state = viewModel.uiState.value
             assertEquals(
-                SessionChatBackgroundWorkPill(
+                EnglishPill(
                     label = "general needs input · 2 running",
                     needsInput = true,
                     accessibilityLabel = "general needs input, 2 subagents running",
                 ),
-                state.backgroundWorkPill,
+                state.backgroundWorkPill.english(),
             )
             assertEquals(listOf("prt-a", "prt-b", "prt-c"), state.subagents.map { it.id })
             assertEquals("child-a", state.subagents.first().childSessionId)
@@ -836,8 +836,8 @@ class SessionChatViewModelTest {
             val state = viewModel.uiState.value
             assertEquals(listOf("prt-1"), state.shells.map { it.id })
             assertEquals(
-                SessionChatBackgroundWorkPill("1 shell", needsInput = false, accessibilityLabel = "1 shell running"),
-                state.backgroundWorkPill,
+                EnglishPill("1 shell", needsInput = false, accessibilityLabel = "1 shell running"),
+                state.backgroundWorkPill.english(),
             )
 
             viewModel.openShellOutput("prt-1")
@@ -5984,7 +5984,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.forkDialogVisible)
-            assertEquals("Enter a session title", viewModel.uiState.value.forkErrorMessage)
+            assertEquals("Enter a session title", viewModel.uiState.value.forkErrorMessage?.english())
             assertEquals(0, sessionRepository.forkSessionCallCount)
             assertNull(sessionRepository.updateRequest)
         }

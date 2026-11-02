@@ -126,7 +126,7 @@ struct SessionChatView: View {
             if hasViewModel {
                 sessionChatBody
             } else {
-                OpenCodeStatusStack(spinner: "Loading session")
+                OpenCodeStatusStack(spinner: "session_chat.loading")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(OpenCodeColors.backgroundBase)
             }
@@ -270,7 +270,7 @@ struct SessionChatView: View {
                         leaveSession()
                     }),
                     actions: [
-                        .icon(.moreVert, accessibilityLabel: "More options") {
+                        .icon(.moreVert, accessibilityLabel: "session_chat.more_options") {
                             logChatAction(ProductAnalytics.Action.chatOpenOverflow)
                             ProductAnalytics.logScreenView(
                                 screenId: ProductAnalytics.Screen.sessionOverflow,
@@ -503,7 +503,7 @@ struct SessionChatView: View {
                                     leadingIcon: suggestion.leadingIcon
                                 )
                             },
-                            emptyMessage: "No matches",
+                            emptyMessage: String(localized: "session_chat.suggestion.no_matches", defaultValue: "No matches"),
                             onSelect: { item in
                                 viewModel.selectAtSuggestion(agentName: item.id)
                             }
@@ -520,7 +520,7 @@ struct SessionChatView: View {
                                     badge: suggestion.badge
                                 )
                             },
-                            emptyMessage: "No commands",
+                            emptyMessage: String(localized: "session_chat.suggestion.no_commands", defaultValue: "No commands"),
                             onSelect: { item in
                                 viewModel.selectSlashSuggestion(commandName: item.id)
                             }
@@ -738,11 +738,11 @@ struct SessionChatView: View {
 
     private func sessionChatPickerSheets(_ content: some View) -> some View {
         content
-            .openCodeBottomSheet(isPresented: attachmentSourcesBinding, title: "Add attachment") {
+            .openCodeBottomSheet(isPresented: attachmentSourcesBinding, title: "session_chat.attachment_source.title") {
                 let sources = composerAttachmentSources
                 if sources.photos {
                     OpenCodeBottomSheetEntry(
-                        title: "Photos",
+                        title: "session_chat.attachment_source.photos",
                         startDecorator: .icon(.description),
                         action: {
                             logAttachmentSourceAction(ProductAnalytics.Action.attachPickPhotos)
@@ -753,7 +753,7 @@ struct SessionChatView: View {
                 }
                 if sources.files {
                     OpenCodeBottomSheetEntry(
-                        title: "Files",
+                        title: "session_chat.attachment_source.files",
                         startDecorator: .icon(.folder),
                         action: {
                             logAttachmentSourceAction(ProductAnalytics.Action.attachPickFiles)
@@ -764,7 +764,7 @@ struct SessionChatView: View {
                 }
                 if sources.logFile {
                     OpenCodeBottomSheetEntry(
-                        title: "Log file",
+                        title: "session_chat.attachment_source.log_file",
                         startDecorator: .icon(.list),
                         action: {
                             logAttachmentSourceAction(ProductAnalytics.Action.attachPickLogFile)
@@ -776,7 +776,7 @@ struct SessionChatView: View {
             }
             .openCodeBottomSheet(
                 isPresented: commandsSheetBinding,
-                title: viewModel.uiState.mcpPageVisible ? "MCP servers" : "Commands",
+                title: viewModel.uiState.mcpPageVisible ? "session_chat.commands.mcp_title" : "session_chat.commands.title",
                 leadingAction: commandsSheetLeadingAction
             ) {
                 if viewModel.uiState.mcpPageVisible {
@@ -936,10 +936,10 @@ struct SessionChatView: View {
         content
             .openCodeDialog(
                 isPresented: deleteDialogBinding,
-                title: "Delete session",
-                subtitle: "Delete session “\(viewModel.uiState.sessionTitle)”?",
+                title: "session_chat.delete_dialog.title",
+                subtitle: deleteDialogMessage,
                 primaryOption: OpenCodeDialogOption(
-                    title: "Delete",
+                    title: "session_chat.delete_dialog.confirm",
                     enabled: !viewModel.uiState.isLifecycleActionInFlight
                 ) {
                     ProductAnalytics.logUserAction(
@@ -950,7 +950,7 @@ struct SessionChatView: View {
                     viewModel.deleteSession()
                 },
                 secondaryOption: OpenCodeDialogOption(
-                    title: "Cancel",
+                    title: "common.cancel",
                     enabled: !viewModel.uiState.isLifecycleActionInFlight
                 ) {
                     ProductAnalytics.logUserAction(
@@ -1001,16 +1001,16 @@ struct SessionChatView: View {
         content
             .openCodeDialog(
                 isPresented: renameDialogBinding,
-                title: "Rename session",
+                title: "session_chat.rename_dialog.title",
                 primaryOption: OpenCodeDialogOption(
-                    title: "Save",
+                    title: "session_chat.rename_dialog.save",
                     enabled: !viewModel.uiState.rename.isSubmitting &&
                         viewModel.uiState.canMutate
                 ) {
                     Task { await viewModel.confirmRenameSession() }
                 },
                 secondaryOption: OpenCodeDialogOption(
-                    title: "Cancel",
+                    title: "common.cancel",
                     enabled: !viewModel.uiState.rename.isSubmitting,
                     action: viewModel.cancelRenameSession
                 ),
@@ -1019,23 +1019,23 @@ struct SessionChatView: View {
                         get: { viewModel.uiState.rename.draftTitle },
                         set: viewModel.updateRenameDraft
                     ),
-                    hint: "Title",
+                    hint: "session_chat.title_hint",
                     enabled: !viewModel.uiState.rename.isSubmitting,
                     errorMessage: .unlocalized(ifPresent: viewModel.uiState.rename.errorMessage)
                 )
             )
             .openCodeDialog(
                 isPresented: forkDialogBinding,
-                title: "Fork session",
+                title: "session_chat.fork_dialog.title",
                 primaryOption: OpenCodeDialogOption(
-                    title: "Fork",
+                    title: "session_chat.fork_dialog.confirm",
                     enabled: !viewModel.uiState.forkSubmitting &&
                         viewModel.uiState.canMutate
                 ) {
                     viewModel.confirmFork()
                 },
                 secondaryOption: OpenCodeDialogOption(
-                    title: "Cancel",
+                    title: "common.cancel",
                     enabled: !viewModel.uiState.forkSubmitting,
                     action: viewModel.cancelForkDialog
                 ),
@@ -1044,22 +1044,41 @@ struct SessionChatView: View {
                         get: { viewModel.uiState.forkDraftTitle },
                         set: viewModel.updateForkDraft
                     ),
-                    hint: "Title",
+                    hint: "session_chat.title_hint",
                     enabled: !viewModel.uiState.forkSubmitting,
-                    errorMessage: .unlocalized(ifPresent: viewModel.uiState.forkErrorMessage)
+                    // Already localised by the commands region, or the server's own error.
+                    errorMessage: .verbatim(ifPresent: viewModel.uiState.forkErrorMessage)
                 )
             )
             .openCodeDialog(
                 isPresented: forkResultDialogBinding,
-                title: "Session forked",
-                subtitle: "Forked as “\(viewModel.uiState.forkedSessionTitle)”.",
-                primaryOption: OpenCodeDialogOption(title: "Open") {
+                title: "session_chat.fork_result.title",
+                subtitle: forkResultMessage,
+                primaryOption: OpenCodeDialogOption(title: "session_chat.fork_result.open") {
                     viewModel.chooseForkOpen()
                 },
-                secondaryOption: OpenCodeDialogOption(title: "Stay") {
+                secondaryOption: OpenCodeDialogOption(title: "session_chat.fork_result.stay") {
                     viewModel.chooseForkStay()
                 }
             )
+    }
+
+    /// The session title is server content and stays an argument.
+    private var deleteDialogMessage: OpenCodeText {
+        let title = viewModel.uiState.sessionTitle
+        return OpenCodeText(LocalizedStringResource(
+            "session_chat.delete_dialog.message",
+            defaultValue: "Delete session “\(title)”?"
+        ))
+    }
+
+    /// The forked session's title is server content and stays an argument.
+    private var forkResultMessage: OpenCodeText {
+        let title = viewModel.uiState.forkedSessionTitle
+        return OpenCodeText(LocalizedStringResource(
+            "session_chat.fork_result.message_forked_as",
+            defaultValue: "Forked as “\(title)”."
+        ))
     }
 
     /// Screens the view model asks to open: a replacement session, Terminal, and Files.
@@ -1181,7 +1200,7 @@ struct SessionChatView: View {
         guard viewModel.uiState.mcpPageVisible else { return nil }
         return OpenCodeBottomSheetHeaderAction(
             icon: .arrowBack,
-            accessibilityLabel: "Back to commands",
+            accessibilityLabel: "session_chat.commands.back",
             action: { viewModel.closeMcpServers() }
         )
     }
@@ -1410,7 +1429,7 @@ struct SessionChatView: View {
         let lifecycleEnabled = sessionCreated && !viewModel.uiState.isLifecycleActionInFlight
         var entries = [
             OpenCodeOverflowMenuEntry(
-                title: "Rename session",
+                title: "session_chat.menu.rename",
                 icon: .edit,
                 enabled: sessionCreated,
                 action: {
@@ -1420,7 +1439,7 @@ struct SessionChatView: View {
                 }
             ),
             OpenCodeOverflowMenuEntry(
-                title: "Review changes",
+                title: "session_chat.menu.review_changes",
                 icon: .description,
                 enabled: sessionCreated,
                 action: {
@@ -1430,7 +1449,7 @@ struct SessionChatView: View {
                 }
             ),
             OpenCodeOverflowMenuEntry(
-                title: "Fork session",
+                title: "session_chat.menu.fork",
                 icon: .callSplit,
                 enabled: sessionCreated,
                 action: {
@@ -1441,7 +1460,7 @@ struct SessionChatView: View {
             ),
             moveToWorktreeMenuEntry(sessionCreated: sessionCreated),
             OpenCodeOverflowMenuEntry(
-                title: "Browse files",
+                title: "session_chat.menu.browse_files",
                 icon: .folder,
                 enabled: sessionCreated,
                 action: {
@@ -1451,7 +1470,7 @@ struct SessionChatView: View {
                 }
             ),
             OpenCodeOverflowMenuEntry(
-                title: "Session context",
+                title: "session_chat.menu.session_context",
                 icon: .architecture,
                 enabled: sessionCreated,
                 action: {
@@ -1461,7 +1480,7 @@ struct SessionChatView: View {
                 }
             ),
             OpenCodeOverflowMenuEntry(
-                title: "Copy session ID",
+                title: "session_chat.menu.copy_session_id",
                 icon: .contentCopy,
                 enabled: sessionCreated,
                 action: {
@@ -1474,7 +1493,7 @@ struct SessionChatView: View {
         if viewModel.uiState.supportsSessionArchive {
             entries.append(
                 OpenCodeOverflowMenuEntry(
-                    title: "Archive",
+                    title: "session_chat.menu.archive",
                     icon: .archive,
                     enabled: lifecycleEnabled,
                     action: {
@@ -1487,7 +1506,7 @@ struct SessionChatView: View {
         }
         entries.append(
             OpenCodeOverflowMenuEntry(
-                title: "Report a problem",
+                title: "session_chat.menu.report_problem",
                 icon: .edit,
                 action: {
                     menuExpanded = false
@@ -1497,7 +1516,7 @@ struct SessionChatView: View {
         )
         entries.append(
             OpenCodeOverflowMenuEntry(
-                title: "Delete",
+                title: "session_chat.menu.delete",
                 icon: .close,
                 enabled: lifecycleEnabled,
                 destructive: true,
@@ -2120,7 +2139,6 @@ private struct SessionRetryCountdownCard: View {
 
     var body: some View {
         let seconds = max(0, Int((Double(card.nextAtMs) / 1000.0) - now.timeIntervalSince1970))
-        let attempt = card.attempt.map { "attempt \($0), " } ?? ""
         let label = card.actionLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
         let link = card.actionLink?.trimmingCharacters(in: .whitespacesAndNewlines)
         // Server-supplied links open as web pages only; other schemes get no button.
@@ -2131,7 +2149,7 @@ private struct SessionRetryCountdownCard: View {
                     .font(OpenCodeTypography.body)
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .lineLimit(1)
-                Text("\(attempt)retrying in \(seconds)s")
+                Text(retryStatus(seconds: seconds))
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeak)
                     .lineLimit(1)
@@ -2140,7 +2158,8 @@ private struct SessionRetryCountdownCard: View {
             .contentShape(Rectangle())
             .modifier(RetryStatusBodyTap(onOpenBody: onOpenBody))
             if let label, !label.isEmpty, let url {
-                OpenCodeButton(variant: .compactText(title: .unlocalized(label))) {
+                // The server names its own link.
+                OpenCodeButton(variant: .compactText(title: .verbatim(label))) {
                     onOpenLink(url)
                 }
             }
@@ -2149,6 +2168,16 @@ private struct SessionRetryCountdownCard: View {
         .padding(.trailing, 10)
         .padding(.vertical, 8)
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now = $0 }
+    }
+
+    private func retryStatus(seconds: Int) -> LocalizedStringResource {
+        guard let attempt = card.attempt else {
+            return LocalizedStringResource("timeline.retry.retrying_in", defaultValue: "retrying in \(seconds)s")
+        }
+        return LocalizedStringResource(
+            "timeline.retry.attempt_retrying_in",
+            defaultValue: "attempt \(attempt), retrying in \(seconds)s"
+        )
     }
 }
 
@@ -2182,8 +2211,8 @@ private struct CommandsActionTileGrid: View {
         let requiresLive = action == .new || action == .fork || action == .terminal || action == .files
         return OpenCodeActionTile(
             icon: action.tileIcon,
-            label: .unlocalized(action.tileLabel),
-            accessibilityLabel: .unlocalized(action.descriptionText),
+            label: OpenCodeText(action.tileLabelResource),
+            accessibilityLabel: OpenCodeText(action.descriptionResource),
             enabled: !requiresLive || canMutate,
             badge: action == .mcp ? mcpBadge : nil,
             action: { run(action) }
@@ -2192,6 +2221,34 @@ private struct CommandsActionTileGrid: View {
 }
 
 private extension ClientSlashAction {
+    var tileLabelResource: LocalizedStringResource {
+        switch self {
+        case .new: "session_chat.commands.new.label"
+        case .fork: "session_chat.commands.fork.label"
+        case .undo: "session_chat.commands.undo.label"
+        case .redo: "session_chat.commands.redo.label"
+        case .compact: "session_chat.commands.compact.label"
+        case .terminal: "session_chat.commands.terminal.label"
+        case .files: "session_chat.commands.files.label"
+        case .mcp: "session_chat.commands.mcp.label"
+        case .btw: "session_chat.commands.btw.label"
+        }
+    }
+
+    var descriptionResource: LocalizedStringResource {
+        switch self {
+        case .new: "session_chat.commands.new.description"
+        case .fork: "session_chat.commands.fork.description"
+        case .undo: "session_chat.commands.undo.description"
+        case .redo: "session_chat.commands.redo.description"
+        case .compact: "session_chat.commands.compact.description"
+        case .terminal: "session_chat.commands.terminal.description"
+        case .files: "session_chat.commands.files.description"
+        case .mcp: "session_chat.commands.mcp.description"
+        case .btw: "session_chat.commands.btw.description"
+        }
+    }
+
     var tileIcon: OpenCodeIcon {
         switch self {
         case .new: .add

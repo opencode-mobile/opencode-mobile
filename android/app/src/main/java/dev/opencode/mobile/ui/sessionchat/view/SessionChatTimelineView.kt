@@ -64,6 +64,7 @@ import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onGloballyPositioned
 
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
@@ -72,6 +73,7 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
 
@@ -290,26 +292,26 @@ private fun SessionChatTimelineStateContent(
     when (props.timeline) {
         SessionChatTimelineState.Creating ->
             OpenCodeStatusStack(
-                title = "Starting session…",
-                subtitle = "Creating on server…",
+                title = stringResource(R.string.timeline_state_creating_title),
+                subtitle = stringResource(R.string.timeline_state_creating_subtitle),
                 testTag = "sessionChatCreating",
                 modifier = modifier.fillMaxSize(),
             )
 
         SessionChatTimelineState.Loading ->
             OpenCodeStatusStack(
-                title = "Loading messages",
-                subtitle = "Fetching timeline…",
+                title = stringResource(R.string.timeline_state_loading_title),
+                subtitle = stringResource(R.string.timeline_state_loading_subtitle),
                 testTag = "sessionChatLoading",
                 modifier = modifier.fillMaxSize(),
             )
 
         SessionChatTimelineState.Error ->
             OpenCodeEmptyState(
-                title = "Unable to load messages",
-                message = props.errorMessage?.takeIf { it.isNotBlank() } ?: "The timeline didn't load.",
+                title = stringResource(R.string.timeline_state_error_title),
+                message = props.errorMessage?.takeIf { it.isNotBlank() } ?: stringResource(R.string.timeline_state_error_fallback),
                 primaryAction =
-                    OpenCodeEmptyStateAction(title = "Retry") {
+                    OpenCodeEmptyStateAction(title = stringResource(R.string.timeline_state_retry)) {
                         props.onRetry()
                     },
                 modifier = modifier.fillMaxSize(),
@@ -324,7 +326,7 @@ private fun SessionChatTimelineStateContent(
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = "No messages yet. Send a prompt to start.",
+                    text = stringResource(R.string.timeline_state_empty),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -482,7 +484,7 @@ private fun SessionChatTimelineReadyView(
     val animatedReserve by animateDpAsState(
         targetValue = SessionChatCornerSlotsLayout.reservedHeight(hasActivity = reservesActivityRow),
         animationSpec = spring(dampingRatio = 0.72f, stiffness = Spring.StiffnessMediumLow),
-        label = "sessionChatPillReserve",
+        label = PILL_RESERVE_ANIMATION_LABEL,
     )
     val listBottomInset = bottomOverlayInset + animatedReserve.coerceAtLeast(0.dp)
     // Only user drag/fling holds applies — not programmatic auto-follow
@@ -1624,7 +1626,6 @@ private fun FailureLineBlock(
     )
 }
 
-private const val STEP_PARAGRAPH_PLACEHOLDER = "Worked without commentary"
 private val StepParagraphTextPaddingHorizontal = 4.dp
 
 /**
@@ -1660,7 +1661,7 @@ private fun StepParagraphBlock(
             )
         } else {
             Text(
-                text = STEP_PARAGRAPH_PLACEHOLDER,
+                text = stringResource(R.string.timeline_step_no_commentary),
                 style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
                 color = openCodeColor("text-weak"),
                 modifier = Modifier.padding(horizontal = StepParagraphTextPaddingHorizontal),
@@ -1818,6 +1819,9 @@ private fun ToolStatus.toToolCallCardStatusBase(): OpenCodeToolCallCardStatus =
 private const val SESSION_CHAT_BOTTOM_ANCHOR_KEY = "session-chat-timeline-bottom"
 private const val SESSION_CHAT_STATUS_INDICATOR_KEY = "session-chat-status-indicators"
 
+/** Animation label for tooling; not shown to users. */
+private const val PILL_RESERVE_ANIMATION_LABEL = "sessionChatPillReserve"
+
 @Composable
 private fun FallbackMessageBubble(
     roleLabel: String,
@@ -1825,7 +1829,7 @@ private fun FallbackMessageBubble(
     modifier: Modifier = Modifier,
 ) {
     Text(
-        text = "$roleLabel: ${text.ifBlank { "…" }}",
+        text = stringResource(R.string.timeline_fallback_message, roleLabel, text.ifBlank { "…" }),
         modifier =
             modifier
                 .background(

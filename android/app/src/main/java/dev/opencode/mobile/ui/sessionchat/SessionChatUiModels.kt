@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.agent.MentionableAgent
@@ -40,6 +41,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeFileIconKind
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellOutputUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsUiState
+import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatWorktreeMoveUiState
 
 data class SessionChatComposerState(
@@ -304,7 +306,7 @@ data class SessionChatUiState(
     val forkDialogVisible: Boolean = false,
     val forkDraftTitle: String = "",
     val forkSubmitting: Boolean = false,
-    val forkErrorMessage: String? = null,
+    val forkErrorMessage: UiText? = null,
     val forkResultVisible: Boolean = false,
     val forkedSessionTitle: String = "",
     val pendingSessionReplace: ChildSessionNavigationTarget? = null,
@@ -586,7 +588,8 @@ data class SessionChatSlashSuggestion(
     val id: String,
     val title: String,
     val subtitle: String?,
-    val badge: String?,
+    /** Source kind (skill or MCP); the view resolves it. */
+    val badge: UiText?,
     val commandName: String,
 )
 
@@ -633,12 +636,12 @@ data class SessionChatComposerRegionState(
 fun ServerCommand.toSlashSuggestion(): SessionChatSlashSuggestion =
     SessionChatSlashSuggestion(
         id = name,
-        title = "/$name",
+        title = slashCommandToken(name),
         subtitle = description,
         badge =
             when (source) {
-                ServerCommandSource.Skill -> "skill"
-                ServerCommandSource.Mcp -> "mcp"
+                ServerCommandSource.Skill -> UiText.resource(R.string.session_chat_suggestion_badge_skill)
+                ServerCommandSource.Mcp -> UiText.resource(R.string.session_chat_suggestion_badge_mcp)
                 ServerCommandSource.Command -> null
             },
         commandName = name,
@@ -647,7 +650,7 @@ fun ServerCommand.toSlashSuggestion(): SessionChatSlashSuggestion =
 fun MentionableAgent.toAtSuggestion(): SessionChatAtSuggestion =
     SessionChatAtSuggestion(
         id = name,
-        title = "@$name",
+        title = agentMentionToken(name),
         subtitle = description,
         agentName = name,
     )
@@ -656,10 +659,17 @@ fun dev.opencode.mobile.domain.filesystem.ProjectEntry.toFileSuggestion(): Sessi
     SessionChatAtSuggestion(
         id = "file:$relativePath",
         title = relativePath,
-        subtitle = "File",
+        // The view labels file rows ("File"), so the label follows the app language.
+        subtitle = null,
         filePath = relativePath,
         isDirectory = isDirectory,
     )
+
+/** What the user types for a command: `/name`. Syntax, never translated. */
+private fun slashCommandToken(name: String): String = "/" + name
+
+/** What the user types to mention an agent: `@name`. Syntax, never translated. */
+private fun agentMentionToken(name: String): String = "@" + name
 
 data class PendingSend(
     val queuedAtMs: Long,
@@ -873,7 +883,7 @@ data class SessionChatCommandsRegionState(
     val forkDialogVisible: Boolean = false,
     val forkDraftTitle: String = "",
     val forkSubmitting: Boolean = false,
-    val forkErrorMessage: String? = null,
+    val forkErrorMessage: UiText? = null,
     val forkResultVisible: Boolean = false,
     val forkedSessionTitle: String = "",
     val isCompacting: Boolean = false,

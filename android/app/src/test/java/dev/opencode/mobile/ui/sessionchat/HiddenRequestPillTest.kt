@@ -29,7 +29,7 @@ class HiddenRequestPillTest {
 
     @Test
     fun subagentsShowUnderAnyComposer() {
-        val pill = SessionChatBackgroundWorkPill("1 subagent", needsInput = false, accessibilityLabel = "1 subagent running")
+        val pill = verbatimPill("1 subagent", needsInput = false, accessibilityLabel = "1 subagent running")
 
         assertEquals(
             listOf(SessionChatActivityItem.Subagents(pill)),

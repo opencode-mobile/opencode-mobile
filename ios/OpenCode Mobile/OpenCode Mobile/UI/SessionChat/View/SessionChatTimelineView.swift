@@ -194,20 +194,20 @@ struct SessionChatTimelineView: View {
             switch props.timeline {
             case .creating:
                 OpenCodeStatusStack(
-                    title: "Starting session…",
-                    subtitle: "Creating on server…",
+                    title: "timeline.state.creating_title",
+                    subtitle: "timeline.state.creating_subtitle",
                     accessibilityIdentifier: "sessionChatCreating"
                 )
             case .loading:
                 OpenCodeStatusStack(
-                    title: "Loading messages",
-                    subtitle: "Fetching timeline…",
+                    title: "timeline.state.loading_title",
+                    subtitle: "timeline.state.loading_subtitle",
                     accessibilityIdentifier: "sessionChatLoading"
                 )
             case .empty:
                 VStack {
                     Spacer()
-                    Text("No messages yet. Send a prompt to start.")
+                    Text("timeline.state.empty")
                         .font(OpenCodeTypography.body)
                         .foregroundStyle(OpenCodeColors.textBase)
                         .padding(.horizontal, 16)
@@ -215,9 +215,9 @@ struct SessionChatTimelineView: View {
                 }
             case .error:
                 OpenCodeEmptyState(
-                    title: "Unable to load messages",
-                    message: .verbatim(props.errorMessage, fallback: "The timeline didn't load."),
-                    primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
+                    title: "timeline.state.error_title",
+                    message: .verbatim(props.errorMessage, fallback: "timeline.state.error_fallback"),
+                    primaryAction: OpenCodeEmptyStateAction(title: "timeline.state.retry") {
                         Task { await props.onRetry() }
                     }
                 )
@@ -500,7 +500,7 @@ private struct SessionChatTimelineReadyView: View {
             .transaction { $0.animation = nil }
             .overlay {
                 if props.isRefreshing {
-                    OpenCodeStatusStack(spinner: "Refreshing messages")
+                    OpenCodeStatusStack(spinner: "timeline.state.refreshing")
                 }
             }
             .overlay(alignment: .topLeading) {
@@ -893,7 +893,7 @@ private extension SessionChatMessageRow {
 
 private struct SessionChatMessageActionsGestureModifier: ViewModifier {
     let renderedMarkdown: NativeMarkdownDocument?
-    let accessibilityLabel: String
+    let accessibilityLabel: LocalizedStringResource
     let onOpenMessageActions: (OpenCodeMessageTapTarget) -> Void
 
     func body(content: Content) -> some View {
@@ -901,13 +901,13 @@ private struct SessionChatMessageActionsGestureModifier: ViewModifier {
             content
                 .environment(\.markdownCodeBlockTapAction) { code in onOpenMessageActions(.codeBlock(code)) }
                 .onLongPressGesture { onOpenMessageActions(.text) }
-                .accessibilityLabel(accessibilityLabel)
-                .accessibilityHint("Long press to show message actions")
+                .accessibilityLabel(Text(accessibilityLabel))
+                .accessibilityHint(Text("timeline.message.actions_hint_long_press"))
         } else {
             content
                 .onTapGesture { onOpenMessageActions(.text) }
-                .accessibilityLabel(accessibilityLabel)
-                .accessibilityHint("Shows message actions")
+                .accessibilityLabel(Text(accessibilityLabel))
+                .accessibilityHint(Text("timeline.message.actions_hint"))
         }
     }
 }
@@ -977,7 +977,7 @@ private struct AssistantMessageContent: View {
                     .modifier(
                         SessionChatMessageActionsGestureModifier(
                             renderedMarkdown: markdown,
-                            accessibilityLabel: "Assistant message",
+                            accessibilityLabel: "timeline.message.assistant",
                             onOpenMessageActions: onOpenMessageActions
                         )
                     )
@@ -1328,12 +1328,12 @@ private struct StepParagraphBlock: View {
                 .modifier(
                     SessionChatMessageActionsGestureModifier(
                         renderedMarkdown: renderedMarkdown,
-                        accessibilityLabel: "Assistant message",
+                        accessibilityLabel: "timeline.message.assistant",
                         onOpenMessageActions: onOpenMessageActions
                     )
                 )
             } else {
-                Text(SessionChatStepParagraphBlock.placeholderText)
+                Text("timeline.step.no_commentary")
                     .font(OpenCodeTypography.bodySecondary)
                     .italic()
                     .foregroundStyle(OpenCodeColors.textWeak)
@@ -1639,8 +1639,14 @@ private struct FallbackMessageBubble: View {
     let roleLabel: String
     let text: String
 
+    /// Role label, then the message text (content, verbatim).
+    private var fallbackLine: LocalizedStringResource {
+        let shown = text.isEmpty ? "…" : text
+        return LocalizedStringResource("timeline.fallback_message", defaultValue: "\(roleLabel): \(shown)")
+    }
+
     var body: some View {
-        Text("\(roleLabel): \(text.isEmpty ? "…" : text)")
+        Text(fallbackLine)
             .font(OpenCodeTypography.caption)
             .foregroundStyle(OpenCodeColors.textBase)
             .padding(.horizontal, 12)

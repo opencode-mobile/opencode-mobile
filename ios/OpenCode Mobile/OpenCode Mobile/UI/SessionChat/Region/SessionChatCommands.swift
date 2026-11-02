@@ -289,7 +289,10 @@ final class SessionChatCommands {
         guard state.forkDialogVisible, !state.forkSubmitting else { return }
         let title = state.forkDraftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if title.isEmpty {
-            state.forkErrorMessage = "Enter a session title"
+            state.forkErrorMessage = String(
+                localized: "session_chat.fork_dialog.error_empty_title",
+                defaultValue: "Enter a session title"
+            )
             notifyChange()
             return
         }

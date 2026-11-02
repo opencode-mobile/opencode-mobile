@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.command.ClientSlashActionCatalog
 import dev.opencode.mobile.domain.command.ClientSlashMessageRef
 import dev.opencode.mobile.domain.composer.ComposerDraft
@@ -27,6 +28,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionCompactChrome
 import dev.opencode.mobile.ui.sessionchat.SessionCompactionPresence
 import dev.opencode.mobile.ui.sessionchat.TimelineProjector
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -362,7 +364,7 @@ class SessionChatCommands(
         val worktree = boundWorktree ?: return
         val title = snapshot.forkDraftTitle.trim()
         if (title.isEmpty()) {
-            _state.update { it.copy(forkErrorMessage = "Enter a session title") }
+            _state.update { it.copy(forkErrorMessage = UiText.resource(R.string.session_chat_fork_dialog_error_empty_title)) }
             return
         }
         val atMessageId = forkAtMessageId
@@ -378,7 +380,9 @@ class SessionChatCommands(
                     _state.update {
                         it.copy(
                             forkSubmitting = false,
-                            forkErrorMessage = error.message ?: "Couldn't fork session.",
+                            forkErrorMessage =
+                                error.message?.let(UiText::verbatim)
+                                    ?: UiText.resource(R.string.session_chat_fork_dialog_error_failed),
                         )
                     }
                     return@launch
