@@ -5,9 +5,10 @@ import SwiftUI
 /// accessibility; press feedback uses `OpenCodeFloatingPillPressStyle`.
 struct OpenCodeFloatingPillChrome: ViewModifier {
     let enabled: Bool
+    var backing: OpenCodeFloatingPillBacking = .glass
 
     func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26, *), backing == .glass {
             content
                 .background(
                     OpenCodeColors.surfaceRaisedBase.opacity(enabled ? 0.92 : 0.7),
@@ -34,6 +35,15 @@ struct OpenCodeFloatingPillChrome: ViewModifier {
     }
 }
 
+/// How opaque a floating pill's body is.
+enum OpenCodeFloatingPillBacking: Equatable {
+    /// Liquid Glass over a mostly opaque raised surface; the timeline shows faintly through.
+    case glass
+    /// Fully opaque raised surface with a hairline and shadow, for pills that stack over
+    /// timeline text (the expanded activity stack) and must not show it through.
+    case solid
+}
+
 struct OpenCodeFloatingPillPressStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -44,7 +54,10 @@ struct OpenCodeFloatingPillPressStyle: ButtonStyle {
 }
 
 extension View {
-    func openCodeFloatingPillChrome(enabled: Bool = true) -> some View {
-        modifier(OpenCodeFloatingPillChrome(enabled: enabled))
+    func openCodeFloatingPillChrome(
+        enabled: Bool = true,
+        backing: OpenCodeFloatingPillBacking = .glass
+    ) -> some View {
+        modifier(OpenCodeFloatingPillChrome(enabled: enabled, backing: backing))
     }
 }
