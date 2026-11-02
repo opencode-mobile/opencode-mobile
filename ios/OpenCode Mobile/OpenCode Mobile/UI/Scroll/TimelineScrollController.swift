@@ -6,10 +6,14 @@ protocol TimelineScrollPerforming: AnyObject {
     func performScrollToEnd(animated: Bool)
     /// Scroll a row into view and flash it.
     func performRevealItem(id: String)
+    /// Stop a coasting fling where it is and end the user scroll. A finger still
+    /// on the list keeps the scroll going.
+    func performEndUserScroll()
 }
 
 extension TimelineScrollPerforming {
     func performRevealItem(id: String) {}
+    func performEndUserScroll() {}
 }
 
 @Observable
@@ -117,6 +121,10 @@ final class TimelineScrollController {
     }
 
     func scrollToEndAnimated() {
+        // The pill shows while a fling coasts: stop the coast rather than ignore the tap.
+        if isUserScrolling {
+            performer?.performEndUserScroll()
+        }
         userUnpinnedContentOffsetY = nil
         autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd: true)
         requestScrollToEnd(animated: true)

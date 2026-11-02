@@ -21,6 +21,9 @@ enum MessageListTimelineDefaults {
     static let insetGlideDamping: CGFloat = 0.72
     /// Hold unanimated layout after the first pin while estimated heights settle.
     static let initialLoadSettlingMilliseconds = 400
+    /// Fling deceleration per millisecond. UIKit's `.normal` (0.998) coasts for seconds and
+    /// `.fast` (0.99) stops like paging; this sits between so a fling settles sooner.
+    static let decelerationRate = UIScrollView.DecelerationRate(rawValue: 0.995)
 }
 
 /// Absolute Y offset for the true timeline bottom (OPE-67 pin math).

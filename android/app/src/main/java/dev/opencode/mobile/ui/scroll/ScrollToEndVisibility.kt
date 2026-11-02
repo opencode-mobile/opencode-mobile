@@ -20,32 +20,6 @@ private fun revealThresholdPx(
         (viewportHeightPx * VIEWPORT_REVEAL_FRACTION).toInt(),
     )
 
-internal fun timelineEndGapPx(
-    messageCount: Int,
-    viewportEndOffset: Int,
-    afterContentPadding: Int,
-    visibleItems: List<TimelineVisibleItem>,
-): Int? {
-    if (messageCount == 0) return null
-
-    val bottomAnchor = visibleItems.firstOrNull { it.index == BOTTOM_ANCHOR_INDEX }
-    if (bottomAnchor != null) {
-        return bottomAnchor.offset +
-            bottomAnchor.size +
-            afterContentPadding -
-            viewportEndOffset
-    }
-
-    val newestMessage =
-        visibleItems.firstOrNull { it.index == newestMessageIndex(messageCount) }
-            ?: return null
-    return newestMessage.offset +
-        newestMessage.size +
-        afterContentPadding +
-        BOTTOM_ANCHOR_HEIGHT_PX -
-        viewportEndOffset
-}
-
 /**
  * Visible item snapshot used by scroll-to-end math. Kept free of Compose types so
  * unit tests can cover taller-than-viewport newest messages without a runtime.
@@ -59,8 +33,6 @@ internal data class TimelineVisibleItem(
 internal fun shouldShowScrollToEnd(
     messageCount: Int,
     viewportHeightPx: Int,
-    viewportEndOffset: Int,
-    afterContentPadding: Int,
     revealThresholdMinPx: Int,
     visibleItems: List<TimelineVisibleItem>,
 ): Boolean {
@@ -68,10 +40,9 @@ internal fun shouldShowScrollToEnd(
     if (viewportHeightPx <= 0) return false
 
     val gap =
-        timelineEndGapPx(
+        timelineEndScrollDistancePx(
             messageCount = messageCount,
-            viewportEndOffset = viewportEndOffset,
-            afterContentPadding = afterContentPadding,
+            bottomAnchorHeightPx = BOTTOM_ANCHOR_HEIGHT_PX,
             visibleItems = visibleItems,
         ) ?: return true
     return gap > revealThresholdPx(viewportHeightPx, revealThresholdMinPx)
@@ -88,8 +59,6 @@ internal fun shouldShowScrollToEndPill(
     currentlyShown: Boolean,
     messageCount: Int,
     viewportHeightPx: Int,
-    viewportEndOffset: Int,
-    afterContentPadding: Int,
     revealThresholdMinPx: Int,
     hideSlackPx: Int,
     visibleItems: List<TimelineVisibleItem>,
@@ -98,10 +67,9 @@ internal fun shouldShowScrollToEndPill(
     if (messageCount == 0 || viewportHeightPx <= 0) return false
 
     val gap =
-        timelineEndGapPx(
+        timelineEndScrollDistancePx(
             messageCount = messageCount,
-            viewportEndOffset = viewportEndOffset,
-            afterContentPadding = afterContentPadding,
+            bottomAnchorHeightPx = BOTTOM_ANCHOR_HEIGHT_PX,
             visibleItems = visibleItems,
         ) ?: return true
     val revealPx = revealThresholdPx(viewportHeightPx, revealThresholdMinPx)
@@ -117,8 +85,6 @@ fun LazyListState.shouldShowScrollToEnd(
     return shouldShowScrollToEnd(
         messageCount = messageCount,
         viewportHeightPx = layoutInfo.viewportSize.height,
-        viewportEndOffset = layoutInfo.viewportEndOffset,
-        afterContentPadding = layoutInfo.afterContentPadding,
         revealThresholdMinPx = revealThresholdMinPx,
         visibleItems = layoutInfo.visibleItemsInfo.map { it.toTimelineVisibleItem() },
     )
@@ -139,8 +105,6 @@ fun LazyListState.shouldShowScrollToEndPill(
         currentlyShown = currentlyShown,
         messageCount = messageCount,
         viewportHeightPx = layoutInfo.viewportSize.height,
-        viewportEndOffset = layoutInfo.viewportEndOffset,
-        afterContentPadding = layoutInfo.afterContentPadding,
         revealThresholdMinPx = revealThresholdMinPx,
         hideSlackPx = hideSlackPx,
         visibleItems = layoutInfo.visibleItemsInfo.map { it.toTimelineVisibleItem() },
