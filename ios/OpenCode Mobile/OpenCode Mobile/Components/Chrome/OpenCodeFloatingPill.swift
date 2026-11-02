@@ -13,11 +13,24 @@ enum OpenCodeFloatingPillLayout: Equatable {
     case closable(label: String)
     /// Plain short label with no mark and no close, e.g. a "+3" overflow button.
     case label(String)
+    /// Round pill that stands for a whole stack of items: the mark of the lead item's state
+    /// (↑ needs attention, ! error, ✓ ready or done, a dot while live, ⋯ when `pending`) and a
+    /// small count badge when `count` is more than one.
+    case summary(count: Int, pending: Bool = false)
 
     var label: String {
         switch self {
         case let .iconLabel(_, label), let .counter(label, _), let .closable(label), let .label(label): label
         case let .iconOnly(_, accessibilityLabel): accessibilityLabel
+        case let .summary(count, _): count > 1 ? "\(count) activities" : "Activity"
+        }
+    }
+
+    /// Round layouts draw only their mark, whatever the width.
+    var isRound: Bool {
+        switch self {
+        case .iconOnly, .summary: true
+        default: false
         }
     }
 }
@@ -53,6 +66,8 @@ enum OpenCodeFloatingPillLeading: Equatable {
     case icon(OpenCodeIcon)
     case spinner
     case pulsingDot
+    /// A single character mark, e.g. "!".
+    case glyph(String)
     case doneCheck
     /// Compact fallback for layouts without a mark: a small dot in the state's tone.
     case stateDot
@@ -79,9 +94,23 @@ enum OpenCodeFloatingPillStyle {
             case .needsAttention: return waiting ? .pulsingDot : .spinner
             case .ready, .error, .done: return .none
             }
+        case let .summary(_, pending):
+            switch state {
+            case .needsAttention: return .icon(.arrowUpward)
+            case .error: return .glyph("!")
+            case .ready: return pending ? .glyph("⋯") : .icon(.check)
+            case .live: return .pulsingDot
+            case .done: return .doneCheck
+            }
         case .closable, .label:
             return .none
         }
+    }
+
+    /// Count badge on a round summary pill: only when it stands for more than one item.
+    static func badgeCount(layout: OpenCodeFloatingPillLayout) -> Int? {
+        guard case let .summary(count, _) = layout, count > 1 else { return nil }
+        return count
     }
 
     /// Mark a compact pill draws in its round body: the regular mark, or a state dot when there is none.
@@ -199,29 +228,62 @@ struct OpenCodeFloatingPill: View {
 
     @ViewBuilder
     private var content: some View {
-        if compact || isIconOnly {
+        if layout.isRound {
             leadingMark
                 .foregroundStyle(contentColor)
                 .frame(width: Self.minHeight, height: Self.minHeight)
                 .contentShape(Circle())
+                .overlay(alignment: .topTrailing) { countBadge }
         } else {
-            HStack(spacing: Self.iconSpacing) {
+            // One structure for full and compact so a change of `compact` animates the
+            // width: the label folds to zero and the padding closes up around the mark.
+            HStack(spacing: 0) {
                 leadingMark
-                Text(layout.label)
-                    .font(OpenCodeTypography.button)
-                    .lineLimit(1)
+                    .frame(width: hasMark ? Self.iconSize : 0, height: Self.iconSize)
+                OpenCodeWidthRevealLayout(
+                    progress: compact ? 0 : 1,
+                    gap: hasFullMark ? Self.iconSpacing : 0,
+                    gapEdge: .leading
+                ) {
+                    Text(layout.label)
+                        .font(OpenCodeTypography.button)
+                        .lineLimit(1)
+                        .fixedSize()
+                }
+                .opacity(compact ? 0 : 1)
+                .clipped()
             }
             .foregroundStyle(contentColor)
-            .padding(.horizontal, Self.paddingHorizontal)
+            .padding(.horizontal, compact ? Self.compactPaddingHorizontal : Self.paddingHorizontal)
             .padding(.vertical, Self.paddingVertical)
             .frame(minHeight: Self.minHeight)
             .contentShape(Capsule())
+            .animation(reduceMotion ? nil : Self.widthAnimation, value: compact)
         }
     }
 
-    private var isIconOnly: Bool {
-        if case .iconOnly = layout { return true }
-        return false
+    /// Whether the pill draws a mark in its current width.
+    private var hasMark: Bool {
+        compact || hasFullMark
+    }
+
+    private var hasFullMark: Bool {
+        OpenCodeFloatingPillStyle.leading(layout: layout, state: state) != .none
+    }
+
+    @ViewBuilder
+    private var countBadge: some View {
+        if let count = OpenCodeFloatingPillStyle.badgeCount(layout: layout) {
+            Text("\(count)")
+                .font(OpenCodeTypography.caption)
+                .foregroundStyle(OpenCodeColors.textStrong)
+                .padding(.horizontal, Self.badgePaddingHorizontal)
+                .frame(minWidth: Self.badgeSize, minHeight: Self.badgeSize)
+                .background(OpenCodeColors.surfaceRaisedBase, in: Capsule())
+                .overlay(Capsule().strokeBorder(OpenCodeColors.borderWeakerBase, lineWidth: 1))
+                .offset(x: 4, y: -4)
+                .accessibilityHidden(true)
+        }
     }
 
     private var updateTraits: AccessibilityTraits {
@@ -230,7 +292,7 @@ struct OpenCodeFloatingPill: View {
 
     @ViewBuilder
     private var leadingMark: some View {
-        let mark = compact
+        let mark = compact && !layout.isRound
             ? OpenCodeFloatingPillStyle.compactLeading(layout: layout, state: state)
             : OpenCodeFloatingPillStyle.leading(layout: layout, state: state)
         switch mark {
@@ -241,7 +303,11 @@ struct OpenCodeFloatingPill: View {
         case .spinner:
             OpenCodeFloatingPillSpinner(color: contentColor)
         case .pulsingDot:
-            OpenCodeFloatingPillPulsingDot()
+            OpenCodeFloatingPillPulsingDot(color: contentColor)
+        case let .glyph(text):
+            Text(text)
+                .font(OpenCodeTypography.button)
+                .frame(width: Self.iconSize, height: Self.iconSize)
         case .doneCheck:
             OpenCodeIconImage(icon: .check, size: Self.iconSize)
                 .foregroundStyle(OpenCodeColors.success)
@@ -262,12 +328,18 @@ struct OpenCodeFloatingPill: View {
         }
     }
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private var accessibilityLabel: String {
         OpenCodeFloatingPillStyle.accessibilityLabel(layout: layout, state: state, override: accessibilityLabelOverride)
     }
 
     static let minHeight: CGFloat = 36
     private static let paddingHorizontal: CGFloat = 14
+    /// Closes the round body to `minHeight` around a 16 pt mark.
+    private static let compactPaddingHorizontal: CGFloat = 10
+    private static let badgeSize: CGFloat = 16
+    private static let badgePaddingHorizontal: CGFloat = 4
     private static let paddingVertical: CGFloat = 8
     private static let iconSize: CGFloat = 16
     private static let iconSpacing: CGFloat = 6
@@ -299,12 +371,13 @@ private struct OpenCodeFloatingPillSpinner: View {
 
 /// Amber dot that pulses while an item waits for the user; still under Reduce Motion.
 private struct OpenCodeFloatingPillPulsingDot: View {
+    let color: Color
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var dim = false
 
     var body: some View {
         Circle()
-            .fill(OpenCodeColors.warning)
+            .fill(color)
             .frame(width: OpenCodeFloatingPill.dotSize, height: OpenCodeFloatingPill.dotSize)
             .opacity(reduceMotion ? 1 : (dim ? 0.35 : 1))
             .frame(width: 16, height: 16)

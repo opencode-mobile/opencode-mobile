@@ -7,7 +7,10 @@ import dev.opencode.mobile.ui.components.OpenCodeFloatingPillState
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchChangedFile
 import dev.opencode.mobile.ui.components.OpenCodeSessionBranchSummary
 import dev.opencode.mobile.ui.components.floatingPillLeading
+import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatActivityPillCopy
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatCornerSlotsLayout
+import dev.opencode.mobile.ui.sessionchat.view.SessionChatNavigationCopy
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -61,20 +64,20 @@ class SessionChatPillSlotsTest {
         )
         assertEquals(SessionChatActivityPriority.NeedsInput, SessionChatActivityItem.AnswerQuestion.priority)
         assertEquals(SessionChatActivityPriority.Error, SessionChatActivityItem.SideQuestionsFailed(1).priority)
-        assertEquals(SessionChatActivityPriority.Running, SessionChatActivityItem.Syncing("Syncing").priority)
+        assertEquals(SessionChatActivityPriority.Running, SessionChatActivityItem.SideQuestionsRunning(1).priority)
     }
 
     @Test
     fun equalPrioritiesKeepTheCallersOrder() {
         val slot =
             SessionChatPillSlots.activity(
-                listOf(SessionChatActivityItem.SideQuestionsRunning(2), SessionChatActivityItem.Syncing("Syncing")),
+                listOf(SessionChatActivityItem.SideQuestionsRunning(2), SessionChatActivityItem.Subagents(SessionChatBackgroundWorkPill("1 subagent", false, "1 subagent running"))),
                 keyboardVisible = false,
                 nowEpochMs = now,
             )
 
         assertEquals(SessionChatActivityItem.SideQuestionsRunning(2), slot.primary)
-        assertEquals(listOf(SessionChatActivityItem.Syncing("Syncing")), slot.overflow)
+        assertEquals(listOf(SessionChatActivityItem.Subagents(SessionChatBackgroundWorkPill("1 subagent", false, "1 subagent running"))), slot.overflow)
     }
 
     @Test
@@ -208,6 +211,50 @@ class SessionChatPillSlotsTest {
             SessionChatNavigationPill(3),
             SessionChatPillSlots.navigation(awayFromEnd = true, newCount = 3, keyboardVisible = false),
         )
+    }
+
+    @Test
+    fun awayFromTheEndFoldsEverythingIntoOneRoundPill() {
+        val items =
+            listOf(SessionChatActivityItem.Queued(2), SessionChatActivityItem.ReviewPermission, SessionChatActivityItem.SideQuestionsRunning(1))
+        val slot = SessionChatPillSlots.activity(items, keyboardVisible = false, nowEpochMs = now, awayFromEnd = true)
+
+        assertTrue(slot.collapsed)
+        assertTrue(slot.primaryCompact)
+        assertFalse(slot.showsOverflowButton)
+        assertEquals(SessionChatActivityItem.ReviewPermission, slot.primary)
+        assertEquals(listOf(SessionChatActivityItem.SideQuestionsRunning(1), SessionChatActivityItem.Queued(2)), slot.overflow)
+        assertEquals(3, slot.itemCount)
+    }
+
+    @Test
+    fun atTheEndOrWithTheKeyboardTheLeftSideDoesNotCollapse() {
+        val items = listOf(SessionChatActivityItem.Queued(2), SessionChatActivityItem.ReviewPermission)
+        assertFalse(SessionChatPillSlots.activity(items, keyboardVisible = false, nowEpochMs = now).collapsed)
+        assertFalse(SessionChatPillSlots.activity(items, keyboardVisible = true, nowEpochMs = now, awayFromEnd = true).collapsed)
+        assertTrue(SessionChatPillSlots.collapsesActivity(awayFromEnd = true, keyboardVisible = false))
+        assertFalse(SessionChatPillSlots.collapsesActivity(awayFromEnd = false, keyboardVisible = false))
+        assertFalse(SessionChatPillSlots.collapsesActivity(awayFromEnd = true, keyboardVisible = true))
+    }
+
+    @Test
+    fun syncingIsACircleAwayFromTheEndOrWithTheKeyboard() {
+        assertFalse(SessionChatPillSlots.syncingCompact(awayFromEnd = false, keyboardVisible = false))
+        assertTrue(SessionChatPillSlots.syncingCompact(awayFromEnd = true, keyboardVisible = false))
+        assertTrue(SessionChatPillSlots.syncingCompact(awayFromEnd = false, keyboardVisible = true))
+    }
+
+    @Test
+    fun navigationAlwaysHasALabel() {
+        assertEquals("Scroll to end", SessionChatNavigationCopy.label(SessionChatNavigationPill(0)))
+        assertEquals("4 new", SessionChatNavigationCopy.label(SessionChatNavigationPill(4)))
+        assertEquals("Scroll to end, 1 new message", SessionChatNavigationCopy.accessibilityLabel(SessionChatNavigationPill(1)))
+    }
+
+    @Test
+    fun reserveIsThePillHeightOnly() {
+        assertEquals(36.dp, SessionChatCornerSlotsLayout.reservedHeight(hasActivity = true))
+        assertEquals(0.dp, SessionChatCornerSlotsLayout.reservedHeight(hasActivity = false))
     }
 
     @Test

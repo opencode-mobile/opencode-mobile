@@ -29,7 +29,7 @@ struct SessionChatTimelineViewProps {
     let hideRetryCountdown: Bool
     /// Extra bottom inset so the timeline can scroll under a floating composer.
     let bottomOverlayInset: CGFloat
-    /// Bottom-left live activity from the screen (btw, queued). The timeline adds syncing and request failed.
+    /// Bottom-left live activity from the screen (btw, queued). The timeline adds request failed.
     let activityItems: [SessionChatActivityItem]
     /// The keyboard is up: the activity pill goes compact and the other corners hide.
     let keyboardVisible: Bool
@@ -279,7 +279,7 @@ private struct SessionChatTimelineReadyView: View {
     @State private var previousStepRailState: SessionChatStepRailViewState = .empty
     @State private var previousNoticeModelNames: TimelineNoticeModelNames = .empty
     @State private var topOverlayInset: CGFloat = 0
-    /// Syncing label the activity slot shows, lagging the prop by the show delay
+    /// Syncing label the bottom-right slot shows, lagging the prop by the show delay
     /// and minimum visible time in `SessionChatSyncingPillTiming`.
     @State private var displayedSyncingLabel: String?
     @State private var syncingShownAt: ContinuousClock.Instant?
@@ -313,14 +313,27 @@ private struct SessionChatTimelineReadyView: View {
             items.append(.requestFailed(rowID: failure.rowID, blockID: failure.blockID))
         }
         items.append(contentsOf: props.activityItems)
-        if let displayedSyncingLabel {
-            items.append(.syncing(label: displayedSyncingLabel))
-        }
         return items
     }
 
     private var activitySlot: SessionChatActivitySlot {
-        SessionChatPillSlots.activity(items: activityItems, keyboardVisible: props.keyboardVisible, now: activityClock)
+        SessionChatPillSlots.activity(
+            items: activityItems,
+            keyboardVisible: props.keyboardVisible,
+            awayFromEnd: showScrollToEnd,
+            now: activityClock
+        )
+    }
+
+    private var trailingSlotState: SessionChatTrailingSlotState {
+        SessionChatTrailingSlotState(
+            syncingLabel: displayedSyncingLabel,
+            syncingCompact: SessionChatPillSlots.syncingIsCompact(
+                awayFromEnd: showScrollToEnd,
+                keyboardVisible: props.keyboardVisible
+            ),
+            navigation: navigationPill
+        )
     }
 
     private var navigationPill: SessionChatNavigationPill? {
@@ -599,9 +612,9 @@ private struct SessionChatTimelineReadyView: View {
         }
     }
 
-    /// Bottom left live activity and bottom right navigation, just above the composer.
+    /// Bottom left live activity and bottom right Syncing and navigation, just above the composer.
     private var bottomSlots: some View {
-        HStack(alignment: .bottom, spacing: SessionChatActivitySlotView.spacing) {
+        HStack(alignment: .bottom, spacing: 0) {
             SessionChatActivitySlotView(
                 slot: activitySlot,
                 stackOpen: $activityStackOpen,
@@ -609,19 +622,15 @@ private struct SessionChatTimelineReadyView: View {
                 onClose: handleActivityClose
             )
             Spacer(minLength: 0)
-            if let navigationPill {
-                SessionChatNavigationSlotView(pill: navigationPill) {
-                    logScroll("pill-click count=\(props.messages.count)")
-                    ProductAnalytics.logUserAction(
-                        screenId: ProductAnalytics.Screen.sessionChat,
-                        actionId: ProductAnalytics.Action.chatScrollToEnd
-                    )
-                    scrollController.scrollToEndAnimated()
-                }
-                .transition(.opacity)
+            SessionChatTrailingSlotView(state: trailingSlotState) {
+                logScroll("pill-click count=\(props.messages.count)")
+                ProductAnalytics.logUserAction(
+                    screenId: ProductAnalytics.Screen.sessionChat,
+                    actionId: ProductAnalytics.Action.chatScrollToEnd
+                )
+                scrollController.scrollToEndAnimated()
             }
         }
-        .animation(.easeInOut(duration: 0.2), value: navigationPill)
         .padding(.horizontal, SessionChatCornerSlotsLayout.horizontalPadding)
         .padding(.bottom, SessionChatCornerSlotsLayout.rowBottom(overlayInset: props.bottomOverlayInset))
     }

@@ -602,7 +602,7 @@ struct SessionChatView: View {
                 trigger: ProductAnalytics.Trigger.present
             )
             showPendingPromptsSheet = true
-        case .requestFailed, .sideQuestionsRunning, .syncing, .finished:
+        case .requestFailed, .sideQuestionsRunning, .finished:
             break
         }
     }
