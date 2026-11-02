@@ -12,8 +12,8 @@ class ConnectionProfileListMetaTest {
     fun activeWithProtocol_captionAndActivePill() {
         val profile = profile(ServerProtocol.V2)
         assertEquals("API v2", profile.listCaption(isActive = true))
-        val status = profile.listStatus(isActive = true)
-        assertEquals("Active", status?.text)
+        val status = profile.listStatus(isActive = true, activeLabel = ACTIVE)
+        assertEquals(ACTIVE, status?.text)
         assertEquals(OpenCodeListItemStatusTone.Interactive, status?.tone)
     }
 
@@ -21,7 +21,7 @@ class ConnectionProfileListMetaTest {
     fun otherWithProtocol_compactInfoPill() {
         val profile = profile(ServerProtocol.V1)
         assertNull(profile.listCaption(isActive = false))
-        val status = profile.listStatus(isActive = false)
+        val status = profile.listStatus(isActive = false, activeLabel = ACTIVE)
         assertEquals("v1", status?.text)
         assertEquals(OpenCodeListItemStatusTone.Info, status?.tone)
     }
@@ -31,8 +31,8 @@ class ConnectionProfileListMetaTest {
         val profile = profile(null)
         assertNull(profile.listCaption(isActive = true))
         assertNull(profile.listCaption(isActive = false))
-        assertEquals("Active", profile.listStatus(isActive = true)?.text)
-        assertNull(profile.listStatus(isActive = false))
+        assertEquals(ACTIVE, profile.listStatus(isActive = true, activeLabel = ACTIVE)?.text)
+        assertNull(profile.listStatus(isActive = false, activeLabel = ACTIVE))
     }
 
     private fun profile(protocol: ServerProtocol?) =
@@ -43,4 +43,8 @@ class ConnectionProfileListMetaTest {
             id = "mac-mini",
             name = "Mac Mini",
         )
+
+    private companion object {
+        const val ACTIVE = "Active"
+    }
 }

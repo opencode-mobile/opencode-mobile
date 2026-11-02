@@ -24,6 +24,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -32,6 +33,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.home.HomeCompactRowPath
 import dev.opencode.mobile.domain.home.HomeProject
@@ -552,7 +554,7 @@ internal fun MainScreen(
                 title = active.displayName,
                 subtitle = active.baseUrl.trimEnd('/'),
                 caption = active.listCaption(isActive = true),
-                status = active.listStatus(isActive = true),
+                status = active.listStatus(isActive = true, activeLabel = stringResource(R.string.servers_status_active)),
                 style = OpenCodeListItemStyle.Card,
                 startDecorator =
                     StartDecorator.Letter(
@@ -570,7 +572,7 @@ internal fun MainScreen(
                     title = profile.displayName,
                     subtitle = ConnectionProfileIdentity.hostLabel(profile.baseUrl),
                     caption = profile.listCaption(isActive = false),
-                    status = profile.listStatus(isActive = false),
+                    status = profile.listStatus(isActive = false, activeLabel = stringResource(R.string.servers_status_active)),
                     startDecorator =
                         StartDecorator.Letter(
                             letterCharacterForProject(profile.displayName),

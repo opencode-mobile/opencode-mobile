@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">OpenCode Mobile</string>
     <string name="bottom_sheet_close">Close</string>
+    <string name="top_bar_back">Back</string>
 
     <!-- Keys match iOS Localizable.xcstrings: iOS `area.name` is Android `area_name`.
          scripts/check-string-keys.mjs checks both sides. -->
@@ -14,6 +15,7 @@
         <item quantity="other">%1$d Connection Profiles</item>
     </plurals>
     <string name="servers_saved">Saved</string>
+    <string name="servers_status_active">Active</string>
     <string name="servers_add">Add server</string>
     <string name="servers_remove_profile">Remove %1$s</string>
     <string name="servers_remove_dialog_title">Remove server?</string>

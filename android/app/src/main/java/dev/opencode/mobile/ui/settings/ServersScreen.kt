@@ -59,6 +59,7 @@ fun ServersScreen(
     var headerTapCount by remember { mutableIntStateOf(0) }
     var lastHeaderTapAtMs by remember { mutableLongStateOf(0L) }
     val headerTapInteraction = remember { MutableInteractionSource() }
+    val activeLabel = stringResource(R.string.servers_status_active)
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBar(
@@ -105,7 +106,7 @@ fun ServersScreen(
                                 title = profile.displayName,
                                 subtitle = ConnectionProfileIdentity.hostLabel(profile.baseUrl),
                                 caption = profile.listCaption(isActive = isActive),
-                                status = profile.listStatus(isActive = isActive),
+                                status = profile.listStatus(isActive = isActive, activeLabel = activeLabel),
                                 style = OpenCodeListItemStyle.Card,
                                 startDecorator =
                                     StartDecorator.Letter(

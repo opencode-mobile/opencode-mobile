@@ -25,6 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
@@ -38,8 +41,10 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -81,9 +86,10 @@ sealed interface OpenCodeTopBarSubtitleLeading {
 sealed interface OpenCodeTopBarLeading {
     data object None : OpenCodeTopBarLeading
 
+    /** [contentDescription] defaults to the localised "Back" (`R.string.top_bar_back`). */
     class Back(
         val onClick: () -> Unit,
-        val contentDescription: String = "Back",
+        val contentDescription: String? = null,
     ) : OpenCodeTopBarLeading
 
     class Close(
@@ -305,7 +311,12 @@ private fun TopBarSubtitleLine(
         if (subtitle != null) {
             Text(
                 text = subtitle,
-                modifier = Modifier.weight(1f, fill = false).widthIn(max = 220.dp),
+                // The cap keeps a following status close to a long project name; a lone
+                // subtitle (counts, labels) takes the full width so longer translations fit.
+                modifier =
+                    Modifier
+                        .weight(1f, fill = false)
+                        .then(if (status != null) Modifier.widthIn(max = 220.dp) else Modifier),
                 style = MaterialTheme.typography.bodySmall,
                 color = openCodeColor("text-base"),
                 maxLines = 1,
@@ -400,12 +411,20 @@ private fun titleBlockAccessibilityLabel(
 private fun LeadingControl(leading: OpenCodeTopBarLeading) {
     when (leading) {
         OpenCodeTopBarLeading.None -> Unit
-        is OpenCodeTopBarLeading.Back ->
+        is OpenCodeTopBarLeading.Back -> {
+            // Back points toward the leading edge, so it flips in right-to-left layouts.
+            val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowBack, leading.contentDescription),
+                variant =
+                    OpenCodeButtonVariant.IconCircle(
+                        OpenCodeIcons.ArrowBack,
+                        leading.contentDescription ?: stringResource(R.string.top_bar_back),
+                    ),
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = leading.onClick,
+                modifier = if (rtl) Modifier.graphicsLayer { scaleX = -1f } else Modifier,
             )
+        }
         is OpenCodeTopBarLeading.Close ->
             OpenCodeButton(
                 variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, leading.contentDescription),

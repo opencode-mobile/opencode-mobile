@@ -123,6 +123,17 @@
         }
       }
     },
+    "servers.status_active" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Active"
+          }
+        }
+      }
+    },
     "servers.title" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -130,6 +141,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Servers"
+          }
+        }
+      }
+    },
+    "top_bar.back" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back"
           }
         }
       }
