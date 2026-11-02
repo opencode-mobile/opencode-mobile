@@ -35,6 +35,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -334,8 +335,8 @@ fun MainNavigation() {
                     AppRootState.Loading -> {
                         ProductRouteScreenViewEffect(screenId = ProductAnalytics.Screen.APP_LOADING)
                         OpenCodeStatusStack(
-                            title = "Loading sessions",
-                            subtitle = "Checking server…",
+                            title = stringResource(R.string.common_loading_sessions),
+                            subtitle = stringResource(R.string.common_checking_server),
                             testTag = "appRootLoading",
                             modifier = Modifier.fillMaxSize(),
                         )

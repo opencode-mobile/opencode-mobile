@@ -52,7 +52,7 @@ struct AppOnboardingView: View {
         VStack(spacing: 0) {
             HStack {
                 Spacer()
-                Button("Skip") {
+                Button("onboarding.skip") {
                     ProductAnalytics.logUserAction(
                         screenId: ProductAnalytics.Screen.appOnboarding,
                         actionId: ProductAnalytics.Action.onboardingSkip
@@ -88,7 +88,7 @@ struct AppOnboardingView: View {
 
                 OpenCodeButton(
                     variant: .fullWidthText(
-                        title: pageIndex == AppOnboardingCopy.pages.count - 1 ? "Connect to server" : "Next"
+                        title: pageIndex == AppOnboardingCopy.pages.count - 1 ? "onboarding.connect" : "onboarding.next"
                     ),
                     action: {
                         if pageIndex == AppOnboardingCopy.pages.count - 1 {
@@ -132,31 +132,31 @@ private struct AppOnboardingPageView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 20))
 
                 if let badge = page.badge {
-                    OpenCodeTag(.unlocalized(badge))
+                    OpenCodeTag(badge)
                 }
 
-                Text(page.title)
+                Text(openCode: page.title)
                     .font(OpenCodeTypography.display)
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .fixedSize(horizontal: false, vertical: true)
 
                 if page.features.isEmpty {
                     if let body = page.body {
-                        Text(body)
+                        Text(openCode: body)
                             .font(OpenCodeTypography.bodySecondary)
                             .foregroundStyle(OpenCodeColors.textBase)
                     }
                     if let setupLink = page.setupLink {
-                        OpenCodeButton(variant: .link(title: .unlocalized(setupLink)), action: onNeedServerFirst)
+                        OpenCodeButton(variant: .link(title: setupLink), action: onNeedServerFirst)
                     }
                 } else {
                     OpenCodeListGroup(page.features, id: \.id) { row in
                         OpenCodeListItem(
-                            title: .unlocalized(row.title),
-                            subtitle: .unlocalized(row.detail),
+                            title: row.title,
+                            subtitle: row.detail,
                             startDecorator: .icon(
                                 AppOnboardingCopy.featureIcon(for: row.id),
-                                accessibilityLabel: .unlocalized(row.title)
+                                accessibilityLabel: row.title
                             )
                         )
                     }
@@ -181,35 +181,35 @@ private struct AppOnboardingSetupGuideView: View {
             VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Set up opencode serve")
+                    Text("onboarding.setup.title")
                         .font(OpenCodeTypography.display)
                         .foregroundStyle(OpenCodeColors.textStrong)
-                    Text("The app talks to an opencode server you run. Short path below — full detail in the official docs.")
+                    Text("onboarding.setup.intro")
                         .font(OpenCodeTypography.bodySecondary)
                         .foregroundStyle(OpenCodeColors.textBase)
                         .padding(.top, 8)
                         .padding(.bottom, 18)
 
                     setupStep(
-                        number: "Step 1",
-                        title: "Start the server on your machine",
-                        body: "In your project, run the opencode server (headless). Keep it running while you use the phone.",
+                        number: 1,
+                        title: "onboarding.setup.step1.title",
+                        body: "onboarding.setup.step1.body",
                         code: "opencode serve"
                     )
                     setupStep(
-                        number: "Step 2",
-                        title: "Require a password",
-                        body: "Set OPENCODE_SERVER_PASSWORD. Username defaults to opencode unless you set OPENCODE_SERVER_USERNAME."
+                        number: 2,
+                        title: "onboarding.setup.step2.title",
+                        body: "onboarding.setup.step2.body"
                     )
                     setupStep(
-                        number: "Step 3",
-                        title: "Reach it from your phone",
-                        body: "Recommended: Tailscale — install Tailscale on the machine and phone, then use the machine’s Tailscale IP or MagicDNS name as the server URL.\n\nAlso fine: same LAN, VPN, HTTPS, or another tunnel you manage. The app does not create a relay for you."
+                        number: 3,
+                        title: "onboarding.setup.step3.title",
+                        body: "onboarding.setup.step3.body"
                     )
                     setupStep(
-                        number: "Step 4",
-                        title: "Connect in the app",
-                        body: "Enter base URL + password. The app checks GET /global/health, then saves a Connection Profile on this device.",
+                        number: 4,
+                        title: "onboarding.setup.step4.title",
+                        body: "onboarding.setup.step4.body",
                         showDivider: false
                     )
                 }
@@ -218,7 +218,7 @@ private struct AppOnboardingSetupGuideView: View {
             }
 
             OpenCodeButton(
-                variant: .fullWidthText(title: "Open server docs"),
+                variant: .fullWidthText(title: "onboarding.setup.open_docs"),
                 action: {
                     ProductAnalytics.logUserAction(
                         screenId: ProductAnalytics.Screen.appOnboardingSetupGuide,
@@ -245,14 +245,15 @@ private struct AppOnboardingSetupGuideView: View {
 
     @ViewBuilder
     private func setupStep(
-        number: String,
-        title: String,
-        body: String,
+        number: Int,
+        title: LocalizedStringResource,
+        body: LocalizedStringResource,
         code: String? = nil,
         showDivider: Bool = true
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(number.uppercased())
+            Text(LocalizedStringResource("onboarding.setup.step_number", defaultValue: "Step \(number)"))
+                .textCase(.uppercase)
                 .font(OpenCodeTypography.caption)
                 .fontWeight(.bold)
                 .foregroundStyle(OpenCodeColors.textWeak)

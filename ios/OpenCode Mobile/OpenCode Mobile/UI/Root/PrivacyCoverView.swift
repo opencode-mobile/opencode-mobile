@@ -14,11 +14,11 @@ struct PrivacyCoverView: View {
             VStack(spacing: 16) {
                 OpenCodeIconImage(icon: .lock, size: 40)
                     .foregroundStyle(OpenCodeColors.textStrong)
-                Text("OpenCode Mobile")
+                Text("privacy_cover.title")
                     .font(OpenCodeTypography.title)
                     .foregroundStyle(OpenCodeColors.textStrong)
                 if locked {
-                    OpenCodeButton(variant: .fullWidthText(title: "Unlock")) {
+                    OpenCodeButton(variant: .fullWidthText(title: "privacy_cover.unlock")) {
                         onUnlock()
                     }
                     .padding(.top, 8)
@@ -28,7 +28,7 @@ struct PrivacyCoverView: View {
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(locked ? "OpenCode Mobile is locked" : "OpenCode Mobile")
+        .accessibilityLabel(Text(locked ? "privacy_cover.locked_label" : "privacy_cover.title"))
         .accessibilityIdentifier("privacyCover")
     }
 }

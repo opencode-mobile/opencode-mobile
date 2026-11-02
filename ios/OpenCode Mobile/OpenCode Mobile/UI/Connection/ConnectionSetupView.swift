@@ -29,7 +29,7 @@ struct ConnectionSetupView: View {
             ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 OpenCodeTopBar(
-                    title: .unlocalized(viewModel.screenTitle),
+                    title: viewModel.screenTitle,
                     leading: .back(action: {
                         ProductAnalytics.logUserAction(
                             screenId: ProductAnalytics.Screen.connectionSetup,
@@ -128,16 +128,15 @@ struct ConnectionSetupView: View {
         }
         .openCodeDialog(
             isPresented: $showRemoveConfirm,
-            title: "Remove “\(viewModel.name.isEmpty ? "server" : viewModel.name)”?",
-            subtitle:
-            "This device forgets the Connection Profile. Sessions stay on that server. If it’s the active server, you’ll pick another — or land on Connect if none remain.",
-            primaryOption: OpenCodeDialogOption(title: "Remove", destructive: true) {
+            title: removeDialogTitle,
+            subtitle: "servers.remove_dialog.message",
+            primaryOption: OpenCodeDialogOption(title: "common.remove", destructive: true) {
                 Task {
                     await viewModel.removeConnection()
                     close()
                 }
             },
-            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+            secondaryOption: OpenCodeDialogOption(title: "common.cancel") {
                 showRemoveConfirm = false
             }
         )
@@ -146,16 +145,16 @@ struct ConnectionSetupView: View {
                 get: { viewModel.cleartextWarningHosts != nil },
                 set: { shown in if !shown { viewModel.dismissCleartextWarning() } }
             ),
-            title: .unlocalized(CleartextPolicy.warningTitle),
-            subtitle: .unlocalized(viewModel.cleartextWarningMessage),
-            primaryOption: OpenCodeDialogOption(title: "Connect anyway") {
+            title: "connection.cleartext.title",
+            subtitle: viewModel.cleartextWarningMessage,
+            primaryOption: OpenCodeDialogOption(title: "connection.cleartext.connect_anyway") {
                 Task {
                     if await viewModel.confirmCleartextWarning() {
                         close()
                     }
                 }
             },
-            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+            secondaryOption: OpenCodeDialogOption(title: "common.cancel") {
                 viewModel.dismissCleartextWarning()
             }
         )
@@ -194,12 +193,12 @@ struct ConnectionSetupView: View {
     private var savedAddressContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             if let recovery = viewModel.addressRecovery {
-                Text(recovery.message)
+                Text(openCode: recovery.message)
                     .font(OpenCodeTypography.body)
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
-                Text(ConnectionSetupViewModel.savedAddressesHint(for: viewModel.serverURLs))
+                Text(openCode: ConnectionSetupViewModel.savedAddressesHint(for: viewModel.serverURLs))
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
                     .fixedSize(horizontal: false, vertical: true)
@@ -211,22 +210,22 @@ struct ConnectionSetupView: View {
 
     private var instructionEssay: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("On your computer, run this, then scan the QR.")
+            Text("connection.setup.instructions.run")
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .fixedSize(horizontal: false, vertical: true)
             OpenCodeCodeSnippet("opencode pair --remote")
-            Text("First run takes about a minute. Needs OpenCode 2.0.25 or later. The service starts if it is not already running.")
+            Text("connection.setup.instructions.first_run")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .fixedSize(horizontal: false, vertical: true)
             VStack(alignment: .leading, spacing: 8) {
-                Text("Same Wi-Fi instead")
+                Text("connection.setup.instructions.same_wifi_title")
                     .font(OpenCodeTypography.body)
                     .fontWeight(.semibold)
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .padding(.top, 8)
-                Text("Plain pair shows a QR only after the server is reachable beyond localhost.")
+                Text("connection.setup.instructions.same_wifi_body")
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
                     .fixedSize(horizontal: false, vertical: true)
@@ -240,8 +239,8 @@ struct ConnectionSetupView: View {
         VStack(alignment: .leading, spacing: 12) {
             OpenCodeServerAddressInput(
                 value: $viewModel.baseURL,
-                hint: "macbook.local:4096",
-                accessibilityLabel: "Host",
+                hint: "connection.setup.host_hint",
+                accessibilityLabel: "connection.setup.host_label",
                 enabled: !viewModel.isBusy,
                 submitAction: .next,
                 isFocused: $urlFocused,
@@ -255,7 +254,7 @@ struct ConnectionSetupView: View {
                 }
             )
             .id(ConnectionSetupKeyboardLayout.urlFieldID)
-            Text("LAN, Tailscale MagicDNS, or tunnel — not localhost on a phone.")
+            Text("connection.setup.host_help")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .padding(.leading, 2)
@@ -265,7 +264,7 @@ struct ConnectionSetupView: View {
     private var connectionNameField: some View {
         OpenCodeTextInput(
             text: $viewModel.name,
-            hint: "Optional name",
+            hint: "connection.setup.name_hint",
             kind: .text,
             enabled: !viewModel.isBusy,
             submitAction: .next,
@@ -293,7 +292,7 @@ struct ConnectionSetupView: View {
             case .password:
                 OpenCodeTextInput(
                     text: $viewModel.username,
-                    hint: "Username",
+                    hint: "connection.setup.username_hint",
                     kind: .username,
                     enabled: !viewModel.isBusy,
                     submitAction: .next,
@@ -303,14 +302,14 @@ struct ConnectionSetupView: View {
                 .id(ConnectionSetupKeyboardLayout.usernameFieldID)
                 OpenCodeTextInput(
                     text: $viewModel.password,
-                    hint: "Password, optional",
+                    hint: "connection.setup.password_hint",
                     kind: .password,
                     enabled: !viewModel.isBusy,
                     isFocused: $passwordFocused,
                     onSubmit: { passwordFocused = false }
                 )
                 .id(ConnectionSetupKeyboardLayout.passwordFieldID)
-                Text("Default user is opencode. Password is optional.")
+                Text("connection.setup.password_help")
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
                     .padding(.leading, 2)
@@ -322,7 +321,7 @@ struct ConnectionSetupView: View {
                     onSubmit: { pairingCodeFocused = false }
                 )
                 .id(ConnectionSetupKeyboardLayout.pairingFieldID)
-                Text("From the pair link. Works once and expires in 5 minutes.")
+                Text("connection.setup.pairing_code_help")
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
                     .padding(.leading, 2)
@@ -335,38 +334,38 @@ struct ConnectionSetupView: View {
             if viewModel.addressRecovery != nil {
                 OpenCodeCodeSnippet("opencode pair --remote")
                 OpenCodeButton(
-                    variant: .fullWidthText(title: .unlocalized(viewModel.primaryActionLabel)),
+                    variant: .fullWidthText(title: viewModel.primaryActionLabel),
                     enabled: !viewModel.isBusy,
                     action: openPairingScanner
                 )
             } else if viewModel.showsInstructionEssay {
                 OpenCodeButton(
-                    variant: .fullWidthText(title: "Scan QR"),
+                    variant: .fullWidthText(title: "connection.setup.action.scan_qr"),
                     enabled: !viewModel.isBusy,
                     action: openPairingScanner
                 )
                 OpenCodeButton(
-                    variant: .fullWidthText(title: "Enter a pairing code"),
+                    variant: .fullWidthText(title: "connection.setup.action.enter_pairing_code"),
                     enabled: !viewModel.isBusy,
                     contrast: .low,
                     action: { viewModel.showPairingCodeForm() }
                 )
                 OpenCodeButton(
-                    variant: .link(title: "Use a host and password"),
+                    variant: .link(title: "connection.setup.action.use_host_password"),
                     enabled: !viewModel.isBusy,
                     action: { viewModel.showHostPasswordForm() }
                 )
             } else {
                 if !isKeyboardVisible, viewModel.showsManualForm {
                     OpenCodeButton(
-                        variant: .link(title: "Scan a QR instead"),
+                        variant: .link(title: "connection.setup.action.scan_qr_instead"),
                         enabled: !viewModel.isBusy,
                         action: { viewModel.showScanInstructions() }
                     )
                 }
                 if viewModel.showsPrimaryAction {
                     OpenCodeButton(
-                        variant: .fullWidthText(title: .unlocalized(viewModel.primaryActionLabel)),
+                        variant: .fullWidthText(title: viewModel.primaryActionLabel),
                         enabled: viewModel.primaryEnabled
                     ) {
                         Task {
@@ -382,8 +381,8 @@ struct ConnectionSetupView: View {
 
     private var credentialSegmentControl: some View {
         HStack(spacing: 2) {
-            credentialSegmentButton(.password, title: "Password")
-            credentialSegmentButton(.pairingCode, title: "Pairing code")
+            credentialSegmentButton(.password, title: "connection.setup.segment.password")
+            credentialSegmentButton(.pairingCode, title: "connection.setup.segment.pairing_code")
         }
         .padding(2)
         .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 10))
@@ -391,7 +390,7 @@ struct ConnectionSetupView: View {
 
     private func credentialSegmentButton(
         _ segment: ConnectionCredentialSegment,
-        title: String
+        title: LocalizedStringResource
     ) -> some View {
         let selected = viewModel.credentialSegment == segment
         return Button {
@@ -500,12 +499,22 @@ struct ConnectionSetupView: View {
         }
     }
 
+    /// The profile name is user content and stays an argument.
+    private var removeDialogTitle: OpenCodeText {
+        guard !viewModel.name.isEmpty else { return "connection.setup.remove_dialog.title_unnamed" }
+        let name = viewModel.name
+        return OpenCodeText(LocalizedStringResource(
+            "servers.remove_dialog.title_named",
+            defaultValue: "Remove “\(name)”?"
+        ))
+    }
+
     private var removeAction: [OpenCodeTopBarAction] {
         guard viewModel.canRemove else { return [] }
         return [
             .icon(
                 .delete,
-                accessibilityLabel: "Remove server",
+                accessibilityLabel: "connection.setup.remove_server",
                 enabled: !viewModel.isBusy,
                 action: { showRemoveConfirm = true }
             ),
@@ -540,15 +549,15 @@ struct ConnectionSetupView: View {
         var body: some View {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(row.title)
+                    Text(openCode: row.title)
                         .font(OpenCodeTypography.heading)
                         .foregroundStyle(OpenCodeColors.textStrong)
-                    Text(row.subtitle)
+                    Text(openCode: row.subtitle)
                         .font(OpenCodeTypography.bodySecondary)
                         .foregroundStyle(OpenCodeColors.textBase)
                 }
                 Spacer(minLength: 8)
-                Text(row.badge)
+                Text(openCode: row.badge)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(row.isCurrent ? OpenCodeColors.textStrong : OpenCodeColors.textBase)
                     .padding(.horizontal, 8)
@@ -629,7 +638,7 @@ private struct ConnectionPairingCodeField: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        TextField("Pairing code", text: $text)
+        TextField(String(localized: "connection.setup.pairing_code_hint", defaultValue: "Pairing code"), text: $text)
             .font(OpenCodeTypography.body)
             .foregroundStyle(OpenCodeColors.textStrong)
             .textInputAutocapitalization(.never)
@@ -646,7 +655,7 @@ private struct ConnectionPairingCodeField: View {
             }
             .disabled(!enabled)
             .opacity(enabled ? 1 : 0.6)
-            .accessibilityLabel("Pairing code")
+            .accessibilityLabel(Text("connection.setup.pairing_code_hint"))
             .onChange(of: focused) { _, value in
                 if isFocused.wrappedValue != value {
                     isFocused.wrappedValue = value

@@ -9,6 +9,122 @@
     <string name="common_cancel">Cancel</string>
     <string name="common_remove">Remove</string>
 
+    <string name="common_loading_sessions">Loading sessions</string>
+    <string name="common_checking_server">Checking server…</string>
+
+    <!-- Connection setup -->
+    <string name="connection_setup_title_first">Connect to server</string>
+    <string name="connection_setup_title_add">Add server</string>
+    <string name="connection_setup_title_edit">Edit server</string>
+    <string name="connection_setup_action_connect">Connect</string>
+    <string name="connection_setup_action_connecting">Connecting…</string>
+    <string name="connection_setup_action_save">Save</string>
+    <string name="connection_setup_action_saving">Saving…</string>
+    <string name="connection_setup_action_scan_qr">Scan QR</string>
+    <string name="connection_setup_action_scan_new_qr">Scan a new QR</string>
+    <string name="connection_setup_action_enter_pairing_code">Enter a pairing code</string>
+    <string name="connection_setup_action_use_host_password">Use a host and password</string>
+    <string name="connection_setup_action_scan_qr_instead">Scan a QR instead</string>
+    <string name="connection_setup_remove_server">Remove server</string>
+    <string name="connection_setup_remove_dialog_title_unnamed">Remove “server”?</string>
+    <string name="connection_setup_instructions_run">On your computer, run this, then scan the QR.</string>
+    <string name="connection_setup_instructions_first_run">First run takes about a minute. Needs OpenCode 2.0.25 or later. The service starts if it is not already running.</string>
+    <string name="connection_setup_instructions_same_wifi_title">Same Wi-Fi instead</string>
+    <string name="connection_setup_instructions_same_wifi_body">Plain pair shows a QR only after the server is reachable beyond localhost.</string>
+    <!-- Example host in an empty address field. -->
+    <string name="connection_setup_host_hint">macbook.local:4096</string>
+    <string name="connection_setup_host_label">Host</string>
+    <string name="connection_setup_host_help">LAN, Tailscale MagicDNS, or tunnel — not localhost on a phone.</string>
+    <string name="connection_setup_name_hint">Optional name</string>
+    <string name="connection_setup_username_hint">Username</string>
+    <string name="connection_setup_password_hint">Password, optional</string>
+    <string name="connection_setup_password_help">Default user is opencode. Password is optional.</string>
+    <string name="connection_setup_pairing_code_hint">Pairing code</string>
+    <string name="connection_setup_pairing_code_help">From the pair link. Works once and expires in 5 minutes.</string>
+    <string name="connection_setup_segment_password">Password</string>
+    <string name="connection_setup_segment_pairing_code">Pairing code</string>
+    <string name="connection_setup_addresses_hint_tunnel_only">Remote tunnel saved. Nothing else to pick. It stays until you turn remote access off.</string>
+    <string name="connection_setup_addresses_hint_tailscale_fallback">Tailscale is used when it answers. Local network is the fallback.</string>
+    <string name="connection_setup_addresses_hint_default">Saved addresses are tried until one answers. Tailscale is preferred when it answers.</string>
+    <string name="connection_setup_address_tailscale">Tailscale</string>
+    <string name="connection_setup_address_remote_tunnel">Remote tunnel</string>
+    <string name="connection_setup_address_local_network">Local network</string>
+    <!-- %1$s is the server host. -->
+    <string name="connection_setup_address_not_reachable">%1$s · not reachable</string>
+    <string name="connection_setup_address_using_now">Using now</string>
+    <string name="connection_setup_address_saved">Saved</string>
+    <string name="connection_setup_pair_again_unreachable">Can\'t reach the saved address. Pair again.</string>
+    <string name="connection_setup_pair_again_unauthorized">This server rejected the saved sign-in. Pair again. A new password logs every device out.</string>
+
+    <string name="connection_cleartext_title">Connection isn\'t encrypted</string>
+    <!-- %1$s is one server host. -->
+    <string name="connection_cleartext_message_one_host">%1$s uses plain http outside your local network or Tailscale. Your server password and everything in your sessions would travel unencrypted. Prefer https, a VPN, or a tunnel.</string>
+    <!-- %1$s is a list of server hosts joined with commas. -->
+    <string name="connection_cleartext_message_hosts">%1$s use plain http outside your local network or Tailscale. Your server password and everything in your sessions would travel unencrypted. Prefer https, a VPN, or a tunnel.</string>
+    <string name="connection_cleartext_message_this_address">This address uses plain http outside your local network or Tailscale. Your server password and everything in your sessions would travel unencrypted. Prefer https, a VPN, or a tunnel.</string>
+    <string name="connection_cleartext_connect_anyway">Connect anyway</string>
+
+    <string name="connection_error_invalid_qr">This isn\'t an OpenCode 2 pairing QR</string>
+    <string name="connection_error_localhost_qr">That QR only has a localhost address</string>
+    <string name="connection_error_camera_denied">Allow camera access to scan the pairing QR</string>
+    <string name="connection_error_camera_unavailable">Camera isn\'t available on this device</string>
+    <string name="connection_error_enter_host">Enter a host</string>
+    <string name="connection_error_enter_pairing_code">Enter a pairing code</string>
+    <string name="connection_error_pairing_link_expired">This pairing link expired or was already used</string>
+    <string name="connection_error_duplicate_profile">A server with this host and username is already saved</string>
+    <string name="connection_error_qr_scan_failed">QR didn\'t connect. OpenCode 2\'s pairing API is still changing, so a scan can fail while this app is working. Enter the host and connect. Password is optional. A pairing code works too.</string>
+    <string name="connection_error_unreachable">Unable to reach the server</string>
+    <string name="connection_error_auth_failed">Authentication failed</string>
+    <string name="connection_error_unhealthy">Server reported unhealthy</string>
+
+    <string name="connection_scanner_title">Scan pairing QR</string>
+    <string name="connection_scanner_card_title">OpenCode pairing QR</string>
+    <string name="connection_scanner_card_body">From opencode pair --remote. Plain pair shows a QR only when the server is reachable beyond localhost.</string>
+
+    <string name="connection_onboarding_title">Connect to your server</string>
+    <string name="connection_onboarding_body">OpenCode Mobile controls sessions on an opencode server running on your development machine.</string>
+    <string name="connection_onboarding_connect">Connect to server</string>
+
+    <!-- App onboarding -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_connect">Connect to server</string>
+    <string name="onboarding_unofficial_title">An unofficial\nopencode client</string>
+    <string name="onboarding_unofficial_body">OpenCode Mobile is a native client for opencode sessions — work in progress. It is not an official OpenCode product.</string>
+    <string name="onboarding_unofficial_badge">Unofficial</string>
+    <string name="onboarding_connect_page_title">Connect to\nyour servers</string>
+    <string name="onboarding_connect_page_body">Point the app at an opencode server on your machine. We recommend Tailscale so your phone can reach it securely from anywhere.</string>
+    <string name="onboarding_connect_page_setup_link">Need the server first?</string>
+    <string name="onboarding_features_title">What you can\ndo from here</string>
+    <string name="onboarding_features_sessions_title">Sessions</string>
+    <string name="onboarding_features_sessions_detail">List, open, create, rename, fork, archive, delete</string>
+    <string name="onboarding_features_chat_title">Chat &amp; abort</string>
+    <string name="onboarding_features_chat_detail">Send prompts and stop work in flight</string>
+    <string name="onboarding_features_permissions_title">Permissions</string>
+    <string name="onboarding_features_permissions_detail">Approve or deny requests (no lasting remember)</string>
+    <string name="onboarding_features_changes_title">Changes</string>
+    <string name="onboarding_features_changes_detail">Inspect session diffs</string>
+    <string name="onboarding_features_live_title">Live while open</string>
+    <string name="onboarding_features_live_detail">Foreground event stream; refresh after reconnect</string>
+    <string name="onboarding_setup_title">Set up opencode serve</string>
+    <string name="onboarding_setup_intro">The app talks to an opencode server you run. Short path below — full detail in the official docs.</string>
+    <!-- %1$d is the step number. Shown in capitals. -->
+    <string name="onboarding_setup_step_number">Step %1$d</string>
+    <string name="onboarding_setup_step1_title">Start the server on your machine</string>
+    <string name="onboarding_setup_step1_body">In your project, run the opencode server (headless). Keep it running while you use the phone.</string>
+    <string name="onboarding_setup_step2_title">Require a password</string>
+    <string name="onboarding_setup_step2_body">Set OPENCODE_SERVER_PASSWORD. Username defaults to opencode unless you set OPENCODE_SERVER_USERNAME.</string>
+    <string name="onboarding_setup_step3_title">Reach it from your phone</string>
+    <string name="onboarding_setup_step3_body">Recommended: Tailscale — install Tailscale on the machine and phone, then use the machine’s Tailscale IP or MagicDNS name as the server URL.\n\nAlso fine: same LAN, VPN, HTTPS, or another tunnel you manage. The app does not create a relay for you.</string>
+    <string name="onboarding_setup_step4_title">Connect in the app</string>
+    <string name="onboarding_setup_step4_body">Enter base URL + password. The app checks GET /global/health, then saves a Connection Profile on this device.</string>
+    <string name="onboarding_setup_open_docs">Open server docs</string>
+
+    <!-- Privacy cover (App Lock) -->
+    <string name="privacy_cover_title">OpenCode Mobile</string>
+    <string name="privacy_cover_locked_label">OpenCode Mobile is locked</string>
+    <string name="privacy_cover_unlock">Unlock</string>
+
     <string name="servers_title">Servers</string>
     <plurals name="servers_profile_count">
         <item quantity="one">%1$d Connection Profile</item>

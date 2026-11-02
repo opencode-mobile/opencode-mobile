@@ -22,9 +22,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -51,6 +53,8 @@ fun PrivacyCover(
     if (!state.covered && !state.locked) return
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    val title = stringResource(R.string.privacy_cover_title)
+    val coverLabel = if (state.locked) stringResource(R.string.privacy_cover_locked_label) else title
     // Keyed on the lock, so a cover already up from onPause still takes focus when it locks; moving
     // focus off a text field closes its input connection, so the IME cannot type underneath.
     LaunchedEffect(state.locked) {
@@ -74,7 +78,7 @@ fun PrivacyCover(
                     }
                 }.focusRequester(focusRequester)
                 .focusable()
-                .semantics { contentDescription = if (state.locked) "OpenCode Mobile is locked" else "OpenCode Mobile" },
+                .semantics { contentDescription = coverLabel },
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -90,14 +94,14 @@ fun PrivacyCover(
             )
             Spacer(Modifier.height(16.dp))
             Text(
-                text = "OpenCode Mobile",
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onBackground,
             )
             if (state.locked) {
                 Spacer(Modifier.height(24.dp))
                 OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText("Unlock"),
+                    variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.privacy_cover_unlock)),
                     onClick = onUnlock,
                 )
             }

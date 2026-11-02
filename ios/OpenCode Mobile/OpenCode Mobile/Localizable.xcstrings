@@ -23,6 +23,28 @@
         }
       }
     },
+    "common.checking_server" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking server…"
+          }
+        }
+      }
+    },
+    "common.loading_sessions" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading sessions"
+          }
+        }
+      }
+    },
     "common.remove" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -30,6 +52,1084 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Remove"
+          }
+        }
+      }
+    },
+    "connection.cleartext.connect_anyway" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect anyway"
+          }
+        }
+      }
+    },
+    "connection.cleartext.message_hosts" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ use plain http outside your local network or Tailscale. Your server password and everything in your sessions would travel unencrypted. Prefer https, a VPN, or a tunnel."
+          }
+        }
+      }
+    },
+    "connection.cleartext.message_one_host" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ uses plain http outside your local network or Tailscale. Your server password and everything in your sessions would travel unencrypted. Prefer https, a VPN, or a tunnel."
+          }
+        }
+      }
+    },
+    "connection.cleartext.message_this_address" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This address uses plain http outside your local network or Tailscale. Your server password and everything in your sessions would travel unencrypted. Prefer https, a VPN, or a tunnel."
+          }
+        }
+      }
+    },
+    "connection.cleartext.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connection isn't encrypted"
+          }
+        }
+      }
+    },
+    "connection.error.auth_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Authentication failed"
+          }
+        }
+      }
+    },
+    "connection.error.camera_denied" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow camera access to scan the pairing QR"
+          }
+        }
+      }
+    },
+    "connection.error.camera_unavailable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Camera isn't available on this device"
+          }
+        }
+      }
+    },
+    "connection.error.duplicate_profile" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A server with this host and username is already saved"
+          }
+        }
+      }
+    },
+    "connection.error.enter_host" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a host"
+          }
+        }
+      }
+    },
+    "connection.error.enter_pairing_code" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a pairing code"
+          }
+        }
+      }
+    },
+    "connection.error.invalid_qr" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This isn't an OpenCode 2 pairing QR"
+          }
+        }
+      }
+    },
+    "connection.error.localhost_qr" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That QR only has a localhost address"
+          }
+        }
+      }
+    },
+    "connection.error.pairing_link_expired" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This pairing link expired or was already used"
+          }
+        }
+      }
+    },
+    "connection.error.qr_scan_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "QR didn't connect. OpenCode 2's pairing API is still changing, so a scan can fail while this app is working. Enter the host and connect. Password is optional. A pairing code works too."
+          }
+        }
+      }
+    },
+    "connection.error.unhealthy" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server reported unhealthy"
+          }
+        }
+      }
+    },
+    "connection.error.unreachable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to reach the server"
+          }
+        }
+      }
+    },
+    "connection.onboarding.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode Mobile controls sessions on an opencode server running on your development machine."
+          }
+        }
+      }
+    },
+    "connection.onboarding.connect" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect to server"
+          }
+        }
+      }
+    },
+    "connection.onboarding.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect to your server"
+          }
+        }
+      }
+    },
+    "connection.scanner.card_body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From opencode pair --remote. Plain pair shows a QR only when the server is reachable beyond localhost."
+          }
+        }
+      }
+    },
+    "connection.scanner.card_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode pairing QR"
+          }
+        }
+      }
+    },
+    "connection.scanner.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan pairing QR"
+          }
+        }
+      }
+    },
+    "connection.setup.action.connect" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect"
+          }
+        }
+      }
+    },
+    "connection.setup.action.connecting" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connecting…"
+          }
+        }
+      }
+    },
+    "connection.setup.action.enter_pairing_code" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a pairing code"
+          }
+        }
+      }
+    },
+    "connection.setup.action.save" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        }
+      }
+    },
+    "connection.setup.action.saving" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saving…"
+          }
+        }
+      }
+    },
+    "connection.setup.action.scan_new_qr" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan a new QR"
+          }
+        }
+      }
+    },
+    "connection.setup.action.scan_qr" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan QR"
+          }
+        }
+      }
+    },
+    "connection.setup.action.scan_qr_instead" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan a QR instead"
+          }
+        }
+      }
+    },
+    "connection.setup.action.use_host_password" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use a host and password"
+          }
+        }
+      }
+    },
+    "connection.setup.address.local_network" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Local network"
+          }
+        }
+      }
+    },
+    "connection.setup.address.not_reachable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ · not reachable"
+          }
+        }
+      }
+    },
+    "connection.setup.address.remote_tunnel" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remote tunnel"
+          }
+        }
+      }
+    },
+    "connection.setup.address.saved" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved"
+          }
+        }
+      }
+    },
+    "connection.setup.address.tailscale" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tailscale"
+          }
+        }
+      }
+    },
+    "connection.setup.address.using_now" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Using now"
+          }
+        }
+      }
+    },
+    "connection.setup.addresses.hint_default" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved addresses are tried until one answers. Tailscale is preferred when it answers."
+          }
+        }
+      }
+    },
+    "connection.setup.addresses.hint_tailscale_fallback" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tailscale is used when it answers. Local network is the fallback."
+          }
+        }
+      }
+    },
+    "connection.setup.addresses.hint_tunnel_only" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remote tunnel saved. Nothing else to pick. It stays until you turn remote access off."
+          }
+        }
+      }
+    },
+    "connection.setup.host_help" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LAN, Tailscale MagicDNS, or tunnel — not localhost on a phone."
+          }
+        }
+      }
+    },
+    "connection.setup.host_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macbook.local:4096"
+          }
+        }
+      }
+    },
+    "connection.setup.host_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Host"
+          }
+        }
+      }
+    },
+    "connection.setup.instructions.first_run" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "First run takes about a minute. Needs OpenCode 2.0.25 or later. The service starts if it is not already running."
+          }
+        }
+      }
+    },
+    "connection.setup.instructions.run" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On your computer, run this, then scan the QR."
+          }
+        }
+      }
+    },
+    "connection.setup.instructions.same_wifi_body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plain pair shows a QR only after the server is reachable beyond localhost."
+          }
+        }
+      }
+    },
+    "connection.setup.instructions.same_wifi_title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same Wi-Fi instead"
+          }
+        }
+      }
+    },
+    "connection.setup.name_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optional name"
+          }
+        }
+      }
+    },
+    "connection.setup.pair_again.unauthorized" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This server rejected the saved sign-in. Pair again. A new password logs every device out."
+          }
+        }
+      }
+    },
+    "connection.setup.pair_again.unreachable" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Can't reach the saved address. Pair again."
+          }
+        }
+      }
+    },
+    "connection.setup.pairing_code_help" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From the pair link. Works once and expires in 5 minutes."
+          }
+        }
+      }
+    },
+    "connection.setup.pairing_code_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pairing code"
+          }
+        }
+      }
+    },
+    "connection.setup.password_help" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Default user is opencode. Password is optional."
+          }
+        }
+      }
+    },
+    "connection.setup.password_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password, optional"
+          }
+        }
+      }
+    },
+    "connection.setup.remove_dialog.title_unnamed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove “server”?"
+          }
+        }
+      }
+    },
+    "connection.setup.remove_server" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove server"
+          }
+        }
+      }
+    },
+    "connection.setup.segment.pairing_code" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pairing code"
+          }
+        }
+      }
+    },
+    "connection.setup.segment.password" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password"
+          }
+        }
+      }
+    },
+    "connection.setup.title.add" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add server"
+          }
+        }
+      }
+    },
+    "connection.setup.title.edit" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit server"
+          }
+        }
+      }
+    },
+    "connection.setup.title.first" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect to server"
+          }
+        }
+      }
+    },
+    "connection.setup.username_hint" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Username"
+          }
+        }
+      }
+    },
+    "onboarding.connect" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect to server"
+          }
+        }
+      }
+    },
+    "onboarding.connect_page.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Point the app at an opencode server on your machine. We recommend Tailscale so your phone can reach it securely from anywhere."
+          }
+        }
+      }
+    },
+    "onboarding.connect_page.setup_link" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Need the server first?"
+          }
+        }
+      }
+    },
+    "onboarding.connect_page.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect to\nyour servers"
+          }
+        }
+      }
+    },
+    "onboarding.features.changes.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inspect session diffs"
+          }
+        }
+      }
+    },
+    "onboarding.features.changes.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changes"
+          }
+        }
+      }
+    },
+    "onboarding.features.chat.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send prompts and stop work in flight"
+          }
+        }
+      }
+    },
+    "onboarding.features.chat.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chat & abort"
+          }
+        }
+      }
+    },
+    "onboarding.features.live.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Foreground event stream; refresh after reconnect"
+          }
+        }
+      }
+    },
+    "onboarding.features.live.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Live while open"
+          }
+        }
+      }
+    },
+    "onboarding.features.permissions.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Approve or deny requests (no lasting remember)"
+          }
+        }
+      }
+    },
+    "onboarding.features.permissions.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Permissions"
+          }
+        }
+      }
+    },
+    "onboarding.features.sessions.detail" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "List, open, create, rename, fork, archive, delete"
+          }
+        }
+      }
+    },
+    "onboarding.features.sessions.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sessions"
+          }
+        }
+      }
+    },
+    "onboarding.features.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "What you can\ndo from here"
+          }
+        }
+      }
+    },
+    "onboarding.next" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next"
+          }
+        }
+      }
+    },
+    "onboarding.setup.intro" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The app talks to an opencode server you run. Short path below — full detail in the official docs."
+          }
+        }
+      }
+    },
+    "onboarding.setup.open_docs" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open server docs"
+          }
+        }
+      }
+    },
+    "onboarding.setup.step1.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In your project, run the opencode server (headless). Keep it running while you use the phone."
+          }
+        }
+      }
+    },
+    "onboarding.setup.step1.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start the server on your machine"
+          }
+        }
+      }
+    },
+    "onboarding.setup.step2.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set OPENCODE_SERVER_PASSWORD. Username defaults to opencode unless you set OPENCODE_SERVER_USERNAME."
+          }
+        }
+      }
+    },
+    "onboarding.setup.step2.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Require a password"
+          }
+        }
+      }
+    },
+    "onboarding.setup.step3.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recommended: Tailscale — install Tailscale on the machine and phone, then use the machine’s Tailscale IP or MagicDNS name as the server URL.\n\nAlso fine: same LAN, VPN, HTTPS, or another tunnel you manage. The app does not create a relay for you."
+          }
+        }
+      }
+    },
+    "onboarding.setup.step3.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reach it from your phone"
+          }
+        }
+      }
+    },
+    "onboarding.setup.step4.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter base URL + password. The app checks GET /global/health, then saves a Connection Profile on this device."
+          }
+        }
+      }
+    },
+    "onboarding.setup.step4.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect in the app"
+          }
+        }
+      }
+    },
+    "onboarding.setup.step_number" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Step %lld"
+          }
+        }
+      }
+    },
+    "onboarding.setup.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set up opencode serve"
+          }
+        }
+      }
+    },
+    "onboarding.skip" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Skip"
+          }
+        }
+      }
+    },
+    "onboarding.unofficial.badge" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unofficial"
+          }
+        }
+      }
+    },
+    "onboarding.unofficial.body" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode Mobile is a native client for opencode sessions — work in progress. It is not an official OpenCode product."
+          }
+        }
+      }
+    },
+    "onboarding.unofficial.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An unofficial\nopencode client"
+          }
+        }
+      }
+    },
+    "privacy_cover.locked_label" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode Mobile is locked"
+          }
+        }
+      }
+    },
+    "privacy_cover.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "OpenCode Mobile"
+          }
+        }
+      }
+    },
+    "privacy_cover.unlock" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unlock"
           }
         }
       }

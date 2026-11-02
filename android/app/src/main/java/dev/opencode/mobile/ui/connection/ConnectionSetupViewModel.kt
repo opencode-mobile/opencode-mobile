@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.R
 import dev.opencode.mobile.data.local.ServerConnectionDefaults
 import dev.opencode.mobile.domain.connection.CleartextPolicy
 import dev.opencode.mobile.domain.connection.ConnectionProbing
@@ -22,11 +23,10 @@ import dev.opencode.mobile.domain.connection.SecureCredentialStoreException
 import dev.opencode.mobile.domain.connection.ServerAddressProbe
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.connection.toProbeStatus
-import dev.opencode.mobile.domain.connection.userMessage
 import dev.opencode.mobile.domain.project.ServerProbeError
 import dev.opencode.mobile.network.ServerConnection
-import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,11 +62,43 @@ enum class SavedAddressRecovery {
     Unauthorized,
 }
 
-internal fun savedAddressPairAgainMessage(recovery: SavedAddressRecovery): String =
+internal fun savedAddressPairAgainMessage(recovery: SavedAddressRecovery): UiText =
     when (recovery) {
-        SavedAddressRecovery.Unreachable -> "Can't reach the saved address. Pair again."
-        SavedAddressRecovery.Unauthorized ->
-            "This server rejected the saved sign-in. Pair again. A new password logs every device out."
+        SavedAddressRecovery.Unreachable -> UiText.resource(R.string.connection_setup_pair_again_unreachable)
+        SavedAddressRecovery.Unauthorized -> UiText.resource(R.string.connection_setup_pair_again_unauthorized)
+    }
+
+/** Error snackbar text in Connection setup. The view resolves [text] into an `OpenCodeSnackbarMessage`. */
+data class ConnectionSetupSnackbar(
+    val text: UiText,
+    val variant: OpenCodeSnackbarVariant = OpenCodeSnackbarVariant.Error,
+    val id: Long = System.nanoTime(),
+)
+
+/** Probe failure shown to the user. */
+internal fun ServerProbeError.userMessageText(): UiText =
+    UiText.resource(
+        when (this) {
+            is ServerProbeError.Transport -> R.string.connection_error_unreachable
+            is ServerProbeError.Http ->
+                if (statusCode == 401 || statusCode == 403) {
+                    R.string.connection_error_auth_failed
+                } else {
+                    R.string.connection_error_unreachable
+                }
+            is ServerProbeError.Unhealthy -> R.string.connection_error_unhealthy
+        },
+    )
+
+/** Body of the "Connection isn't encrypted" warning. Hosts are server content and stay verbatim. */
+internal fun cleartextWarningMessage(hosts: List<String>): UiText =
+    if (hosts.isEmpty()) {
+        UiText.resource(R.string.connection_cleartext_message_this_address)
+    } else {
+        UiText.resource(
+            if (hosts.size == 1) R.string.connection_cleartext_message_one_host else R.string.connection_cleartext_message_hosts,
+            UiText.verbatim(hosts.joinToString(", ")),
+        )
     }
 
 private enum class ConnectFailureOrigin {
@@ -86,7 +118,7 @@ data class ConnectionSetupUiState(
     val credentialSegment: ConnectionCredentialSegment = ConnectionCredentialSegment.Password,
     val pairingCode: String = "",
     val requestPasswordFocus: Boolean = false,
-    val snackbar: OpenCodeSnackbarMessage? = null,
+    val snackbar: ConnectionSetupSnackbar? = null,
     val serverUrls: List<String> = emptyList(),
     val addressProbeFinished: Boolean = false,
     val unreachableUrls: Set<String> = emptySet(),
@@ -99,8 +131,8 @@ data class ConnectionSetupUiState(
     /** Untrusted `http` hosts waiting for the user's "Connect anyway". `null` when no warning shows. */
     val cleartextWarningHosts: List<String>? = null,
 ) {
-    val cleartextWarningMessage: String
-        get() = CleartextPolicy.warningMessage(cleartextWarningHosts.orEmpty())
+    val cleartextWarningMessage: UiText
+        get() = cleartextWarningMessage(cleartextWarningHosts.orEmpty())
 
     val usesQrLayout: Boolean
         get() = serverUrls.isNotEmpty()
@@ -109,26 +141,34 @@ data class ConnectionSetupUiState(
     val showsManualForm: Boolean
         get() = entry == ConnectionSetupEntry.Manual && !usesQrLayout
 
-    val pairAgainMessage: String?
+    val pairAgainMessage: UiText?
         get() = addressRecovery?.let(::savedAddressPairAgainMessage)
 
-    val screenTitle: String
+    val screenTitle: UiText
         get() =
-            when (mode) {
-                ConnectionSetupMode.First -> "Connect to server"
-                ConnectionSetupMode.Add -> "Add server"
-                ConnectionSetupMode.Edit -> "Edit server"
-            }
+            UiText.resource(
+                when (mode) {
+                    ConnectionSetupMode.First -> R.string.connection_setup_title_first
+                    ConnectionSetupMode.Add -> R.string.connection_setup_title_add
+                    ConnectionSetupMode.Edit -> R.string.connection_setup_title_edit
+                },
+            )
 
-    val primaryActionLabel: String
+    val primaryActionLabel: UiText
         get() =
-            when {
-                state == ConnectionSetupState.Connecting ->
-                    if (mode == ConnectionSetupMode.Edit) "Saving…" else "Connecting…"
-                state == ConnectionSetupState.Saving -> "Saving…"
-                mode == ConnectionSetupMode.Edit || qrPairingReady -> "Save"
-                else -> "Connect"
-            }
+            UiText.resource(
+                when {
+                    state == ConnectionSetupState.Connecting ->
+                        if (mode == ConnectionSetupMode.Edit) {
+                            R.string.connection_setup_action_saving
+                        } else {
+                            R.string.connection_setup_action_connecting
+                        }
+                    state == ConnectionSetupState.Saving -> R.string.connection_setup_action_saving
+                    mode == ConnectionSetupMode.Edit || qrPairingReady -> R.string.connection_setup_action_save
+                    else -> R.string.connection_setup_action_connect
+                },
+            )
 
     /** A camera scan hides Save until pairing succeeds. Editing a saved QR profile, and a failed paste, keep the button. */
     val showsPrimaryAction: Boolean
@@ -333,11 +373,11 @@ class ConnectionSetupViewModel
         }
 
         fun pairingQRCameraDenied() {
-            showError("Allow camera access to scan the pairing QR")
+            showError(UiText.resource(R.string.connection_error_camera_denied))
         }
 
         fun pairingQRCameraUnavailable() {
-            showError("Camera isn't available on this device")
+            showError(UiText.resource(R.string.connection_error_camera_unavailable))
         }
 
         private fun reportFieldEdit(actionId: String) {
@@ -388,7 +428,7 @@ class ConnectionSetupViewModel
                 return
             }
             if (hostIsBlank(_uiState.value.baseUrl)) {
-                showError("Enter a host")
+                showError(UiText.resource(R.string.connection_error_enter_host))
                 return
             }
             if (PairingQRPayload.isConnectLink(_uiState.value.baseUrl)) {
@@ -427,7 +467,7 @@ class ConnectionSetupViewModel
                 ConnectionCredentialSegment.PairingCode -> {
                     val code = _uiState.value.pairingCode.trim()
                     if (code.isEmpty()) {
-                        showError("Enter a pairing code")
+                        showError(UiText.resource(R.string.connection_error_enter_pairing_code))
                         return
                     }
                     // Typed codes redeem for user opencode. The username field is hidden here.
@@ -632,10 +672,10 @@ class ConnectionSetupViewModel
             }
         }
 
-        private fun pairingErrorText(error: PairingQRError): String =
+        private fun pairingErrorText(error: PairingQRError): UiText =
             when (error) {
-                PairingQRError.InvalidPayload -> "This isn't an OpenCode 2 pairing QR"
-                PairingQRError.NoReachableUrl -> "That QR only has a localhost address"
+                PairingQRError.InvalidPayload -> UiText.resource(R.string.connection_error_invalid_qr)
+                PairingQRError.NoReachableUrl -> UiText.resource(R.string.connection_error_localhost_qr)
             }
 
         private suspend fun redeemAnsweredHost(
@@ -671,9 +711,8 @@ class ConnectionSetupViewModel
                                     _uiState.value.copy(
                                         state = ConnectionSetupState.Idle,
                                         snackbar =
-                                            OpenCodeSnackbarMessage(
-                                                text = "This pairing link expired or was already used",
-                                                variant = OpenCodeSnackbarVariant.Error,
+                                            ConnectionSetupSnackbar(
+                                                UiText.resource(R.string.connection_error_pairing_link_expired),
                                             ),
                                     )
                             }
@@ -909,26 +948,18 @@ class ConnectionSetupViewModel
                 _uiState.value.copy(
                     state = ConnectionSetupState.Idle,
                     requestPasswordFocus = focusPassword,
-                    snackbar =
-                        OpenCodeSnackbarMessage(
-                            text = error.userMessage(),
-                            variant = OpenCodeSnackbarVariant.Error,
-                        ),
+                    snackbar = ConnectionSetupSnackbar(error.userMessageText()),
                 )
         }
 
         private fun presentScannedQrFailure() {
             leaveScannedQr(
-                snackbar =
-                    OpenCodeSnackbarMessage(
-                        text = QrScanFailureMessage,
-                        variant = OpenCodeSnackbarVariant.Error,
-                    ),
+                snackbar = ConnectionSetupSnackbar(QrScanFailureMessage),
             )
         }
 
         /** Back to the host form with the scanned address and password, as after a failed scan. */
-        private fun leaveScannedQr(snackbar: OpenCodeSnackbarMessage?) {
+        private fun leaveScannedQr(snackbar: ConnectionSetupSnackbar?) {
             pendingPairingCode = null
             pastedConnectLinkUnconfirmed = false
             val current = _uiState.value
@@ -965,18 +996,18 @@ class ConnectionSetupViewModel
                     _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Idle)
                     onSaved()
                 } catch (_: DuplicateConnectionProfileException) {
-                    showSaveFailure("A server with this host and username is already saved")
+                    showSaveFailure(UiText.resource(R.string.connection_error_duplicate_profile))
                 } catch (_: SecureCredentialStoreException) {
-                    showSaveFailure(SecureCredentialStoreException.USER_MESSAGE)
+                    showSaveFailure(credentialStoreFailure)
                 }
             }
         }
 
-        private fun showSaveFailure(text: String) {
+        private fun showSaveFailure(text: UiText) {
             _uiState.value =
                 _uiState.value.copy(
                     state = ConnectionSetupState.Idle,
-                    snackbar = OpenCodeSnackbarMessage(text = text, variant = OpenCodeSnackbarVariant.Error),
+                    snackbar = ConnectionSetupSnackbar(text),
                 )
         }
 
@@ -992,21 +1023,14 @@ class ConnectionSetupViewModel
                 _uiState.value = _uiState.value.copy(state = ConnectionSetupState.Idle)
                 onSaved()
             } catch (_: DuplicateConnectionProfileException) {
-                showSaveFailure("A server with this host and username is already saved")
+                showSaveFailure(UiText.resource(R.string.connection_error_duplicate_profile))
             } catch (_: SecureCredentialStoreException) {
-                showSaveFailure(SecureCredentialStoreException.USER_MESSAGE)
+                showSaveFailure(credentialStoreFailure)
             }
         }
 
-        private fun showError(text: String) {
-            _uiState.value =
-                _uiState.value.copy(
-                    snackbar =
-                        OpenCodeSnackbarMessage(
-                            text = text,
-                            variant = OpenCodeSnackbarVariant.Error,
-                        ),
-                )
+        private fun showError(text: UiText) {
+            _uiState.value = _uiState.value.copy(snackbar = ConnectionSetupSnackbar(text))
         }
 
         fun removeConnection(onRemoved: () -> Unit) {
@@ -1035,10 +1059,13 @@ class ConnectionSetupViewModel
             ServerConnection.fromProfile(draftProfile().copy(baseUrl = baseUrl))
 
         companion object {
-            const val QrScanFailureMessage =
-                "QR didn't connect. OpenCode 2's pairing API is still changing, so a scan can fail " +
-                    "while this app is working. Enter the host and connect. Password is optional. " +
-                    "A pairing code works too."
+            val QrScanFailureMessage: UiText = UiText.resource(R.string.connection_error_qr_scan_failed)
+
+            /**
+             * The credential store's own message. Its wording differs per platform (iOS adds the
+             * Keychain status), so it stays in the domain error for now instead of a shared key.
+             */
+            private val credentialStoreFailure: UiText = UiText.verbatim(SecureCredentialStoreException.USER_MESSAGE)
 
             fun hostIsBlank(baseUrl: String): Boolean {
                 val trimmed = baseUrl.trim()
