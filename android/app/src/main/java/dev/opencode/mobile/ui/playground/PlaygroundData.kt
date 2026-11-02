@@ -536,7 +536,7 @@ class PlaygroundProfileStore : ConnectionProfileStore {
         this.profile = profile
     }
 
-    override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = emptyList()
+    override suspend fun addedWorktrees(serverBaseUrl: String): List<String> = listOf(PlaygroundContent.WORKTREE)
 
     override suspend fun addWorktree(
         serverBaseUrl: String,

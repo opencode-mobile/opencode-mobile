@@ -6,6 +6,13 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
+/// A title that replaces the session title and opens a menu when tapped. The Session Chat
+/// Playground names its scenario this way; the app passes none.
+struct SessionChatTitleMenu {
+    let title: String
+    let onClick: () -> Void
+}
+
 struct SessionChatView: View {
     /// Server-supplied links (retry cards, failure sheets) open as web pages only.
     static func openServerLink(_ url: URL) {
@@ -79,18 +86,21 @@ struct SessionChatView: View {
     /// a child chat, Terminal, Files, Session context, tool groups) and the problem report
     /// do not open; their name is passed here instead.
     private let onUnavailableRoute: ((String) -> Void)?
+    private let titleMenu: SessionChatTitleMenu?
 
     init(
         session: SessionListItem,
         viewModel: SessionChatViewModel? = nil,
         detailControl: OpenCodeSplitPaneDetailControl? = nil,
         onLeaveSession: (() -> Void)? = nil,
-        onUnavailableRoute: ((String) -> Void)? = nil
+        onUnavailableRoute: ((String) -> Void)? = nil,
+        titleMenu: SessionChatTitleMenu? = nil
     ) {
         self.session = session
         self.detailControl = detailControl
         self.onLeaveSession = onLeaveSession
         self.onUnavailableRoute = onUnavailableRoute
+        self.titleMenu = titleMenu
         // Do not construct the ViewModel in `State(initialValue:)` — SwiftUI re-runs
         // View.init (and that expression) whenever the parent body refreshes, while
         // keeping one live `@State`. Eager make() was spawning bind storms and
@@ -239,7 +249,8 @@ struct SessionChatView: View {
                 entries: sessionOverflowMenuEntries
             ) {
                 OpenCodeTopBar(
-                    title: viewModel.uiState.sessionTitle.isEmpty ? session.title : viewModel.uiState.sessionTitle,
+                    title: titleMenu?.title
+                        ?? (viewModel.uiState.sessionTitle.isEmpty ? session.title : viewModel.uiState.sessionTitle),
                     subtitle: viewModel.uiState.projectLabel,
                     subtitleLeading: {
                         if viewModel.uiState.worktreeCheckout {
@@ -267,7 +278,8 @@ struct SessionChatView: View {
                             menuExpanded = true
                         },
                     ],
-                    showDivider: true
+                    showDivider: true,
+                    onTitleClick: titleMenu?.onClick
                 )
             }
 

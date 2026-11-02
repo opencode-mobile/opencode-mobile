@@ -5,18 +5,23 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.domain.message.AttachmentKind
 import dev.opencode.mobile.domain.message.DisplayMessage
-import dev.opencode.mobile.domain.message.FollowUpDelivery
-import dev.opencode.mobile.domain.preferences.InMemoryPreferences
-import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
-import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
 import dev.opencode.mobile.domain.message.DisplayMessagePreparing
+import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
 import dev.opencode.mobile.domain.message.MessagePreparationMode
 import dev.opencode.mobile.domain.message.MessageRole
+import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.StreamingHighlight
+import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
+import dev.opencode.mobile.domain.preferences.InMemoryPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatDisplayPreferences
+import dev.opencode.mobile.domain.preferences.SessionChatTimelineStyle
+import dev.opencode.mobile.domain.session.SessionActivity
+import dev.opencode.mobile.domain.session.SessionTodoStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.sessionchat.SessionChatBackgroundWork
 import dev.opencode.mobile.ui.sessionchat.pendingPromptsFrom
@@ -61,15 +66,44 @@ class SessionChatPlaygroundTest {
             assertEquals(id, scenario.id)
             assertNotNull("$id binds a session it has", scenario.initial.session(scenario.boundSessionId))
             assertConsistent(id, scenario.initial)
+            var state = scenario.initial
+            for (step in scenario.steps) {
+                state = step.apply(state, NOW)
+                assertConsistent(id, state)
+            }
             assertConsistent(id, scenario.finalState(NOW))
         }
     }
 
     @Test
-    fun onlyEverythingSubagentsAndScrolledUpAreScripted() {
+    fun sheetListsTwentyOneScenariosInFourGroups() {
+        val codes = PlaygroundScenarioId.entries.map { it.code }
+        assertEquals(
+            (1..5).map { "M$it" } + (1..4).map { "L$it" } + (1..11).map { "P$it" } + listOf("S1"),
+            codes,
+        )
+        assertEquals(
+            PlaygroundScenarioGroup.entries,
+            PlaygroundScenarioId.entries.map { it.group }.distinct(),
+        )
+        PlaygroundScenarioId.entries.forEach { id ->
+            assertEquals("$id code matches its group", id.group.title.first(), id.code.first())
+            assertTrue(id.summary.isNotBlank())
+        }
+    }
+
+    @Test
+    fun liveScenariosJumpToLatestAndFullLifecycleAreScripted() {
         val scripted = PlaygroundScenarioId.entries.filter { PlaygroundScenarios.build(it, NOW).isScripted }
         assertEquals(
-            listOf(PlaygroundScenarioId.Everything, PlaygroundScenarioId.Subagents, PlaygroundScenarioId.ScrolledUp),
+            listOf(
+                PlaygroundScenarioId.StreamingTurn,
+                PlaygroundScenarioId.FollowUps,
+                PlaygroundScenarioId.Subagents,
+                PlaygroundScenarioId.AbortAndRetry,
+                PlaygroundScenarioId.JumpToLatest,
+                PlaygroundScenarioId.FullLifecycle,
+            ),
             scripted,
         )
     }
@@ -87,8 +121,11 @@ class SessionChatPlaygroundTest {
             Regex("""/Users/([A-Za-z0-9_-]+)""").findAll(text).forEach { match ->
                 assertEquals("$id names a home folder", "example", match.groupValues[1])
             }
-            scenario.initial.sessions.forEach { session ->
-                assertEquals("$id session ${session.id} lives in the fake project", PlaygroundContent.WORKTREE, session.directory)
+            scenario.finalState(NOW).sessions.forEach { session ->
+                assertTrue(
+                    "$id session ${session.id} lives in the fake project",
+                    session.directory in listOf(PlaygroundContent.WORKTREE, PlaygroundContent.WORKTREE_CHECKOUT),
+                )
                 assertEquals(PlaygroundContent.PROJECT_ID, session.projectId)
             }
             val paths = scenario.initial.changedFiles.map { it.path } + scenario.initial.turnDiff.map { it.path }
@@ -96,6 +133,7 @@ class SessionChatPlaygroundTest {
             scenario.initial.branch?.let { assertEquals(PlaygroundContent.BRANCH, it) }
         }
         assertTrue(PlaygroundContent.WORKTREE.startsWith("/Users/example/acme-"))
+        assertTrue(PlaygroundContent.WORKTREE_CHECKOUT.startsWith("/Users/example/acme-"))
     }
 
     @Test
@@ -112,22 +150,107 @@ class SessionChatPlaygroundTest {
     }
 
     @Test
-    fun everythingCoversEveryToolStateAndEndsIdle() {
-        val scenario = PlaygroundScenarios.build(PlaygroundScenarioId.Everything, NOW)
+    fun messageScenariosCoverWhatTheyName() {
+        fun messages(id: PlaygroundScenarioId) = PlaygroundScenarios.build(id, NOW).let { it.initial.messages(it.boundSessionId) }
+
+        assertEquals(28, messages(PlaygroundScenarioId.LongConversation).size)
+
+        val user = messages(PlaygroundScenarioId.UserMessages)
+        val files = user.flatMap { it.parts }.filterIsInstance<MessagePart.File>()
+        assertEquals(4, files.count { it.kind == AttachmentKind.Image })
+        assertEquals(1, files.count { it.kind == AttachmentKind.Pdf })
+        assertTrue(user.any { it.promptSkills.isNotEmpty() })
+        assertTrue(user.any { it.role == MessageRole.User && it.text.contains('\n') })
+        assertTrue(user.flatMap { it.parts }.any { it is MessagePart.Tool && it.title == "Shell" && it.output != null })
+
+        val replies = PlaygroundScenarios.build(PlaygroundScenarioId.AgentReplies, NOW)
         val tools =
-            scenario.initial
-                .messages(scenario.boundSessionId)
+            replies.initial
+                .messages(ROOT)
                 .flatMap { it.parts }
                 .filterIsInstance<MessagePart.Tool>()
         assertEquals(ToolStatus.entries.toSet(), tools.map { it.status }.toSet())
-        assertTrue(scenario.initial.isBusy(scenario.boundSessionId))
-        assertEquals(1, pendingPromptsFrom(scenario.initial.messages(scenario.boundSessionId), emptyList()).size)
+        assertTrue(tools.any { it.toolName == "edit" && it.metadata != null })
+        assertTrue(tools.any { it.toolName == "todowrite" })
+        assertTrue(tools.any { it.toolName == "task" && it.status == ToolStatus.Completed })
+        assertTrue(
+            replies.initial
+                .messages(ROOT)
+                .flatMap { it.parts }
+                .any { it is MessagePart.Reasoning },
+        )
+
+        val notices = PlaygroundScenarios.build(PlaygroundScenarioId.NoticesAndFailures, NOW).initial
+        val noticeKinds =
+            notices
+                .messages(ROOT)
+                .flatMap { it.parts }
+                .filterIsInstance<MessagePart.Notice>()
+                .map { it.notice::class }
+        assertEquals(
+            setOf(
+                TimelineNotice.AgentChanged::class,
+                TimelineNotice.ModelChanged::class,
+                TimelineNotice.Moved::class,
+                TimelineNotice.InstructionsUpdated::class,
+            ),
+            noticeKinds.toSet(),
+        )
+        assertTrue(notices.messages(ROOT).flatMap { it.parts }.any { it is MessagePart.Compaction })
+        assertTrue(notices.messages(ROOT).any { it.stopReason == MessageStopReason.Interrupted })
+        assertTrue(notices.messages(ROOT).any { it.failure != null })
+        assertTrue(notices.activity(ROOT) is SessionActivity.Retrying)
+
+        assertTrue(messages(PlaygroundScenarioId.EmptySession).isEmpty())
+    }
+
+    @Test
+    fun streamingTurnStreamsThenEndsIdle() {
+        val scenario = PlaygroundScenarios.build(PlaygroundScenarioId.StreamingTurn, NOW)
+        assertEquals(10, scenario.steps.size)
+        val streaming = scenario.steps.filter { it.frames.size > 1 }.map { it.label }
+        assertEquals(listOf("Reasoning streams", "Reply streams"), streaming)
+
+        // Each frame of the reply shows more of it.
+        var state = scenario.initial
+        val replyStep = scenario.steps.indexOfFirst { it.label == "Reply streams" }
+        scenario.steps.take(replyStep).forEach { state = it.apply(state, NOW) }
+        val shown =
+            scenario.steps[replyStep].frames.map { frame ->
+                state = frame.apply(state, NOW)
+                state.messages(ROOT).last().text
+            }
+        shown.zipWithNext().forEach { (before, after) -> assertTrue(after.startsWith(before) && after.length > before.length) }
 
         val final = scenario.finalState(NOW)
-        assertFalse(final.isBusy(scenario.boundSessionId))
-        assertTrue(pendingPromptsFrom(final.messages(scenario.boundSessionId), emptyList()).isEmpty())
-        val last = final.messages(scenario.boundSessionId).last { it.role == MessageRole.Assistant }
-        assertNotNull(last.completedAtEpochMs)
+        assertFalse(final.isBusy(ROOT))
+        val reply = final.messages(ROOT).last()
+        assertEquals(shown.last(), reply.text)
+        assertNotNull(reply.completedAtEpochMs)
+        val tools = reply.parts.filterIsInstance<MessagePart.Tool>()
+        assertEquals(listOf("read", "grep", "edit", "bash"), tools.map { it.toolName })
+        assertTrue(tools.all { it.status == ToolStatus.Completed })
+        assertTrue(
+            reply.parts.none { (it as? MessagePart.Text)?.isStreaming == true || (it as? MessagePart.Reasoning)?.isStreaming == true },
+        )
+    }
+
+    @Test
+    fun followUpsDeliverTheSteerThenRunTheQueue() {
+        val scenario = PlaygroundScenarios.build(PlaygroundScenarioId.FollowUps, NOW)
+        val counts =
+            scenario.steps.runningFold(scenario.initial) { state, step -> step.apply(state, NOW) }.map { state ->
+                pendingPromptsFrom(state.messages(ROOT), emptyList()).map { it.delivery }
+            }
+        assertEquals(listOf(FollowUpDelivery.Queue, FollowUpDelivery.Queue), counts[0])
+        assertEquals(3, counts[1].size)
+        assertTrue(FollowUpDelivery.Steer in counts[1])
+        assertEquals(2, counts[2].size)
+        assertEquals(1, counts[scenario.steps.indexOfFirst { it.label == "First queued prompt runs" } + 1].size)
+        assertTrue(counts.last().isEmpty())
+        val final = scenario.finalState(NOW)
+        assertFalse(final.isBusy(ROOT))
+        assertTrue(final.messages(ROOT).filter { it.role == MessageRole.Assistant }.all { it.completedAtEpochMs != null })
     }
 
     @Test
@@ -145,8 +268,24 @@ class SessionChatPlaygroundTest {
     }
 
     @Test
-    fun scrolledUpScriptAddsThreeMessagesBelow() {
-        val scenario = PlaygroundScenarios.build(PlaygroundScenarioId.ScrolledUp, NOW)
+    fun abortAndRetryInterruptsThenRetriesThenFinishes() {
+        val scenario = PlaygroundScenarios.build(PlaygroundScenarioId.AbortAndRetry, NOW)
+        val states = scenario.steps.runningFold(scenario.initial) { state, step -> step.apply(state, NOW) }
+        val stopped = states[scenario.steps.indexOfFirst { it.label == "Stop interrupts it" } + 1]
+        assertFalse(stopped.isBusy(ROOT))
+        assertEquals(MessageStopReason.Interrupted, stopped.messages(ROOT).last().stopReason)
+        val retrying = states[scenario.steps.indexOfFirst { it.label == "Next prompt waits to retry" } + 1]
+        assertTrue(retrying.activity(ROOT) is SessionActivity.Retrying)
+        val final = states.last()
+        assertFalse(final.isBusy(ROOT))
+        assertNotNull(final.messages(ROOT).last().completedAtEpochMs)
+        assertNull(final.messages(ROOT).last().stopReason)
+    }
+
+    @Test
+    fun jumpToLatestScriptAddsThreeMessagesBelow() {
+        val scenario = PlaygroundScenarios.build(PlaygroundScenarioId.JumpToLatest, NOW)
+        assertNotNull(scenario.hint)
         val before = scenario.initial.messages(scenario.boundSessionId)
         val after = scenario.finalState(NOW).messages(scenario.boundSessionId)
         assertEquals(before.size + 3, after.size)
@@ -156,17 +295,45 @@ class SessionChatPlaygroundTest {
     }
 
     @Test
+    fun fullLifecycleGoesFromSendToDone() {
+        val scenario = PlaygroundScenarios.build(PlaygroundScenarioId.FullLifecycle, NOW)
+        assertFalse(scenario.initial.isBusy(ROOT))
+        val states = scenario.steps.runningFold(scenario.initial) { state, step -> step.apply(state, NOW) }
+
+        fun after(label: String) = states[scenario.steps.indexOfFirst { it.label == label } + 1]
+        assertEquals(1, pendingPromptsFrom(after("A prompt is queued").messages(ROOT), emptyList()).size)
+        assertEquals("2 subagents", pill(after("Subagents start"))?.label)
+        assertTrue(pill(after("explore needs input"))!!.needsInput)
+        assertNull(pill(after("Subagents finish")))
+        assertTrue(after("Subagents finish").isBusy(ROOT))
+        assertTrue(pendingPromptsFrom(after("Queued prompt runs").messages(ROOT), emptyList()).isEmpty())
+        val final = states.last()
+        assertFalse(final.isBusy(ROOT))
+        assertTrue(final.permissions.isEmpty())
+        assertTrue(final.messages(ROOT).filter { it.role == MessageRole.Assistant }.all { it.completedAtEpochMs != null })
+    }
+
+    @Test
     fun stillScenariosSetUpTheirMoment() {
         fun build(id: PlaygroundScenarioId) = PlaygroundScenarios.build(id, NOW)
 
-        val quiet = build(PlaygroundScenarioId.Quiet).initial
-        assertFalse(quiet.isBusy(quiet.rootSessionId))
-        assertNotNull(quiet.branch)
-        assertTrue(quiet.changedFiles.isNotEmpty() && quiet.todos.isNotEmpty())
+        val idle = build(PlaygroundScenarioId.IdleOnBranch).initial
+        assertFalse(idle.isBusy(idle.rootSessionId))
+        assertEquals(128, idle.changedFiles.sumOf { it.additions })
+        assertEquals(14, idle.changedFiles.sumOf { it.deletions })
+        assertEquals(3, idle.todos.count { it.status == SessionTodoStatus.Completed })
+        assertEquals(5, idle.todos.size)
 
-        val working = build(PlaygroundScenarioId.Working).initial
-        assertTrue(working.isBusy(working.rootSessionId))
-        assertEquals(2, pendingPromptsFrom(working.messages(working.rootSessionId), emptyList()).size)
+        val clean = build(PlaygroundScenarioId.CleanWorktree)
+        assertEquals(PlaygroundContent.WORKTREE_CHECKOUT, clean.boundSession.directory)
+        assertTrue(clean.initial.changedFiles.isEmpty())
+        assertNotNull(clean.initial.branch)
+
+        val queued = build(PlaygroundScenarioId.RunningQueued).initial
+        assertTrue(queued.isBusy(queued.rootSessionId))
+        assertEquals(2, pendingPromptsFrom(queued.messages(queued.rootSessionId), emptyList()).size)
+
+        assertEquals("2 subagents", pill(build(PlaygroundScenarioId.BackgroundWork).initial)?.label)
 
         val needsInput = build(PlaygroundScenarioId.NeedsInput)
         assertTrue(needsInput.collapsesPermission)
@@ -194,6 +361,96 @@ class SessionChatPlaygroundTest {
         val child = build(PlaygroundScenarioId.ChildSession)
         assertNotNull(child.boundSession.parentId)
     }
+
+    @Test
+    fun nextFinishesAStreamingStepThenRunsTheNextAtOnce() =
+        runTest(dispatcher) {
+            val scope = CoroutineScope(SupervisorJob() + dispatcher)
+            val session = PlaygroundSession(streamingScenario(), PlainPreparing, scope, nowMs = { dispatcher.scheduler.currentTime })
+            runCurrent()
+            // Two frames of the three-frame step have streamed.
+            advanceTimeBy(1_100)
+            runCurrent()
+            assertEquals("one two", session.world.state.value.branch)
+            assertEquals(1, session.player.progress.value.shownSteps)
+            assertEquals("stream", session.player.progress.value.label)
+
+            session.player.next()
+            assertEquals("one two three", session.world.state.value.branch)
+            assertTrue(session.player.progress.value.isPlaying)
+
+            session.player.pause()
+            session.player.next()
+            assertEquals("done", session.world.state.value.branch)
+            assertEquals(2, session.player.progress.value.shownSteps)
+            assertTrue(session.player.progress.value.isFinished)
+            assertFalse(session.player.progress.value.isPlaying)
+            session.close()
+            scope.cancel()
+        }
+
+    @Test
+    fun fastPlayWaitsAQuarterAndScalesAWaitInProgress() =
+        runTest(dispatcher) {
+            val scope = CoroutineScope(SupervisorJob() + dispatcher)
+            val session = PlaygroundSession(twoStepScenario(), PlainPreparing, scope, nowMs = { dispatcher.scheduler.currentTime })
+            runCurrent()
+            session.player.setFast(true)
+            assertTrue(session.player.progress.value.isFast)
+            // 50 ms at 4× is 12 ms.
+            advanceTimeBy(13)
+            runCurrent()
+            assertEquals("first", session.world.state.value.branch)
+            // 200 ms at 4× is 50 ms; 26 ms in, back to 1× makes the 24 ms left 96.
+            advanceTimeBy(25)
+            session.player.setFast(false)
+            advanceTimeBy(95)
+            runCurrent()
+            assertEquals("first", session.world.state.value.branch)
+            advanceTimeBy(2)
+            runCurrent()
+            assertEquals("second", session.world.state.value.branch)
+            session.close()
+            scope.cancel()
+        }
+
+    @Test
+    fun realScreenModelStreamsTheReplyIncrementally() =
+        runTest(dispatcher) {
+            val scope = CoroutineScope(SupervisorJob() + dispatcher)
+            val scenario = PlaygroundScenarios.build(PlaygroundScenarioId.StreamingTurn, NOW)
+            val session = PlaygroundSession(scenario, PlainPreparing, scope, nowMs = { NOW + dispatcher.scheduler.currentTime })
+            val viewModel = session.chatViewModel
+            viewModel.ioDispatcher = dispatcher
+            viewModel.nowMs = { NOW + dispatcher.scheduler.currentTime }
+            runCurrent()
+            viewModel.bind(scenario.boundSessionId, scenario.boundSession.title, PlaygroundContent.WORKTREE)
+
+            val seen = mutableListOf<String>()
+            while (!session.player.progress.value.isFinished) {
+                advanceTimeBy(45)
+                runCurrent()
+                val reply =
+                    viewModel.uiState.value.messages
+                        .firstOrNull { it.id == "pg-l1-a" }
+                        ?.text
+                if (reply != null && reply.startsWith("Done.") && reply != seen.lastOrNull()) seen += reply
+            }
+            assertTrue("the reply showed in several frames: $seen", seen.size >= 5)
+            seen.zipWithNext().forEach { (before, after) -> assertTrue(after.startsWith(before)) }
+            assertEquals(
+                scenario
+                    .finalState(NOW)
+                    .messages(ROOT)
+                    .last()
+                    .text,
+                seen.last(),
+            )
+
+            viewModel.ioDispatcher = Dispatchers.Unconfined
+            session.close()
+            scope.cancel()
+        }
 
     @Test
     fun realScreenModelFollowsTheSubagentsScript() =
@@ -290,29 +547,48 @@ class SessionChatPlaygroundTest {
             val viewModel =
                 ViewModelProvider.create(
                     store,
-                    viewModelFactory { initializer { SessionChatPlaygroundViewModel(PlainPreparing) { NOW + dispatcher.scheduler.currentTime } } },
+                    viewModelFactory {
+                        initializer {
+                            SessionChatPlaygroundViewModel(
+                                PlainPreparing,
+                            ) { NOW + dispatcher.scheduler.currentTime }
+                        }
+                    },
                 )[SessionChatPlaygroundViewModel::class]
             runCurrent()
             assertEquals(before + 1, ProductAnalytics.suppressionCount)
             assertTrue(SessionChatDisplayPreferences.isSandboxed)
-            val first = viewModel.session.value.session
-            advanceTimeBy(3_500)
+            viewModel.select(PlaygroundScenarioId.StreamingTurn)
             runCurrent()
-            assertEquals(1, first.player.progress.value.nextStep)
+            val first = viewModel.session.value.session
+            advanceTimeBy(900)
+            runCurrent()
+            assertEquals(1, first.player.progress.value.shownSteps)
+            first.player.setFast(true)
 
             viewModel.restart()
             runCurrent()
             val second = viewModel.session.value.session
             assertTrue(second !== first)
-            assertEquals(PlaygroundScenarioId.Everything, second.scenario.id)
-            assertEquals(0, second.player.progress.value.nextStep)
+            assertEquals(PlaygroundScenarioId.StreamingTurn, second.scenario.id)
+            assertEquals(0, second.player.progress.value.shownSteps)
+            assertTrue("restart keeps the speed", second.player.progress.value.isFast)
             assertFalse(first.player.progress.value.isPlaying)
             val firstAfterRestart = first.world.state.value
             advanceTimeBy(5_000)
             runCurrent()
             assertEquals(firstAfterRestart, first.world.state.value)
 
-            viewModel.select(PlaygroundScenarioId.Quiet)
+            viewModel.selectNext()
+            assertEquals(PlaygroundScenarioId.FollowUps, viewModel.session.value.session.scenario.id)
+            viewModel.selectPrevious()
+            viewModel.selectPrevious()
+            assertEquals(PlaygroundScenarioId.EmptySession, viewModel.session.value.session.scenario.id)
+            viewModel.select(PlaygroundScenarioId.ChildSession)
+            viewModel.selectNext()
+            assertEquals(PlaygroundScenarioId.LongConversation, viewModel.session.value.session.scenario.id)
+            assertEquals(10, viewModel.stepCounts[PlaygroundScenarioId.StreamingTurn])
+            assertEquals(0, viewModel.stepCounts[PlaygroundScenarioId.LongConversation])
             assertEquals(before + 1, ProductAnalytics.suppressionCount)
 
             store.clear()
@@ -357,6 +633,20 @@ class SessionChatPlaygroundTest {
             SessionChatDisplayPreferences.clear()
         }
     }
+
+    private fun streamingScenario() =
+        PlaygroundScenarios.build(PlaygroundScenarioId.Subagents, NOW).copy(
+            steps =
+                listOf(
+                    PlaygroundStep(
+                        "stream",
+                        listOf("one", "one two", "one two three").mapIndexed { index, text ->
+                            PlaygroundFrame(if (index == 0) 1_000 else 80) { state, _ -> state.copy(branch = text) }
+                        },
+                    ),
+                    PlaygroundStep(5_000, "done") { state, _ -> state.copy(branch = "done") },
+                ),
+        )
 
     private fun twoStepScenario() =
         PlaygroundScenarios.build(PlaygroundScenarioId.Subagents, NOW).copy(
@@ -426,5 +716,6 @@ class SessionChatPlaygroundTest {
 
     private companion object {
         const val NOW = 1_800_000_000_000L
+        const val ROOT = PlaygroundContent.ROOT_SESSION_ID
     }
 }

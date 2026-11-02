@@ -54,6 +54,41 @@ struct PlaygroundState: Equatable {
         return copy
     }
 
+    func updateMessage(_ sessionID: String, _ messageID: String, _ transform: (Message) -> Message) -> PlaygroundState {
+        mapMessages(sessionID) { $0.id == messageID ? transform($0) : $0 }
+    }
+
+    /// Replaces the part of `messageID` that has `part`'s id, or appends `part`.
+    func upsertPart(_ sessionID: String, _ messageID: String, _ part: MessagePart) -> PlaygroundState {
+        updateMessage(sessionID, messageID) { message in
+            var parts = message.parts
+            if let index = parts.firstIndex(where: { $0.partID == part.partID }) {
+                parts[index] = part
+            } else {
+                parts.append(part)
+            }
+            return PlaygroundContent.withParts(message, parts)
+        }
+    }
+
+    func updatePart(
+        _ sessionID: String,
+        _ messageID: String,
+        _ partID: String,
+        _ transform: (MessagePart) -> MessagePart
+    ) -> PlaygroundState {
+        updateMessage(sessionID, messageID) { message in
+            PlaygroundContent.withParts(message, message.parts.map { $0.partID == partID ? transform($0) : $0 })
+        }
+    }
+
+    /// A waiting follow-up the server picks up: it leaves the pending strip and lands at the end of the timeline.
+    func deliver(_ sessionID: String, _ messageID: String, now: Int64) -> PlaygroundState {
+        guard let message = messages(sessionID).first(where: { $0.id == messageID }) else { return self }
+        return removingMessage(sessionID, messageID)
+            .upsert(sessionID, message.replacing(sentAtEpochMs: now, isWaitingForPickup: false))
+    }
+
     func removingMessage(_ sessionID: String, _ messageID: String) -> PlaygroundState {
         var copy = self
         copy.messages[sessionID] = messages(sessionID).filter { $0.id != messageID }
@@ -173,18 +208,22 @@ nonisolated extension Message {
         }.joined(separator: "\n\n")
     }
 
-    /// A copy with some fields replaced; the domain type itself is immutable.
+    /// A copy with some fields replaced; the domain type itself is immutable. New `parts`
+    /// rebuild the text unless `text` is given too.
     func replacing(
+        text: String? = nil,
         parts: [MessagePart]? = nil,
+        sentAtEpochMs: Int64? = nil,
         completedAtEpochMs: Int64?? = nil,
         followUpDelivery: FollowUpDelivery?? = nil,
-        isWaitingForPickup: Bool? = nil
+        isWaitingForPickup: Bool? = nil,
+        stopReason: MessageStopReason?? = nil
     ) -> Message {
         let newParts = parts ?? self.parts
         return Message(
             id: id,
             role: role,
-            text: parts == nil ? text : Message.joinedText(newParts),
+            text: text ?? (parts == nil ? self.text : Message.joinedText(newParts)),
             parts: newParts,
             cost: cost,
             tokens: tokens,
@@ -193,16 +232,30 @@ nonisolated extension Message {
             modelID: modelID,
             variant: variant,
             mode: mode,
-            sentAtEpochMs: sentAtEpochMs,
+            sentAtEpochMs: sentAtEpochMs ?? self.sentAtEpochMs,
             completedAtEpochMs: completedAtEpochMs ?? self.completedAtEpochMs,
             contextInputTokens: contextInputTokens,
             contextEstimate: contextEstimate,
             followUpDelivery: followUpDelivery ?? self.followUpDelivery,
             isWaitingForPickup: isWaitingForPickup ?? self.isWaitingForPickup,
-            stopReason: stopReason,
+            stopReason: stopReason ?? self.stopReason,
             failure: failure,
             promptSkills: promptSkills
         )
+    }
+}
+
+nonisolated private extension MessagePart {
+    /// The part's id, whatever kind it is; nil for a part the server sent without one.
+    var partID: String? {
+        switch self {
+        case let .text(part): part.id
+        case let .file(part): part.id
+        case let .tool(part): part.id
+        case let .compaction(part): part.id
+        case let .reasoning(part): part.id
+        case let .notice(notice): notice.id
+        }
     }
 }
 

@@ -426,7 +426,7 @@ final class PlaygroundProfileStore: ConnectionProfileStore {
     func saveProfile(_ profile: ConnectionProfile) async throws { self.profile = profile }
     func applyProfile(id _: String) async {}
     func removeProfile(id _: String) async {}
-    func addedWorktrees(serverBaseURL _: String) async -> [String] { [] }
+    func addedWorktrees(serverBaseURL _: String) async -> [String] { [PlaygroundContent.worktree] }
     func addWorktree(serverBaseURL _: String, worktree _: String) async {}
     func removeWorktree(serverBaseURL _: String, worktree _: String) async {}
     func setAddedWorktrees(serverBaseURL _: String, worktrees _: [String]) async {}

@@ -8,6 +8,7 @@ import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
 import dev.opencode.mobile.domain.message.PromptSkill
 import dev.opencode.mobile.domain.message.SessionFailure
+import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
@@ -31,6 +32,9 @@ import kotlinx.serialization.json.putJsonObject
  */
 object PlaygroundContent {
     const val WORKTREE = "/Users/example/acme-web"
+
+    /** A worktree checkout of [WORKTREE], for sessions that run in their own checkout. */
+    const val WORKTREE_CHECKOUT = "/Users/example/acme-web-coupon-field"
     const val PROJECT_ID = "pg-project-acme-web"
     const val ROOT_SESSION_ID = "pg-session"
     const val PROVIDER_ID = "acme"
@@ -64,11 +68,12 @@ object PlaygroundContent {
         nowMs: Long,
         parentId: String? = null,
         agentName: String? = null,
+        directory: String = WORKTREE,
     ) = Session(
         id = id,
         title = title,
         projectId = PROJECT_ID,
-        directory = WORKTREE,
+        directory = directory,
         parentId = parentId,
         createdAtEpochMs = nowMs - 40 * MINUTE,
         updatedAtEpochMs = nowMs,
@@ -120,6 +125,89 @@ object PlaygroundContent {
         completedAtEpochMs = completedAtMs,
         failure = failure,
         stopReason = stopReason,
+    )
+
+    /** [message] with [parts], its text rebuilt from them as [assistant] builds it. */
+    fun withParts(
+        message: Message,
+        parts: List<MessagePart>,
+    ): Message =
+        if (message.role == MessageRole.Assistant) {
+            message.copy(parts = parts, text = parts.filterIsInstance<MessagePart.Text>().joinToString("\n\n") { it.text })
+        } else {
+            message.copy(parts = parts)
+        }
+
+    fun notice(
+        id: String,
+        notice: TimelineNotice,
+        sentAtMs: Long,
+    ) = Message(
+        id = id,
+        role = MessageRole.Notice,
+        text = "",
+        parts = listOf(MessagePart.Notice(id, notice)),
+        sentAtEpochMs = sentAtMs,
+    )
+
+    /** A `!` command the user ran, as the server reports it: the command, then its output under it. */
+    fun shellCommand(
+        id: String,
+        command: String,
+        output: String,
+        sentAtMs: Long,
+    ): List<Message> =
+        listOf(
+            Message(
+                id = id,
+                role = MessageRole.User,
+                text = command,
+                parts = listOf(MessagePart.Text(command, id = "$id:text:0")),
+                modelProviderId = PROVIDER_ID,
+                modelId = MODEL_ID,
+                mode = AGENT,
+                sentAtEpochMs = sentAtMs,
+                completedAtEpochMs = sentAtMs + 1_200,
+            ),
+            assistant(
+                id = "$id:assistant",
+                sentAtMs = sentAtMs,
+                completedAtMs = sentAtMs + 1_200,
+                parts =
+                    listOf(
+                        MessagePart.Tool(
+                            toolName = "bash",
+                            status = ToolStatus.Completed,
+                            title = "Shell",
+                            input = buildJsonObject { put("command", command) },
+                            output = output,
+                            metadata = buildJsonObject { put("exit", 0) },
+                            id = "$id:tool",
+                        ),
+                    ),
+            ),
+        )
+
+    /** A finished compaction: the summary stays behind the row's disclosure. */
+    fun compaction(
+        id: String,
+        sentAtMs: Long,
+    ) = Message(
+        id = id,
+        role = MessageRole.Assistant,
+        text = "",
+        parts =
+            listOf(
+                MessagePart.Compaction(
+                    id = id,
+                    auto = true,
+                    completed = true,
+                    summary = "The checkout form has a coupon field; codes are validated on blur and expired codes show an error.",
+                ),
+            ),
+        mode = "compaction",
+        sentAtEpochMs = sentAtMs,
+        completedAtEpochMs = sentAtMs + 6_000,
     )
 
     fun text(
@@ -294,7 +382,7 @@ object PlaygroundContent {
                 text(
                     "$id-text",
                     "This is the **Session Chat Playground**, so nothing went to a server. " +
-                        "Pick another scenario from the menu to keep exploring.",
+                        "Tap the title to pick another scenario.",
                 ),
             ),
     )
@@ -328,10 +416,10 @@ object PlaygroundContent {
         )
     }
 
-    /** Twelve short finished turns, for scrolling. */
+    /** Fourteen short finished turns, for scrolling. */
     fun longHistory(nowMs: Long): List<Message> =
-        (1..12).flatMap { turn ->
-            val at = nowMs - (60 - turn * 4) * MINUTE
+        (1..14).flatMap { turn ->
+            val at = nowMs - (70 - turn * 4) * MINUTE
             listOf(
                 userMessage("pg-hu$turn", HISTORY_PROMPTS[(turn - 1) % HISTORY_PROMPTS.size], at),
                 assistant(
@@ -395,7 +483,7 @@ object PlaygroundContent {
 
     val changedFiles =
         listOf(
-            VcsFileStatus("src/checkout/CheckoutForm.tsx", FileDiffStatus.Modified, additions = 24, deletions = 6),
+            VcsFileStatus("src/checkout/CheckoutForm.tsx", FileDiffStatus.Modified, additions = 29, deletions = 14),
             VcsFileStatus("src/checkout/coupon.ts", FileDiffStatus.Added, additions = 41, deletions = 0),
             VcsFileStatus("src/checkout/coupon.test.ts", FileDiffStatus.Added, additions = 58, deletions = 0),
         )

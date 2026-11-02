@@ -4,6 +4,8 @@ import Foundation
 /// `/Users/example`, `example.com` links, an `acme` model. Nothing comes from a real session.
 enum PlaygroundContent {
     static let worktree = "/Users/example/acme-web"
+    /// A worktree checkout of `worktree`, for sessions that run in their own checkout.
+    static let worktreeCheckout = "/Users/example/acme-web-coupon-field"
     static let projectID = "pg-project-acme-web"
     static let rootSessionID = "pg-session"
     static let providerID = "acme"
@@ -35,14 +37,15 @@ enum PlaygroundContent {
         _ title: String,
         now: Int64,
         parentID: String? = nil,
-        agentName: String? = nil
+        agentName: String? = nil,
+        directory: String = worktree
     ) -> Session {
         Session(
             id: id,
             title: title,
             slug: nil,
             projectID: projectID,
-            directory: worktree,
+            directory: directory,
             parentID: parentID,
             createdAtEpochMs: now - 40 * minute,
             updatedAtEpochMs: now,
@@ -100,6 +103,71 @@ enum PlaygroundContent {
             completedAtEpochMs: running ? nil : (completedAt ?? sentAt + 20_000),
             stopReason: stopReason,
             failure: failure
+        )
+    }
+
+    /// `message` with `parts`; an assistant's text is rebuilt from them as `assistant` builds it.
+    static func withParts(_ message: Message, _ parts: [MessagePart]) -> Message {
+        message.role == .assistant ? message.replacing(parts: parts) : message.replacing(text: message.text, parts: parts)
+    }
+
+    static func notice(_ id: String, _ kind: TimelineNoticeKind, _ sentAt: Int64) -> Message {
+        Message(
+            id: id,
+            role: .notice,
+            text: "",
+            parts: [.notice(TimelineNotice(id: id, kind: kind))],
+            model: nil,
+            mode: nil,
+            sentAtEpochMs: sentAt
+        )
+    }
+
+    /// A `!` command the user ran, as the server reports it: the command, then its output under it.
+    static func shellCommand(_ id: String, _ command: String, output: String, _ sentAt: Int64) -> [Message] {
+        [
+            Message(
+                id: id,
+                role: .user,
+                text: command,
+                parts: [.text(TextPart(id: "\(id):text:0", text: command, isStreaming: false))],
+                model: nil,
+                modelProviderID: providerID,
+                modelID: modelID,
+                mode: agent,
+                sentAtEpochMs: sentAt,
+                completedAtEpochMs: sentAt + 1_200
+            ),
+            assistant("\(id):assistant", sentAt, [
+                .tool(ToolPart(
+                    id: "\(id):tool",
+                    toolName: "bash",
+                    status: .completed,
+                    title: "Shell",
+                    input: ["command": .string(command)],
+                    output: output,
+                    metadata: ["exit": .int(0)]
+                )),
+            ], completedAt: sentAt + 1_200),
+        ]
+    }
+
+    /// A finished compaction: the summary stays behind the row's disclosure.
+    static func compaction(_ id: String, _ sentAt: Int64) -> Message {
+        Message(
+            id: id,
+            role: .assistant,
+            text: "",
+            parts: [.compaction(CompactionPart(
+                id: id,
+                auto: true,
+                completed: true,
+                summary: "The checkout form has a coupon field; codes are validated on blur and expired codes show an error."
+            ))],
+            model: nil,
+            mode: "compaction",
+            sentAtEpochMs: sentAt,
+            completedAtEpochMs: sentAt + 6_000
         )
     }
 
@@ -263,7 +331,7 @@ enum PlaygroundContent {
             [text(
                 "\(id)-text",
                 "This is the **Session Chat Playground**, so nothing went to a server. " +
-                    "Pick another scenario from the menu to keep exploring."
+                    "Tap the title to pick another scenario."
             )],
             completedAt: now
         )
@@ -289,10 +357,10 @@ enum PlaygroundContent {
         ]
     }
 
-    /// Twelve short finished turns, for scrolling.
+    /// Fourteen short finished turns, for scrolling.
     static func longHistory(now: Int64) -> [Message] {
-        (1...12).flatMap { turn -> [Message] in
-            let at = now - Int64(60 - turn * 4) * minute
+        (1...14).flatMap { turn -> [Message] in
+            let at = now - Int64(70 - turn * 4) * minute
             return [
                 userMessage("pg-hu\(turn)", historyPrompts[(turn - 1) % historyPrompts.count], at),
                 assistant("pg-ha\(turn)", at + 3_000, [
@@ -339,7 +407,7 @@ enum PlaygroundContent {
     ]
 
     static let changedFiles = [
-        VcsFileStatus(path: "src/checkout/CheckoutForm.tsx", status: .modified, additions: 24, deletions: 6),
+        VcsFileStatus(path: "src/checkout/CheckoutForm.tsx", status: .modified, additions: 29, deletions: 14),
         VcsFileStatus(path: "src/checkout/coupon.ts", status: .added, additions: 41, deletions: 0),
         VcsFileStatus(path: "src/checkout/coupon.test.ts", status: .added, additions: 58, deletions: 0),
     ]

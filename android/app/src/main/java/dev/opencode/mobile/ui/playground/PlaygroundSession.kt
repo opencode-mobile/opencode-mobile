@@ -13,6 +13,8 @@ import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.session.SideQuestionStore
 import dev.opencode.mobile.domain.sessioncache.NoOpSessionCache
 import dev.opencode.mobile.domain.sync.NoOpSyncCoordinator
+import dev.opencode.mobile.domain.worktree.WorktreeInventory
+import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
@@ -146,13 +148,27 @@ class PlaygroundSession(
             connectionProfileStore = profileStore,
             activeConnectionManager = activeConnectionManager,
             sideQuestionStore = sideQuestionStore,
+            worktreeInventoryCache = playgroundWorktreeInventory(),
         )
     }
+
+    /** The fake project lists one worktree checkout, so a session bound there names it with the worktree icon. */
+    private fun playgroundWorktreeInventory() =
+        WorktreeInventoryCache().apply {
+            val server = playgroundProfile.baseUrl
+            setAddedPaths(listOf(PlaygroundContent.WORKTREE), server)
+            record(
+                WorktreeInventory.loaded(listOf(PlaygroundContent.WORKTREE, PlaygroundContent.WORKTREE_CHECKOUT)),
+                PlaygroundContent.WORKTREE,
+                server,
+            )
+        }
 }
 
 /**
- * Plays a scenario's steps in order. Pausing keeps the next step and the time still to wait
- * for it, so Play resumes where the script stopped.
+ * Plays a scenario's steps in order, frame by frame. Pausing keeps the next frame and the time
+ * still to wait for it, so Play resumes where the script stopped. [next] finishes the step in
+ * progress, or runs the next one at once. Fast play waits a quarter of each delay.
  */
 class PlaygroundPlayer(
     private val world: PlaygroundWorld,
@@ -161,40 +177,50 @@ class PlaygroundPlayer(
 ) {
     data class Progress(
         val isPlaying: Boolean = false,
-        val nextStep: Int = 0,
+        /** Steps started so far: the finished ones plus the one streaming. */
+        val shownSteps: Int = 0,
         val stepCount: Int = 0,
+        /** The last step started; null before the first. */
+        val label: String? = null,
+        val isFinished: Boolean = false,
+        val isFast: Boolean = false,
     ) {
-        val isFinished: Boolean get() = nextStep >= stepCount
+        /** How far the script is, 0 to 1. */
+        val fraction: Float get() = if (stepCount == 0) 0f else shownSteps.toFloat() / stepCount
     }
 
-    private val _progress = MutableStateFlow(Progress(stepCount = steps.size))
+    private val _progress = MutableStateFlow(Progress(stepCount = steps.size, isFinished = steps.isEmpty()))
     val progress: StateFlow<Progress> = _progress.asStateFlow()
     private var job: Job? = null
 
-    /** Still to wait for the next step after a pause; null means its full delay. */
+    /** The next frame to apply: `steps[stepIndex].frames[frameIndex]`. */
+    private var stepIndex = 0
+    private var frameIndex = 0
+
+    /** Still to wait for the next frame after a pause; null means its full delay. */
     private var remainingMs: Long? = null
 
     /** When the current wait started and how long it is; null while not waiting. */
     private var waitStartedAtMs: Long? = null
     private var waitMs = 0L
 
+    private val isFinished: Boolean get() = stepIndex >= steps.size
+
     fun play() {
-        if (job?.isActive == true || _progress.value.isFinished) return
-        _progress.update { it.copy(isPlaying = true) }
+        if (job?.isActive == true || isFinished) return
+        publish(isPlaying = true)
         job =
             scope.launch {
-                while (true) {
-                    val index = _progress.value.nextStep
-                    val step = steps.getOrNull(index) ?: break
-                    waitMs = remainingMs ?: step.afterMs
+                while (!isFinished) {
+                    val frame = steps[stepIndex].frames[frameIndex]
+                    waitMs = remainingMs ?: scaled(frame.afterMs)
                     remainingMs = null
                     waitStartedAtMs = world.nowMs()
                     delay(waitMs)
                     waitStartedAtMs = null
-                    world.update { step.apply(it, world.nowMs()) }
-                    _progress.update { it.copy(nextStep = index + 1) }
+                    applyFrame()
                 }
-                _progress.update { it.copy(isPlaying = false) }
+                publish(isPlaying = false)
             }
     }
 
@@ -205,6 +231,56 @@ class PlaygroundPlayer(
         waitStartedAtMs = null
         job?.cancel()
         job = null
-        _progress.update { it.copy(isPlaying = false) }
+        publish(isPlaying = false)
+    }
+
+    /** Finishes the step in progress, or runs the next step now; playback carries on as it was. */
+    fun next() {
+        if (isFinished) return
+        val wasPlaying = _progress.value.isPlaying
+        pause()
+        remainingMs = null
+        do applyFrame() while (frameIndex != 0)
+        if (wasPlaying) play()
+    }
+
+    /** Switches between 1× and 4×; a wait already running shrinks or grows to match. */
+    fun setFast(fast: Boolean) {
+        if (fast == _progress.value.isFast) return
+        val wasPlaying = _progress.value.isPlaying
+        pause()
+        remainingMs = remainingMs?.let { if (fast) it / FAST_FACTOR else it * FAST_FACTOR }
+        _progress.update { it.copy(isFast = fast) }
+        if (wasPlaying) play()
+    }
+
+    private fun scaled(ms: Long): Long = if (_progress.value.isFast) ms / FAST_FACTOR else ms
+
+    private fun applyFrame() {
+        val step = steps[stepIndex]
+        val frame = step.frames[frameIndex]
+        world.update { frame.apply(it, world.nowMs()) }
+        frameIndex += 1
+        if (frameIndex >= step.frames.size) {
+            stepIndex += 1
+            frameIndex = 0
+        }
+        publish(isPlaying = _progress.value.isPlaying)
+    }
+
+    private fun publish(isPlaying: Boolean) {
+        val shown = if (frameIndex > 0) stepIndex + 1 else stepIndex
+        _progress.update {
+            it.copy(
+                isPlaying = isPlaying && !isFinished,
+                shownSteps = shown,
+                label = steps.getOrNull(shown - 1)?.label,
+                isFinished = isFinished,
+            )
+        }
+    }
+
+    companion object {
+        const val FAST_FACTOR = 4
     }
 }

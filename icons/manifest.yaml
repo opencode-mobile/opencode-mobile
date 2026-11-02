@@ -128,3 +128,24 @@ icons:
   - name: git_branch
     lucide: git-branch
     notes: Session Chat branch pill for a non-worktree session
+  - name: chevron_left
+    lucide: chevron-left
+    notes: Pair of chevron_right; previous scenario in the Session Chat Playground sheet
+  - name: play
+    lucide: play
+    notes: Session Chat Playground playback capsule
+  - name: pause
+    lucide: pause
+    notes: Session Chat Playground playback capsule
+  - name: skip_next
+    lucide: skip-forward
+    notes: Next step in the Session Chat Playground playback capsule
+  - name: restart
+    lucide: rotate-ccw
+    notes: Restart in the Session Chat Playground playback capsule
+  - name: minimize
+    lucide: minimize-2
+    notes: Minimise the Session Chat Playground playback capsule
+  - name: drag_handle
+    lucide: grip-vertical
+    notes: Drag grip of a floating capsule

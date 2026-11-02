@@ -30,6 +30,8 @@ final class SessionChatPlaygroundModel: Identifiable {
     private(set) var generation = 0
     private(set) var isReady = false
     var snackbar: OpenCodeSnackbarMessage?
+    /// How many steps each scenario's script has; zero for a still scenario.
+    let stepCounts: [PlaygroundScenarioID: Int]
 
     @ObservationIgnored private var isolation: PlaygroundIsolation?
     @ObservationIgnored private var prepareTask: Task<Void, Never>?
@@ -37,19 +39,26 @@ final class SessionChatPlaygroundModel: Identifiable {
 
     init(now: @escaping () -> Int64 = PlaygroundWorld.systemNow, preferences: SessionChatDisplayPreferences = .shared) {
         self.now = now
+        let builtAt = now()
+        stepCounts = Dictionary(uniqueKeysWithValues: PlaygroundScenarioID.allCases.map { id in
+            (id, PlaygroundScenarios.build(id, now: builtAt).steps.count)
+        })
         isolation = PlaygroundIsolation(preferences: preferences)
-        open(.everything)
+        select(PlaygroundScenarioID.allCases[0])
     }
 
     var isClosed: Bool { isolation == nil }
 
-    /// A fresh world and screen model for `id`; the previous one stops.
-    func open(_ id: PlaygroundScenarioID) {
+    /// Opens `id` fresh, a new world and screen model; the previous one stops. A scripted
+    /// scenario plays at once, at the speed the last one had.
+    func select(_ id: PlaygroundScenarioID) {
         guard !isClosed else { return }
         prepareTask?.cancel()
+        let fast = session?.player.progress.isFast ?? false
         session?.close()
         isReady = false
         let next = PlaygroundSession(scenario: PlaygroundScenarios.build(id, now: now()), now: now)
+        next.player.setFast(fast)
         next.world.onNotice = { [weak self] text in self?.snackbar = OpenCodeSnackbarMessage(text: text) }
         session = next
         generation += 1
@@ -61,7 +70,17 @@ final class SessionChatPlaygroundModel: Identifiable {
     }
 
     func restart() {
-        if let current = session?.scenario.id { open(current) }
+        if let current = session?.scenario.id { select(current) }
+    }
+
+    func selectPrevious() { select(neighbour(-1)) }
+
+    func selectNext() { select(neighbour(1)) }
+
+    private func neighbour(_ offset: Int) -> PlaygroundScenarioID {
+        let all = PlaygroundScenarioID.allCases
+        let index = session.flatMap { all.firstIndex(of: $0.scenario.id) } ?? 0
+        return all[(index + offset + all.count) % all.count]
     }
 
     /// Stops the scenario and ends the isolation; later calls do nothing.
@@ -75,103 +94,67 @@ final class SessionChatPlaygroundModel: Identifiable {
 }
 
 /// Developer Tools → Session Chat Playground: the real Session Chat screen over a
-/// `PlaygroundWorld`, with a bar to pick a scenario and play, pause or restart its script.
+/// `PlaygroundWorld`. The chat title picks the scenario; a floating capsule plays its script.
 struct SessionChatPlaygroundView: View {
     let model: SessionChatPlaygroundModel
-    @Environment(\.dismiss) private var dismiss
-    @State private var menuExpanded = false
+    @State private var sheetVisible = false
+    /// Kept across scenarios, so the capsule stays where it was put.
+    @State private var capsule = PlaygroundCapsulePlacement()
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            ZStack {
                 if let session = model.session {
-                    topBar(session)
-                    ZStack {
-                        if model.isReady {
-                            chat(session).id(model.generation)
-                        } else {
-                            OpenCodeStatusStack(spinner: "Loading scenario")
-                        }
+                    if model.isReady {
+                        chat(session).id(model.generation)
+                    } else {
+                        OpenCodeStatusStack(spinner: "Loading scenario")
                     }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if session.scenario.isScripted {
+                        PlaygroundPlaybackCapsule(
+                            code: session.scenario.id.code,
+                            player: session.player,
+                            idleLabel: session.scenario.hint ?? "Ready",
+                            placement: $capsule,
+                            onRestart: { model.restart() }
+                        )
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(OpenCodeColors.backgroundBase)
             .toolbar(.hidden, for: .navigationBar)
             .overlay {
                 OpenCodeSnackbarHost(message: model.snackbar, onDismissed: { model.snackbar = nil })
             }
-        }
-    }
-
-    private func topBar(_ session: PlaygroundSession) -> some View {
-        let scenario = session.scenario
-        let player = session.player
-        return OpenCodeTopBarOverflowHost(isPresented: $menuExpanded, entries: menuEntries(current: scenario.id)) {
-            OpenCodeTopBar(
-                title: "Playground",
-                subtitle: scenario.id.title + (scenario.isScripted ? " · \(playbackLabel(player))" : ""),
-                leading: .back(action: { dismiss() }),
-                actions: playbackActions(player, scripted: scenario.isScripted) + [
-                    .icon(.moreVert, accessibilityLabel: "Scenarios", action: { menuExpanded = true }),
-                ],
-                showDivider: true
+            .playgroundScenarioSheet(
+                isPresented: $sheetVisible,
+                current: model.session?.scenario.id ?? PlaygroundScenarioID.allCases[0],
+                stepCounts: model.stepCounts,
+                onSelect: { id in
+                    sheetVisible = false
+                    model.select(id)
+                },
+                onPrevious: { model.selectPrevious() },
+                onNext: { model.selectNext() }
             )
         }
     }
 
     private func chat(_ session: PlaygroundSession) -> some View {
         let bound = session.scenario.boundSession
+        let directory = bound.directory ?? PlaygroundContent.worktree
         return SessionChatView(
             session: SessionListItem(
                 id: bound.id,
                 title: bound.title,
-                worktree: PlaygroundContent.worktree,
+                worktree: directory,
                 parentID: bound.parentID,
-                directory: PlaygroundContent.worktree
+                directory: directory
             ),
             viewModel: session.chatViewModel,
-            onUnavailableRoute: { session.world.notice($0) }
+            onUnavailableRoute: { session.world.notice($0) },
+            titleMenu: SessionChatTitleMenu(title: session.scenario.id.title) { sheetVisible = true }
         )
-    }
-
-    private func menuEntries(current: PlaygroundScenarioID) -> [OpenCodeOverflowMenuEntry] {
-        [
-            OpenCodeOverflowMenuEntry(
-                id: "restart",
-                title: "Restart scenario",
-                icon: .redo,
-                accessibilityIdentifier: "playgroundRestart",
-                action: {
-                    menuExpanded = false
-                    model.restart()
-                }
-            ),
-        ] + PlaygroundScenarioID.allCases.map { id in
-            OpenCodeOverflowMenuEntry(
-                id: id.rawValue,
-                title: id.title,
-                subtitle: id.summary,
-                icon: id == current ? .check : nil,
-                accessibilityIdentifier: "playgroundScenario.\(id.rawValue)",
-                action: {
-                    menuExpanded = false
-                    model.open(id)
-                }
-            )
-        }
-    }
-
-    private func playbackLabel(_ player: PlaygroundPlayer) -> String {
-        if player.isFinished { return "finished" }
-        if player.isPlaying { return "step \(player.nextStep + 1) of \(player.stepCount)" }
-        return "paused"
-    }
-
-    private func playbackActions(_ player: PlaygroundPlayer, scripted: Bool) -> [OpenCodeTopBarAction] {
-        guard scripted else { return [] }
-        if player.isFinished { return [.label(title: "Restart", action: { model.restart() })] }
-        if player.isPlaying { return [.label(title: "Pause", action: { player.pause() })] }
-        return [.label(title: "Play", action: { player.play() })]
     }
 }

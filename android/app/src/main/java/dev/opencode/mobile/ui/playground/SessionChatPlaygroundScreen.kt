@@ -1,9 +1,7 @@
 package dev.opencode.mobile.ui.playground
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,15 +19,10 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.domain.message.DisplayMessagePreparing
 import dev.opencode.mobile.domain.message.MessageContentPreparer
 import dev.opencode.mobile.domain.message.asDisplayMessagePreparing
-import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
-import dev.opencode.mobile.ui.components.OpenCodeTopBar
-import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
-import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
-import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
+import dev.opencode.mobile.ui.sessionchat.SessionChatTitleMenu
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,7 +30,7 @@ import javax.inject.Inject
 
 /**
  * Developer Tools → Session Chat Playground: the real Session Chat screen over a
- * [PlaygroundWorld], with a bar to pick a scenario and play, pause or restart its script.
+ * [PlaygroundWorld]. The chat title picks the scenario; a floating capsule plays its script.
  */
 @HiltViewModel
 class SessionChatPlaygroundViewModel
@@ -51,22 +44,44 @@ class SessionChatPlaygroundViewModel
         // Nothing the playground does may reach analytics or the real preferences.
         private val isolation = PlaygroundIsolation.begin()
         private var generation = 0
-        private val _session = MutableStateFlow(open(PlaygroundScenarioId.Everything))
+        private val _session = MutableStateFlow(open(PlaygroundScenarioId.entries.first(), fast = false))
 
         /** The open scenario; a new value is a fresh world and screen model. */
         val session: StateFlow<OpenedPlayground> = _session.asStateFlow()
 
+        /** How many steps each scenario's script has; zero for a still scenario. */
+        val stepCounts: Map<PlaygroundScenarioId, Int> =
+            PlaygroundScenarioId.entries.associateWith { PlaygroundScenarios.build(it, nowMs()).steps.size }
+
+        /** Opens [id] fresh; a scripted one plays at once, at the speed the last one had. */
         fun select(id: PlaygroundScenarioId) {
-            _session.value.session.close()
-            _session.value = open(id)
+            val current = _session.value.session
+            val fast = current.player.progress.value.isFast
+            current.close()
+            _session.value = open(id, fast)
         }
 
         fun restart() = select(_session.value.session.scenario.id)
 
-        private fun open(id: PlaygroundScenarioId): OpenedPlayground {
+        fun selectPrevious() = select(neighbour(-1))
+
+        fun selectNext() = select(neighbour(1))
+
+        private fun neighbour(offset: Int): PlaygroundScenarioId {
+            val all = PlaygroundScenarioId.entries
+            val index = all.indexOf(_session.value.session.scenario.id)
+            return all[(index + offset).mod(all.size)]
+        }
+
+        private fun open(
+            id: PlaygroundScenarioId,
+            fast: Boolean,
+        ): OpenedPlayground {
             generation += 1
             val scenario = PlaygroundScenarios.build(id, nowMs())
-            return OpenedPlayground(generation, PlaygroundSession(scenario, preparing, viewModelScope, nowMs))
+            val session = PlaygroundSession(scenario, preparing, viewModelScope, nowMs)
+            session.player.setFast(fast)
+            return OpenedPlayground(generation, session)
         }
 
         override fun onCleared() {
@@ -90,8 +105,10 @@ fun SessionChatPlaygroundScreen(
     val scenario = session.scenario
     val ready by session.ready.collectAsStateWithLifecycle()
     val progress by session.player.progress.collectAsStateWithLifecycle()
-    var menuExpanded by remember { mutableStateOf(false) }
+    var sheetVisible by remember { mutableStateOf(false) }
     var snackbar by remember { mutableStateOf<OpenCodeSnackbarMessage?>(null) }
+    // Kept across scenarios, so the capsule stays where it was put.
+    val capsule = remember { PlaygroundCapsulePlacement() }
 
     LaunchedEffect(session) {
         session.world.notices.collect { snackbar = OpenCodeSnackbarMessage(it) }
@@ -99,100 +116,56 @@ fun SessionChatPlaygroundScreen(
     val notAvailable: (String) -> Unit = { action -> session.world.notice(action) }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            OpenCodeTopBarOverflowHost(
-                expanded = menuExpanded,
-                onDismissRequest = { menuExpanded = false },
-                entries =
-                    listOf(
-                        OpenCodeOverflowMenuEntry(
-                            title = "Restart scenario",
-                            icon = OpenCodeIcons.Redo,
-                            onClick = {
-                                menuExpanded = false
-                                viewModel.restart()
-                            },
-                            testTag = "playgroundRestart",
-                        ),
-                    ) +
-                        PlaygroundScenarioId.entries.map { id ->
-                            OpenCodeOverflowMenuEntry(
-                                title = id.title,
-                                subtitle = id.summary,
-                                icon = if (id == scenario.id) OpenCodeIcons.Check else null,
-                                onClick = {
-                                    menuExpanded = false
-                                    viewModel.select(id)
-                                },
-                                testTag = "playgroundScenario.${id.name}",
-                            )
-                        },
-            ) {
-                OpenCodeTopBar(
-                    title = "Playground",
-                    subtitle = scenario.id.title + if (scenario.isScripted) " · ${playbackLabel(progress)}" else "",
-                    leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
-                    actions =
-                        listOfNotNull(
-                            playbackAction(progress, scenario.isScripted, session.player, viewModel::restart),
-                            OpenCodeTopBarAction.Icon(
-                                imageVector = OpenCodeIcons.MoreVert,
-                                contentDescription = "Scenarios",
-                                onClick = { menuExpanded = true },
-                            ),
-                        ),
-                    showDivider = true,
+        if (ready) {
+            key(opened.generation) {
+                val bound = scenario.boundSession
+                SessionChatScreen(
+                    sessionId = bound.id,
+                    sessionTitle = bound.title,
+                    worktree = bound.directory ?: PlaygroundContent.WORKTREE,
+                    parentId = bound.parentId,
+                    onNavigateBack = onNavigateBack,
+                    onSessionContextClick = { notAvailable("Session context") },
+                    onReviewChangesClick = { notAvailable("Changes") },
+                    onChildSessionClick = { notAvailable("Opening a subagent") },
+                    onToolGroupClick = { notAvailable("Tool groups") },
+                    onSessionReplaceRequested = { notAvailable("Switching sessions") },
+                    onTerminalRequested = { _, _ -> notAvailable("Terminal") },
+                    onFilesRequested = { notAvailable("Files") },
+                    onReportProblem = { notAvailable("Report a problem") },
+                    titleMenu = SessionChatTitleMenu(scenario.id.title) { sheetVisible = true },
+                    viewModel = session.chatViewModel,
                 )
             }
-            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                if (ready) {
-                    key(opened.generation) {
-                        val bound = scenario.boundSession
-                        SessionChatScreen(
-                            sessionId = bound.id,
-                            sessionTitle = bound.title,
-                            worktree = PlaygroundContent.WORKTREE,
-                            parentId = bound.parentId,
-                            onNavigateBack = onNavigateBack,
-                            onSessionContextClick = { notAvailable("Session context") },
-                            onReviewChangesClick = { notAvailable("Changes") },
-                            onChildSessionClick = { notAvailable("Opening a subagent") },
-                            onToolGroupClick = { notAvailable("Tool groups") },
-                            onSessionReplaceRequested = { notAvailable("Switching sessions") },
-                            onTerminalRequested = { _, _ -> notAvailable("Terminal") },
-                            onFilesRequested = { notAvailable("Files") },
-                            onReportProblem = { notAvailable("Report a problem") },
-                            viewModel = session.chatViewModel,
-                        )
-                    }
-                }
-            }
         }
+        if (scenario.isScripted) {
+            PlaygroundPlaybackCapsule(
+                code = scenario.id.code,
+                progress = progress,
+                idleLabel = scenario.hint ?: "Ready",
+                placement = capsule,
+                onPlayPause = { if (progress.isPlaying) session.player.pause() else session.player.play() },
+                onNext = session.player::next,
+                onRestart = viewModel::restart,
+                onToggleSpeed = { session.player.setFast(!progress.isFast) },
+            )
+        }
+        PlaygroundScenarioSheet(
+            visible = sheetVisible,
+            current = scenario.id,
+            stepCounts = viewModel.stepCounts,
+            onSelect = { id ->
+                sheetVisible = false
+                viewModel.select(id)
+            },
+            onPrevious = viewModel::selectPrevious,
+            onNext = viewModel::selectNext,
+            onDismissRequest = { sheetVisible = false },
+        )
         OpenCodeSnackbarHost(
             message = snackbar,
             onDismissed = { snackbar = null },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
-    }
-}
-
-private fun playbackLabel(progress: PlaygroundPlayer.Progress): String =
-    when {
-        progress.isFinished -> "finished"
-        progress.isPlaying -> "step ${progress.nextStep + 1} of ${progress.stepCount}"
-        else -> "paused"
-    }
-
-private fun playbackAction(
-    progress: PlaygroundPlayer.Progress,
-    scripted: Boolean,
-    player: PlaygroundPlayer,
-    restart: () -> Unit,
-): OpenCodeTopBarAction? {
-    if (!scripted) return null
-    return when {
-        progress.isFinished -> OpenCodeTopBarAction.Label(title = "Restart", onClick = restart)
-        progress.isPlaying -> OpenCodeTopBarAction.Label(title = "Pause", onClick = player::pause)
-        else -> OpenCodeTopBarAction.Label(title = "Play", onClick = player::play)
     }
 }
