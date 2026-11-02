@@ -82,6 +82,45 @@ data class PlaygroundState(
         transform: (Message) -> Message,
     ): PlaygroundState = copy(messages = messages + (sessionId to messages(sessionId).map(transform)))
 
+    fun updateMessage(
+        sessionId: String,
+        messageId: String,
+        transform: (Message) -> Message,
+    ): PlaygroundState = mapMessages(sessionId) { if (it.id == messageId) transform(it) else it }
+
+    /** Replaces the part of [messageId] that has [part]'s id, or appends [part]. */
+    fun upsertPart(
+        sessionId: String,
+        messageId: String,
+        part: MessagePart,
+    ): PlaygroundState =
+        updateMessage(sessionId, messageId) { message ->
+            val index = message.parts.indexOfFirst { it.partId == part.partId }
+            val parts = if (index >= 0) message.parts.toMutableList().also { it[index] = part } else message.parts + part
+            PlaygroundContent.withParts(message, parts)
+        }
+
+    fun updatePart(
+        sessionId: String,
+        messageId: String,
+        partId: String,
+        transform: (MessagePart) -> MessagePart,
+    ): PlaygroundState =
+        updateMessage(sessionId, messageId) { message ->
+            PlaygroundContent.withParts(message, message.parts.map { if (it.partId == partId) transform(it) else it })
+        }
+
+    /** A waiting follow-up the server picks up: it leaves the pending strip and lands at the end of the timeline. */
+    fun deliver(
+        sessionId: String,
+        messageId: String,
+        nowMs: Long,
+    ): PlaygroundState {
+        val message = messages(sessionId).firstOrNull { it.id == messageId } ?: return this
+        return removeMessage(sessionId, messageId)
+            .upsert(sessionId, message.copy(isWaitingForPickup = false, sentAtEpochMs = nowMs))
+    }
+
     fun removeMessage(
         sessionId: String,
         messageId: String,
@@ -106,6 +145,17 @@ data class PlaygroundState(
             )
         }
 }
+
+private val MessagePart.partId: String?
+    get() =
+        when (this) {
+            is MessagePart.Text -> id
+            is MessagePart.Tool -> id
+            is MessagePart.Reasoning -> id
+            is MessagePart.File -> id
+            is MessagePart.Compaction -> id
+            is MessagePart.Notice -> id
+        }
 
 /**
  * The playground's in-memory "server": one [PlaygroundState] plus a channel for actions

@@ -11,7 +11,6 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case check = "lucide_check"
     case chevronRight = "lucide_chevron_right"
     case keyboardArrowDown = "lucide_keyboard_arrow_down"
-    case dragHandle = "lucide_drag_handle"
     case close = "lucide_close"
     case contentCopy = "lucide_content_copy"
     case collapseContent = "lucide_collapse_content"
@@ -48,6 +47,13 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case code = "lucide_code"
     case lock = "lucide_lock"
     case gitBranch = "lucide_git_branch"
+    case chevronLeft = "lucide_chevron_left"
+    case play = "lucide_play"
+    case pause = "lucide_pause"
+    case skipNext = "lucide_skip_next"
+    case restart = "lucide_restart"
+    case minimize = "lucide_minimize"
+    case dragHandle = "lucide_drag_handle"
 
     var accessibilityIdentifier: String { rawValue }
 }

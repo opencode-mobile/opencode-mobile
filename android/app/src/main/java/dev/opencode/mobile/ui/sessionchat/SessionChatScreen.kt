@@ -174,6 +174,15 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * A title that replaces the session title and opens a menu when tapped. The Session Chat
+ * Playground names its scenario this way; the app passes none.
+ */
+data class SessionChatTitleMenu(
+    val title: String,
+    val onClick: () -> Unit,
+)
+
 /** Session Chat; gives the timeline the loader for images that live on the server. */
 @Composable
 fun SessionChatScreen(
@@ -194,6 +203,7 @@ fun SessionChatScreen(
     detailControl: OpenCodeSplitPaneDetailControl? = null,
     /** Replaces the "Report a problem" sheet; the Session Chat Playground sends no reports. Null opens the sheet. */
     onReportProblem: (() -> Unit)? = null,
+    titleMenu: SessionChatTitleMenu? = null,
     viewModel: SessionChatViewModel =
         hiltViewModel(
             key = sessionChatViewModelKey(sessionId, worktree, optimisticNavigationInstanceId),
@@ -223,6 +233,7 @@ fun SessionChatScreen(
             onFilesRequested = onFilesRequested,
             detailControl = detailControl,
             onReportProblem = onReportProblem,
+            titleMenu = titleMenu,
             viewModel = viewModel,
         )
     }
@@ -247,6 +258,7 @@ private fun SessionChatScreenBody(
     onFilesRequested: (worktree: String) -> Unit,
     detailControl: OpenCodeSplitPaneDetailControl?,
     onReportProblem: (() -> Unit)?,
+    titleMenu: SessionChatTitleMenu?,
     viewModel: SessionChatViewModel,
 ) {
     val context = LocalContext.current
@@ -863,7 +875,8 @@ private fun SessionChatScreenBody(
                     },
             ) {
                 OpenCodeTopBar(
-                    title = uiState.sessionTitle.ifBlank { sessionTitle },
+                    title = titleMenu?.title ?: uiState.sessionTitle.ifBlank { sessionTitle },
+                    onTitleClick = titleMenu?.onClick,
                     subtitle = uiState.projectLabel,
                     subtitleLeading =
                         if (uiState.worktreeCheckout) {
