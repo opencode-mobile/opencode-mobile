@@ -334,17 +334,24 @@ struct OpenCodeSessionComposer: View {
                     .fill(OpenCodeColors.borderWeakBase)
                     .frame(height: 1)
             }
-            VStack(alignment: .leading, spacing: 10) {
-                switch state {
-                case let .permission(permission):
-                    permissionApprovalContent(permission)
-                case let .question(question):
-                    questionRequestContent(question)
-                case let .childLockout(lockout):
-                    childLockoutContent(lockout)
-                case let .prompt(prompt):
-                    promptEntryContent(prompt)
+            // The shell is pinned to the bottom of the screen, so the content is too: both
+            // modes stay still and crossfade while the shell resizes around them, which
+            // reads as one surface morphing instead of the old content sliding down.
+            ZStack(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 10) {
+                    switch state {
+                    case let .permission(permission):
+                        permissionApprovalContent(permission)
+                    case let .question(question):
+                        questionRequestContent(question)
+                    case let .childLockout(lockout):
+                        childLockoutContent(lockout)
+                    case let .prompt(prompt):
+                        promptEntryContent(prompt)
+                    }
                 }
+                .id(contentKind)
+                .transition(.opacity)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 12)
@@ -361,8 +368,8 @@ struct OpenCodeSessionComposer: View {
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 4)
-        .animation(.easeInOut(duration: 0.24), value: contentKind)
-        .animation(.easeInOut(duration: 0.24), value: dictation != nil)
+        .animation(Self.morphAnimation, value: contentKind)
+        .animation(Self.morphAnimation, value: dictation != nil)
         .accessibilityIdentifier(composerAccessibilityIdentifier)
     }
 
@@ -1081,6 +1088,10 @@ struct OpenCodeSessionComposer: View {
     }
 
     private static let shellCornerRadius: CGFloat = 26
+
+    /// How the shell resizes between modes. Chrome that rides on the composer's top
+    /// edge (corner pills, the timeline end) moves on the same curve.
+    static let morphAnimation = Animation.easeInOut(duration: 0.24)
 
     /// Send button label. Steer/Queue only describe what Send does while work is running;
     /// an idle session just sends. A shell command always runs now.

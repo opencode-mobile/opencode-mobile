@@ -56,6 +56,12 @@ struct SessionChatView: View {
     @State private var finishedHoldTask: Task<Void, Never>?
     /// Measured floating composer chrome height (composer + optional pending-prompts strip).
     @State private var composerOverlayHeight: CGFloat = 0
+    /// The composer mode the measured height belongs to. A height measured for a new mode
+    /// is the composer morphing: it lands at its end value at once, so the pills and the
+    /// timeline take it on the composer's curve instead of jumping ahead of the shell.
+    @State private var composerHeightKind: SessionChatComposerKind?
+    /// True while the timeline takes a morphing composer height on the composer's curve.
+    @State private var composerMorphing = false
     /// A shown snackbar floats above the composer; the timeline lifts its
     /// end-pinned last row over it so the row keeps the same end gap.
     @State private var snackbarOverlayHeight: CGFloat = 0
@@ -356,6 +362,7 @@ struct SessionChatView: View {
                         + snackbarOverlayHeight
                         + composerHomeIndicatorLift
                         + keyboardOverlap,
+                    bottomOverlayAnimation: composerMorphing ? OpenCodeSessionComposer.morphAnimation : nil,
                     activityItems: sessionChatActivityItems,
                     keyboardVisible: keyboardOverlap > 0,
                     onActivityTap: handleActivityTap,
@@ -544,10 +551,25 @@ struct SessionChatView: View {
                 .background {
                     GeometryReader { geometry in
                         Color.clear
-                            .onAppear { composerOverlayHeight = geometry.size.height }
+                            .onAppear {
+                                composerOverlayHeight = geometry.size.height
+                                composerHeightKind = composerKind
+                            }
                             .onChange(of: geometry.size.height) { _, height in
                                 guard abs(composerOverlayHeight - height) > 0.5 else { return }
-                                composerOverlayHeight = height
+                                let morphs = composerHeightKind != composerKind
+                                composerHeightKind = composerKind
+                                if morphs {
+                                    composerMorphing = true
+                                    withAnimation(OpenCodeSessionComposer.morphAnimation) {
+                                        composerOverlayHeight = height
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                        composerMorphing = false
+                                    }
+                                } else {
+                                    composerOverlayHeight = height
+                                }
                             }
                     }
                 }
@@ -975,6 +997,9 @@ struct SessionChatView: View {
                 }
             }
             .onChange(of: composerKind) { _, kind in
+                // After this pass's height change has been measured: a mode change that
+                // keeps the height must not make the next typing growth animate.
+                DispatchQueue.main.async { composerHeightKind = kind }
                 if kind != .prompt {
                     viewModel.cancelDictationForModeChange()
                 }

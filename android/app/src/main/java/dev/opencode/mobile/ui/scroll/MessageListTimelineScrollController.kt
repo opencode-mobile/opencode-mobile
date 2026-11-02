@@ -64,6 +64,13 @@ internal class MessageListTimelineScrollController(
         bottomAnchorHeightPx: Int,
         autoFollowEnabled: Boolean = true,
     ) {
+        // A viewport that resizes every frame (the keyboard sliding) while the list already rests
+        // at its end needs no scroll. Settling in place keeps isProgrammaticScrolling unchanged,
+        // since every flip of it recomposes the whole timeline.
+        if (scrollJob?.isActive != true && listState.isAtTimelineEnd(messageCount)) {
+            autoFollowState.markProgrammaticScrollSettled(isPinnedToEnd = true)
+            return
+        }
         launchScroll {
             listState.scrollToTimelineEndAfterLayoutChange(messageCount = messageCount)
             settleScroll(

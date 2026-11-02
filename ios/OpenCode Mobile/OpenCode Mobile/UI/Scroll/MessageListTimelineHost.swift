@@ -23,6 +23,9 @@ where Item.ID == String {
     /// minus any inherited system bottom inset so home-indicator underlap does
     /// not double-count.
     var bottomOverlayInset: CGFloat = 0
+    /// When set, an end-pinned list glides to a new `bottomOverlayInset` on this curve
+    /// instead of its spring: the composer morphing between modes, so the rows keep to its edge.
+    var bottomOverlayAnimation: Animation?
     /// Extra scroll clearance under the top float stack (todos / review / sync).
     /// Applied via `additionalSafeAreaInsets.top` so the first message rests
     /// below the overlay while content can still scroll under it.
@@ -66,7 +69,7 @@ where Item.ID == String {
         viewController.canLoadOlder = canLoadOlder
         viewController.onNearOldestVisible = onNearOldestVisible
         viewController.itemContent = itemContent
-        viewController.updateBottomOverlayInset(bottomOverlayInset)
+        viewController.updateBottomOverlayInset(bottomOverlayInset, animation: bottomOverlayAnimation)
         viewController.updateTopOverlayInset(topOverlayInset)
         scrollController.attach(viewController)
         viewController.loadViewIfNeeded()
@@ -226,14 +229,14 @@ where Item.ID == String {
     /// `contentInset.bottom` alone did not expand scroll range here (LLDB).
     /// Subtract inherited system bottom inset so an edge-to-edge host does not
     /// stack the home indicator on top of the measured composer clearance.
-    func updateBottomOverlayInset(_ value: CGFloat) {
+    func updateBottomOverlayInset(_ value: CGFloat, animation: Animation? = nil) {
         let inset = max(0, value)
         guard abs(bottomOverlayInset - inset) > 0.5 else {
             applyBottomOverlaySafeArea(repinIfNeeded: false)
             return
         }
         bottomOverlayInset = inset
-        applyBottomOverlaySafeArea(repinIfNeeded: true)
+        applyBottomOverlaySafeArea(repinIfNeeded: true, glideAnimation: animation)
     }
 
     override func viewSafeAreaInsetsDidChange() {
@@ -241,7 +244,7 @@ where Item.ID == String {
         applyBottomOverlaySafeArea(repinIfNeeded: false)
     }
 
-    private func applyBottomOverlaySafeArea(repinIfNeeded: Bool) {
+    private func applyBottomOverlaySafeArea(repinIfNeeded: Bool, glideAnimation: Animation? = nil) {
         guard isViewLoaded else { return }
         let inheritedBottom = max(0, view.safeAreaInsets.bottom - additionalSafeAreaInsets.bottom)
         let inset = max(0, bottomOverlayInset - inheritedBottom)
@@ -254,7 +257,11 @@ where Item.ID == String {
         if repinIfNeeded, wasPinned, insetWillChange, let rows = visibleRowOffsets() {
             // UIKit applies the new adjusted inset in a later layout turn, so the rows
             // have not moved yet. Remember where they are and glide once they have.
-            pendingGlide = PendingGlide(rows: rows, adjustedBottom: collectionView.adjustedContentInset.bottom)
+            pendingGlide = PendingGlide(
+                rows: rows,
+                adjustedBottom: collectionView.adjustedContentInset.bottom,
+                animation: glideAnimation
+            )
         }
         if insetWillChange {
             if repinIfNeeded, wasPinned { armRepinOnAdjustedInsetChange() }
@@ -279,6 +286,8 @@ where Item.ID == String {
     private struct PendingGlide {
         let rows: [(cell: UICollectionViewCell, top: CGFloat)]
         let adjustedBottom: CGFloat
+        /// The curve to glide on; nil uses the inset spring.
+        let animation: Animation?
     }
 
     private var pendingGlide: PendingGlide?
@@ -289,7 +298,7 @@ where Item.ID == String {
               abs(collectionView.adjustedContentInset.bottom - pending.adjustedBottom) > 0.5
         else { return }
         pendingGlide = nil
-        glideRows(from: pending.rows)
+        glideRows(from: pending.rows, animation: pending.animation)
     }
 
     /// Each visible cell's top in the collection view's own coordinates.
@@ -305,7 +314,7 @@ where Item.ID == String {
     /// FLIP: the inset change already moved the rows to their final place. Offset each one back
     /// to where it was and let a spring carry it home. Only a transform moves, so the offset,
     /// geometry reports and end-pin logic never see the glide.
-    private func glideRows(from rows: [(cell: UICollectionViewCell, top: CGFloat)]) {
+    private func glideRows(from rows: [(cell: UICollectionViewCell, top: CGFloat)], animation: Animation?) {
         var moved: [UICollectionViewCell] = []
         for (cell, top) in rows {
             let dy = top - (cell.frame.minY - collectionView.contentOffset.y)
@@ -318,6 +327,20 @@ where Item.ID == String {
         // can be suppressed. The offsets above are already set (the rows still draw where
         // they were); start the spring from a clean turn.
         DispatchQueue.main.async {
+            let settle = { moved.forEach { $0.contentView.transform = .identity } }
+            if let animation {
+                if #available(iOS 18.0, *) {
+                    UIView.animate(animation, changes: settle)
+                } else {
+                    UIView.animate(
+                        withDuration: 0.24,
+                        delay: 0,
+                        options: [.curveEaseInOut, .allowUserInteraction, .beginFromCurrentState],
+                        animations: settle
+                    )
+                }
+                return
+            }
             UIView.animate(
                 withDuration: MessageListTimelineDefaults.insetGlideDuration,
                 delay: 0,

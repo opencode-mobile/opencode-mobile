@@ -209,6 +209,15 @@ suspend fun LazyListState.scrollToTimelineEnd() {
     scrollToItem(BOTTOM_ANCHOR_INDEX)
 }
 
+/**
+ * The timeline rests exactly at its end: [scrollToTimelineEndAfterLayoutChange] would only
+ * scroll to the bottom anchor where it already sits, so the scroll would not move it.
+ */
+internal fun LazyListState.isAtTimelineEnd(messageCount: Int): Boolean =
+    firstVisibleItemIndex == BOTTOM_ANCHOR_INDEX &&
+        firstVisibleItemScrollOffset == 0 &&
+        (distanceFromTimelineEnd(messageCount) ?: 0) <= 0
+
 private fun LazyListState.distanceFromTimelineEnd(messageCount: Int): Int? {
     val bottomAnchor =
         layoutInfo.visibleItemsInfo.firstOrNull { it.index == BOTTOM_ANCHOR_INDEX }

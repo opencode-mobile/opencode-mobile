@@ -29,6 +29,8 @@ struct SessionChatTimelineViewProps {
     let hideRetryCountdown: Bool
     /// Extra bottom inset so the timeline can scroll under a floating composer.
     let bottomOverlayInset: CGFloat
+    /// Set while the composer morphs between modes: the end-pinned list follows its edge on this curve.
+    let bottomOverlayAnimation: Animation?
     /// Bottom-left live activity from the screen (btw, queued). The timeline adds request failed.
     let activityItems: [SessionChatActivityItem]
     /// The keyboard is up: the activity pill goes compact and the other corners hide.
@@ -96,6 +98,7 @@ struct SessionChatTimelineViewProps {
         hideLiveRetryFailures: Bool = false,
         hideRetryCountdown: Bool = false,
         bottomOverlayInset: CGFloat = 0,
+        bottomOverlayAnimation: Animation? = nil,
         activityItems: [SessionChatActivityItem] = [],
         keyboardVisible: Bool = false,
         onActivityTap: @escaping (SessionChatActivityItem) -> Void = { _ in },
@@ -151,6 +154,7 @@ struct SessionChatTimelineViewProps {
         self.hideLiveRetryFailures = hideLiveRetryFailures
         self.hideRetryCountdown = hideRetryCountdown
         self.bottomOverlayInset = bottomOverlayInset
+        self.bottomOverlayAnimation = bottomOverlayAnimation
         self.activityItems = activityItems
         self.keyboardVisible = keyboardVisible
         self.onActivityTap = onActivityTap
@@ -475,6 +479,7 @@ private struct SessionChatTimelineReadyView: View {
                 onNearOldestVisible: props.onLoadOlder,
                 bottomContentPadding: 0,
                 bottomOverlayInset: listBottomInset,
+                bottomOverlayAnimation: props.bottomOverlayAnimation,
                 topOverlayInset: topOverlayInset
             ) { item in
                 SessionChatTimelineHostRow(

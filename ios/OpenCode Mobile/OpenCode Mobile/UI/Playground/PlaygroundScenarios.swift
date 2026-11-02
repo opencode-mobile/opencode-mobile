@@ -97,7 +97,7 @@ enum PlaygroundScenarioID: String, CaseIterable {
         switch self {
         case .longConversation: "Fourteen finished turns to scroll through"
         case .userMessages: "Short, long, images, a PDF, a skill and a shell command"
-        case .agentReplies: "Markdown, reasoning, every tool state, a diff, todos, a subagent"
+        case .agentReplies: "Markdown, reasoning, every tool state, a diff, todos, images, a subagent"
         case .noticesAndFailures: "Changes, compaction, an interrupt, a failure, a retry"
         case .emptySession: "No messages yet"
         case .streamingTurn: "Reasoning, tools, a diff and tests, then the reply streams"
@@ -575,6 +575,14 @@ enum PlaygroundScenarios {
                     output: "Found 3 call sites: checkout form, cart summary, order API."
                 ),
                 C.text("pg-m3-a2-x", "The typecheck fails on one line in `totals.ts`. I'll fix it next."),
+            ]),
+            C.userMessage("pg-m3-u4", "Sketch the phone layout before you build it.", start + 12 * minute),
+            C.assistant("pg-m3-a4", start + 12 * minute + 3_000, [
+                C.text("pg-m3-a4-x1", "Here is the field with the button moved below it:"),
+                .file(C.image("pg-m3-a4-img1", "coupon-phone.png", 1)),
+                C.text("pg-m3-a4-x2", "And the two error states, expired and unknown:"),
+                .file(C.image("pg-m3-a4-img2", "coupon-expired.png", 0)),
+                .file(C.image("pg-m3-a4-img3", "coupon-unknown.png", 2)),
             ]),
             C.userMessage("pg-m3-u3", "Fix it and add tests for expired codes.", now - 30_000),
             C.assistant("pg-m3-a3", now - 28_000, [

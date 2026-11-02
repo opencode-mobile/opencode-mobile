@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -456,17 +457,21 @@ fun OpenCodeSessionComposer(
                 AnimatedContent(
                     targetState = state,
                     modifier = Modifier.fillMaxWidth(),
+                    // The shell is pinned to the bottom of the screen, so the content is too: both
+                    // states stay still while the shell resizes around them and crossfade, which
+                    // reads as one surface morphing instead of the old content sliding down.
+                    contentAlignment = Alignment.BottomStart,
                     transitionSpec = {
                         (
                             fadeIn(
-                                animationSpec = tween(durationMillis = 120, delayMillis = 80),
+                                animationSpec = tween(durationMillis = 180, delayMillis = 60),
                             ) togetherWith
                                 fadeOut(
-                                    animationSpec = tween(durationMillis = 80),
+                                    animationSpec = tween(durationMillis = 120),
                                 )
                         ).using(
                             SizeTransform(clip = true) { _, _ ->
-                                tween(durationMillis = 240)
+                                tween(durationMillis = 280, easing = FastOutSlowInEasing)
                             },
                         )
                     },
