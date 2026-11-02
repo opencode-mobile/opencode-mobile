@@ -227,6 +227,9 @@ struct OpenCodeFloatingPill: View {
                     .allowsHitTesting(false)
             }
         }
+        // After the chrome and the attention ring, so the badge sits on top of both instead of
+        // being cut by the ring's stroke or the glass.
+        .overlay(alignment: .topTrailing) { countBadge }
     }
 
     @ViewBuilder
@@ -236,7 +239,6 @@ struct OpenCodeFloatingPill: View {
                 .foregroundStyle(contentColor)
                 .frame(width: Self.minHeight, height: Self.minHeight)
                 .contentShape(Circle())
-                .overlay(alignment: .topTrailing) { countBadge }
         } else {
             // One structure for full and compact so a change of `compact` animates the
             // width: the label folds to zero and the padding closes up around the mark.
