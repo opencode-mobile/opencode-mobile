@@ -9,15 +9,13 @@ class ScrollToEndVisibilityTest {
     fun hideWhenBottomAnchorStillNearEnd() {
         val visible =
             listOf(
-                TimelineVisibleItem(index = 0, offset = 1900, size = 1),
-                TimelineVisibleItem(index = 1, offset = -5000, size = 6900),
+                TimelineVisibleItem(index = 0, offset = -100, size = 1),
+                TimelineVisibleItem(index = 1, offset = -99, size = 6900),
             )
         assertFalse(
             shouldShowScrollToEnd(
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 visibleItems = visible,
             ),
@@ -35,8 +33,6 @@ class ScrollToEndVisibilityTest {
             shouldShowScrollToEnd(
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 visibleItems = visible,
             ),
@@ -47,14 +43,12 @@ class ScrollToEndVisibilityTest {
     fun hideWhenBottomAnchorJustLeftViewportButThresholdNotReached() {
         val visible =
             listOf(
-                TimelineVisibleItem(index = 1, offset = -4800, size = 6900),
+                TimelineVisibleItem(index = 1, offset = -300, size = 6900),
             )
         assertFalse(
             shouldShowScrollToEnd(
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 visibleItems = visible,
             ),
@@ -73,8 +67,25 @@ class ScrollToEndVisibilityTest {
             shouldShowScrollToEnd(
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 12,
+                revealThresholdMinPx = 120,
+                visibleItems = visible,
+            ),
+        )
+    }
+
+    @Test
+    fun showWhenScrolledUpInsideTallNewestReplyWhoseTopIsOnScreen() {
+        // Reverse layout: the reply's top and the prompt above it are on screen,
+        // but its end is 1500px below. Measuring the reply's top edge hid the pill.
+        val visible =
+            listOf(
+                TimelineVisibleItem(index = 1, offset = -1500, size = 2000),
+                TimelineVisibleItem(index = 2, offset = 500, size = 200),
+            )
+        assertTrue(
+            shouldShowScrollToEnd(
+                messageCount = 3,
+                viewportHeightPx = 2000,
                 revealThresholdMinPx = 120,
                 visibleItems = visible,
             ),
@@ -92,8 +103,6 @@ class ScrollToEndVisibilityTest {
             shouldShowScrollToEnd(
                 messageCount = 10,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 visibleItems = visible,
             ),
@@ -135,8 +144,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = true,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = scrolledPastReveal(),
@@ -153,8 +160,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = false,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = scrolledPastReveal(),
@@ -171,8 +176,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = false,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = scrolledPastReveal(),
@@ -189,8 +192,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = false,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = scrolledPastReveal(),
@@ -207,8 +208,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = false,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = justInsideReveal(),
@@ -225,8 +224,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = true,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = justInsideReveal(),
@@ -244,8 +241,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = shown,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = scrolledPastReveal(),
@@ -258,8 +253,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = shown,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = scrolledPastReveal(),
@@ -272,8 +265,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = shown,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = nearEnd(),
@@ -291,8 +282,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = shown,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = scrolledPastReveal(),
@@ -305,8 +294,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = shown,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = scrolledPastReveal(),
@@ -319,8 +306,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = shown,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = justInsideReveal(),
@@ -333,8 +318,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = shown,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = nearEnd(),
@@ -351,8 +334,6 @@ class ScrollToEndVisibilityTest {
                 currentlyShown = true,
                 messageCount = 3,
                 viewportHeightPx = 2000,
-                viewportEndOffset = 2000,
-                afterContentPadding = 0,
                 revealThresholdMinPx = 120,
                 hideSlackPx = 16,
                 visibleItems = nearEnd(),
@@ -463,12 +444,12 @@ class ScrollToEndVisibilityTest {
 
     private fun justInsideReveal(): List<TimelineVisibleItem> =
         listOf(
-            TimelineVisibleItem(index = 1, offset = -4511, size = 6900),
+            TimelineVisibleItem(index = 1, offset = -390, size = 6900),
         )
 
     private fun nearEnd(): List<TimelineVisibleItem> =
         listOf(
-            TimelineVisibleItem(index = 0, offset = 1900, size = 1),
-            TimelineVisibleItem(index = 1, offset = -5000, size = 6900),
+            TimelineVisibleItem(index = 0, offset = -10, size = 1),
+            TimelineVisibleItem(index = 1, offset = -9, size = 6900),
         )
 }

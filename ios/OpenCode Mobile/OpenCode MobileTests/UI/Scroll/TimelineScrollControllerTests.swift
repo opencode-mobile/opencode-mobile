@@ -9,9 +9,15 @@ private final class FakeTimelineScrollPerformer: TimelineScrollPerforming {
     }
 
     private(set) var calls: [Call] = []
+    /// Stands in for the host stopping a coast; nil keeps the user scroll going.
+    var endUserScroll: (() -> Void)?
 
     func performScrollToEnd(animated: Bool) {
         calls.append(Call(animated: animated))
+    }
+
+    func performEndUserScroll() {
+        endUserScroll?()
     }
 }
 
@@ -278,6 +284,27 @@ struct TimelineScrollControllerTests {
 
         #expect(performer.calls.isEmpty)
         #expect(!controller.isProgrammaticScrolling)
+    }
+
+    @Test func pillTapStopsCoastingScrollAndScrollsToEnd() {
+        let performer = FakeTimelineScrollPerformer()
+        let controller = TimelineScrollController(initialMessageCount: 2)
+        controller.attach(performer)
+        performer.endUserScroll = { [weak controller] in
+            controller?.endUserScrolling(contentOffsetY: 100)
+        }
+        controller.updateGeometry(
+            distanceFromBottom: 300,
+            viewportHeight: 400,
+            contentHeight: 1_000
+        )
+
+        controller.beginUserScrolling()
+        controller.scrollToEndAnimated()
+
+        #expect(performer.calls == [.init(animated: true)])
+        #expect(!controller.isUserScrolling)
+        #expect(controller.userUnpinnedContentOffsetY == nil)
     }
 
     @Test func pinnedGeometryAfterUserScrollAwayDoesNotFollow() {

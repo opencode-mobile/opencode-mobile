@@ -1043,6 +1043,16 @@ where Item.ID == String {
         finishUserScroll(scrollView)
     }
 
+    func performEndUserScroll() {
+        // isDragging stays true through the coast; isTracking is the finger.
+        guard !collectionView.isTracking else { return }
+        if collectionView.isDecelerating {
+            // Setting the current offset stops the coast where it is.
+            collectionView.setContentOffset(collectionView.contentOffset, animated: false)
+        }
+        finishUserScroll(collectionView)
+    }
+
     private func finishUserScroll(_ scrollView: UIScrollView) {
         scrollController?.endUserScrolling(contentOffsetY: scrollView.contentOffset.y)
         flushPendingApplyIfNeeded()
@@ -1082,6 +1092,7 @@ where Item.ID == String {
         collectionView.contentInsetAdjustmentBehavior = .automatic
         collectionView.delegate = self
         collectionView.keyboardDismissMode = .onDrag
+        collectionView.decelerationRate = MessageListTimelineDefaults.decelerationRate
         // Prefer lighter invalidation: including constraints re-measured tall
         // markdown cells aggressively during open and blocked scrolling.
         collectionView.selfSizingInvalidation = .enabled
