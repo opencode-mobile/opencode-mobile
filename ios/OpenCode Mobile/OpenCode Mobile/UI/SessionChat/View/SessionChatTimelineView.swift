@@ -293,9 +293,10 @@ private struct SessionChatTimelineReadyView: View {
         scrollController.shouldShowScrollToEnd
     }
 
+    /// Stays up while a sheet is open: the pill that opened it should not vanish,
+    /// and its measured top inset keeps the timeline from shifting under the sheet.
     private var contextItems: [SessionChatContextItem] {
-        guard !props.hideFloatStack else { return [] }
-        return SessionChatPillSlots.context(
+        SessionChatPillSlots.context(
             todos: props.sessionTodosVisible
                 ? (props.sessionTodoCompletedCount, props.sessionTodoTotalCount)
                 : nil,
