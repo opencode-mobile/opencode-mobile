@@ -49,7 +49,7 @@ enum class PlaygroundScenarioId(
     AgentReplies(
         "M3",
         "Agent replies",
-        "Markdown, reasoning, every tool state, a diff, todos, a subagent",
+        "Markdown, reasoning, every tool state, a diff, todos, images, a subagent",
         PlaygroundScenarioGroup.Messages,
     ),
     NoticesAndFailures(
@@ -544,6 +544,18 @@ object PlaygroundScenarios {
                                 output = "Found 3 call sites: checkout form, cart summary, order API.",
                             ),
                             text("pg-m3-a2-x", "The typecheck fails on one line in `totals.ts`. I'll fix it next."),
+                        ),
+                    ),
+                    userMessage("pg-m3-u4", "Sketch the phone layout before you build it.", start + 12 * MINUTE),
+                    assistant(
+                        "pg-m3-a4",
+                        start + 12 * MINUTE + 3_000,
+                        listOf(
+                            text("pg-m3-a4-x1", "Here is the field with the button moved below it:"),
+                            image("pg-m3-a4-img1", "coupon-phone.png", 1),
+                            text("pg-m3-a4-x2", "And the two error states, expired and unknown:"),
+                            image("pg-m3-a4-img2", "coupon-expired.png", 0),
+                            image("pg-m3-a4-img3", "coupon-unknown.png", 2),
                         ),
                     ),
                     userMessage("pg-m3-u3", "Fix it and add tests for expired codes.", nowMs - 30_000),
