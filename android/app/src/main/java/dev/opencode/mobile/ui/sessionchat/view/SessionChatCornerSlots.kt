@@ -85,27 +85,34 @@ internal fun SessionChatPillReveal(
 }
 
 /**
- * Switches a pill between full and round by animating its width, so the pills beside it move in
- * step. The two forms cross-fade inside the changing box; the shadow is not clipped.
+ * Switches a pill between forms by animating its width, so the pills beside it move in step.
+ * The forms cross-fade inside the changing box; the shadow is not clipped. [state] is everything
+ * that decides what [content] draws, so the outgoing form keeps its own look while it fades.
  */
 @Composable
-internal fun SessionChatPillMorph(
-    compact: Boolean,
+internal fun <T> SessionChatPillMorph(
+    state: T,
     modifier: Modifier = Modifier,
-    content: @Composable (compact: Boolean) -> Unit,
+    content: @Composable (state: T) -> Unit,
 ) {
     AnimatedContent(
-        targetState = compact,
+        targetState = state,
         modifier = modifier,
         transitionSpec = {
             (fadeIn(tween(PillRevealMs)) togetherWith fadeOut(tween(PillRevealMs / 2)))
                 .using(SizeTransform(clip = false) { _, _ -> tween(PillRevealMs, easing = FastOutSlowInEasing) })
         },
         label = "sessionChatPillMorph",
-    ) { isCompact ->
-        content(isCompact)
+    ) { form ->
+        content(form)
     }
 }
+
+/** The shape the primary activity pill is drawn in; the morph animates between these. */
+private data class ActivityPillForm(
+    val collapsed: Boolean,
+    val compact: Boolean,
+)
 
 /**
  * Bottom-left live activity slot: one pill, a "+N" button, and the stack "+N" springs up.
@@ -159,11 +166,13 @@ internal fun SessionChatActivitySlotView(
             horizontalArrangement = Arrangement.spacedBy(SessionChatCornerSlotsLayout.Spacing),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            SessionChatPillMorph(compact = slot.collapsed || slot.primaryCompact) { compactNow ->
-                if (slot.collapsed) {
+            SessionChatPillMorph(
+                state = ActivityPillForm(collapsed = slot.collapsed, compact = slot.collapsed || slot.primaryCompact),
+            ) { form ->
+                if (form.collapsed) {
                     SessionChatActivityPill(
                         item = primary,
-                        compact = compactNow,
+                        compact = form.compact,
                         badgeCount = slot.itemCount,
                         accessibilityLabel = SessionChatActivityPillCopy.collapsedAccessibilityLabel(primary, slot.itemCount, stackOpen),
                         onClick = { onStackOpenChange(!stackOpen) },
@@ -172,7 +181,7 @@ internal fun SessionChatActivitySlotView(
                 } else {
                     SessionChatActivityPill(
                         item = primary,
-                        compact = compactNow,
+                        compact = form.compact,
                         onClick = {
                             onStackOpenChange(false)
                             onClick(primary)
@@ -361,7 +370,7 @@ internal fun SessionChatSyncingSlotView(
     compact: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    SessionChatPillMorph(compact = compact, modifier = modifier) { compactNow ->
+    SessionChatPillMorph(state = compact, modifier = modifier) { compactNow ->
         OpenCodeFloatingPill(
             layout = OpenCodeFloatingPillLayout.Counter(label),
             state = OpenCodeFloatingPillState.Live,

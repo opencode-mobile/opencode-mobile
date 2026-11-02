@@ -769,11 +769,12 @@ private fun SessionChatTimelineReadyView(
                 )
             }
         // Away from the end the left side folds into one round pill; Syncing shrinks to a circle.
-        val awayFromEnd = timeline.showScrollToEnd && !hideFloatStack
+        val awayFromEnd = timeline.showScrollToEnd
         val displayedActivitySlot =
             SessionChatPillSlots.activity(allActivityItems, keyboardVisible, activityClockMs, awayFromEnd = awayFromEnd)
-        val syncingText = remember { mutableStateOf("Syncing") }
-        displayedSyncingLabel?.let { syncingText.value = it }
+        // Kept while Syncing animates out, so it does not flash the default text on exit.
+        val syncingText = rememberLastNonNull(displayedSyncingLabel, "Syncing")
+        val navigationText = rememberLastNonNull(navigationPill, SessionChatNavigationPill(0))
         Row(
             modifier =
                 Modifier
@@ -816,19 +817,18 @@ private fun SessionChatTimelineReadyView(
             )
             Spacer(modifier = Modifier.weight(1f))
             // Bottom right, overlay only: Syncing left of scroll-to-end. Neither reserves list space.
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(SessionChatCornerSlotsLayout.Spacing),
-                verticalAlignment = Alignment.Bottom,
-            ) {
+            // The gap lives inside the scroll-to-end reveal so it grows and shrinks with that pill.
+            Row(verticalAlignment = Alignment.Bottom) {
                 SessionChatPillReveal(visible = displayedSyncingLabel != null) {
                     SessionChatSyncingSlotView(
-                        label = syncingText.value,
+                        label = syncingText,
                         compact = SessionChatPillSlots.syncingCompact(awayFromEnd, keyboardVisible),
                     )
                 }
                 SessionChatPillReveal(visible = navigationPill != null) {
                     SessionChatNavigationSlotView(
-                        pill = navigationPill ?: SessionChatNavigationPill(0),
+                        modifier = Modifier.padding(start = SessionChatCornerSlotsLayout.Spacing),
+                        pill = navigationText,
                         onClick = {
                             ProductAnalytics.logUserAction(
                                 screenId = ProductAnalytics.Screen.SESSION_CHAT,
@@ -1836,6 +1836,21 @@ private fun FallbackMessageBubble(
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
 }
+
+/** The latest non-null [value], so an exiting animation keeps drawing what it showed. */
+@Composable
+private fun <T : Any> rememberLastNonNull(
+    value: T?,
+    initial: T,
+): T {
+    val held = remember { LastValue(initial) }
+    if (value != null) held.value = value
+    return held.value
+}
+
+private class LastValue<T>(
+    var value: T,
+)
 
 /**
  * Syncing label the bottom-right Syncing pill shows, lagging [label] by
