@@ -82,6 +82,9 @@ struct OpenCodeMentionTextView: View {
     /// Hardware-keyboard Return: when set, Return runs this and Shift+Return adds a line
     /// (see `OpenCodeReturnKeyPolicy`). The soft keyboard's Return still adds a line.
     var returnKey: OpenCodeHardwareReturnKey?
+    /// ↑ / ↓ with no modifier: return true when it recalled a prompt (the key is
+    /// then not used to move the caret).
+    var onHistoryKey: ((_ direction: OpenCodePromptHistoryDirection, _ text: String, _ caret: OpenCodePromptCaret) -> Bool)?
     /// Tab or Shift+Tab (`backward`) left the field. Tab never types a tab character.
     var onTabOut: ((_ backward: Bool) -> Void)?
     let onChange: (_ text: String, _ selectionStart: Int, _ selectionEnd: Int) -> Void
@@ -101,6 +104,7 @@ struct OpenCodeMentionTextView: View {
             onPasteAttachments: onPasteAttachments,
             acceptsTextDrops: acceptsTextDrops,
             returnKey: returnKey,
+            onHistoryKey: onHistoryKey,
             onTabOut: onTabOut,
             onChange: onChange
         )
@@ -121,6 +125,7 @@ private struct Representable: UIViewRepresentable {
     let onPasteAttachments: (([NSItemProvider]) -> Void)?
     let acceptsTextDrops: Bool
     let returnKey: OpenCodeHardwareReturnKey?
+    let onHistoryKey: ((OpenCodePromptHistoryDirection, String, OpenCodePromptCaret) -> Bool)?
     let onTabOut: ((_ backward: Bool) -> Void)?
     let onChange: (String, Int, Int) -> Void
 
@@ -153,6 +158,8 @@ private struct Representable: UIViewRepresentable {
         uiView.acceptsTextDrops = acceptsTextDrops
         uiView.returnKey = returnKey
         uiView.onTabOut = onTabOut
+        uiView.onHistoryKey = onHistoryKey
+        uiView.textInputRole = .composer
         applyInputTraits(to: uiView)
         if context.coordinator.lastFocusRequestToken != focusRequestToken {
             context.coordinator.lastFocusRequestToken = focusRequestToken
@@ -341,6 +348,13 @@ final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput, OpenCode
     var returnKey: OpenCodeHardwareReturnKey?
     /// Tab or Shift+Tab (`backward`) left the field; nil just stops editing.
     var onTabOut: ((_ backward: Bool) -> Void)?
+    var onHistoryKey: ((OpenCodePromptHistoryDirection, String, OpenCodePromptCaret) -> Bool)?
+
+    /// The question prompt's answer field (it has its own Esc) rather than the prompt.
+    /// What this field is to shortcut gating, set by its owner: the composer
+    /// prompt, a question's custom answer, or (default) any other field.
+    var textInputRole: OpenCodeTextInputFocus = .otherTextField
+
     /// Esc while editing; nil leaves the field the default way (see `OpenCodeEscapeRouter`).
     /// A field with its own Esc hands keyboard focus on explicitly, so Tab does not
     /// move into it while it is not being edited.
@@ -422,6 +436,14 @@ final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput, OpenCode
             leaveOnTab(backward: key.modifierFlags.contains(.shift))
             return
         }
+        if presses.count == 1, let key = presses.first?.key, let onHistoryKey,
+           key.keyCode == .keyboardUpArrow || key.keyCode == .keyboardDownArrow,
+           key.modifierFlags.isDisjoint(with: [.shift, .command, .alternate, .control]),
+           markedTextRange == nil,
+           onHistoryKey(key.keyCode == .keyboardUpArrow ? .older : .newer, text ?? "", promptCaret) {
+            swallowedPresses.insert(key.keyCode)
+            return
+        }
         if presses.count == 1, let key = presses.first?.key,
            key.keyCode == .keyboardReturnOrEnter || key.keyCode == .keypadEnter,
            returnKey != nil,
@@ -431,6 +453,23 @@ final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput, OpenCode
             pendingHardwareReturnAt = Date()
         }
         super.pressesBegan(presses, with: event)
+    }
+
+    /// The caret's line for prompt recall: lines as laid out (wrapped lines count).
+    private var promptCaret: OpenCodePromptCaret {
+        let atStart = selectedRange.location == 0 && selectedRange.length == 0
+        guard let caret = selectedTextRange?.start else {
+            return OpenCodePromptCaret(atStart: atStart, onFirstLine: true, onLastLine: true)
+        }
+        let caretY = caretRect(for: caret).midY
+        let firstY = caretRect(for: beginningOfDocument).midY
+        let lastY = caretRect(for: endOfDocument).midY
+        let tolerance = (font?.lineHeight ?? 16) / 2
+        return OpenCodePromptCaret(
+            atStart: atStart,
+            onFirstLine: abs(caretY - firstY) < tolerance,
+            onLastLine: abs(caretY - lastY) < tolerance
+        )
     }
 
     /// Tab right after Return: the Return's line may still be on its way, and

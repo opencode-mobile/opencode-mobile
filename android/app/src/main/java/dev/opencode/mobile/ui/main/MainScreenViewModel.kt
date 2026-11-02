@@ -664,18 +664,7 @@ class MainScreenViewModel
             _revealNewestToken.update { it + 1 }
             _uiState.update { state ->
                 if (state is MainScreenUiState.Loaded) {
-                    state.copy(
-                        pendingOpenSession =
-                            SessionOpenTarget(
-                                sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
-                                title = "New Session",
-                                worktree = worktree,
-                                optimisticNavigationInstanceId =
-                                    java.util.UUID
-                                        .randomUUID()
-                                        .toString(),
-                            ),
-                    )
+                    state.copy(pendingOpenSession = newSessionOpenTarget(worktree))
                 } else {
                     state
                 }
@@ -1900,6 +1889,22 @@ data class SessionOpenTarget(
     val worktree: String,
     val optimisticNavigationInstanceId: String? = null,
 )
+
+/**
+ * A new session in [worktree], opened optimistically: Session Chat shows it at once and the
+ * server session is created with the first prompt. Home's New session and Ctrl+N (Home and
+ * Session Chat) all open this.
+ */
+fun newSessionOpenTarget(worktree: String): SessionOpenTarget =
+    SessionOpenTarget(
+        sessionId = OptimisticSessionCreate.PLACEHOLDER_SESSION_ID,
+        title = "New Session",
+        worktree = worktree,
+        optimisticNavigationInstanceId =
+            java.util.UUID
+                .randomUUID()
+                .toString(),
+    )
 
 /** Home with [moved]'s session row in its new directory, so it regroups under that worktree. */
 internal fun MainScreenUiState.Loaded.withSessionMoved(moved: SessionMovedUpdate): MainScreenUiState.Loaded {

@@ -476,6 +476,8 @@ private struct NewSessionDockButton: View {
     var body: some View {
         content
             .openCodeKeyboardFocusable(.capsule, activate: onNewSession)
+            // Right-click opens what a long-press opens (choose project or worktree).
+            .openCodeSecondaryClick(onLongPress)
     }
 
     @ViewBuilder

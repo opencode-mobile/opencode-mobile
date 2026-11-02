@@ -1383,7 +1383,7 @@ fun OpenCodeBottomSheetEntry(
                         Color.Transparent
                     },
                 ).defaultMinSize(minHeight = BottomSheetEntryMinHeight)
-                .openCodeFocusRing(entryShape)
+                .openCodeFocusRing(entryShape, enabled)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = ripple(bounded = true),

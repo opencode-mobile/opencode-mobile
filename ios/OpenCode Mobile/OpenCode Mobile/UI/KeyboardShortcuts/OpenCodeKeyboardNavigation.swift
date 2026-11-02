@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // Pure rules for hardware-keyboard navigation (#869 Tier 1). The SwiftUI and UIKit
 // wiring lives in `OpenCodeKeyboardFocus.swift` and the design-system focus modifier.
@@ -303,5 +304,166 @@ nonisolated enum OpenCodePromptFocus {
     /// disabled (nothing typed yet) focus stays in the field.
     static func targetAfterCustomAnswerReturn(primaryActionEnabled: Bool) -> OpenCodePromptFocusTarget? {
         primaryActionEnabled ? .primaryAction : nil
+    }
+}
+
+// MARK: - Tier 2: prompt chords, digit picks, prompt history
+
+/// The visible prompt, as far as the prompt chords need it.
+nonisolated enum OpenCodePromptChordState: Equatable, Sendable {
+    case none
+    /// `actionsEnabled` is false while a reply is in flight or the session is read-only.
+    case permission(requestID: String, actionsEnabled: Bool, alwaysOffered: Bool)
+    case question(requestID: String, isLastStep: Bool, nextEnabled: Bool, submitEnabled: Bool, dismissEnabled: Bool)
+}
+
+/// What a prompt chord does; each goes through the same path as its button.
+nonisolated enum OpenCodePromptChordOutcome: Equatable, Sendable {
+    case allowOnce
+    case alwaysAllow
+    case deny
+    case next
+    case submit
+    case dismiss
+
+    /// Title in the menu bar and the hold-⌘ overlay.
+    var title: String {
+        switch self {
+        case .allowOnce: "Allow Once"
+        case .alwaysAllow: "Always Allow"
+        case .deny: "Deny"
+        case .next: "Next Question"
+        case .submit: "Submit Answers"
+        case .dismiss: "Dismiss Question"
+        }
+    }
+}
+
+nonisolated enum OpenCodePromptChordRule {
+    /// ⌘⏎ allows once or goes Next / Submits; ⌥⌘⏎ always allows when offered;
+    /// ⌘⌫ denies or dismisses. Nil when the chord does nothing now (no prompt, the
+    /// button is disabled, or a reply is in flight).
+    static func outcome(_ shortcut: OpenCodeKeyboardShortcut, state: OpenCodePromptChordState) -> OpenCodePromptChordOutcome? {
+        switch (shortcut, state) {
+        case let (.promptPrimary, .permission(_, enabled, _)):
+            return enabled ? .allowOnce : nil
+        case let (.promptAlwaysAllow, .permission(_, enabled, offered)):
+            return enabled && offered ? .alwaysAllow : nil
+        case let (.promptReject, .permission(_, enabled, _)):
+            return enabled ? .deny : nil
+        case let (.promptPrimary, .question(_, isLastStep, nextEnabled, submitEnabled, _)):
+            if isLastStep { return submitEnabled ? .submit : nil }
+            return nextEnabled ? .next : nil
+        case let (.promptReject, .question(_, _, _, _, dismissEnabled)):
+            return dismissEnabled ? .dismiss : nil
+        default:
+            return nil
+        }
+    }
+}
+
+/// Bare 1–9 in a question prompt pick that option, like tapping it: a single
+/// select selects it, a multi select toggles it.
+nonisolated enum OpenCodeQuestionDigitPick {
+    /// Only once keyboard focus is inside the prompt and not in a text field, so a
+    /// digit typed anywhere else never answers; and only a bare digit (⌘2, ⌃2, ⌥2
+    /// are other shortcuts). Keypad digits count.
+    static func optionIndex(
+        for character: Character,
+        modifiers: EventModifiers,
+        optionCount: Int,
+        focusInsidePrompt: Bool,
+        textFieldFocused: Bool,
+        optionsEnabled: Bool
+    ) -> Int? {
+        guard modifiers.subtracting([.numericPad, .capsLock]).isEmpty,
+              focusInsidePrompt, !textFieldFocused, optionsEnabled,
+              let digit = character.wholeNumberValue, (1...9).contains(digit),
+              String(character) == String(digit)
+        else { return nil }
+        let index = digit - 1
+        return index < optionCount ? index : nil
+    }
+}
+
+nonisolated enum OpenCodePromptHistoryDirection: Sendable {
+    /// ↑: an older prompt.
+    case older
+    /// ↓: a newer prompt, then back to the empty prompt.
+    case newer
+}
+
+/// The prompts ↑ recalls: this session's sent user prompts, oldest first, without
+/// sends still pending or failed and without blank ones.
+nonisolated enum OpenCodePromptHistory {
+    struct Message: Equatable, Sendable {
+        let isUser: Bool
+        let text: String
+        /// Not delivered (still sending, or the send failed).
+        let isPending: Bool
+    }
+
+    static func entries(_ messages: [Message]) -> [String] {
+        messages.compactMap { message in
+            guard message.isUser, !message.isPending,
+                  !message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            else { return nil }
+            return message.text
+        }
+    }
+}
+
+/// ↑ in an empty prompt (no text, no attachments) with the caret at the start
+/// recalls this session's sent prompts, newest first; ↓ steps forward and finally
+/// back to empty. In a recalled multi-line prompt ↑ steps only from the first
+/// line and ↓ only from the last; elsewhere they move the caret. Any edit ends
+/// browsing (the text no longer matches the recalled prompt).
+nonisolated struct OpenCodePromptHistoryBrowser: Equatable, Sendable {
+    /// Index into the history being shown; nil while not browsing.
+    private(set) var index: Int?
+
+    init() {}
+
+    /// The text to show for this key, or nil to leave the key to the text field.
+    /// `history` is oldest first.
+    mutating func step(
+        _ direction: OpenCodePromptHistoryDirection,
+        history: [String],
+        text: String,
+        hasAttachments: Bool = false,
+        caretAtStart: Bool,
+        caretOnFirstLine: Bool = true,
+        caretOnLastLine: Bool = true
+    ) -> String? {
+        if let index, !(history.indices.contains(index) && history[index] == text) {
+            self.index = nil
+        }
+        guard let index else {
+            guard direction == .older, text.isEmpty, !hasAttachments, caretAtStart,
+                  let last = history.indices.last
+            else { return nil }
+            self.index = last
+            return history[last]
+        }
+        // Inside a recalled multi-line prompt the arrows move the caret first.
+        switch direction {
+        case .older where !caretOnFirstLine, .newer where !caretOnLastLine:
+            return nil
+        default:
+            break
+        }
+        switch direction {
+        case .older:
+            let older = max(index - 1, 0)
+            self.index = older
+            return history[older]
+        case .newer:
+            if index < history.count - 1 {
+                self.index = index + 1
+                return history[index + 1]
+            }
+            self.index = nil
+            return ""
+        }
     }
 }

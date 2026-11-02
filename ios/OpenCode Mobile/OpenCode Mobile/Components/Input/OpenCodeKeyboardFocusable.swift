@@ -225,6 +225,13 @@ private struct OpenCodeKeyboardFocusableModifier: ViewModifier {
                     ringView.allowsHitTesting(false)
                 }
             }
+            // A right-click never presses a control (see `OpenCodeSecondaryClickOutcome`).
+            .openCodeIgnoresSecondaryClick()
+            // Pointer hover: the system highlight in the control's own outline. Touch
+            // never shows it.
+            .contentShape(.hoverEffect, OpenCodeControlOutline(ring))
+            .hoverEffect(.highlight)
+            .hoverEffectDisabled(!enabled)
             // Not `interactions: .activate`: on iPadOS without Full Keyboard Access
             // such views are never reached by Tab (checked on an iPadOS 26.5
             // simulator). Touch focus hides the ring instead (`OpenCodeFocusRingPolicy`).
@@ -304,6 +311,30 @@ private struct OpenCodeKeyboardFocusableModifier: ViewModifier {
                 .strokeBorder(stroke, lineWidth: width)
                 .padding(.horizontal, horizontalInset)
                 .padding(.vertical, verticalInset)
+        }
+    }
+}
+
+/// A control's outline from its ring shape, without the ring's outset: the
+/// shape hover highlights.
+struct OpenCodeControlOutline: Shape {
+    let ring: OpenCodeFocusRingShape
+
+    init(_ ring: OpenCodeFocusRingShape) {
+        self.ring = ring
+    }
+
+    func path(in rect: CGRect) -> Path {
+        switch ring {
+        case let .roundedRectangle(cornerRadius):
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).path(in: rect)
+        case .capsule:
+            Capsule().path(in: rect)
+        case .circle:
+            Circle().path(in: rect)
+        case let .insetRoundedRectangle(cornerRadius, horizontalInset, verticalInset):
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .path(in: rect.insetBy(dx: horizontalInset, dy: verticalInset))
         }
     }
 }

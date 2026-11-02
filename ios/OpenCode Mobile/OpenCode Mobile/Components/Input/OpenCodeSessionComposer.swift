@@ -26,6 +26,8 @@ enum OpenCodeSessionComposerState {
         /// and a selected Shell badge replaces the model and agent chips; tapping it sends
         /// `.exitShellMode`.
         let shellMode: Bool
+        /// This session's sent prompts, oldest first, for ↑ / ↓ recall.
+        let history: [String]
         /// Send asks a `/btw` side question instead of prompting. A selected `/btw` badge replaces
         /// the model and agent chips and the field shows its own placeholder; tapping the badge or
         /// deleting on an empty field sends `.exitSideQuestionMode`.
@@ -51,7 +53,8 @@ enum OpenCodeSessionComposerState {
             followUpDelivery: FollowUpDelivery? = nil,
             showDictationButton: Bool = false,
             shellMode: Bool = false,
-            sideQuestionMode: Bool = false
+            sideQuestionMode: Bool = false,
+            history: [String] = []
         ) {
             self.text = text
             self.mentionRanges = mentionRanges
@@ -73,6 +76,7 @@ enum OpenCodeSessionComposerState {
             self.showDictationButton = showDictationButton
             self.shellMode = shellMode
             self.sideQuestionMode = sideQuestionMode
+            self.history = history
         }
     }
 
@@ -231,6 +235,48 @@ enum OpenCodeSessionComposerState {
 }
 
 extension OpenCodeSessionComposerState {
+    /// The prompt chords' view of this state (`OpenCodePromptChordRule`).
+    var promptChordState: OpenCodePromptChordState {
+        switch self {
+        case let .permission(permission):
+            .permission(
+                requestID: permission.requestID,
+                actionsEnabled: permission.actionsEnabled && !permission.submitting,
+                alwaysOffered: !permission.alwaysPatterns.isEmpty
+            )
+        case let .question(question):
+            .question(
+                requestID: question.requestID,
+                isLastStep: question.questionIndex >= question.questionCount - 1,
+                nextEnabled: question.nextEnabled && !question.submitting,
+                submitEnabled: question.submitEnabled && !question.submitting,
+                dismissEnabled: !question.submitting
+            )
+        case .prompt, .childLockout:
+            .none
+        }
+    }
+
+    /// The button action a prompt chord presses, for this state's request.
+    func action(for outcome: OpenCodePromptChordOutcome) -> OpenCodeSessionComposerAction? {
+        switch (self, outcome) {
+        case let (.permission(permission), .allowOnce):
+            .allowPermissionOnce(requestID: permission.requestID, sessionID: permission.sessionID)
+        case let (.permission(permission), .alwaysAllow):
+            .alwaysAllowPermission(requestID: permission.requestID, sessionID: permission.sessionID)
+        case let (.permission(permission), .deny):
+            .denyPermission(requestID: permission.requestID, sessionID: permission.sessionID)
+        case let (.question(question), .next):
+            .questionNext(requestID: question.requestID, sessionID: question.sessionID)
+        case let (.question(question), .submit):
+            .submitQuestion(requestID: question.requestID, sessionID: question.sessionID)
+        case let (.question(question), .dismiss):
+            .dismissQuestion(requestID: question.requestID, sessionID: question.sessionID)
+        default:
+            nil
+        }
+    }
+
     /// Whether the composer has a prompt input that a focus request can focus.
     var acceptsInputFocus: Bool {
         if case .prompt = self { return true }
@@ -299,9 +345,18 @@ enum OpenCodeComposerFocusTarget: Hashable {
     case afterPrompt
 }
 
-/// UIKit text input owned by the composer prompt. Lets keyboard-shortcut focus
-/// gating tell the composer apart from every other text field.
-protocol OpenCodeComposerTextInput: AnyObject {}
+/// A text input that states what it is for keyboard-shortcut gating: the
+/// composer prompt, a question's "Type your own answer", or another field.
+protocol OpenCodeComposerTextInput: AnyObject {
+    var textInputRole: OpenCodeTextInputFocus { get }
+}
+
+/// Where the caret is when ↑ / ↓ reaches the prompt (`OpenCodePromptHistoryBrowser`).
+struct OpenCodePromptCaret {
+    let atStart: Bool
+    let onFirstLine: Bool
+    let onLastLine: Bool
+}
 
 struct OpenCodeSessionComposer: View {
     let state: OpenCodeSessionComposerState
@@ -329,6 +384,8 @@ struct OpenCodeSessionComposer: View {
     @State private var navigationKeysAtArrival = 0
     /// A control of the current request had keyboard focus.
     @State private var focusWasInPrompt = false
+    /// ↑ / ↓ prompt recall.
+    @State private var historyBrowser = OpenCodePromptHistoryBrowser()
 
     init(
         state: OpenCodeSessionComposerState,
@@ -382,6 +439,11 @@ struct OpenCodeSessionComposer: View {
                         }
                     }
                     .id(promptRequestID ?? contentKind)
+                    // Bare 1–9 picks a question option, only while focus is inside the
+                    // prompt (key presses reach here only from a focused descendant).
+                    .onKeyPress(characters: .decimalDigits, phases: .down) { press in
+                        pickOption(with: press.characters, modifiers: press.modifiers)
+                    }
                     .transition(.opacity)
                 }
             }
@@ -447,6 +509,25 @@ struct OpenCodeSessionComposer: View {
         OpenCodeKeyboardFocusState.shared.setNextTabTarget(target)
         customAnswerFocused = false
         OpenCodeKeyboardAnchor.takeFocus()
+    }
+
+    private func pickOption(with characters: String, modifiers: EventModifiers) -> KeyPress.Result {
+        guard case let .question(question) = state, characters.count == 1, let character = characters.first,
+              let index = OpenCodeQuestionDigitPick.optionIndex(
+                  for: character,
+                  modifiers: modifiers,
+                  optionCount: question.options.count,
+                  focusInsidePrompt: focusRequester.focusedKey != nil,
+                  textFieldFocused: customAnswerFocused,
+                  optionsEnabled: !question.submitting
+              )
+        else { return .ignored }
+        onAction(.toggleQuestionOption(
+            requestID: question.requestID,
+            sessionID: question.sessionID,
+            label: question.options[index].label
+        ))
+        return .handled
     }
 
     /// The permission or question request on screen; nil for the prompt and lockout.
@@ -572,6 +653,22 @@ struct OpenCodeSessionComposer: View {
                 onPasteAttachments: prompt.attachEnabled ? { onAction(.pasteAttachments($0)) } : nil,
                 acceptsTextDrops: !attachmentDragActive,
                 returnKey: OpenCodeHardwareReturnKey(rule: prompt.returnKeyRule) { onAction(.send) },
+                onHistoryKey: { direction, text, caret in
+                    var browser = historyBrowser
+                    let recalled = browser.step(
+                        direction,
+                        history: prompt.history,
+                        text: text,
+                        hasAttachments: !prompt.attachments.isEmpty,
+                        caretAtStart: caret.atStart,
+                        caretOnFirstLine: caret.onFirstLine,
+                        caretOnLastLine: caret.onLastLine
+                    )
+                    historyBrowser = browser
+                    guard let recalled else { return false }
+                    onAction(.textChanged(text: recalled, selectionStart: recalled.count, selectionEnd: recalled.count))
+                    return true
+                },
                 onTabOut: { backward in
                     // iPadOS cannot move focus in code out of the UIKit prompt field:
                     // stop editing and make the first chip after it the next Tab stop.
@@ -1364,7 +1461,8 @@ private struct QuestionCustomTextField: View {
             maxLines: Self.maxLines,
             onHardwareReturn: onReturn,
             onEscape: onEscape,
-            onTabOut: onTabOut
+            onTabOut: onTabOut,
+            inputRole: .promptAnswer
         )
         .onAppear { draft = text }
         .onChange(of: text) { _, newValue in

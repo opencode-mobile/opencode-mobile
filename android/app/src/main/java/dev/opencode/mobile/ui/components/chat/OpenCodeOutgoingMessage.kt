@@ -155,6 +155,7 @@ fun OpenCodeOutgoingMessage(
                                         .alpha(if (isPending) PENDING_STEER_ALPHA else 1f)
                                         .clip(OutgoingMessageShape)
                                         .openCodeFocusRing(OutgoingMessageShape)
+                                        .openCodeSecondaryClick(enabled = onLongClick != null) { onLongClick?.invoke() }
                                         .then(
                                             outgoingMessageInteractionModifier(
                                                 onClick = onClick,

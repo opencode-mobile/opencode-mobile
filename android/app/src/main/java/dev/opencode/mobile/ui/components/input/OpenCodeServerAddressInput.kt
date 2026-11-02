@@ -154,7 +154,7 @@ fun OpenCodeServerAddressInput(
                         .semantics {
                             contentDescription = "Scheme ${scheme.label}. Opens scheme picker"
                         }.clip(SchemeStartShape)
-                        .openCodeFocusRing(SchemeStartShape)
+                        .openCodeFocusRing(SchemeStartShape, enabled)
                         .clickable(
                             enabled = enabled,
                             interactionSource = schemeInteractionSource,

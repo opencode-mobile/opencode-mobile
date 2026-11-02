@@ -65,6 +65,7 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import dev.opencode.mobile.theme.LetterAccent
@@ -74,6 +75,7 @@ import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 private val ReorderableRowCornerRadius = OpenCodeRadius.small
 private val ReorderableRowLiftedElevation = 8.dp
@@ -166,6 +168,8 @@ fun <T> OpenCodeReorderableList(
                 val isPressed = pressedKey == itemKey
                 val movable = reorderEnabled && canMove(item)
                 val canReveal = onContextAction != null && supportsContextAction(item)
+                // A secondary click opens the swipe's action as a menu at the pointer.
+                var contextMenuAt by remember { mutableStateOf<IntOffset?>(null) }
                 // Live reveal offset in px, 0 = closed. The swipe writes it directly
                 // while the finger is down; once released, [openKey] decides the
                 // target and the effect below settles there. The gesture cannot run
@@ -408,6 +412,8 @@ fun <T> OpenCodeReorderableList(
                                             }
                                     }
                                     if (actions.isNotEmpty()) customActions = actions
+                                }.openCodeSecondaryClick(enabled = canReveal) { position ->
+                                    contextMenuAt = IntOffset(position.x.roundToInt(), position.y.roundToInt())
                                 }.pointerInput(itemKey, movable, canReveal) {
                                     // One detector owns press, tap, swipe and lift, so the
                                     // three arbitrate on the first decisive movement rather
@@ -519,6 +525,19 @@ fun <T> OpenCodeReorderableList(
                                 },
                     ) {
                         rowScope.row(item)
+                        OpenCodeContextMenu(
+                            position = contextMenuAt.takeIf { canReveal },
+                            entries =
+                                listOf(
+                                    OpenCodeOverflowMenuEntry(
+                                        title = contextActionLabel,
+                                        icon = null,
+                                        destructive = true,
+                                        onClick = { onContextAction?.invoke(item) },
+                                    ),
+                                ),
+                            onDismissRequest = { contextMenuAt = null },
+                        )
                     }
                     if (canReveal && openKey == itemKey) {
                         // The row's pointerInput covers its layout frame; graphicsLayer

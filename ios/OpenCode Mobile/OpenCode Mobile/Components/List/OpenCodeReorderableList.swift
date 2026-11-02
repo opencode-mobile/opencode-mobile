@@ -230,6 +230,15 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View, Trailing: View>: V
         .overlay {
             gestureLayer(item, at: index, movable: movable, canReveal: canReveal)
         }
+        // Right-click offers the swiped-to action (Remove) as a menu, so a pointer
+        // does not need the swipe.
+        .openCodeSecondaryClickMenu(
+            canReveal ? [
+                OpenCodeSecondaryClickMenuItem(title: contextActionLabel, destructive: true) {
+                    onContextAction?(item)
+                },
+            ] : []
+        )
         .overlay(alignment: .trailing) {
             if reveal > 0 {
                 // Above the gesture layer. That layer covers the row's layout

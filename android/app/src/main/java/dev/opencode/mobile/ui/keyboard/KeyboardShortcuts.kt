@@ -3,21 +3,94 @@ package dev.opencode.mobile.ui.keyboard
 import android.view.KeyEvent
 import dev.opencode.mobile.ui.components.OpenCodeFocusedTextInput
 
-/** Hardware keyboard shortcuts for the tablet split layout and Session Chat. */
+/** Groups of the Keyboard Shortcuts Helper (Meta+/), in the order they are listed. */
+enum class KeyboardShortcutGroupKind(
+    val label: String,
+) {
+    Session("Session"),
+    Prompt("Prompt"),
+    Go("Go"),
+}
+
+/**
+ * Hardware keyboard shortcuts (#358, #869 Tier 2). [title] is the default Keyboard Shortcuts
+ * Helper title; a handler may name its chord more precisely (Ctrl+Enter is "Allow Once" on a
+ * permission and "Submit" on a question).
+ */
 enum class KeyboardShortcutAction(
     val title: String,
     val keyCode: Int,
     val ctrl: Boolean,
+    val group: KeyboardShortcutGroupKind,
     val alt: Boolean = false,
     val shift: Boolean = false,
     /** Whether holding the chord repeats the action. */
     val repeats: Boolean = false,
+    /** Another key that means the same chord (the numeric keypad Enter). */
+    val alternateKeyCode: Int? = null,
 ) {
-    /** Ctrl+Alt+S: Home and Settings while they show the split layout. */
-    ToggleSidebar(title = "Toggle Sidebar", keyCode = KeyEvent.KEYCODE_S, ctrl = true, alt = true),
+    /** Ctrl+N: Home and Session Chat, in the current context's project. */
+    NewSession(title = "New Session", keyCode = KeyEvent.KEYCODE_N, ctrl = true, group = KeyboardShortcutGroupKind.Session),
+
+    /** Ctrl+K: Session Chat, the slash-command list. */
+    CommandPalette(title = "Command Palette", keyCode = KeyEvent.KEYCODE_K, ctrl = true, group = KeyboardShortcutGroupKind.Session),
+
+    /** Ctrl+Shift+M: Session Chat, the model picker. */
+    ModelPicker(
+        title = "Choose Model",
+        keyCode = KeyEvent.KEYCODE_M,
+        ctrl = true,
+        shift = true,
+        group = KeyboardShortcutGroupKind.Session,
+    ),
+
+    /** Ctrl+L: any visible Session Chat with a prompt composer. */
+    FocusComposer(title = "Focus Composer", keyCode = KeyEvent.KEYCODE_L, ctrl = true, group = KeyboardShortcutGroupKind.Session),
+
+    /** Ctrl+Enter: Allow once on a permission; Next or Submit on a question. */
+    PromptPrimary(
+        title = "Allow Once",
+        keyCode = KeyEvent.KEYCODE_ENTER,
+        ctrl = true,
+        group = KeyboardShortcutGroupKind.Prompt,
+        alternateKeyCode = KeyEvent.KEYCODE_NUMPAD_ENTER,
+    ),
+
+    /** Ctrl+Alt+Enter: Always allow on a permission that offers it. */
+    PromptAlways(
+        title = "Always Allow",
+        keyCode = KeyEvent.KEYCODE_ENTER,
+        ctrl = true,
+        alt = true,
+        group = KeyboardShortcutGroupKind.Prompt,
+        alternateKeyCode = KeyEvent.KEYCODE_NUMPAD_ENTER,
+    ),
+
+    /** Ctrl+Backspace: Deny a permission; Dismiss a question. */
+    PromptReject(title = "Deny", keyCode = KeyEvent.KEYCODE_DEL, ctrl = true, group = KeyboardShortcutGroupKind.Prompt),
+
+    /** Ctrl+,: wherever Settings is reachable. */
+    Settings(title = "Settings", keyCode = KeyEvent.KEYCODE_COMMA, ctrl = true, group = KeyboardShortcutGroupKind.Go),
+
+    /** Ctrl+1…Ctrl+9: Home, the Nth project in the dock's project order. */
+    Project1(title = "Project 1", keyCode = KeyEvent.KEYCODE_1, ctrl = true, group = KeyboardShortcutGroupKind.Go),
+    Project2(title = "Project 2", keyCode = KeyEvent.KEYCODE_2, ctrl = true, group = KeyboardShortcutGroupKind.Go),
+    Project3(title = "Project 3", keyCode = KeyEvent.KEYCODE_3, ctrl = true, group = KeyboardShortcutGroupKind.Go),
+    Project4(title = "Project 4", keyCode = KeyEvent.KEYCODE_4, ctrl = true, group = KeyboardShortcutGroupKind.Go),
+    Project5(title = "Project 5", keyCode = KeyEvent.KEYCODE_5, ctrl = true, group = KeyboardShortcutGroupKind.Go),
+    Project6(title = "Project 6", keyCode = KeyEvent.KEYCODE_6, ctrl = true, group = KeyboardShortcutGroupKind.Go),
+    Project7(title = "Project 7", keyCode = KeyEvent.KEYCODE_7, ctrl = true, group = KeyboardShortcutGroupKind.Go),
+    Project8(title = "Project 8", keyCode = KeyEvent.KEYCODE_8, ctrl = true, group = KeyboardShortcutGroupKind.Go),
+    Project9(title = "Project 9", keyCode = KeyEvent.KEYCODE_9, ctrl = true, group = KeyboardShortcutGroupKind.Go),
 
     /** Ctrl+Tab: Home split layout. */
-    NextSession(title = "Next Session", keyCode = KeyEvent.KEYCODE_TAB, ctrl = true, repeats = true),
+    NextSession(
+        title = "Next Session",
+        keyCode = KeyEvent.KEYCODE_TAB,
+        ctrl = true,
+        group = KeyboardShortcutGroupKind.Go,
+        repeats = true,
+    ),
 
     /** Ctrl+Shift+Tab: Home split layout. */
     PreviousSession(
@@ -25,12 +98,25 @@ enum class KeyboardShortcutAction(
         keyCode = KeyEvent.KEYCODE_TAB,
         ctrl = true,
         shift = true,
+        group = KeyboardShortcutGroupKind.Go,
         repeats = true,
     ),
 
-    /** Ctrl+L: any visible Session Chat with a prompt composer. */
-    FocusComposer(title = "Focus Composer", keyCode = KeyEvent.KEYCODE_L, ctrl = true),
+    /** Ctrl+Alt+S: Home and Settings while they show the split layout. */
+    ToggleSidebar(
+        title = "Toggle Sidebar",
+        keyCode = KeyEvent.KEYCODE_S,
+        ctrl = true,
+        alt = true,
+        group = KeyboardShortcutGroupKind.Go,
+    ),
     ;
+
+    companion object {
+        /** Ctrl+1…Ctrl+9 in project order; index 0 is Project 1. */
+        val projects: List<KeyboardShortcutAction> =
+            listOf(Project1, Project2, Project3, Project4, Project5, Project6, Project7, Project8, Project9)
+    }
 
     /** `KeyEvent.META_*` mask for `KeyboardShortcutInfo`. */
     val metaState: Int
@@ -44,6 +130,9 @@ enum class KeyboardShortcutAction(
 enum class KeyboardShortcutTextFocus {
     None,
     Composer,
+
+    /** The "Type your own answer" field of a question prompt. */
+    CustomAnswer,
     OtherTextField,
 }
 
@@ -64,7 +153,7 @@ object KeyboardShortcutRules {
     ): KeyboardShortcutAction? {
         if (meta) return null
         return KeyboardShortcutAction.entries.firstOrNull { action ->
-            action.keyCode == keyCode &&
+            (action.keyCode == keyCode || action.alternateKeyCode == keyCode) &&
                 action.ctrl == ctrl &&
                 action.alt == alt &&
                 action.shift == shift
@@ -82,6 +171,7 @@ object KeyboardShortcutRules {
         when (focusedInput) {
             OpenCodeFocusedTextInput.Field -> KeyboardShortcutTextFocus.OtherTextField
             OpenCodeFocusedTextInput.SessionComposer -> KeyboardShortcutTextFocus.Composer
+            OpenCodeFocusedTextInput.QuestionCustomAnswer -> KeyboardShortcutTextFocus.CustomAnswer
             null ->
                 if (nativeTextEditorFocused) {
                     KeyboardShortcutTextFocus.OtherTextField
@@ -94,7 +184,45 @@ object KeyboardShortcutRules {
     fun allowed(
         focus: KeyboardShortcutTextFocus,
         modalSurfaceShown: Boolean,
-    ): Boolean = !modalSurfaceShown && focus != KeyboardShortcutTextFocus.OtherTextField
+    ): Boolean =
+        !modalSurfaceShown &&
+            focus != KeyboardShortcutTextFocus.OtherTextField &&
+            focus != KeyboardShortcutTextFocus.CustomAnswer
+
+    /**
+     * Per-chord gating. Nothing fires over a sheet, dialog or menu, or while a text field other
+     * than the composer has focus. Prompt chords fire while their prompt shows even with nothing
+     * focused. In "Type your own answer", only Ctrl+Enter (save and Next / Submit) fires; Ctrl+
+     * Backspace there deletes text.
+     */
+    fun allowed(
+        action: KeyboardShortcutAction,
+        focus: KeyboardShortcutTextFocus,
+        modalSurfaceShown: Boolean,
+    ): Boolean {
+        if (modalSurfaceShown) return false
+        return when (focus) {
+            KeyboardShortcutTextFocus.OtherTextField -> false
+            KeyboardShortcutTextFocus.CustomAnswer -> action == KeyboardShortcutAction.PromptPrimary
+            KeyboardShortcutTextFocus.None, KeyboardShortcutTextFocus.Composer -> true
+        }
+    }
+
+    /**
+     * Whether Home's Ctrl+N applies. While a Session Chat shows beside Home (the split pane has a
+     * selected session), the chat owns Ctrl+N and creates the session in its own project, so
+     * exactly one handler acts.
+     */
+    fun homeHandlesNewSession(sessionChatBeside: Boolean): Boolean = !sessionChatBeside
+
+    /** Helper title of Ctrl+[number] for the project [projectTitle]. */
+    fun projectShortcutTitle(projectTitle: String): String = "Show $projectTitle"
+
+    /** The filter id Ctrl+[number] selects: the Nth project in dock order, or null past the end. */
+    fun projectForShortcut(
+        projectIds: List<String>,
+        number: Int,
+    ): String? = projectIds.getOrNull(number - 1)
 
     /**
      * The session to select when stepping through [orderedIds] (visible list order, top to

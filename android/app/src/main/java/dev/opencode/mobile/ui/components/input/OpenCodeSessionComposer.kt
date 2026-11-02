@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.compose.ui.text.TextLayoutResult
 import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -76,6 +77,7 @@ import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onInterceptKeyBeforeSoftKeyboard
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
@@ -116,6 +118,9 @@ import dev.opencode.mobile.ui.keyboard.ComposerReturnAction
 import dev.opencode.mobile.ui.keyboard.CustomAnswerKeyAction
 import dev.opencode.mobile.ui.keyboard.KeyboardNavigationRules
 import dev.opencode.mobile.ui.keyboard.KeyboardPromptKind
+import dev.opencode.mobile.ui.keyboard.KeyboardShortcutAction
+import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
+import dev.opencode.mobile.ui.keyboard.PromptRecallDirection
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 
@@ -152,6 +157,8 @@ sealed interface OpenCodeSessionComposerState {
         val sideQuestionMode: Boolean = false,
         /** An `@` or `/` suggestion list shows above the composer; a hardware Return does not send. */
         val suggestionsOpen: Boolean = false,
+        /** This session's sent prompts, oldest first, for ↑ / ↓ recall with a hardware keyboard. */
+        val promptHistory: List<String> = emptyList(),
     ) : OpenCodeSessionComposerState
 
     /** The descendant subagent session asking a permission or question; Open shows that session. */
@@ -610,6 +617,8 @@ private fun PromptEntryContent(
     val reportFocus = rememberOpenCodeTextInputFocusReport(OpenCodeFocusedTextInput.SessionComposer)
     val hardwareKeyboard = rememberOpenCodeHardwareKeyboardConnected()
     val returnSendScope = rememberCoroutineScope()
+    val recall = remember { ComposerPromptRecall() }
+    var promptTextLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
     val latestSendEnabled by rememberUpdatedState(state.sendEnabled)
     DisposableEffect(focus) {
         focus.attachPromptInput()
@@ -707,6 +716,7 @@ private fun PromptEntryContent(
                 )
             },
             textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
+            onTextLayout = { promptTextLayout = it },
             cursorBrush = SolidColor(bodyColor),
             visualTransformation = mentionTransformation,
             // A shell command must reach the server as typed: no autocorrect or auto-capitalization.
@@ -730,6 +740,9 @@ private fun PromptEntryContent(
                     // Return into a new line. Return sends, like the Send button; Shift+Return adds a line.
                     .onInterceptKeyBeforeSoftKeyboard { event ->
                         if (focusManager.moveFocusOnHardwareTab(event, hardwareKeyboard)) return@onInterceptKeyBeforeSoftKeyboard true
+                        if (recall.handleKey(event, state, textFieldValue, promptTextLayout, hardwareKeyboard, onAction)) {
+                            return@onInterceptKeyBeforeSoftKeyboard true
+                        }
                         val returnAction =
                             KeyboardNavigationRules.composerReturn(
                                 isReturn = event.key == Key.Enter || event.key == Key.NumPadEnter,
@@ -1190,6 +1203,16 @@ private fun PermissionApprovalContent(
     // Reading order: Deny, Always (when offered), Allow once.
     val actionTargetsEnabled = listOfNotNull(actionsEnabled, actionsEnabled.takeIf { showsAlways }, actionsEnabled)
     val keyboard = rememberPromptKeyboardFocus(KeyboardPromptKind.Permission, actionTargetsEnabled)
+    // Chords answer through the same actions, and the same enabled rules, as the buttons.
+    KeyboardShortcutHandler(KeyboardShortcutAction.PromptPrimary, enabled = actionsEnabled, title = "Allow Once") {
+        onAction(OpenCodeSessionComposerAction.AllowPermissionOnce(state.requestId, state.sessionId))
+    }
+    KeyboardShortcutHandler(KeyboardShortcutAction.PromptAlways, enabled = actionsEnabled && showsAlways, title = "Always Allow") {
+        onAction(OpenCodeSessionComposerAction.AlwaysAllowPermission(state.requestId, state.sessionId))
+    }
+    KeyboardShortcutHandler(KeyboardShortcutAction.PromptReject, enabled = actionsEnabled, title = "Deny") {
+        onAction(OpenCodeSessionComposerAction.DenyPermission(state.requestId, state.sessionId))
+    }
     PromptKeyboardColumn(keyboard) {
         state.attribution?.let { RequestAttributionRow(it, onAction) }
         Column(
@@ -1441,8 +1464,55 @@ private fun ColumnScope.QuestionRequestContent(
     val keyboard = rememberPromptKeyboardFocus(KeyboardPromptKind.Question, listOf(!state.submitting))
     val customRow = remember { FocusRequester() }
     val advance = remember { FocusRequester() }
+    // Ctrl+Enter: Next or Submit when that button is enabled; Ctrl+Backspace: Dismiss.
+    val advanceEnabled = !state.submitting && if (showNext) state.nextEnabled else state.submitEnabled
+    KeyboardShortcutHandler(
+        KeyboardShortcutAction.PromptPrimary,
+        enabled = advanceEnabled,
+        title = if (showNext) "Next Question" else "Submit Answers",
+    ) {
+        onAction(
+            if (showNext) {
+                OpenCodeSessionComposerAction.QuestionNext(state.requestId, state.sessionId)
+            } else {
+                OpenCodeSessionComposerAction.SubmitQuestion(state.requestId, state.sessionId)
+            },
+        )
+    }
+    KeyboardShortcutHandler(KeyboardShortcutAction.PromptReject, enabled = !state.submitting, title = "Dismiss Question") {
+        onAction(OpenCodeSessionComposerAction.DismissQuestion(state.requestId, state.sessionId))
+    }
+    val inputFocusRegistry = LocalOpenCodeInputFocusRegistry.current
+    val reportCustomAnswerFocus = rememberOpenCodeTextInputFocusReport(OpenCodeFocusedTextInput.QuestionCustomAnswer)
+    // Bare 1–9 pick an option once focus is inside the prompt, as tapping it would.
+    val pickByDigit =
+        Modifier.onKeyEvent { event ->
+            if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+            val native = event.nativeKeyEvent
+            val index =
+                KeyboardNavigationRules.questionDigitPick(
+                    keyCode = native.keyCode,
+                    ctrl = native.isCtrlPressed,
+                    alt = native.isAltPressed,
+                    shift = native.isShiftPressed,
+                    meta = native.isMetaPressed,
+                    focusInsidePrompt = keyboard.focusInside,
+                    textFieldFocused = inputFocusRegistry?.focusedTextInput != null,
+                    optionCount = state.options.size,
+                ) ?: return@onKeyEvent false
+            if (native.repeatCount == 0 && !state.submitting) {
+                onAction(
+                    OpenCodeSessionComposerAction.ToggleQuestionOption(
+                        requestId = state.requestId,
+                        sessionId = state.sessionId,
+                        label = state.options[index].label,
+                    ),
+                )
+            }
+            true
+        }
     // The prompt takes what is left after the composer chrome; inside it the body scrolls.
-    PromptKeyboardColumn(keyboard, modifier = Modifier.weight(1f, fill = false)) {
+    PromptKeyboardColumn(keyboard, modifier = Modifier.weight(1f, fill = false).then(pickByDigit)) {
         state.attribution?.let { RequestAttributionRow(it, onAction) }
         Column(
             modifier =
@@ -1551,14 +1621,16 @@ private fun ColumnScope.QuestionRequestContent(
                             hint = "Enter a custom answer",
                             enabled = !state.submitting,
                             modifier =
-                                Modifier.onInterceptKeyBeforeSoftKeyboard { event ->
-                                    customAnswerKey(
-                                        event = event,
-                                        hardwareKeyboard = keyboard.hardwareKeyboard,
-                                        onSave = { advance.tryRequestFocus() },
-                                        onLeave = { customRow.tryRequestFocus() },
-                                    )
-                                },
+                                Modifier
+                                    .onFocusChanged { reportCustomAnswerFocus(it.hasFocus) }
+                                    .onInterceptKeyBeforeSoftKeyboard { event ->
+                                        customAnswerKey(
+                                            event = event,
+                                            hardwareKeyboard = keyboard.hardwareKeyboard,
+                                            onSave = { advance.tryRequestFocus() },
+                                            onLeave = { customRow.tryRequestFocus() },
+                                        )
+                                    },
                             minLines = QuestionCustomMinLines,
                             maxLines = QuestionCustomMaxLines,
                         )
@@ -1640,6 +1712,69 @@ private fun questionBodyMaxHeight(): Dp {
 }
 
 private const val QuestionBodyMaxHeightFraction = 0.5f
+
+/** ↑ / ↓ prompt history of one composer (see [KeyboardNavigationRules.promptRecall]). */
+private class ComposerPromptRecall {
+    private var index: Int? = null
+    private var shownText: String? = null
+
+    fun handleKey(
+        event: androidx.compose.ui.input.key.KeyEvent,
+        state: OpenCodeSessionComposerState.Prompt,
+        field: TextFieldValue,
+        layout: TextLayoutResult?,
+        hardwareKeyboard: Boolean,
+        onAction: (OpenCodeSessionComposerAction) -> Unit,
+    ): Boolean {
+        val direction =
+            when (event.key) {
+                Key.DirectionUp -> PromptRecallDirection.Older
+                Key.DirectionDown -> PromptRecallDirection.Newer
+                else -> return false
+            }
+        val native = event.nativeKeyEvent
+        if (native.isCtrlPressed || native.isAltPressed || native.isShiftPressed || native.isMetaPressed) return false
+        if (!KeyboardNavigationRules.fromHardwareKeyboard(hardwareKeyboard, native.flags) || field.composition != null) return false
+        val step =
+            KeyboardNavigationRules.promptRecall(
+                history = state.promptHistory,
+                browsingIndex = index,
+                unedited = shownText == state.text,
+                text = state.text,
+                hasAttachments = state.attachments.isNotEmpty(),
+                caretAtStart = field.selection.collapsed && field.selection.start == 0,
+                caretOnFirstLine = field.caretOnFirstLine(layout),
+                caretOnLastLine = field.caretOnLastLine(layout),
+                direction = direction,
+            ) ?: return false
+        if (event.type == KeyEventType.KeyDown) {
+            index = step.index
+            shownText = step.text.takeIf { step.index != null }
+            onAction(OpenCodeSessionComposerAction.TextChanged(text = step.text, selectionStart = step.text.length))
+        }
+        return true
+    }
+}
+
+/** The caret's line is the first visual line (soft wraps count), or the first line without a layout yet. */
+private fun TextFieldValue.caretOnFirstLine(layout: TextLayoutResult?): Boolean {
+    val caret = selection.start.coerceIn(0, text.length)
+    return if (layout != null && layout.layoutInput.text.length == text.length) {
+        layout.getLineForOffset(caret) == 0
+    } else {
+        '\n' !in text.substring(0, caret)
+    }
+}
+
+/** The caret's line is the last visual line (soft wraps count), or the last line without a layout yet. */
+private fun TextFieldValue.caretOnLastLine(layout: TextLayoutResult?): Boolean {
+    val caret = selection.end.coerceIn(0, text.length)
+    return if (layout != null && layout.layoutInput.text.length == text.length) {
+        layout.getLineForOffset(caret) == layout.lineCount - 1
+    } else {
+        '\n' !in text.substring(caret)
+    }
+}
 
 /** Keyboard focus state of one permission or question prompt. */
 @Stable

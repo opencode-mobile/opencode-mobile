@@ -12,6 +12,8 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.drag
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -312,6 +314,7 @@ fun SessionListScopeControl(
             }
     }
 
+    val scopeInteraction = remember { MutableInteractionSource() }
     LaunchedEffect(selectedId) {
         if (!isSwitching) {
             shownTabId = selectedId
@@ -351,8 +354,10 @@ fun SessionListScopeControl(
                             }
                         else -> false
                     }
-                }.openCodeFocusRing(ScopeControlShape)
-                .focusable()
+                }.openCodeHoverLayer(scopeInteraction, ScopeControlShape)
+                .openCodeFocusRing(ScopeControlShape)
+                .hoverable(scopeInteraction)
+                .focusable(interactionSource = scopeInteraction)
                 .pointerInput(shownTabId, isSwitching) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
@@ -861,7 +866,7 @@ fun SessionListWorktreesPill(
             modifier
                 .clip(RoundedCornerShape(percent = 50))
                 .background(textStrong.copy(alpha = if (enabled) 0.08f else 0.04f))
-                .openCodeFocusRing(RoundedCornerShape(percent = 50))
+                .openCodeFocusRing(RoundedCornerShape(percent = 50), enabled)
                 .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
                 .semantics { this.contentDescription = contentDescription }
                 .heightIn(min = 28.dp)
@@ -975,6 +980,7 @@ private fun DockCta(
                 .clip(shape)
                 .background(fill)
                 .openCodeFocusRing(shape)
+                .openCodeSecondaryClick(enabled = onLongClick != null) { onLongClick?.invoke() }
                 .then(interaction),
         contentAlignment = Alignment.Center,
     ) {

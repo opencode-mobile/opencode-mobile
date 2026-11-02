@@ -296,7 +296,9 @@ fun OpenCodeListItem(
                             Modifier
                         },
                     ).openCodeFocusRing(focused = isFocused && !isPlain, shape = containerShape)
-                    .then(if (interactionModifier === Modifier) Modifier else Modifier.openCodeFocusMemory())
+                    .then(if (interactionModifier === Modifier) Modifier else Modifier.openCodeControl(enabled))
+                    // A secondary click opens the same actions as a long-press.
+                    .openCodeSecondaryClick(enabled = enabled && onLongPress != null) { onLongPress?.invoke() }
                     .then(interactionModifier),
         ) {
             if (isPlain) {

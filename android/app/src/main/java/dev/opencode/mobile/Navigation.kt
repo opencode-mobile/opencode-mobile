@@ -332,6 +332,24 @@ fun MainNavigation() {
     OpenCodeTheme(darkTheme = darkTheme) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Box(modifier = Modifier.fillMaxSize()) {
+                // Ctrl+,: Settings from Home and the session screens; not from Settings itself.
+                val settingsShortcutApplies =
+                    rootState == AppRootState.Home &&
+                        when (backStack.lastOrNull()) {
+                            is ProjectListHome,
+                            is SessionChat,
+                            is SessionContext,
+                            is Changes,
+                            is FileBrowser,
+                            is SessionToolGroup,
+                            is Terminal,
+                            is TerminalsCatalog,
+                            -> true
+                            else -> false
+                        }
+                KeyboardShortcutHandler(KeyboardShortcutAction.Settings, enabled = settingsShortcutApplies) {
+                    backStack.add(SettingsHome)
+                }
                 when (rootState) {
                     AppRootState.Loading -> {
                         ProductRouteScreenViewEffect(screenId = ProductAnalytics.Screen.APP_LOADING)

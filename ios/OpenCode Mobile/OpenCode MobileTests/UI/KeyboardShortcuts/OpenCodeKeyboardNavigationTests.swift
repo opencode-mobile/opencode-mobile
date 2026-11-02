@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import OpenCode_Mobile
 
@@ -335,5 +336,277 @@ import Testing
         #expect(!OpenCodeFocusRingPolicy.focusFollowsTouch(touchAt: touch, focusAt: touch.addingTimeInterval(0.5)))
         #expect(!OpenCodeFocusRingPolicy.focusFollowsTouch(touchAt: nil, focusAt: touch))
         #expect(!OpenCodeFocusRingPolicy.focusFollowsTouch(touchAt: touch, focusAt: touch.addingTimeInterval(-1)))
+    }
+}
+
+@Suite struct OpenCodePromptChordRuleTests {
+    private let permission = OpenCodePromptChordState.permission(requestID: "per_1", actionsEnabled: true, alwaysOffered: true)
+
+    @Test func permission_commandReturnAllowsOnce_optionCommandReturnAlwaysAllows_commandDeleteDenies() {
+        #expect(OpenCodePromptChordRule.outcome(.promptPrimary, state: permission) == .allowOnce)
+        #expect(OpenCodePromptChordRule.outcome(.promptAlwaysAllow, state: permission) == .alwaysAllow)
+        #expect(OpenCodePromptChordRule.outcome(.promptReject, state: permission) == .deny)
+    }
+
+    @Test func alwaysAllow_onlyWhenOffered() {
+        let noAlways = OpenCodePromptChordState.permission(requestID: "per_1", actionsEnabled: true, alwaysOffered: false)
+        #expect(OpenCodePromptChordRule.outcome(.promptAlwaysAllow, state: noAlways) == nil)
+        #expect(OpenCodePromptChordRule.outcome(.promptPrimary, state: noAlways) == .allowOnce)
+    }
+
+    @Test func replyInFlight_orReadOnly_doesNothing() {
+        let busy = OpenCodePromptChordState.permission(requestID: "per_1", actionsEnabled: false, alwaysOffered: true)
+        for chord in [OpenCodeKeyboardShortcut.promptPrimary, .promptAlwaysAllow, .promptReject] {
+            #expect(OpenCodePromptChordRule.outcome(chord, state: busy) == nil)
+        }
+    }
+
+    @Test func question_commandReturnIsNextOrSubmit_onlyWhenEnabled() {
+        let middle = OpenCodePromptChordState.question(requestID: "q", isLastStep: false, nextEnabled: true, submitEnabled: false, dismissEnabled: true)
+        let last = OpenCodePromptChordState.question(requestID: "q", isLastStep: true, nextEnabled: false, submitEnabled: true, dismissEnabled: true)
+        let unanswered = OpenCodePromptChordState.question(requestID: "q", isLastStep: true, nextEnabled: false, submitEnabled: false, dismissEnabled: true)
+        #expect(OpenCodePromptChordRule.outcome(.promptPrimary, state: middle) == .next)
+        #expect(OpenCodePromptChordRule.outcome(.promptPrimary, state: last) == .submit)
+        #expect(OpenCodePromptChordRule.outcome(.promptPrimary, state: unanswered) == nil)
+    }
+
+    @Test func question_commandDeleteDismisses_andHasNoAlwaysAllow() {
+        let question = OpenCodePromptChordState.question(requestID: "q", isLastStep: true, nextEnabled: false, submitEnabled: true, dismissEnabled: true)
+        #expect(OpenCodePromptChordRule.outcome(.promptReject, state: question) == .dismiss)
+        #expect(OpenCodePromptChordRule.outcome(.promptAlwaysAllow, state: question) == nil)
+        let submitting = OpenCodePromptChordState.question(requestID: "q", isLastStep: true, nextEnabled: false, submitEnabled: false, dismissEnabled: false)
+        #expect(OpenCodePromptChordRule.outcome(.promptReject, state: submitting) == nil)
+    }
+
+    @Test func noPrompt_andOtherShortcuts_doNothing() {
+        #expect(OpenCodePromptChordRule.outcome(.promptPrimary, state: .none) == nil)
+        #expect(OpenCodePromptChordRule.outcome(.newSession, state: permission) == nil)
+    }
+
+    @Test func titles_nameWhatTheChordDoesNow() {
+        #expect(OpenCodePromptChordOutcome.allowOnce.title == "Allow Once")
+        #expect(OpenCodePromptChordOutcome.next.title == "Next Question")
+        #expect(OpenCodePromptChordOutcome.submit.title == "Submit Answers")
+        #expect(OpenCodePromptChordOutcome.dismiss.title == "Dismiss Question")
+    }
+}
+
+@MainActor
+@Suite struct OpenCodeComposerPromptChordMappingTests {
+    @Test func permissionState_mapsToTheVisibleRequest() {
+        let state = OpenCodeSessionComposerState.permission(.init(
+            requestID: "per_1", sessionID: "ses_1", permission: "bash", patterns: ["rm"], alwaysPatterns: ["rm *"]
+        ))
+        #expect(state.promptChordState == .permission(requestID: "per_1", actionsEnabled: true, alwaysOffered: true))
+        guard case let .allowPermissionOnce(requestID, sessionID)? = state.action(for: .allowOnce) else {
+            Issue.record("expected allow once")
+            return
+        }
+        #expect(requestID == "per_1" && sessionID == "ses_1")
+        #expect(state.action(for: .next) == nil)
+    }
+
+    @Test func submittingPermission_disablesTheChords() {
+        let state = OpenCodeSessionComposerState.permission(.init(
+            requestID: "per_1", sessionID: "ses_1", permission: "bash", patterns: [], submitting: true
+        ))
+        #expect(state.promptChordState == .permission(requestID: "per_1", actionsEnabled: false, alwaysOffered: false))
+    }
+
+    @Test func questionState_knowsTheLastStep() {
+        let state = OpenCodeSessionComposerState.question(.init(
+            requestID: "q", sessionID: "ses_1", questionIndex: 1, questionCount: 2,
+            header: "", question: "", options: [], submitEnabled: true
+        ))
+        #expect(state.promptChordState == .question(requestID: "q", isLastStep: true, nextEnabled: false, submitEnabled: true, dismissEnabled: true))
+        guard case .submitQuestion? = state.action(for: .submit) else {
+            Issue.record("expected submit")
+            return
+        }
+    }
+}
+
+@Suite struct OpenCodeQuestionDigitPickTests {
+    private func pick(
+        _ c: Character,
+        modifiers: EventModifiers = [],
+        count: Int = 3,
+        inside: Bool = true,
+        field: Bool = false,
+        enabled: Bool = true
+    ) -> Int? {
+        OpenCodeQuestionDigitPick.optionIndex(
+            for: c, modifiers: modifiers, optionCount: count, focusInsidePrompt: inside, textFieldFocused: field, optionsEnabled: enabled
+        )
+    }
+
+    @Test func digitsPastTheOptionsOrWithModifiersDoNothing() {
+        #expect(pick("4") == nil)
+        #expect(pick("2", modifiers: .command) == nil)
+        #expect(pick("2", modifiers: .control) == nil)
+        #expect(pick("2", modifiers: .option) == nil)
+        #expect(pick("2", modifiers: .shift) == nil)
+        // Keypad digits and Caps Lock still pick.
+        #expect(pick("2", modifiers: .numericPad) == 1)
+        #expect(pick("2", modifiers: .capsLock) == 1)
+    }
+
+    @Test func digits_pickTheNthOption() {
+        #expect(pick("1") == 0)
+        #expect(pick("3") == 2)
+    }
+
+    @Test func outOfRange_orZero_picksNothing() {
+        #expect(pick("4") == nil)
+        #expect(pick("0") == nil)
+        #expect(pick("9", count: 9) == 8)
+        #expect(pick("a") == nil)
+        // Non-ASCII digits are not keys 1–9.
+        #expect(pick("١") == nil)
+    }
+
+    @Test func onlyWithFocusInsideThePrompt_andNotInATextField() {
+        #expect(pick("1", inside: false) == nil)
+        #expect(pick("1", field: true) == nil)
+        #expect(pick("1", enabled: false) == nil)
+    }
+
+    @Test func singleSelect_selects_multiSelect_toggles() {
+        // A digit presses the option like a tap: `toggledQuestionSelection` decides.
+        let single = QuestionInfo(question: "q", header: "h", options: [.init(label: "A", description: ""), .init(label: "B", description: "")], multiple: false, custom: false)
+        #expect(toggledQuestionSelection(question: single, selected: ["A"], label: "B") == ["B"])
+        #expect(toggledQuestionSelection(question: single, selected: ["B"], label: "B") == ["B"])
+        let multi = QuestionInfo(question: "q", header: "h", options: [.init(label: "A", description: ""), .init(label: "B", description: "")], multiple: true, custom: false)
+        #expect(toggledQuestionSelection(question: multi, selected: ["A"], label: "B") == ["A", "B"])
+        #expect(toggledQuestionSelection(question: multi, selected: ["A", "B"], label: "B") == ["A"])
+    }
+}
+
+@Suite struct OpenCodePromptHistoryBrowserTests {
+    private let history = ["first", "second", "third"]
+
+    @Test func up_inAnEmptyPromptAtTheStart_recallsTheNewest() {
+        var browser = OpenCodePromptHistoryBrowser()
+        #expect(browser.step(.older, history: history, text: "", caretAtStart: true) == "third")
+        #expect(browser.step(.older, history: history, text: "third", caretAtStart: false) == "second")
+        #expect(browser.step(.older, history: history, text: "second", caretAtStart: false) == "first")
+        // Stays on the oldest.
+        #expect(browser.step(.older, history: history, text: "first", caretAtStart: false) == "first")
+    }
+
+    @Test func down_stepsForward_thenBackToEmpty() {
+        var browser = OpenCodePromptHistoryBrowser()
+        _ = browser.step(.older, history: history, text: "", caretAtStart: true)
+        _ = browser.step(.older, history: history, text: "third", caretAtStart: false)
+        #expect(browser.step(.newer, history: history, text: "second", caretAtStart: false) == "third")
+        #expect(browser.step(.newer, history: history, text: "third", caretAtStart: false) == "")
+        // Not browsing any more: ↓ is the caret's again.
+        #expect(browser.step(.newer, history: history, text: "", caretAtStart: true) == nil)
+    }
+
+    @Test func up_withADraft_orCaretNotAtStart_isTheCaretsKey() {
+        var browser = OpenCodePromptHistoryBrowser()
+        #expect(browser.step(.older, history: history, text: "draft", caretAtStart: true) == nil)
+        #expect(browser.step(.older, history: history, text: "", caretAtStart: false) == nil)
+        #expect(browser.step(.newer, history: history, text: "", caretAtStart: true) == nil)
+    }
+
+    @Test func anEdit_endsBrowsing() {
+        var browser = OpenCodePromptHistoryBrowser()
+        _ = browser.step(.older, history: history, text: "", caretAtStart: true)
+        #expect(browser.step(.older, history: history, text: "third!", caretAtStart: false) == nil)
+        #expect(browser.index == nil)
+    }
+
+    @Test func multiLinePrompt_arrowsMoveTheCaretUntilTheFirstOrLastLine() {
+        let history = ["one", "two\nlines"]
+        var browser = OpenCodePromptHistoryBrowser()
+        #expect(browser.step(.older, history: history, text: "", caretAtStart: true) == "two\nlines")
+        // Caret on the last line of the recalled prompt: ↑ moves the caret up.
+        #expect(browser.step(.older, history: history, text: "two\nlines", caretAtStart: false, caretOnFirstLine: false, caretOnLastLine: true) == nil)
+        #expect(browser.index == 1)
+        // Now on the first line: ↑ steps older.
+        #expect(browser.step(.older, history: history, text: "two\nlines", caretAtStart: true, caretOnFirstLine: true, caretOnLastLine: false) == "one")
+        _ = browser.step(.newer, history: history, text: "one", caretAtStart: false)
+        // Back in the two-line prompt, caret on the first line: ↓ moves the caret down.
+        #expect(browser.step(.newer, history: history, text: "two\nlines", caretAtStart: false, caretOnFirstLine: true, caretOnLastLine: false) == nil)
+        #expect(browser.step(.newer, history: history, text: "two\nlines", caretAtStart: false, caretOnFirstLine: false, caretOnLastLine: true) == "")
+    }
+
+    @Test func draftWithAttachments_isNotEmpty() {
+        var browser = OpenCodePromptHistoryBrowser()
+        #expect(browser.step(.older, history: history, text: "", hasAttachments: true, caretAtStart: true) == nil)
+    }
+
+    @Test func historyEntries_skipPendingFailedAndBlankSends() {
+        let entries = OpenCodePromptHistory.entries([
+            .init(isUser: true, text: "first", isPending: false),
+            .init(isUser: false, text: "reply", isPending: false),
+            .init(isUser: true, text: "  \n ", isPending: false),
+            .init(isUser: true, text: "still sending", isPending: true),
+            .init(isUser: true, text: "second", isPending: false),
+        ])
+        #expect(entries == ["first", "second"])
+    }
+
+    @Test func noHistory_recallsNothing() {
+        var browser = OpenCodePromptHistoryBrowser()
+        #expect(browser.step(.older, history: [], text: "", caretAtStart: true) == nil)
+    }
+}
+
+@Suite struct HomeKeyboardShortcutContextTests {
+    @Test func projectNumbers_skipAllAndWorktreeScopes() {
+        let tabs: [SessionListFilterTab] = [
+            .all(projectCount: 2, sessionCount: 3),
+            .project(worktree: "/example/a", title: "alpha", count: 2),
+            .project(worktree: "/example/b", title: "beta", count: 1),
+        ]
+        #expect(HomeKeyboardShortcutContext.projectTabs(tabs).map(\.title) == ["alpha", "beta"])
+    }
+
+    @Test func newSession_inAChildSession_usesTheOpenChatsProject() {
+        let parent = SessionListItem(id: "ses_parent", title: "Parent", worktree: "/example/a", directory: "/example/a")
+        let child = SessionListItem(id: "ses_child", title: "Child", worktree: "/example/a", parentID: "ses_parent", directory: "/example/a")
+        // A child opened inside its parent's chat: the parent is the open chat.
+        let fromParent = HomeKeyboardShortcutContext.openChat(topRoute: parent, splitSelection: nil)
+        #expect(fromParent?.id == "ses_parent")
+        // A child opened as its own route: it decides, and its project is the parent's.
+        let fromChild = HomeKeyboardShortcutContext.openChat(topRoute: child, splitSelection: parent)
+        #expect(fromChild?.id == "ses_child")
+        #expect(HomeKeyboardShortcutContext.newSessionDirectory(
+            openChatDirectory: fromChild?.directory,
+            openChatWorktree: fromChild?.worktree
+        ) == "/example/a")
+        #expect(HomeKeyboardShortcutContext.openChat(topRoute: nil, splitSelection: parent)?.id == "ses_parent")
+        #expect(HomeKeyboardShortcutContext.openChat(topRoute: nil, splitSelection: nil) == nil)
+    }
+
+    @Test func newSession_followsTheOpenChat() {
+        #expect(HomeKeyboardShortcutContext.newSessionDirectory(openChatDirectory: "/example/a-wt", openChatWorktree: "/example/a") == "/example/a-wt")
+        #expect(HomeKeyboardShortcutContext.newSessionDirectory(openChatDirectory: nil, openChatWorktree: "/example/a") == "/example/a")
+        #expect(HomeKeyboardShortcutContext.newSessionDirectory(openChatDirectory: nil, openChatWorktree: nil) == nil)
+    }
+
+    @Test func newSession_onHomeOrOverAPushedChat_notOverOtherScreens() {
+        #expect(HomeKeyboardShortcutContext.acceptsNewSession(topRouteIsSession: nil))
+        #expect(HomeKeyboardShortcutContext.acceptsNewSession(topRouteIsSession: true))
+        #expect(!HomeKeyboardShortcutContext.acceptsNewSession(topRouteIsSession: false))
+    }
+}
+
+@Suite struct OpenCodeSecondaryClickOutcomeTests {
+    @Test func plainControls_ignoreARightClick() {
+        // Allow Once, Deny, the sidebar toggle: a right-click must not press them.
+        #expect(OpenCodeSecondaryClickOutcome.outcome(hasAction: false, hasMenu: false) == .ignore)
+    }
+
+    @Test func longPressControls_runTheirLongPress() {
+        #expect(OpenCodeSecondaryClickOutcome.outcome(hasAction: true, hasMenu: false) == .runAction)
+    }
+
+    @Test func controlsWithAMenu_showIt() {
+        #expect(OpenCodeSecondaryClickOutcome.outcome(hasAction: false, hasMenu: true) == .showMenu)
+        #expect(OpenCodeSecondaryClickOutcome.outcome(hasAction: true, hasMenu: true) == .showMenu)
     }
 }

@@ -191,6 +191,8 @@ struct OpenCodeListItem<Trailing: View>: View {
     var body: some View {
         rowBody
             .openCodeKeyboardFocusable(focusRing, enabled: enabled && keyboardActivate != nil, activate: keyboardActivate)
+            // Right-click opens what a long-press opens.
+            .openCodeSecondaryClick(enabled ? onLongPress : nil)
     }
 
     /// Return / Space: the row action; a toggle row flips its switch; a row with

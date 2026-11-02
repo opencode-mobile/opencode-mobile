@@ -210,6 +210,7 @@ struct OpenCodeOutgoingMessage: View {
                 .accessibilityValue(accessibilityValue)
                 .accessibilityHint("Shows message actions")
                 .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: OpenCodeRadius.small), activate: onTap)
+                .openCodeSecondaryClick(onLongPress)
         case (nil, let onLongPress?):
             textPill(text: text)
                 .onLongPressGesture(perform: onLongPress)
@@ -217,6 +218,7 @@ struct OpenCodeOutgoingMessage: View {
                 .accessibilityValue(accessibilityValue)
                 .accessibilityHint("Long press to show message actions")
                 .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: OpenCodeRadius.small), activate: onLongPress)
+                .openCodeSecondaryClick(onLongPress)
         case (let onTap?, nil):
             textPill(text: text)
                 .onTapGesture(perform: onTap)

@@ -30,6 +30,9 @@ enum class OpenCodeFocusedTextInput {
 
     /** Any other text input: [OpenCodeTextInput], [OpenCodeServerAddressInput], and so on. */
     Field,
+
+    /** The "Type your own answer" field of a question prompt; prompt chords treat it specially. */
+    QuestionCustomAnswer,
 }
 
 /**
@@ -61,10 +64,15 @@ class OpenCodeInputFocusRegistry {
         }
     }
 
-    /** [OpenCodeFocusedTextInput.Field] wins if both kinds report focus during a hand-off. */
+    /**
+     * The custom answer field also reports as a plain field, so it wins over [OpenCodeFocusedTextInput.Field];
+     * a plain field wins over the composer if both report focus during a hand-off.
+     */
     val focusedTextInput: OpenCodeFocusedTextInput?
         get() =
             when {
+                OpenCodeFocusedTextInput.QuestionCustomAnswer in focusedInputs.values ->
+                    OpenCodeFocusedTextInput.QuestionCustomAnswer
                 OpenCodeFocusedTextInput.Field in focusedInputs.values -> OpenCodeFocusedTextInput.Field
                 OpenCodeFocusedTextInput.SessionComposer in focusedInputs.values ->
                     OpenCodeFocusedTextInput.SessionComposer
@@ -75,7 +83,7 @@ class OpenCodeInputFocusRegistry {
         get() = modalSurfaces.isNotEmpty()
 
     /**
-     * The design-system control that holds keyboard focus right now (see `openCodeFocusMemory`),
+     * The design-system control that holds keyboard focus right now (see `openCodeControl`),
      * or null. Clickable controls take focus only in keyboard input mode, so a value means the
      * user is driving with the keyboard.
      */

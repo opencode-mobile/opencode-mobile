@@ -37,6 +37,7 @@ class KeyboardShortcutHost(
 ) {
     private class Registration(
         val action: KeyboardShortcutAction,
+        val title: String,
         val handler: () -> Unit,
     )
 
@@ -92,8 +93,9 @@ class KeyboardShortcutHost(
 
     fun register(
         action: KeyboardShortcutAction,
+        title: String = action.title,
         handler: () -> Unit,
-    ): Any = Registration(action, handler).also(registrations::add)
+    ): Any = Registration(action, title, handler).also(registrations::add)
 
     fun unregister(registration: Any) {
         registrations.remove(registration)
@@ -126,7 +128,7 @@ class KeyboardShortcutHost(
         }
         val action = KeyboardShortcutRules.match(keyCode, ctrl, alt, shift, meta) ?: return false
         val focus = KeyboardShortcutRules.textFocus(inputFocus.focusedTextInput, nativeTextEditorFocused)
-        if (!KeyboardShortcutRules.allowed(focus, inputFocus.hasModalSurface)) return false
+        if (!KeyboardShortcutRules.allowed(action, focus, inputFocus.hasModalSurface)) return false
         val registration = registrations.lastOrNull { it.action == action } ?: return false
         consumedDownKeyCode = keyCode
         if (repeatCount == 0 || action.repeats) {
@@ -298,18 +300,23 @@ class KeyboardShortcutHost(
         )
     }
 
-    /** Group for the system Keyboard Shortcuts Helper (Meta+/), or null when nothing applies. */
-    fun shortcutGroup(): KeyboardShortcutGroup? {
-        val actions = activeActions()
-        if (actions.isEmpty()) return null
-        return KeyboardShortcutGroup(
-            GROUP_LABEL,
-            actions.map { action -> KeyboardShortcutInfo(action.title, action.keyCode, action.metaState) },
-        )
-    }
+    /** Titles of the chords that apply now, as the Keyboard Shortcuts Helper lists them. */
+    fun activeShortcutTitles(): Map<KeyboardShortcutAction, String> =
+        activeActions().associateWith { action -> registrations.last { it.action == action }.title }
 
-    private companion object {
-        const val GROUP_LABEL = "Sessions"
+    /**
+     * Groups for the system Keyboard Shortcuts Helper (Meta+/): Session, Prompt, Go, each with
+     * the chords that apply now. Empty groups are left out.
+     */
+    fun shortcutGroups(): List<KeyboardShortcutGroup> {
+        val titles = activeShortcutTitles()
+        return KeyboardShortcutGroupKind.entries.mapNotNull { kind ->
+            val infos =
+                titles
+                    .filterKeys { it.group == kind }
+                    .map { (action, title) -> KeyboardShortcutInfo(title, action.keyCode, action.metaState) }
+            if (infos.isEmpty()) null else KeyboardShortcutGroup(kind.label, infos)
+        }
     }
 }
 
@@ -334,14 +341,16 @@ val LocalKeyboardShortcutHost = staticCompositionLocalOf<KeyboardShortcutHost?> 
 fun KeyboardShortcutHandler(
     action: KeyboardShortcutAction,
     enabled: Boolean = true,
+    /** Helper title for this context, such as "Submit" for Ctrl+Enter on a question. */
+    title: String = action.title,
     onShortcut: () -> Unit,
 ) {
     val host = LocalKeyboardShortcutHost.current
     val currentOnShortcut by rememberUpdatedState(onShortcut)
-    DisposableEffect(host, action, enabled) {
+    DisposableEffect(host, action, enabled, title) {
         val registration =
             if (host != null && enabled) {
-                host.register(action) { currentOnShortcut() }
+                host.register(action, title) { currentOnShortcut() }
             } else {
                 null
             }

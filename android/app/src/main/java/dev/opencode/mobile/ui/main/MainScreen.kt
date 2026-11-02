@@ -1003,6 +1003,33 @@ private fun HomeProjectsContent(
                 onSelectedFilterIdChange(resolvedFilterId)
             }
         }
+        // Ctrl+N: the dock's New session for the current scope. A Session Chat open beside Home
+        // registers its own Ctrl+N (its project) and, being newer, takes over.
+        KeyboardShortcutHandler(
+            KeyboardShortcutAction.NewSession,
+            enabled = KeyboardShortcutRules.homeHandlesNewSession(sessionChatBeside = selectedSessionId != null),
+        ) {
+            onNewSessionAction(
+                SessionListHomeChrome.newSessionAction(
+                    projects = chromeProjects,
+                    selectedFilterId = resolvedFilterId,
+                    worktreesEnabled = worktreesEnabled,
+                ),
+            )
+        }
+        // Ctrl+1…Ctrl+9: the Nth project in the dock's order.
+        val dockProjects = filterTabs.filterNot { it.isAll || it.isWorktree }
+        val dockProjectIds = dockProjects.map { it.id }
+        KeyboardShortcutAction.projects.forEachIndexed { index, action ->
+            val projectId = KeyboardShortcutRules.projectForShortcut(dockProjectIds, index + 1)
+            KeyboardShortcutHandler(
+                action,
+                enabled = projectId != null,
+                title = dockProjects.getOrNull(index)?.let { KeyboardShortcutRules.projectShortcutTitle(it.title) } ?: action.title,
+            ) {
+                projectId?.let(onSelectedFilterIdChange)
+            }
+        }
         LaunchedEffect(pendingScopeRequest) {
             pendingScopeRequest?.let { request ->
                 if (request.evenFromAll || resolvedFilterId != SessionListFilterTab.ALL_ID) {

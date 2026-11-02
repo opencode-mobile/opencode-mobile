@@ -185,7 +185,7 @@ fun OpenCodeToolChip(
                 if (onClick != null) {
                     Modifier
                         .touchTargetShell()
-                        .openCodeFocusMemory()
+                        .openCodeControl()
                         .clickable(
                             interactionSource = interactionSource,
                             indication = null,

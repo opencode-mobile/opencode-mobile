@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.translate
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.openCodeColor
 
@@ -40,17 +42,19 @@ object OpenCodeFocusRing {
 
 /**
  * Draws the focus ring while the focus target that follows this modifier in the chain (for
- * example `clickable` or `focusable`) holds focus. Place it right before that modifier. The
- * control is also remembered as the keyboard-focused control, so a bottom sheet it opens can
- * hand focus back to it (see [openCodeFocusMemory]).
+ * example `clickable` or `focusable`) holds focus. Place it right before that modifier. Also
+ * applies [openCodeControl]: the hand pointer while [enabled], and focus memory.
  */
-fun Modifier.openCodeFocusRing(shape: Shape = RectangleShape): Modifier =
+fun Modifier.openCodeFocusRing(
+    shape: Shape = RectangleShape,
+    enabled: Boolean = true,
+): Modifier =
     composed {
         var focused by remember { mutableStateOf(false) }
         this
             .onFocusChanged { focused = it.isFocused }
             .openCodeFocusRing(focused = focused, shape = shape)
-            .openCodeFocusMemory()
+            .openCodeControl(enabled)
     }
 
 /** Draws the focus ring while [focused]; for components that track focus themselves. */
@@ -85,11 +89,18 @@ private fun DrawScope.drawInsetOutline(
 }
 
 /**
- * Remembers this control while it holds keyboard focus, so a bottom sheet it opens can return
- * focus to it when the sheet closes. Place it right before the control's focus target
- * (`clickable`); [openCodeFocusRing] with a shape already includes it.
+ * What every design-system control carries next to its click handler: the hand pointer under a
+ * mouse while [enabled], and focus memory (the control is remembered while it holds keyboard
+ * focus, so a bottom sheet it opens can return focus to it). Place it right before the control's
+ * focus target (`clickable`); [openCodeFocusRing] with a shape already includes it. A
+ * secondary-button press (right-click) does not click the control.
  */
-fun Modifier.openCodeFocusMemory(): Modifier =
+fun Modifier.openCodeControl(enabled: Boolean = true): Modifier =
+    pointerHoverIcon(if (enabled) PointerIcon.Hand else PointerIcon.Default)
+        .openCodeSwallowSecondaryPress()
+        .openCodeFocusMemory()
+
+private fun Modifier.openCodeFocusMemory(): Modifier =
     composed {
         val registry = LocalOpenCodeInputFocusRegistry.current
         val requester = remember { FocusRequester() }

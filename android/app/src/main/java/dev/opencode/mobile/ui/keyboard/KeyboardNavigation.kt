@@ -65,6 +65,20 @@ enum class KeyboardPromptKind {
     Question,
 }
 
+enum class PromptRecallDirection {
+    /** ↑: an older prompt. */
+    Older,
+
+    /** ↓: a newer prompt, and finally back to an empty composer. */
+    Newer,
+}
+
+/** The composer after a recall step: the history [index] browsed (null: browsing ended) and its [text]. */
+data class PromptRecallStep(
+    val index: Int?,
+    val text: String,
+)
+
 /** Pure rules for standard keyboard navigation (#869 Tier 1). */
 object KeyboardNavigationRules {
     /** The TUI's double-Esc window: a second Esc less than this long after the first interrupts. */
@@ -202,6 +216,74 @@ object KeyboardNavigationRules {
         hardwareKeyboardConnected: Boolean,
         eventFlags: Int,
     ): Boolean = hardwareKeyboardConnected && (eventFlags and KeyEvent.FLAG_SOFT_KEYBOARD) == 0
+
+    /**
+     * The option a bare digit picks in a question prompt (0-based), or null. Digits 1–9 (top
+     * row or keypad) pick options 1–9, only once focus is inside the prompt, never while a text
+     * field has focus, and never with a modifier held.
+     */
+    fun questionDigitPick(
+        keyCode: Int,
+        ctrl: Boolean,
+        alt: Boolean,
+        shift: Boolean,
+        meta: Boolean,
+        focusInsidePrompt: Boolean,
+        textFieldFocused: Boolean,
+        optionCount: Int,
+    ): Int? {
+        if (!focusInsidePrompt || textFieldFocused || ctrl || alt || shift || meta) return null
+        val index =
+            when (keyCode) {
+                in KeyEvent.KEYCODE_1..KeyEvent.KEYCODE_9 -> keyCode - KeyEvent.KEYCODE_1
+                in KeyEvent.KEYCODE_NUMPAD_1..KeyEvent.KEYCODE_NUMPAD_9 -> keyCode - KeyEvent.KEYCODE_NUMPAD_1
+                else -> return null
+            }
+        return index.takeIf { it < optionCount }
+    }
+
+    /**
+     * ↑ / ↓ prompt history in the composer, like the TUI. [history] is this session's sent
+     * prompts, oldest first. ↑ in an empty composer (no text, no attachments) with the caret at
+     * the start shows the newest; further ↑ steps back (staying on the oldest); ↓ steps forward
+     * and past the newest returns to an empty composer. While browsing a multi-line prompt, ↑
+     * steps only with the caret on its first line and ↓ only on its last line; elsewhere the
+     * arrows move the caret. [browsingIndex] is the entry shown now; [unedited] is false once
+     * the text differs from it, which ends browsing. Null: the key is not a recall step.
+     */
+    fun promptRecall(
+        history: List<String>,
+        browsingIndex: Int?,
+        unedited: Boolean,
+        text: String,
+        hasAttachments: Boolean,
+        caretAtStart: Boolean,
+        caretOnFirstLine: Boolean,
+        caretOnLastLine: Boolean,
+        direction: PromptRecallDirection,
+    ): PromptRecallStep? {
+        val browsing = browsingIndex?.takeIf { unedited && it in history.indices }
+        return when (direction) {
+            PromptRecallDirection.Older ->
+                when {
+                    browsing != null ->
+                        if (caretOnFirstLine) {
+                            (browsing - 1).coerceAtLeast(0).let { PromptRecallStep(it, history[it]) }
+                        } else {
+                            null
+                        }
+                    text.isEmpty() && !hasAttachments && caretAtStart && history.isNotEmpty() ->
+                        PromptRecallStep(history.lastIndex, history.last())
+                    else -> null
+                }
+            PromptRecallDirection.Newer ->
+                when {
+                    browsing == null || !caretOnLastLine -> null
+                    browsing >= history.lastIndex -> PromptRecallStep(null, "")
+                    else -> PromptRecallStep(browsing + 1, history[browsing + 1])
+                }
+        }
+    }
 
     /** "Press Tab to answer with the keyboard" shows only with a hardware keyboard and focus outside the prompt. */
     fun promptHintVisible(

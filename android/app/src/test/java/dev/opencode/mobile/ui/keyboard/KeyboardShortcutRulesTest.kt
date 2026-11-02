@@ -48,7 +48,7 @@ class KeyboardShortcutRulesTest {
     @Test
     fun match_ignoresOtherKeys() {
         assertNull(match(KeyEvent.KEYCODE_A, ctrl = true))
-        assertNull(match(KeyEvent.KEYCODE_ENTER, ctrl = true))
+        assertNull(match(KeyEvent.KEYCODE_Z, ctrl = true))
     }
 
     @Test
@@ -66,11 +66,11 @@ class KeyboardShortcutRulesTest {
     }
 
     @Test
-    fun titles_matchIosLabels() {
-        assertEquals(
-            listOf("Toggle Sidebar", "Next Session", "Previous Session", "Focus Composer"),
-            KeyboardShortcutAction.entries.map { it.title },
-        )
+    fun titles_ofTheRequirementChords() {
+        assertEquals("Toggle Sidebar", KeyboardShortcutAction.ToggleSidebar.title)
+        assertEquals("Next Session", KeyboardShortcutAction.NextSession.title)
+        assertEquals("Previous Session", KeyboardShortcutAction.PreviousSession.title)
+        assertEquals("Focus Composer", KeyboardShortcutAction.FocusComposer.title)
     }
 
     @Test

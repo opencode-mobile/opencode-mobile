@@ -48,6 +48,8 @@ struct OpenCodeButton: View {
     var body: some View {
         content
             .openCodeKeyboardFocusable(variant.focusRing, enabled: enabled, activate: action)
+            // Right-click opens what a long-press opens.
+            .openCodeSecondaryClick(enabled ? longPress : nil)
     }
 
     @ViewBuilder

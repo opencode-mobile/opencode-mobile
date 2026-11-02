@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import dev.opencode.mobile.theme.OpenCodeSmallShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -38,6 +37,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -109,7 +109,7 @@ fun OpenCodeButton(
             text = variant.title,
             modifier =
                 modifier
-                    .openCodeFocusRing(OpenCodeButtonCornerRadius)
+                    .openCodeFocusRing(OpenCodeButtonCornerRadius, enabled)
                     .clickable(enabled = enabled, role = Role.Button, onClick = onClick),
             style =
                 MaterialTheme.typography.bodyMedium.copy(
@@ -243,7 +243,8 @@ fun OpenCodeButton(
                     scaleX = accentScale
                     scaleY = accentScale
                 }.clip(shape)
-                .openCodeFocusRing(shape)
+                .openCodeFocusRing(shape, enabled)
+                .openCodeSecondaryClick(enabled = enabled && onLongClick != null) { onLongClick?.invoke() }
                 .then(interaction),
         shape = shape,
         color = containerColor,
