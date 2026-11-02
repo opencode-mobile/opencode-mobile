@@ -1,6 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.MessagePart
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -14,9 +16,10 @@ import kotlinx.serialization.json.intOrNull
  */
 @Serializable
 sealed class ToolResultPresentation {
-    abstract val title: String
+    /** App text (`3 files`) or content (a file name, a grep pattern). Getters, so they are not saved. */
+    abstract val title: UiText
     abstract val raw: String
-    abstract val eyebrow: String?
+    abstract val eyebrow: UiText?
 
     val copiesOriginal: Boolean
         get() =
@@ -35,7 +38,56 @@ sealed class ToolResultPresentation {
     enum class StatusTone { Modified, Added, Deleted, Other }
 
     @Serializable
-    data class Count(val label: String, val tone: StatusTone)
+    data class Count(val count: Int, val tone: StatusTone) {
+        val label: UiText
+            get() =
+                when (tone) {
+                    StatusTone.Added -> UiText.plural(R.plurals.timeline_tool_result_files_added, count)
+                    StatusTone.Deleted -> UiText.plural(R.plurals.timeline_tool_result_files_deleted, count)
+                    StatusTone.Modified, StatusTone.Other -> UiText.plural(R.plurals.timeline_tool_result_files_modified, count)
+                }
+    }
+
+    /** The tool a result came from, shown above the title. */
+    @Serializable
+    enum class ToolLabel {
+        Shell,
+        Thought,
+        Read,
+        Write,
+        Grep,
+        Glob,
+        Edit,
+        Patch,
+        ;
+
+        val text: UiText
+            get() =
+                UiText.resource(
+                    when (this) {
+                        Shell -> R.string.tool_title_shell
+                        Thought -> R.string.tool_title_thought
+                        Read -> R.string.tool_title_read
+                        Write -> R.string.tool_title_write
+                        Grep -> R.string.tool_title_grep
+                        Glob -> R.string.tool_title_glob
+                        Edit -> R.string.tool_title_edit
+                        Patch -> R.string.tool_title_patch
+                    },
+                )
+    }
+
+    /** Which lines a read showed: `lines 10–29`, or `first 20 lines`. */
+    @Serializable
+    data class LineRange(val start: Int?, val end: Int?, val limit: Int?) {
+        val label: UiText?
+            get() =
+                when {
+                    start != null && end != null -> UiText.resource(R.string.tool_result_lines_range, start, end)
+                    limit != null -> UiText.plural(R.plurals.tool_result_first_lines, limit)
+                    else -> null
+                }
+    }
 
     @Serializable
     data class FileStatus(
@@ -46,8 +98,8 @@ sealed class ToolResultPresentation {
         val counts: List<Count>,
         override val raw: String,
     ) : ToolResultPresentation() {
-        override val eyebrow: String = "Shell"
-        override val title: String = countTitle(files.size, "file", "files")
+        override val eyebrow: UiText get() = ToolLabel.Shell.text
+        override val title: UiText get() = UiText.plural(R.plurals.tool_count_file, files.size)
     }
 
     @Serializable
@@ -55,12 +107,13 @@ sealed class ToolResultPresentation {
 
     @Serializable
     data class PathList(
-        override val eyebrow: String,
+        val tool: ToolLabel,
         val command: String?,
         val paths: List<PathRow>,
         override val raw: String,
     ) : ToolResultPresentation() {
-        override val title: String = countTitle(paths.size, "path", "paths")
+        override val eyebrow: UiText get() = tool.text
+        override val title: UiText get() = UiText.plural(R.plurals.tool_count_path, paths.size)
     }
 
     @Serializable
@@ -74,8 +127,8 @@ sealed class ToolResultPresentation {
         val pullTitle: String?,
         override val raw: String,
     ) : ToolResultPresentation() {
-        override val eyebrow: String = "Shell"
-        override val title: String = "Pull request opened"
+        override val eyebrow: UiText get() = ToolLabel.Shell.text
+        override val title: UiText get() = UiText.resource(R.string.tool_result_pull_request_opened)
     }
 
     @Serializable
@@ -85,8 +138,8 @@ sealed class ToolResultPresentation {
         val paragraphs: List<String>,
         override val raw: String,
     ) : ToolResultPresentation() {
-        override val eyebrow: String = "Thought"
-        override val title: String = "Thought"
+        override val eyebrow: UiText get() = ToolLabel.Thought.text
+        override val title: UiText get() = UiText.resource(R.string.tool_title_thought)
     }
 
     @Serializable
@@ -98,15 +151,17 @@ sealed class ToolResultPresentation {
     @Serializable
     data class Source(
         val kind: SourceKind,
+        /** Empty when the tool sent no path. */
         val filename: String,
         val language: String?,
         val highlightLanguage: String?,
-        val rangeLabel: String?,
+        val range: LineRange?,
         val lines: List<SourceLine>,
         override val raw: String,
     ) : ToolResultPresentation() {
-        override val eyebrow: String = if (kind == SourceKind.Read) "Read" else "Write"
-        override val title: String = filename
+        override val eyebrow: UiText get() = (if (kind == SourceKind.Read) ToolLabel.Read else ToolLabel.Write).text
+        override val title: UiText get() = fileTitle(filename)
+        val rangeLabel: UiText? get() = range?.label
     }
 
     @Serializable
@@ -127,41 +182,46 @@ sealed class ToolResultPresentation {
         val groups: List<GrepFile>,
         override val raw: String,
     ) : ToolResultPresentation() {
-        override val eyebrow: String = "Grep"
-        override val title: String = pattern
+        override val eyebrow: UiText get() = ToolLabel.Grep.text
+        override val title: UiText get() = UiText.verbatim(pattern)
     }
 
     @Serializable
     data class Edit(
-        override val eyebrow: String,
+        val tool: ToolLabel,
+        /** Empty when the tool sent no path. */
         val filename: String,
         val additions: Int,
         val deletions: Int,
         val patch: String,
         override val raw: String,
     ) : ToolResultPresentation() {
-        override val title: String = filename
+        override val eyebrow: UiText get() = tool.text
+        override val title: UiText get() = fileTitle(filename)
     }
 
     @Serializable
     data class Unrecognized(
-        override val title: String,
+        @Serializable(with = UiTextSerializer::class)
+        override val title: UiText,
         val error: String?,
         override val raw: String,
     ) : ToolResultPresentation() {
-        override val eyebrow: String? = null
+        override val eyebrow: UiText? get() = null
     }
 
     companion object {
-        fun countTitle(count: Int, singular: String, plural: String): String =
-            if (count == 1) "1 $singular" else "$count $plural"
+        /** A file name, or `File` when the tool sent no path. */
+        fun fileTitle(filename: String): UiText =
+            filename.takeIf { it.isNotBlank() }?.let(UiText::verbatim) ?: UiText.resource(R.string.tool_result_file)
     }
 }
 
 /** Inputs the classifier needs. Callers extract these from a tool part. */
 internal data class ToolResultRequest(
     val toolName: String,
-    val fallbackTitle: String,
+    /** The card title, used when the result has no shape of its own. */
+    val fallbackTitle: UiText,
     val command: String? = null,
     val path: String? = null,
     val pattern: String? = null,
@@ -179,7 +239,7 @@ internal data class ToolResultRequest(
 )
 
 internal object ToolResultInspector {
-    fun fromTool(tool: MessagePart.Tool, fallbackTitle: String): ToolResultPresentation? =
+    fun fromTool(tool: MessagePart.Tool, fallbackTitle: UiText): ToolResultPresentation? =
         classify(
             ToolResultRequest(
                 toolName = tool.toolName,
@@ -238,7 +298,7 @@ internal object ToolResultInspector {
             val rows = pathRows(output)
             if (rows.isNotEmpty()) {
                 return ToolResultPresentation.PathList(
-                    eyebrow = if (name == "glob") "Glob" else "Shell",
+                    tool = if (name == "glob") ToolResultPresentation.ToolLabel.Glob else ToolResultPresentation.ToolLabel.Shell,
                     command = command ?: request.pattern,
                     paths = rows,
                     raw = output,
@@ -247,7 +307,7 @@ internal object ToolResultInspector {
         }
 
         if (name == "read" && output != null) {
-            val path = request.path?.takeIf { it.isNotBlank() } ?: "File"
+            val path = request.path?.takeIf { it.isNotBlank() }.orEmpty()
             return source(ToolResultPresentation.SourceKind.Read, path, output, request)
         }
         if (name == "write") {
@@ -273,13 +333,15 @@ internal object ToolResultInspector {
         }
 
         if (name == "edit" || name == "apply_patch" || name == "patch") {
-            val path = request.path?.takeIf { it.isNotBlank() } ?: "File"
-            val patch = request.patch?.takeIf { it.contains("@@") } ?: syntheticPatch(path, request.oldString, request.newString)
+            val path = request.path?.takeIf { it.isNotBlank() }.orEmpty()
+            val patch =
+                request.patch?.takeIf { it.contains("@@") }
+                    ?: syntheticPatch(path.ifEmpty { SYNTHETIC_PATCH_PATH }, request.oldString, request.newString)
             if (patch != null) {
                 val additions = request.patch?.let { countPrefix(it, '+') } ?: request.newString?.let { lineCount(it) } ?: 0
                 val deletions = request.patch?.let { countPrefix(it, '-') } ?: request.oldString?.let { lineCount(it) } ?: 0
                 return ToolResultPresentation.Edit(
-                    eyebrow = if (name == "edit") "Edit" else "Patch",
+                    tool = if (name == "edit") ToolResultPresentation.ToolLabel.Edit else ToolResultPresentation.ToolLabel.Patch,
                     filename = fileName(path),
                     additions = additions,
                     deletions = deletions,
@@ -291,7 +353,7 @@ internal object ToolResultInspector {
 
         val raw = output ?: error ?: return null
         return ToolResultPresentation.Unrecognized(
-            title = request.fallbackTitle.ifBlank { toolLabel(name) },
+            title = request.fallbackTitle.takeUnless { it is UiText.Verbatim && it.value.isBlank() } ?: toolLabel(name),
             error = error?.takeIf { output != null && error != output },
             raw = raw,
         )
@@ -335,9 +397,10 @@ internal object ToolResultInspector {
         val end = lines.lastOrNull()?.number
         val range =
             when {
-                request.offset != null && request.limit != null -> "lines ${request.offset}–${request.offset + request.limit - 1}"
-                request.offset != null && end != null -> "lines ${request.offset}–$end"
-                request.limit != null -> "first ${request.limit} lines"
+                request.offset != null && request.limit != null ->
+                    ToolResultPresentation.LineRange(request.offset, request.offset + request.limit - 1, null)
+                request.offset != null && end != null -> ToolResultPresentation.LineRange(request.offset, end, null)
+                request.limit != null -> ToolResultPresentation.LineRange(null, null, request.limit)
                 else -> null
             }
         return ToolResultPresentation.Source(
@@ -345,7 +408,7 @@ internal object ToolResultInspector {
             filename = fileName(path),
             language = languageName(path),
             highlightLanguage = highlightLanguage(path),
-            rangeLabel = range,
+            range = range,
             lines = lines,
             raw = body,
         )
@@ -446,9 +509,9 @@ internal object ToolResultInspector {
         val added = files.count { it.tone == ToolResultPresentation.StatusTone.Added }
         val deleted = files.count { it.tone == ToolResultPresentation.StatusTone.Deleted }
         return listOfNotNull(
-            modified.takeIf { it > 0 }?.let { ToolResultPresentation.Count("$it modified", ToolResultPresentation.StatusTone.Modified) },
-            added.takeIf { it > 0 }?.let { ToolResultPresentation.Count("$it added", ToolResultPresentation.StatusTone.Added) },
-            deleted.takeIf { it > 0 }?.let { ToolResultPresentation.Count("$it deleted", ToolResultPresentation.StatusTone.Deleted) },
+            modified.takeIf { it > 0 }?.let { ToolResultPresentation.Count(it, ToolResultPresentation.StatusTone.Modified) },
+            added.takeIf { it > 0 }?.let { ToolResultPresentation.Count(it, ToolResultPresentation.StatusTone.Added) },
+            deleted.takeIf { it > 0 }?.let { ToolResultPresentation.Count(it, ToolResultPresentation.StatusTone.Deleted) },
         )
     }
 
@@ -608,16 +671,20 @@ internal object ToolResultInspector {
         return tool.output?.takeIf { it.contains("@@") }
     }
 
-    private fun toolLabel(name: String): String =
+    private fun toolLabel(name: String): UiText =
         when (name) {
-            "bash", "shell" -> "Shell"
-            "grep" -> "Grep"
-            "glob" -> "Glob"
-            "read" -> "Read"
-            "write" -> "Write"
-            "edit" -> "Edit"
-            else -> name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+            "bash", "shell" -> ToolResultPresentation.ToolLabel.Shell.text
+            "grep" -> ToolResultPresentation.ToolLabel.Grep.text
+            "glob" -> ToolResultPresentation.ToolLabel.Glob.text
+            "read" -> ToolResultPresentation.ToolLabel.Read.text
+            "write" -> ToolResultPresentation.ToolLabel.Write.text
+            "edit" -> ToolResultPresentation.ToolLabel.Edit.text
+            // Any other tool keeps its own name, which is server content.
+            else -> UiText.verbatim(name.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() })
         }
+
+    /** Path in the header of a patch built from old and new text when the tool sent no path. */
+    private const val SYNTHETIC_PATCH_PATH = "File"
 
     private val statusLine = Regex("""^([ MADRC?!]{2}) (.+)$""")
     private val prUrl = Regex("""https?://github\.com/[^/\s]+/[^/\s]+/pull/(\d+)""")

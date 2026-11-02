@@ -272,7 +272,10 @@ struct SessionChatContextSlotView: View {
                 switch item {
                 case let .todos(completed, total):
                     OpenCodeFloatingPill(
-                        layout: .iconLabel(icon: .list, label: "\(completed)/\(total)"),
+                        layout: .iconLabel(
+                            icon: .list,
+                            label: String(localized: "session_chat.todos.progress", defaultValue: "\(completed)/\(total)")
+                        ),
                         state: .ready,
                         accessibilityLabel: todosAccessibilityLabel,
                         action: onTodosTap

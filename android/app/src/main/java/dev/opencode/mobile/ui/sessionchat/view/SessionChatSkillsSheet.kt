@@ -14,6 +14,7 @@ import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 import dev.opencode.mobile.ui.sessionchat.SessionChatSkillUse
+import dev.opencode.mobile.ui.text.resolve
 
 /** Skills a message loaded, opened from any skill chip in the chip timeline. */
 internal data class SessionChatSkillsTarget(
@@ -45,7 +46,7 @@ internal fun SessionChatSkillsSheet(
         Column(modifier = Modifier.fillMaxWidth()) {
             target?.skills.orEmpty().forEach { skill ->
                 OpenCodeListItem(
-                    title = skill.label,
+                    title = skill.label.resolve(),
                     subtitle = skill.directory,
                     status = skill.status.toListItemStatus(),
                 )

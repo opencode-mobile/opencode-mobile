@@ -525,6 +525,227 @@
         <item quantity="one">%1$d deleted</item>
         <item quantity="other">%1$d deleted</item>
     </plurals>
+    <!-- Session Chat timeline, tool cards, activity and chat screen messages -->
+    <!-- Tool name on a tool card, chip or step. -->
+    <string name="tool_title_read">Read</string>
+    <string name="tool_title_grep">Grep</string>
+    <string name="tool_title_glob">Glob</string>
+    <string name="tool_title_search">Search</string>
+    <string name="tool_title_fetch">Fetch</string>
+    <string name="tool_title_shell">Shell</string>
+    <string name="tool_title_execute">Execute</string>
+    <string name="tool_title_lsp">LSP</string>
+    <string name="tool_title_plan">Plan</string>
+    <string name="tool_title_edit">Edit</string>
+    <string name="tool_title_write">Write</string>
+    <string name="tool_title_skill">Skill</string>
+    <string name="tool_title_patch">Patch</string>
+    <string name="tool_title_get_issue">Get issue</string>
+    <string name="tool_title_save_issue">Save issue</string>
+    <string name="tool_title_question">Question</string>
+    <string name="tool_title_agent">Agent</string>
+    <string name="tool_title_thought">Thought</string>
+    <plurals name="tool_title_asked_questions">
+        <item quantity="one">Asked %1$d question</item>
+        <item quantity="other">Asked %1$d questions</item>
+    </plurals>
+    <plurals name="tool_count_read">
+        <item quantity="one">%1$d read</item>
+        <item quantity="other">%1$d reads</item>
+    </plurals>
+    <plurals name="tool_count_grep">
+        <item quantity="one">%1$d grep</item>
+        <item quantity="other">%1$d greps</item>
+    </plurals>
+    <plurals name="tool_count_glob">
+        <item quantity="one">%1$d glob</item>
+        <item quantity="other">%1$d globs</item>
+    </plurals>
+    <plurals name="tool_count_search">
+        <item quantity="one">%1$d search</item>
+        <item quantity="other">%1$d searches</item>
+    </plurals>
+    <plurals name="tool_count_fetch">
+        <item quantity="one">%1$d fetch</item>
+        <item quantity="other">%1$d fetches</item>
+    </plurals>
+    <plurals name="tool_count_shell">
+        <item quantity="one">%1$d shell</item>
+        <item quantity="other">%1$d shells</item>
+    </plurals>
+    <plurals name="tool_count_execute">
+        <item quantity="one">%1$d execute</item>
+        <item quantity="other">%1$d executes</item>
+    </plurals>
+    <plurals name="tool_count_lsp">
+        <item quantity="one">%1$d LSP</item>
+        <item quantity="other">%1$d LSPs</item>
+    </plurals>
+    <plurals name="tool_count_plan">
+        <item quantity="one">%1$d plan</item>
+        <item quantity="other">%1$d plans</item>
+    </plurals>
+    <plurals name="tool_count_edit">
+        <item quantity="one">%1$d edit</item>
+        <item quantity="other">%1$d edits</item>
+    </plurals>
+    <plurals name="tool_count_write">
+        <item quantity="one">%1$d write</item>
+        <item quantity="other">%1$d writes</item>
+    </plurals>
+    <plurals name="tool_count_skill">
+        <item quantity="one">%1$d skill</item>
+        <item quantity="other">%1$d skills</item>
+    </plurals>
+    <plurals name="tool_count_patch">
+        <item quantity="one">%1$d patch</item>
+        <item quantity="other">%1$d patches</item>
+    </plurals>
+    <plurals name="tool_count_get_issue">
+        <item quantity="one">%1$d Get issue</item>
+        <item quantity="other">%1$d Get issues</item>
+    </plurals>
+    <plurals name="tool_count_save_issue">
+        <item quantity="one">%1$d Save issue</item>
+        <item quantity="other">%1$d Save issues</item>
+    </plurals>
+    <plurals name="tool_count_tool">
+        <item quantity="one">%1$d tool</item>
+        <item quantity="other">%1$d tools</item>
+    </plurals>
+    <plurals name="tool_count_file">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <plurals name="tool_count_match">
+        <item quantity="one">%1$d match</item>
+        <item quantity="other">%1$d matches</item>
+    </plurals>
+    <plurals name="tool_count_path">
+        <item quantity="one">%1$d path</item>
+        <item quantity="other">%1$d paths</item>
+    </plurals>
+    <!-- %1$d is how many times a tool ran, %2$s the tool name. -->
+    <string name="tool_count_named">%1$d %2$s</string>
+    <string name="tool_error_malformed">Not run: malformed tool call</string>
+    <!-- Error line under a failed tool chip. %1$s is the chip label, %2$s the error. -->
+    <string name="tool_error_line">%1$s: %2$s</string>
+    <string name="tool_error_failed">Failed</string>
+    <string name="tool_error_exit_code">Exited with code %1$d</string>
+    <string name="tool_status_declined">Declined</string>
+    <string name="tool_status_stopped">Stopped</string>
+    <string name="tool_placeholder_writing_command">Writing command…</string>
+    <string name="tool_placeholder_preparing_read">Preparing read…</string>
+    <string name="tool_placeholder_preparing_edit">Preparing edit…</string>
+    <string name="tool_placeholder_preparing_write">Preparing write…</string>
+    <!-- %1$s is the subagent task description. -->
+    <string name="tool_subtitle_background">%1$s (background)</string>
+    <string name="tool_subtitle_plan_ready">Ready to implement?</string>
+    <string name="tool_unknown_title">Unknown tool</string>
+    <string name="tool_unknown_detail">Tool not available</string>
+    <string name="tool_result_pull_request_opened">Pull request opened</string>
+    <!-- Title of a file result when the tool sent no path. -->
+    <string name="tool_result_file">File</string>
+    <string name="tool_result_lines_range">lines %1$d–%2$d</string>
+    <plurals name="tool_result_first_lines">
+        <item quantity="one">first %1$d line</item>
+        <item quantity="other">first %1$d lines</item>
+    </plurals>
+    <string name="timeline_step_reading">Reading…</string>
+    <!-- %1$s is a file, pattern, query or host. -->
+    <string name="timeline_step_reading_named">Reading %1$s</string>
+    <string name="timeline_step_searching">Searching…</string>
+    <string name="timeline_step_searching_named">Searching %1$s</string>
+    <string name="timeline_step_listing">Listing…</string>
+    <string name="timeline_step_listing_named">Listing %1$s</string>
+    <string name="timeline_step_editing">Editing…</string>
+    <string name="timeline_step_editing_named">Editing %1$s</string>
+    <string name="timeline_step_writing">Writing…</string>
+    <string name="timeline_step_writing_named">Writing %1$s</string>
+    <string name="timeline_step_fetching">Fetching…</string>
+    <string name="timeline_step_fetching_named">Fetching %1$s</string>
+    <string name="timeline_step_running">Running…</string>
+    <!-- %1$s is a shell command. -->
+    <string name="timeline_step_running_named">Running %1$s</string>
+    <!-- %1$s is a shell command. -->
+    <string name="timeline_step_ran_named">Ran %1$s</string>
+    <string name="timeline_step_ran_command">Ran command</string>
+    <string name="timeline_step_loading_skill">Loading skill…</string>
+    <string name="timeline_step_loading_skill_named">Loading skill %1$s</string>
+    <string name="timeline_step_skill_named">Skill %1$s</string>
+    <!-- %1$s is how long the model thought, such as 6.4s. -->
+    <string name="timeline_step_thought_duration">Thought · %1$s</string>
+    <!-- %1$s is a tool title (LSP, Plan), %2$s its argument. -->
+    <string name="timeline_step_tool_named">%1$s %2$s</string>
+    <!-- %1$s is a list of counts, such as 4 reads · 2 greps. -->
+    <string name="timeline_explore_label">Explored · %1$s</string>
+    <string name="timeline_explore_label_running">Exploring · %1$s</string>
+    <string name="timeline_explore_title">Explored — %1$s</string>
+    <!-- Joins two parts of a list. -->
+    <string name="timeline_list_separator">%1$s · %2$s</string>
+    <!-- Joins two tool names in a list. -->
+    <string name="timeline_list_comma">%1$s, %2$s</string>
+    <plurals name="timeline_activity_count_step">
+        <item quantity="one">%1$d step</item>
+        <item quantity="other">%1$d steps</item>
+    </plurals>
+    <plurals name="timeline_activity_count_command">
+        <item quantity="one">%1$d command</item>
+        <item quantity="other">%1$d commands</item>
+    </plurals>
+    <plurals name="timeline_activity_count_thought">
+        <item quantity="one">%1$d thought</item>
+        <item quantity="other">%1$d thoughts</item>
+    </plurals>
+    <plurals name="timeline_activity_count_agent">
+        <item quantity="one">%1$d agent</item>
+        <item quantity="other">%1$d agents</item>
+    </plurals>
+    <string name="timeline_activity_thinking">Thinking…</string>
+    <string name="timeline_activity_waiting_for_agents">Waiting for agents</string>
+    <string name="timeline_activity_waiting_for_you">Waiting for you</string>
+    <string name="timeline_notice_moved_to">Moved to</string>
+    <string name="timeline_notice_agent_changed">Agent changed</string>
+    <!-- Previous agent → new agent. -->
+    <string name="timeline_notice_agent_change">%1$s → %2$s</string>
+    <string name="timeline_notice_switched_to">Switched to</string>
+    <string name="timeline_notice_variant_switched">Switched variant to</string>
+    <string name="timeline_notice_variant_default">Switched variant to Default</string>
+    <string name="timeline_notice_instructions_updated">Instructions updated</string>
+    <string name="timeline_notice_restart">Continuing after restart</string>
+    <!-- Accessibility label: the notice label, then its value. -->
+    <string name="timeline_notice_accessibility">%1$s %2$s</string>
+    <string name="timeline_compaction_title">Context compacted</string>
+    <string name="timeline_compaction_automatic">Automatic</string>
+    <string name="timeline_syncing">Syncing…</string>
+    <string name="timeline_failure_session_work_failed">Session work failed</string>
+    <!-- %1$d is the HTTP status, %2$s the failure message. -->
+    <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
+    <string name="timeline_failure_pick_model">Pick a model</string>
+    <string name="timeline_failure_compact">Compact</string>
+    <string name="session_chat_compact_status">Compacting…</string>
+    <string name="session_chat_compact_success">Session compacted.</string>
+    <!-- Context usage before and after, in percent. -->
+    <string name="session_chat_compact_success_usage">Context compacted · %1$d%% → %2$d%%</string>
+    <string name="session_chat_compact_failure">Couldn\'t compact session context.</string>
+    <string name="session_chat_revert_undo_failed">Couldn\'t undo last message.</string>
+    <string name="session_chat_revert_failed">Couldn\'t revert message.</string>
+    <string name="session_chat_revert_redo_failed">Couldn\'t redo.</string>
+    <string name="session_chat_revert_cancel_failed">Couldn\'t cancel revert.</string>
+    <string name="session_chat_revert_commit_failed">Couldn\'t commit revert.</string>
+    <string name="session_chat_fork_rename_failed">Fork created, but it couldn\'t be renamed.</string>
+    <string name="session_chat_pending_prompt_update_failed">Couldn\'t update pending prompt</string>
+    <string name="session_chat_shell_stop_failed">Couldn\'t stop the shell. Try again.</string>
+    <string name="session_chat_shell_status_running">Running</string>
+    <string name="session_chat_shell_status_exited">Exited</string>
+    <string name="session_chat_shell_status_timed_out">Timed out</string>
+    <string name="session_chat_shell_duration_seconds">%1$d s</string>
+    <string name="session_chat_shell_duration_minutes">%1$d min</string>
+    <string name="session_chat_shell_duration_minutes_seconds">%1$d min %2$d s</string>
+    <string name="session_chat_shell_duration_hours">%1$d h</string>
+    <string name="session_chat_shell_duration_hours_minutes">%1$d h %2$d min</string>
+    <!-- Todos pill: completed todos / all todos. -->
+    <string name="session_chat_todos_progress">%1$d/%2$d</string>
     <!-- Session Chat sheets and Session Context -->
     <string name="session_chat_sheet_copy">Copy</string>
     <string name="session_chat_sheet_copy_output">Copy output</string>

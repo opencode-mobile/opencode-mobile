@@ -2345,7 +2345,9 @@ final class SessionChatViewModel {
         return steers + queued
     }
 
-    private static let pendingPromptFailure = "Couldn't update pending prompt"
+    private static var pendingPromptFailure: String {
+        String(localized: "session_chat.pending_prompt.update_failed", defaultValue: "Couldn't update pending prompt")
+    }
     static let chipTimelineIntroEnabledNotice = "Chip timeline is on. Turn it off in Settings."
     /// Pause after history loads so the chat is on screen before the picker.
     static let timelineStylePickerDelayMs = 600

@@ -8,18 +8,18 @@ class SessionCompactChromeTest {
     fun successMessage_formatsDeltaWhenBothFractionsPresent() {
         assertEquals(
             "Context compacted · 72% → 34%",
-            SessionCompactChrome.successMessage(beforeFraction = 0.72f, afterFraction = 0.34f),
+            SessionCompactChrome.successMessage(beforeFraction = 0.72f, afterFraction = 0.34f).english(),
         )
     }
 
     @Test
     fun successMessage_fallsBackWhenEitherFractionMissing() {
         assertEquals(
-            SessionCompactChrome.FALLBACK_SUCCESS,
+            SessionCompactChrome.fallbackSuccess,
             SessionCompactChrome.successMessage(beforeFraction = 0.72f, afterFraction = null),
         )
         assertEquals(
-            SessionCompactChrome.FALLBACK_SUCCESS,
+            SessionCompactChrome.fallbackSuccess,
             SessionCompactChrome.successMessage(beforeFraction = null, afterFraction = 0.34f),
         )
     }
@@ -27,11 +27,11 @@ class SessionCompactChromeTest {
     @Test
     fun successMessage_fallsBackWhenUsageIsUnknown() {
         assertEquals(
-            SessionCompactChrome.FALLBACK_SUCCESS,
+            SessionCompactChrome.fallbackSuccess,
             SessionCompactChrome.successMessage(beforeFraction = 0f, afterFraction = 0f),
         )
         assertEquals(
-            SessionCompactChrome.FALLBACK_SUCCESS,
+            SessionCompactChrome.fallbackSuccess,
             SessionCompactChrome.successMessage(beforeFraction = 0.72f, afterFraction = 0f),
         )
     }

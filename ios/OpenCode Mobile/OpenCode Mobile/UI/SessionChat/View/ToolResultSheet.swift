@@ -8,7 +8,7 @@ struct ToolResultPinnedHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let eyebrow = presentation.eyebrow {
-                Text(eyebrow)
+                Text(openCode: eyebrow.openCode)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeaker)
             }
@@ -379,7 +379,7 @@ private struct EditBody: View {
     var body: some View {
         OpenCodeUnifiedDiff(
             file: FileDiff(
-                path: presentation.filename,
+                path: presentation.title.resolved,
                 patch: presentation.patch,
                 additions: presentation.additions,
                 deletions: presentation.deletions,
@@ -422,7 +422,7 @@ private func countLine(_ counts: [ToolResultPresentation.Count]) -> some View {
     } else {
         HStack(spacing: 10) {
             ForEach(Array(counts.enumerated()), id: \.offset) { _, count in
-                Text(count.label)
+                Text(openCode: count.label.openCode)
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(toneColor(count.tone))
             }
@@ -447,7 +447,7 @@ private func sourceSubline(_ source: ToolResultPresentation.Source) -> some View
     let parts = [
         source.language,
         source.lines.isEmpty ? nil : lineCountLabel(source.lines.count),
-        source.rangeLabel,
+        source.rangeLabel?.resolved,
     ].compactMap { $0 }
     if parts.isEmpty {
         EmptyView()

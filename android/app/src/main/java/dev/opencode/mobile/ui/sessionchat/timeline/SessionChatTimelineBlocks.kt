@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.command.CommandInvocationCollapser
 import dev.opencode.mobile.domain.command.ServerCommand
@@ -15,6 +16,7 @@ import dev.opencode.mobile.domain.message.ToolArgumentsPreview
 import dev.opencode.mobile.domain.message.ToolPartIdentity
 import dev.opencode.mobile.domain.message.ToolStatus
 import dev.opencode.mobile.markdown.MarkdownDocument
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -45,9 +47,10 @@ sealed class SessionChatTimelineBlock {
         override val blockID: String,
         val toolName: String,
         val status: ToolStatus,
-        val title: String,
-        val subtitle: String? = null,
-        val errorText: String? = null,
+        /** App text (`Shell`, `Explored — 1 read`) or server content (agent name, tool name). */
+        val title: UiText,
+        val subtitle: UiText? = null,
+        val errorText: UiText? = null,
         val additions: Int? = null,
         val deletions: Int? = null,
         /** Non-null when the card should open a Bottom Sheet with this body. */
@@ -87,11 +90,12 @@ sealed class SessionChatTimelineBlock {
      */
     data class FailureLine(
         override val blockID: String,
-        val text: String,
+        /** The caption: the server's failure message, or app text when it sent none. */
+        val text: UiText,
         val providerBody: String? = null,
         val isNeutral: Boolean = false,
         val action: FailureAction? = null,
-        val actionLabel: String? = null,
+        val actionLabel: UiText? = null,
         val coveredByLiveRetry: Boolean = false,
         val retryAtEpochMs: Long? = null,
     ) : SessionChatTimelineBlock()
@@ -109,9 +113,9 @@ sealed class SessionChatTimelineBlock {
         override val blockID: String,
         val count: Int,
         val status: ToolStatus,
-        val title: String,
-        val subtitle: String? = null,
-        val errorText: String? = null,
+        val title: UiText,
+        val subtitle: UiText? = null,
+        val errorText: UiText? = null,
         val members: List<ToolCard>,
     ) : SessionChatTimelineBlock() {
         /** Every member's images, in call order. */
@@ -163,7 +167,7 @@ sealed class SessionChatTimelineBlock {
         val text: String?,
         val renderedMarkdown: MarkdownDocument? = null,
         val chips: List<ToolChip>,
-        val errorLines: List<String>,
+        val errorLines: List<UiText>,
         val textBlockID: String? = null,
         val expansionID: String = blockID,
         val exploreSummary: ExploreSummary? = null,
@@ -176,9 +180,9 @@ sealed class SessionChatTimelineBlock {
      */
     data class ExploreSummary(
         val blockID: String,
-        val label: String,
-        val title: String,
-        val subtitle: String?,
+        val label: UiText,
+        val title: UiText,
+        val subtitle: UiText?,
         val status: ToolStatus,
         val members: List<ToolCard>,
     )
@@ -198,7 +202,8 @@ sealed class SessionChatTimelineBlock {
         val id: String,
         val kind: ToolChipKind,
         val family: ToolChipFamily,
-        val label: String,
+        /** Mostly server content (a path, a command, `/skill`); app text for LSP, Plan and questions. */
+        val label: UiText,
         /** Agent chips: first line of the description; skill chips: the skill directory. */
         val brief: String? = null,
         /**
@@ -343,11 +348,11 @@ data class SessionChatStep(
     val id: String,
     val kind: SessionChatStepKind,
     val status: SessionChatStepStatus,
-    val title: String,
-    val runningTitle: String = title,
-    val settledTitle: String = title,
+    val title: UiText,
+    val runningTitle: UiText = title,
+    val settledTitle: UiText = title,
     val family: SessionChatStepFamily? = null,
-    val detail: String? = null,
+    val detail: UiText? = null,
     val additions: Int? = null,
     val deletions: Int? = null,
     val startedAtMs: Long? = null,
@@ -366,7 +371,7 @@ data class SessionChatStep(
  */
 data class SessionChatSkillUse(
     val id: String,
-    val label: String,
+    val label: UiText,
     val directory: String?,
     val status: ToolStatus,
 )
@@ -382,14 +387,34 @@ object SessionChatTimelineBlocks {
     private val contextToolNames = setOf("read", "glob", "grep", "websearch")
 
     /** Neutral copy for a tool the user stopped or declined (never the raw abort text). */
-    internal fun interruptedToolText(error: String?): String {
+    internal fun interruptedToolText(error: String?): UiText {
         val text = error.orEmpty()
         return if (text.contains("declined", ignoreCase = true) || text.contains("rejected", ignoreCase = true)) {
-            "Declined"
+            UiText.resource(R.string.tool_status_declined)
         } else {
-            "Stopped"
+            UiText.resource(R.string.tool_status_stopped)
         }
     }
+
+    /** Caption under a failed reply: the server message, or app text when it sent none. */
+    internal fun failureLineText(failure: dev.opencode.mobile.domain.message.SessionFailure): UiText {
+        val shown =
+            failure.message
+                .takeIf { it.isNotBlank() }
+                ?.let(UiText::verbatim)
+                ?: UiText.resource(R.string.timeline_failure_session_work_failed)
+        val status = failure.status ?: return shown
+        return UiText.resource(R.string.timeline_failure_http_status, status, shown)
+    }
+
+    /** The failure sheet's action button; Rate-limit and quota use the composer status instead. */
+    internal fun failureActionLabel(action: FailureAction?): UiText? =
+        when (action) {
+            FailureAction.PickModel -> UiText.resource(R.string.timeline_failure_pick_model)
+            FailureAction.Compact -> UiText.resource(R.string.timeline_failure_compact)
+            FailureAction.Copy -> UiText.resource(R.string.timeline_failure_copy)
+            null -> null
+        }
 
     /**
      * Blocks for files sent or attached together: each run of two or more images becomes one
@@ -835,7 +860,12 @@ object SessionChatTimelineBlocks {
             kind = SessionChatStepKind.Thought,
             status = SessionChatStepStatus.Completed,
             family = SessionChatStepFamily.Thought,
-            title = if (duration != null) "Thought \u00b7 $duration" else "Thought",
+            title =
+                if (duration != null) {
+                    UiText.resource(R.string.timeline_step_thought_duration, duration)
+                } else {
+                    UiText.resource(R.string.tool_title_thought)
+                },
             startedAtMs = part.timeStartEpochMs,
             endedAtMs = part.timeEndEpochMs,
             thoughtText = ThoughtPartChrome.displayText(part).takeIf { it.isNotBlank() },
@@ -859,17 +889,21 @@ object SessionChatTimelineBlocks {
             val toolsSoFar = (tool.metadata?.get("summary") as? JsonArray)?.size?.takeIf { it > 0 }
             val detail =
                 when {
-                    status == SessionChatStepStatus.Failed -> card.errorText?.let(::firstLine) ?: description
+                    status == SessionChatStepStatus.Failed -> card.errorText?.let(::firstLine) ?: TimelineText.verbatim(description)
                     status.isInFlight && toolsSoFar != null ->
-                        listOfNotNull(description, "$toolsSoFar ${if (toolsSoFar == 1) "tool" else "tools"} so far")
-                            .joinToString(" \u00b7 ")
-                    else -> description
+                        TimelineText.joined(
+                            listOfNotNull(
+                                TimelineText.verbatim(description),
+                                UiText.plural(R.plurals.session_chat_sheet_activity_tools_so_far, toolsSoFar),
+                            ),
+                        )
+                    else -> TimelineText.verbatim(description)
                 }
             return SessionChatStep(
                 id = partId,
                 kind = SessionChatStepKind.ChildSession,
                 status = status,
-                title = agent,
+                title = UiText.verbatim(agent),
                 family = SessionChatStepFamily.Agent,
                 detail = detail,
                 startedAtMs = tool.timeStartEpochMs,
@@ -926,50 +960,72 @@ object SessionChatTimelineBlocks {
         tool: MessagePart.Tool,
         card: SessionChatTimelineBlock.ToolCard,
         running: Boolean,
-    ): String {
+    ): UiText {
         // While arguments stream in nothing can be read yet; the card's placeholder covers it.
         val placeholder = card.subtitle.takeIf { card.isReceivingArguments }
 
         fun verbed(
-            verb: String,
+            verb: Int,
+            verbNamed: Int,
             argument: String?,
-        ): String =
+        ): UiText =
             when {
-                argument == null -> placeholder ?: verb
-                running -> "$verb $argument"
-                else -> argument
+                argument == null -> placeholder ?: UiText.resource(verb)
+                running -> UiText.resource(verbNamed, argument)
+                else -> UiText.verbatim(argument)
             }
         return when (name) {
-            "read" -> verbed("Reading", readPath(tool)?.let(::lastPathComponent))
+            "read" ->
+                verbed(R.string.timeline_step_reading, R.string.timeline_step_reading_named, readPath(tool)?.let(::lastPathComponent))
             "glob", "grep" ->
-                verbed("Searching", inputString(tool.input, "pattern") ?: inputString(tool.input, "path", "directory"))
-            "websearch" -> verbed("Searching", inputString(tool.input, "query"))
-            "list", "ls" -> verbed("Listing", inputString(tool.input, "path", "directory")?.let(::lastPathComponent) ?: ".")
-            "edit", "apply_patch", "patch" -> verbed("Editing", changedFile(card))
-            "write" -> verbed("Writing", changedFile(card))
+                verbed(
+                    R.string.timeline_step_searching,
+                    R.string.timeline_step_searching_named,
+                    inputString(tool.input, "pattern") ?: inputString(tool.input, "path", "directory"),
+                )
+            "websearch" ->
+                verbed(R.string.timeline_step_searching, R.string.timeline_step_searching_named, inputString(tool.input, "query"))
+            "list", "ls" ->
+                verbed(
+                    R.string.timeline_step_listing,
+                    R.string.timeline_step_listing_named,
+                    inputString(tool.input, "path", "directory")?.let(::lastPathComponent) ?: ".",
+                )
+            "edit", "apply_patch", "patch" ->
+                verbed(R.string.timeline_step_editing, R.string.timeline_step_editing_named, changedFile(card))
+            "write" -> verbed(R.string.timeline_step_writing, R.string.timeline_step_writing_named, changedFile(card))
             "bash", "shell" -> {
                 val command = shellCommand(tool)?.let(::shortCommand)
                 when {
-                    command == null -> placeholder ?: if (running) "Running" else "Ran command"
-                    running -> "Running $command"
-                    else -> "Ran $command"
+                    command == null ->
+                        placeholder
+                            ?: UiText.resource(if (running) R.string.timeline_step_running else R.string.timeline_step_ran_command)
+                    running -> UiText.resource(R.string.timeline_step_running_named, command)
+                    else -> UiText.resource(R.string.timeline_step_ran_named, command)
                 }
             }
-            "webfetch" -> verbed("Fetching", inputString(tool.input, "url")?.let(::urlHost))
+            "webfetch" ->
+                verbed(
+                    R.string.timeline_step_fetching,
+                    R.string.timeline_step_fetching_named,
+                    inputString(tool.input, "url")?.let(::urlHost),
+                )
             "skill" -> {
                 val skill = skillName(tool)
                 when {
-                    skill == null -> if (running) "Loading skill" else "Skill"
-                    running -> "Loading skill $skill"
-                    else -> "Skill $skill"
+                    skill == null -> UiText.resource(if (running) R.string.timeline_step_loading_skill else R.string.tool_title_skill)
+                    running -> UiText.resource(R.string.timeline_step_loading_skill_named, skill)
+                    else -> UiText.resource(R.string.timeline_step_skill_named, skill)
                 }
             }
             else ->
                 when {
                     isQuestionTool(tool) -> card.title
                     else ->
-                        tool.title?.trim()?.takeIf { it.isNotEmpty() }
-                            ?: tool.toolName.replaceFirstChar { it.uppercase() }
+                        UiText.verbatim(
+                            tool.title?.trim()?.takeIf { it.isNotEmpty() }
+                                ?: tool.toolName.replaceFirstChar { it.uppercase() },
+                        )
                 }
         }
     }
@@ -980,21 +1036,23 @@ object SessionChatTimelineBlocks {
         tool: MessagePart.Tool,
         card: SessionChatTimelineBlock.ToolCard,
         status: SessionChatStepStatus,
-    ): String? {
+    ): UiText? {
         if (status == SessionChatStepStatus.Failed) {
-            if (card.isMalformed) return "Not run: malformed tool call"
+            if (card.isMalformed) return UiText.resource(R.string.tool_error_malformed)
             return card.errorText?.let(::firstLine)
         }
         if (status != SessionChatStepStatus.Completed) return null
         return when (name) {
-            "grep" -> intFromObject(tool.metadata ?: return null, "matches")?.let { if (it == 1) "1 match" else "$it matches" }
-            "glob" -> intFromObject(tool.metadata ?: return null, "count")?.let { if (it == 1) "1 file" else "$it files" }
+            "grep" -> intFromObject(tool.metadata ?: return null, "matches")?.let { UiText.plural(R.plurals.tool_count_match, it) }
+            "glob" -> intFromObject(tool.metadata ?: return null, "count")?.let { UiText.plural(R.plurals.tool_count_file, it) }
             else -> null
         }
     }
 
+    /** The edited file, from a card subtitle that is server content (a path). */
     private fun changedFile(card: SessionChatTimelineBlock.ToolCard): String? =
-        card.subtitle
+        (card.subtitle as? UiText.Verbatim)
+            ?.value
             ?.takeUnless { card.isReceivingArguments }
             ?.let(::lastPathComponent)
 
@@ -1015,6 +1073,13 @@ object SessionChatTimelineBlocks {
             .map { it.trim() }
             .firstOrNull { it.isNotEmpty() }
 
+    /** First line of server text; app text is already one line. */
+    private fun firstLine(text: UiText): UiText? =
+        when (text) {
+            is UiText.Verbatim -> firstLine(text.value)?.let(UiText::verbatim)
+            else -> text
+        }
+
     private const val STEP_COMMAND_MAX_CHARS = 40
 
     /**
@@ -1027,8 +1092,8 @@ object SessionChatTimelineBlocks {
             blockID = PresentationBlockId.direct(partId),
             toolName = SessionCompactChrome.MARKER_TOOL_NAME,
             status = if (part.completed) ToolStatus.Completed else ToolStatus.Running,
-            title = if (part.completed) SessionCompactChrome.MARKER_TITLE else SessionCompactChrome.STATUS_LABEL,
-            subtitle = if (part.auto) SessionCompactChrome.MARKER_AUTO_SUBTITLE else null,
+            title = if (part.completed) SessionCompactChrome.markerTitle else SessionCompactChrome.statusLabel,
+            subtitle = if (part.auto) SessionCompactChrome.markerAutoSubtitle else null,
             detailText = part.summary?.takeIf { it.isNotBlank() },
             detailIsMarkdown = true,
         )
@@ -1059,8 +1124,8 @@ object SessionChatTimelineBlocks {
         val counts = exploreCounts(tools)
         return SessionChatTimelineBlock.ExploreSummary(
             blockID = PresentationBlockId.toolGroup(memberIds),
-            label = (if (running) "Exploring" else "Explored") + " · " + counts,
-            title = "Explored — $counts",
+            label = UiText.resource(if (running) R.string.timeline_explore_label_running else R.string.timeline_explore_label, counts),
+            title = UiText.resource(R.string.timeline_explore_title, counts),
             subtitle = exploredGroupSubtitle(tools),
             status = if (running) ToolStatus.Running else ToolStatus.Completed,
             members = members,
@@ -1068,7 +1133,13 @@ object SessionChatTimelineBlocks {
     }
 
     /** `4 reads · 2 greps` in first-encounter order. */
-    private fun exploreCounts(tools: List<MessagePart.Tool>): String {
+    private fun exploreCounts(tools: List<MessagePart.Tool>): UiText {
+        val (order, counts) = countsByToolName(tools)
+        return TimelineText.joined(order.map { name -> exploreCountPhrase(name, counts.getValue(name)) }) ?: UiText.verbatim("")
+    }
+
+    /** Tool names in first-encounter order, with how often each ran. */
+    private fun countsByToolName(tools: List<MessagePart.Tool>): Pair<List<String>, Map<String, Int>> {
         val order = mutableListOf<String>()
         val counts = mutableMapOf<String, Int>()
         for (tool in tools) {
@@ -1076,20 +1147,20 @@ object SessionChatTimelineBlocks {
             if (key !in counts) order += key
             counts[key] = (counts[key] ?: 0) + 1
         }
-        return order.joinToString(" · ") { name -> exploreCountPhrase(name, counts.getValue(name)) }
+        return order to counts
     }
 
     private fun exploreCountPhrase(
         name: String,
         count: Int,
-    ): String =
+    ): UiText =
         when (name) {
-            "read" -> if (count == 1) "1 read" else "$count reads"
-            "grep" -> if (count == 1) "1 grep" else "$count greps"
-            "glob" -> if (count == 1) "1 glob" else "$count globs"
-            "websearch" -> if (count == 1) "1 search" else "$count searches"
-            "webfetch" -> if (count == 1) "1 fetch" else "$count fetches"
-            else -> "$count $name"
+            "read" -> UiText.plural(R.plurals.tool_count_read, count)
+            "grep" -> UiText.plural(R.plurals.tool_count_grep, count)
+            "glob" -> UiText.plural(R.plurals.tool_count_glob, count)
+            "websearch" -> UiText.plural(R.plurals.tool_count_search, count)
+            "webfetch" -> UiText.plural(R.plurals.tool_count_fetch, count)
+            else -> UiText.resource(R.string.tool_count_named, count, name)
         }
 
     /**
@@ -1128,7 +1199,7 @@ object SessionChatTimelineBlocks {
      * first chip's id and the latest run's label, status and directory.
      */
     fun skillUses(blocks: List<SessionChatTimelineBlock>): List<SessionChatSkillUse> {
-        val uses = linkedMapOf<String, SessionChatSkillUse>()
+        val uses = linkedMapOf<Any, SessionChatSkillUse>()
         blocks
             .filterIsInstance<SessionChatTimelineBlock.StepParagraph>()
             .flatMap { it.chips }
@@ -1151,10 +1222,14 @@ object SessionChatTimelineBlocks {
     private fun orderedChips(chips: List<SessionChatTimelineBlock.ToolChip>): List<SessionChatTimelineBlock.ToolChip> =
         chips.sortedBy { it.family.ordinal }
 
-    private fun chipErrorLine(chip: SessionChatTimelineBlock.ToolChip): String? {
+    private fun chipErrorLine(chip: SessionChatTimelineBlock.ToolChip): UiText? {
         if (chip.status != ToolStatus.Error || chip.card.isInterrupted) return null
-        if (chip.card.isMalformed) return "Not run: malformed tool call"
-        return "${chip.label}: ${chip.card.errorText ?: "Failed"}"
+        if (chip.card.isMalformed) return UiText.resource(R.string.tool_error_malformed)
+        return UiText.resource(
+            R.string.tool_error_line,
+            chip.label,
+            chip.card.errorText ?: UiText.resource(R.string.tool_error_failed),
+        )
     }
 
     private fun toToolChip(tool: MessagePart.Tool): SessionChatTimelineBlock.ToolChip? {
@@ -1208,24 +1283,25 @@ object SessionChatTimelineBlocks {
         name: String,
         tool: MessagePart.Tool,
         card: SessionChatTimelineBlock.ToolCard,
-    ): String =
-        when (name) {
-            "read" ->
-                readPath(tool)?.let(::lastPathComponent)
-                    ?: card.subtitle.takeIf { card.isReceivingArguments }
-            "edit", "write", "apply_patch", "patch" -> card.subtitle?.let(::lastPathComponent)
-            "glob", "grep" -> inputString(tool.input, "pattern") ?: inputString(tool.input, "path", "directory")
-            "websearch" -> inputString(tool.input, "query")
-            "webfetch" -> inputString(tool.input, "url")?.let(::urlHost)
+    ): UiText {
+        val placeholder = card.subtitle.takeIf { card.isReceivingArguments }
+        val subtitle = (card.subtitle as? UiText.Verbatim)?.value
+        return when (name) {
+            "read" -> readPath(tool)?.let(::lastPathComponent)?.let(UiText::verbatim) ?: placeholder
+            "edit", "write", "apply_patch", "patch" -> subtitle?.let(::lastPathComponent)?.let(UiText::verbatim)
+            "glob", "grep" -> TimelineText.verbatim(inputString(tool.input, "pattern") ?: inputString(tool.input, "path", "directory"))
+            "websearch" -> TimelineText.verbatim(inputString(tool.input, "query"))
+            "webfetch" -> TimelineText.verbatim(inputString(tool.input, "url")?.let(::urlHost))
             "bash", "shell" ->
-                shellCommand(tool)?.let(StepParagraphChips::commandLabel)
-                    ?: card.subtitle.takeIf { card.isReceivingArguments }
-            "execute" -> card.subtitle?.let(StepParagraphChips::commandLabel)
-            "task", "subagent" -> taskAgentName(tool)
-            "skill" -> "/" + (skillName(tool) ?: name)
+                shellCommand(tool)?.let(StepParagraphChips::commandLabel)?.let(UiText::verbatim) ?: placeholder
+            // An execute subtitle is a call preview (server content) or `N tools`, which reads as is.
+            "execute" -> subtitle?.let(StepParagraphChips::commandLabel)?.let(UiText::verbatim) ?: card.subtitle
+            "task", "subagent" -> UiText.verbatim(taskAgentName(tool))
+            "skill" -> UiText.verbatim("/" + (skillName(tool) ?: name))
             "lsp", "plan_exit" -> card.title
-            else -> if (isQuestionTool(tool)) card.title else customToolLabel(tool)
-        } ?: tool.toolName
+            else -> if (isQuestionTool(tool)) card.title else TimelineText.verbatim(customToolLabel(tool))
+        } ?: UiText.verbatim(tool.toolName)
+    }
 
     /**
      * Custom and MCP tools: the live progress title while running, then the
@@ -1399,7 +1475,7 @@ object SessionChatTimelineBlocks {
                     if (block is SessionChatTimelineBlock.ToolCard &&
                         block.toolName == SessionCompactChrome.MARKER_TOOL_NAME
                     ) {
-                        block.copy(status = ToolStatus.Error, errorText = failure.line())
+                        block.copy(status = ToolStatus.Error, errorText = failureLineText(failure))
                     } else {
                         block
                     }
@@ -1416,11 +1492,11 @@ object SessionChatTimelineBlocks {
                 blocks +
                 SessionChatTimelineBlock.FailureLine(
                     blockID = "${body.message.id}:failure",
-                    text = failure.line(),
+                    text = failureLineText(failure),
                     providerBody = failure.providerBody,
                     isNeutral = failure.isNeutral,
                     action = failure.action(),
-                    actionLabel = failure.actionLabel(),
+                    actionLabel = failureActionLabel(failure.action()),
                     coveredByLiveRetry = failure.coversLiveRetry(),
                     retryAtEpochMs = failure.retryAtEpochMs(),
                 )
@@ -1876,64 +1952,53 @@ object SessionChatTimelineBlocks {
     }
 
     /** Context-only groups match TUI (`Explored — 1 read`). Mixed groups stay `N tools`. */
-    private fun groupTitle(tools: List<MessagePart.Tool>): String =
+    private fun groupTitle(tools: List<MessagePart.Tool>): UiText =
         if (tools.isNotEmpty() && tools.all { isContextTool(it.toolName) }) {
             exploredTitle(tools)
         } else {
-            "${tools.size} tools"
+            UiText.plural(R.plurals.tool_count_tool, tools.size)
         }
 
     /**
      * Family one-liner in encounter order (`Edit · Write · 5 shells`).
      * A single member of a family is just the verb; multiples get a count.
      */
-    private fun groupSubtitle(tools: List<MessagePart.Tool>): String? {
+    private fun groupSubtitle(tools: List<MessagePart.Tool>): UiText? {
         if (tools.isNotEmpty() && tools.all { isContextTool(it.toolName) }) {
             return exploredGroupSubtitle(tools)
         }
-        val order = mutableListOf<String>()
-        val counts = mutableMapOf<String, Int>()
-        for (tool in tools) {
-            val key = tool.toolName.lowercase()
-            if (key !in counts) order += key
-            counts[key] = (counts[key] ?: 0) + 1
-        }
-        return order.joinToString(" · ") { name ->
-            familyPhrase(name, counts.getValue(name))
-        }
+        val (order, counts) = countsByToolName(tools)
+        return TimelineText.joined(order.map { name -> familyPhrase(name, counts.getValue(name)) })
     }
 
     /**
      * One explore tool keeps its argument (a glob pattern, a path); several are `4 tools` (the title
      * already counts each kind, and each row keeps its own argument).
      */
-    private fun exploredGroupSubtitle(tools: List<MessagePart.Tool>): String? =
-        if (tools.size == 1) contextSubtitle(tools.single()) else "${tools.size} tools"
-
-    private fun exploredTitle(tools: List<MessagePart.Tool>): String {
-        val order = mutableListOf<String>()
-        val counts = mutableMapOf<String, Int>()
-        for (tool in tools) {
-            val key = tool.toolName.lowercase()
-            if (key !in counts) order += key
-            counts[key] = (counts[key] ?: 0) + 1
+    private fun exploredGroupSubtitle(tools: List<MessagePart.Tool>): UiText? =
+        if (tools.size == 1) {
+            TimelineText.verbatim(contextSubtitle(tools.single()))
+        } else {
+            UiText.plural(R.plurals.tool_count_tool, tools.size)
         }
+
+    private fun exploredTitle(tools: List<MessagePart.Tool>): UiText {
+        val (order, counts) = countsByToolName(tools)
         val summary =
-            order.joinToString(" · ") { name ->
-                exploredFamilyPhrase(name, counts.getValue(name))
-            }
-        return "Explored — $summary"
+            TimelineText.joined(order.map { name -> exploredFamilyPhrase(name, counts.getValue(name)) })
+                ?: UiText.verbatim("")
+        return UiText.resource(R.string.timeline_explore_title, summary)
     }
 
     private fun exploredFamilyPhrase(
         name: String,
         count: Int,
-    ): String =
+    ): UiText =
         when (name) {
-            "read" -> if (count == 1) "1 read" else "$count reads"
-            "grep" -> if (count == 1) "1 grep" else "$count greps"
-            "glob" -> if (count == 1) "1 glob" else "$count globs"
-            "websearch" -> if (count == 1) "1 search" else "$count searches"
+            "read" -> UiText.plural(R.plurals.tool_count_read, count)
+            "grep" -> UiText.plural(R.plurals.tool_count_grep, count)
+            "glob" -> UiText.plural(R.plurals.tool_count_glob, count)
+            "websearch" -> UiText.plural(R.plurals.tool_count_search, count)
             else -> familyPhrase(name, count)
         }
 
@@ -1945,29 +2010,39 @@ object SessionChatTimelineBlocks {
             else -> null
         }
 
+    /** One run is the tool's title (`Shell`); more are a count (`5 shells`). */
     private fun familyPhrase(
         name: String,
         count: Int,
-    ): String =
-        when (name) {
-            "read" -> if (count == 1) "Read" else "$count reads"
-            "grep" -> if (count == 1) "Grep" else "$count greps"
-            "glob" -> if (count == 1) "Glob" else "$count globs"
-            "bash", "shell" -> if (count == 1) "Shell" else "$count shells"
-            "execute" -> if (count == 1) "Execute" else "$count executes"
-            "lsp" -> if (count == 1) "LSP" else "$count LSPs"
-            "plan_exit" -> if (count == 1) "Plan" else "$count plans"
-            "edit" -> if (count == 1) "Edit" else "$count edits"
-            "write" -> if (count == 1) "Write" else "$count writes"
-            "webfetch" -> if (count == 1) "Fetch" else "$count fetches"
-            "websearch" -> if (count == 1) "Search" else "$count searches"
-            "question" -> askedQuestionsTitle(count)
-            "skill" -> if (count == 1) "Skill" else "$count skills"
-            "apply_patch", "patch" -> if (count == 1) "Patch" else "$count patches"
-            "linear_get_issue" -> if (count == 1) "Get issue" else "$count Get issues"
-            "linear_save_issue" -> if (count == 1) "Save issue" else "$count Save issues"
-            else -> if (count == 1) name else "$count $name"
-        }
+    ): UiText {
+        if (name == "question") return askedQuestionsTitle(count)
+        val (title, plural) =
+            when (name) {
+                "read" -> R.string.tool_title_read to R.plurals.tool_count_read
+                "grep" -> R.string.tool_title_grep to R.plurals.tool_count_grep
+                "glob" -> R.string.tool_title_glob to R.plurals.tool_count_glob
+                "bash", "shell" -> R.string.tool_title_shell to R.plurals.tool_count_shell
+                "execute" -> R.string.tool_title_execute to R.plurals.tool_count_execute
+                "lsp" -> R.string.tool_title_lsp to R.plurals.tool_count_lsp
+                "plan_exit" -> R.string.tool_title_plan to R.plurals.tool_count_plan
+                "edit" -> R.string.tool_title_edit to R.plurals.tool_count_edit
+                "write" -> R.string.tool_title_write to R.plurals.tool_count_write
+                "webfetch" -> R.string.tool_title_fetch to R.plurals.tool_count_fetch
+                "websearch" -> R.string.tool_title_search to R.plurals.tool_count_search
+                "skill" -> R.string.tool_title_skill to R.plurals.tool_count_skill
+                "apply_patch", "patch" -> R.string.tool_title_patch to R.plurals.tool_count_patch
+                "linear_get_issue" -> R.string.tool_title_get_issue to R.plurals.tool_count_get_issue
+                "linear_save_issue" -> R.string.tool_title_save_issue to R.plurals.tool_count_save_issue
+                // Any other tool keeps its own name, which is server content.
+                else ->
+                    return if (count == 1) {
+                        UiText.verbatim(name)
+                    } else {
+                        UiText.resource(R.string.tool_count_named, count, name)
+                    }
+            }
+        return if (count == 1) UiText.resource(title) else UiText.plural(plural, count)
+    }
 
     private fun worstStatus(statuses: List<ToolStatus>): ToolStatus {
         if (statuses.any { it == ToolStatus.Error }) return ToolStatus.Error
@@ -2015,9 +2090,9 @@ object SessionChatTimelineBlocks {
         val interrupted = failedExit == null && tool.status == ToolStatus.Error && tool.isInterrupted
         val errorText =
             when {
-                failedExit != null -> "Exited with code $failedExit"
+                failedExit != null -> UiText.resource(R.string.tool_error_exit_code, failedExit)
                 interrupted -> interruptedToolText(tool.error)
-                tool.status == ToolStatus.Error -> tool.error?.takeIf { it.isNotEmpty() }
+                tool.status == ToolStatus.Error -> TimelineText.verbatim(tool.error?.takeIf { it.isNotEmpty() })
                 else -> null
             }
         val receivingArguments = ToolArgumentsPreview.isReceiving(tool)
@@ -2043,12 +2118,12 @@ object SessionChatTimelineBlocks {
     }
 
     /** What a card says while its arguments stream in and none can be read yet (TUI v2 copy). */
-    private fun receivingArgumentsPlaceholder(name: String): String? =
+    private fun receivingArgumentsPlaceholder(name: String): UiText? =
         when (name) {
-            "bash", "shell" -> "Writing command…"
-            "read" -> "Preparing read…"
-            "edit" -> "Preparing edit…"
-            "write" -> "Preparing write…"
+            "bash", "shell" -> UiText.resource(R.string.tool_placeholder_writing_command)
+            "read" -> UiText.resource(R.string.tool_placeholder_preparing_read)
+            "edit" -> UiText.resource(R.string.tool_placeholder_preparing_edit)
+            "write" -> UiText.resource(R.string.tool_placeholder_preparing_write)
             else -> null
         }
 
@@ -2067,8 +2142,8 @@ object SessionChatTimelineBlocks {
     }
 
     private data class Chrome(
-        val title: String,
-        val subtitle: String?,
+        val title: UiText,
+        val subtitle: UiText?,
         val additions: Int? = null,
         val deletions: Int? = null,
         val detailText: String? = null,
@@ -2083,8 +2158,8 @@ object SessionChatTimelineBlocks {
                 ?: inputPreview(tool.input)
                 ?: tool.title?.takeIf { it.isNotEmpty() && !it.equals(tool.toolName, ignoreCase = true) }
         return Chrome(
-            title = ToolPartIdentity.calledTitle(tool.toolName),
-            subtitle = subtitle,
+            title = UiText.verbatim(ToolPartIdentity.calledTitle(tool.toolName)),
+            subtitle = TimelineText.verbatim(subtitle),
             detailText = settledDetail(tool),
         )
     }
@@ -2102,24 +2177,24 @@ object SessionChatTimelineBlocks {
             "execute" -> executeChrome(tool)
             "lsp" -> lspChrome(tool)
             "plan_exit" -> planExitChrome(tool)
-            "webfetch" -> networkChrome(tool, displayTitle = "Fetch", subtitleKey = "url")
+            "webfetch" -> networkChrome(tool, displayTitle = UiText.resource(R.string.tool_title_fetch), subtitleKey = "url")
             "websearch" -> contextChrome(tool, subtitle = inputString(tool.input, "query"))
             "skill" ->
                 Chrome(
-                    title = "Skill",
-                    subtitle = skillName(tool) ?: runningTitleOverride(tool),
+                    title = UiText.resource(R.string.tool_title_skill),
+                    subtitle = TimelineText.verbatim(skillName(tool) ?: runningTitleOverride(tool)),
                 )
             "task", "subagent" -> taskChrome(tool)
-            "edit" -> fileChangeChrome(tool, displayTitle = "Edit")
-            "write" -> fileChangeChrome(tool, displayTitle = "Write")
-            "apply_patch", "patch" -> fileChangeChrome(tool, displayTitle = "Patch")
+            "edit" -> fileChangeChrome(tool, displayTitle = UiText.resource(R.string.tool_title_edit))
+            "write" -> fileChangeChrome(tool, displayTitle = UiText.resource(R.string.tool_title_write))
+            "apply_patch", "patch" -> fileChangeChrome(tool, displayTitle = UiText.resource(R.string.tool_title_patch))
             else -> null
         }
     }
 
     private fun fileChangeChrome(
         tool: MessagePart.Tool,
-        displayTitle: String,
+        displayTitle: UiText,
     ): Chrome {
         val filesArray = tool.metadata?.get("files") as? JsonArray
         val patchFiles = metadataFiles(tool.metadata)
@@ -2127,8 +2202,8 @@ object SessionChatTimelineBlocks {
             val additions = positiveCount(patchFiles.sumOf { it.additions ?: 0 })
             val deletions = positiveCount(patchFiles.sumOf { it.deletions ?: 0 })
             return Chrome(
-                title = "Patch",
-                subtitle = "${filesArray.size} files",
+                title = UiText.resource(R.string.tool_title_patch),
+                subtitle = UiText.plural(R.plurals.tool_count_file, filesArray.size),
                 additions = additions,
                 deletions = deletions,
                 opensChangesReview = canOpenChangesReview(tool.status),
@@ -2156,7 +2231,7 @@ object SessionChatTimelineBlocks {
         val opens = path != null && canOpenChangesReview(tool.status)
         return Chrome(
             title = displayTitle,
-            subtitle = path,
+            subtitle = TimelineText.verbatim(path),
             additions = additions.takeIf { path != null },
             deletions = deletions.takeIf { path != null },
             opensChangesReview = opens,
@@ -2247,11 +2322,11 @@ object SessionChatTimelineBlocks {
         val subtitle =
             when {
                 description != null && isTruthyMetadata(tool.metadata, "background") ->
-                    "$description (background)"
-                else -> description
+                    UiText.resource(R.string.tool_subtitle_background, description)
+                else -> TimelineText.verbatim(description)
             }
         return Chrome(
-            title = title,
+            title = UiText.verbatim(title),
             subtitle = subtitle,
             childSessionId = childSessionId(tool),
         )
@@ -2289,7 +2364,7 @@ object SessionChatTimelineBlocks {
     ): Chrome =
         Chrome(
             title = exploredTitle(listOf(tool)),
-            subtitle = runningTitleOverride(tool) ?: subtitle,
+            subtitle = TimelineText.verbatim(runningTitleOverride(tool) ?: subtitle),
             detailText = settledDetail(tool),
         )
 
@@ -2299,8 +2374,8 @@ object SessionChatTimelineBlocks {
                 ?: runningTitleOverride(tool)
                 ?: ToolArgumentsPreview.string(tool, "command")
         return Chrome(
-            title = "Shell",
-            subtitle = command,
+            title = UiText.resource(R.string.tool_title_shell),
+            subtitle = TimelineText.verbatim(command),
             detailText = settledDetail(tool),
         )
     }
@@ -2310,10 +2385,12 @@ object SessionChatTimelineBlocks {
         val subtitle =
             when {
                 calls.isEmpty() ->
-                    runningTitleOverride(tool)
-                        ?: tool.title?.takeIf { it.isNotEmpty() }
-                calls.size == 1 -> calls.first()
-                else -> "${calls.size} tools"
+                    TimelineText.verbatim(
+                        runningTitleOverride(tool)
+                            ?: tool.title?.takeIf { it.isNotEmpty() },
+                    )
+                calls.size == 1 -> UiText.verbatim(calls.first())
+                else -> UiText.plural(R.plurals.tool_count_tool, calls.size)
             }
         val detail =
             buildString {
@@ -2324,7 +2401,7 @@ object SessionChatTimelineBlocks {
                     append(extra)
                 }
             }.takeIf { it.isNotEmpty() }
-        return Chrome(title = "Execute", subtitle = subtitle, detailText = detail)
+        return Chrome(title = UiText.resource(R.string.tool_title_execute), subtitle = subtitle, detailText = detail)
     }
 
     private fun executeCallPreviews(metadata: JsonObject?): List<String> {
@@ -2358,15 +2435,19 @@ object SessionChatTimelineBlocks {
                     runningTitleOverride(tool)
                         ?: tool.title?.takeIf { it.isNotEmpty() }
             }
-        return Chrome(title = "LSP", subtitle = subtitle, detailText = settledDetail(tool))
+        return Chrome(
+            title = UiText.resource(R.string.tool_title_lsp),
+            subtitle = TimelineText.verbatim(subtitle),
+            detailText = settledDetail(tool),
+        )
     }
 
     private fun planExitChrome(tool: MessagePart.Tool): Chrome =
         Chrome(
-            title = "Plan",
+            title = UiText.resource(R.string.tool_title_plan),
             subtitle =
-                tool.title?.takeIf { it.isNotEmpty() }
-                    ?: "Ready to implement?",
+                TimelineText.verbatim(tool.title?.takeIf { it.isNotEmpty() })
+                    ?: UiText.resource(R.string.tool_subtitle_plan_ready),
             detailText = settledDetail(tool),
         )
 
@@ -2410,7 +2491,7 @@ object SessionChatTimelineBlocks {
 
     private fun networkChrome(
         tool: MessagePart.Tool,
-        displayTitle: String,
+        displayTitle: UiText,
         subtitleKey: String,
     ): Chrome {
         val subtitle =
@@ -2425,7 +2506,7 @@ object SessionChatTimelineBlocks {
             }
         return Chrome(
             title = displayTitle,
-            subtitle = subtitle,
+            subtitle = TimelineText.verbatim(subtitle),
             detailText = detail,
         )
     }
@@ -2460,7 +2541,7 @@ object SessionChatTimelineBlocks {
 
     private fun isQuestionTool(tool: MessagePart.Tool): Boolean = ToolPartIdentity.isQuestion(tool.toolName, tool.input)
 
-    private fun askedQuestionsTitle(count: Int): String = if (count == 1) "Asked 1 question" else "Asked $count questions"
+    private fun askedQuestionsTitle(count: Int): UiText = UiText.plural(R.plurals.tool_title_asked_questions, count)
 
     private fun questionChrome(tool: MessagePart.Tool): Chrome {
         val questions = questionTexts(tool.input)
@@ -2474,7 +2555,7 @@ object SessionChatTimelineBlocks {
         val count = questions.size.coerceAtLeast(if (firstQuestion != null) 1 else 0)
         return Chrome(
             title = askedQuestionsTitle(count),
-            subtitle = firstAnswer,
+            subtitle = TimelineText.verbatim(firstAnswer),
             detailText =
                 questionDetail(
                     questions = questions.ifEmpty { listOfNotNull(firstQuestion) },

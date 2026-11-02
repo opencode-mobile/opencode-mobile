@@ -74,6 +74,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.R
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.resolve
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessageStopReason
 
@@ -182,7 +184,7 @@ internal data class SessionChatTimelineViewProps(
     val isLoadingOlder: Boolean = false,
     val errorMessage: String?,
     val sessionBranchPill: SessionBranchPillUiState? = null,
-    val syncingIndicatorLabel: String? = null,
+    val syncingIndicatorLabel: UiText? = null,
     val workingIndicatorLabel: String? = null,
     val workingIndicatorCollapsed: Boolean = false,
     val workingIndicatorFading: Boolean = false,
@@ -355,7 +357,7 @@ private fun SessionChatTimelineStateContent(
                 hasOlder = props.hasOlder,
                 isLoadingOlder = props.isLoadingOlder,
                 sessionBranchPill = props.sessionBranchPill,
-                syncingIndicatorLabel = props.syncingIndicatorLabel,
+                syncingIndicatorLabel = props.syncingIndicatorLabel?.resolve(),
                 workingIndicatorLabel = props.workingIndicatorLabel,
                 workingIndicatorCollapsed = props.workingIndicatorCollapsed,
                 workingIndicatorFading = props.workingIndicatorFading,
@@ -775,7 +777,7 @@ private fun SessionChatTimelineReadyView(
         val displayedActivitySlot =
             SessionChatPillSlots.activity(allActivityItems, keyboardVisible, activityClockMs, awayFromEnd = awayFromEnd)
         // Kept while Syncing animates out, so it does not flash the default text on exit.
-        val syncingText = rememberLastNonNull(displayedSyncingLabel, "Syncing")
+        val syncingText = rememberLastNonNull(displayedSyncingLabel, stringResource(R.string.timeline_syncing))
         val navigationText = rememberLastNonNull(navigationPill, SessionChatNavigationPill(0))
         Row(
             modifier =
@@ -1114,19 +1116,19 @@ private fun AssistantMessageContent(
                     is SessionChatTimelineBlock.ToolCard ->
                         OpenCodeToolCallCard(
                             status = block.status.toToolCallCardStatus(interrupted = block.isInterrupted),
-                            title = block.title,
-                            subtitle = block.subtitle,
+                            title = block.title.resolve(),
+                            subtitle = block.subtitle?.resolve(),
                             additions = block.additions,
                             deletions = block.deletions,
-                            errorText = block.errorText,
+                            errorText = block.errorText?.resolve(),
                             onClick = toolCardAction(block),
                         )
                     is SessionChatTimelineBlock.ToolGroup ->
                         OpenCodeToolCallCard(
                             status = block.status.toToolCallCardStatus(),
-                            title = block.title,
-                            subtitle = block.subtitle,
-                            errorText = block.errorText,
+                            title = block.title.resolve(),
+                            subtitle = block.subtitle?.resolve(),
+                            errorText = block.errorText?.resolve(),
                             onClick = {
                                 onToolGroupTap(
                                     SessionChatToolGroupTarget(
@@ -1264,6 +1266,7 @@ private fun StepRailBlock(
     )
 }
 
+@Composable
 private fun SessionChatStepRail.Entry.toStepRailItem(tappable: (String) -> Boolean): OpenCodeStepRailItem =
     when (this) {
         is SessionChatStepRail.Entry.Fold -> OpenCodeStepRailItem.Fold(count = count, status = status.toStepRailStatus())
@@ -1272,19 +1275,19 @@ private fun SessionChatStepRail.Entry.toStepRailItem(tappable: (String) -> Boole
                 SessionChatStepKind.ChildSession ->
                     OpenCodeStepRailItem.ChildSession(
                         id = step.id,
-                        agent = step.title,
+                        agent = step.title.resolve(),
                         description = step.childSession?.description,
                         status = step.status.toStepRailStatus(),
                         startedAtMs = step.startedAtMs,
                         endedAtMs = step.endedAtMs,
-                        detail = step.detail,
+                        detail = step.detail?.resolve(),
                         tappable = tappable(step.id),
                     )
                 SessionChatStepKind.Tool, SessionChatStepKind.Thought ->
                     OpenCodeStepRailItem.Step(
                         id = step.id,
-                        title = step.title,
-                        detail = step.detail,
+                        title = step.title.resolve(),
+                        detail = step.detail?.resolve(),
                         status = step.status.toStepRailStatus(),
                         additions = step.additions,
                         deletions = step.deletions,
@@ -1321,7 +1324,7 @@ private class ToolTapTargets(
         when {
             block.childSessionId != null -> {
                 {
-                    onChildSessionTap(block.childSessionId, block.title)
+                    onChildSessionTap(block.childSessionId, block.childSessionTitle)
                 }
             }
             block.opensChangesReview && supportsSessionMessageDiff -> {
@@ -1348,7 +1351,7 @@ private fun thoughtDetailTarget(
 ): SessionChatToolDetailTarget {
     val presentation = ToolResultInspector.thought(text, durationLabel)
     return SessionChatToolDetailTarget(
-        title = presentation?.title ?: "Thought",
+        title = presentation?.title ?: UiText.resource(R.string.tool_title_thought),
         body = text,
         presentation = presentation,
     )
@@ -1372,6 +1375,10 @@ private fun sessionChatToolCardDetail(block: SessionChatTimelineBlock.ToolCard):
         presentation = presentation,
     )
 }
+
+/** A child session card's title is its agent name, which is server content. */
+internal val SessionChatTimelineBlock.ToolCard.childSessionTitle: String
+    get() = (title as? UiText.Verbatim)?.value.orEmpty()
 
 /**
  * The detail a step's tap shows (a thought, or tool output, failure or answer
@@ -1415,10 +1422,15 @@ private fun ActivityCardBlock(
         val live = remember(block.steps, children) { SessionChatActivityCard.live(block, children) }
         OpenCodeActivityCard(
             state = OpenCodeActivityCardState.Live(elapsedStartMs = live.startedAtMs),
-            summary = live.summary,
+            summary = live.summary.resolve(),
             agents =
                 live.agents.map {
-                    OpenCodeActivityAgentRow(id = it.id, agentName = it.agentName, action = it.action, startedAtMs = it.startedAtMs)
+                    OpenCodeActivityAgentRow(
+                        id = it.id,
+                        agentName = it.agentName,
+                        action = it.action.resolve(),
+                        startedAtMs = it.startedAtMs,
+                    )
                 },
             // The Screen Model's footer hold decides what the band shows; the raw value is a fallback.
             current =
@@ -1426,7 +1438,7 @@ private fun ActivityCardBlock(
                     is SessionChatActivityFooter.Tool ->
                         OpenCodeActivityCurrentRow(
                             icon = footer.family.toActivityIcon(),
-                            title = footer.title,
+                            title = footer.title.resolve(),
                             extraRunning = footer.extraRunning,
                             startedAtMs = footer.startedAtMs,
                             running = footer.running,
@@ -1437,7 +1449,7 @@ private fun ActivityCardBlock(
                         live.current?.let {
                             OpenCodeActivityCurrentRow(
                                 icon = it.family.toActivityIcon(),
-                                title = it.title,
+                                title = it.title.resolve(),
                                 extraRunning = it.extraRunning,
                                 startedAtMs = it.startedAtMs,
                                 stepId = it.stepId,
@@ -1446,9 +1458,9 @@ private fun ActivityCardBlock(
                 },
             idleText =
                 when (footer) {
-                    is SessionChatActivityFooter.Idle -> footer.text
+                    is SessionChatActivityFooter.Idle -> footer.text.resolve()
                     is SessionChatActivityFooter.Tool -> null
-                    null -> live.idleText
+                    null -> live.idleText?.resolve()
                 },
             onAgentTap = { id -> actions[id]?.invoke() },
             onOpen = onOpen,
@@ -1466,10 +1478,10 @@ private fun ActivityCardBlock(
                         },
                     stepCount = settled.stepCount,
                 ),
-            summary = settled.names.joinToString(", "),
+            summary = settled.namesText.resolve(),
             agents =
                 settled.agents.map {
-                    OpenCodeActivityAgentRow(id = it.id, agentName = it.agentName, action = it.action, startedAtMs = null)
+                    OpenCodeActivityAgentRow(id = it.id, agentName = it.agentName, action = it.action.resolve(), startedAtMs = null)
                 },
             current = null,
             idleText = null,
@@ -1527,7 +1539,7 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
     // Resolved live too: a running tool's output grows while its detail shows.
     val detailStepId = props.activityCardDetailStepId
     val detailTarget = detailStepId?.let { id -> stepsById[id]?.let(::detailOf) }
-    val detail = detailTarget?.let { target -> detailStepId?.let { OpenCodeActivitySheetDetail(stepId = it, title = target.title) } }
+    val detail = detailTarget?.let { target -> detailStepId?.let { OpenCodeActivitySheetDetail(stepId = it, title = target.title.resolve()) } }
     OpenCodeActivitySheet(
         visible = visible,
         live = content?.isLive == true,
@@ -1539,12 +1551,12 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
                     id = agent.step.id,
                     agentName = agent.agentName,
                     description = agent.description,
-                    caption = agent.caption,
+                    caption = agent.caption?.resolve(),
                     status = agent.step.toActivityStatus(),
                     startedAtMs = agent.step.startedAtMs,
                     recent =
                         agent.recent.map { sub ->
-                            OpenCodeActivitySheetSubStep(id = sub.id, title = sub.title, status = sub.toActivityStatus())
+                            OpenCodeActivitySheetSubStep(id = sub.id, title = sub.title.resolve(), status = sub.toActivityStatus())
                         },
                     tappable = taps?.stepAction(agent.step) != null,
                 )
@@ -1554,8 +1566,8 @@ private fun ActivityCardSheet(props: SessionChatTimelineViewProps) {
                 OpenCodeActivitySheetStep(
                     id = step.id,
                     icon = step.family.toActivityIcon(),
-                    title = step.title,
-                    detail = SessionChatActivityCard.sheetDetail(step),
+                    title = step.title.resolve(),
+                    detail = SessionChatActivityCard.sheetDetail(step)?.resolve(),
                     status = step.toActivityStatus(),
                     additions = step.additions,
                     deletions = step.deletions,
@@ -1598,8 +1610,8 @@ private fun TimelineNoticeBlock(block: SessionChatTimelineBlock.Notice) {
     val line = SessionChatNoticeCopy.line(block.notice, LocalNoticeModelNames.current)
     var expanded by rememberSaveable(block.blockID) { mutableStateOf(false) }
     OpenCodeTimelineNotice(
-        label = line.label,
-        value = line.value,
+        label = line.label.resolve(),
+        value = line.value?.resolve(),
         variant = if (line.isMove) OpenCodeTimelineNoticeVariant.Move else OpenCodeTimelineNoticeVariant.Change,
         state = if (expanded) OpenCodeTimelineNoticeState.Expanded else OpenCodeTimelineNoticeState.Collapsed,
         onToggle = { expanded = !expanded },
@@ -1619,7 +1631,7 @@ private fun FailureLineBlock(
             actionLabel = block.actionLabel,
         )
     SessionFailureCaption(
-        text = block.text,
+        text = block.text.resolve(),
         isNeutral = block.isNeutral,
         onOpen = target?.let { detail -> { onToolDetailTap(detail) } },
         retryAtEpochMs = block.retryAtEpochMs.takeIf { block.blockID == LocalRetryCountdownBlockId.current },
@@ -1676,7 +1688,7 @@ private fun StepParagraphBlock(
                 block.exploreSummary?.let { summary ->
                     key("explore") {
                         OpenCodeToolChip(
-                            variant = OpenCodeToolChipVariant.Explore(summary.label),
+                            variant = OpenCodeToolChipVariant.Explore(summary.label.resolve()),
                             status = summary.status.toToolChipStatus(),
                             onClick = { exploreAction(summary) },
                         )
@@ -1706,7 +1718,7 @@ private fun StepParagraphBlock(
         }
         block.errorLines.forEach { line ->
             Text(
-                text = line,
+                text = line.resolve(),
                 style = MaterialTheme.typography.bodySmall,
                 color = openCodeColor("error"),
                 modifier = Modifier.padding(horizontal = StepParagraphTextPaddingHorizontal),
@@ -1715,13 +1727,16 @@ private fun StepParagraphBlock(
     }
 }
 
-private fun SessionChatTimelineBlock.ToolChip.toToolChipVariant(): OpenCodeToolChipVariant =
-    when (kind) {
+@Composable
+private fun SessionChatTimelineBlock.ToolChip.toToolChipVariant(): OpenCodeToolChipVariant {
+    val label = label.resolve()
+    return when (kind) {
         ToolChipKind.File -> OpenCodeToolChipVariant.File(label = label, additions = additions, deletions = deletions)
         ToolChipKind.Command -> OpenCodeToolChipVariant.Command(label = label)
         ToolChipKind.Agent -> OpenCodeToolChipVariant.Agent(name = label, brief = brief)
         ToolChipKind.Skill -> OpenCodeToolChipVariant.Skill(name = label)
     }
+}
 
 private fun ToolStatus.toToolChipStatus(interrupted: Boolean = false): OpenCodeToolChipStatus =
     when {

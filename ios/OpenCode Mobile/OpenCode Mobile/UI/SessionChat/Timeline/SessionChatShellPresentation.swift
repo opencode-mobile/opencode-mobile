@@ -1,15 +1,11 @@
 import Foundation
 
-/// Copy for the Shells section and the shell output sheet. Pure, so both platforms
-/// can pin the same strings in tests.
+/// Copy for the Shells section and the shell output sheet, from the String Catalog.
+/// Pure, so both platforms can pin the same English in tests.
 nonisolated enum SessionChatShellPresentation {
-    static let sectionTitle = "Shells"
-    static let emptyOutput = "No output yet"
-    static let truncatedNotice = "Showing the latest output"
-    static let copyLabel = "Copy"
-    static let stopLabel = "Stop shell"
-    static let stoppingLabel = "Stopping…"
-    static let stopFailedMessage = "Couldn't stop the shell. Try again."
+    static var stopFailedMessage: String {
+        String(localized: "session_chat.shell.stop_failed", defaultValue: "Couldn't stop the shell. Try again.")
+    }
 
     /// Row timer: live while running, the run time once ended; nil when the end is unknown.
     static func elapsed(_ shell: AgentShell, nowMs: Int64) -> String? {
@@ -25,31 +21,38 @@ nonisolated enum SessionChatShellPresentation {
         guard let start = ToolStartTime.normalizeEpochMs(shell.startedAtMs) else { return status }
         let end = shell.status.isRunning ? nowMs : ToolStartTime.normalizeEpochMs(shell.finishedAtMs)
         guard let end else { return status }
-        return "\(status) · \(duration(ms: max(0, end - start)))"
+        let elapsed = duration(ms: max(0, end - start))
+        return String(localized: "timeline.list_separator", defaultValue: "\(status) · \(elapsed)")
     }
 
     static func statusLabel(_ status: AgentShellStatus) -> String {
         switch status {
-        case .running: "Running"
-        case .exited(let code?) where code != 0: "Exited with code \(code)"
-        case .exited: "Exited"
-        case .timedOut: "Timed out"
-        case .stopped: "Stopped"
-        case .failed: "Failed"
+        case .running: String(localized: "session_chat.shell.status.running", defaultValue: "Running")
+        case .exited(let code?) where code != 0: String(localized: "tool.error.exit_code", defaultValue: "Exited with code \(code)")
+        case .exited: String(localized: "session_chat.shell.status.exited", defaultValue: "Exited")
+        case .timedOut: String(localized: "session_chat.shell.status.timed_out", defaultValue: "Timed out")
+        case .stopped: String(localized: "tool.status.stopped", defaultValue: "Stopped")
+        case .failed: String(localized: "tool.error.failed", defaultValue: "Failed")
         }
     }
 
     /// "12 s", "1 min 12 s", "2 min", "1 h 5 min".
     static func duration(ms: Int64) -> String {
-        let seconds = ms / 1_000
-        if seconds < 60 { return "\(seconds) s" }
+        let seconds = Int(ms / 1_000)
+        if seconds < 60 {
+            return String(localized: "session_chat.shell.duration_seconds", defaultValue: "\(seconds) s")
+        }
         let minutes = seconds / 60
         if minutes < 60 {
             let rest = seconds % 60
-            return rest == 0 ? "\(minutes) min" : "\(minutes) min \(rest) s"
+            return rest == 0
+                ? String(localized: "session_chat.shell.duration_minutes", defaultValue: "\(minutes) min")
+                : String(localized: "session_chat.shell.duration_minutes_seconds", defaultValue: "\(minutes) min \(rest) s")
         }
         let hours = minutes / 60
         let restMinutes = minutes % 60
-        return restMinutes == 0 ? "\(hours) h" : "\(hours) h \(restMinutes) min"
+        return restMinutes == 0
+            ? String(localized: "session_chat.shell.duration_hours", defaultValue: "\(hours) h")
+            : String(localized: "session_chat.shell.duration_hours_minutes", defaultValue: "\(hours) h \(restMinutes) min")
     }
 }

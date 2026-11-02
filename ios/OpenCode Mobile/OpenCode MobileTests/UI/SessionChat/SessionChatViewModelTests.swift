@@ -3331,7 +3331,7 @@ struct SessionChatViewModelTests {
             Issue.record("Expected tool card block")
             return
         }
-        #expect(card.title == "Shell")
+        #expect(english(card.title) == "Shell")
     }
 
     @Test func rowFromUserMessage_preservesOrderedTextAndAttachmentBlocks() {

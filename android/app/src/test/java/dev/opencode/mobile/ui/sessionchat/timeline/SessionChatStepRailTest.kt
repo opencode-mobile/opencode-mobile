@@ -13,6 +13,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 
 class SessionChatStepRailTest {
     private fun tool(
@@ -38,7 +40,7 @@ class SessionChatStepRailTest {
         id: String,
         status: SessionChatStepStatus = SessionChatStepStatus.Completed,
         kind: SessionChatStepKind = SessionChatStepKind.Tool,
-    ) = SessionChatStep(id = id, kind = kind, status = status, title = id)
+    ) = SessionChatStep(id = id, kind = kind, status = status, title = UiText.verbatim(id))
 
     // Block builder
 
@@ -153,7 +155,7 @@ class SessionChatStepRailTest {
         val failed = rails(listOf(tool("p1"), tool("p2", status = ToolStatus.Error, error = "boom"))).single()
         assertEquals(SessionChatStepStatus.Completed, ok.worstStatus)
         assertEquals(SessionChatStepStatus.Failed, failed.worstStatus)
-        assertEquals("boom", failed.steps[1].detail)
+        assertEquals("boom", failed.steps[1].detail?.english())
     }
 
     @Test
@@ -174,12 +176,12 @@ class SessionChatStepRailTest {
                     tool("b2", "bash", ToolStatus.Completed, command),
                 ),
             ).single()
-        val titles = rail.steps.associate { it.id to it.title }
+        val titles = rail.steps.associate { it.id to it.title.english() }
         assertEquals("Reading App.kt", titles["r1"])
         assertEquals("App.kt", titles["r2"])
         assertEquals("Searching branchPill", titles["g1"])
         assertEquals("branchPill", titles["g2"])
-        assertEquals("4 matches", rail.steps.first { it.id == "g2" }.detail)
+        assertEquals("4 matches", rail.steps.first { it.id == "g2" }.detail?.english())
         assertEquals("Editing App.kt", titles["e1"])
         assertEquals("App.kt", titles["e2"])
         assertEquals("Running ./gradlew :app:testDebugUnitTest --tests…", titles["b1"])
@@ -196,8 +198,8 @@ class SessionChatStepRailTest {
         val metadata = buildJsonObject { put("sessionId", "child-1") }
         val step = rails(listOf(tool("c1", "task", ToolStatus.Running, input, metadata))).single().steps.single()
         assertEquals(SessionChatStepKind.ChildSession, step.kind)
-        assertEquals("explore", step.title)
-        assertEquals("Find the branch pill", step.detail)
+        assertEquals("explore", step.title.english())
+        assertEquals("Find the branch pill", step.detail?.english())
         assertEquals("child-1", step.childSession?.childSessionId)
         assertEquals("child-1", step.card?.childSessionId)
     }
@@ -212,7 +214,7 @@ class SessionChatStepRailTest {
         val rail = rails(parts).single()
         assertEquals("sr:r1", rail.blockID)
         assertEquals(SessionChatStepKind.Thought, rail.steps[0].kind)
-        assertEquals("Thought · 2.5s", rail.steps[0].title)
+        assertEquals("Thought · 2.5s", rail.steps[0].title.english())
         assertNull(rail.steps[0].card)
     }
 

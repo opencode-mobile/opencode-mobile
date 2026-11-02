@@ -1735,7 +1735,7 @@ struct SessionChatView: View {
                     onOpenBody: liveBody.map { body in
                         {
                             guard let target = SessionChatToolDetailTarget.failure(
-                                text: card.message,
+                                text: .verbatim(card.message),
                                 providerBody: body,
                                 action: nil,
                                 actionLabel: nil,
@@ -1936,7 +1936,7 @@ struct SessionChatView: View {
         case .permissionDenied:
             viewModel.beginDictationUnavailable(
                 .permissionDenied,
-                message: "Microphone access is off"
+                message: String(localized: "feedback.dictation.microphone_off", defaultValue: "Microphone access is off")
             )
         case let .modelNotInstalled(languageLabel):
             viewModel.beginDictationUnavailable(.modelNotInstalled, languageLabel: languageLabel)
@@ -1949,7 +1949,7 @@ struct SessionChatView: View {
                 dictationSupport = .permissionDenied
                 viewModel.beginDictationUnavailable(
                     .permissionDenied,
-                    message: "Microphone access is off"
+                    message: String(localized: "feedback.dictation.microphone_off", defaultValue: "Microphone access is off")
                 )
                 return
             }
@@ -1982,7 +1982,7 @@ struct SessionChatView: View {
         case .permissionDenied:
             viewModel.beginDictationUnavailable(
                 .permissionDenied,
-                message: "Microphone access is off"
+                message: String(localized: "feedback.dictation.microphone_off", defaultValue: "Microphone access is off")
             )
         case .modelNotInstalled, .modelDownloading:
             viewModel.dictationModelDownload(.modelDownloadFailed)
@@ -2003,7 +2003,7 @@ struct SessionChatView: View {
                 if AVAudioApplication.shared.recordPermission == .denied {
                     viewModel.beginDictationUnavailable(
                         .permissionDenied,
-                        message: "Microphone access is off"
+                        message: String(localized: "feedback.dictation.microphone_off", defaultValue: "Microphone access is off")
                     )
                 } else {
                     viewModel.beginDictationUnavailable(.recognizerError, message: message)

@@ -40,8 +40,8 @@ internal enum class SessionFailureSheetAction {
 }
 
 internal data class SessionChatToolDetailTarget(
-    /** Tool or failure text, shown as is unless [localizedTitle] is set. */
-    val title: String,
+    /** Tool card title or failure caption; replaced by [localizedTitle] when that is set. */
+    val title: UiText,
     val body: String,
     /** Render [body] as markdown (a compaction summary) instead of plain tool output. */
     val bodyIsMarkdown: Boolean = false,
@@ -50,7 +50,7 @@ internal data class SessionChatToolDetailTarget(
     /** Provider error bodies are monospace and copyable. */
     val monospace: Boolean = false,
     val sheetAction: SessionFailureSheetAction? = null,
-    val sheetActionLabel: String? = null,
+    val sheetActionLabel: UiText? = null,
     /** Live retry link, shown when this sheet was opened from the composer status. */
     val sheetLinkLabel: String? = null,
     val sheetLink: String? = null,
@@ -63,15 +63,15 @@ internal data class SessionChatToolDetailTarget(
  * Copy with no body, Compact, and Pick a model are the sheet action.
  */
 internal fun sessionFailureDetailTarget(
-    text: String,
+    text: UiText,
     providerBody: String?,
     action: FailureAction?,
-    actionLabel: String?,
+    actionLabel: UiText?,
     linkLabel: String? = null,
     link: String? = null,
 ): SessionChatToolDetailTarget? {
     val body = providerBody?.trim()?.takeIf { it.isNotEmpty() }
-    val label = actionLabel?.trim()?.takeIf { it.isNotEmpty() }
+    val label = actionLabel
     val sheetAction =
         when {
             action == null || label == null -> null
@@ -111,20 +111,21 @@ internal fun SessionChatToolDetailSheet(
 
     val clipboard = LocalClipboardManager.current
     val action = target?.sheetAction
-    val actionLabel = target?.sheetActionLabel?.takeIf { it.isNotBlank() }
+    val actionLabel = target?.sheetActionLabel?.resolve()?.takeIf { it.isNotBlank() }
     val linkLabel = target?.sheetLinkLabel?.takeIf { it.isNotBlank() }
     val link = target?.sheetLink?.takeIf { it.isNotBlank() }
     val hasAction = action != null && actionLabel != null
     val hasLink = linkLabel != null && link != null
     val presentation = target?.presentation?.takeIf { target.bodyIsMarkdown.not() }
     val copies = presentation?.copiesOriginal == true && !hasAction && !hasLink
+    val caption = target?.title?.resolve().orEmpty()
 
     OpenCodeBottomSheet(
         visible = target != null,
         title =
-            presentation?.title
+            presentation?.title?.resolve()
                 ?: target?.localizedTitle?.resolve()
-                ?: target?.title
+                ?: target?.title?.resolve()
                 ?: stringResource(R.string.session_chat_sheet_tool_detail_tool),
         onDismissRequest = {
             ProductAnalytics.logUserAction(
@@ -155,7 +156,7 @@ internal fun SessionChatToolDetailSheet(
                                 onClick = {
                                     when (action) {
                                         SessionFailureSheetAction.CopyCaption ->
-                                            clipboard.setText(AnnotatedString(target?.title.orEmpty()))
+                                            clipboard.setText(AnnotatedString(caption))
                                         SessionFailureSheetAction.PickModel -> {
                                             onDismiss()
                                             onFailureAction(FailureAction.PickModel)

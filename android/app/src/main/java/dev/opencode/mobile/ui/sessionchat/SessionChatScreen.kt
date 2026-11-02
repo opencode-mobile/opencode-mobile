@@ -164,6 +164,7 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionToolGroupImages
 import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
 import dev.opencode.mobile.ui.sessionchat.view.toRoute
+import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 import dev.opencode.mobile.ui.worktree.NewWorktreeRow
 import dev.opencode.mobile.ui.worktree.WorktreeCreateFormActions
@@ -1515,7 +1516,7 @@ private fun SessionChatScreenBody(
                                                 {
                                                     toolDetailTarget =
                                                         sessionFailureDetailTarget(
-                                                            text = card.message,
+                                                            text = UiText.verbatim(card.message),
                                                             providerBody = body,
                                                             action = null,
                                                             actionLabel = null,
@@ -1942,9 +1943,10 @@ private fun ComposerDictationUiState.toCardModel(elapsedLabel: String): Composer
     )
 }
 
+@Composable
 private fun SessionChatSnackbar.toOpenCodeSnackbarMessage(): OpenCodeSnackbarMessage =
     OpenCodeSnackbarMessage(
-        text = message,
+        text = message.resolve(),
         variant =
             when (tone) {
                 SessionChatSnackbarTone.Default -> OpenCodeSnackbarVariant.Default

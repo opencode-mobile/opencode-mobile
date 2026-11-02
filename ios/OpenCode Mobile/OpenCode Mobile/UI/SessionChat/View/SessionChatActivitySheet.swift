@@ -75,7 +75,9 @@ private struct SessionChatActivitySheetModifier: ViewModifier {
         let count = card?.steps.count ?? 0
         let isLive = card?.isLive == true
         let inspector = detail?.target.inspectorPresentation
-        let title = inspector?.title ?? detail?.target.title ?? (isLive ? Self.workingTitle(count) : OpenCodeActivityCard.stepsLabel(count))
+        let detailTitle: String? = (inspector?.title ?? detail?.target.title)?.resolved
+        let fallbackTitle: String = isLive ? Self.workingTitle(count) : OpenCodeActivityCard.stepsLabel(count)
+        let title: String = detailTitle ?? fallbackTitle
         let titleState: OpenCodeBottomSheetTitleState = detail == nil && isLive
             ? .running(startedAtMs: ToolStartTime.normalizeEpochMs(card?.startedAtMs))
             : .plain
@@ -218,7 +220,7 @@ struct SessionChatActivitySheetContent: View {
                                 size: 6,
                                 pulsing: true
                             )
-                            Text(sub.title)
+                            Text(openCode: sub.title.openCode)
                                 .font(OpenCodeTypography.caption)
                                 .foregroundStyle(OpenCodeColors.textWeak)
                                 .lineLimit(1)
@@ -251,7 +253,7 @@ struct SessionChatActivitySheetContent: View {
             guard let tools, tools > 0 else { return nil }
             return String(localized: "session_chat_sheet.activity.tools_so_far", defaultValue: "\(tools) tools so far")
         case .failed:
-            return step.detail
+            return step.detail?.resolved
         case .interrupted:
             return String(localized: "session_chat_sheet.activity.stopped", defaultValue: "Stopped")
         case .completed:
@@ -271,12 +273,12 @@ struct SessionChatActivitySheetContent: View {
                     .frame(width: 16)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(step.listTitle)
+                    Text(openCode: step.listTitle.openCode)
                         .font(OpenCodeTypography.bodySecondary)
                         .foregroundStyle(OpenCodeColors.textStrong)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    if let detail = step.detail, !detail.isEmpty {
+                    if let detail = step.detail?.resolved, !detail.isEmpty {
                         Text(detail)
                             .font(OpenCodeTypography.caption)
                             .foregroundStyle(step.activityStatus == .failed ? OpenCodeColors.error : OpenCodeColors.textWeak)

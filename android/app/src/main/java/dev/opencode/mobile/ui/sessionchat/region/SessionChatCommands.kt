@@ -18,7 +18,6 @@ import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
 import dev.opencode.mobile.domain.session.CompactionStart
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.Session
-import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionForkTitle
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.ui.sessionchat.ChildSessionNavigationTarget
@@ -255,7 +254,7 @@ class SessionChatCommands(
         _state.update { it.copy(actionErrorMessage = null, actionSuccessMessage = null) }
     }
 
-    fun reportActionError(message: String) {
+    fun reportActionError(message: UiText) {
         _state.update { it.copy(actionErrorMessage = message) }
     }
 
@@ -464,7 +463,7 @@ class SessionChatCommands(
             isBusy = isBusy,
             restoreComposerText = restoreComposerText,
             operation = "undo",
-            failureMessage = "Couldn't undo last message.",
+            failureMessage = UiText.resource(R.string.session_chat_revert_undo_failed),
         )
     }
 
@@ -479,7 +478,7 @@ class SessionChatCommands(
             isBusy = isBusy,
             restoreComposerText = restoreComposerText,
             operation = "revert",
-            failureMessage = "Couldn't revert message.",
+            failureMessage = UiText.resource(R.string.session_chat_revert_failed),
         )
     }
 
@@ -492,7 +491,7 @@ class SessionChatCommands(
             isBusy = isBusy,
             clearComposerRestore = clearComposerRestore,
             operation = "redo",
-            failureMessage = "Couldn't redo.",
+            failureMessage = UiText.resource(R.string.session_chat_revert_redo_failed),
         )
     }
 
@@ -504,7 +503,7 @@ class SessionChatCommands(
             isBusy = isBusy,
             clearComposerRestore = clearComposerRestore,
             operation = "cancel-revert",
-            failureMessage = "Couldn't cancel revert.",
+            failureMessage = UiText.resource(R.string.session_chat_revert_cancel_failed),
         )
     }
 
@@ -528,7 +527,7 @@ class SessionChatCommands(
     ) {
         if (currentRevertMessageId == null) return
         val committed = withContext(ioDispatcher) { sessionRepository.commitRevert(sessionId, worktree) }
-        if (!committed) throw SessionError.Http(statusCode = 0, message = "Couldn't commit revert.")
+        if (!committed) throw SessionChatRevertCommitFailure()
         logI("revert committed before prompt session=$sessionId")
     }
 
@@ -593,7 +592,7 @@ class SessionChatCommands(
                 _state.update {
                     it.copy(
                         isCompacting = false,
-                        actionErrorMessage = SessionCompactChrome.FAILURE,
+                        actionErrorMessage = SessionCompactChrome.failure,
                         actionSuccessMessage = null,
                     )
                 }
@@ -623,7 +622,7 @@ class SessionChatCommands(
         isBusy: Boolean,
         restoreComposerText: (String) -> Unit,
         operation: String,
-        failureMessage: String,
+        failureMessage: UiText,
     ) {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
@@ -646,7 +645,7 @@ class SessionChatCommands(
         isBusy: Boolean,
         clearComposerRestore: () -> Unit,
         operation: String,
-        failureMessage: String,
+        failureMessage: UiText,
     ) {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
@@ -698,6 +697,11 @@ class SessionChatCommands(
     }
 
     companion object {
-        const val FORK_RENAME_FAILURE = "Fork created, but it couldn't be renamed."
+        val FORK_RENAME_FAILURE: UiText = UiText.resource(R.string.session_chat_fork_rename_failed)
     }
+}
+
+/** The pending revert could not be committed, so the prompt was not sent. [text] is what the user reads. */
+class SessionChatRevertCommitFailure : Exception("revert commit failed") {
+    val text: UiText = UiText.resource(R.string.session_chat_revert_commit_failed)
 }

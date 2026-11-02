@@ -338,7 +338,7 @@ struct SessionChatPillSlotsTests {
     private func failure(_ blockID: String, neutral: Bool = false) -> SessionChatTimelineBlock {
         .failureLine(
             blockID: blockID,
-            text: "HTTP 500 · Server error",
+            text: .verbatim("HTTP 500 · Server error"),
             providerBody: nil,
             isNeutral: neutral,
             action: nil,

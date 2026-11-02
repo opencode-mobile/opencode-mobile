@@ -92,7 +92,7 @@ struct SessionChatActivityCardTests {
             edit("e1", status: .running),
             bash("b1", status: .running),
         ])[0].steps
-        #expect(running.map(\.runningTitle) == [
+        #expect(running.map { english($0.runningTitle) } == [
             "Reading View.swift",
             "Searching chipTimeline",
             "Editing Blocks.swift",
@@ -100,8 +100,8 @@ struct SessionChatActivityCardTests {
         ])
 
         let settled = try cards([read("r1"), grep("g1"), edit("e1"), bash("b1")])[0].steps
-        #expect(settled.map(\.settledTitle) == ["View.swift", "chipTimeline", "Blocks.swift", "Ran npm test"])
-        #expect(settled.map(\.runningTitle) == [
+        #expect(settled.map { english($0.settledTitle) } == ["View.swift", "chipTimeline", "Blocks.swift", "Ran npm test"])
+        #expect(settled.map { english($0.runningTitle) } == [
             "Reading View.swift",
             "Searching chipTimeline",
             "Editing Blocks.swift",
@@ -167,27 +167,27 @@ struct SessionChatActivityCardTests {
 
     @Test func summary_countsFamiliesInFirstSeenOrder() throws {
         let steps = try cards([read("r1"), grep("g1"), read("r2"), edit("e1"), read("r3")])[0].steps
-        #expect(SessionChatActivityCardBlock.summary(steps) == "5 steps · 3 reads · 1 search · 1 edit")
+        #expect(SessionChatActivityCardBlock.summary(steps).resolved == "5 steps · 3 reads · 1 search · 1 edit")
     }
 
     @Test func summary_singularAndPlural() {
         func steps(_ families: [SessionChatStepFamily]) -> [SessionChatStep] {
             families.enumerated().map { index, family in
-                SessionChatStep(id: "s\(index)", kind: .tool, status: .completed, title: "x", family: family)
+                SessionChatStep(id: "s\(index)", kind: .tool, status: .completed, title: .verbatim("x"), family: family)
             }
         }
-        #expect(SessionChatActivityCardBlock.families(steps([.search, .search])) == "2 searches")
-        #expect(SessionChatActivityCardBlock.families(steps([.fetch, .fetch])) == "2 fetches")
-        #expect(SessionChatActivityCardBlock.families(steps([.command])) == "1 command")
-        #expect(SessionChatActivityCardBlock.families(steps([.agent, .agent])) == "2 agents")
-        #expect(SessionChatActivityCardBlock.families(steps([.thought])) == "1 thought")
-        #expect(SessionChatActivityCardBlock.families(steps([.fetch])) == "1 fetch")
-        #expect(SessionChatActivityCardBlock.families(steps([.edit, .edit])) == "2 edits")
+        #expect(english(SessionChatActivityCardBlock.families(steps([.search, .search]))) == "2 searches")
+        #expect(english(SessionChatActivityCardBlock.families(steps([.fetch, .fetch]))) == "2 fetches")
+        #expect(english(SessionChatActivityCardBlock.families(steps([.command]))) == "1 command")
+        #expect(english(SessionChatActivityCardBlock.families(steps([.agent, .agent]))) == "2 agents")
+        #expect(english(SessionChatActivityCardBlock.families(steps([.thought]))) == "1 thought")
+        #expect(english(SessionChatActivityCardBlock.families(steps([.fetch]))) == "1 fetch")
+        #expect(english(SessionChatActivityCardBlock.families(steps([.edit, .edit]))) == "2 edits")
     }
 
     @Test func summary_stepsOutsideFamiliesCountButAreNotListed() {
-        let skill = SessionChatStep(id: "s1", kind: .tool, status: .completed, title: "Skill feature")
-        #expect(SessionChatActivityCardBlock.summary([skill]) == "1 step")
+        let skill = SessionChatStep(id: "s1", kind: .tool, status: .completed, title: .verbatim("Skill feature"))
+        #expect(SessionChatActivityCardBlock.summary([skill]).resolved == "1 step")
     }
 
     // MARK: - Worst status
@@ -508,13 +508,11 @@ struct SessionChatActivityCardTests {
         ]
         let activity = SessionChatTimelineBlocks.childActivity(from: messages)
         // b1 started last; hidden tools are not steps.
-        #expect(activity.currentAction == "Running npm test")
+        #expect(english(activity.currentAction) == "Running npm test")
         #expect(activity.toolCount == 4)
-        #expect(activity.recentSteps == [
-            SessionChatChildActivityStep(id: "g1", title: "chipTimeline", isRunning: false),
-            SessionChatChildActivityStep(id: "b1", title: "Running npm test", isRunning: true),
-            SessionChatChildActivityStep(id: "r2", title: "View.swift", isRunning: true),
-        ])
+        #expect(activity.recentSteps.map(\.id) == ["g1", "b1", "r2"])
+        #expect(activity.recentSteps.map { english($0.title) } == ["chipTimeline", "Running npm test", "View.swift"])
+        #expect(activity.recentSteps.map(\.isRunning) == [false, true, true])
         #expect(SessionChatTimelineBlocks.childActivity(from: []) == .empty)
     }
 
@@ -525,8 +523,8 @@ struct SessionChatActivityCardTests {
         ])[0]
         let rows = [row("a1", role: .assistant, blocks: [.activityCard(blockID: card.id, card: card)])]
         let activities = [
-            "ses-a": SessionChatChildActivity(currentAction: "Reading View.swift", recentSteps: [], toolCount: 1),
-            "ses-b": SessionChatChildActivity(currentAction: "Done", recentSteps: [], toolCount: 2),
+            "ses-a": SessionChatChildActivity(currentAction: .verbatim("Reading View.swift"), recentSteps: [], toolCount: 1),
+            "ses-b": SessionChatChildActivity(currentAction: .verbatim("Done"), recentSteps: [], toolCount: 2),
         ]
         #expect(SessionChatActivityCardPresentation.childActions(in: rows, liveCardID: card.id, activities: activities)
             == ["ses-a": "Reading View.swift"])
@@ -548,7 +546,7 @@ struct SessionChatActivityCardTests {
             supportsSessionMessageDiff: true
         )
         #expect(detail?.step.id == thought.id)
-        #expect(detail?.target.title == "Thought")
+        #expect(english(detail?.target.title) == "Thought")
         #expect(detail?.target.body == "Weighing the options")
     }
 
@@ -557,7 +555,7 @@ struct SessionChatActivityCardTests {
         let shell = try #require(card.steps.first { $0.id == "b1" }?.card)
         let detail = SessionChatActivityCardPresentation.detail(stepID: "b1", in: card, supportsSessionMessageDiff: true)
         #expect(shell.detailText != nil)
-        #expect(detail?.target.title == shell.title)
+        #expect(english(detail?.target.title) == shell.title)
         #expect(detail?.target.body == shell.detailText)
         #expect(detail?.target.bodyIsMarkdown == shell.detailIsMarkdown)
     }

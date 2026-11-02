@@ -160,7 +160,8 @@ sealed interface SessionChatSnackbarAction {
 }
 
 data class SessionChatSnackbar(
-    val message: String,
+    /** App text, or a server error shown as is. */
+    val message: UiText,
     val tone: SessionChatSnackbarTone,
     val id: Long,
     val action: SessionChatSnackbarAction? = null,
@@ -232,7 +233,7 @@ data class SessionChatUiState(
     /** True while the reserved Working lamp/label is fading through the idle hold. */
     val workingIndicatorFading: Boolean = false,
     /** Top Syncing pill label while cached or catching-up messages wait for network confirmation. */
-    val syncingIndicatorLabel: String? = null,
+    val syncingIndicatorLabel: UiText? = null,
     val sessionTodos: List<SessionTodo> = emptyList(),
     val sessionTodosVisible: Boolean = false,
     val sessionTodosFinished: Boolean = false,
@@ -887,8 +888,8 @@ data class SessionChatCommandsRegionState(
     val forkResultVisible: Boolean = false,
     val forkedSessionTitle: String = "",
     val isCompacting: Boolean = false,
-    val actionErrorMessage: String? = null,
-    val actionSuccessMessage: String? = null,
+    val actionErrorMessage: UiText? = null,
+    val actionSuccessMessage: UiText? = null,
     val pendingSessionReplace: ChildSessionNavigationTarget? = null,
     val pendingTerminalOpen: PendingTerminalOpen? = null,
     /** Worktree to open in the File Browser; consumed by the screen once it navigates. */

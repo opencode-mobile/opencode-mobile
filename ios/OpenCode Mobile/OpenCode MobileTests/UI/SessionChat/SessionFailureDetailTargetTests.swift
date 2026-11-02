@@ -5,27 +5,27 @@ import Testing
 struct SessionFailureDetailTargetTests {
     @Test func compactWithoutABodyStillOpensASheet() {
         let target = SessionChatToolDetailTarget.failure(
-            text: "Context overflow",
+            text: .verbatim("Context overflow"),
             providerBody: nil,
             action: .compact,
-            actionLabel: "Compact"
+            actionLabel: SessionChatTimelineBlocks.failureActionLabel(.compact)
         )
-        #expect(target?.title == "Context overflow")
+        #expect(target?.title.resolved == "Context overflow")
         #expect(target?.body == "")
         #expect(target?.monospace == false)
         #expect(target?.sheetAction == .compact)
-        #expect(target?.sheetActionLabel == "Compact")
+        #expect(target?.sheetActionLabel?.resolved == "Compact")
     }
 
     @Test func copyWithABodyUsesTheBodyCopyOnly() {
         let target = SessionChatToolDetailTarget.failure(
-            text: "Something went wrong",
+            text: .verbatim("Something went wrong"),
             providerBody: "{\"error\":1}",
             action: .copy,
-            actionLabel: "Copy"
+            actionLabel: SessionChatTimelineBlocks.failureActionLabel(.copy)
         )
         let providerResponse: OpenCodeText = "session_chat_sheet.tool_detail.provider_response"
-        #expect(target?.title == "Something went wrong")
+        #expect(target?.title.resolved == "Something went wrong")
         #expect(target?.localizedTitle == providerResponse)
         #expect(target?.localizedTitle?.resolved == "Provider response")
         #expect(target?.monospace == true)
@@ -34,20 +34,20 @@ struct SessionFailureDetailTargetTests {
 
     @Test func copyWithoutABodyCopiesTheCaption() {
         let target = SessionChatToolDetailTarget.failure(
-            text: "Something went wrong",
+            text: .verbatim("Something went wrong"),
             providerBody: "  ",
             action: .copy,
-            actionLabel: "Copy"
+            actionLabel: SessionChatTimelineBlocks.failureActionLabel(.copy)
         )
         #expect(target?.sheetAction == .copyCaption)
-        #expect(target?.title == "Something went wrong")
+        #expect(target?.title.resolved == "Something went wrong")
         #expect(target?.localizedTitle == nil)
         #expect(target?.monospace == false)
     }
 
     @Test func authWithABodyHasNoAction() {
         let target = SessionChatToolDetailTarget.failure(
-            text: "HTTP 401 · Sign in",
+            text: .verbatim("HTTP 401 · Sign in"),
             providerBody: "denied",
             action: nil,
             actionLabel: nil
@@ -60,7 +60,7 @@ struct SessionFailureDetailTargetTests {
 
     @Test func markWithoutBodyOrActionDoesNotOpen() {
         let target = SessionChatToolDetailTarget.failure(
-            text: "Permission rejected",
+            text: .verbatim("Permission rejected"),
             providerBody: nil,
             action: nil,
             actionLabel: nil
@@ -70,7 +70,7 @@ struct SessionFailureDetailTargetTests {
 
     @Test func liveLinkRidesAlongWithTheBody() {
         let target = SessionChatToolDetailTarget.failure(
-            text: "Slow down",
+            text: .verbatim("Slow down"),
             providerBody: "limited",
             action: nil,
             actionLabel: nil,
@@ -116,7 +116,7 @@ struct SessionFailureDetailTargetTests {
             Issue.record("expected a failure line")
             return
         }
-        #expect(text == "HTTP 429 · Free usage limit reached.")
+        #expect(text.resolved == "HTTP 429 · Free usage limit reached.")
         #expect(action == .pickModel)
         #expect(retryAt == 61_000)
     }
@@ -151,7 +151,7 @@ struct SessionFailureDetailTargetTests {
             blocks: [
                 .failureLine(
                     blockID: "\(id):failure",
-                    text: "Slow down",
+                    text: .verbatim("Slow down"),
                     providerBody: body,
                     isNeutral: false,
                     action: nil,

@@ -990,21 +990,22 @@ private struct AssistantMessageContent: View {
                 case .imageGallery(_, let gallery):
                     SessionChatImageGalleryView(images: gallery.images)
                 case .toolCard(_, let card):
+                    // OpenCodeToolCallCard takes String; the timeline resolves its text here.
                     OpenCodeToolCallCard(
                         status: card.status.toolCallCardStatus(interrupted: card.isInterrupted),
-                        title: card.title,
-                        subtitle: card.subtitle,
+                        title: card.title.resolved,
+                        subtitle: card.subtitle?.resolved,
                         additions: card.additions,
                         deletions: card.deletions,
-                        errorText: card.errorText,
+                        errorText: card.errorText?.resolved,
                         action: toolCardAction(for: card)
                     )
                 case .toolGroup(let blockID, let group):
                     OpenCodeToolCallCard(
                         status: group.status.toolCallCardStatus(interrupted: false),
-                        title: group.title,
-                        subtitle: group.subtitle,
-                        errorText: group.errorText,
+                        title: group.title.resolved,
+                        subtitle: group.subtitle?.resolved,
+                        errorText: group.errorText?.resolved,
                         action: {
                             onToolGroupTap(
                                 SessionChatToolGroupTarget(
@@ -1179,7 +1180,8 @@ struct SessionChatStepTapActions {
 
     func action(for card: SessionChatToolCardBlock) -> (() -> Void)? {
         if let childSessionId = card.childSessionId {
-            return { onChildSessionTap(childSessionId, card.title) }
+            // A child session card's title is its agent name (server content).
+            return { onChildSessionTap(childSessionId, card.title.resolved) }
         }
         if card.opensChangesReview, supportsSessionMessageDiff {
             return { onChangesReviewTap(messageID, card.changesInitialFilePath) }
@@ -1216,7 +1218,7 @@ struct SessionChatStepTapActions {
     static func thoughtDetail(text: String, durationLabel: String?) -> SessionChatToolDetailTarget {
         let thought = ToolResultInspector.thought(text: text, durationLabel: durationLabel)
         return SessionChatToolDetailTarget(
-            title: thought?.title ?? "Thought",
+            title: thought?.title ?? .app("tool.title.thought", "Thought"),
             body: text,
             presentation: thought.map(ToolResultPresentation.thought)
         )
@@ -1346,7 +1348,7 @@ private struct StepParagraphBlock: View {
                         switch item {
                         case .explore(let summary):
                             OpenCodeToolChip(
-                                variant: .explore(label: summary.label),
+                                variant: .explore(label: summary.label.resolved),
                                 status: summary.status.toolChipStatus(interrupted: false),
                                 action: { exploreAction(summary) }
                             )
@@ -1364,7 +1366,7 @@ private struct StepParagraphBlock: View {
             }
 
             ForEach(Array(paragraph.errorLines.enumerated()), id: \.offset) { _, line in
-                Text(line)
+                Text(openCode: line.openCode)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.error)
                     .lineLimit(3)
@@ -1380,12 +1382,14 @@ private struct StepParagraphBlock: View {
 }
 
 private extension SessionChatToolChipBlock {
+    /// OpenCodeToolChip takes String; the chip label is resolved here.
     var variant: OpenCodeToolChipVariant {
-        switch kind {
-        case .file: .file(label: label, additions: additions, deletions: deletions)
-        case .command: .command(label: label)
-        case .agent: .agent(name: label, brief: brief)
-        case .skill: .skill(name: label)
+        let text = label.resolved
+        return switch kind {
+        case .file: .file(label: text, additions: additions, deletions: deletions)
+        case .command: .command(label: text)
+        case .agent: .agent(name: text, brief: brief)
+        case .skill: .skill(name: text)
         }
     }
 }
@@ -1404,19 +1408,19 @@ private extension SessionChatStepRailRow {
             if step.kind == .childSession {
                 return .childSession(
                     id: step.id,
-                    agent: step.childSession?.agent ?? step.title,
+                    agent: step.childSession?.agent ?? step.title.resolved,
                     description: step.childSession?.description,
                     status: status,
                     startedAtMs: startedAtMs,
                     endedAtMs: endedAtMs,
-                    detail: step.detail,
+                    detail: step.detail?.resolved,
                     isActionable: actionable(step)
                 )
             }
             return .step(
                 id: step.id,
-                title: step.title,
-                detail: step.detail,
+                title: step.title.resolved,
+                detail: step.detail?.resolved,
                 status: status,
                 additions: step.additions,
                 deletions: step.deletions,
@@ -1526,11 +1530,11 @@ private extension ToolStatus {
 
 /// Quiet mark under a failed reply. A body or an action opens the detail sheet.
 private struct FailureLineBlock: View {
-    let text: String
+    let text: TimelineText
     let providerBody: String?
     let isNeutral: Bool
     let action: FailureAction?
-    let actionLabel: String?
+    let actionLabel: TimelineText?
     /// Adds a "Try again in …" line below the caption until this time passes.
     let retryAtEpochMs: Int64?
     let onToolDetailTap: (SessionChatToolDetailTarget) -> Void
@@ -1550,7 +1554,7 @@ private struct FailureLineBlock: View {
                 Circle()
                     .fill(isNeutral ? OpenCodeColors.textWeak : OpenCodeColors.error)
                     .frame(width: Self.dotSize, height: Self.dotSize)
-                Text(text)
+                Text(openCode: text.openCode)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeak)
                     .lineLimit(3)
@@ -1626,8 +1630,8 @@ private struct SessionChatNoticeLine: View {
         let presentation = TimelineNoticeCopy.presentation(for: notice, modelNames: modelNames)
         OpenCodeTimelineNotice(
             variant: presentation.isMove ? .moved : .plain,
-            label: presentation.label,
-            value: presentation.value,
+            label: presentation.label.resolved,
+            value: presentation.value?.resolved,
             state: state,
             onToggle: { state = state.toggled }
         )

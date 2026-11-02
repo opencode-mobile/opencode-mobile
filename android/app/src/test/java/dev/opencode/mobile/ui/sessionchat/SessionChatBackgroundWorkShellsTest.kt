@@ -82,23 +82,23 @@ class SessionChatBackgroundWorkShellsTest {
         val start = 1_000_000L
         val running = shell("sh_1", startedAtMs = start)
 
-        assertEquals("Running · 1 min 12 s", SessionChatShellsCopy.status(running, nowMs = start + 72_000))
-        assertEquals("Running · 4 s", SessionChatShellsCopy.status(running, nowMs = start + 4_000))
-        assertEquals("Running", SessionChatShellsCopy.status(running.copy(startedAtMs = null), nowMs = start))
+        assertEquals("Running · 1 min 12 s", SessionChatShellsCopy.status(running, nowMs = start + 72_000).english())
+        assertEquals("Running · 4 s", SessionChatShellsCopy.status(running, nowMs = start + 4_000).english())
+        assertEquals("Running", SessionChatShellsCopy.status(running.copy(startedAtMs = null), nowMs = start).english())
 
         fun ended(status: AgentShellStatus) = running.copy(status = status, finishedAtMs = start + 72_000)
-        assertEquals("Exited · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Exited(0)), nowMs = 0))
-        assertEquals("Exited · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Exited(null)), nowMs = 0))
-        assertEquals("Exited with code 1 · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Exited(1)), nowMs = 0))
-        assertEquals("Timed out · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.TimedOut), nowMs = 0))
-        assertEquals("Stopped · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Stopped), nowMs = 0))
-        assertEquals("Failed · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Failed), nowMs = 0))
-        assertEquals("12 s", SessionChatShellsCopy.duration(12_000))
-        assertEquals("0 s", SessionChatShellsCopy.duration(0))
-        assertEquals("1 min 12 s", SessionChatShellsCopy.duration(72_000))
-        assertEquals("2 min", SessionChatShellsCopy.duration(120_000))
-        assertEquals("1 h 5 min", SessionChatShellsCopy.duration((3600 + 5 * 60) * 1000L))
-        assertEquals("1 h", SessionChatShellsCopy.duration(3600 * 1000L + 30_000))
+        assertEquals("Exited · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Exited(0)), nowMs = 0).english())
+        assertEquals("Exited · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Exited(null)), nowMs = 0).english())
+        assertEquals("Exited with code 1 · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Exited(1)), nowMs = 0).english())
+        assertEquals("Timed out · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.TimedOut), nowMs = 0).english())
+        assertEquals("Stopped · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Stopped), nowMs = 0).english())
+        assertEquals("Failed · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Failed), nowMs = 0).english())
+        assertEquals("12 s", SessionChatShellsCopy.duration(12_000).english())
+        assertEquals("0 s", SessionChatShellsCopy.duration(0).english())
+        assertEquals("1 min 12 s", SessionChatShellsCopy.duration(72_000).english())
+        assertEquals("2 min", SessionChatShellsCopy.duration(120_000).english())
+        assertEquals("1 h 5 min", SessionChatShellsCopy.duration((3600 + 5 * 60) * 1000L).english())
+        assertEquals("1 h", SessionChatShellsCopy.duration(3600 * 1000L + 30_000).english())
     }
 
     @Test

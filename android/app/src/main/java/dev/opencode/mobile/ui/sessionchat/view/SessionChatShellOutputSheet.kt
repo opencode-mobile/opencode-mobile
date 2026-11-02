@@ -38,6 +38,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellOutputUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellsCopy
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.delay
 
 /**
@@ -120,7 +121,7 @@ private fun SessionChatShellOutputHeader(sheet: SessionChatShellOutputUiState) {
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = SessionChatShellsCopy.status(sheet.shell, nowMs),
+            text = SessionChatShellsCopy.status(sheet.shell, nowMs).resolve(),
             style = MaterialTheme.typography.bodySmall,
             color =
                 if (SessionChatShellsCopy.isProblem(sheet.shell.status)) {
@@ -177,7 +178,7 @@ private fun SessionChatShellOutputActions(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         sheet.stopError?.let { error ->
             Text(
-                text = error,
+                text = error.resolve(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },

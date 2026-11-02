@@ -8,8 +8,8 @@ enum SessionFailureSheetAction: Equatable {
 }
 
 struct SessionChatToolDetailTarget: Equatable {
-    /// Tool or failure text, shown as is unless `localizedTitle` is set.
-    let title: String
+    /// Tool card title or failure caption; replaced by `localizedTitle` when that is set.
+    let title: TimelineText
     let body: String
     /// App-text title that replaces `title` in the sheet header, such as "Provider response".
     var localizedTitle: OpenCodeText? = nil
@@ -18,7 +18,7 @@ struct SessionChatToolDetailTarget: Equatable {
     /// Provider response: monospace, with a copy button.
     var monospace: Bool = false
     var sheetAction: SessionFailureSheetAction? = nil
-    var sheetActionLabel: String? = nil
+    var sheetActionLabel: TimelineText? = nil
     /// Live retry link, shown when this sheet was opened from the composer status.
     var sheetLinkLabel: String? = nil
     var sheetLink: String? = nil
@@ -33,15 +33,15 @@ struct SessionChatToolDetailTarget: Equatable {
     /// Sheet for a failure mark. Copy of a provider body stays on the monospace body.
     /// Copy with no body, Compact, and Pick a model are the sheet action.
     static func failure(
-        text: String,
+        text: TimelineText,
         providerBody: String?,
         action: FailureAction?,
-        actionLabel: String?,
+        actionLabel: TimelineText?,
         linkLabel: String? = nil,
         link: String? = nil
     ) -> SessionChatToolDetailTarget? {
         let body = nonEmptyTrimmed(providerBody)
-        let label = nonEmptyTrimmed(actionLabel)
+        let label = actionLabel
         let sheetAction: SessionFailureSheetAction? = {
             guard let action, label != nil else { return nil }
             if action == .copy, body != nil { return nil }
@@ -114,19 +114,18 @@ struct SessionChatToolDetailSheetModifier: ViewModifier {
         target?.inspectorPresentation
     }
 
-    /// Inspector and tool titles are already resolved text; the header shows them as is.
+    /// Inspector and tool titles are app text or server content; the header shows each its way.
     private var sheetTitle: OpenCodeText {
-        if let title = inspector?.title { return .verbatim(title) }
+        if let title = inspector?.title { return title.openCode }
         if let localizedTitle = target?.localizedTitle { return localizedTitle }
-        if let title = target?.title { return .verbatim(title) }
+        if let title = target?.title { return title.openCode }
         return "session_chat_sheet.tool_detail.tool"
     }
 
     /// Copy stays off a failure sheet so Compact, Pick a model, and the caption copy are unchanged.
     private var showsCopy: Bool {
         guard inspector?.copiesOriginal == true else { return false }
-        let label = target?.sheetActionLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let hasAction = target?.sheetAction != nil && label?.isEmpty == false
+        let hasAction = target?.sheetAction != nil && target?.sheetActionLabel != nil
         let link = target?.sheetLinkLabel?.trimmingCharacters(in: .whitespacesAndNewlines)
         let hasLink = link?.isEmpty == false && target?.sheetLink?.isEmpty == false
         return !hasAction && !hasLink
@@ -232,15 +231,11 @@ private struct SessionChatToolDetailSheetActions: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let action = target?.sheetAction,
-               let label = target?.sheetActionLabel?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !label.isEmpty
-            {
-                // Failure action labels arrive resolved from the failure presentation.
-                OpenCodeButton(variant: .fullWidthText(title: .verbatim(label))) {
+            if let action = target?.sheetAction, let label = target?.sheetActionLabel {
+                OpenCodeButton(variant: .fullWidthText(title: label.openCode)) {
                     switch action {
                     case .copyCaption:
-                        UIPasteboard.general.string = target?.title
+                        UIPasteboard.general.string = target?.title.resolved
                     case .pickModel:
                         onFailureAction(.pickModel)
                     case .compact:

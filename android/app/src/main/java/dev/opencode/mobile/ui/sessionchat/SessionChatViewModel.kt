@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.R
 import androidx.compose.runtime.snapshotFlow
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -93,6 +94,7 @@ import dev.opencode.mobile.ui.sessionchat.region.SessionInfo
 import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
 import dev.opencode.mobile.ui.worktree.WorktreeCreateForm
 import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -1647,7 +1649,7 @@ class SessionChatViewModel
                     if (ok) {
                         optimistic()
                     } else {
-                        commands.reportActionError(PENDING_PROMPT_FAILURE)
+                        commands.reportActionError(UiText.resource(R.string.session_chat_pending_prompt_update_failed))
                     }
                 }.onFailure { error ->
                     if (error is CancellationException) throw error
@@ -1656,7 +1658,7 @@ class SessionChatViewModel
                         "pending prompt $actionId failed id=$inboxId",
                         error,
                     )
-                    commands.reportActionError(PENDING_PROMPT_FAILURE)
+                    commands.reportActionError(UiText.resource(R.string.session_chat_pending_prompt_update_failed))
                 }
             }
         }
@@ -1727,7 +1729,9 @@ class SessionChatViewModel
                 onSendFailed = { optimisticId, error ->
                     armedSendAcceptance = null
                     pendingSend = null
-                    timeline.failOptimisticSend(optimisticId, error)
+                    // Server and transport errors stay the timeline error; app text goes to the snackbar.
+                    timeline.failOptimisticSend(optimisticId, (error as? UiText.Verbatim)?.value)
+                    if (error !is UiText.Verbatim) commands.reportActionError(error)
                     publishUiState()
                 },
                 serverAlreadyAccepted = ::serverAlreadyAccepted,
@@ -2197,19 +2201,20 @@ class SessionChatViewModel
                 if (timelineState.timeline == SessionChatTimelineState.Error) {
                     null
                 } else {
+                    // Other regions still report plain strings; they are shown as is.
                     when {
-                        infoState.lifecycleErrorMessage != null -> infoState.lifecycleErrorMessage
-                        worktreeMove.state.value.errorMessage != null -> worktreeMove.state.value.errorMessage
-                        composerState.errorMessage != null -> composerState.errorMessage
-                        composerState.abortErrorMessage != null -> composerState.abortErrorMessage
+                        infoState.lifecycleErrorMessage != null -> UiText.verbatim(infoState.lifecycleErrorMessage)
+                        worktreeMove.state.value.errorMessage != null -> TimelineText.verbatim(worktreeMove.state.value.errorMessage)
+                        composerState.errorMessage != null -> UiText.verbatim(composerState.errorMessage)
+                        composerState.abortErrorMessage != null -> UiText.verbatim(composerState.abortErrorMessage)
                         commandsState.actionErrorMessage != null -> commandsState.actionErrorMessage
-                        turnDiffNotice != null -> turnDiffNotice
-                        infoState.errorMessage != null -> infoState.errorMessage
+                        turnDiffNotice != null -> TimelineText.verbatim(turnDiffNotice)
+                        infoState.errorMessage != null -> UiText.verbatim(infoState.errorMessage)
                         inboxSnapshot.permissionRequests.isEmpty() &&
-                            inboxSnapshot.permissionTopologyError != null -> inboxSnapshot.permissionTopologyError
+                            inboxSnapshot.permissionTopologyError != null -> TimelineText.verbatim(inboxSnapshot.permissionTopologyError)
                         inboxSnapshot.questionRequests.isEmpty() &&
-                            inboxSnapshot.questionTopologyError != null -> inboxSnapshot.questionTopologyError
-                        timelineState.errorMessage != null -> timelineState.errorMessage
+                            inboxSnapshot.questionTopologyError != null -> TimelineText.verbatim(inboxSnapshot.questionTopologyError)
+                        timelineState.errorMessage != null -> UiText.verbatim(timelineState.errorMessage)
                         else -> null
                     }
                 }
@@ -2217,11 +2222,9 @@ class SessionChatViewModel
                 resolveSnackbar(
                     transientError,
                     sideQuestions.state.value.notice,
-                    composerState.followUpNotice
-                        ?: worktreeMove.state.value.notice
+                    TimelineText.verbatim(composerState.followUpNotice ?: worktreeMove.state.value.notice)
                         ?: commandsState.actionSuccessMessage
-                        ?: branchCopiedNotice
-                        ?: chipTimelineIntroNotice,
+                        ?: TimelineText.verbatim(branchCopiedNotice ?: chipTimelineIntroNotice),
                 )
             val sessionStatusLabel =
                 if (isCompacting) {
@@ -2281,7 +2284,7 @@ class SessionChatViewModel
             }
             val syncingIndicatorLabel =
                 if (timelineState.isSyncingMessages) {
-                    SessionMessageSyncChrome.STATUS_LABEL
+                    SessionMessageSyncChrome.statusLabel
                 } else {
                     null
                 }
@@ -2613,9 +2616,9 @@ class SessionChatViewModel
         }
 
         private fun resolveSnackbar(
-            transientError: String?,
+            transientError: UiText?,
             sideQuestionNotice: SessionChatSideQuestionNotice?,
-            successNotice: String?,
+            successNotice: UiText?,
         ): SessionChatSnackbar? {
             // A `/btw` notice outranks other success notices and yields to errors; its id keeps a
             // repeated failure of the same question from deduping into the earlier snackbar.
@@ -2627,7 +2630,7 @@ class SessionChatViewModel
                     lastSnackbarKey = key
                 }
                 return SessionChatSnackbar(
-                    message = sideQuestionNotice.message,
+                    message = UiText.verbatim(sideQuestionNotice.message),
                     tone = if (sideQuestionNotice.isError) SessionChatSnackbarTone.Error else SessionChatSnackbarTone.Default,
                     id = snackbarSequence,
                     action = sideQuestionNotice.retryId?.let { SessionChatSnackbarAction.RetrySideQuestion(it) },
@@ -2764,7 +2767,6 @@ class SessionChatViewModel
         companion object {
             const val ModelFilterThreshold: Int = SessionChatComposer.ModelFilterThreshold
             const val PENDING_SEND_TIMEOUT_MS = 8_000L
-            const val PENDING_PROMPT_FAILURE = "Couldn't update pending prompt"
             const val CHIP_TIMELINE_INTRO_ENABLED_NOTICE = "Chip timeline is on. Turn it off in Settings."
             const val BRANCH_COPIED_MESSAGE = "Branch name copied"
 

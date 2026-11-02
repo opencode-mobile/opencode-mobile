@@ -342,7 +342,7 @@ struct V2LiveTurnTimelineTests {
         let paragraph = try #require(stepParagraphs(frame.messages[1].blocks).first?.paragraph)
         #expect(paragraph.errorLines.isEmpty)
         #expect(paragraph.chips.first?.card.isInterrupted == true)
-        #expect(paragraph.chips.first?.card.errorText == "Stopped")
+        #expect(english(paragraph.chips.first?.card.errorText) == "Stopped")
 
         let rest = try restMessages(
             """
@@ -369,21 +369,21 @@ struct V2LiveTurnTimelineTests {
         let fields = #""assistantMessageID":"a1","id":"call_sh","name":"bash""#
         apply([envelope("session.tool.input.started", 1_120, fields)])
         // Servers that do not stream tool input still show the placeholder until `ended`.
-        #expect(liveToolCard("a1")?.subtitle == "Writing command…")
+        #expect(english(liveToolCard("a1")?.subtitle) == "Writing command…")
         apply([inputDelta(fields, #"{"comm"#, at: 1_121)])
 
         let waiting = try #require(liveToolCard("a1"))
         #expect(waiting.status == .pending)
         #expect(waiting.isReceivingArguments)
-        #expect(waiting.subtitle == "Writing command…")
+        #expect(english(waiting.subtitle) == "Writing command…")
 
         apply([inputDelta(fields, #"and":"ls -la /tm"#, at: 1_122)])
-        #expect(liveToolCard("a1")?.subtitle == "ls -la /tm")
+        #expect(english(liveToolCard("a1")?.subtitle) == "ls -la /tm")
         apply([inputDelta(fields, #"p/scratch","description":"List"#, at: 1_123)])
-        #expect(liveToolCard("a1")?.subtitle == "ls -la /tmp/scratch")
+        #expect(english(liveToolCard("a1")?.subtitle) == "ls -la /tmp/scratch")
         let frame = chipFrame(store.messages(sessionID: Self.session))
         let chip = try #require(stepParagraphs(frame.messages[1].blocks).first?.paragraph.chips.first)
-        #expect(chip.label == "ls -la /tmp/scratch")
+        #expect(english(chip.label) == "ls -la /tmp/scratch")
 
         apply([
             envelope(
@@ -396,13 +396,13 @@ struct V2LiveTurnTimelineTests {
         let called = try #require(liveToolCard("a1"))
         #expect(called.status == .running)
         #expect(!called.isReceivingArguments)
-        #expect(called.subtitle == "ls -la /tmp")
+        #expect(english(called.subtitle) == "ls -la /tmp")
 
         apply([envelope("session.tool.success", 1_140, fields + #","content":[{"type":"text","text":"ok"}]"#)])
         let done = try #require(liveToolCard("a1"))
         #expect(done.status == .completed)
         #expect(!done.isReceivingArguments)
-        #expect(done.subtitle == "ls -la /tmp")
+        #expect(english(done.subtitle) == "ls -la /tmp")
         #expect(done.detailText == "ok")
     }
 
@@ -418,11 +418,11 @@ struct V2LiveTurnTimelineTests {
             let fields = #""assistantMessageID":"a1","id":"call_\#(item.name)","name":"\#(item.name)""#
             let at = Int64(1_200 + index * 10)
             apply([envelope("session.tool.input.started", at, fields), inputDelta(fields, "{", at: at + 1)])
-            #expect(liveToolCard("a1", callID: "call_\(item.name)")?.subtitle == item.placeholder)
+            #expect(english(liveToolCard("a1", callID: "call_\(item.name)")?.subtitle) == item.placeholder)
             apply([inputDelta(fields, item.partial, at: at + 2)])
             let card = try #require(liveToolCard("a1", callID: "call_\(item.name)"))
             #expect(card.isReceivingArguments)
-            #expect(card.subtitle == item.path)
+            #expect(english(card.subtitle) == item.path)
             #expect(!card.opensChangesReview)
         }
     }
@@ -441,7 +441,7 @@ struct V2LiveTurnTimelineTests {
         let card = try #require(liveToolCard("a1"))
         #expect(card.status == .pending)
         #expect(!card.isReceivingArguments)
-        #expect(card.subtitle == "ls -la")
+        #expect(english(card.subtitle) == "ls -la")
     }
 
     @Test func restReloadMidStream_keepsTheStreamingArgumentsAsThePreview() throws {
@@ -456,24 +456,24 @@ struct V2LiveTurnTimelineTests {
         )
         let card = try #require(toolCards(rest[0].parts).first)
         #expect(card.isReceivingArguments)
-        #expect(card.subtitle == "git st")
+        #expect(english(card.subtitle) == "git st")
     }
 
     @Test func v1AndSettledCards_keepTodaysChrome() {
         let v1Pending = ToolPart(id: "call_v1", toolName: "bash", status: .pending)
         let v1Card = toolCards([.tool(v1Pending)]).first
         #expect(v1Card?.isReceivingArguments == false)
-        #expect(v1Card?.subtitle == nil)
+        #expect(english(v1Card?.subtitle) == nil)
 
         // A settled card ignores a stray preview the server never replaced.
         let stray: [String: AnyCodable] = [ToolArgumentsPreview.inputKey: .string(#"{"command":"rm"#)]
         for status in [ToolStatus.completed, .error] {
             let card = toolCards([.tool(ToolPart(id: "call_\(status)", toolName: "bash", status: status, input: stray))]).first
             #expect(card?.isReceivingArguments == false)
-            #expect(card?.subtitle == nil)
+            #expect(english(card?.subtitle) == nil)
         }
         let generic = ToolPart(id: "call_g", toolName: "sim_task", status: .pending, input: stray)
-        #expect(toolCards([.tool(generic)]).first?.subtitle == nil)
+        #expect(english(toolCards([.tool(generic)]).first?.subtitle) == nil)
     }
 
     @Test func realToolFailure_staysAnError() throws {
@@ -558,7 +558,7 @@ struct V2LiveTurnTimelineTests {
         let frame = chipFrame(store.messages(sessionID: Self.session))
         #expect(frame.messages[1].blocks.contains { block in
             if case .failureLine(_, let text, let body, let neutral, _, _, _, _) = block {
-                return text == "HTTP 401 · Sign in" && body == "denied" && neutral == false
+                return text.resolved == "HTTP 401 · Sign in" && body == "denied" && neutral == false
             }
             return false
         })
@@ -710,7 +710,7 @@ struct V2LiveTurnTimelineTests {
         #expect(frame.messages.map(\.id) == ["u1", "a1", "c1"])
         #expect(stepParagraphs(frame.messages[1].blocks).map(\.paragraph.text) == ["Hi there."])
         let card = try #require(toolCard(frame.messages[2].blocks))
-        #expect(card.title == SessionCompactChrome.markerTitle)
+        #expect(english(card.title) == english(SessionCompactChrome.markerTitle))
         #expect(card.detailText == Self.summary)
     }
 

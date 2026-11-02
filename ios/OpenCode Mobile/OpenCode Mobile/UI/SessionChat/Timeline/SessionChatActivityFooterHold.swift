@@ -4,12 +4,12 @@ import Foundation
 /// (title, "+N", elapsed) or in its settled form (settled title only), or idle text.
 enum SessionChatActivityFooter: Equatable, Sendable {
     case tool(Tool)
-    case idle(String)
+    case idle(TimelineText)
 
     struct Tool: Equatable, Sendable {
         let stepID: String
         let icon: OpenCodeActivityLineIcon
-        let title: String
+        let title: TimelineText
         let running: Bool
         let extraRunning: Int
         let startedAtMs: Int64?
@@ -51,7 +51,7 @@ enum SessionChatActivityFooter: Equatable, Sendable {
     /// Everything the band paints, for timeline row invalidation.
     var revisionKey: String {
         switch self {
-        case .tool(let tool): "\(contentKey):\(tool.title):\(tool.extraRunning):\(tool.startedAtMs ?? -1)"
+        case .tool(let tool): "\(contentKey):\(tool.title.resolved):\(tool.extraRunning):\(tool.startedAtMs ?? -1)"
         case .idle: contentKey
         }
     }
@@ -61,7 +61,7 @@ enum SessionChatActivityFooter: Equatable, Sendable {
     var contentKey: String {
         switch self {
         case .tool(let tool): "tool:\(tool.stepID):\(tool.running ? "running" : "settled")"
-        case .idle(let text): "idle:\(text)"
+        case .idle(let text): "idle:\(text.resolved)"
         }
     }
 }

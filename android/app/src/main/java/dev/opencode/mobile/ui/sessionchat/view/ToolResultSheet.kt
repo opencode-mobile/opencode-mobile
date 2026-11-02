@@ -51,6 +51,7 @@ import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
 import dev.opencode.mobile.ui.components.UnifiedDiffParser
 import dev.opencode.mobile.ui.components.codeColors
 import dev.opencode.mobile.ui.sessionchat.ToolResultPresentation
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -62,7 +63,7 @@ internal fun ToolResultPinnedHeader(presentation: ToolResultPresentation) {
     ) {
         presentation.eyebrow?.let { eyebrow ->
             Text(
-                text = eyebrow,
+                text = eyebrow.resolve(),
                 style = MaterialTheme.typography.labelSmall,
                 color = openCodeColor("text-weaker"),
             )
@@ -141,7 +142,7 @@ private fun CountLine(counts: List<ToolResultPresentation.Count>) {
     if (counts.isEmpty()) return
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         counts.forEach { count ->
-            Text(text = count.label, style = MaterialTheme.typography.bodySmall, color = toneColor(count.tone))
+            Text(text = count.label.resolve(), style = MaterialTheme.typography.bodySmall, color = toneColor(count.tone))
         }
     }
 }
@@ -294,7 +295,7 @@ private fun SourceSubline(presentation: ToolResultPresentation.Source) {
         listOfNotNull(
             presentation.language,
             lineCount.takeIf { presentation.lines.isNotEmpty() },
-            presentation.rangeLabel,
+            presentation.rangeLabel?.resolve(),
         )
     if (parts.isNotEmpty()) Subline(parts.joinToString(SUBLINE_SEPARATOR))
 }
@@ -398,7 +399,7 @@ private fun EditBody(presentation: ToolResultPresentation.Edit) {
     OpenCodeUnifiedDiff(
         file =
             FileDiff(
-                path = presentation.filename,
+                path = presentation.title.resolve(),
                 patch = presentation.patch,
                 additions = presentation.additions,
                 deletions = presentation.deletions,

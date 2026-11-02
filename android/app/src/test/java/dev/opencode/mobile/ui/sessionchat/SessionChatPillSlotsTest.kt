@@ -18,6 +18,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import dev.opencode.mobile.ui.text.UiText
 
 class SessionChatPillSlotsTest {
     private val now = 1_000_000L
@@ -314,7 +315,7 @@ class SessionChatPillSlotsTest {
     private fun failure(
         blockId: String,
         neutral: Boolean = false,
-    ) = SessionChatTimelineBlock.FailureLine(blockID = blockId, text = "HTTP 500 · Server error", isNeutral = neutral)
+    ) = SessionChatTimelineBlock.FailureLine(blockID = blockId, text = UiText.verbatim("HTTP 500 · Server error"), isNeutral = neutral)
 
     // Background work (subagents)
 

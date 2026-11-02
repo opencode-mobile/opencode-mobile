@@ -1,6 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.Message
+import dev.opencode.mobile.ui.text.UiText
 
 /**
  * What a child session is doing, read from its own messages while an activity
@@ -10,7 +12,7 @@ data class SessionChatChildActivity(
     val steps: List<SessionChatStep>,
 ) {
     /** Running title of its most recently started running tool. */
-    val currentAction: String?
+    val currentAction: UiText?
         get() = SessionChatActivityCard.latestRunning(steps)?.runningTitle
 
     val toolCount: Int
@@ -19,18 +21,19 @@ data class SessionChatChildActivity(
 
 /** A live activity card: the summary line, running child sessions, and the footer band. */
 data class SessionChatActivityLive(
-    val summary: String,
+    val summary: UiText,
     val agents: List<Agent>,
     val current: Current?,
     /** Footer text when no tool runs; null when [current] is set. */
-    val idleText: String?,
+    val idleText: UiText?,
     val startedAtMs: Long?,
 ) {
     /** A running child session; [id] is the step (part) id. */
     data class Agent(
         val id: String,
         val agentName: String,
-        val action: String,
+        /** What the child is doing now (app text), else its description (content). */
+        val action: UiText,
         val startedAtMs: Long?,
     )
 
@@ -38,7 +41,7 @@ data class SessionChatActivityLive(
     data class Current(
         val stepId: String,
         val family: SessionChatStepFamily?,
-        val title: String,
+        val title: UiText,
         val extraRunning: Int,
         val startedAtMs: Long?,
     )
@@ -50,7 +53,7 @@ data class SessionChatActivityLive(
  */
 data class SessionChatActivitySettled(
     val stepCount: Int,
-    val names: List<String>,
+    val names: List<UiText>,
     val worstStatus: SessionChatStepStatus,
     val agents: List<Agent> = emptyList(),
 ) {
@@ -58,8 +61,12 @@ data class SessionChatActivitySettled(
     data class Agent(
         val id: String,
         val agentName: String,
-        val action: String,
+        val action: UiText,
     )
+
+    /** The tool names as one list: `Read, Grep, Edit, Agent`. */
+    val namesText: UiText
+        get() = names.reduceOrNull { acc, next -> UiText.resource(R.string.timeline_list_comma, acc, next) } ?: UiText.verbatim("")
 }
 
 /**
@@ -81,7 +88,7 @@ data class SessionChatActivitySheetContent(
         val agentName: String,
         val description: String?,
         /** `N tools so far` while running, the finished summary once done. */
-        val caption: String?,
+        val caption: UiText?,
         /** Up to three latest steps of a running child, oldest first; empty when not observed. */
         val recent: List<SessionChatStep>,
     )
@@ -93,8 +100,8 @@ data class SessionChatActivitySheetContent(
  * identity and liveness are shared with [SessionChatStepRail].
  */
 object SessionChatActivityCard {
-    const val THINKING = "Thinking…"
-    const val WAITING_FOR_AGENTS = "Waiting for agents"
+    val THINKING: UiText = UiText.resource(R.string.timeline_activity_thinking)
+    val WAITING_FOR_AGENTS: UiText = UiText.resource(R.string.timeline_activity_waiting_for_agents)
 
     /** Most recently started running tool that is not a child session; later in order wins a tie. */
     fun latestRunning(steps: List<SessionChatStep>): SessionChatStep? =
@@ -107,7 +114,7 @@ object SessionChatActivityCard {
     fun live(
         block: SessionChatTimelineBlock.ActivityCard,
         children: Map<String, SessionChatChildActivity> = emptyMap(),
-        thinkingText: String = THINKING,
+        thinkingText: UiText = THINKING,
     ): SessionChatActivityLive {
         val steps = block.steps
         val runningChildren = steps.filter { it.kind == SessionChatStepKind.ChildSession && it.status.isInFlight }
@@ -157,7 +164,7 @@ object SessionChatActivityCard {
                         SessionChatActivitySettled.Agent(
                             id = step.id,
                             agentName = agentName(step),
-                            action = child?.result ?: child?.description ?: "",
+                            action = UiText.verbatim(child?.result ?: child?.description ?: ""),
                         )
                     },
         )
@@ -230,11 +237,12 @@ object SessionChatActivityCard {
         SessionChatChildActivity(SessionChatTimelineBlocks.toolSteps(messages))
 
     /** Settled one-liner and live summary: `9 steps · 3 reads · 1 search`. */
-    fun settledSummary(steps: List<SessionChatStep>): String =
-        listOf(plural(steps.size, "step")).plus(familyCounts(steps)).joinToString(SEPARATOR)
+    fun settledSummary(steps: List<SessionChatStep>): UiText =
+        TimelineText.joined(listOf(UiText.plural(R.plurals.timeline_activity_count_step, steps.size)) + familyCounts(steps))
+            ?: UiText.plural(R.plurals.timeline_activity_count_step, steps.size)
 
     /** The family list without the leading count: `3 reads · 1 search`. */
-    fun familySummary(steps: List<SessionChatStep>): String = familyCounts(steps).joinToString(SEPARATOR)
+    fun familySummary(steps: List<SessionChatStep>): UiText = TimelineText.joined(familyCounts(steps)) ?: UiText.verbatim("")
 
     fun worstStatus(steps: List<SessionChatStep>): SessionChatStepStatus = SessionChatStepRail.worstStatus(steps)
 
@@ -242,51 +250,54 @@ object SessionChatActivityCard {
      * Caption under a sheet step: the builder's detail (match count, failure),
      * or for an answered question the chosen answer.
      */
-    fun sheetDetail(step: SessionChatStep): String? {
+    fun sheetDetail(step: SessionChatStep): UiText? {
         step.detail?.let { return it }
         val isQuestion = step.kind == SessionChatStepKind.Tool && step.family == null
         return step.card?.subtitle?.takeIf { isQuestion && step.status == SessionChatStepStatus.Completed }
     }
 
     /** Deduplicated tool names in first-seen order: `Read, Grep, Edit, Agent`. */
-    fun toolNames(steps: List<SessionChatStep>): List<String> = steps.map(::toolName).distinct()
+    fun toolNames(steps: List<SessionChatStep>): List<UiText> = steps.map(::toolName).distinct()
 
-    private fun toolName(step: SessionChatStep): String =
+    private fun toolName(step: SessionChatStep): UiText =
         when (step.kind) {
-            SessionChatStepKind.Thought -> "Thought"
-            SessionChatStepKind.ChildSession -> "Agent"
+            SessionChatStepKind.Thought -> UiText.resource(R.string.tool_title_thought)
+            SessionChatStepKind.ChildSession -> UiText.resource(R.string.tool_title_agent)
             SessionChatStepKind.Tool -> {
                 val raw = step.card?.toolName.orEmpty()
-                when (raw.lowercase()) {
-                    "read" -> "Read"
-                    "glob" -> "Glob"
-                    "grep" -> "Grep"
-                    "websearch", "codesearch" -> "Search"
-                    "webfetch" -> "Fetch"
-                    "edit", "apply_patch", "patch" -> "Edit"
-                    "write" -> "Write"
-                    "bash", "shell" -> "Shell"
-                    "task", "subagent" -> "Agent"
-                    "skill" -> "Skill"
-                    "question" -> "Question"
-                    // A question has no family; anything else outside the list keeps its own name.
-                    else -> if (step.family == null) "Question" else raw.replaceFirstChar { it.uppercase() }
-                }
+                val title =
+                    when (raw.lowercase()) {
+                        "read" -> R.string.tool_title_read
+                        "glob" -> R.string.tool_title_glob
+                        "grep" -> R.string.tool_title_grep
+                        "websearch", "codesearch" -> R.string.tool_title_search
+                        "webfetch" -> R.string.tool_title_fetch
+                        "edit", "apply_patch", "patch" -> R.string.tool_title_edit
+                        "write" -> R.string.tool_title_write
+                        "bash", "shell" -> R.string.tool_title_shell
+                        "task", "subagent" -> R.string.tool_title_agent
+                        "skill" -> R.string.tool_title_skill
+                        "question" -> R.string.tool_title_question
+                        // A question has no family; anything else outside the list keeps its own name.
+                        else -> if (step.family == null) R.string.tool_title_question else null
+                    }
+                title?.let { UiText.resource(it) } ?: UiText.verbatim(raw.replaceFirstChar { it.uppercase() })
             }
         }
 
     private fun startedAtMs(steps: List<SessionChatStep>): Long? = steps.mapNotNull { it.startedAtMs }.minOrNull()
 
+    /** A child session step's title is its agent name (server content). */
     private fun agentName(step: SessionChatStep): String =
-        (step.childSession?.agent ?: step.title).replaceFirstChar { it.uppercase() }
+        (step.childSession?.agent ?: (step.title as? UiText.Verbatim)?.value.orEmpty()).replaceFirstChar { it.uppercase() }
 
     private fun childAction(
         step: SessionChatStep,
         children: Map<String, SessionChatChildActivity>,
-    ): String {
+    ): UiText {
         val child = step.childSession
         val observed = child?.childSessionId?.let(children::get)?.currentAction
-        return observed ?: child?.description ?: ""
+        return observed ?: UiText.verbatim(child?.description ?: "")
     }
 
     private fun sheetAgent(
@@ -299,10 +310,11 @@ object SessionChatActivityCard {
         val toolCount = activity?.toolCount?.takeIf { it > 0 } ?: child?.toolsSoFar
         val caption =
             when {
-                running -> toolCount?.let { if (it == 1) "1 tool so far" else "$it tools so far" }
-                step.status == SessionChatStepStatus.Failed && step.isInterrupted -> "Stopped"
+                running -> toolCount?.let { UiText.plural(R.plurals.session_chat_sheet_activity_tools_so_far, it) }
+                step.status == SessionChatStepStatus.Failed && step.isInterrupted ->
+                    UiText.resource(R.string.session_chat_sheet_activity_stopped)
                 step.status == SessionChatStepStatus.Failed -> step.detail
-                else -> child?.result
+                else -> TimelineText.verbatim(child?.result)
             }
         return SessionChatActivitySheetContent.Agent(
             step = step,
@@ -314,35 +326,24 @@ object SessionChatActivityCard {
     }
 
     /** Families in first-seen order, each as `N word(s)`. */
-    private fun familyCounts(steps: List<SessionChatStep>): List<String> {
+    private fun familyCounts(steps: List<SessionChatStep>): List<UiText> {
         val counts = LinkedHashMap<SessionChatStepFamily, Int>()
         steps.forEach { step -> step.family?.let { counts[it] = (counts[it] ?: 0) + 1 } }
-        return counts.map { (family, count) -> plural(count, family.word) }
+        return counts.map { (family, count) -> UiText.plural(family.countPlural, count) }
     }
 
-    private val SessionChatStepFamily.word: String
+    private val SessionChatStepFamily.countPlural: Int
         get() =
             when (this) {
-                SessionChatStepFamily.Read -> "read"
-                SessionChatStepFamily.Search -> "search"
-                SessionChatStepFamily.Fetch -> "fetch"
-                SessionChatStepFamily.Edit -> "edit"
-                SessionChatStepFamily.Command -> "command"
-                SessionChatStepFamily.Skill -> "skill"
-                SessionChatStepFamily.Thought -> "thought"
-                SessionChatStepFamily.Agent -> "agent"
+                SessionChatStepFamily.Read -> R.plurals.tool_count_read
+                SessionChatStepFamily.Search -> R.plurals.tool_count_search
+                SessionChatStepFamily.Fetch -> R.plurals.tool_count_fetch
+                SessionChatStepFamily.Edit -> R.plurals.tool_count_edit
+                SessionChatStepFamily.Command -> R.plurals.timeline_activity_count_command
+                SessionChatStepFamily.Skill -> R.plurals.tool_count_skill
+                SessionChatStepFamily.Thought -> R.plurals.timeline_activity_count_thought
+                SessionChatStepFamily.Agent -> R.plurals.timeline_activity_count_agent
             }
 
-    private fun plural(
-        count: Int,
-        word: String,
-    ): String =
-        when {
-            count == 1 -> "1 $word"
-            word.endsWith("ch") -> "$count ${word}es"
-            else -> "$count ${word}s"
-        }
-
     private const val RECENT_CHILD_STEPS = 3
-    private const val SEPARATOR = " · "
 }
