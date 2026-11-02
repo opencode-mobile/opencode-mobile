@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.exclude
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.ime
@@ -936,7 +937,16 @@ private fun SessionChatScreenBody(
 
             val modelOptions = uiState.composer.modelOptions
             val noticeModelNames = remember(modelOptions) { SessionChatNoticeModelNames.from(modelOptions) }
-            OpenCodeReadableColumn(modifier = Modifier.weight(1f)) {
+            // The keyboard above the navigation bar lifts the whole chat area. Inset padding updates
+            // in layout only, so a keyboard animation never recomposes the screen. It also consumes
+            // that part of the inset: the composer below keeps a constant measured height instead of
+            // writing a new one into composerOverlayHeightPx on every frame.
+            OpenCodeReadableColumn(
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .windowInsetsPadding(WindowInsets.ime.exclude(WindowInsets.navigationBars)),
+            ) {
                 SessionChatTimelineView(
                     props =
                         SessionChatTimelineViewProps(
