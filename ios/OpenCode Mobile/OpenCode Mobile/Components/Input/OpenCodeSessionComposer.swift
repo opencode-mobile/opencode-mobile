@@ -337,7 +337,7 @@ struct OpenCodeSessionComposer: View {
             // The shell is pinned to the bottom of the screen, so the content is too: both
             // modes stay still and crossfade while the shell resizes around them, which
             // reads as one surface morphing instead of the old content sliding down.
-            ZStack(alignment: .bottomLeading) {
+            ComposerModeStack {
                 VStack(alignment: .leading, spacing: 10) {
                     switch state {
                     case let .permission(permission):
@@ -1402,6 +1402,24 @@ private struct QuestionCustomTextField: View {
     )
     .openCodeTheme()
     .environment(\.colorScheme, .dark)
+}
+
+/// Overlays the outgoing and incoming composer modes on the bottom edge while they crossfade.
+/// Unlike a `ZStack`, it places each mode with the proposal it measured it with: re-proposing
+/// the measured size makes `QuestionBodyHeightLayout` halve its cap a second time.
+private struct ComposerModeStack: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        subviews.reduce(CGSize.zero) { size, subview in
+            let fitted = subview.sizeThatFits(proposal)
+            return CGSize(width: max(size.width, fitted.width), height: max(size.height, fitted.height))
+        }
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for subview in subviews {
+            subview.place(at: CGPoint(x: bounds.minX, y: bounds.maxY), anchor: .bottomLeading, proposal: proposal)
+        }
+    }
 }
 
 /// Sizes the question body to its content, up to half the height the composer is offered
