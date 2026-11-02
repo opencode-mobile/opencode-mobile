@@ -135,6 +135,21 @@ struct OpenCodeFloatingPillOptionsTests {
         }
     }
 
+    @Test func compactWithSummary_drawsTheSummaryMarkInsteadOfItsOwn() {
+        let closable = OpenCodeFloatingPillLayout.closable(label: "Request failed")
+        let summary = OpenCodeFloatingPillSummary(count: 2)
+        #expect(OpenCodeFloatingPillStyle.compactLeading(layout: closable, state: .error) == .stateDot)
+        #expect(OpenCodeFloatingPillStyle.compactLeading(layout: closable, state: .error, summary: summary) == .glyph("!"))
+        #expect(
+            OpenCodeFloatingPillStyle.compactLeading(
+                layout: .label("1 queued"),
+                state: .ready,
+                summary: OpenCodeFloatingPillSummary(count: 1, pending: true)
+            ) == .glyph("⋯")
+        )
+        #expect(OpenCodeFloatingPillStyle.badgeCount(layout: summary.layout) == 2)
+    }
+
     @Test func summary_drawsTheLeadItemsMarkAndBadgesACount() {
         let layout = OpenCodeFloatingPillLayout.summary(count: 3)
         #expect(OpenCodeFloatingPillStyle.leading(layout: layout, state: .needsAttention) == .icon(.arrowUpward))
