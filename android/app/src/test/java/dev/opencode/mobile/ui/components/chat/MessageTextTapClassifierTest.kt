@@ -21,6 +21,17 @@ class MessageTextTapClassifierTest {
         )
 
     @Test
+    fun mouseClickIsNeverTap() {
+        // A click clears a mouse selection or starts a double-click word selection;
+        // a right-click opens message actions instead.
+        val click = { classifier.isTap(released = true, moved = false, linkHandled = false, startedDuringScroll = false, mouse = true) }
+        assertFalse(click())
+        assertFalse(click())
+        // Touch behaviour is unchanged after mouse clicks.
+        assertTrue(touch())
+    }
+
+    @Test
     fun quickStillTouchIsTap() {
         assertTrue(touch())
     }

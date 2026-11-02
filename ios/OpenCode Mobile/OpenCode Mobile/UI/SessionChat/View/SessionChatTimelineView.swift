@@ -913,6 +913,7 @@ private struct SessionChatMessageActionsGestureModifier: ViewModifier {
         } else {
             content
                 .onTapGesture { onOpenMessageActions(.text) }
+                .openCodeSecondaryClick { onOpenMessageActions(.text) }
                 .accessibilityLabel(accessibilityLabel)
                 .accessibilityHint("Shows message actions")
         }
