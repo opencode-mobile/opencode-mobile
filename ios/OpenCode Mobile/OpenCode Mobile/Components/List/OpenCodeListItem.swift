@@ -540,7 +540,7 @@ struct OpenCodeListItem<Trailing: View>: View {
                         .overlay(Circle().stroke(OpenCodeColors.backgroundBase, lineWidth: 2))
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                         .offset(x: 1, y: 1)
-                        .accessibilityLabel("Worktree")
+                        .accessibilityLabel(Text("component.worktree"))
                 } else {
                     if let statusDot {
                         Circle()
@@ -562,7 +562,7 @@ struct OpenCodeListItem<Trailing: View>: View {
                             .overlay(Circle().stroke(OpenCodeColors.backgroundBase, lineWidth: 2))
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
                             .offset(x: 1, y: 1)
-                            .accessibilityLabel("Worktree")
+                            .accessibilityLabel(Text("component.worktree"))
                     }
                 }
             }

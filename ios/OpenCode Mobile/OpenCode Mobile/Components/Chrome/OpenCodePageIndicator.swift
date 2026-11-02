@@ -21,7 +21,13 @@ struct OpenCodePageIndicator: View {
         }
         .animation(.easeInOut(duration: 0.2), value: currentPage)
         .accessibilityElement()
-        .accessibilityLabel("Page \(currentPage + 1) of \(pageCount)")
+        .accessibilityLabel(Text(pageLabel))
+    }
+
+    private var pageLabel: LocalizedStringResource {
+        let page = currentPage + 1
+        let count = pageCount
+        return LocalizedStringResource("component.page_indicator.label", defaultValue: "Page \(page) of \(count)")
     }
 }
 

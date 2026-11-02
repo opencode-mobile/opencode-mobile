@@ -95,8 +95,8 @@ struct SessionListProjectPickerRows: View {
                 .accessibilityIdentifier("projectPickerReorderNote")
         case let .all(tab):
             OpenCodeListItem(
-                title: .unlocalized(tab.pickerTitle),
-                subtitle: .unlocalized(tab.pickerSubtitle),
+                title: .localized(tab.pickerTitle),
+                subtitle: .localized(tab.pickerSubtitle),
                 startDecorator: .iconCircle(.widgets, accessibilityLabel: nil)
             )
         case let .project(tab, _):
@@ -138,10 +138,10 @@ struct SessionListProjectPickerRows: View {
             HStack(spacing: 12) {
                 if let pill, let projectKey = row.tab?.id {
                     OpenCodeExpandPill(
-                        title: .unlocalized(pill.title),
+                        title: .localized(pill.title),
                         isExpanded: pill.isExpanded,
                         enabled: pill.enabled,
-                        accessibilityLabel: .unlocalized(pill.accessibilityLabel),
+                        accessibilityLabel: .localized(pill.accessibilityLabel),
                         action: { onToggleExpanded(projectKey) }
                     )
                     .accessibilityIdentifier("projectPickerWorktreesPill")

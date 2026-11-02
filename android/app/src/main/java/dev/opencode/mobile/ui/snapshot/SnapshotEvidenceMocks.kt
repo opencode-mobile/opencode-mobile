@@ -36,7 +36,7 @@ object SnapshotEvidenceMocks {
     const val CHILD_SESSION_TITLE = "Find auth bugs"
 
     /** Home filtered to a worktree with no sessions while sibling worktrees have some. */
-    const val WORKTREE_EMPTY_MESSAGE = SessionListWorktreeEmptyCopy.OTHER_WORKTREES
+    val WORKTREE_EMPTY_MESSAGE = SessionListWorktreeEmptyCopy.OTHER_WORKTREES
 
     val userPrompt =
         SnapshotEvidenceMessage(

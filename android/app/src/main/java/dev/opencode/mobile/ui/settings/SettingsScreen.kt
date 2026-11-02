@@ -306,7 +306,7 @@ fun SettingsScreen(
 
                 themeLoadError?.let { error ->
                     OpenCodeInlineNotice(
-                        message = error,
+                        message = error.resolve(),
                         tone = OpenCodeInlineNoticeTone.Error,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )

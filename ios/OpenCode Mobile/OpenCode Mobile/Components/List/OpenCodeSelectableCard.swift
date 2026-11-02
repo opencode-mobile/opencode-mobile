@@ -40,7 +40,7 @@ struct OpenCodeSelectableCard<Preview: View>: View {
                     if selected {
                         OpenCodeIconImage(icon: .check, size: 18)
                             .foregroundStyle(OpenCodeColors.interactive)
-                            .accessibilityLabel("Selected")
+                            .accessibilityLabel(Text("common.selected"))
                     }
                 }
                 preview

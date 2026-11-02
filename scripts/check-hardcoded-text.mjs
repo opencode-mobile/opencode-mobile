@@ -4,10 +4,13 @@
 //
 // Scanned:
 //   Android  android/app/src/main/java/dev/opencode/mobile/ui/**/*.kt
+//            (feature UI and the design-system components in ui/components)
 //   iOS      ios/OpenCode Mobile/OpenCode Mobile/UI/**/*.swift
-// Skipped: design-system internals (Android ui/components, iOS Components live
-// outside UI/), the component gallery, developer tools (playground, highlighting
-// lab, diagnostics overlay, snapshot hosts), and @Preview / #Preview blocks.
+//            ios/OpenCode Mobile/OpenCode Mobile/Components/**/*.swift
+// Skipped: the component gallery, developer tools (playground, highlighting
+// lab, diagnostics overlay, snapshot hosts), @Preview / #Preview blocks,
+// top-level preview and gallery sample declarations (a name containing
+// `Preview` or `Sample`), and Compose animation debug labels.
 //
 // A finding is a string literal with at least one letter passed where users read
 // it, for example:
@@ -41,10 +44,13 @@ const TEXT_PARAMS =
 const PLATFORMS = [
   {
     name: "Android",
-    root: "android/app/src/main/java/dev/opencode/mobile/ui",
+    roots: ["android/app/src/main/java/dev/opencode/mobile/ui"],
     extension: ".kt",
-    skipDirs: ["components", "componentgallery", "playground", "snapshot", "icons", "diagnostic"],
+    skipDirs: ["componentgallery", "playground", "snapshot", "icons", "diagnostic"],
     preview: /^\s*@Preview\b/,
+    sample: /^(?:(?:private|internal|public)\s+)?(?:fun|object|val|class)\s+(?:[\w.<>]+\.)?\w*(?:[Pp]review|[Ss]ample)\w*/,
+    // `label = "…"` on animate*/transition calls names the animation for tooling.
+    animation: /\b(?:animate\w*|rememberInfiniteTransition|updateTransition|Crossfade|AnimatedContent)\s*\(/,
     patterns: [
       /\bText\(\s*"((?:[^"\\]|\\.)*)"/g,
       new RegExp(`\\b(?:${TEXT_PARAMS})\\s*=\\s*"((?:[^"\\\\]|\\\\.)*)"`, "g"),
@@ -55,10 +61,12 @@ const PLATFORMS = [
   },
   {
     name: "iOS",
-    root: "ios/OpenCode Mobile/OpenCode Mobile/UI",
+    roots: ["ios/OpenCode Mobile/OpenCode Mobile/UI", "ios/OpenCode Mobile/OpenCode Mobile/Components"],
     extension: ".swift",
     skipDirs: ["Playground", "HighlightLab", "Diagnostic"],
     preview: /^\s*#Preview\b/,
+    sample: /^(?:(?:private|fileprivate|internal)\s+)?(?:struct|enum|extension|func|let|var)\s+\w*(?:[Pp]review|[Ss]ample)\w*/,
+    animation: null,
     patterns: [
       /\bText\(\s*"((?:[^"\\]|\\.)*)"/g,
       new RegExp(`\\b(?:${TEXT_PARAMS}):\\s*"((?:[^"\\\\]|\\\\.)*)"`, "g"),
@@ -82,25 +90,54 @@ function walk(dir, extension, skipDirs, out) {
   return out;
 }
 
-function isFinding(literal) {
-  return /[A-Za-z]/.test(literal) && !STRUCTURED_KEY.test(literal);
+// Letters that only come from interpolations (`$count`, `${a.b}`, `\(name)`) or
+// Unicode escapes (`\u{2212}`) are not text: "+$additions" or "\(done)/\(total)"
+// are not findings.
+function withoutInterpolations(literal) {
+  return literal
+    .replace(/\$\{[^}]*\}/g, "")
+    .replace(/\$[A-Za-z_][A-Za-z0-9_]*/g, "")
+    .replace(/\\\([^)]*\)/g, "")
+    .replace(/\\u\{[0-9A-Fa-f]+\}|\\u[0-9A-Fa-f]{4}/g, "");
 }
+
+function isFinding(literal) {
+  return /[A-Za-z]/.test(withoutInterpolations(literal)) && !STRUCTURED_KEY.test(literal);
+}
+
+// Compose animation labels name the animation for tooling ("listItemPressScale",
+// "opencode-working-fade"); they are never shown.
+const ANIMATION_LABEL = /^(?:[a-z]+(?:[A-Z][a-z0-9]*)+|[A-Z][a-z0-9]+(?:[A-Z][a-z0-9]*)+|[a-z0-9]+(?:-[a-z0-9]+)+)$/;
 
 function scanFile(path, platform) {
   const lines = readFileSync(path, "utf8").split("\n");
   const findings = [];
   let inPreview = false;
+  // Expression-bodied sample declarations (no brace) end at the first blank line.
+  let previewEndsAtBlank = false;
+  let lastAnimationLine = -10;
   lines.forEach((line, index) => {
-    if (platform.preview.test(line)) inPreview = true;
+    if (!inPreview && platform.preview.test(line)) {
+      inPreview = true;
+      previewEndsAtBlank = false;
+    } else if (!inPreview && platform.sample.test(line)) {
+      inPreview = true;
+      previewEndsAtBlank = !line.includes("{");
+    }
     if (inPreview) {
       // Previews are top-level declarations: they end at the first column-0 brace.
-      if (line.startsWith("}")) inPreview = false;
+      if (line.startsWith("}") || line.startsWith(")")) inPreview = false;
+      else if (previewEndsAtBlank && line.trim() === "") inPreview = false;
       return;
     }
     const code = line.trimStart();
     if (code.startsWith("//") || code.startsWith("*") || code.startsWith("/*")) return;
+    if (platform.animation && platform.animation.test(line)) lastAnimationLine = index;
+    const inAnimationCall = index - lastAnimationLine <= 8;
     for (const pattern of platform.patterns) {
       for (const match of line.matchAll(pattern)) {
+        const isLabel = platform.animation && /\blabel\s*=\s*"/.test(match[0]);
+        if (isLabel && (inAnimationCall || ANIMATION_LABEL.test(match[1]))) continue;
         if (isFinding(match[1])) findings.push({ line: index + 1, kind: "literal" });
       }
     }
@@ -114,7 +151,8 @@ function scanFile(path, platform) {
 let total = 0;
 const allFindings = [];
 for (const platform of PLATFORMS) {
-  const files = walk(join(REPO_ROOT, platform.root), platform.extension, platform.skipDirs, []);
+  const files = [];
+  for (const root of platform.roots) walk(join(REPO_ROOT, root), platform.extension, platform.skipDirs, files);
   const perFile = [];
   let literals = 0;
   let debt = 0;

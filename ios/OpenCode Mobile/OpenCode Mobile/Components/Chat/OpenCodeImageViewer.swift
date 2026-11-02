@@ -85,12 +85,15 @@ struct OpenCodeImageViewer: View {
 
     private var topBar: some View {
         HStack(alignment: .center, spacing: 12) {
-            roundButton(label: "Close", action: onDismiss) {
+            roundButton(label: "component.close", action: onDismiss) {
                 OpenCodeIconImage(icon: .close, size: 22)
             }
             VStack(spacing: 2) {
                 if items.count > 1 {
-                    Text("\(current + 1) of \(items.count)")
+                    Text(LocalizedStringResource(
+                        "component.image_viewer.position",
+                        defaultValue: "\(current + 1) of \(items.count)"
+                    ))
                         .font(OpenCodeTypography.heading)
                         .foregroundStyle(Color.white)
                 }
@@ -114,7 +117,7 @@ struct OpenCodeImageViewer: View {
     private var bottomBar: some View {
         HStack {
             Spacer()
-            roundButton(label: "Share", action: { sharing = currentPicture }) {
+            roundButton(label: "component.image_viewer.share", action: { sharing = currentPicture }) {
                 // Native share glyph: the Lucide catalog has no share icon yet.
                 Image(systemName: "square.and.arrow.up")
                     .font(.system(size: 18, weight: .regular))
@@ -127,7 +130,7 @@ struct OpenCodeImageViewer: View {
     }
 
     private func roundButton<Label: View>(
-        label: String,
+        label: LocalizedStringKey,
         action: @escaping () -> Void,
         @ViewBuilder icon: () -> Label
     ) -> some View {
@@ -138,7 +141,7 @@ struct OpenCodeImageViewer: View {
                 .background(Color.white.opacity(0.14), in: Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(label)
+        .accessibilityLabel(Text(label))
     }
 }
 
@@ -180,7 +183,7 @@ private struct OpenCodeImageViewerPage: View {
                 .accessibilityAddTraits(.isImage)
             } else if failed {
                 VStack(spacing: 6) {
-                    Text("Could not load this image")
+                    Text("component.image_viewer.could_not_load_this")
                         .font(OpenCodeTypography.body)
                         .foregroundStyle(Color.white)
                     if let filename = item.filename {
@@ -195,7 +198,10 @@ private struct OpenCodeImageViewerPage: View {
                 ProgressView()
                     .tint(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel("\(accessibilityLabel), loading")
+                    .accessibilityLabel(Text(LocalizedStringResource(
+                        "component.image.loading_label",
+                        defaultValue: "\(accessibilityLabel), loading"
+                    )))
             }
         }
         .task(id: item.id) {

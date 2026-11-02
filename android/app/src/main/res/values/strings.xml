@@ -1155,4 +1155,288 @@
     <string name="changes_accessibility_summary">%1$s, %2$s, %3$s</string>
     <!-- Accessibility label of a changed file. %1$s path, %2$s status (Added, Deleted, Modified), %3$d position, %4$d file count, %5$s additions, %6$s deletions. -->
     <string name="changes_accessibility_file">%1$s, %2$s, file %3$d of %4$d, %5$s, %6$s</string>
+    <string name="component_unified_diff_summary_added">Added file %1$s, %2$d additions, %3$d deletions</string>
+    <string name="component_activity_status_running">running</string>
+    <string name="component_composer_reverting_title">Reverting this message</string>
+    <!-- Title of a session that has none yet. -->
+    <string name="session_new_title">New Session</string>
+    <string name="session_list_dock_add_project">Add project</string>
+    <string name="theme_error_preset_not_found">Theme preset not found</string>
+    <string name="component_composer_submit">Submit</string>
+    <string name="component_composer_select_all_that_apply">Select all that apply</string>
+    <string name="component_unified_diff_summary_modified">Modified file %1$s, %2$d additions, %3$d deletions</string>
+    <string name="component_hunk_navigation_collapse_context">Collapse context</string>
+    <!-- %1$s is the project letter, %2$s the subtitle. -->
+    <string name="component_top_bar_project_subtitle">Project %1$s %2$s</string>
+    <string name="component_composer_dismiss">Dismiss</string>
+    <string name="dictation_model_downloading_detail">This is a system download. It keeps going if you close this card.</string>
+    <string name="session_list_scope_load_loading">Loading sessions…</string>
+    <string name="dictation_insert">Insert</string>
+    <string name="dictation_action_check_again">Check Again</string>
+    <string name="component_activity_sheet_steps">Steps</string>
+    <string name="component_list_item_show_actions">Show actions</string>
+    <!-- %1$s is Listening or Ready to insert, %2$s the language. -->
+    <string name="dictation_status_line">%1$s · %2$s</string>
+    <string name="component_attachment_kind_image">Image</string>
+    <string name="component_composer_hide_question">Hide question</string>
+    <string name="live_updates_status_connecting">connecting</string>
+    <!-- %1$s is the system (Android or iOS). -->
+    <string name="dictation_model_queued_detail">%1$s queued the download. It may wait for Wi-Fi, charging, or free storage. Check again in a few minutes.</string>
+    <!-- %1$s is the system (Android or iOS). -->
+    <string name="dictation_model_not_installed_detail">Dictation runs on this device, so your voice is never uploaded. %1$s downloads the model once and keeps it for every app.</string>
+    <string name="component_outgoing_message_shows_actions_hint">Shows message actions</string>
+    <string name="component_activity_status_stopped">stopped</string>
+    <string name="dictation_action_try_again">Try Again</string>
+    <!-- %1$s is the model name, %2$s the effort variant. -->
+    <string name="component_composer_model_effort">Model %1$s, effort %2$s</string>
+    <string name="component_activity_card_working">Working</string>
+    <!-- %1$s describes the activity row. -->
+    <string name="component_activity_card_opens_activity">%1$s, opens activity</string>
+    <!-- %1$s describes the image. -->
+    <string name="component_image_loading_label">%1$s, loading</string>
+    <string name="session_list_dock_new_session">New session</string>
+    <!-- %1$s lists the patterns Always would save. -->
+    <string name="component_composer_always_allows">Always allows: %1$s</string>
+    <string name="component_composer_leave_side_question_mode">Leave side question mode</string>
+    <string name="session_list_worktree_empty_other_projects">Clear the filter to see sessions on other projects.</string>
+    <string name="component_attachment_uploading">Uploading…</string>
+    <string name="component_composer_deny">Deny</string>
+    <string name="dictation_stopped">Dictation stopped</string>
+    <string name="component_composer_question_position">%1$d of %2$d</string>
+    <string name="session_list_status_ready">Ready</string>
+    <string name="session_list_dock_hint_swipe">Opens the project filter. Swipe to switch projects.</string>
+    <string name="component_composer_select_one">Select one</string>
+    <string name="component_session_list_skeleton_row">Loading session</string>
+    <string name="component_split_pane_resize_sidebar">Resize sidebar</string>
+    <string name="session_list_section_recent">Recent</string>
+    <string name="component_activity_status_completed">completed</string>
+    <string name="share_diagnostics_chooser_title">Share diagnostic logs</string>
+    <!-- %1$s is the system (Android or iOS), %2$s the speech model. -->
+    <string name="dictation_model_queued_title">%1$s will download the %2$s later</string>
+    <string name="session_list_dock_choose_project_or_worktree">Choose project or worktree</string>
+    <!-- %1$s is the worktree name. -->
+    <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
+    <!-- %1$s describes the image. -->
+    <string name="component_image_could_not_load_label">%1$s, could not load</string>
+    <string name="component_composer_question">Question</string>
+    <!-- Accessibility label of the worktree mark. -->
+    <string name="component_worktree">Worktree</string>
+    <string name="session_list_worktree_empty_other_worktrees">Clear the filter to see sessions on other worktrees.</string>
+    <string name="component_composer_side_question_mode">Side question mode</string>
+    <string name="component_page_indicator_label">Page %1$d of %2$d</string>
+    <string name="component_composer_next">Next</string>
+    <!-- %1$s is the image file name. -->
+    <string name="component_message_image_label">Image %1$s</string>
+    <string name="component_composer_leave_shell_mode">Leave shell mode</string>
+    <string name="dictation_action_downloading">Downloading…</string>
+    <string name="component_image_viewer_share">Share</string>
+    <string name="session_list_status_failed">Failed</string>
+    <string name="component_composer_custom_answer_title">Type your own answer</string>
+    <string name="component_composer_always">Always</string>
+    <string name="component_composer_send_side_question">Ask side question</string>
+    <string name="component_composer_select_exactly">Select %1$d</string>
+    <string name="dictation_action_open_settings">Open Settings</string>
+    <string name="component_composer_open_commands">Open commands</string>
+    <string name="component_thinking_ellipsis">Thinking…</string>
+    <!-- Short relative time, days. -->
+    <plurals name="relative_time_days_ago">
+        <item quantity="one">%1$dd ago</item>
+        <item quantity="other">%1$dd ago</item>
+    </plurals>
+    <!-- %1$s is the URL scheme, such as https://. -->
+    <string name="component_server_address_scheme_button_description">Scheme %1$s. Opens scheme picker</string>
+    <string name="share_diagnostics_subject">OpenCode diagnostic logs</string>
+    <string name="component_reorderable_list_move_up">Move up</string>
+    <!-- %1$s is the project name. -->
+    <string name="session_list_scope_load_failed_title">Couldn\'t load %1$s</string>
+    <string name="dictation_status_listening">Listening</string>
+    <string name="dictation_downloading_model">Downloading speech model</string>
+    <string name="session_list_worktree_empty_every_worktree">Clear the filter to see every worktree.</string>
+    <string name="component_overflow_menu_more_options">More options</string>
+    <!-- %1$d is the retry attempt number. -->
+    <string name="session_list_status_retrying_attempt">Retrying · %1$d</string>
+    <string name="live_updates_status_offline">offline</string>
+    <string name="component_attachment_kind_text">Text</string>
+    <string name="component_composer_next_question">Next question</string>
+    <string name="component_split_pane_show_sidebar">Show sidebar</string>
+    <string name="component_composer_placeholder">Ask anything...</string>
+    <string name="component_server_address_host">Host</string>
+    <!-- Short relative time, hours. -->
+    <plurals name="relative_time_hours_ago">
+        <item quantity="one">%1$dh ago</item>
+        <item quantity="other">%1$dh ago</item>
+    </plurals>
+    <plurals name="component_activity_card_step_count">
+        <item quantity="one">%1$d step</item>
+        <item quantity="other">%1$d steps</item>
+    </plurals>
+    <string name="theme_error_apply_failed">Failed to apply theme preset</string>
+    <string name="component_unified_diff_summary_deleted">Deleted file %1$s, %2$d additions, %3$d deletions</string>
+    <string name="session_list_status_running">Running</string>
+    <!-- %1$s is the number of earlier steps, such as 3 earlier steps. -->
+    <string name="component_step_rail_expands">%1$s, expands</string>
+    <string name="session_list_status_done">Done</string>
+    <!-- Components and shared text (#886). -->
+    <string name="session_list_status_idle">Idle</string>
+    <string name="component_attachment_kind_file">File</string>
+    <string name="component_composer_run_shell_command">Run shell command</string>
+    <string name="component_image_could_not_load">Couldn\'t load</string>
+    <string name="component_outgoing_message_show_actions">Show message actions</string>
+    <!-- %1$s is the live updates status, such as live or offline. -->
+    <string name="live_updates_accessibility_label">Live updates %1$s</string>
+    <string name="component_composer_previous_question">Previous question</string>
+    <string name="component_activity_card_agent">Agent</string>
+    <string name="session_list_section_today">Today</string>
+    <string name="component_composer_child_lockout">Child sessions cannot be prompted.</string>
+    <!-- %1$d is the upload percentage. -->
+    <string name="component_attachment_uploading_percent">Uploading %1$d%%</string>
+    <string name="component_composer_custom_answer_hint">Enter a custom answer</string>
+    <string name="component_composer_cancel_revert">Cancel revert</string>
+    <string name="session_list_scope_load_slow_caption">Still loading — large projects can take a moment</string>
+    <string name="component_outgoing_message_label_with_actions">Outgoing message. Shows message actions</string>
+    <string name="session_list_scope_load_failed_subtitle">Couldn\'t load sessions</string>
+    <plurals name="component_activity_card_more_running">
+        <item quantity="one">%1$d more running</item>
+        <item quantity="other">%1$d more running</item>
+    </plurals>
+    <!-- Shown for two or more agents. -->
+    <plurals name="component_activity_card_agent_count">
+        <item quantity="one">%1$d agents</item>
+        <item quantity="other">%1$d agents</item>
+    </plurals>
+    <string name="theme_error_syntax_preset_not_found">Syntax highlight preset not found</string>
+    <string name="session_list_scope_load_slow">Still loading…</string>
+    <string name="session_list_dock_hint">Opens the project filter.</string>
+    <string name="component_hunk_navigation_next">Next hunk</string>
+    <string name="session_list_scope_load_failed_message">The server didn\'t return this project\'s sessions.</string>
+    <!-- %1$s is the drop overlay title, %2$s its subtitle. -->
+    <string name="component_drop_overlay_accessibility_label">%1$s. %2$s</string>
+    <string name="component_image_view_full_screen">View full screen</string>
+    <string name="component_activity_sheet_back">Back to activity</string>
+    <!-- %1$s is the file name. -->
+    <string name="component_file_tabs_close">Close %1$s</string>
+    <string name="dictation_action_download">Download</string>
+    <string name="component_attachment_kind_pdf">PDF</string>
+    <string name="session_list_dock_next_project">Next project</string>
+    <string name="component_composer_allow_once">Allow once</string>
+    <string name="session_list_worktree_empty_title">No sessions in this worktree</string>
+    <string name="component_activity_card_opens_activity_hint">Opens activity</string>
+    <string name="dictation_speech_model">speech model</string>
+    <string name="session_list_dock_previous_project">Previous project</string>
+    <!-- Short relative time, minutes. -->
+    <plurals name="relative_time_minutes_ago">
+        <item quantity="one">%1$dm ago</item>
+        <item quantity="other">%1$dm ago</item>
+    </plurals>
+    <string name="component_composer_request_position">%1$d of %2$d</string>
+    <string name="component_composer_side_question_placeholder">Side question, not added to chat</string>
+    <string name="session_list_worktree_empty_every_project">Clear the filter to see every project.</string>
+    <!-- %1$s is the image file name. -->
+    <string name="component_image_viewer_could_not_load_named">Couldn\'t load %1$s</string>
+    <string name="component_composer_select_up_to">Select up to %1$d</string>
+    <string name="live_updates_status_live">live</string>
+    <string name="component_image_viewer_could_not_load_this">Couldn\'t load this image</string>
+    <string name="session_list_worktree_empty_action">Clear filter</string>
+    <string name="dictation_model_download_failed_detail">Check the connection and free storage on this device, then try again.</string>
+    <string name="component_composer_send_queue">Send as Queue</string>
+    <string name="session_list_dock_new_session_hint">Use Choose project or worktree to start somewhere else.</string>
+    <string name="session_list_section_yesterday">Yesterday</string>
+    <!-- %1$d is the line number, %2$s the line's code. -->
+    <string name="component_code_file_line_label">Line %1$d, %2$s</string>
+    <string name="share_feedback_subject_idea">OpenCode Mobile idea report</string>
+    <string name="component_hunk_navigation_previous">Previous hunk</string>
+    <!-- %1$s and %2$s are the first and last day of the week, such as Mar 3. -->
+    <string name="session_list_section_week_of">Week of %1$s – %2$s</string>
+    <!-- Spoken after the project name in the dock. -->
+    <plurals name="session_list_dock_session_count">
+        <item quantity="one">%1$d sessions</item>
+        <item quantity="other">%1$d sessions</item>
+    </plurals>
+    <!-- %1$s is the system (Android or iOS), %2$s the speech model. -->
+    <string name="dictation_model_download_failed_title">%1$s couldn\'t download the %2$s</string>
+    <string name="component_activity_status_pending">pending</string>
+    <!-- Tag on the pending revert chip; shown in capitals. -->
+    <string name="component_composer_revert_tag">Revert</string>
+    <!-- %1$s is the model name. -->
+    <string name="component_composer_model">Model %1$s</string>
+    <plurals name="component_step_rail_earlier_steps">
+        <item quantity="one">%1$d earlier step</item>
+        <item quantity="other">%1$d earlier steps</item>
+    </plurals>
+    <string name="component_outgoing_message_long_press_hint">Long press to show message actions</string>
+    <string name="component_composer_hide_permission">Hide permission request</string>
+    <!-- %1$s is the download progress, such as 40%. -->
+    <string name="dictation_downloading_model_progress">Downloading speech model, %1$s</string>
+    <string name="component_branch_pill_copy_branch_name">Copy branch name</string>
+    <string name="component_outgoing_message_label">Outgoing message</string>
+    <string name="session_list_status_stopped">Stopped</string>
+    <!-- %1$s is the file name. -->
+    <string name="component_attachment_cancel_upload">Cancel upload of %1$s</string>
+    <string name="dictation_cancel_description">Cancel dictation</string>
+    <string name="component_composer_shell_mode">Shell mode</string>
+    <string name="component_skeleton_illustration_connect">Connect</string>
+    <string name="component_composer_not_selected">Not selected</string>
+    <string name="component_composer_shell_mode_description">Shell mode. Leave shell mode</string>
+    <!-- %1$s is the base branch name. -->
+    <string name="component_branch_pill_based_on">Based on %1$s</string>
+    <string name="component_composer_add_attachment">Add attachment</string>
+    <string name="dictation_microphone_off">Microphone access is off</string>
+    <string name="component_composer_shell">Shell</string>
+    <string name="live_updates_status_auth_failed">Authentication failed</string>
+    <string name="component_branch_pill_view_all_changes">View all changes</string>
+    <string name="component_composer_send">Send</string>
+    <!-- %1$s is Loading sessions, %2$s the slow-loading caption. -->
+    <string name="component_session_list_skeleton_slow_label">%1$s. %2$s</string>
+    <string name="component_close">Close</string>
+    <string name="relative_time_now">now</string>
+    <string name="component_composer_previous_permission">Previous permission request</string>
+    <string name="component_composer_dictate">Dictate</string>
+    <string name="component_composer_side_question_mode_description">Side question mode. Leave side question mode</string>
+    <string name="component_composer_abort">Abort active work</string>
+    <!-- %1$s is the URL scheme, such as https://. -->
+    <string name="component_server_address_scheme_button">Scheme %1$s</string>
+    <string name="component_composer_open_subagent_session">Open subagent session</string>
+    <string name="component_composer_question_step">Step %1$d of %2$d</string>
+    <string name="share_feedback_subject_bug">OpenCode Mobile bug report</string>
+    <string name="component_activity_card_opens_child_session_hint">Opens the child session</string>
+    <string name="component_activity_status_failed">failed</string>
+    <!-- %1$s is the system (Android or iOS), %2$s the speech model. -->
+    <string name="dictation_model_not_installed_title">%1$s needs its %2$s</string>
+    <string name="component_composer_back_to_main_session">Back to main session</string>
+    <!-- %1$d is the number of steps so far. -->
+    <string name="component_activity_sheet_working_count">Working %1$d</string>
+    <string name="session_list_status_retrying">Retrying</string>
+    <!-- %1$s is the file name. -->
+    <string name="component_attachment_remove">Remove %1$s</string>
+    <string name="component_composer_send_steer">Send as Steer</string>
+    <string name="component_composer_next_permission">Next permission request</string>
+    <string name="session_list_dock_project_filter">Project filter</string>
+    <string name="component_split_pane_resize_hint">Double-tap to hide the sidebar</string>
+    <string name="component_branch_pill_shows_details_hint">Shows branch details</string>
+    <string name="component_composer_permission_requested">Permission requested</string>
+    <string name="component_thinking">Thinking</string>
+    <!-- %1$s is the system (Android or iOS), %2$s the speech model. -->
+    <string name="dictation_model_downloading_title">%1$s is downloading the %2$s</string>
+    <string name="component_hunk_navigation_expand_context">Expand context</string>
+    <string name="dictation_listening_placeholder">Listening…</string>
+    <!-- Badge in an illustration; shown in capitals. -->
+    <string name="component_skeleton_illustration_unofficial">Unofficial</string>
+    <string name="dictation_status_ready">Ready to insert</string>
+    <string name="dictation_starting">Starting…</string>
+    <!-- %1$s is the dictation language, such as English. -->
+    <string name="dictation_language_speech_model">%1$s speech model</string>
+    <string name="component_reorderable_list_move_down">Move down</string>
+    <plurals name="component_section_header_item_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <string name="component_server_address_scheme">Scheme</string>
+    <string name="component_server_address_scheme_picker_hint">Opens scheme picker</string>
+    <string name="component_split_pane_hide_sidebar">Hide sidebar</string>
+    <string name="component_composer_select_range">Select %1$d to %2$d</string>
+    <string name="component_image_viewer_position">%1$d of %2$d</string>
+    <!-- %1$s is Listening or Ready to insert, %2$s the language. -->
+    <string name="dictation_status_line_on_device">%1$s · %2$s · on-device</string>
+    <string name="component_composer_select_at_least">Select at least %1$d</string>
+    <string name="dictation_insert_description">Insert transcript</string>
 </resources>

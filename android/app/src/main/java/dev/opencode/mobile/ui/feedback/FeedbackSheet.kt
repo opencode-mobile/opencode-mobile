@@ -115,6 +115,7 @@ import dev.opencode.mobile.ui.sessionchat.dictation.cardPhase
 import dev.opencode.mobile.ui.sessionchat.dictation.dictationLanguageLabel
 import dev.opencode.mobile.ui.sessionchat.dictation.formatDictationElapsed
 import dev.opencode.mobile.ui.sessionchat.dictation.probeDictationSupport
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
 import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -943,7 +944,7 @@ private suspend fun shareIntent(
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         }
-    send.putExtra(Intent.EXTRA_SUBJECT, payload.subject)
+    send.putExtra(Intent.EXTRA_SUBJECT, payload.subject.resolve(ResourcesUiTextLookup(context.resources)))
     send.putExtra(Intent.EXTRA_TEXT, payload.text)
     return Intent.createChooser(send, context.getString(R.string.feedback_share_chooser_title))
 }

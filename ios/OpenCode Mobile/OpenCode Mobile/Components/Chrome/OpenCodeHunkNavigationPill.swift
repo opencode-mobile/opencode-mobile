@@ -13,19 +13,19 @@ struct OpenCodeHunkNavigationPill: View {
         HStack(spacing: 0) {
             actionButton(
                 icon: .arrowUpward,
-                label: "Previous hunk",
+                label: "component.hunk_navigation.previous",
                 enabled: previousEnabled,
                 action: onPrevious
             )
             actionButton(
                 icon: contextExpanded ? .collapseContent : .expandContent,
-                label: contextExpanded ? "Collapse context" : "Expand context",
+                label: contextExpanded ? "component.hunk_navigation.collapse_context" : "component.hunk_navigation.expand_context",
                 enabled: contextEnabled,
                 action: onToggleContext
             )
             actionButton(
                 icon: .arrowDownward,
-                label: "Next hunk",
+                label: "component.hunk_navigation.next",
                 enabled: nextEnabled,
                 action: onNext
             )
@@ -40,7 +40,7 @@ struct OpenCodeHunkNavigationPill: View {
 
     private func actionButton(
         icon: OpenCodeIcon,
-        label: String,
+        label: LocalizedStringKey,
         enabled: Bool,
         action: @escaping () -> Void
     ) -> some View {
@@ -52,7 +52,7 @@ struct OpenCodeHunkNavigationPill: View {
         }
         .buttonStyle(OpenCodeHunkNavigationButtonStyle(enabled: enabled))
         .disabled(!enabled)
-        .accessibilityLabel(label)
+        .accessibilityLabel(Text(label))
     }
 
     private static let width: CGFloat = 132

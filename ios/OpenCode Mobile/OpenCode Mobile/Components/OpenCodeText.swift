@@ -74,6 +74,18 @@ struct OpenCodeText: Hashable, Sendable, ExpressibleByStringInterpolation {
         return .verbatim(content)
     }
 
+    /// App text already resolved from the String Catalog, such as a
+    /// `String(localized:)` value built in shared code that must return a
+    /// `String`. Shown as is; never looked up again. Not for English literals.
+    static func localized(_ string: String) -> OpenCodeText {
+        OpenCodeText(verbatim: string)
+    }
+
+    /// Optional form of `localized(_:)`; `nil` stays `nil`.
+    static func localized(ifPresent string: String?) -> OpenCodeText? {
+        string.map(OpenCodeText.init(verbatim:))
+    }
+
     /// App text that is still built as a `String` in code and not yet in the
     /// String Catalog. Shown as is, like `.verbatim`, but marks text to extract,
     /// so the hardcoded-text check counts it. Not for server or session content.

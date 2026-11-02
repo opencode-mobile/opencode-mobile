@@ -159,7 +159,7 @@ struct OpenCodeOverflowMenuTrigger: View {
 
     var body: some View {
         OpenCodeButton(
-            variant: .iconCircle(.moreVert, accessibilityLabel: "More options"),
+            variant: .iconCircle(.moreVert, accessibilityLabel: "component.overflow_menu.more_options"),
             contrast: .low,
             action: action
         )

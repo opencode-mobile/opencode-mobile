@@ -31,7 +31,7 @@ struct OpenCodeSessionRowSkeleton: View {
             OpenCodeSessionRowSkeletonContent(accent: accent, variant: variant, phase: phase)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Loading session")
+        .accessibilityLabel(Text("component.session_list_skeleton.row"))
     }
 }
 
@@ -39,7 +39,18 @@ struct OpenCodeSessionRowSkeleton: View {
 /// optional quiet caption under them. Static when Reduce Motion is on.
 struct OpenCodeSessionListSkeleton: View {
     static let defaultRowCount = 6
-    static let defaultAccessibilityLabel = "Loading sessions"
+    private var accessibilityLabel: String {
+        let label = Self.defaultAccessibilityLabel
+        guard let caption else { return label }
+        return String(localized: LocalizedStringResource(
+            "component.session_list_skeleton.slow_label",
+            defaultValue: "\(label). \(caption)"
+        ))
+    }
+
+    static var defaultAccessibilityLabel: String {
+        String(localized: "common.loading_sessions", defaultValue: "Loading sessions")
+    }
 
     let rowCount: Int
     let accent: LetterAccent?
@@ -73,7 +84,7 @@ struct OpenCodeSessionListSkeleton: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(caption.map { "\(Self.defaultAccessibilityLabel). \($0)" } ?? Self.defaultAccessibilityLabel)
+        .accessibilityLabel(accessibilityLabel)
         .accessibilityIdentifier("sessionListSkeleton")
     }
 }

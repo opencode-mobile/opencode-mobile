@@ -440,7 +440,7 @@ struct SettingsView: View {
 
                     if let loadError = themeManager.loadError {
                         // ThemeManager's own message; it moves to a key with the theme code.
-                        OpenCodeInlineNotice(message: .verbatim(loadError), tone: .error)
+                        OpenCodeInlineNotice(message: loadError, tone: .error)
                             .padding(.horizontal, 16)
                             .padding(.top, 4)
                     }

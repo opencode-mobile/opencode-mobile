@@ -6,6 +6,7 @@ import dev.opencode.mobile.domain.session.SessionSummary
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.components.toListItemStatus
+import dev.opencode.mobile.ui.text.EnglishStrings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -77,7 +78,7 @@ class SessionListStatusMappingTest {
     fun cachedRunningUsesStaleTone() {
         assertEquals(
             OpenCodeListItemStatusTone.Stale,
-            SessionListStatus.Running.toListItemStatus(stale = true).tone,
+            SessionListStatus.Running.toListItemStatus(stale = true, text = EnglishStrings).tone,
         )
     }
 
@@ -85,20 +86,20 @@ class SessionListStatusMappingTest {
     fun serverRunningUsesInteractiveTone() {
         assertEquals(
             OpenCodeListItemStatusTone.Interactive,
-            SessionListStatus.Running.toListItemStatus(stale = false).tone,
+            SessionListStatus.Running.toListItemStatus(stale = false, text = EnglishStrings).tone,
         )
     }
 
     @Test
     fun idleShowsInfoPill() {
-        val status = SessionListStatus.Idle.toListItemStatus(stale = false)
+        val status = SessionListStatus.Idle.toListItemStatus(stale = false, text = EnglishStrings)
         assertEquals("Idle", status.text)
         assertEquals(OpenCodeListItemStatusTone.Info, status.tone)
     }
 
     @Test
     fun cachedIdleUsesStaleTone() {
-        val status = SessionListStatus.Idle.toListItemStatus(stale = true)
+        val status = SessionListStatus.Idle.toListItemStatus(stale = true, text = EnglishStrings)
         assertEquals("Idle", status.text)
         assertEquals(OpenCodeListItemStatusTone.Stale, status.tone)
     }
@@ -136,9 +137,9 @@ class SessionListStatusMappingTest {
 
     @Test
     fun unreadPillsUseOutcomeTones() {
-        val done = SessionListStatus.Done.toListItemStatus()
-        val failed = SessionListStatus.Failed.toListItemStatus()
-        val stopped = SessionListStatus.Stopped.toListItemStatus()
+        val done = SessionListStatus.Done.toListItemStatus(text = EnglishStrings)
+        val failed = SessionListStatus.Failed.toListItemStatus(text = EnglishStrings)
+        val stopped = SessionListStatus.Stopped.toListItemStatus(text = EnglishStrings)
 
         assertEquals("Done" to OpenCodeListItemStatusTone.Success, done.text to done.tone)
         assertEquals("Failed" to OpenCodeListItemStatusTone.Error, failed.text to failed.tone)

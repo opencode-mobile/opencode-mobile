@@ -2,7 +2,7 @@ import SwiftUI
 
 struct OpenCodeServerAddressInput: View {
     @Binding var value: String
-    var hint: OpenCodeText = "Host"
+    var hint: OpenCodeText = "component.server_address.host"
     var accessibilityLabel: OpenCodeText?
     var enabled = true
     var errorMessage: OpenCodeText?
@@ -27,7 +27,7 @@ struct OpenCodeServerAddressInput: View {
 
     init(
         value: Binding<String>,
-        hint: OpenCodeText = "Host",
+        hint: OpenCodeText = "component.server_address.host",
         accessibilityLabel: OpenCodeText? = nil,
         enabled: Bool = true,
         errorMessage: OpenCodeText? = nil,
@@ -69,8 +69,11 @@ struct OpenCodeServerAddressInput: View {
                 }
                 .buttonStyle(ServerAddressSchemeButtonStyle())
                 .disabled(!enabled)
-                .accessibilityLabel("Scheme \(scheme.label)")
-                .accessibilityHint("Opens scheme picker")
+                .accessibilityLabel(Text(LocalizedStringResource(
+                    "component.server_address.scheme_button",
+                    defaultValue: "Scheme \(scheme.label)"
+                )))
+                .accessibilityHint(Text("component.server_address.scheme_picker_hint"))
 
                 TextField(hint.resolved, text: hostBinding)
                     .font(OpenCodeTypography.body)
@@ -117,7 +120,7 @@ struct OpenCodeServerAddressInput: View {
                 focused = newValue
             }
         }
-        .openCodeBottomSheet(isPresented: $showSchemeSheet, title: "Scheme") {
+        .openCodeBottomSheet(isPresented: $showSchemeSheet, title: "component.server_address.scheme") {
             ForEach(ServerAddressScheme.allCases, id: \.self) { option in
                 OpenCodeBottomSheetEntry(
                     title: .verbatim(option.label),

@@ -91,6 +91,8 @@ internal fun rememberComposerAttachmentPaste(): ComposerAttachmentPaste {
 internal fun Modifier.composerAttachmentPasteMenu(
     paste: ComposerAttachmentPaste,
     enabled: Boolean,
+    /** The menu item's label: the system's localised "Paste". */
+    pasteLabel: String,
     onPaste: (OpenCodeComposerPastedContent) -> Unit,
 ): Modifier {
     if (!enabled) return this
@@ -98,7 +100,7 @@ internal fun Modifier.composerAttachmentPasteMenu(
         component.key != TextContextMenuKeys.PasteKey || !paste.hasAttachableClip()
     }.appendTextContextMenuComponents {
         if (paste.hasAttachableClip()) {
-            item(key = ComposerPasteAttachmentKey, label = "Paste") {
+            item(key = ComposerPasteAttachmentKey, label = pasteLabel) {
                 close()
                 paste.attachableClip()?.let(onPaste)
             }

@@ -1,5 +1,6 @@
 package dev.opencode.mobile
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -48,6 +49,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.app.AppVersion
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.feedback.FeedbackScreen
@@ -303,13 +305,16 @@ fun MainNavigation() {
                     val diagnosticLogsViewModel: DiagnosticLogsViewModel = hiltViewModel()
                     val diagnosticLogsState by diagnosticLogsViewModel.state.collectAsStateWithLifecycle()
                     val context = LocalContext.current
+                    val shareSubject = stringResource(R.string.share_diagnostics_subject)
+                    val shareChooserTitle = stringResource(R.string.share_diagnostics_chooser_title)
                     DiagnosticLogsScreen(
                         state = diagnosticLogsState,
                         onNavigateBack = onNavigateBack,
                         detailControl = detailControl,
                         onShareViaApps = {
                             diagnosticLogsViewModel.shareViaApps { intent ->
-                                context.startActivity(intent)
+                                intent.putExtra(Intent.EXTRA_SUBJECT, shareSubject)
+                                context.startActivity(Intent.createChooser(intent, shareChooserTitle))
                             }
                         },
                         onSaveToUri = diagnosticLogsViewModel::saveToUri,

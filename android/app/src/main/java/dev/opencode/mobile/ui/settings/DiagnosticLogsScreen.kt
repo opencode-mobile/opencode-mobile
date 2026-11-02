@@ -146,6 +146,7 @@ class DiagnosticLogsViewModel
             }
         }
 
+        /** Builds the share intent; the caller adds the subject and the chooser (app text). */
         fun shareViaApps(onReady: (Intent) -> Unit) {
             viewModelScope.launch {
                 runCatching {
@@ -153,7 +154,6 @@ class DiagnosticLogsViewModel
                     Intent(Intent.ACTION_SEND).apply {
                         type = EXPORT_MIME_TYPE
                         putExtra(Intent.EXTRA_STREAM, uri)
-                        putExtra(Intent.EXTRA_SUBJECT, "OpenCode diagnostic logs")
                         putExtra(Intent.EXTRA_TITLE, EXPORT_FILE_NAME)
                         clipData = ClipData.newUri(context.contentResolver, EXPORT_FILE_NAME, uri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -161,7 +161,7 @@ class DiagnosticLogsViewModel
                 }.onSuccess { intent ->
                     mutableState.value = mutableState.value.copy(shareError = null, saveMessage = null)
                     refresh()
-                    onReady(Intent.createChooser(intent, "Share diagnostic logs"))
+                    onReady(intent)
                 }.onFailure {
                     mutableState.value =
                         mutableState.value.copy(

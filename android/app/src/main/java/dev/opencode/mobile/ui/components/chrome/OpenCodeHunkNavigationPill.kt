@@ -15,8 +15,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -42,19 +44,26 @@ fun OpenCodeHunkNavigationPill(
         Row(Modifier.width(132.dp).defaultMinSize(minHeight = 44.dp)) {
             HunkNavigationButton(
                 icon = OpenCodeIcons.ArrowUpward,
-                label = "Previous hunk",
+                label = stringResource(R.string.component_hunk_navigation_previous),
                 enabled = previousEnabled,
                 onClick = onPrevious,
             )
             HunkNavigationButton(
                 icon = if (contextExpanded) OpenCodeIcons.CollapseContent else OpenCodeIcons.ExpandContent,
-                label = if (contextExpanded) "Collapse context" else "Expand context",
+                label =
+                    stringResource(
+                        if (contextExpanded) {
+                            R.string.component_hunk_navigation_collapse_context
+                        } else {
+                            R.string.component_hunk_navigation_expand_context
+                        },
+                    ),
                 enabled = contextEnabled,
                 onClick = onToggleContext,
             )
             HunkNavigationButton(
                 icon = OpenCodeIcons.ArrowDownward,
-                label = "Next hunk",
+                label = stringResource(R.string.component_hunk_navigation_next),
                 enabled = nextEnabled,
                 onClick = onNext,
             )

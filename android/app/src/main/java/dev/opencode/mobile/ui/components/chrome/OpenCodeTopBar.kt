@@ -92,9 +92,10 @@ sealed interface OpenCodeTopBarLeading {
         val contentDescription: String? = null,
     ) : OpenCodeTopBarLeading
 
+    /** [contentDescription] defaults to the localised "Close" (`R.string.component_close`). */
     class Close(
         val onClick: () -> Unit,
-        val contentDescription: String = "Close",
+        val contentDescription: String? = null,
     ) : OpenCodeTopBarLeading
 
     class CustomIcon(
@@ -196,13 +197,13 @@ private fun TopBarTitleBlock(
     titleMenuExpanded: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val titleBlockDescription = titleBlockAccessibilityLabel(title, subtitle, subtitleLeading, subtitleAccessory)
     Box(
         modifier =
             modifier
                 .height(TopBarTitleBlockHeight)
                 .semantics {
-                    contentDescription =
-                        titleBlockAccessibilityLabel(title, subtitle, subtitleLeading, subtitleAccessory)
+                    contentDescription = titleBlockDescription
                 },
         contentAlignment = Alignment.CenterStart,
     ) {
@@ -303,7 +304,7 @@ private fun TopBarSubtitleLine(
         if (worktree && hasSubtitle) {
             Icon(
                 imageVector = OpenCodeIcons.CallSplit,
-                contentDescription = "Worktree",
+                contentDescription = stringResource(R.string.component_worktree),
                 modifier = Modifier.size(12.dp),
                 tint = openCodeColor("icon-strong-base"),
             )
@@ -379,6 +380,7 @@ private fun TopBarLetterBadge(
     }
 }
 
+@Composable
 private fun titleBlockAccessibilityLabel(
     title: String,
     subtitle: String?,
@@ -394,14 +396,15 @@ private fun titleBlockAccessibilityLabel(
                 ?.toString()
         parts +=
             when {
-                letter != null -> "Project $letter $subtitle"
-                subtitleLeading is OpenCodeTopBarSubtitleLeading.Worktree -> "Worktree $subtitle"
+                letter != null -> stringResource(R.string.component_top_bar_project_subtitle, letter, subtitle)
+                subtitleLeading is OpenCodeTopBarSubtitleLeading.Worktree ->
+                    stringResource(R.string.component_top_bar_worktree_subtitle, subtitle)
                 else -> subtitle
             }
     }
     when (subtitleAccessory) {
         is OpenCodeTopBarSubtitleAccessory.StatusDot ->
-            parts += "Live updates ${subtitleAccessory.status.label}"
+            parts += subtitleAccessory.status.accessibilityLabel()
         null -> Unit
     }
     return if (parts.isEmpty()) title else parts.joinToString(prefix = "$title, ", separator = ", ")
@@ -427,7 +430,11 @@ private fun LeadingControl(leading: OpenCodeTopBarLeading) {
         }
         is OpenCodeTopBarLeading.Close ->
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, leading.contentDescription),
+                variant =
+                    OpenCodeButtonVariant.IconCircle(
+                        OpenCodeIcons.Close,
+                        leading.contentDescription ?: stringResource(R.string.component_close),
+                    ),
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = leading.onClick,
             )

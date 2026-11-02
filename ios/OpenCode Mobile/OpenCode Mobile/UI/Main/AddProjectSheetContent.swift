@@ -114,7 +114,7 @@ struct AddProjectSuggestions: View {
                 OpenCodeListItem(
                     title: .verbatim(suggestion.name),
                     subtitle: .verbatim(suggestion.path),
-                    caption: .unlocalized(ifPresent: suggestion.activityLabel),
+                    caption: .localized(ifPresent: suggestion.activityLabel),
                     startDecorator: .icon(.folder),
                     action: { onSelectSuggestion(suggestion.path) }
                 )

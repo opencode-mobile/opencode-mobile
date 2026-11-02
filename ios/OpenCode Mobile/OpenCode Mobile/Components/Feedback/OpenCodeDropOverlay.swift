@@ -25,6 +25,15 @@ struct OpenCodeDropOverlay: View {
         variant == .accept ? OpenCodeColors.interactive : OpenCodeColors.error
     }
 
+    private var accessibilityLabel: LocalizedStringResource {
+        let title = title.resolved
+        let subtitle = subtitle.resolved
+        return LocalizedStringResource(
+            "component.drop_overlay.accessibility_label",
+            defaultValue: "\(title). \(subtitle)"
+        )
+    }
+
     var body: some View {
         ZStack {
             Color.black.opacity(Self.scrimAlpha)
@@ -61,7 +70,7 @@ struct OpenCodeDropOverlay: View {
             )
             .padding(.horizontal, 32)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(title.resolved). \(subtitle.resolved)")
+            .accessibilityLabel(Text(accessibilityLabel))
         }
         .accessibilityIdentifier("session-chat-drop-overlay")
     }

@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.components
 
 import android.content.res.Configuration
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.Animatable
@@ -74,6 +75,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -94,6 +96,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeRadius
@@ -101,6 +104,9 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodePageIndicator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.resolve
+import java.util.Locale
 import kotlin.math.abs
 
 sealed interface OpenCodeSessionComposerState {
@@ -673,7 +679,12 @@ private fun PromptEntryContent(
                     .onFocusChanged {
                         focus.updateFocused(it.isFocused)
                         reportFocus(it.isFocused)
-                    }.composerAttachmentPasteMenu(attachmentPaste, enabled = state.attachEnabled, onPaste = onPasteContent)
+                    }.composerAttachmentPasteMenu(
+                        attachmentPaste,
+                        enabled = state.attachEnabled,
+                        pasteLabel = stringResource(android.R.string.paste),
+                        onPaste = onPasteContent,
+                    )
                     .onPreviewKeyEvent { event ->
                         if (state.attachEnabled && attachmentPaste.handleKey(event, onPasteContent)) return@onPreviewKeyEvent true
                         // Delete on an empty field changes no text; in side-question mode it leaves the mode.
@@ -689,7 +700,14 @@ private fun PromptEntryContent(
                 Box {
                     if (state.text.isBlank()) {
                         Text(
-                            text = if (state.sideQuestionMode) SESSION_COMPOSER_SIDE_QUESTION_PLACEHOLDER else "Ask anything...",
+                            text =
+                                stringResource(
+                                    if (state.sideQuestionMode) {
+                                        R.string.component_composer_side_question_placeholder
+                                    } else {
+                                        R.string.component_composer_placeholder
+                                    },
+                                ),
                             style = MaterialTheme.typography.bodyLarge,
                             color = openCodeColor("text-weak"),
                         )
@@ -711,19 +729,19 @@ private fun PromptEntryContent(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, "Add attachment"),
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, stringResource(R.string.component_composer_add_attachment)),
                 enabled = state.attachEnabled,
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = { onAction(OpenCodeSessionComposerAction.Attach) },
             )
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Slash, "Open commands"),
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Slash, stringResource(R.string.component_composer_open_commands)),
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = { onAction(OpenCodeSessionComposerAction.OpenCommands) },
             )
             if (state.showDictationButton) {
                 OpenCodeButton(
-                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Mic, "Dictate"),
+                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Mic, stringResource(R.string.component_composer_dictate)),
                     contrast = OpenCodeButtonContrast.Low,
                     onClick = { onAction(OpenCodeSessionComposerAction.BeginDictation) },
                 )
@@ -736,7 +754,7 @@ private fun PromptEntryContent(
         ) {
             if (state.showStop) {
                 OpenCodeButton(
-                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Stop, "Abort active work"),
+                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Stop, stringResource(R.string.component_composer_abort)),
                     enabled = state.stopEnabled,
                     contrast = OpenCodeButtonContrast.Low,
                     onClick = { onAction(OpenCodeSessionComposerAction.Stop) },
@@ -757,7 +775,7 @@ private fun PromptEntryContent(
                                 hasActiveWork = state.showStop,
                                 shellMode = state.shellMode,
                                 sideQuestionMode = state.sideQuestionMode,
-                            ),
+                            ).resolve(),
                     ),
                 enabled = state.sendEnabled,
                 // A side question is not a prompt, so its Send does not look like one.
@@ -812,15 +830,16 @@ internal fun questionSelectionHint(
     multiple: Boolean,
     minSelections: Int? = null,
     maxSelections: Int? = null,
-): String {
-    if (!multiple || maxSelections == 1) return "Select one"
+): UiText {
+    if (!multiple || maxSelections == 1) return UiText.resource(R.string.component_composer_select_one)
     val min = minSelections?.takeIf { it > 1 }
     return when {
-        min != null && maxSelections != null && maxSelections > min -> "Select $min to $maxSelections"
-        min != null && maxSelections != null -> "Select $min"
-        min != null -> "Select at least $min"
-        maxSelections != null -> "Select up to $maxSelections"
-        else -> "Select all that apply"
+        min != null && maxSelections != null && maxSelections > min ->
+            UiText.resource(R.string.component_composer_select_range, min, maxSelections)
+        min != null && maxSelections != null -> UiText.resource(R.string.component_composer_select_exactly, min)
+        min != null -> UiText.resource(R.string.component_composer_select_at_least, min)
+        maxSelections != null -> UiText.resource(R.string.component_composer_select_up_to, maxSelections)
+        else -> UiText.resource(R.string.component_composer_select_all_that_apply)
     }
 }
 
@@ -828,16 +847,14 @@ internal fun questionSelectionHint(
  * Send button label. Steer/Queue only describe what Send does while work is running;
  * an idle session just sends. A shell command always runs now.
  */
-internal const val SESSION_COMPOSER_SIDE_QUESTION_PLACEHOLDER = "Side question, not added to chat"
-
 internal fun sessionComposerSendLabel(
     followUpDelivery: FollowUpDelivery?,
     hasActiveWork: Boolean,
     shellMode: Boolean = false,
     sideQuestionMode: Boolean = false,
-): String =
+): UiText =
     if (sideQuestionMode) {
-        "Ask side question"
+        UiText.resource(R.string.component_composer_send_side_question)
     } else {
         sessionComposerPromptSendLabel(followUpDelivery, hasActiveWork, shellMode)
     }
@@ -846,11 +863,11 @@ private fun sessionComposerPromptSendLabel(
     followUpDelivery: FollowUpDelivery?,
     hasActiveWork: Boolean,
     shellMode: Boolean,
-): String =
+): UiText =
     when (followUpDelivery.takeIf { hasActiveWork && !shellMode }) {
-        FollowUpDelivery.Steer -> "Send as Steer"
-        FollowUpDelivery.Queue -> "Send as Queue"
-        null -> if (shellMode) "Run shell command" else "Send"
+        FollowUpDelivery.Steer -> UiText.resource(R.string.component_composer_send_steer)
+        FollowUpDelivery.Queue -> UiText.resource(R.string.component_composer_send_queue)
+        null -> UiText.resource(if (shellMode) R.string.component_composer_run_shell_command else R.string.component_composer_send)
     }
 
 private class MentionVisualTransformation(
@@ -879,6 +896,8 @@ private class MentionVisualTransformation(
 @Composable
 private fun PendingRevertChip(onCancel: () -> Unit) {
     val chipShape = RoundedCornerShape(OpenCodeRadius.small)
+    val revertingTitle = stringResource(R.string.component_composer_reverting_title)
+    val revertTag = stringResource(R.string.component_composer_revert_tag).uppercase(Locale.getDefault())
     Row(
         modifier =
             Modifier
@@ -903,18 +922,18 @@ private fun PendingRevertChip(onCancel: () -> Unit) {
             modifier =
                 Modifier
                     .weight(1f)
-                    .semantics { contentDescription = "Reverting this message, REVERT" },
+                    .describedAs("$revertingTitle, $revertTag"),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             Text(
-                text = "Reverting this message",
+                text = revertingTitle,
                 style = MaterialTheme.typography.bodyMedium,
                 color = openCodeColor("text-strong"),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "REVERT",
+                text = revertTag,
                 style = MaterialTheme.typography.bodySmall,
                 color = openCodeColor("text-base"),
             )
@@ -922,7 +941,7 @@ private fun PendingRevertChip(onCancel: () -> Unit) {
         IconButton(onClick = onCancel, modifier = Modifier.size(36.dp)) {
             Icon(
                 OpenCodeIcons.Close,
-                contentDescription = "Cancel revert",
+                contentDescription = stringResource(R.string.component_composer_cancel_revert),
                 tint = openCodeColor("icon-strong-base"),
             )
         }
@@ -965,20 +984,20 @@ private fun PickerChipsRow(
             ) {
                 if (state.sideQuestionMode) {
                     OpenCodeChoiceBadge(
-                        label = "/btw",
+                        label = SIDE_QUESTION_COMMAND,
                         selected = true,
                         onClick = { onAction(OpenCodeSessionComposerAction.ExitSideQuestionMode) },
                         variant = OpenCodeChoiceBadgeVariant.Glass,
-                        modifier = Modifier.semantics { contentDescription = "Side question mode. Leave side question mode" },
+                        modifier = Modifier.describedAs(stringResource(R.string.component_composer_side_question_mode_description)),
                     )
                 } else if (state.shellMode) {
                     // Like the TUI, shell mode shows "Shell" in place of the agent and model.
                     OpenCodeChoiceBadge(
-                        label = "Shell",
+                        label = stringResource(R.string.component_composer_shell),
                         selected = true,
                         onClick = { onAction(OpenCodeSessionComposerAction.ExitShellMode) },
                         variant = OpenCodeChoiceBadgeVariant.Glass,
-                        modifier = Modifier.semantics { contentDescription = "Shell mode. Leave shell mode" },
+                        modifier = Modifier.describedAs(stringResource(R.string.component_composer_shell_mode_description)),
                     )
                 } else {
                     OpenCodeChoiceBadge(
@@ -1014,9 +1033,9 @@ private fun ChildLockoutContent(
 ) {
     val lockoutLabel =
         if (state.showVariant) {
-            "Model ${state.selectedModelLabel}, effort ${state.selectedVariantLabel}"
+            stringResource(R.string.component_composer_model_effort, state.selectedModelLabel, state.selectedVariantLabel)
         } else {
-            "Model ${state.selectedModelLabel}"
+            stringResource(R.string.component_composer_model, state.selectedModelLabel)
         }
     val textStrong = openCodeColor("text-strong")
     val ctaFill = textStrong.copy(alpha = 0.14f)
@@ -1038,7 +1057,7 @@ private fun ChildLockoutContent(
         }
     }
     Text(
-        text = "Child sessions cannot be prompted.",
+        text = stringResource(R.string.component_composer_child_lockout),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(horizontal = 4.dp),
@@ -1054,7 +1073,7 @@ private fun ChildLockoutContent(
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = "Back to main session",
+            text = stringResource(R.string.component_composer_back_to_main_session),
             color = textStrong,
             style = MaterialTheme.typography.titleSmall,
         )
@@ -1092,16 +1111,24 @@ private fun PermissionApprovalContent(
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Permission requested", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+            Text(
+                stringResource(R.string.component_composer_permission_requested),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
             RequestPager(
                 position = state.queuePosition,
                 count = state.queueCount,
                 enabled = !state.submitting,
-                noun = "permission request",
+                kind = RequestPagerKind.Permission,
                 onAction = onAction,
             )
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.KeyboardArrowDown, "Hide permission request"),
+                variant =
+                    OpenCodeButtonVariant.IconCircle(
+                        OpenCodeIcons.KeyboardArrowDown,
+                        stringResource(R.string.component_composer_hide_permission),
+                    ),
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = { onAction(OpenCodeSessionComposerAction.HidePermission(state.requestId)) },
             )
@@ -1118,7 +1145,7 @@ private fun PermissionApprovalContent(
         }
         if (state.alwaysPatterns.isNotEmpty()) {
             Text(
-                text = "Always allows: ${state.alwaysPatterns.joinToString(", ")}",
+                text = stringResource(R.string.component_composer_always_allows, state.alwaysPatterns.joinToString(", ")),
                 style = MaterialTheme.typography.bodySmall,
                 color = openCodeColor("text-weak"),
             )
@@ -1133,7 +1160,7 @@ private fun PermissionApprovalContent(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         OpenCodeButton(
-            OpenCodeButtonVariant.CompactText("Deny"),
+            OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_deny)),
             onClick = {
                 onAction(OpenCodeSessionComposerAction.DenyPermission(state.requestId, state.sessionId))
             },
@@ -1146,7 +1173,7 @@ private fun PermissionApprovalContent(
         }
         if (state.alwaysPatterns.isNotEmpty()) {
             OpenCodeButton(
-                OpenCodeButtonVariant.CompactText("Always"),
+                OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_always)),
                 onClick = {
                     onAction(OpenCodeSessionComposerAction.AlwaysAllowPermission(state.requestId, state.sessionId))
                 },
@@ -1155,7 +1182,7 @@ private fun PermissionApprovalContent(
             )
         }
         OpenCodeButton(
-            OpenCodeButtonVariant.CompactText("Allow once"),
+            OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_allow_once)),
             onClick = {
                 onAction(OpenCodeSessionComposerAction.AllowPermissionOnce(state.requestId, state.sessionId))
             },
@@ -1237,10 +1264,10 @@ private fun RequestAttributionRow(
             modifier = Modifier.weight(1f),
         )
         OpenCodeButton(
-            variant = OpenCodeButtonVariant.CompactText("Open"),
+            variant = OpenCodeButtonVariant.CompactText(stringResource(R.string.common_open)),
             contrast = OpenCodeButtonContrast.Low,
             onClick = { onAction(OpenCodeSessionComposerAction.OpenRequestSession(attribution.sessionId)) },
-            modifier = Modifier.semantics { contentDescription = "Open subagent session" },
+            modifier = Modifier.describedAs(stringResource(R.string.component_composer_open_subagent_session)),
         )
     }
 }
@@ -1251,20 +1278,22 @@ private fun RequestPager(
     position: Int,
     count: Int,
     enabled: Boolean,
-    noun: String,
+    kind: RequestPagerKind,
     onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
     if (count <= 1) return
+    val previousLabel = stringResource(kind.previous)
+    val nextLabel = stringResource(kind.next)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
         OpenCodeButton(
-            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowBack, "Previous $noun"),
+            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowBack, previousLabel),
             enabled = enabled && position > 1,
             contrast = OpenCodeButtonContrast.Low,
             onClick = { onAction(OpenCodeSessionComposerAction.PageRequest(-1)) },
         )
-        Text("$position of $count", style = MaterialTheme.typography.bodySmall)
+        Text(stringResource(R.string.component_composer_request_position, position, count), style = MaterialTheme.typography.bodySmall)
         OpenCodeButton(
-            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowForward, "Next $noun"),
+            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowForward, nextLabel),
             enabled = enabled && position < count,
             contrast = OpenCodeButtonContrast.Low,
             onClick = { onAction(OpenCodeSessionComposerAction.PageRequest(1)) },
@@ -1315,7 +1344,7 @@ private fun ColumnScope.QuestionRequestContent(
             multiple = state.multiple,
             minSelections = state.minSelections,
             maxSelections = state.maxSelections,
-        )
+        ).resolve()
     state.attribution?.let { RequestAttributionRow(it, onAction) }
     Column(
         modifier =
@@ -1331,14 +1360,22 @@ private fun ColumnScope.QuestionRequestContent(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                text = state.header.ifBlank { "Question" },
+                text = state.header.ifBlank { stringResource(R.string.component_composer_question) },
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f),
             )
             if (state.questionCount > 1) {
                 // With a request pager beside it, name this counter so the two read apart.
                 Text(
-                    "${if (state.requestCount > 1) "Step " else ""}${state.questionIndex + 1} of ${state.questionCount}",
+                    stringResource(
+                        if (state.requestCount > 1) {
+                            R.string.component_composer_question_step
+                        } else {
+                            R.string.component_composer_question_position
+                        },
+                        state.questionIndex + 1,
+                        state.questionCount,
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
@@ -1346,11 +1383,15 @@ private fun ColumnScope.QuestionRequestContent(
                 position = state.requestPosition,
                 count = state.requestCount,
                 enabled = !state.submitting,
-                noun = "question",
+                kind = RequestPagerKind.Question,
                 onAction = onAction,
             )
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.KeyboardArrowDown, "Hide question"),
+                variant =
+                    OpenCodeButtonVariant.IconCircle(
+                        OpenCodeIcons.KeyboardArrowDown,
+                        stringResource(R.string.component_composer_hide_question),
+                    ),
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = { onAction(OpenCodeSessionComposerAction.HideQuestion(state.requestId)) },
             )
@@ -1384,7 +1425,7 @@ private fun ColumnScope.QuestionRequestContent(
             }
             if (state.customAllowed) {
                 OpenCodeListItem(
-                    title = "Type your own answer",
+                    title = stringResource(R.string.component_composer_custom_answer_title),
                     subtitle =
                         if (!state.customSelected) {
                             state.customText.takeIf { it.isNotBlank() }
@@ -1416,7 +1457,7 @@ private fun ColumnScope.QuestionRequestContent(
                                 ),
                             )
                         },
-                        hint = "Enter a custom answer",
+                        hint = stringResource(R.string.component_composer_custom_answer_hint),
                         enabled = !state.submitting,
                         minLines = QuestionCustomMinLines,
                         maxLines = QuestionCustomMaxLines,
@@ -1434,7 +1475,7 @@ private fun ColumnScope.QuestionRequestContent(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         OpenCodeButton(
-            variant = OpenCodeButtonVariant.CompactText("Dismiss"),
+            variant = OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_dismiss)),
             onClick = {
                 onAction(OpenCodeSessionComposerAction.DismissQuestion(state.requestId, state.sessionId))
             },
@@ -1450,7 +1491,7 @@ private fun ColumnScope.QuestionRequestContent(
             }
             if (showBack) {
                 OpenCodeButton(
-                    OpenCodeButtonVariant.CompactText("Back"),
+                    OpenCodeButtonVariant.CompactText(stringResource(R.string.top_bar_back)),
                     onClick = {
                         onAction(OpenCodeSessionComposerAction.QuestionBack(state.requestId, state.sessionId))
                     },
@@ -1460,7 +1501,7 @@ private fun ColumnScope.QuestionRequestContent(
             }
             if (showNext) {
                 OpenCodeButton(
-                    OpenCodeButtonVariant.CompactText("Next"),
+                    OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_next)),
                     onClick = {
                         onAction(OpenCodeSessionComposerAction.QuestionNext(state.requestId, state.sessionId))
                     },
@@ -1468,7 +1509,7 @@ private fun ColumnScope.QuestionRequestContent(
                 )
             } else {
                 OpenCodeButton(
-                    OpenCodeButtonVariant.CompactText("Submit"),
+                    OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_submit)),
                     onClick = {
                         onAction(OpenCodeSessionComposerAction.SubmitQuestion(state.requestId, state.sessionId))
                     },
@@ -1496,11 +1537,26 @@ private fun questionBodyMaxHeight(): Dp {
 
 private const val QuestionBodyMaxHeightFraction = 0.5f
 
+@Composable
 private fun questionSelectionDecorator(selected: Boolean): StartDecorator =
     StartDecorator.Icon(
         imageVector = if (selected) OpenCodeIcons.RadioButtonChecked else OpenCodeIcons.RadioButtonUnchecked,
-        contentDescription = if (selected) "Selected" else "Not selected",
+        contentDescription = stringResource(if (selected) R.string.common_selected else R.string.component_composer_not_selected),
     )
+
+/** What the request pager steps through; names its Previous and Next buttons. */
+private enum class RequestPagerKind(
+    @param:StringRes val previous: Int,
+    @param:StringRes val next: Int,
+) {
+    Permission(R.string.component_composer_previous_permission, R.string.component_composer_next_permission),
+    Question(R.string.component_composer_previous_question, R.string.component_composer_next_question),
+}
+
+/** The side-question command; typed by the user, so never translated. */
+private const val SIDE_QUESTION_COMMAND = "/btw"
+
+private fun Modifier.describedAs(description: String): Modifier = semantics { contentDescription = description }
 
 @Preview(showBackground = true)
 @Composable

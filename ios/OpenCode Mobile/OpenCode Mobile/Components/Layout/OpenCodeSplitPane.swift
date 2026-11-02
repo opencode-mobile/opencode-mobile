@@ -208,8 +208,8 @@ struct OpenCodeSplitPane<Leading: View, Trailing: View>: View {
                 .onEnded { handleDragEnded($0, fold: fold) }
         )
         .accessibilityElement()
-        .accessibilityLabel("Resize sidebar")
-        .accessibilityHint("Double-tap to hide the sidebar")
+        .accessibilityLabel(Text("component.split_pane.resize_sidebar"))
+        .accessibilityHint(Text("component.split_pane.resize_hint"))
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { toggle() }
     }

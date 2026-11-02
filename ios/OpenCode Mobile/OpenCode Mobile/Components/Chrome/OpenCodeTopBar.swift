@@ -32,7 +32,7 @@ enum OpenCodeTopBarLeading {
         consumesInteractivePop: Bool = false,
         action: () -> Void
     )
-    case close(accessibilityLabel: OpenCodeText = "Close", action: () -> Void)
+    case close(accessibilityLabel: OpenCodeText = "component.close", action: () -> Void)
     case customIcon(OpenCodeIcon, accessibilityLabel: OpenCodeText, action: () -> Void)
 
     var consumesInteractivePop: Bool {
@@ -322,7 +322,7 @@ struct OpenCodeTopBar: View {
                 if hasSubtitle, case .worktree? = subtitleLeading {
                     OpenCodeIconImage(icon: .callSplit, size: 12)
                         .foregroundStyle(OpenCodeColors.iconStrongBase)
-                        .accessibilityLabel("Worktree")
+                        .accessibilityLabel(Text("component.worktree"))
                 }
                 if let subtitle {
                     Text(openCode: subtitle)
@@ -360,16 +360,23 @@ struct OpenCodeTopBar: View {
         var parts: [String] = []
         if let subtitle = subtitle?.resolved {
             if case let .letter(character, _)? = subtitleLeading {
-                parts.append("Project \(String(character).uppercased()) \(subtitle)")
+                let letter = String(character).uppercased()
+                parts.append(String(localized: LocalizedStringResource(
+                    "component.top_bar.project_subtitle",
+                    defaultValue: "Project \(letter) \(subtitle)"
+                )))
             } else if case .worktree? = subtitleLeading {
-                parts.append("Worktree \(subtitle)")
+                parts.append(String(localized: LocalizedStringResource(
+                    "component.top_bar.worktree_subtitle",
+                    defaultValue: "Worktree \(subtitle)"
+                )))
             } else {
                 parts.append(subtitle)
             }
         }
         switch subtitleAccessory {
         case let .statusDot(status):
-            parts.append("Live updates \(status.rawValue)")
+            parts.append(String(localized: status.accessibilityLabel))
         case nil:
             break
         }

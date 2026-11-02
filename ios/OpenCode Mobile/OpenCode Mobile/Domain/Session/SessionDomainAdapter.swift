@@ -341,7 +341,7 @@ private extension SessionDomainAdapter {
 
 private extension SessionDomainAdapter {
     nonisolated static func displayTitle(_ title: String) -> String {
-        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "New Session" : title
+        title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? OptimisticSessionCreate.placeholderTitle : title
     }
 
     nonisolated static func updatedAtLabel(epochMs: Int64) -> String {

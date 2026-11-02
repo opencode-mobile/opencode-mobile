@@ -180,10 +180,10 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View, Trailing: View>: V
                         Button(contextActionLabel) { onContextAction(item) }
                     }
                     if movable, let previous = neighborMovableIndex(from: index, step: -1) {
-                        Button("Move up") { onMove?(index, previous) }
+                        Button("component.reorderable_list.move_up") { onMove?(index, previous) }
                     }
                     if movable, let next = neighborMovableIndex(from: index, step: 1) {
-                        Button("Move down") { onMove?(index, next) }
+                        Button("component.reorderable_list.move_down") { onMove?(index, next) }
                     }
                 }
             if Trailing.self != EmptyView.self {

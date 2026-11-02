@@ -35,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -203,7 +204,7 @@ private fun SuggestionFrame(
                         OpenCodeListItem(
                             title = suggestion.name,
                             subtitle = suggestion.path,
-                            caption = suggestion.activityLabel,
+                            caption = suggestion.activityLabel?.resolve(),
                             startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
                             onClick = { callbacks.onSelectSuggestion(suggestion.path) },
                         )
@@ -242,7 +243,6 @@ private fun SuggestionFrame(
 
 private const val RULER_TITLE = "Project"
 private const val RULER_SUBTITLE = "/Users/placeholder"
-private const val RULER_CAPTION = "1d ago"
 
 /** Hidden suggestion row. Every slot stays the height of a real row, loaded or not. */
 @Composable
@@ -251,7 +251,7 @@ private fun AddProjectSuggestionRuler() {
     OpenCodeListItem(
         title = RULER_TITLE,
         subtitle = RULER_SUBTITLE,
-        caption = RULER_CAPTION,
+        caption = pluralStringResource(R.plurals.relative_time_days_ago, 1, 1),
         enabled = false,
         startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
         modifier = Modifier.alpha(0f).clearAndSetSemantics {},

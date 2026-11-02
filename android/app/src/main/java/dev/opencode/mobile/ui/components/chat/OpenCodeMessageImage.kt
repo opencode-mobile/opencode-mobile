@@ -16,8 +16,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.AttachmentDataUrl
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import kotlinx.coroutines.Dispatchers
@@ -50,13 +52,13 @@ fun OpenCodeMessageImage(
         val width = height * ratio
         Image(
             bitmap = bitmap.asImageBitmap(),
-            contentDescription = "Image ${attachment.filename}",
+            contentDescription = stringResource(R.string.component_message_image_label, attachment.filename),
             contentScale = ContentScale.Fit,
             modifier =
                 Modifier
                     .size(width = width, height = height)
                     .clip(OpenCodeSmallShape)
-                    .clickable(onClickLabel = "View full screen", role = Role.Button) {
+                    .clickable(onClickLabel = stringResource(R.string.component_image_view_full_screen), role = Role.Button) {
                         if (onOpen != null) onOpen() else viewerOpen = true
                     },
         )

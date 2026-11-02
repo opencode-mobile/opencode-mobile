@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
@@ -42,7 +43,7 @@ fun SessionListSkeletonGalleryScreen(modifier: Modifier = Modifier) {
             rowCount = rowCount,
             accent = if (accented) LetterAccent.Violet else null,
             title = "opencode-mobile",
-            caption = if (slow) SessionListScopeLoad.SLOW_CAPTION else null,
+            caption = if (slow) stringResource(SessionListScopeLoad.SLOW_CAPTION) else null,
         )
     }
 }

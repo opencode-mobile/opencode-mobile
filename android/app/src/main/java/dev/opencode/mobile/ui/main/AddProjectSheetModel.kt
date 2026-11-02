@@ -96,7 +96,7 @@ data class AddProjectRootUi(
 data class AddProjectSuggestionUi(
     val name: String,
     val path: String,
-    val activityLabel: String?,
+    val activityLabel: UiText?,
 )
 
 /** One folder listing, cached for the sheet's lifetime. */

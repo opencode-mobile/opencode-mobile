@@ -34,22 +34,28 @@ enum SessionListStatus: Hashable {
         let base: OpenCodeListItemStatus
         switch self {
         case .idle:
-            base = OpenCodeListItemStatus(text: "Idle", tone: .info)
+            base = OpenCodeListItemStatus(text: "session_list.status.idle", tone: .info)
         case .running:
-            base = OpenCodeListItemStatus(text: "Running", tone: .interactive)
+            base = OpenCodeListItemStatus(text: "session_list.status.running", tone: .interactive)
         case let .retrying(attempt):
-            base = OpenCodeListItemStatus(
-                text: attempt.map { "Retrying · \($0)" } ?? "Retrying",
-                tone: .warning
-            )
+            let text: OpenCodeText
+            if let attempt {
+                text = OpenCodeText(LocalizedStringResource(
+                    "session_list.status.retrying_attempt",
+                    defaultValue: "Retrying · \(attempt)"
+                ))
+            } else {
+                text = "session_list.status.retrying"
+            }
+            base = OpenCodeListItemStatus(text: text, tone: .warning)
         case .ready:
-            base = OpenCodeListItemStatus(text: "Ready", tone: .success)
+            base = OpenCodeListItemStatus(text: "session_list.status.ready", tone: .success)
         case .done:
-            base = OpenCodeListItemStatus(text: "Done", tone: .success)
+            base = OpenCodeListItemStatus(text: "session_list.status.done", tone: .success)
         case .failed:
-            base = OpenCodeListItemStatus(text: "Failed", tone: .error)
+            base = OpenCodeListItemStatus(text: "session_list.status.failed", tone: .error)
         case .stopped:
-            base = OpenCodeListItemStatus(text: "Stopped", tone: .warning)
+            base = OpenCodeListItemStatus(text: "session_list.status.stopped", tone: .warning)
         }
         if isStale {
             return OpenCodeListItemStatus(text: base.text, tone: .stale)
@@ -121,11 +127,23 @@ enum SessionListScopeLoad: Hashable {
     case loading(isSlow: Bool)
     case failed(message: String)
 
-    static let loadingSubtitle = "Loading sessions\u{2026}"
-    static let slowSubtitle = "Still loading\u{2026}"
-    static let slowListCaption = "Still loading \u{2014} large projects can take a moment"
-    static let failedListMessage = "The server didn\u{2019}t return this project\u{2019}s sessions."
-    static let retryTitle = "Retry"
+    static var loadingSubtitle: String {
+        String(localized: "session_list.scope_load.loading", defaultValue: "Loading sessions\u{2026}")
+    }
+
+    static var slowSubtitle: String {
+        String(localized: "session_list.scope_load.slow", defaultValue: "Still loading\u{2026}")
+    }
+
+    static var slowListCaption: String {
+        String(
+            localized: "session_list.scope_load.slow_caption",
+            defaultValue: "Still loading \u{2014} large projects can take a moment"
+        )
+    }
+
+    static let failedListMessage: OpenCodeText = "session_list.scope_load.failed_message"
+    static let retryTitle: OpenCodeText = "common.retry"
 
     /// Dock subtitle in place of the project path.
     var subtitle: String {
@@ -140,8 +158,11 @@ enum SessionListScopeLoad: Hashable {
         return false
     }
 
-    static func failedListTitle(projectTitle: String) -> String {
-        "Couldn\u{2019}t load \(projectTitle)"
+    static func failedListTitle(projectTitle: String) -> OpenCodeText {
+        OpenCodeText(LocalizedStringResource(
+            "session_list.scope_load.failed_title",
+            defaultValue: "Couldn't load \(projectTitle)"
+        ))
     }
 }
 
@@ -309,16 +330,16 @@ struct SessionListFilterTab: Identifiable, Hashable {
 /// Scope a "Clear filter" action selects, and the line that explains why.
 struct WorktreeFilterClear: Equatable {
     let filterId: String
-    let message: String
+    let message: OpenCodeText
 }
 
 enum SessionListWorktreeEmptyCopy {
-    static let title = "No sessions in this worktree"
-    static let action = "Clear filter"
-    static let otherWorktrees = "Clear the filter to see sessions on other worktrees."
-    static let otherProjects = "Clear the filter to see sessions on other projects."
-    static let everyWorktree = "Clear the filter to see every worktree."
-    static let everyProject = "Clear the filter to see every project."
+    static let title: OpenCodeText = "session_list.worktree_empty.title"
+    static let action: OpenCodeText = "session_list.worktree_empty.action"
+    static let otherWorktrees: OpenCodeText = "session_list.worktree_empty.other_worktrees"
+    static let otherProjects: OpenCodeText = "session_list.worktree_empty.other_projects"
+    static let everyWorktree: OpenCodeText = "session_list.worktree_empty.every_worktree"
+    static let everyProject: OpenCodeText = "session_list.worktree_empty.every_project"
 }
 
 struct SessionList<EmptyContent: View>: View {
@@ -504,10 +525,10 @@ struct SessionList<EmptyContent: View>: View {
             } else if let worktreeClear {
                 ScrollView {
                     OpenCodeEmptyState(
-                        title: .unlocalized(SessionListWorktreeEmptyCopy.title),
-                        message: .unlocalized(worktreeClear.message),
+                        title: SessionListWorktreeEmptyCopy.title,
+                        message: worktreeClear.message,
                         icon: .callSplit,
-                        primaryAction: OpenCodeEmptyStateAction(title: .unlocalized(SessionListWorktreeEmptyCopy.action)) {
+                        primaryAction: OpenCodeEmptyStateAction(title: SessionListWorktreeEmptyCopy.action) {
                             onFilterSelected(worktreeClear.filterId)
                         }
                     )
@@ -564,7 +585,7 @@ struct SessionList<EmptyContent: View>: View {
         switch load {
         case let .loading(isSlow):
             VStack(alignment: .leading, spacing: 0) {
-                OpenCodeSectionHeader(title: .unlocalized(tab.title))
+                OpenCodeSectionHeader(title: .verbatim(tab.title))
                 OpenCodeSessionListSkeleton(
                     accent: tab.accent,
                     caption: isSlow ? SessionListScopeLoad.slowListCaption : nil
@@ -572,11 +593,11 @@ struct SessionList<EmptyContent: View>: View {
             }
         case .failed:
             OpenCodeEmptyState(
-                title: .unlocalized(SessionListScopeLoad.failedListTitle(projectTitle: tab.title)),
-                message: .unlocalized(SessionListScopeLoad.failedListMessage),
+                title: SessionListScopeLoad.failedListTitle(projectTitle: tab.title),
+                message: SessionListScopeLoad.failedListMessage,
                 fillsAvailableSpace: false,
                 primaryAction: onRetryScopeLoad.map { retry in
-                    OpenCodeEmptyStateAction(title: .unlocalized(SessionListScopeLoad.retryTitle)) { retry(tab.id) }
+                    OpenCodeEmptyStateAction(title: SessionListScopeLoad.retryTitle) { retry(tab.id) }
                 }
             )
             .padding(.top, 64)
@@ -586,7 +607,7 @@ struct SessionList<EmptyContent: View>: View {
 
     @ViewBuilder
     private func recentStack(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
-        OpenCodeSectionHeader(title: "Recent")
+        OpenCodeSectionHeader(title: .localized(section.title))
 
         ForEach(section.items, id: \.id) { session in
             sessionRow(session, showStatusDot: true)
@@ -595,7 +616,7 @@ struct SessionList<EmptyContent: View>: View {
 
     @ViewBuilder
     private func dayOrWeekSection(_ section: HomeSessionLadderSection<SessionListSession>) -> some View {
-        OpenCodeSectionHeader(title: .unlocalized(section.title))
+        OpenCodeSectionHeader(title: .localized(section.title))
 
         ForEach(section.items, id: \.id) { session in
             sessionRow(session, showStatusDot: false)
@@ -634,7 +655,7 @@ struct SessionList<EmptyContent: View>: View {
             emphasized: row.emphasized,
             path: row.path,
             status: row.status,
-            caption: .unlocalized(ifPresent: session.caption.isEmpty ? nil : session.caption),
+            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
             selected: selectedSessionId == session.id,
             startDecorator: .compactLetter(
                 session.letter,
@@ -660,7 +681,7 @@ struct SessionList<EmptyContent: View>: View {
             subtitleSegments: lines?.subtitle,
             detailSegments: lines?.detail,
             status: listItemStatus(session.status, isStale: session.statusIsStale),
-            caption: .unlocalized(ifPresent: session.caption.isEmpty ? nil : session.caption),
+            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
             selected: selectedSessionId == session.id,
             startDecorator: .letter(
                 session.letter,

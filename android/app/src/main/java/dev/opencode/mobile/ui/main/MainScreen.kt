@@ -1222,7 +1222,7 @@ private data class HomeRowSource(
             subtitle = listedIn,
             directory = directory,
             status = session.toSessionListStatus(),
-            caption = session.updatedAtEpochMs?.let(RelativeTimeFormatting::format).orEmpty(),
+            caption = session.updatedAtEpochMs?.let(RelativeTimeFormatting::format) ?: UiText.verbatim(""),
             updatedAtEpochMs = session.updatedAtEpochMs,
             retryAttempt = session.retryAttempt(),
             statusStale = session.statusStale,

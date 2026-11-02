@@ -25,6 +25,7 @@ import dev.opencode.mobile.ui.components.SessionListProjectPickerRows
 import dev.opencode.mobile.ui.components.SessionListScopeLoad
 import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
+import dev.opencode.mobile.ui.text.UiText
 
 @Composable
 fun SessionListGalleryScreen(modifier: Modifier = Modifier) {
@@ -130,7 +131,7 @@ private val sessionListGallerySamples: List<SessionListSession>
                 letterAccent = LetterAccent.Violet,
                 subtitle = "/Users/demo/opencode-mobile",
                 status = SessionListStatus.Running,
-                caption = "now",
+                caption = UiText.verbatim("now"),
                 updatedAtEpochMs = now,
                 projectName = "opencode-mobile",
                 compactWorktree = "794-readable-tool-results",
@@ -143,7 +144,7 @@ private val sessionListGallerySamples: List<SessionListSession>
                 letterAccent = LetterAccent.Teal,
                 subtitle = "/Users/demo/playground",
                 status = SessionListStatus.Idle,
-                caption = "14m ago",
+                caption = UiText.verbatim("14m ago"),
                 updatedAtEpochMs = now - 14 * 60_000L,
             ),
             SessionListSession(
@@ -154,7 +155,7 @@ private val sessionListGallerySamples: List<SessionListSession>
                 letterAccent = LetterAccent.Violet,
                 subtitle = "/Users/demo/opencode-mobile",
                 status = SessionListStatus.Ready,
-                caption = "3h ago",
+                caption = UiText.verbatim("3h ago"),
                 updatedAtEpochMs = now - 3 * 3_600_000L,
                 projectName = "opencode-mobile",
             ),
@@ -166,7 +167,7 @@ private val sessionListGallerySamples: List<SessionListSession>
                 letterAccent = LetterAccent.Teal,
                 subtitle = "/Users/demo/playground",
                 status = SessionListStatus.Done,
-                caption = "5m ago",
+                caption = UiText.verbatim("5m ago"),
                 updatedAtEpochMs = now - 5 * 60_000L,
             ),
             SessionListSession(
@@ -177,7 +178,7 @@ private val sessionListGallerySamples: List<SessionListSession>
                 letterAccent = LetterAccent.Teal,
                 subtitle = "/Users/demo/playground",
                 status = SessionListStatus.Failed,
-                caption = "8m ago",
+                caption = UiText.verbatim("8m ago"),
                 updatedAtEpochMs = now - 8 * 60_000L,
             ),
             SessionListSession(
@@ -188,7 +189,7 @@ private val sessionListGallerySamples: List<SessionListSession>
                 letterAccent = LetterAccent.Teal,
                 subtitle = "/Users/demo/playground",
                 status = SessionListStatus.Stopped,
-                caption = "11m ago",
+                caption = UiText.verbatim("11m ago"),
                 updatedAtEpochMs = now - 11 * 60_000L,
             ),
             SessionListSession(
@@ -199,7 +200,7 @@ private val sessionListGallerySamples: List<SessionListSession>
                 letterAccent = LetterAccent.Violet,
                 subtitle = "/Users/demo/opencode-mobile",
                 status = SessionListStatus.Retrying,
-                caption = "now",
+                caption = UiText.verbatim("now"),
                 updatedAtEpochMs = now,
                 retryAttempt = 2,
                 projectName = "opencode-mobile",
@@ -214,7 +215,7 @@ private val sessionListGallerySamples: List<SessionListSession>
                 subtitle = "/Users/demo/opencode-mobile",
                 status = SessionListStatus.Running,
                 statusStale = true,
-                caption = "now",
+                caption = UiText.verbatim("now"),
                 updatedAtEpochMs = now,
             ),
             SessionListSession(
@@ -225,7 +226,7 @@ private val sessionListGallerySamples: List<SessionListSession>
                 letterAccent = LetterAccent.Amber,
                 subtitle = "/Users/demo/api-client",
                 status = SessionListStatus.Running,
-                caption = "2d ago",
+                caption = UiText.verbatim("2d ago"),
                 updatedAtEpochMs = now - 2 * 86_400_000L,
             ),
         )

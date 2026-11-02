@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.annotation.StringRes
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.EaseInOut
 import androidx.compose.animation.core.tween
@@ -29,9 +30,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.home.HomeSessionLadder
 import dev.opencode.mobile.domain.home.HomeSessionLadderKind
 import dev.opencode.mobile.domain.home.HomeSessionLadderSection
@@ -44,6 +48,10 @@ import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.UiTextLookup
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.delay
 
 private val SessionListFallbackBottomSpacer = 168.dp
@@ -82,7 +90,8 @@ data class SessionListSession(
     val letterAccent: LetterAccent,
     val subtitle: String,
     val status: SessionListStatus,
-    val caption: String,
+    /** Trailing caption, such as the relative update time; empty shows none. */
+    val caption: UiText,
     val updatedAtEpochMs: Long? = null,
     /** Retry attempt shown with the Retrying chip, e.g. "Retrying · 2". */
     val retryAttempt: Int? = null,
@@ -152,14 +161,19 @@ sealed interface SessionListScopeLoad {
     data object Failed : SessionListScopeLoad
 
     companion object {
-        const val LOADING_SUBTITLE = "Loading sessions…"
-        const val SLOW_SUBTITLE = "Still loading…"
-        const val FAILED_SUBTITLE = "Couldn't load sessions"
-        const val SLOW_CAPTION = "Still loading — large projects can take a moment"
-        const val FAILED_MESSAGE = "The server didn't return this project's sessions."
-        const val RETRY_TITLE = "Retry"
+        @StringRes val LOADING_SUBTITLE = R.string.session_list_scope_load_loading
 
-        fun failedTitle(scopeTitle: String): String = "Couldn't load $scopeTitle"
+        @StringRes val SLOW_SUBTITLE = R.string.session_list_scope_load_slow
+
+        @StringRes val FAILED_SUBTITLE = R.string.session_list_scope_load_failed_subtitle
+
+        @StringRes val SLOW_CAPTION = R.string.session_list_scope_load_slow_caption
+
+        @StringRes val FAILED_MESSAGE = R.string.session_list_scope_load_failed_message
+
+        @StringRes val RETRY_TITLE = R.string.common_retry
+
+        fun failedTitle(scopeTitle: String): UiText = UiText.resource(R.string.session_list_scope_load_failed_title, scopeTitle)
     }
 }
 
@@ -254,16 +268,21 @@ data class SessionListFilterTab(
 /** Scope a "Clear filter" action selects, and the line that explains why. */
 data class WorktreeFilterClear(
     val filterId: String,
-    val message: String,
+    @param:StringRes val message: Int,
 )
 
 object SessionListWorktreeEmptyCopy {
-    const val TITLE = "No sessions in this worktree"
-    const val ACTION = "Clear filter"
-    const val OTHER_WORKTREES = "Clear the filter to see sessions on other worktrees."
-    const val OTHER_PROJECTS = "Clear the filter to see sessions on other projects."
-    const val EVERY_WORKTREE = "Clear the filter to see every worktree."
-    const val EVERY_PROJECT = "Clear the filter to see every project."
+    @StringRes val TITLE = R.string.session_list_worktree_empty_title
+
+    @StringRes val ACTION = R.string.session_list_worktree_empty_action
+
+    @StringRes val OTHER_WORKTREES = R.string.session_list_worktree_empty_other_worktrees
+
+    @StringRes val OTHER_PROJECTS = R.string.session_list_worktree_empty_other_projects
+
+    @StringRes val EVERY_WORKTREE = R.string.session_list_worktree_empty_every_worktree
+
+    @StringRes val EVERY_PROJECT = R.string.session_list_worktree_empty_every_project
 }
 
 @Composable
@@ -537,11 +556,11 @@ private fun SessionListFeed(
                     contentAlignment = Alignment.Center,
                 ) {
                     OpenCodeEmptyState(
-                        title = SessionListScopeLoad.failedTitle(scopeTab.title),
-                        message = SessionListScopeLoad.FAILED_MESSAGE,
+                        title = SessionListScopeLoad.failedTitle(scopeTab.title).resolve(),
+                        message = stringResource(SessionListScopeLoad.FAILED_MESSAGE),
                         primaryAction =
                             OpenCodeEmptyStateAction(
-                                title = SessionListScopeLoad.RETRY_TITLE,
+                                title = stringResource(SessionListScopeLoad.RETRY_TITLE),
                                 onClick = { onRetryScopeLoad(scopeTab.id) },
                             ),
                     )
@@ -551,7 +570,7 @@ private fun SessionListFeed(
                     accent = scopeTab?.letterAccent,
                     title = scopeTab?.title,
                     caption =
-                        SessionListScopeLoad.SLOW_CAPTION.takeIf {
+                        stringResource(SessionListScopeLoad.SLOW_CAPTION).takeIf {
                             (scopeTab?.load as? SessionListScopeLoad.Loading)?.isSlow == true
                         },
                     modifier = Modifier.fillMaxSize(),
@@ -571,12 +590,12 @@ private fun SessionListFeed(
                         contentAlignment = Alignment.Center,
                     ) {
                         OpenCodeEmptyState(
-                            title = SessionListWorktreeEmptyCopy.TITLE,
-                            message = clear.message,
+                            title = stringResource(SessionListWorktreeEmptyCopy.TITLE),
+                            message = stringResource(clear.message),
                             icon = OpenCodeIcons.CallSplit,
                             primaryAction =
                                 OpenCodeEmptyStateAction(
-                                    title = SessionListWorktreeEmptyCopy.ACTION,
+                                    title = stringResource(SessionListWorktreeEmptyCopy.ACTION),
                                     onClick = { onFilterSelected(clear.filterId) },
                                 ),
                         )
@@ -632,7 +651,7 @@ private fun SessionListFeedRows(
                 when (section.kind) {
                     HomeSessionLadderKind.Recent -> {
                         item(key = "header-${section.id}") {
-                            OpenCodeSectionHeader(title = "Recent")
+                            OpenCodeSectionHeader(title = section.title.resolve())
                         }
                         items(
                             section.items,
@@ -652,7 +671,7 @@ private fun SessionListFeedRows(
                     HomeSessionLadderKind.Week,
                     -> {
                         item(key = "header-${section.id}") {
-                            OpenCodeSectionHeader(title = section.title)
+                            OpenCodeSectionHeader(title = section.title.resolve())
                         }
                         items(
                             section.items,
@@ -683,7 +702,12 @@ private fun SessionListRow(
     onSessionLongPress: ((SessionListSession) -> Unit)?,
     rowStyle: HomeSessionRowStyle,
 ) {
-    val status = session.status.toListItemStatus(session.retryAttempt, stale = session.statusStale)
+    val status =
+        session.status.toListItemStatus(
+            session.retryAttempt,
+            stale = session.statusStale,
+            text = ResourcesUiTextLookup(LocalResources.current),
+        )
     if (rowStyle == HomeSessionRowStyle.Compact) {
         SessionListCompactRow(
             session = session,
@@ -701,7 +725,7 @@ private fun SessionListRow(
         subtitleSegments = lines?.subtitle,
         detailSegments = lines?.detail,
         status = status,
-        caption = session.caption.takeIf { it.isNotEmpty() },
+        caption = session.caption.resolve().takeIf { it.isNotEmpty() },
         startDecorator =
             StartDecorator.Letter(
                 character = session.letter,
@@ -723,14 +747,14 @@ private fun SessionListCompactRow(
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
 ) {
-    val active = session.compactStatus(status)
+    val active = session.compactStatus(text = ResourcesUiTextLookup(LocalResources.current), status = status)
     OpenCodeListItem(
         title = session.title,
         variant = OpenCodeListItemVariant.Compact,
         path = session.compactPath(),
         titleEmphasized = session.status.isUnreadFinish,
         status = active,
-        caption = session.caption.takeIf { it.isNotEmpty() },
+        caption = session.caption.resolve().takeIf { it.isNotEmpty() },
         startDecorator =
             StartDecorator.Tile(
                 character = session.letter,
@@ -746,7 +770,8 @@ private fun SessionListCompactRow(
 
 /** Compact rows show a status only when the session is not Idle. */
 internal fun SessionListSession.compactStatus(
-    status: OpenCodeListItemStatus = this.status.toListItemStatus(retryAttempt, stale = statusStale),
+    text: UiTextLookup,
+    status: OpenCodeListItemStatus = this.status.toListItemStatus(retryAttempt, stale = statusStale, text = text),
 ): OpenCodeListItemStatus? = status.takeIf { this.status != SessionListStatus.Idle }
 
 private class SelectionRevealHold(
@@ -846,9 +871,24 @@ internal fun List<SessionListLocationPart>.toSubtitleSegments(
 
 private const val LOCATION_SEPARATOR = " · "
 
+/** Status pill label; [retryAttempt] numbers a retry. */
+internal fun SessionListStatus.label(retryAttempt: Int? = null): UiText =
+    when (this) {
+        SessionListStatus.Idle -> UiText.resource(R.string.session_list_status_idle)
+        SessionListStatus.Running -> UiText.resource(R.string.session_list_status_running)
+        SessionListStatus.Retrying ->
+            retryAttempt?.let { UiText.resource(R.string.session_list_status_retrying_attempt, it) }
+                ?: UiText.resource(R.string.session_list_status_retrying)
+        SessionListStatus.Ready -> UiText.resource(R.string.session_list_status_ready)
+        SessionListStatus.Done -> UiText.resource(R.string.session_list_status_done)
+        SessionListStatus.Failed -> UiText.resource(R.string.session_list_status_failed)
+        SessionListStatus.Stopped -> UiText.resource(R.string.session_list_status_stopped)
+    }
+
 internal fun SessionListStatus.toListItemStatus(
     retryAttempt: Int? = null,
     stale: Boolean = false,
+    text: UiTextLookup,
 ): OpenCodeListItemStatus {
     val tone =
         if (stale) {
@@ -864,19 +904,7 @@ internal fun SessionListStatus.toListItemStatus(
                 SessionListStatus.Stopped -> OpenCodeListItemStatusTone.Warning
             }
         }
-    return when (this) {
-        SessionListStatus.Idle -> OpenCodeListItemStatus(text = "Idle", tone = tone)
-        SessionListStatus.Running -> OpenCodeListItemStatus(text = "Running", tone = tone)
-        SessionListStatus.Retrying ->
-            OpenCodeListItemStatus(
-                text = retryAttempt?.let { "Retrying · $it" } ?: "Retrying",
-                tone = tone,
-            )
-        SessionListStatus.Ready -> OpenCodeListItemStatus(text = "Ready", tone = tone)
-        SessionListStatus.Done -> OpenCodeListItemStatus(text = "Done", tone = tone)
-        SessionListStatus.Failed -> OpenCodeListItemStatus(text = "Failed", tone = tone)
-        SessionListStatus.Stopped -> OpenCodeListItemStatus(text = "Stopped", tone = tone)
-    }
+    return OpenCodeListItemStatus(text = label(retryAttempt).resolve(text), tone = tone)
 }
 
 internal fun compactHomePath(path: String): String {
@@ -919,7 +947,7 @@ private fun SessionListPreview() {
                         letterAccent = LetterAccent.Violet,
                         subtitle = "/Users/demo/opencode-mobile",
                         status = SessionListStatus.Running,
-                        caption = "now",
+                        caption = UiText.verbatim("now"),
                         updatedAtEpochMs = System.currentTimeMillis(),
                     ),
                     SessionListSession(
@@ -930,7 +958,7 @@ private fun SessionListPreview() {
                         letterAccent = LetterAccent.Teal,
                         subtitle = "/Users/demo/playground",
                         status = SessionListStatus.Idle,
-                        caption = "14m ago",
+                        caption = UiText.verbatim("14m ago"),
                         updatedAtEpochMs = System.currentTimeMillis() - 14 * 60_000L,
                     ),
                 ),

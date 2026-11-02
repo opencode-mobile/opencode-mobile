@@ -507,7 +507,7 @@ class FilesViewModel internal constructor(
 
         /** The server's detail stays verbatim; without one, app text asks to check the connection. */
         private fun Exception.userDetail(): UiText =
-            (this as? ProjectFilesException)?.detail?.let { UiText.verbatim(it) }
+            (this as? ProjectFilesException)?.detail
                 ?: UiText.resource(R.string.files_error_check_server_connection)
     }
 }

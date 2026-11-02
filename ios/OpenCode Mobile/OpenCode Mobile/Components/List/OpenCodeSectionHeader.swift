@@ -115,7 +115,11 @@ struct OpenCodeSectionHeader: View {
 
     private var accessibilityLabel: String {
         if case let .count(count) = trailing {
-            return "\(title.resolved), \(count) \(count == 1 ? "item" : "items")"
+            let items = String(localized: LocalizedStringResource(
+                "component.section_header.item_count",
+                defaultValue: "\(count) items"
+            ))
+            return "\(title.resolved), \(items)"
         }
         return title.resolved
     }
