@@ -367,7 +367,7 @@ class ArchivedSessionsModel(
         val visible = allRows.filter { it.id in visibleIds }
         _state.update { current ->
             current.copy(
-                scopeTitle = scopeTitle(resolved, homeProjects),
+                scopeTitle = archivedScopeTitle(resolved, homeProjects),
                 content =
                     if (!loaded) {
                         current.content
@@ -387,20 +387,6 @@ class ArchivedSessionsModel(
         }
     }
 
-    private fun scopeTitle(
-        scope: HomeScope,
-        homeProjects: List<HomeProject>,
-    ): UiText =
-        when (scope) {
-            HomeScope.All -> UiText.resource(R.string.home_all_projects)
-            is HomeScope.Project -> UiText.verbatim(homeProjects.firstOrNull { it.key == scope.key }?.displayName.orEmpty())
-            is HomeScope.Worktree -> {
-                val project = homeProjects.firstOrNull { it.key == scope.projectKey }
-                val worktree = project?.worktree(scope.directory)
-                UiText.verbatim(listOfNotNull(project?.displayName, worktree?.folderName).joinToString(" · "))
-            }
-        }
-
     private fun logI(message: String) {
         DiagnosticLog.info(DiagnosticLogArea.Session, "archived $message")
     }
@@ -419,3 +405,18 @@ class ArchivedSessionsModel(
         private val DELETE_ERROR = UiText.resource(R.string.home_session_error_delete_failed)
     }
 }
+
+/** The scope's name as the Archived sessions subtitle and the Home menu entry say it. */
+internal fun archivedScopeTitle(
+    scope: HomeScope,
+    homeProjects: List<HomeProject>,
+): UiText =
+    when (scope) {
+        HomeScope.All -> UiText.resource(R.string.home_all_projects)
+        is HomeScope.Project -> UiText.verbatim(homeProjects.firstOrNull { it.key == scope.key }?.displayName.orEmpty())
+        is HomeScope.Worktree -> {
+            val project = homeProjects.firstOrNull { it.key == scope.projectKey }
+            val worktree = project?.worktree(scope.directory)
+            UiText.verbatim(listOfNotNull(project?.displayName, worktree?.folderName).joinToString(" · "))
+        }
+    }

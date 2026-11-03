@@ -5538,6 +5538,18 @@
         }
       }
     },
+    "home.menu.archived_count" : {
+      "comment" : "Home menu subtitle. The number of archived sessions, then the Home scope, such as All projects.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld in %2$@"
+          }
+        }
+      }
+    },
     "home.more_options" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -428,6 +428,7 @@ fun MainNavigation() {
                                                 MainScreen(
                                                     onSettingsClick = { backStack.add(SettingsHome) },
                                                     onTerminalClick = { backStack.add(TerminalsCatalog) },
+                                                    onArchivedSessionsClick = { scopeId -> backStack.add(ArchivedSessions(scopeId)) },
                                                     onSessionClick = { target ->
                                                         if (useSplitLayout) {
                                                             paneStack.selectPaneSession(target.toSessionChatRoute())

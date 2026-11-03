@@ -150,6 +150,28 @@ struct ArchivedSessionsViewModelTests {
         #expect(sessions.map(\.id) == ["a1"])
     }
 
+    @Test func homeMenuEntryCountsTheScopeAndHidesWithoutSupport() async {
+        let repository = ArchivedSessionRepository([
+            "/work/alpha": [archived("a1", "/work/alpha", now - day), archived("a2", "/work/alpha", now - day)],
+            "/work/beta": [archived("b1", "/work/beta", now - day)],
+        ])
+        var supported = true
+        let menu = HomeArchivedMenu(sessionRepository: repository, supported: { supported })
+
+        menu.refresh(scopeID: "all", projects: [alpha, beta], worktreesEnabled: true)
+        #expect(menu.entry?.count == nil)
+        await menu.settle()
+        #expect(menu.entry == HomeArchivedMenuEntry(scopeID: "all", scopeTitle: "All projects", count: 3))
+
+        menu.refresh(scopeID: beta.key, projects: [alpha, beta], worktreesEnabled: true)
+        await menu.settle()
+        #expect(menu.entry == HomeArchivedMenuEntry(scopeID: beta.key, scopeTitle: "beta", count: 1))
+
+        supported = false
+        menu.refresh(scopeID: "all", projects: [alpha, beta], worktreesEnabled: true)
+        #expect(menu.entry == nil)
+    }
+
     private func makeViewModel(
         _ repository: ArchivedSessionRepository,
         eventStream: (any ForegroundEventStream)? = nil

@@ -4,6 +4,7 @@ import Foundation
 /// Settings always closes the menu, after a divider when anything sits above it.
 enum HomeMenu {
     static let settingsID = "homeMenuSettings"
+    static let archivedSessionsID = "homeMenuArchivedSessions"
 
     static func entries(
         features: [OpenCodeOverflowMenuEntry],

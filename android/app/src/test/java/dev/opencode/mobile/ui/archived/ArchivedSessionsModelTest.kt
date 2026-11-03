@@ -211,6 +211,37 @@ class ArchivedSessionsModelTest {
             assertEquals(listOf("a1"), sessions.map { it.id })
         }
 
+    @Test
+    fun homeMenuEntryCountsTheScopeAndHidesWithoutSupport() =
+        runTest {
+            val repository =
+                FakeArchivedRepository(
+                    "/work/alpha" to listOf(archived("a1", "/work/alpha", now - day), archived("a2", "/work/alpha", now - day)),
+                    "/work/beta" to listOf(archived("b1", "/work/beta", now - day)),
+                )
+            var supported = true
+            val menu =
+                HomeArchivedMenu(
+                    sessionRepository = repository,
+                    projects = MutableStateFlow(listOf(alpha, beta)),
+                    scope = CoroutineScope(StandardTestDispatcher(testScheduler) + SupervisorJob()),
+                    supported = { supported },
+                )
+
+            menu.refresh("all", worktreesEnabled = true)
+            assertNull(menu.state.value?.count)
+            advanceUntilIdle()
+            assertEquals(HomeArchivedMenuEntry("all", UiText.resource(R.string.home_all_projects), 3), menu.state.value)
+
+            menu.refresh(beta.key, worktreesEnabled = true)
+            advanceUntilIdle()
+            assertEquals(HomeArchivedMenuEntry(beta.key, UiText.verbatim("beta"), 1), menu.state.value)
+
+            supported = false
+            menu.refresh("all", worktreesEnabled = true)
+            assertNull(menu.state.value)
+        }
+
     private fun rows(model: ArchivedSessionsModel): List<String> =
         (model.state.value.content as ArchivedSessionsContent.Loaded).sections.flatMap { s -> s.rows.map { it.id } }
 

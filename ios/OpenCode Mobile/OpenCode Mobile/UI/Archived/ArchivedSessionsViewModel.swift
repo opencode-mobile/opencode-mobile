@@ -300,7 +300,7 @@ final class ArchivedSessionsViewModel {
 
     private func publish() {
         let resolved = HomeScope.resolve(id: scopeID, projects: projects, worktreesEnabled: worktreesEnabled) ?? .all
-        scopeTitle = title(of: resolved)
+        scopeTitle = archivedScopeTitle(resolved, projects: projects)
         guard loaded else { return }
         let nowMs = now()
         let restoredByProject = Dictionary(grouping: restoredSessions.values) { session in
@@ -343,19 +343,6 @@ final class ArchivedSessionsViewModel {
             },
             canShowAllProjects: resolved != .all && !allRows.isEmpty
         )
-    }
-
-    private func title(of scope: HomeScope) -> String {
-        switch scope {
-        case .all:
-            return String(localized: "home.all_projects", defaultValue: "All projects")
-        case let .project(key):
-            return projects.first { $0.key == key }?.displayName ?? ""
-        case let .worktree(projectKey, directory):
-            let project = projects.first { $0.key == projectKey }
-            let worktree = project?.worktree(at: directory)
-            return [project?.displayName, worktree?.folderName].compactMap { $0 }.joined(separator: " · ")
-        }
     }
 
     private static var loadError: String {
