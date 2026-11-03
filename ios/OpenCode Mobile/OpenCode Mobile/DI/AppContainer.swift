@@ -124,6 +124,11 @@ extension Container {
         }.singleton
     }
 
+    /// Home's projects and sessions for the Worktrees screen, and its requests back to Home.
+    var homeWorktreesFeed: Factory<HomeWorktreesFeed> {
+        onMainActor { HomeWorktreesFeed() }.singleton
+    }
+
     /// Home's worktree inventories, read by Session Chat for its first frame.
     var worktreeInventoryCache: Factory<WorktreeInventoryCache> {
         onMainActor { WorktreeInventoryCache() }.singleton
@@ -689,7 +694,8 @@ extension Container {
                 liveUpdates: self.liveUpdates(),
                 worktreeRepository: self.worktreeRepository(),
                 foregroundEventStream: self.foregroundEventStream(),
-                worktreeInventoryCache: self.worktreeInventoryCache()
+                worktreeInventoryCache: self.worktreeInventoryCache(),
+                homeWorktreesFeed: self.homeWorktreesFeed()
             )
         }
     }
@@ -851,6 +857,18 @@ extension Container {
     @MainActor
     static func makeTerminalsCatalogViewModel() -> TerminalsCatalogViewModel {
         shared.terminalsCatalogViewModel()
+    }
+
+    /// Uncommitted changes come from the session repository's VCS status (v1 `/vcs/status`,
+    /// v2 `/api/vcs/status`); nil when the server could not tell.
+    @MainActor
+    static func makeWorktreesViewModel(feed: HomeWorktreesFeed) -> WorktreesViewModel {
+        let sessions = shared.sessionRepository()
+        return WorktreesViewModel(
+            feed: feed,
+            repository: shared.worktreeRepository(),
+            changeCount: { directory in try? await sessions.getVcsStatus(directory: directory).count }
+        )
     }
 
     @MainActor

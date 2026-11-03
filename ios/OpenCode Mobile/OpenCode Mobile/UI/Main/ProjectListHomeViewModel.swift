@@ -459,6 +459,8 @@ final class ProjectListHomeViewModel {
     private let liveUpdates: any LiveUpdates
     private let worktreeRepository: any WorktreeRepository
     private let worktreeInventoryCache: WorktreeInventoryCache
+    /// The Worktrees screen reads Home's projects and sessions here and asks Home to act.
+    let homeWorktreesFeed: HomeWorktreesFeed
     /// New worktree form of the Run in sheet.
     let worktreeCreate: WorktreeCreateModel
     /// False once a v1 server answered 404 for its worktree routes.
@@ -523,7 +525,8 @@ final class ProjectListHomeViewModel {
         worktreeRepository: any WorktreeRepository = UnavailableWorktreeRepository(),
         foregroundEventStream: (any ForegroundEventStream)? = nil,
         branchRetryDelays: [Duration] = [.seconds(1), .seconds(3)],
-        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache()
+        worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
+        homeWorktreesFeed: HomeWorktreesFeed? = nil
     ) {
         self.addProjectListingDebounce = addProjectListingDebounce
         self.projectLoadTiming = projectLoadTiming
@@ -539,6 +542,7 @@ final class ProjectListHomeViewModel {
         self.liveUpdates = liveUpdates
         self.worktreeRepository = worktreeRepository
         self.worktreeInventoryCache = worktreeInventoryCache
+        self.homeWorktreesFeed = homeWorktreesFeed ?? HomeWorktreesFeed()
         self.worktreeCreate = WorktreeCreateModel(repository: worktreeRepository)
         self.serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
         self.foregroundEventStream = foregroundEventStream
@@ -656,6 +660,9 @@ final class ProjectListHomeViewModel {
                 self?.serversChrome = HomeServersChrome()
             }
         }
+        self.homeWorktreesFeed.onRequest = { [weak self] request in
+            Task { @MainActor in await self?.handleWorktreeRequest(request) }
+        }
         branchLookups.onChange = { [weak self] branches in
             guard let self, self.worktreeBranches != branches else { return }
             self.worktreeBranches = branches
@@ -688,6 +695,8 @@ final class ProjectListHomeViewModel {
     }
 
     private func clearHomeProjectInputs() {
+        homeWorktreesFeed.clear()
+        worktreeMarks.retain(removedDirectories: [])
         projectResolutions.removeAll()
         worktreeDirectories.removeAll()
         worktreeBranches.removeAll()
@@ -1115,6 +1124,23 @@ final class ProjectListHomeViewModel {
         worktreeCreate.dismiss()
         await createSession(in: created.directory)
         return true
+    }
+
+    /// Worktree directories removed from this app; their sessions stay on Home marked removed.
+    var removedWorktreeDirectories: Set<String> { homeWorktreesFeed.removedDirectories }
+
+    /// Show sessions, New session here, and a finished remove from the Worktrees screen.
+    func handleWorktreeRequest(_ request: HomeWorktreeRequest) async {
+        switch request {
+        case let .showSessions(projectKey, directory):
+            pendingSelectedFilterOverridesAll = true
+            pendingSelectedFilterId = HomeScope.worktree(projectKey: projectKey, directory: directory).id
+        case let .newSession(directory):
+            await createSession(in: directory)
+        case let .removed(_, directory):
+            worktreeMarks.retain(removedDirectories: homeWorktreesFeed.removedDirectories)
+            await refreshWorktreeInventory(containing: directory)
+        }
     }
 
     /// Reloads the checkouts of the project that owns `directory` (Session Chat after a create).

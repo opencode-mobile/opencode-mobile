@@ -170,6 +170,7 @@ import dev.opencode.mobile.ui.settings.SettingsViewModel
 import dev.opencode.mobile.ui.settings.SyntaxHighlightPickerScreen
 import dev.opencode.mobile.ui.settings.ThemePickerScreen
 import dev.opencode.mobile.ui.terminal.TerminalsCatalogScreen
+import dev.opencode.mobile.ui.worktrees.WorktreesScreen
 
 /**
  * Entry decorators for the root [NavDisplay]. The ViewModelStore decorator scopes every
@@ -217,6 +218,7 @@ fun MainNavigation() {
                 is SessionToolGroup,
                 is Terminal,
                 is TerminalsCatalog,
+                is WorktreesHome,
                 -> backStack.popRouteUnlessRoot()
                 else -> break
             }
@@ -350,6 +352,7 @@ fun MainNavigation() {
                             is SessionToolGroup,
                             is Terminal,
                             is TerminalsCatalog,
+                            is WorktreesHome,
                             -> true
                             else -> false
                         }
@@ -836,6 +839,23 @@ fun MainNavigation() {
                                                         ),
                                                     )
                                                 },
+                                            )
+                                        }
+                                    }
+                                    entry<WorktreesHome> {
+                                        RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.WORKTREES,
+                                            )
+                                            WorktreesScreen(
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
+                                                onOpenSession = { sessionId, title, directory ->
+                                                    backStack.add(
+                                                        SessionOpenTarget(sessionId = sessionId, title = title, worktree = directory)
+                                                            .toSessionChatRoute(),
+                                                    )
+                                                },
+                                                homeShowsWorktrees = HomeDisplayPreferences.showsWorktrees,
                                             )
                                         }
                                     }

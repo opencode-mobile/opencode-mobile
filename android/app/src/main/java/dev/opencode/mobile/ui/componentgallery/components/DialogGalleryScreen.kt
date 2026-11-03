@@ -17,6 +17,8 @@ import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeDialog
+import dev.opencode.mobile.ui.components.OpenCodeDialogNote
+import dev.opencode.mobile.ui.components.OpenCodeDialogNoteTone
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeDialogTextField
 
@@ -27,6 +29,7 @@ fun DialogGalleryScreen(modifier: Modifier = Modifier) {
     var showsTextField by rememberSaveable { mutableStateOf(false) }
     var optionsEnabled by rememberSaveable { mutableStateOf(true) }
     var destructivePrimary by rememberSaveable { mutableStateOf(true) }
+    var showsNotes by rememberSaveable { mutableStateOf(false) }
     var draftTitle by rememberSaveable { mutableStateOf("Importing icons") }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -51,6 +54,11 @@ fun DialogGalleryScreen(modifier: Modifier = Modifier) {
                     label = "Options enabled",
                     selected = optionsEnabled,
                     onClick = { optionsEnabled = !optionsEnabled },
+                )
+                OpenCodeChoiceBadge(
+                    label = "Notes",
+                    selected = showsNotes && !showsTextField,
+                    onClick = { showsNotes = !showsNotes },
                 )
                 OpenCodeChoiceBadge(
                     label = "Destructive",
@@ -98,6 +106,15 @@ fun DialogGalleryScreen(modifier: Modifier = Modifier) {
                 )
             } else {
                 null
+            },
+        notes =
+            if (showsNotes && !showsTextField) {
+                listOf(
+                    OpenCodeDialogNote("3 uncommitted changes will be lost.", OpenCodeDialogNoteTone.Warning),
+                    OpenCodeDialogNote("1 session uses this worktree. It stays on Home but can't run here again."),
+                )
+            } else {
+                emptyList()
             },
         onDismissRequest = { visible = false },
     )

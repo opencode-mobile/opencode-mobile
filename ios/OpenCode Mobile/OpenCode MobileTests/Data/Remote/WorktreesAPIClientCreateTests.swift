@@ -198,6 +198,100 @@ struct WorktreesAPIClientCreateTests {
         #expect(CreateURLProtocol.requestCount == 0)
     }
 
+    // MARK: Remove (#833)
+
+    @Test func removeV2DeletesWithProjectDirectoryAndForce() async throws {
+        CreateURLProtocol.reset(status: 204, body: "")
+
+        try await makeClient().removeV2(projectID: "prj", directory: "/wt/a", force: true)
+
+        let request = try #require(CreateURLProtocol.lastRequest)
+        #expect(request.httpMethod == "DELETE")
+        #expect(request.url?.path.hasSuffix("/api/worktree") == true)
+        #expect(request.url?.query == nil)
+        let json = try bodyJSON()
+        #expect(json["projectID"] as? String == "prj")
+        #expect(json["directory"] as? String == "/wt/a")
+        #expect(json["force"] as? Bool == true)
+        #expect(json.count == 3)
+    }
+
+    @Test func removeV1DeletesInTheProjectDirectory() async throws {
+        CreateURLProtocol.reset(status: 200, body: "true")
+
+        try await makeClient().removeV1(projectDirectory: "/src/repo", directory: "/wt/a")
+
+        let request = try #require(CreateURLProtocol.lastRequest)
+        #expect(request.httpMethod == "DELETE")
+        let url = try #require(request.url)
+        #expect(url.path.hasSuffix("/experimental/worktree"))
+        #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "directory" }?.value == "/src/repo")
+        let json = try bodyJSON()
+        #expect(json["directory"] as? String == "/wt/a")
+        #expect(json.count == 1)
+    }
+
+    @Test func repositoryRemoveV2NeedsAProject() async {
+        CreateURLProtocol.reset(status: 204, body: "")
+        let repository = DefaultWorktreeRepository(remote: makeClient(), protocolProvider: { .v2 })
+
+        for projectID in [nil, " ", "global"] as [String?] {
+            await #expect(throws: WorktreeRemoveError.unsupported) {
+                try await repository.remove(
+                    RemoveWorktreeRequest(projectID: projectID, projectDirectory: "/src/repo", directory: "/wt/a", force: false)
+                )
+            }
+        }
+        #expect(CreateURLProtocol.requestCount == 0)
+    }
+
+    @Test func repositoryRemoveV2DirtyCheckoutAsksForForce() async throws {
+        CreateURLProtocol.reset(
+            status: 400,
+            body: #"{"_tag":"WorktreeError","name":"WorktreeError","data":{"message":"contains modified or untracked files","forceRequired":true}}"#
+        )
+        let repository = DefaultWorktreeRepository(remote: makeClient(), protocolProvider: { .v2 })
+
+        await #expect(throws: WorktreeRemoveError.forceRequired(message: "contains modified or untracked files")) {
+            try await repository.remove(
+                RemoveWorktreeRequest(projectID: "prj", projectDirectory: "/src/repo", directory: "/wt/a/", force: false)
+            )
+        }
+        #expect(try bodyJSON()["directory"] as? String == "/wt/a")
+    }
+
+    @Test func repositoryRemoveV2OtherFailureKeepsTheServerWords() async {
+        CreateURLProtocol.reset(
+            status: 400,
+            body: #"{"name":"WorktreeError","data":{"message":"Invalid worktree directory: /wt/a"}}"#
+        )
+        let repository = DefaultWorktreeRepository(remote: makeClient(), protocolProvider: { .v2 })
+
+        await #expect(throws: WorktreeRemoveError.failed(message: "Invalid worktree directory: /wt/a")) {
+            try await repository.remove(
+                RemoveWorktreeRequest(projectID: "prj", projectDirectory: "/src/repo", directory: "/wt/a", force: true)
+            )
+        }
+    }
+
+    @Test func repositoryRemoveV1AsksInTheMainCheckoutAnd404IsUnsupported() async throws {
+        CreateURLProtocol.reset(status: 200, body: "true")
+        let repository = DefaultWorktreeRepository(remote: makeClient(), protocolProvider: { .v1 })
+
+        try await repository.remove(
+            RemoveWorktreeRequest(projectID: nil, projectDirectory: "/src/repo/", directory: "/wt/a", force: false)
+        )
+        let url = try #require(CreateURLProtocol.lastRequest?.url)
+        #expect(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "directory" }?.value == "/src/repo")
+
+        CreateURLProtocol.reset(status: 404, body: "Not Found")
+        await #expect(throws: WorktreeRemoveError.unsupported) {
+            try await repository.remove(
+                RemoveWorktreeRequest(projectID: nil, projectDirectory: "/src/repo", directory: "/wt/a", force: false)
+            )
+        }
+    }
+
     // MARK: Helpers
 
     private func bodyJSON() throws -> [String: Any] {

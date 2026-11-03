@@ -279,6 +279,32 @@ class CrossProjectSessionListSessionsTest {
     }
 
     @Test
+    fun removedWorktreeSessions_stayWithTheirFolderStruckThrough() {
+        // After the remove the inventory no longer lists /wt-gone; v1 still holds its last list.
+        val projects =
+            HomeProjectGrouping.group(
+                addedPaths = listOf("/repo"),
+                resolved = mapOf("/repo" to ResolvedHomePath("proj", "/repo", isRepository = true)),
+                inventories = mapOf("/repo" to setOf("/repo")),
+                branches = mapOf("/repo" to "main"),
+            )
+        val sessions =
+            homeSessionListSessions(
+                projects,
+                listOf(section(worktree = "/repo", session(id = "main", title = "Main", updatedAtEpochMs = 1L))),
+                extraSessions = mapOf("/wt-gone" to listOf(session(id = "gone", title = "Gone", updatedAtEpochMs = 2L))),
+                removedWorktrees = mapOf("/wt-gone" to "proj"),
+            )
+
+        assertEquals(listOf("gone", "main"), sessions.map { it.id })
+        assertEquals(listOf(SessionListLocationPart("wt-gone", isRemoved = true)), sessions.first().location)
+        assertEquals(listOf(SessionListLocationPart("main", isBranch = true)), sessions.last().location)
+        val detail = sessions.first().locationLines(removedNote = "worktree removed")!!.detail!!
+        assertEquals(listOf("wt-gone", " · ", "worktree removed"), detail.map { it.text })
+        assertEquals(OpenCodeListItemSubtitleTone.Removed, detail.first().tone)
+    }
+
+    @Test
     fun chromeProjects_countProjectsWorktreesAndRunningSessions() {
         val sections =
             listOf(

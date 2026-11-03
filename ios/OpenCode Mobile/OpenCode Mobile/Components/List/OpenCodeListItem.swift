@@ -83,6 +83,8 @@ enum OpenCodeListItemSubtitleTone {
     case tertiary
     case addition
     case deletion
+    /// Something that no longer exists (a removed worktree): weaker and struck through.
+    case removed
 }
 
 struct OpenCodeListItemSubtitleSegment: Equatable {
@@ -468,7 +470,7 @@ struct OpenCodeListItem<Trailing: View>: View {
             if let icon = segment.icon, let image = OpenCodeInlineIcon.image(icon, pointSize: listItemSubtitleIconSize) {
                 text = text + Text(image).foregroundColor(color).baselineOffset(-1) + Text("\u{2009}")
             }
-            return text + Text(segment.text).foregroundColor(color)
+            return text + Text(segment.text).foregroundColor(color).strikethrough(segment.tone == .removed)
         }
     }
 
@@ -483,6 +485,8 @@ struct OpenCodeListItem<Trailing: View>: View {
             return OpenCodeColors.diffAdd
         case .deletion:
             return OpenCodeColors.diffDelete
+        case .removed:
+            return OpenCodeColors.textWeaker
         }
     }
 

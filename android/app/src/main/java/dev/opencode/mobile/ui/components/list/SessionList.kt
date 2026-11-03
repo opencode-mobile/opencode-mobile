@@ -124,12 +124,12 @@ data class SessionListSession(
      * (branch icon, then folder) on the detail line under it, in every scope. Each line cuts on
      * its own, so a long project name never hides the branch. Null keeps the path subtitle.
      */
-    fun locationLines(): SessionListLocationLines? {
+    fun locationLines(removedNote: String = ""): SessionListLocationLines? {
         val parts = location ?: return null
         val name =
             projectName?.takeIf { it.isNotEmpty() }
-                ?: return SessionListLocationLines(parts.toSubtitleSegments(), detail = null)
-        val worktree = parts.toSubtitleSegments(OpenCodeListItemSubtitleTone.Tertiary)
+                ?: return SessionListLocationLines(parts.toSubtitleSegments(removedNote = removedNote), detail = null)
+        val worktree = parts.toSubtitleSegments(OpenCodeListItemSubtitleTone.Tertiary, removedNote)
         return SessionListLocationLines(
             subtitle = listOf(OpenCodeListItemSubtitleSegment(name, OpenCodeListItemSubtitleTone.Secondary, OpenCodeIcons.Folder)),
             detail = worktree.ifEmpty { null },
@@ -148,6 +148,8 @@ data class SessionListLocationPart(
     val text: String,
     /** Drawn with the branch mark. */
     val isBranch: Boolean = false,
+    /** A worktree folder removed from the server: struck through, followed by the removed note. */
+    val isRemoved: Boolean = false,
 )
 
 /** First load of a project scope's sessions that has not finished yet. */
@@ -718,7 +720,7 @@ private fun SessionListRow(
         )
         return
     }
-    val lines = session.locationLines()
+    val lines = session.locationLines(removedNote = stringResource(R.string.session_list_worktree_removed))
     OpenCodeListItem(
         title = session.title,
         subtitle = if (lines == null) compactHomePath(session.subtitle) else null,
@@ -854,18 +856,24 @@ fun List<SessionListSession>.visibleForFilter(selectedFilterId: String): List<Se
         filter { it.worktree == selectedFilterId || it.worktreeScopeId == selectedFilterId }
     }
 
-/** Location parts as list subtitle segments: the branch carries the branch mark, parts joined with " · ". */
+/**
+ * Location parts as list subtitle segments: the branch carries the branch mark, parts joined with
+ * " · ". A removed worktree folder is struck through and followed by [removedNote].
+ */
 internal fun List<SessionListLocationPart>.toSubtitleSegments(
     tone: OpenCodeListItemSubtitleTone = OpenCodeListItemSubtitleTone.Secondary,
+    removedNote: String = "",
 ): List<OpenCodeListItemSubtitleSegment> =
     flatMapIndexed { index, part ->
         listOfNotNull(
             OpenCodeListItemSubtitleSegment(LOCATION_SEPARATOR, tone).takeIf { index > 0 },
             OpenCodeListItemSubtitleSegment(
                 text = part.text,
-                tone = tone,
+                tone = if (part.isRemoved) OpenCodeListItemSubtitleTone.Removed else tone,
                 icon = if (part.isBranch) OpenCodeIcons.CallSplit else null,
             ),
+            OpenCodeListItemSubtitleSegment(LOCATION_SEPARATOR, tone).takeIf { part.isRemoved && removedNote.isNotEmpty() },
+            OpenCodeListItemSubtitleSegment(removedNote, tone).takeIf { part.isRemoved && removedNote.isNotEmpty() },
         )
     }
 

@@ -114,6 +114,12 @@ struct ProjectListHomeView: View {
                         projectTitle: terminal.projectTitle,
                         ptyId: terminal.ptyId
                     )
+                case .worktrees:
+                    WorktreesView(
+                        feed: viewModel.homeWorktreesFeed,
+                        homeShowsWorktrees: homeDisplayPreferences.showsWorktrees,
+                        onOpenSession: { session in openSession(session) }
+                    )
                 }
             }
             .task {
@@ -161,6 +167,9 @@ struct ProjectListHomeView: View {
                     self.selectedSession = nil
                 }
                 lastLoadedSessionIDs = current
+            }
+            .onChange(of: homeWorktreesSnapshot, initial: true) { _, snapshot in
+                viewModel.homeWorktreesFeed.publish(snapshot)
             }
             .onChange(of: viewModel.pendingSelectedFilterId) { _, worktree in
                 if let worktree {
@@ -541,7 +550,28 @@ struct ProjectListHomeView: View {
     private var homeSessions: [SessionListSession] {
         homeSections.crossProjectSessionListSessions(
             projects: viewModel.homeProjects,
-            worktreesEnabled: homeDisplayPreferences.showsWorktrees
+            worktreesEnabled: homeDisplayPreferences.showsWorktrees,
+            removedDirectories: viewModel.removedWorktreeDirectories
+        )
+    }
+
+    /// Home's projects and sessions for the Worktrees screen.
+    private var homeWorktreesSnapshot: HomeWorktreesSnapshot {
+        HomeWorktreesSnapshot(
+            projects: homeSections.isEmpty ? [] : viewModel.homeProjects,
+            sessions: homeSessions.map { session in
+                let isRunning: Bool
+                switch session.status {
+                case .running, .retrying: isRunning = true
+                default: isRunning = false
+                }
+                return HomeWorktreeSession(
+                    id: session.id,
+                    title: session.title,
+                    directory: ServerPathPolicy.canonical(session.directory),
+                    isRunning: isRunning
+                )
+            }
         )
     }
 
@@ -1185,7 +1215,11 @@ struct ProjectListHomeView: View {
     ) -> some View {
         let worktreesEnabled = homeDisplayPreferences.showsWorktrees
         let projects = sections.isEmpty ? [] : viewModel.homeProjects
-        let sessions = sections.crossProjectSessionListSessions(projects: projects, worktreesEnabled: worktreesEnabled)
+        let sessions = sections.crossProjectSessionListSessions(
+            projects: projects,
+            worktreesEnabled: worktreesEnabled,
+            removedDirectories: viewModel.removedWorktreeDirectories
+        )
         let filterTabs = homeFilterTabs(projects: projects, sessions: sessions)
         let selectedFilterId = SessionListHomeChrome.resolvedFilterId(
             selectedId: selectedSessionFilterId,
@@ -1376,7 +1410,8 @@ extension Array where Element == ProjectSectionItem {
     /// `projects` defaults to one project per added path.
     func crossProjectSessionListSessions(
         projects: [HomeProject]? = nil,
-        worktreesEnabled: Bool = true
+        worktreesEnabled: Bool = true,
+        removedDirectories: Set<String> = []
     ) -> [SessionListSession] {
         let projects = projects ?? HomeProjectGrouping.group(addedPaths: map(\.worktree), resolutions: [:])
         let flattened = flatMap { section in
@@ -1436,7 +1471,8 @@ extension Array where Element == ProjectSectionItem {
                         project: $0,
                         sessionDirectory: directory,
                         includesProjectName: false,
-                        worktreesEnabled: worktreesEnabled
+                        worktreesEnabled: worktreesEnabled,
+                        removedDirectories: removedDirectories
                     )
                 },
                 projectName: project?.displayName,

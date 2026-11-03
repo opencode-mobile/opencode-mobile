@@ -6,6 +6,7 @@ struct DialogGalleryView: View {
     @State private var showsTextField = false
     @State private var optionsEnabled = true
     @State private var destructivePrimary = true
+    @State private var showsNotes = false
     @State private var draftTitle = "Importing icons"
 
     var body: some View {
@@ -30,6 +31,11 @@ struct DialogGalleryView: View {
                         label: "Options enabled",
                         selected: optionsEnabled,
                         action: { optionsEnabled.toggle() }
+                    )
+                    OpenCodeChoiceBadge(
+                        label: "Notes",
+                        selected: showsNotes && !showsTextField,
+                        action: { showsNotes.toggle() }
                     )
                     OpenCodeChoiceBadge(
                         label: "Destructive",
@@ -66,7 +72,13 @@ struct DialogGalleryView: View {
                     hint: "Title",
                     enabled: optionsEnabled
                 )
-                : nil
+                : nil,
+            notes: showsNotes && !showsTextField
+                ? [
+                    OpenCodeDialogNote(text: "3 uncommitted changes will be lost.", tone: .warning),
+                    OpenCodeDialogNote(text: "1 session uses this worktree. It stays on Home but can't run here again."),
+                ]
+                : []
         )
     }
 

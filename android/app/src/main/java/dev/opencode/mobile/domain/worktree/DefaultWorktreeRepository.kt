@@ -5,12 +5,17 @@ import dev.opencode.mobile.data.remote.WorktreeHttpException
 import dev.opencode.mobile.data.remote.WorktreeRemote
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
+import dev.opencode.mobile.domain.home.HomeProjectGrouping.GLOBAL_PROJECT_ID
 import dev.opencode.mobile.domain.session.ServerErrorMessage
 import dev.opencode.mobile.network.ActiveConnectionManager
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.jsonPrimitive
 import javax.inject.Inject
 
 class DefaultWorktreeRepository(
@@ -153,6 +158,40 @@ class DefaultWorktreeRepository(
 
     private class V1CreateNotFound : Exception()
 
+    override suspend fun remove(request: RemoveWorktreeRequest) {
+        val directory = ServerPathPolicy.canonical(request.directory.trim())
+        when (protocol()) {
+            ServerProtocol.V2 -> {
+                val projectId =
+                    request.projectId?.trim()?.takeIf { it.isNotEmpty() && it != GLOBAL_PROJECT_ID }
+                        ?: throw WorktreeRemoveError.Unsupported()
+                removeCall(notFoundMeansUnsupported = false) { remote.removeV2(projectId, directory, request.force) }
+            }
+            ServerProtocol.V1 ->
+                removeCall(notFoundMeansUnsupported = true) {
+                    remote.removeV1(ServerPathPolicy.canonical(request.projectDirectory.trim()), directory)
+                }
+        }
+    }
+
+    private suspend fun removeCall(
+        notFoundMeansUnsupported: Boolean,
+        call: suspend () -> Unit,
+    ) {
+        try {
+            call()
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (error: WorktreeHttpException) {
+            if (error.statusCode == 404 && notFoundMeansUnsupported) throw WorktreeRemoveError.Unsupported()
+            val message = httpErrorMessage(error.statusCode, error.body)
+            if (WorktreeErrorBody.forceRequired(error.body)) throw WorktreeRemoveError.ForceRequired(message)
+            throw WorktreeRemoveError.Failed(message)
+        } catch (error: Exception) {
+            throw WorktreeRemoveError.Failed(error.message?.trim()?.takeIf { it.isNotEmpty() } ?: "Unknown error")
+        }
+    }
+
     private suspend fun loadV2(projectId: String?): WorktreeLoad {
         if (projectId.isNullOrBlank()) return WorktreeLoad.Unloaded
         return try {
@@ -206,3 +245,16 @@ internal fun httpErrorMessage(
     ServerErrorMessage.userFacing(body)
         ?: body.trim().takeIf { it.isNotEmpty() && !it.startsWith("{") && !it.startsWith("[") && it.length <= 200 && !it.contains('\n') }
         ?: WorktreeCreateCopy.requestFailed(statusCode)
+
+/** V2 `WorktreeError` body: `{"name":"WorktreeError","data":{"message","forceRequired"}}`. */
+internal object WorktreeErrorBody {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    fun forceRequired(body: String): Boolean =
+        try {
+            val data = (json.parseToJsonElement(body) as? JsonObject)?.get("data") as? JsonObject
+            data?.get("forceRequired")?.jsonPrimitive?.booleanOrNull == true
+        } catch (_: Exception) {
+            false
+        }
+}

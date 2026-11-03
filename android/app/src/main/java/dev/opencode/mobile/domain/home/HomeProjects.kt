@@ -227,19 +227,23 @@ object HomeSessionLocation {
     data class Part(
         val text: String,
         val isBranch: Boolean = false,
+        /** The worktree folder of a checkout removed from the server. */
+        val isRemoved: Boolean = false,
     )
 
     /**
      * Row subtitle parts for a session of a repository project: the project name (All scope
      * only), the branch, and the worktree folder when it is not the main checkout or the branch
      * is unknown. Null for a non-repository project, which keeps its path subtitle, and for
-     * every project while [worktreesEnabled] is off.
+     * every project while [worktreesEnabled] is off. A directory in [removedDirectories] is a
+     * removed worktree: its folder part is marked removed.
      */
     fun parts(
         project: HomeProject,
         sessionDirectory: String?,
         includeProjectName: Boolean,
         worktreesEnabled: Boolean = true,
+        removedDirectories: Set<String> = emptySet(),
     ): List<Part>? {
         if (!worktreesEnabled || !project.isRepository) return null
         val directory =
@@ -249,7 +253,9 @@ object HomeSessionLocation {
         return buildList {
             if (includeProjectName) add(Part(project.displayName))
             worktree.branch?.let { add(Part(it, isBranch = true)) }
-            if (!worktree.isMain || worktree.branch == null) add(Part(worktree.folderName))
+            if (!worktree.isMain || worktree.branch == null) {
+                add(Part(worktree.folderName, isRemoved = directory in removedDirectories && project.worktree(directory) == null))
+            }
         }
     }
 

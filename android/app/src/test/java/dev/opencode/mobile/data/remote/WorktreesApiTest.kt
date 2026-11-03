@@ -221,6 +221,57 @@ class WorktreesApiTest {
             assertEquals(listOf("main", "dev"), api.branchesV2("/repo"))
         }
 
+    @Test
+    fun v2RemoveDeletesWithProjectDirectoryAndForce() =
+        runTest {
+            val captured = mutableListOf<HttpRequestData>()
+            val api =
+                api(captured) { request ->
+                    captured += request
+                    respond("", HttpStatusCode.NoContent)
+                }
+
+            api.removeV2("proj", "/wt/a", force = true)
+
+            val request = captured.single()
+            assertEquals("DELETE", request.method.value)
+            assertTrue(request.url.encodedPath.endsWith("/api/worktree"))
+            assertEquals("""{"projectID":"proj","directory":"/wt/a","force":true}""", request.body.readText())
+        }
+
+    @Test
+    fun v1RemoveDeletesInTheProjectDirectory() =
+        runTest {
+            val captured = mutableListOf<HttpRequestData>()
+            val api =
+                api(captured) { request ->
+                    captured += request
+                    respond("true", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+
+            api.removeV1("/repo", "/wt/a")
+
+            val request = captured.single()
+            assertEquals("DELETE", request.method.value)
+            assertTrue(request.url.encodedPath.endsWith("/experimental/worktree"))
+            assertEquals("/repo", request.url.parameters["directory"])
+            assertEquals("""{"directory":"/wt/a"}""", request.body.readText())
+        }
+
+    @Test
+    fun removeFailureKeepsStatusAndBody() =
+        runTest {
+            val api = api(mutableListOf()) { respond("""{"data":{"message":"nope"}}""", HttpStatusCode.BadRequest) }
+
+            try {
+                api.removeV2("proj", "/wt/a", force = false)
+                fail("expected WorktreeHttpException")
+            } catch (error: WorktreeHttpException) {
+                assertEquals(400, error.statusCode)
+                assertEquals("""{"data":{"message":"nope"}}""", error.body)
+            }
+        }
+
     private fun api(
         captured: MutableList<HttpRequestData>,
         handler: io.ktor.client.engine.mock.MockRequestHandler,

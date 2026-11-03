@@ -94,6 +94,26 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         throw WorktreeRemoteError.invalidResponse
     }
 
+    func removeV2(projectID: String, directory: String, force: Bool) async throws {
+        guard let connection = connectionProvider() else { throw WorktreeRemoteError.noActiveConnection }
+        var request = connection.authorizedRequest(path: "api/worktree", method: "DELETE")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(WorktreeRemoveV2Body(projectID: projectID, directory: directory, force: force))
+        _ = try await bodyData(for: request)
+    }
+
+    func removeV1(projectDirectory: String, directory: String) async throws {
+        guard let connection = connectionProvider() else { throw WorktreeRemoteError.noActiveConnection }
+        var request = connection.authorizedRequest(
+            path: "experimental/worktree",
+            method: "DELETE",
+            directory: projectDirectory
+        )
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(WorktreeRemoveV1Body(directory: directory))
+        _ = try await bodyData(for: request)
+    }
+
     /// Like `data(for:)`, keeping the error body so the server's words reach the user.
     private func bodyData(for request: URLRequest) async throws -> Data {
         let (data, response) = try await resolveURLSession().data(for: request)
@@ -133,6 +153,16 @@ private nonisolated struct WorktreeCreateV1Body: Encodable {
 private nonisolated struct WorktreeCreatedV1DTO: Decodable {
     let name: String?
     let branch: String?
+    let directory: String
+}
+
+private nonisolated struct WorktreeRemoveV2Body: Encodable {
+    let projectID: String
+    let directory: String
+    let force: Bool
+}
+
+private nonisolated struct WorktreeRemoveV1Body: Encodable {
     let directory: String
 }
 

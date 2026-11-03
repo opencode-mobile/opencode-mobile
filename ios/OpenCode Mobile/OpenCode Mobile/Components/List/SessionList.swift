@@ -1141,7 +1141,12 @@ extension SessionListSession {
 }
 
 extension HomeRowLocation {
-    /// Branch (with the branch icon) and folder, joined with " · ".
+    static var removedNote: String {
+        String(localized: "session_list.worktree_removed", defaultValue: "worktree removed")
+    }
+
+    /// Branch (with the branch icon) and folder, joined with " · ". A removed worktree's folder
+    /// is struck through and followed by "worktree removed".
     func listItemSegments(tone: OpenCodeListItemSubtitleTone) -> [OpenCodeListItemSubtitleSegment] {
         var segments: [OpenCodeListItemSubtitleSegment] = []
         for (index, part) in parts.enumerated() {
@@ -1154,6 +1159,12 @@ extension HomeRowLocation {
                     segments.append(OpenCodeListItemSubtitleSegment(text: prefix, tone: tone))
                 }
                 segments.append(OpenCodeListItemSubtitleSegment(text: branch, tone: tone, icon: .callSplit))
+            case let .removed(folder):
+                if !prefix.isEmpty {
+                    segments.append(OpenCodeListItemSubtitleSegment(text: prefix, tone: tone))
+                }
+                segments.append(OpenCodeListItemSubtitleSegment(text: folder, tone: .removed))
+                segments.append(OpenCodeListItemSubtitleSegment(text: Self.separator + Self.removedNote, tone: tone))
             }
         }
         return segments

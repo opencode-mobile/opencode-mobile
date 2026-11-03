@@ -24,6 +24,8 @@ data class HomeWorktreeIndex(
     val branches: Map<String, String> = emptyMap(),
     /** V1 sessions of listed worktrees that are not added paths, per canonical directory. */
     val extraSessions: Map<String, List<SessionSummary>> = emptyMap(),
+    /** Worktrees removed from this app, canonical directory to project key; their sessions stay on Home. */
+    val removedWorktrees: Map<String, String> = emptyMap(),
 ) {
     fun projects(addedPaths: List<String>): List<HomeProject> =
         HomeProjectGrouping.group(

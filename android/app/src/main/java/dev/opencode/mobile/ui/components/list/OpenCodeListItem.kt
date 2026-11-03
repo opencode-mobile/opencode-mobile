@@ -61,6 +61,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
@@ -124,6 +125,9 @@ enum class OpenCodeListItemSubtitleTone {
     Tertiary,
     Addition,
     Deletion,
+
+    /** Something that no longer exists (a removed worktree): weaker and struck through. */
+    Removed,
 }
 
 data class OpenCodeListItemSubtitleSegment(
@@ -661,6 +665,7 @@ private fun ListItemSegmentsText(
                     OpenCodeListItemSubtitleTone.Tertiary -> textWeak
                     OpenCodeListItemSubtitleTone.Addition -> diffAdd
                     OpenCodeListItemSubtitleTone.Deletion -> diffDelete
+                    OpenCodeListItemSubtitleTone.Removed -> textWeaker
                 }
             }
         }
@@ -691,7 +696,9 @@ private fun ListItemSegmentsText(
                     // Decorative icon: alternate text must be non-empty, so use a zero-width space
                     // rather than the default replacement character screen readers announce.
                     if (segment.icon != null) appendInlineContent(subtitleIconId(index), "\u200B")
-                    withStyle(SpanStyle(color = segmentColors[index])) { append(segment.text) }
+                    val decoration =
+                        if (segment.tone == OpenCodeListItemSubtitleTone.Removed) TextDecoration.LineThrough else null
+                    withStyle(SpanStyle(color = segmentColors[index], textDecoration = decoration)) { append(segment.text) }
                 }
             },
         inlineContent = inlineIcons,

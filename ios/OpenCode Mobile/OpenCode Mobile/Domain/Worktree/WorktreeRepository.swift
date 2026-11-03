@@ -22,6 +22,16 @@ protocol WorktreeRepository: Sendable {
     func baseBranches(directory: String) async throws -> [String]
     /// False once this connection's v1 server answered 404 for its worktree routes.
     var canCreateWorktrees: Bool { get }
+    /// Deletes a checkout on the server: v2 `DELETE /api/worktree` (needs `projectID`), v1
+    /// `DELETE /experimental/worktree`. Throws `WorktreeRemoveError`; `.forceRequired` when v2
+    /// found uncommitted changes.
+    func remove(_ request: RemoveWorktreeRequest) async throws
+}
+
+extension WorktreeRepository {
+    func remove(_ request: RemoveWorktreeRequest) async throws {
+        throw WorktreeRemoveError.unsupported
+    }
 }
 
 /// What New worktree asks the server for. v1 ignores `projectID` and `baseRef`.
@@ -87,4 +97,8 @@ protocol WorktreeRemote: Sendable {
     func createV1(directory: String, name: String) async throws -> CreatedWorktree
     /// V2 `GET /api/vcs/branch` at `directory`.
     func branchesV2(directory: String) async throws -> [String]
+    /// V2 `DELETE /api/worktree` with `{projectID, directory, force}`. Throws `WorktreeRemoteError`.
+    func removeV2(projectID: String, directory: String, force: Bool) async throws
+    /// V1 `DELETE /experimental/worktree?directory=` with `{"directory"}`; the server always forces.
+    func removeV1(projectDirectory: String, directory: String) async throws
 }

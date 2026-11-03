@@ -36,12 +36,15 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
+import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeCompactRowPath
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeProjectGrouping
 import dev.opencode.mobile.domain.home.HomeProjectPickerState
 import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.home.HomeSessionLocation
+import dev.opencode.mobile.domain.home.HomeWorktreeSession
+import dev.opencode.mobile.domain.home.HomeWorktreesSnapshot
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionSummary
@@ -1208,7 +1211,22 @@ internal fun homeScopeId(
 
 /** Rows for every Home project, one per session id. */
 internal fun MainScreenUiState.Loaded.homeSessions(worktreesEnabled: Boolean = true): List<SessionListSession> =
-    homeSessionListSessions(projects, sections, home.extraSessions, worktreesEnabled)
+    homeSessionListSessions(projects, sections, home.extraSessions, worktreesEnabled, home.removedWorktrees)
+
+/** Home's projects and sessions for the Worktrees screen. */
+internal fun MainScreenUiState.Loaded.worktreesSnapshot(): HomeWorktreesSnapshot =
+    HomeWorktreesSnapshot(
+        projects = projects,
+        sessions =
+            homeSessions().map { session ->
+                HomeWorktreeSession(
+                    id = session.id,
+                    title = session.title,
+                    directory = ServerPathPolicy.canonical(session.directory.trim()),
+                    isRunning = session.status == SessionListStatus.Running || session.status == SessionListStatus.Retrying,
+                )
+            },
+    )
 
 /** Without project data, each section is its own project (tests and previews). */
 internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> =
@@ -1216,23 +1234,27 @@ internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Se
 
 /**
  * Home rows: each project's sessions from its added paths' lists and (v1) its other
- * worktrees' lists. A session listed more than once keeps its newest copy (the earlier
- * source on a tie); rows are newest first.
+ * worktrees' lists, including worktrees removed from this app ([removedWorktrees], directory to
+ * project key). A session listed more than once keeps its newest copy (the earlier source on a
+ * tie); rows are newest first.
  */
 internal fun homeSessionListSessions(
     projects: List<HomeProject>,
     sections: List<ProjectSectionUi>,
     extraSessions: Map<String, List<SessionSummary>> = emptyMap(),
     worktreesEnabled: Boolean = true,
+    removedWorktrees: Map<String, String> = emptyMap(),
 ): List<SessionListSession> {
     val sectionsByPath = sections.associateBy { it.worktree }
+    val removed = removedWorktrees.keys
     val flattened =
         projects.flatMap { project ->
+            val removedHere = removedWorktrees.filterValues { it == project.key }.keys
             project.memberPaths.flatMap { path ->
-                sectionsByPath[path]?.allSessions.orEmpty().map { HomeRowSource(project, path, it) }
+                sectionsByPath[path]?.allSessions.orEmpty().map { HomeRowSource(project, path, it, removed) }
             } +
-                project.worktrees.flatMap { worktree ->
-                    extraSessions[worktree.directory].orEmpty().map { HomeRowSource(project, worktree.directory, it) }
+                (project.worktrees.map { it.directory } + removedHere).distinct().flatMap { directory ->
+                    extraSessions[directory].orEmpty().map { HomeRowSource(project, directory, it, removed) }
                 }
         }
     val chosenIndexById = mutableMapOf<String, Int>()
@@ -1257,6 +1279,8 @@ private data class HomeRowSource(
     /** The added path or worktree whose list carried the session. */
     val listedIn: String,
     val session: SessionSummary,
+    /** Worktree directories removed from this app. */
+    val removedDirectories: Set<String> = emptySet(),
 ) {
     fun toSessionListSession(worktreesEnabled: Boolean = true): SessionListSession {
         val directory = session.directory?.takeIf { it.isNotEmpty() } ?: listedIn
@@ -1277,8 +1301,8 @@ private data class HomeRowSource(
             worktreeScopeId = worktree?.let { HomeScope.worktreeId(project.key, it.directory) },
             location =
                 HomeSessionLocation
-                    .parts(project, directory, includeProjectName = false, worktreesEnabled = worktreesEnabled)
-                    ?.map { SessionListLocationPart(it.text, isBranch = it.isBranch) },
+                    .parts(project, directory, includeProjectName = false, worktreesEnabled, removedDirectories)
+                    ?.map { SessionListLocationPart(it.text, isBranch = it.isBranch, isRemoved = it.isRemoved) },
             projectName = project.displayName,
             compactWorktree = HomeCompactRowPath.worktreeLabel(project, directory, worktreesEnabled),
         )

@@ -6,6 +6,7 @@ enum HomeRoute: Hashable {
     case session(SessionListItem)
     case terminalsCatalog
     case terminal(TerminalRoute)
+    case worktrees
 
     var session: SessionListItem? {
         if case let .session(session) = self { return session }

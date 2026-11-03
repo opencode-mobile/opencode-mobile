@@ -33,6 +33,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object TerminalsCatalog : NavKey
 
+@Serializable data object WorktreesHome : NavKey
+
 /** Root of the Home split view's trailing pane stack while no session is selected. */
 @Serializable data object HomeSessionPanePlaceholder : NavKey
 
