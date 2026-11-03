@@ -79,9 +79,14 @@ final class SessionInfo {
                 let hasTitleUpdate = eventAdapter.sessionTitleUpdate(from: event) != nil
                 // Another client deleted the open session: leave instead of showing a dead chat.
                 let boundDeleted = eventAdapter.sessionDeletedID(from: event) == boundSessionID
-                guard boundError != nil || hasTitleUpdate || boundDeleted else { continue }
+                // Archived or restored anywhere: the banner follows the server's answer.
+                let archiveStateChanged = event.sessionID == boundSessionID && Self.archiveStateEvents.contains(event.type)
+                guard boundError != nil || hasTitleUpdate || boundDeleted || archiveStateChanged else { continue }
                 await MainActor.run {
                     guard !Task.isCancelled, let sessionInfo = info else { return }
+                    if archiveStateChanged {
+                        sessionInfo.loadArchiveState()
+                    }
                     if boundDeleted {
                         OpenCodeLog.sessionChat.info("session deleted elsewhere session=\(boundSessionID); leaving")
                         sessionInfo.requestLeaveSession()
@@ -97,6 +102,7 @@ final class SessionInfo {
                 }
             }
         }
+        loadArchiveState()
         observationTask = Task {
             async let statusLoop: Void = info.observeActivity()
             async let connectionLoop: Void = info.observeConnectionState()
@@ -212,6 +218,53 @@ final class SessionInfo {
                 )
                 state.isLifecycleActionInFlight = false
                 state.lifecycleErrorMessage = Self.archiveError
+                notifyChange()
+            }
+        }
+    }
+
+    /// Reads whether the bound session is archived (the archived banner).
+    func loadArchiveState() {
+        let sessionID = state.sessionID
+        guard !sessionID.isEmpty, !OptimisticSessionCreate.isPlaceholder(sessionID) else { return }
+        Task {
+            guard let session = try? await sessionRepository.getSession(id: sessionID, directory: worktree),
+                  state.sessionID == sessionID
+            else { return }
+            state.archivedAtEpochMs = session.archivedAtEpochMs
+            notifyChange()
+        }
+    }
+
+    /// Restores the open archived session; the banner leaves on success.
+    func unarchiveSession() {
+        guard !state.sessionID.isEmpty,
+              !OptimisticSessionCreate.isPlaceholder(state.sessionID),
+              !state.isLifecycleActionInFlight,
+              state.archivedAtEpochMs != nil else { return }
+        let sessionID = state.sessionID
+        state.isLifecycleActionInFlight = true
+        state.lifecycleErrorMessage = nil
+        notifyChange()
+        OpenCodeLog.sessionChat.info("unarchive start session=\(sessionID)")
+        Task {
+            do {
+                _ = try await sessionRepository.unarchiveSession(id: sessionID, directory: worktree)
+                guard state.sessionID == sessionID else { return }
+                OpenCodeLog.sessionChat.info("unarchive success session=\(sessionID)")
+                state.isLifecycleActionInFlight = false
+                state.archivedAtEpochMs = nil
+                notifyChange()
+            } catch {
+                guard state.sessionID == sessionID else { return }
+                OpenCodeLog.sessionChat.info(
+                    "unarchive failure session=\(sessionID) error=\(error.localizedDescription)"
+                )
+                state.isLifecycleActionInFlight = false
+                state.lifecycleErrorMessage = String(
+                    localized: "archived_sessions.unarchive_failed",
+                    defaultValue: "Couldn't unarchive session."
+                )
                 notifyChange()
             }
         }
@@ -363,6 +416,7 @@ final class SessionInfo {
     }
 
     private static let emptyTitleError = "Enter a session title"
+    nonisolated private static let archiveStateEvents: Set<String> = ["session.archived", "session.unarchived"]
     private static let archiveError = "Couldn't archive session."
     private static let deleteError = "Couldn't delete session."
 }

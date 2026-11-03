@@ -56,6 +56,8 @@ import dev.opencode.mobile.domain.worktree.WorktreeInventoryCache
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.ui.archived.HomeArchivedMenu
+import dev.opencode.mobile.ui.archived.HomeArchivedMenuEntry
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
@@ -128,6 +130,21 @@ class MainScreenViewModel
                 },
             )
         val sessionActions: StateFlow<HomeSessionActionsUiState> = sessionActionsRegion.state
+        private val archivedMenuRegion =
+            HomeArchivedMenu(
+                sessionRepository = sessionRepository,
+                projects = homeProjectsSnapshot.projects,
+                scope = viewModelScope,
+                supported = { activeConnectionManager.currentCapabilities().supportsArchivedSessions },
+            )
+
+        /** Home menu's Archived sessions entry; null on servers that cannot restore archived sessions. */
+        val archivedMenu: StateFlow<HomeArchivedMenuEntry?> = archivedMenuRegion.state
+
+        fun refreshArchivedMenu(
+            scopeId: String,
+            worktreesEnabled: Boolean,
+        ) = archivedMenuRegion.refresh(scopeId, worktreesEnabled)
         private val _revealNewestToken = MutableStateFlow(0)
         val revealNewestToken: StateFlow<Int> = _revealNewestToken.asStateFlow()
         private val _pendingScopeRequest = MutableStateFlow<HomeScopeRequest?>(null)

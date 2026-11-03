@@ -30,6 +30,7 @@ enum OpenCodeIcon: String, CaseIterable, Hashable {
     case terminal = "lucide_terminal"
     case architecture = "lucide_architecture"
     case archive = "lucide_archive"
+    case unarchive = "lucide_unarchive"
     case cloud = "lucide_cloud"
     case stop = "lucide_stop"
     case stopCircle = "lucide_stop_circle"

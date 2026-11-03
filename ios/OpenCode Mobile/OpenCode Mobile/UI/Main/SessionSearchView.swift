@@ -5,7 +5,6 @@ import SwiftUI
 struct SessionSearchView: View {
     let model: SessionSearchModel
     let rowStyle: HomeSessionRowStyle
-    let hideUserDirectoryPrefix: Bool
     /// Session open in the trailing pane on split layouts; nil on phones.
     let selectedSessionId: String?
     let onOpen: (SessionListSession) -> Void
@@ -117,11 +116,11 @@ struct SessionSearchView: View {
                     ForEach(results) { result in
                         SessionListRow(
                             session: result.row,
-                            style: rowStyle,
+                            rowStyle: rowStyle,
+                            showStatusDot: true,
                             selected: selectedSessionId == result.row.id,
                             titleHighlight: result.matchRange,
-                            hideUserDirectoryPrefix: hideUserDirectoryPrefix,
-                            onSelect: { open(result.row) },
+                            action: { open(result.row) },
                             onLongPress: { onLongPress(result.row) }
                         )
                         .accessibilityIdentifier("sessionSearchResult")

@@ -61,4 +61,11 @@ struct ServerProtocolClassifierTests {
         #expect(ServerCapabilities.forProtocol(.v2, v2Features: V2ServerFeatures(sessionArchive: true)).supportsSessionArchive == true)
         #expect(ServerCapabilities.forProtocol(.v1, v2Features: V2ServerFeatures()).supportsSessionArchive == true)
     }
+
+    @Test func archivedSessionsNeedV2WithArchive() {
+        // v1 archives through time.archived but cannot clear it, so it cannot list or restore.
+        #expect(ServerCapabilities.forProtocol(.v1, v2Features: V2ServerFeatures(sessionArchive: true)).supportsArchivedSessions == false)
+        #expect(ServerCapabilities.forProtocol(.v2).supportsArchivedSessions == false)
+        #expect(ServerCapabilities.forProtocol(.v2, v2Features: V2ServerFeatures(sessionArchive: true)).supportsArchivedSessions == true)
+    }
 }

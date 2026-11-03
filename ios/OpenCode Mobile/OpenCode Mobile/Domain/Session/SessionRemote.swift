@@ -60,6 +60,14 @@ struct ProtocolSelectedSessionRemote: SessionRemote, Sendable {
         try await selected().archiveSession(id: id, directory: directory)
     }
 
+    func listArchivedSessions(directory: String?) async throws -> [Session] {
+        try await selected().listArchivedSessions(directory: directory)
+    }
+
+    func unarchiveSession(id: String, directory: String?) async throws -> Session {
+        try await selected().unarchiveSession(id: id, directory: directory)
+    }
+
     func deleteSession(id: String, directory: String?) async throws -> Bool {
         try await selected().deleteSession(id: id, directory: directory)
     }

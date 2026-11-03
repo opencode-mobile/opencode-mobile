@@ -78,6 +78,17 @@ class DefaultSessionRepository
             runCatching { remote.archiveSession(id, directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
+        override suspend fun listArchivedSessions(directory: String?): List<Session> =
+            runCatching { remote.listArchivedSessions(directory) }
+                .getOrElse { throw adapter.mapError(it) }
+
+        override suspend fun unarchiveSession(
+            id: String,
+            directory: String?,
+        ): Session =
+            runCatching { remote.unarchiveSession(id, directory) }
+                .getOrElse { throw adapter.mapError(it) }
+
         override suspend fun deleteSession(
             id: String,
             directory: String?,

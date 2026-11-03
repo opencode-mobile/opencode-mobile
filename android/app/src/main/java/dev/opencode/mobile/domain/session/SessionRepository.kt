@@ -40,6 +40,19 @@ interface SessionRepository {
         directory: String? = null,
     ): Session
 
+    /**
+     * Archived sessions listed for [directory] (its project on v2), in server order. Callers gate
+     * on `supportsArchivedSessions`; other servers throw.
+     */
+    suspend fun listArchivedSessions(directory: String? = null): List<Session> =
+        throw SessionError.Http(404, ARCHIVED_SESSIONS_UNAVAILABLE)
+
+    /** Restores an archived session. Callers gate on `supportsArchivedSessions`; other servers throw. */
+    suspend fun unarchiveSession(
+        id: String,
+        directory: String? = null,
+    ): Session = throw SessionError.Http(404, ARCHIVED_SESSIONS_UNAVAILABLE)
+
     suspend fun deleteSession(
         id: String,
         directory: String? = null,
@@ -242,4 +255,5 @@ enum class CompactionStart {
 }
 
 internal const val SESSION_MOVE_UNAVAILABLE = "session move is not available"
+internal const val ARCHIVED_SESSIONS_UNAVAILABLE = "archived sessions need an opencode v2 server with archive"
 internal const val SIDE_QUESTION_UNAVAILABLE = "side questions need an opencode v2 server"

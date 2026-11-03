@@ -18,11 +18,20 @@ struct V2SessionRemote: SessionRemote, Sendable {
     }
 
     func listSessions(directory: String?) async throws -> [Session] {
+        try await listSessions(directory: directory, archived: false)
+    }
+
+    /// Callers gate on `supportsArchivedSessions`.
+    func listArchivedSessions(directory: String?) async throws -> [Session] {
+        try await listSessions(directory: directory, archived: true)
+    }
+
+    private func listSessions(directory: String?, archived: Bool) async throws -> [Session] {
         let projectID = await listableProjectID(directory: directory)
         return try await api.listSessionsV2(
             directory: projectID == nil ? directory : nil,
             projectID: projectID,
-            archived: false
+            archived: archived
         ).map { adapter.session(from: $0) }
     }
 
@@ -90,6 +99,14 @@ struct V2SessionRemote: SessionRemote, Sendable {
             archived.archivedAtEpochMs = Int64(Date().timeIntervalSince1970 * 1000)
         }
         return archived
+    }
+
+    /// Callers gate on `supportsArchivedSessions`.
+    func unarchiveSession(id: String, directory _: String?) async throws -> Session {
+        try await api.setSessionArchivedV2(id: id, archived: false)
+        var restored = adapter.session(from: try await api.getSessionV2(id: id))
+        restored.archivedAtEpochMs = nil
+        return restored
     }
 
     func deleteSession(id: String, directory _: String?) async throws -> Bool {

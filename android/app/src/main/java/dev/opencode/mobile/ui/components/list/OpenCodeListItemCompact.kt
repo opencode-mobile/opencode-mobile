@@ -162,6 +162,7 @@ internal fun CompactListItemContent(
     caption: String?,
     startDecorator: StartDecorator,
     enabled: Boolean,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val textStrong = openCodeColor("text-strong")
     val textBase = openCodeColor("text-base")
@@ -228,6 +229,9 @@ internal fun CompactListItemContent(
                     ListItemCompactStatusLabel(status = status, enabled = enabled)
                 }
             }
+        }
+        if (trailing != null) {
+            Box(contentAlignment = Alignment.Center) { trailing() }
         }
     }
 }

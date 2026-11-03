@@ -503,6 +503,8 @@ final class ProjectListHomeViewModel {
     private var liveStatusesByWorktree: [String: SessionActivitySnapshot] = [:]
     private var liveReadyIdsByWorktree: [String: Set<String>] = [:]
     private let sessionActionsRegion: HomeSessionActions
+    /// Home menu's Archived sessions entry; its `entry` is nil on servers that cannot restore archived sessions.
+    let archivedMenu: HomeArchivedMenu
     /// Title-edit Analytics fires once per dialog so keystrokes are not events.
     private var loggedRenameTitleEdit = false
     private var loggedForkTitleEdit = false
@@ -599,6 +601,10 @@ final class ProjectListHomeViewModel {
         self.sessionActionsRegion = HomeSessionActions(
             sessionRepository: sessionRepository,
             messageRepository: messageRepository
+        )
+        self.archivedMenu = HomeArchivedMenu(
+            sessionRepository: sessionRepository,
+            supported: { activeConnectionManager.capabilities.supportsArchivedSessions }
         )
         lastHomeHiddenAtEpochMs = HomeDisplayPreferences.shared.lastHomeHiddenAtEpochMs()
         sessionActionsRegion.onLifecycleError = { [weak self] message in

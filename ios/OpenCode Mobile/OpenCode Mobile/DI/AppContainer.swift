@@ -783,6 +783,15 @@ extension Container {
         }
     }
 
+    var archivedSessionsViewModel: Factory<ArchivedSessionsViewModel> {
+        onMainActor {
+            ArchivedSessionsViewModel(
+                sessionRepository: self.sessionRepository(),
+                eventStream: self.foregroundEventStream()
+            )
+        }
+    }
+
     var terminalsCatalogViewModel: Factory<TerminalsCatalogViewModel> {
         onMainActor {
             TerminalsCatalogViewModel(
@@ -851,6 +860,10 @@ extension Container {
     @MainActor
     static func makeTerminalsCatalogViewModel() -> TerminalsCatalogViewModel {
         shared.terminalsCatalogViewModel()
+    }
+
+    static func makeArchivedSessionsViewModel() -> ArchivedSessionsViewModel {
+        shared.archivedSessionsViewModel()
     }
 
     @MainActor

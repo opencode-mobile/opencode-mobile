@@ -45,6 +45,13 @@ internal class ProtocolSelectedSessionRemote(
         directory: String?,
     ): Session = selected().archiveSession(id, directory)
 
+    override suspend fun listArchivedSessions(directory: String?): List<Session> = selected().listArchivedSessions(directory)
+
+    override suspend fun unarchiveSession(
+        id: String,
+        directory: String?,
+    ): Session = selected().unarchiveSession(id, directory)
+
     override suspend fun deleteSession(
         id: String,
         directory: String?,

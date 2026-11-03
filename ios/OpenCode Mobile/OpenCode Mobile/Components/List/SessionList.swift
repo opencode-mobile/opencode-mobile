@@ -631,11 +631,10 @@ struct SessionList<EmptyContent: View>: View {
     private func sessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
         SessionListRow(
             session: session,
-            style: effectiveRowStyle,
+            rowStyle: effectiveRowStyle,
             showStatusDot: showStatusDot,
             selected: selectedSessionId == session.id,
-            hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix,
-            onSelect: { onSessionSelected(session) },
+            action: { onSessionSelected(session) },
             onLongPress: onSessionLongPress.map { handler in { handler(session) } }
         )
         .background {
@@ -688,72 +687,6 @@ struct SessionList<EmptyContent: View>: View {
             feedLayers = [SessionListFeedLayer(id: newId, isOutgoing: false)]
             outgoingOpacity = 0
         }
-    }
-}
-
-/// One Home session row in the Session rows style (Compact or Standard), shared by the
-/// session list and session search. `titleHighlight` marks a search match in the title.
-struct SessionListRow: View {
-    let session: SessionListSession
-    let style: HomeSessionRowStyle
-    var showStatusDot = true
-    var selected = false
-    var titleHighlight: Range<String.Index>?
-    var hideUserDirectoryPrefix = false
-    let onSelect: () -> Void
-    var onLongPress: (() -> Void)?
-
-    var body: some View {
-        switch style {
-        case .compact: compactRow
-        case .classic: classicRow
-        }
-    }
-
-    private var compactRow: some View {
-        let row = session.compactRow
-        return OpenCodeListItem(
-            variant: .compact,
-            title: .verbatim(session.title),
-            titleHighlight: titleHighlight,
-            emphasized: row.emphasized,
-            path: row.path,
-            status: row.status,
-            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
-            selected: selected,
-            startDecorator: .compactLetter(
-                session.letter,
-                session.letterAccent,
-                statusDot: row.status?.tone,
-                pulsing: row.pulsing
-            ),
-            action: onSelect,
-            onLongPress: onLongPress
-        )
-    }
-
-    private var classicRow: some View {
-        let lines = session.locationLines
-        let status = session.status.listItemStatus(isStale: session.statusIsStale)
-        return OpenCodeListItem(
-            title: .verbatim(session.title),
-            titleHighlight: titleHighlight,
-            subtitle: .verbatim(ifPresent: lines == nil
-                ? compactHomePath(session.subtitle, hideUserDirectoryPrefix: hideUserDirectoryPrefix)
-                : nil),
-            subtitleSegments: lines?.subtitle,
-            detailSegments: lines?.detail,
-            status: status,
-            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
-            selected: selected,
-            startDecorator: .letter(
-                session.letter,
-                session.letterAccent,
-                statusDot: showStatusDot ? status.tone : nil
-            ),
-            action: onSelect,
-            onLongPress: onLongPress
-        )
     }
 }
 
@@ -1131,6 +1064,103 @@ extension SessionListSession {
         return SessionListLocationLines(
             subtitle: [OpenCodeListItemSubtitleSegment(text: projectName, tone: .secondary, icon: .folder)],
             detail: worktree.isEmpty ? nil : worktree
+        )
+    }
+}
+
+/// Home's session row in either row style. Other session lists (Archived sessions, search) reuse
+/// it; `showsStatus` false drops the status, `trailing` adds a control after the row's text, and
+/// `titleHighlight` marks the part of the title a search matched (#929).
+struct SessionListRow<Trailing: View>: View {
+    let session: SessionListSession
+    let rowStyle: HomeSessionRowStyle
+    var showStatusDot: Bool = false
+    var showsStatus: Bool = true
+    var selected: Bool = false
+    var titleHighlight: Range<String.Index>?
+    let action: () -> Void
+    var onLongPress: (() -> Void)?
+    @ViewBuilder var trailing: () -> Trailing
+    @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
+
+    init(
+        session: SessionListSession,
+        rowStyle: HomeSessionRowStyle,
+        showStatusDot: Bool = false,
+        showsStatus: Bool = true,
+        selected: Bool = false,
+        titleHighlight: Range<String.Index>? = nil,
+        action: @escaping () -> Void,
+        onLongPress: (() -> Void)? = nil,
+        @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }
+    ) {
+        self.session = session
+        self.rowStyle = rowStyle
+        self.showStatusDot = showStatusDot
+        self.showsStatus = showsStatus
+        self.selected = selected
+        self.titleHighlight = titleHighlight
+        self.action = action
+        self.onLongPress = onLongPress
+        self.trailing = trailing
+    }
+
+    var body: some View {
+        switch rowStyle {
+        case .compact: compactRow
+        case .classic: classicRow
+        }
+    }
+
+    private var compactRow: some View {
+        let row = session.compactRow
+        let status = showsStatus ? row.status : nil
+        return OpenCodeListItem(
+            variant: .compact,
+            title: .verbatim(session.title),
+            titleHighlight: titleHighlight,
+            emphasized: row.emphasized,
+            path: row.path,
+            status: status,
+            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
+            selected: selected,
+            startDecorator: .compactLetter(
+                session.letter,
+                session.letterAccent,
+                statusDot: status?.tone,
+                pulsing: showsStatus && row.pulsing
+            ),
+            action: action,
+            onLongPress: onLongPress,
+            trailing: trailing
+        )
+    }
+
+    private var classicRow: some View {
+        let lines = session.locationLines
+        let status = session.status.listItemStatus(isStale: session.statusIsStale)
+        return OpenCodeListItem(
+            title: .verbatim(session.title),
+            titleHighlight: titleHighlight,
+            subtitle: .verbatim(ifPresent: lines == nil
+                ? compactHomePath(
+                    session.subtitle,
+                    hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
+                )
+                : nil),
+            subtitleSegments: lines?.subtitle,
+            detailSegments: lines?.detail,
+            status: showsStatus ? status : nil,
+            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
+            selected: selected,
+            startDecorator: .letter(
+                session.letter,
+                session.letterAccent,
+                statusDot: showStatusDot && showsStatus ? status.tone : nil
+            ),
+            action: action,
+            onLongPress: onLongPress,
+            trailing: trailing
         )
     }
 }

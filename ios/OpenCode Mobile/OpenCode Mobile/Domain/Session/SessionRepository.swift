@@ -11,6 +11,11 @@ protocol SessionRepository: Sendable {
     func getSession(id: String, directory: String?) async throws -> Session
     func updateSession(id: String, title: String?, directory: String?) async throws -> Session
     func archiveSession(id: String, directory: String?) async throws -> Session
+    /// Archived sessions listed for `directory` (its project on v2), in server order. Callers gate
+    /// on `supportsArchivedSessions`; other servers throw.
+    func listArchivedSessions(directory: String?) async throws -> [Session]
+    /// Restores an archived session. Callers gate on `supportsArchivedSessions`; other servers throw.
+    func unarchiveSession(id: String, directory: String?) async throws -> Session
     func deleteSession(id: String, directory: String?) async throws -> Bool
     func listChildSessions(id: String) async throws -> [Session]
     func listSessionTodos(id: String, directory: String?) async throws -> [SessionTodo]
@@ -93,6 +98,14 @@ extension SessionRepository {
     func moveSession(id _: String, directory _: String) async throws {
         throw SessionError.http(statusCode: 404, message: "Needs an opencode v2 server")
     }
+    /// v1 sets `time.archived` but cannot clear it, so it neither lists nor restores archived sessions.
+    func listArchivedSessions(directory _: String?) async throws -> [Session] {
+        throw SessionError.http(statusCode: 404, message: Self.archivedSessionsUnavailable)
+    }
+    func unarchiveSession(id _: String, directory _: String?) async throws -> Session {
+        throw SessionError.http(statusCode: 404, message: Self.archivedSessionsUnavailable)
+    }
+    static var archivedSessionsUnavailable: String { "archived sessions need an opencode v2 server with archive" }
     func askSideQuestion(sessionID _: String, question _: String) async throws -> String {
         throw SessionError.http(statusCode: 404, message: "Needs an opencode v2 server")
     }
@@ -194,6 +207,14 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func archiveSession(id: String, directory: String?) async throws -> Session {
         try await run { try await remote.archiveSession(id: id, directory: directory) }
+    }
+
+    func listArchivedSessions(directory: String?) async throws -> [Session] {
+        try await run { try await remote.listArchivedSessions(directory: directory) }
+    }
+
+    func unarchiveSession(id: String, directory: String?) async throws -> Session {
+        try await run { try await remote.unarchiveSession(id: id, directory: directory) }
     }
 
     func deleteSession(id: String, directory: String?) async throws -> Bool {
