@@ -161,7 +161,10 @@ class SessionSearchViewModel internal constructor(
     private var home = SessionSearchHome()
     private var homeRows: List<SessionListSession> = emptyList()
 
-    /** Server matches of [serverKey]'s query and scope, by id; null until the server answered. */
+    /**
+     * Server sessions of the latest answered search, as Home rows. They stay while the next search
+     * runs, and every row is matched again against the current query and scope.
+     */
     private var serverRows: List<SessionListSession>? = null
     private var serverKey: Pair<String, String>? = null
     private var serverJob: Job? = null
@@ -177,6 +180,7 @@ class SessionSearchViewModel internal constructor(
             return
         }
         cancelServerSearch()
+        serverRows = null
         val scopeId =
             when (val scope = HomeScope.resolve(homeScopeId, home.projects, home.worktreesEnabled)) {
                 is HomeScope.Project -> scope.key
@@ -198,6 +202,7 @@ class SessionSearchViewModel internal constructor(
 
     fun close() {
         cancelServerSearch()
+        serverRows = null
         cancelArchiveListing()
         _uiState.value = SessionSearchUiState(focusRequest = _uiState.value.focusRequest)
     }
@@ -237,6 +242,7 @@ class SessionSearchViewModel internal constructor(
     /** Home's lists changed (live status, a new session, a project added or removed). */
     fun homeChanged(next: SessionSearchHome) {
         if (next == home) return
+        val previousDirectories = home.listedDirectories(_uiState.value.scope.id)
         home = next
         homeRows = next.rows()
         val state = _uiState.value
@@ -244,8 +250,13 @@ class SessionSearchViewModel internal constructor(
         // A removed project falls back to All projects.
         val scope = options.firstOrNull { it.id == state.scope.id } ?: SessionSearchUiState.ALL_PROJECTS
         _uiState.value = state.copy(scope = scope, scopeOptions = options)
+        // Server rows of projects that left Home go with them.
+        val projectKeys = next.projects.mapTo(mutableSetOf()) { it.key }
+        serverRows = serverRows?.filter { it.worktree in projectKeys }
         if (!state.open) return
-        if (scope.id != state.scope.id) refresh(debounce = false) else publish()
+        // Another scope, or other lists in it (a project added or removed): ask the server again.
+        if (scope.id != state.scope.id || next.listedDirectories(scope.id) != previousDirectories) serverKey = null
+        refresh(debounce = false)
     }
 
     private fun refresh(debounce: Boolean) {
@@ -255,7 +266,7 @@ class SessionSearchViewModel internal constructor(
         if (key != serverKey) {
             cancelServerSearch()
             serverKey = key
-            if (query.isNotEmpty()) startServerSearch(query, state.scope.id, debounce)
+            if (query.isNotEmpty()) startServerSearch(query, state.scope.id, debounce) else serverRows = null
         }
         publish()
     }
@@ -275,21 +286,27 @@ class SessionSearchViewModel internal constructor(
         serverJob =
             viewModelScope.launch {
                 if (debounce) delay(debounceMs)
+                // One failed list must not cost the others their matches.
                 val replies =
-                    try {
-                        coroutineScope {
-                            directories
-                                .map { directory -> async { directory to search(query, directory) } }
-                                .awaitAll()
-                        }
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: Throwable) {
-                        DiagnosticLog.warning(DiagnosticLogArea.Chat, "session search failed", error)
-                        null
+                    coroutineScope {
+                        directories
+                            .map { directory ->
+                                async {
+                                    try {
+                                        directory to search(query, directory)
+                                    } catch (error: CancellationException) {
+                                        throw error
+                                    } catch (error: Throwable) {
+                                        DiagnosticLog.warning(DiagnosticLogArea.Chat, "session search failed", error)
+                                        null
+                                    }
+                                }
+                            }.awaitAll()
+                            .filterNotNull()
                     }
                 if (serverKey != key) return@launch
-                serverRows = replies?.let(::serverRowsOf).orEmpty()
+                // When every list failed, keep what is shown.
+                if (replies.isNotEmpty()) serverRows = serverRowsOf(replies)
                 _uiState.value = _uiState.value.copy(busy = false)
                 publish()
             }
@@ -357,11 +374,11 @@ class SessionSearchViewModel internal constructor(
         archivedRows = null
     }
 
+    /** Stops the running request; its last answer stays until the next one replaces it. */
     private fun cancelServerSearch() {
         serverJob?.cancel()
         serverJob = null
         serverKey = null
-        serverRows = null
         if (_uiState.value.busy) _uiState.value = _uiState.value.copy(busy = false)
     }
 

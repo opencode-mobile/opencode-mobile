@@ -238,11 +238,22 @@ final class SessionSearchModel {
 
     func homeChanged(_ snapshot: SessionSearchHome) {
         guard snapshot != home else { return }
+        let previousPaths = pathsInScope(scope)
         home = snapshot
-        if scope != HomeScope.allID, !snapshot.projects.contains(where: { $0.key == scope }) {
+        // Server rows of projects that left Home go with them.
+        let projectKeys = Set(snapshot.projects.map(\.key))
+        serverRows = serverRows.filter { projectKeys.contains($0.value.worktree) }
+        var searchAgain = pathsInScope(scope) != previousPaths
+        // A removed project falls back to All projects.
+        if scope != HomeScope.allID, !projectKeys.contains(scope) {
             scope = HomeScope.allID
+            searchAgain = true
         }
         rebuildArchivedRows()
+        // Another scope, or other lists in it: the running search (if any) asked the wrong lists.
+        if searchAgain, isPresented, !SessionTitleSearch.normalizedQuery(query).isEmpty {
+            startServerSearch(debounced: false)
+        }
     }
 
     // MARK: Matching

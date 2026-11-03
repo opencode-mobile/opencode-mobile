@@ -28,6 +28,7 @@ class SessionSearchViewModelTest {
     private val searches = mutableListOf<Pair<String, String>>()
     private var serverSessions: Map<String, List<Session>> = emptyMap()
     private var serverFails = false
+    private val failingDirectories = mutableSetOf<String>()
     private var archiveSupported = true
     private var archivedFails = false
     private val archivedListings = mutableListOf<List<String>>()
@@ -331,6 +332,107 @@ class SessionSearchViewModelTest {
             assertTrue((model.uiState.value.content as SessionSearchContent.Results).archived.isEmpty())
         }
 
+    @Test
+    fun oneFailedList_keepsTheOtherListsServerMatches() =
+        runTest(testDispatcher) {
+            serverSessions = billingServerOnly
+            failingDirectories += ACME_PATH
+            val model = model()
+            model.open(HomeScope.ALL_ID)
+
+            model.updateQuery("invoice")
+            advanceUntilIdle()
+
+            assertEquals(listOf("billing-server", "acme-invoice"), resultIds(model))
+            assertFalse(model.uiState.value.busy)
+        }
+
+    @Test
+    fun typing_keepsServerOnlyMatchesUntilTheNextAnswer() =
+        runTest(testDispatcher) {
+            serverSessions = billingServerOnly
+            val model = model()
+            model.open(HomeScope.ALL_ID)
+            model.updateQuery("invoice")
+            advanceUntilIdle()
+
+            model.updateQuery("invoice a")
+
+            assertTrue(model.uiState.value.busy)
+            assertEquals(listOf("billing-server"), resultIds(model))
+            advanceUntilIdle()
+            assertEquals(listOf("billing-server"), resultIds(model))
+        }
+
+    @Test
+    fun everyListFailing_keepsTheLastServerAnswer() =
+        runTest(testDispatcher) {
+            serverSessions = billingServerOnly
+            val model = model()
+            model.open(HomeScope.ALL_ID)
+            model.updateQuery("invoice")
+            advanceUntilIdle()
+
+            serverFails = true
+            model.updateQuery("invoice a")
+            advanceUntilIdle()
+
+            assertEquals(listOf("billing-server"), resultIds(model))
+        }
+
+    @Test
+    fun removedProject_fallsBackToAllProjectsSearchesAgainAndDropsItsServerRows() =
+        runTest(testDispatcher) {
+            serverSessions = billingServerOnly
+            val model = model()
+            model.open(BILLING)
+            model.updateQuery("invoice")
+            advanceUntilIdle()
+            assertEquals(listOf("billing-server"), resultIds(model).take(1))
+            searches.clear()
+
+            model.homeChanged(home(withBilling = false))
+            runCurrent()
+
+            assertEquals(HomeScope.ALL_ID, model.uiState.value.scope.id)
+            assertEquals(listOf("invoice" to ACME_PATH), searches)
+            advanceUntilIdle()
+            assertEquals(listOf("acme-invoice"), resultIds(model))
+        }
+
+    @Test
+    fun addedProject_searchesItsListToo() =
+        runTest(testDispatcher) {
+            val model = model()
+            model.homeChanged(home(withBilling = false))
+            model.open(HomeScope.ALL_ID)
+            model.updateQuery("invoice")
+            advanceUntilIdle()
+            searches.clear()
+
+            model.homeChanged(home())
+            runCurrent()
+
+            assertEquals(setOf("invoice" to ACME_PATH, "invoice" to BILLING_PATH), searches.toSet())
+        }
+
+    @Test
+    fun liveUpdate_withTheSameLists_doesNotSearchAgain() =
+        runTest(testDispatcher) {
+            val model = model()
+            model.open(HomeScope.ALL_ID)
+            model.updateQuery("invoice")
+            advanceUntilIdle()
+            searches.clear()
+
+            val newSession = SessionSummary(id = "acme-new", title = "Invoice totals", updatedAtEpochMs = 200)
+            model.homeChanged(home(acmeSessions = acmeSessions + newSession))
+            runCurrent()
+
+            assertTrue(searches.isEmpty())
+            assertEquals(listOf("acme-new", "acme-invoice"), resultIds(model))
+        }
+
     private fun resultIds(model: SessionSearchViewModel): List<String> =
         (model.uiState.value.content as SessionSearchContent.Results).results.map { it.session.id }
 
@@ -338,7 +440,7 @@ class SessionSearchViewModelTest {
         SessionSearchViewModel(
             search = { query, directory ->
                 searches += query to directory
-                if (serverFails) error("offline")
+                if (serverFails || directory in failingDirectories) error("offline")
                 serverSessions[directory].orEmpty()
             },
             sessionDomainAdapter = SessionDomainAdapter(),
@@ -351,24 +453,31 @@ class SessionSearchViewModelTest {
             nowEpochMs = { 1_000 },
         ).also { it.homeChanged(home()) }
 
+    private val billingServerOnly =
+        mapOf(BILLING_PATH to listOf(Session(id = "billing-server", title = "Invoice audit", updatedAtEpochMs = 300)))
+
     private val acmeSessions =
         listOf(
             SessionSummary(id = "acme-invoice", title = "Invoice export", updatedAtEpochMs = 100),
             SessionSummary(id = "acme-login", title = "Fix login", updatedAtEpochMs = 90),
         )
 
-    private fun home(acmeSessions: List<SessionSummary> = this.acmeSessions): SessionSearchHome {
-        val projects = HomeProjectGrouping.group(listOf(ACME_PATH, BILLING_PATH), emptyMap())
+    private fun home(
+        acmeSessions: List<SessionSummary> = this.acmeSessions,
+        withBilling: Boolean = true,
+    ): SessionSearchHome {
+        val paths = if (withBilling) listOf(ACME_PATH, BILLING_PATH) else listOf(ACME_PATH)
+        val projects = HomeProjectGrouping.group(paths, emptyMap())
         return SessionSearchHome(
             projects = projects,
             sections =
-                listOf(
+                listOfNotNull(
                     section(ACME_PATH, "acme", acmeSessions),
                     section(
                         BILLING_PATH,
                         "billing",
                         listOf(SessionSummary(id = "billing-refactor", title = "Refactor auth", updatedAtEpochMs = 80)),
-                    ),
+                    ).takeIf { withBilling },
                 ),
         )
     }

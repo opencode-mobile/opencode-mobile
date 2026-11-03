@@ -383,6 +383,15 @@ internal fun MainScreen(
     LaunchedEffect(loaded, worktreesEnabled) {
         loaded?.let { search.onHomeChanged(SessionSearchHome.from(it, worktreesEnabled)) }
     }
+    // Another server: what search found belongs to the old one, so search closes.
+    val searchServerId = serversChrome.active?.id
+    var searchedServerId by rememberSaveable { mutableStateOf(searchServerId) }
+    LaunchedEffect(searchServerId) {
+        if (searchServerId != searchedServerId) {
+            searchedServerId = searchServerId
+            search.callbacks.onClose()
+        }
+    }
     val openSearch: () -> Unit = {
         search.onOpen(homeScopeId(selectedFilterId, loaded?.projects.orEmpty(), worktreesEnabled))
     }

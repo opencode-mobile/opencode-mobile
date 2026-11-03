@@ -230,6 +230,76 @@ struct SessionSearchModelTests {
         #expect(model.scope == HomeScope.allID)
     }
 
+    @Test func homeChange_removedProjectSearchesAllProjectsAgainAndDropsItsServerRows() async {
+        let (model, repository, sleeper) = makeModel()
+        repository.results[beta] = [session("b-server", title: "Logbook server", directory: beta, updated: 90)]
+        model.open(homeScopeId: HomeProjectGrouping.pathKey(beta))
+        await search(model, "log", sleeper)
+        #expect(resultIDs(model) == ["b-server", "b-logs"])
+        repository.calls = []
+        let sleepsBefore = sleeper.durations.count
+
+        model.homeChanged(makeHome(paths: [alpha]))
+
+        #expect(model.scope == HomeScope.allID)
+        #expect(model.busy)
+        #expect(await waitUntil { !model.busy })
+        #expect(sleeper.durations.count == sleepsBefore)
+        #expect(repository.calls == [.init(query: "log", directory: alpha)])
+        #expect(resultIDs(model) == ["a-login"])
+    }
+
+    @Test func homeChange_addedProjectIsSearchedToo() async {
+        let (model, repository, sleeper) = makeModel()
+        model.homeChanged(makeHome(paths: [alpha]))
+        model.open(homeScopeId: HomeScope.allID)
+        await search(model, "log", sleeper)
+        repository.calls = []
+
+        model.homeChanged(makeHome(paths: [alpha, beta]))
+
+        #expect(await waitUntil { !model.busy })
+        #expect(Set(repository.calls) == [.init(query: "log", directory: alpha), .init(query: "log", directory: beta)])
+    }
+
+    @Test func homeChange_sameListsDoNotSearchAgain() async {
+        let (model, repository, sleeper) = makeModel()
+        model.open(homeScopeId: HomeScope.allID)
+        await search(model, "log", sleeper)
+        repository.calls = []
+
+        var home = makeHome(paths: [alpha, beta])
+        home.worktreesEnabled = false
+        model.homeChanged(home)
+        await settle()
+
+        #expect(!model.busy)
+        #expect(repository.calls.isEmpty)
+    }
+
+    @Test func oneFailedPath_keepsTheOtherPathsServerRows() async {
+        let (model, repository, sleeper) = makeModel()
+        repository.results[beta] = [session("b-server", title: "Logbook server", directory: beta, updated: 90)]
+        repository.failingDirectories = [alpha]
+        model.open(homeScopeId: HomeScope.allID)
+
+        await search(model, "log", sleeper)
+
+        #expect(resultIDs(model) == ["b-server", "a-login", "b-logs"])
+    }
+
+    @Test func typing_keepsServerOnlyRowsUntilTheNextAnswer() async {
+        let (model, repository, sleeper) = makeModel()
+        repository.results[beta] = [session("b-server", title: "Logbook server", directory: beta, updated: 90)]
+        model.open(homeScopeId: HomeScope.allID)
+        await search(model, "log", sleeper)
+
+        model.updateQuery("logb")
+
+        #expect(model.busy)
+        #expect(resultIDs(model) == ["b-server"])
+    }
+
     // MARK: Include archived
 
     private var archivedFixture: [String: [Session]] {
