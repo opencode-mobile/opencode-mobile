@@ -8,10 +8,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -20,7 +22,10 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -37,6 +42,13 @@ private val MenuChipPaddingEnd = 8.dp
 private val MenuChipSpacing = 6.dp
 private val MenuChipIconSize = 16.dp
 private val MenuChipLetterSize = 18.dp
+private val MenuChipLetterGlyphSize = 10.sp
+private val MenuChipLetterTextStyle =
+    TextStyle(
+        lineHeight = MenuChipLetterGlyphSize,
+        platformStyle = PlatformTextStyle(includeFontPadding = false),
+        lineHeightStyle = LineHeightStyle(alignment = LineHeightStyle.Alignment.Center, trim = LineHeightStyle.Trim.Both),
+    )
 private const val MENU_CHIP_SELECTED_FILL_ALPHA = 0.14f
 private const val MENU_CHIP_SELECTED_BORDER_ALPHA = 0.32f
 
@@ -106,12 +118,15 @@ fun OpenCodeMenuChip(
                 is OpenCodeMenuChipLeading.Icon ->
                     Icon(imageVector = leading.imageVector, contentDescription = null, modifier = Modifier.size(MenuChipIconSize))
                 is OpenCodeMenuChipLeading.Letter ->
-                    ListItemLetterCircle(
-                        character = leading.character,
-                        accent = leading.accent,
-                        glyphSize = 10.sp,
-                        modifier = Modifier.size(MenuChipLetterSize),
-                    )
+                    // A small badge: trim the line box so the letter sits in the middle.
+                    CompositionLocalProvider(LocalTextStyle provides MenuChipLetterTextStyle) {
+                        ListItemLetterCircle(
+                            character = leading.character,
+                            accent = leading.accent,
+                            glyphSize = MenuChipLetterGlyphSize,
+                            modifier = Modifier.size(MenuChipLetterSize),
+                        )
+                    }
             }
             Text(
                 text = title,

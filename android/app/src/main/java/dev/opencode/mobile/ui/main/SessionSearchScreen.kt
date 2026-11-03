@@ -15,6 +15,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -83,7 +84,11 @@ internal fun SessionSearchScreen(
     BackHandler(onBack = callbacks.onClose)
     val focusRequester = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
+    // Focus on open and Ctrl+F only; coming Back from a session leaves the results in view.
+    var handledFocusRequest by rememberSaveable { mutableIntStateOf(0) }
     LaunchedEffect(state.focusRequest) {
+        if (state.focusRequest == handledFocusRequest) return@LaunchedEffect
+        handledFocusRequest = state.focusRequest
         focusRequester.requestFocus()
         keyboard?.show()
     }
@@ -135,7 +140,7 @@ internal fun SessionSearchScreen(
                         primaryAction =
                             if (content.offerAllProjects) {
                                 OpenCodeEmptyStateAction(
-                                    title = stringResource(R.string.session_search_all_projects),
+                                    title = stringResource(R.string.session_search_search_all_projects),
                                     onClick = callbacks.onSearchAllProjects,
                                 )
                             } else {
@@ -190,7 +195,6 @@ private fun SessionSearchScopeChip(
                     OpenCodeMenuChipLeading.Icon(OpenCodeIcons.Widgets)
                 },
             selected = !scope.isAll,
-            accessibilityLabel = stringResource(R.string.session_search_scope, scopeTitle),
             modifier = Modifier.testTag(SessionSearchTags.SCOPE),
         )
     }

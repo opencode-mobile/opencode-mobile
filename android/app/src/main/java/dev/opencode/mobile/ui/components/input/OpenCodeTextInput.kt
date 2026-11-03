@@ -349,7 +349,7 @@ private fun OpenCodeSearchInputDecoration(
                 ) {
                     Icon(
                         imageVector = OpenCodeIcons.Close,
-                        contentDescription = stringResource(R.string.common_clear_search),
+                        contentDescription = stringResource(R.string.session_search_clear),
                         tint = openCodeColor("text-weak"),
                         modifier = Modifier.size(OpenCodeSearchInputIconSize),
                     )
