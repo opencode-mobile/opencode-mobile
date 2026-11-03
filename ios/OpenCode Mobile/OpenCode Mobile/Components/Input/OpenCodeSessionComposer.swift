@@ -413,7 +413,7 @@ struct OpenCodeSessionComposer: View {
                 selectionStart: prompt.selectionStart,
                 selectionEnd: prompt.selectionEnd,
                 selectionRevision: prompt.selectionRevision,
-                placeholder: prompt.sideQuestionMode ? Self.sideQuestionPlaceholder : "Ask anything...",
+                placeholder: prompt.sideQuestionMode ? Self.sideQuestionPlaceholder : Self.promptPlaceholder,
                 focusRequestToken: focusRequestToken,
                 onFocusChange: onInputFocusChange,
                 literalInput: prompt.shellMode,
@@ -432,21 +432,21 @@ struct OpenCodeSessionComposer: View {
             HStack {
                 HStack(spacing: 8) {
                     OpenCodeButton(
-                        variant: .iconCircle(.add, accessibilityLabel: "Add attachment"),
+                        variant: .iconCircle(.add, accessibilityLabel: "component.composer.add_attachment"),
                         enabled: prompt.attachEnabled,
                         contrast: .low,
                         action: { onAction(.attach) }
                     )
 
                     OpenCodeButton(
-                        variant: .iconCircle(.slash, accessibilityLabel: "Open commands"),
+                        variant: .iconCircle(.slash, accessibilityLabel: "component.composer.open_commands"),
                         contrast: .low,
                         action: { onAction(.openCommands) }
                     )
 
                     if prompt.showDictationButton {
                         OpenCodeButton(
-                            variant: .iconCircle(.mic, accessibilityLabel: "Dictate"),
+                            variant: .iconCircle(.mic, accessibilityLabel: "component.composer.dictate"),
                             contrast: .low,
                             action: { onAction(.beginDictation) }
                         )
@@ -458,7 +458,7 @@ struct OpenCodeSessionComposer: View {
                 HStack(spacing: 8) {
                     if prompt.showStop {
                         OpenCodeButton(
-                            variant: .iconCircle(.stop, accessibilityLabel: "Abort active work"),
+                            variant: .iconCircle(.stop, accessibilityLabel: "component.composer.abort"),
                             enabled: prompt.stopEnabled,
                             contrast: .low,
                             action: { onAction(.stop) }
@@ -468,12 +468,12 @@ struct OpenCodeSessionComposer: View {
                     OpenCodeButton(
                         variant: .iconCircle(
                             prompt.followUpDelivery == .steer && !prompt.sideQuestionMode ? .arrowWarmUp : .arrowUpward,
-                            accessibilityLabel: Self.sendLabel(
+                            accessibilityLabel: .localized(Self.sendLabel(
                                 followUpDelivery: prompt.followUpDelivery,
                                 hasActiveWork: prompt.showStop,
                                 shellMode: prompt.shellMode,
                                 sideQuestionMode: prompt.sideQuestionMode
-                            )
+                            ))
                         ),
                         enabled: prompt.sendEnabled,
                         // A side question is not a prompt, so its Send does not look like one.
@@ -550,23 +550,23 @@ struct OpenCodeSessionComposer: View {
             OpenCodeIconImage(icon: .undo, size: 28)
                 .foregroundStyle(OpenCodeColors.iconBase)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Reverting this message")
+                Text("component.composer.reverting_title")
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .lineLimit(1)
-                Text("REVERT")
+                Text("component.composer.revert_tag").textCase(.uppercase)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textBase)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("Reverting this message, REVERT")
+            .accessibilityLabel(Text(Self.revertingAccessibilityLabel))
             Button(action: { onAction(.cancelRevert) }) {
                 OpenCodeIconImage(icon: .close, size: 20)
                     .foregroundStyle(OpenCodeColors.iconStrongBase)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Cancel revert")
+            .accessibilityLabel(Text("component.composer.cancel_revert"))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
@@ -596,39 +596,39 @@ struct OpenCodeSessionComposer: View {
             let chips = HStack(spacing: 8) {
                 if prompt.sideQuestionMode {
                     OpenCodeChoiceBadge(
-                        label: "/btw",
+                        label: .verbatim(Self.sideQuestionCommand),
                         selected: true,
                         variant: .glass,
                         action: { onAction(.exitSideQuestionMode) }
                     )
-                    .accessibilityLabel("Side question mode")
-                    .accessibilityHint("Leave side question mode")
+                    .accessibilityLabel(Text("component.composer.side_question_mode"))
+                    .accessibilityHint(Text("component.composer.leave_side_question_mode"))
                 } else if prompt.shellMode {
                     // Like the TUI, shell mode shows "Shell" in place of the agent and model.
                     OpenCodeChoiceBadge(
-                        label: "Shell",
+                        label: "component.composer.shell",
                         selected: true,
                         variant: .glass,
                         action: { onAction(.exitShellMode) }
                     )
-                    .accessibilityLabel("Shell mode")
-                    .accessibilityHint("Leave shell mode")
+                    .accessibilityLabel(Text("component.composer.shell_mode"))
+                    .accessibilityHint(Text("component.composer.leave_shell_mode"))
                 } else {
                     OpenCodeChoiceBadge(
-                        label: prompt.selectedModelLabel,
+                        label: .verbatim(prompt.selectedModelLabel),
                         selected: false,
                         variant: .glass,
                         action: { onAction(.selectModel) }
                     )
                     OpenCodeChoiceBadge(
-                        label: prompt.selectedModeLabel,
+                        label: .verbatim(prompt.selectedModeLabel),
                         selected: false,
                         variant: .glass,
                         action: { onAction(.selectMode) }
                     )
                     if prompt.showVariant {
                         OpenCodeChoiceBadge(
-                            label: prompt.selectedVariantLabel,
+                            label: .unlocalized(prompt.selectedVariantLabel),
                             selected: false,
                             variant: .glass,
                             action: { onAction(.selectVariant) }
@@ -657,12 +657,12 @@ struct OpenCodeSessionComposer: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(lockoutAccessibilityLabel(lockout))
-        Text("Child sessions cannot be prompted.")
+        Text("component.composer.child_lockout")
             .font(OpenCodeTypography.caption)
             .foregroundStyle(OpenCodeColors.textBase)
             .padding(.horizontal, 4)
         Button(action: { onAction(.backToMainSession) }) {
-            Text("Back to main session")
+            Text("component.composer.back_to_main_session")
                 .font(OpenCodeTypography.button)
                 .foregroundStyle(OpenCodeColors.textStrong)
                 .frame(maxWidth: .infinity)
@@ -685,11 +685,15 @@ struct OpenCodeSessionComposer: View {
     }
 
     private func lockoutAccessibilityLabel(_ lockout: OpenCodeSessionComposerState.ChildLockout) -> String {
+        let model = lockout.selectedModelLabel
         if lockout.showVariant {
-            "Model \(lockout.selectedModelLabel), effort \(lockout.selectedVariantLabel)"
-        } else {
-            "Model \(lockout.selectedModelLabel)"
+            let effort = lockout.selectedVariantLabel
+            return String(localized: LocalizedStringResource(
+                "component.composer.model_effort",
+                defaultValue: "Model \(model), effort \(effort)"
+            ))
         }
+        return String(localized: LocalizedStringResource("component.composer.model", defaultValue: "Model \(model)"))
     }
 
     @ViewBuilder
@@ -700,16 +704,16 @@ struct OpenCodeSessionComposer: View {
         }
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Permission requested").font(OpenCodeTypography.heading)
+                Text("component.composer.permission_requested").font(OpenCodeTypography.heading)
                 Spacer()
                 requestPager(
                     position: permission.queuePosition,
                     count: permission.queueCount,
                     enabled: !permission.submitting,
-                    noun: "permission request"
+                    kind: .permission
                 )
                 OpenCodeButton(
-                    variant: .iconCircle(.keyboardArrowDown, accessibilityLabel: "Hide permission request"),
+                    variant: .iconCircle(.keyboardArrowDown, accessibilityLabel: "component.composer.hide_permission"),
                     contrast: .low,
                     action: { onAction(.hidePermission(requestID: permission.requestID)) }
                 )
@@ -728,7 +732,10 @@ struct OpenCodeSessionComposer: View {
                 }
             }
             if !permission.alwaysPatterns.isEmpty {
-                Text("Always allows: \(permission.alwaysPatterns.joined(separator: ", "))")
+                Text(LocalizedStringResource(
+                    "component.composer.always_allows",
+                    defaultValue: "Always allows: \(permission.alwaysPatterns.joined(separator: ", "))"
+                ))
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeak)
             }
@@ -742,7 +749,7 @@ struct OpenCodeSessionComposer: View {
         .padding(.vertical, 4)
         HStack(spacing: 8) {
             OpenCodeButton(
-                variant: .compactText(title: "Deny"),
+                variant: .compactText(title: "component.composer.deny"),
                 enabled: actionsEnabled,
                 contrast: .low,
                 action: {
@@ -755,7 +762,7 @@ struct OpenCodeSessionComposer: View {
             }
             if !permission.alwaysPatterns.isEmpty {
                 OpenCodeButton(
-                    variant: .compactText(title: "Always"),
+                    variant: .compactText(title: "component.composer.always"),
                     enabled: actionsEnabled,
                     contrast: .low,
                     action: {
@@ -764,7 +771,7 @@ struct OpenCodeSessionComposer: View {
                 )
             }
             OpenCodeButton(
-                variant: .compactText(title: "Allow once"),
+                variant: .compactText(title: "component.composer.allow_once"),
                 enabled: actionsEnabled,
                 action: {
                     onAction(.allowPermissionOnce(requestID: permission.requestID, sessionID: permission.sessionID))
@@ -790,11 +797,11 @@ struct OpenCodeSessionComposer: View {
                 .truncationMode(.tail)
             Spacer(minLength: 4)
             OpenCodeButton(
-                variant: .compactText(title: "Open"),
+                variant: .compactText(title: "common.open"),
                 contrast: .low,
                 action: { onAction(.openRequestSession(sessionID: attribution.sessionID)) }
             )
-            .accessibilityLabel("Open subagent session")
+            .accessibilityLabel(Text("component.composer.open_subagent_session"))
         }
         .padding(.leading, 8)
         .padding(.trailing, 4)
@@ -809,20 +816,20 @@ struct OpenCodeSessionComposer: View {
 
     /// "‹ 1 of 2 ›" beside the panel title while more than one request waits.
     @ViewBuilder
-    private func requestPager(position: Int, count: Int, enabled: Bool, noun: String) -> some View {
+    private func requestPager(position: Int, count: Int, enabled: Bool, kind: RequestPagerKind) -> some View {
         if count > 1 {
             HStack(spacing: 2) {
                 OpenCodeButton(
-                    variant: .iconCircle(.arrowBack, accessibilityLabel: "Previous \(noun)"),
+                    variant: .iconCircle(.arrowBack, accessibilityLabel: kind.previous),
                     enabled: enabled && position > 1,
                     contrast: .low,
                     action: { onAction(.pageRequest(delta: -1)) }
                 )
-                Text("\(position) of \(count)")
+                Text(LocalizedStringResource("component.composer.request_position", defaultValue: "\(position) of \(count)"))
                     .font(OpenCodeTypography.caption)
                     .monospacedDigit()
                 OpenCodeButton(
-                    variant: .iconCircle(.arrowForward, accessibilityLabel: "Next \(noun)"),
+                    variant: .iconCircle(.arrowForward, accessibilityLabel: kind.next),
                     enabled: enabled && position < count,
                     contrast: .low,
                     action: { onAction(.pageRequest(delta: 1)) }
@@ -881,22 +888,22 @@ struct OpenCodeSessionComposer: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(question.header.isEmpty ? "Question" : question.header)
+                Text(question.header.isEmpty ? String(localized: "component.composer.question", defaultValue: "Question") : question.header)
                     .font(OpenCodeTypography.heading)
                 Spacer()
                 if question.questionCount > 1 {
                     // With a request pager beside it, name this counter so the two read apart.
-                    Text("\(question.requestCount > 1 ? "Step " : "")\(question.questionIndex + 1) of \(question.questionCount)")
+                    Text(Self.questionPosition(question))
                         .font(OpenCodeTypography.caption)
                 }
                 requestPager(
                     position: question.requestPosition,
                     count: question.requestCount,
                     enabled: !question.submitting,
-                    noun: "question"
+                    kind: .question
                 )
                 OpenCodeButton(
-                    variant: .iconCircle(.keyboardArrowDown, accessibilityLabel: "Hide question"),
+                    variant: .iconCircle(.keyboardArrowDown, accessibilityLabel: "component.composer.hide_question"),
                     contrast: .low,
                     action: { onAction(.hideQuestion(requestID: question.requestID)) }
                 )
@@ -911,8 +918,8 @@ struct OpenCodeSessionComposer: View {
                 ForEach(question.options) { option in
                     let optionSelected = question.selectedLabels.contains(option.label)
                     OpenCodeListItem(
-                        title: option.label,
-                        subtitle: option.description.isEmpty ? nil : option.description,
+                        title: .verbatim(option.label),
+                        subtitle: .verbatim(ifPresent: option.description.isEmpty ? nil : option.description),
                         selected: optionSelected,
                         enabled: !question.submitting,
                         style: .card,
@@ -931,10 +938,10 @@ struct OpenCodeSessionComposer: View {
 
                 if question.customAllowed {
                     OpenCodeListItem(
-                        title: "Type your own answer",
-                        subtitle: question.customSelected || question.customText.isEmpty
+                        title: "component.composer.custom_answer_title",
+                        subtitle: .verbatim(ifPresent: question.customSelected || question.customText.isEmpty
                             ? nil
-                            : question.customText,
+                            : question.customText),
                         selected: question.customSelected,
                         enabled: !question.submitting,
                         style: .card,
@@ -1016,7 +1023,7 @@ struct OpenCodeSessionComposer: View {
 
         HStack {
             OpenCodeButton(
-                variant: .compactText(title: "Dismiss"),
+                variant: .compactText(title: "component.composer.dismiss"),
                 enabled: !question.submitting,
                 contrast: .low,
                 action: {
@@ -1030,7 +1037,7 @@ struct OpenCodeSessionComposer: View {
                 }
                 if showBack {
                     OpenCodeButton(
-                        variant: .compactText(title: "Back"),
+                        variant: .compactText(title: "top_bar.back"),
                         enabled: question.backEnabled && !question.submitting,
                         contrast: .low,
                         action: {
@@ -1040,7 +1047,7 @@ struct OpenCodeSessionComposer: View {
                 }
                 if showNext {
                     OpenCodeButton(
-                        variant: .compactText(title: "Next"),
+                        variant: .compactText(title: "component.composer.next"),
                         enabled: question.nextEnabled && !question.submitting,
                         action: {
                             onAction(.questionNext(requestID: question.requestID, sessionID: question.sessionID))
@@ -1048,7 +1055,7 @@ struct OpenCodeSessionComposer: View {
                     )
                 } else {
                     OpenCodeButton(
-                        variant: .compactText(title: "Submit"),
+                        variant: .compactText(title: "component.composer.submit"),
                         enabled: question.submitEnabled && !question.submitting,
                         action: {
                             onAction(.submitQuestion(requestID: question.requestID, sessionID: question.sessionID))
@@ -1095,7 +1102,32 @@ struct OpenCodeSessionComposer: View {
 
     /// Send button label. Steer/Queue only describe what Send does while work is running;
     /// an idle session just sends. A shell command always runs now.
-    static let sideQuestionPlaceholder = "Side question, not added to chat"
+    static var sideQuestionPlaceholder: String {
+        String(localized: "component.composer.side_question_placeholder", defaultValue: "Side question, not added to chat")
+    }
+
+    static var promptPlaceholder: String {
+        String(localized: "component.composer.placeholder", defaultValue: "Ask anything...")
+    }
+
+    /// The side-question command; typed by the user, so never translated.
+    static let sideQuestionCommand = "/btw"
+
+    private static var revertingAccessibilityLabel: String {
+        let title = String(localized: "component.composer.reverting_title", defaultValue: "Reverting this message")
+        let tag = String(localized: "component.composer.revert_tag", defaultValue: "Revert").uppercased(with: .current)
+        return "\(title), \(tag)"
+    }
+
+    /// "2 of 3", or "Step 2 of 3" when a request pager sits beside it.
+    private static func questionPosition(_ question: OpenCodeSessionComposerState.Question) -> LocalizedStringResource {
+        let index = question.questionIndex + 1
+        let count = question.questionCount
+        if question.requestCount > 1 {
+            return LocalizedStringResource("component.composer.question_step", defaultValue: "Step \(index) of \(count)")
+        }
+        return LocalizedStringResource("component.composer.question_position", defaultValue: "\(index) of \(count)")
+    }
 
     nonisolated static func sendLabel(
         followUpDelivery: FollowUpDelivery?,
@@ -1103,12 +1135,12 @@ struct OpenCodeSessionComposer: View {
         shellMode: Bool = false,
         sideQuestionMode: Bool = false
     ) -> String {
-        if sideQuestionMode { return "Ask side question" }
-        if shellMode { return "Run shell command" }
-        guard hasActiveWork, let followUpDelivery else { return "Send" }
+        if sideQuestionMode { return String(localized: "component.composer.send_side_question", defaultValue: "Ask side question") }
+        if shellMode { return String(localized: "component.composer.run_shell_command", defaultValue: "Run shell command") }
+        guard hasActiveWork, let followUpDelivery else { return String(localized: "component.composer.send", defaultValue: "Send") }
         switch followUpDelivery {
-        case .steer: return "Send as Steer"
-        case .queue: return "Send as Queue"
+        case .steer: return String(localized: "component.composer.send_steer", defaultValue: "Send as Steer")
+        case .queue: return String(localized: "component.composer.send_queue", defaultValue: "Send as Queue")
         }
     }
 
@@ -1118,22 +1150,50 @@ struct OpenCodeSessionComposer: View {
         minSelections: Int? = nil,
         maxSelections: Int? = nil
     ) -> String {
-        if !multiple || maxSelections == 1 { return "Select one" }
-        let min = minSelections.flatMap { $0 > 1 ? $0 : nil }
-        switch (min, maxSelections) {
-        case let (min?, max?) where max > min: return "Select \(min) to \(max)"
-        case let (min?, _?): return "Select \(min)"
-        case let (min?, nil): return "Select at least \(min)"
-        case let (nil, max?): return "Select up to \(max)"
-        case (nil, nil): return "Select all that apply"
+        if !multiple || maxSelections == 1 {
+            return String(localized: "component.composer.select_one", defaultValue: "Select one")
         }
+        let min = minSelections.flatMap { $0 > 1 ? $0 : nil }
+        let hint: LocalizedStringResource = switch (min, maxSelections) {
+        case let (min?, max?) where max > min:
+            LocalizedStringResource("component.composer.select_range", defaultValue: "Select \(min) to \(max)")
+        case let (min?, _?):
+            LocalizedStringResource("component.composer.select_exactly", defaultValue: "Select \(min)")
+        case let (min?, nil):
+            LocalizedStringResource("component.composer.select_at_least", defaultValue: "Select at least \(min)")
+        case let (nil, max?):
+            LocalizedStringResource("component.composer.select_up_to", defaultValue: "Select up to \(max)")
+        case (nil, nil):
+            LocalizedStringResource("component.composer.select_all_that_apply", defaultValue: "Select all that apply")
+        }
+        return String(localized: hint)
     }
 
     private static func questionSelectionDecorator(selected: Bool) -> StartDecorator {
         .icon(
             selected ? .radioButtonChecked : .radioButtonUnchecked,
-            accessibilityLabel: selected ? "Selected" : "Not selected"
+            accessibilityLabel: selected ? "common.selected" : "component.composer.not_selected"
         )
+    }
+}
+
+/// What the request pager steps through; names its Previous and Next buttons.
+enum RequestPagerKind {
+    case permission
+    case question
+
+    var previous: OpenCodeText {
+        switch self {
+        case .permission: "component.composer.previous_permission"
+        case .question: "component.composer.previous_question"
+        }
+    }
+
+    var next: OpenCodeText {
+        switch self {
+        case .permission: "component.composer.next_permission"
+        case .question: "component.composer.next_question"
+        }
     }
 }
 
@@ -1157,7 +1217,7 @@ private struct QuestionCustomTextField: View {
                     onChange(newValue)
                 }
             ),
-            hint: "Enter a custom answer",
+            hint: "component.composer.custom_answer_hint",
             enabled: enabled,
             minLines: Self.minLines,
             maxLines: Self.maxLines

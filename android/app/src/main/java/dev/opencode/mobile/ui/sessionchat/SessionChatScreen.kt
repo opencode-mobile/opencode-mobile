@@ -50,6 +50,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -59,6 +60,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.SessionToolGroup
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.connection.ExternalLinkPolicy
@@ -74,7 +76,6 @@ import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.domain.session.SideQuestion
-import dev.opencode.mobile.domain.worktree.WorktreeCreateCopy
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
@@ -164,6 +165,8 @@ import dev.opencode.mobile.ui.sessionchat.view.SessionToolGroupImages
 import dev.opencode.mobile.ui.sessionchat.view.sessionFailureDetailTarget
 import dev.opencode.mobile.ui.sessionchat.view.toActionTileBadge
 import dev.opencode.mobile.ui.sessionchat.view.toRoute
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.resolve
 import dev.opencode.mobile.ui.worktree.NewWorktreeRow
 import dev.opencode.mobile.ui.worktree.WorktreeCreateFormActions
 import dev.opencode.mobile.ui.worktree.WorktreeCreateFormBody
@@ -313,7 +316,7 @@ private fun SessionChatScreenBody(
     val animatedSnackbarOverlayHeight by animateDpAsState(
         targetValue = snackbarOverlayHeight,
         animationSpec = tween(durationMillis = 200),
-        label = "sessionChatSnackbarInset",
+        label = SNACKBAR_INSET_ANIMATION_LABEL,
     )
     val sessionCreated = !OptimisticSessionCreate.isPlaceholder(uiState.sessionId)
     val lifecycleActionsEnabled = sessionCreated && !uiState.isLifecycleActionInFlight
@@ -691,11 +694,11 @@ private fun SessionChatScreenBody(
 
     OpenCodeDialog(
         visible = showDeleteConfirmation,
-        title = "Delete session",
-        subtitle = "Delete session “${uiState.sessionTitle}”?",
+        title = stringResource(R.string.session_chat_delete_dialog_title),
+        subtitle = stringResource(R.string.session_chat_delete_dialog_message, uiState.sessionTitle),
         primaryOption =
             OpenCodeDialogOption(
-                title = "Delete",
+                title = stringResource(R.string.session_chat_delete_dialog_confirm),
                 enabled = lifecycleActionsEnabled,
                 onClick = {
                     showDeleteConfirmation = false
@@ -704,7 +707,7 @@ private fun SessionChatScreenBody(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = "Cancel",
+                title = stringResource(R.string.common_cancel),
                 enabled = lifecycleActionsEnabled,
                 onClick = {
                     ProductAnalytics.logUserAction(
@@ -756,7 +759,7 @@ private fun SessionChatScreenBody(
                     buildList {
                         add(
                             OpenCodeOverflowMenuEntry(
-                                title = "Rename session",
+                                title = stringResource(R.string.session_chat_menu_rename),
                                 icon = OpenCodeIcons.Edit,
                                 enabled = sessionCreated,
                                 onClick = {
@@ -767,7 +770,7 @@ private fun SessionChatScreenBody(
                         )
                         add(
                             OpenCodeOverflowMenuEntry(
-                                title = "Review changes",
+                                title = stringResource(R.string.session_chat_menu_review_changes),
                                 icon = OpenCodeIcons.Description,
                                 enabled = sessionCreated,
                                 onClick = {
@@ -779,7 +782,7 @@ private fun SessionChatScreenBody(
                         )
                         add(
                             OpenCodeOverflowMenuEntry(
-                                title = "Fork session",
+                                title = stringResource(R.string.session_chat_menu_fork),
                                 icon = OpenCodeIcons.CallSplit,
                                 enabled = sessionCreated,
                                 onClick = {
@@ -803,7 +806,7 @@ private fun SessionChatScreenBody(
                         )
                         add(
                             OpenCodeOverflowMenuEntry(
-                                title = "Browse files",
+                                title = stringResource(R.string.session_chat_menu_browse_files),
                                 icon = OpenCodeIcons.Folder,
                                 enabled = sessionCreated,
                                 onClick = {
@@ -815,7 +818,7 @@ private fun SessionChatScreenBody(
                         )
                         add(
                             OpenCodeOverflowMenuEntry(
-                                title = "Session context",
+                                title = stringResource(R.string.session_chat_menu_session_context),
                                 icon = OpenCodeIcons.Architecture,
                                 enabled = sessionCreated,
                                 onClick = {
@@ -827,7 +830,7 @@ private fun SessionChatScreenBody(
                         )
                         add(
                             OpenCodeOverflowMenuEntry(
-                                title = "Copy session ID",
+                                title = stringResource(R.string.session_chat_menu_copy_session_id),
                                 icon = OpenCodeIcons.ContentCopy,
                                 enabled = sessionCreated,
                                 onClick = {
@@ -840,7 +843,7 @@ private fun SessionChatScreenBody(
                         if (uiState.supportsSessionArchive) {
                             add(
                                 OpenCodeOverflowMenuEntry(
-                                    title = "Archive",
+                                    title = stringResource(R.string.session_chat_menu_archive),
                                     icon = OpenCodeIcons.Archive,
                                     enabled = lifecycleActionsEnabled,
                                     onClick = {
@@ -852,7 +855,7 @@ private fun SessionChatScreenBody(
                         }
                         add(
                             OpenCodeOverflowMenuEntry(
-                                title = "Report a problem",
+                                title = stringResource(R.string.session_chat_menu_report_problem),
                                 icon = OpenCodeIcons.Edit,
                                 onClick = {
                                     menuExpanded = false
@@ -862,7 +865,7 @@ private fun SessionChatScreenBody(
                         )
                         add(
                             OpenCodeOverflowMenuEntry(
-                                title = "Delete",
+                                title = stringResource(R.string.session_chat_menu_delete),
                                 icon = OpenCodeIcons.Close,
                                 enabled = lifecycleActionsEnabled,
                                 destructive = true,
@@ -902,7 +905,7 @@ private fun SessionChatScreenBody(
                         listOf(
                             OpenCodeTopBarAction.Icon(
                                 imageVector = OpenCodeIcons.MoreVert,
-                                contentDescription = "More options",
+                                contentDescription = stringResource(R.string.session_chat_more_options),
                                 onClick = {
                                     logChatAction(ProductAnalytics.Action.CHAT_OPEN_OVERFLOW)
                                     menuExpanded = true
@@ -1144,14 +1147,16 @@ private fun SessionChatScreenBody(
                                             OpenCodeComposerSuggestionItem(
                                                 id = suggestion.id,
                                                 title = suggestion.title,
-                                                subtitle = suggestion.subtitle,
+                                                subtitle =
+                                                    suggestion.subtitle
+                                                        ?: if (suggestion.filePath != null) stringResource(R.string.session_chat_suggestion_file) else null,
                                                 leadingIcon = suggestion.leadingIcon,
                                             )
                                         },
                                     onSelect = { item ->
                                         viewModel.selectAtSuggestion(item.id)
                                     },
-                                    emptyMessage = "No matches",
+                                    emptyMessage = stringResource(R.string.session_chat_suggestion_no_matches),
                                     modifier =
                                         Modifier
                                             .padding(horizontal = 12.dp)
@@ -1165,13 +1170,13 @@ private fun SessionChatScreenBody(
                                                 id = suggestion.id,
                                                 title = suggestion.title,
                                                 subtitle = suggestion.subtitle,
-                                                badge = suggestion.badge,
+                                                badge = suggestion.badge?.resolve(),
                                             )
                                         },
                                     onSelect = { item ->
                                         viewModel.selectSlashSuggestion(item.id)
                                     },
-                                    emptyMessage = "No commands",
+                                    emptyMessage = stringResource(R.string.session_chat_suggestion_no_commands),
                                     modifier =
                                         Modifier
                                             .padding(horizontal = 12.dp)
@@ -1521,7 +1526,7 @@ private fun SessionChatScreenBody(
                                                 {
                                                     toolDetailTarget =
                                                         sessionFailureDetailTarget(
-                                                            text = card.message,
+                                                            text = UiText.verbatim(card.message),
                                                             providerBody = body,
                                                             action = null,
                                                             actionLabel = null,
@@ -1648,7 +1653,7 @@ private fun SessionChatScreenBody(
 
         OpenCodeBottomSheet(
             visible = showAttachmentSource,
-            title = "Add attachment",
+            title = stringResource(R.string.session_chat_attachment_source_title),
             onDismissRequest = {
                 logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_SOURCE_DISMISS)
                 showAttachmentSource = false
@@ -1656,7 +1661,7 @@ private fun SessionChatScreenBody(
         ) {
             if (attachmentSources.photos) {
                 OpenCodeBottomSheetEntry(
-                    title = "Photos",
+                    title = stringResource(R.string.session_chat_attachment_source_photos),
                     startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description),
                     onClick = {
                         logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_PICK_PHOTOS)
@@ -1667,7 +1672,7 @@ private fun SessionChatScreenBody(
             }
             if (attachmentSources.files) {
                 OpenCodeBottomSheetEntry(
-                    title = "Files",
+                    title = stringResource(R.string.session_chat_attachment_source_files),
                     startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
                     onClick = {
                         logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_PICK_FILES)
@@ -1678,7 +1683,7 @@ private fun SessionChatScreenBody(
             }
             if (attachmentSources.logFile) {
                 OpenCodeBottomSheetEntry(
-                    title = "Log file",
+                    title = stringResource(R.string.session_chat_attachment_source_log_file),
                     startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.List),
                     onClick = {
                         logAttachmentSourceAction(ProductAnalytics.Action.ATTACH_PICK_LOG_FILE)
@@ -1724,10 +1729,10 @@ private fun SessionChatScreenBody(
 
         OpenCodeDialog(
             visible = uiState.rename.isDialogVisible,
-            title = "Rename session",
+            title = stringResource(R.string.session_chat_rename_dialog_title),
             primaryOption =
                 OpenCodeDialogOption(
-                    title = "Save",
+                    title = stringResource(R.string.session_chat_rename_dialog_save),
                     enabled =
                         !uiState.rename.isSubmitting &&
                             uiState.canMutate,
@@ -1735,7 +1740,7 @@ private fun SessionChatScreenBody(
                 ),
             secondaryOption =
                 OpenCodeDialogOption(
-                    title = "Cancel",
+                    title = stringResource(R.string.common_cancel),
                     enabled = !uiState.rename.isSubmitting,
                     onClick = viewModel::cancelRenameSession,
                 ),
@@ -1743,7 +1748,7 @@ private fun SessionChatScreenBody(
                 OpenCodeDialogTextField(
                     value = uiState.rename.draftTitle,
                     onValueChange = viewModel::updateRenameDraft,
-                    hint = "Title",
+                    hint = stringResource(R.string.session_chat_title_hint),
                     enabled = !uiState.rename.isSubmitting,
                     errorMessage = uiState.rename.errorMessage,
                 ),
@@ -1756,13 +1761,16 @@ private fun SessionChatScreenBody(
 
         OpenCodeBottomSheet(
             visible = uiState.commandsSheetVisible,
-            title = if (uiState.mcpPageVisible) "MCP servers" else "Commands",
+            title =
+                stringResource(
+                    if (uiState.mcpPageVisible) R.string.session_chat_commands_mcp_title else R.string.session_chat_commands_title,
+                ),
             onDismissRequest = viewModel::dismissCommands,
             headerLeadingAction =
                 if (uiState.mcpPageVisible) {
                     OpenCodeBottomSheetHeaderAction(
                         imageVector = OpenCodeIcons.ArrowBack,
-                        contentDescription = "Back to commands",
+                        contentDescription = stringResource(R.string.session_chat_commands_back),
                         onClick = viewModel::closeMcpServers,
                     )
                 } else {
@@ -1789,10 +1797,10 @@ private fun SessionChatScreenBody(
 
         OpenCodeDialog(
             visible = uiState.forkDialogVisible,
-            title = "Fork session",
+            title = stringResource(R.string.session_chat_fork_dialog_title),
             primaryOption =
                 OpenCodeDialogOption(
-                    title = "Fork",
+                    title = stringResource(R.string.session_chat_fork_dialog_confirm),
                     enabled =
                         !uiState.forkSubmitting &&
                             uiState.canMutate,
@@ -1800,7 +1808,7 @@ private fun SessionChatScreenBody(
                 ),
             secondaryOption =
                 OpenCodeDialogOption(
-                    title = "Cancel",
+                    title = stringResource(R.string.common_cancel),
                     enabled = !uiState.forkSubmitting,
                     onClick = viewModel::cancelForkDialog,
                 ),
@@ -1808,9 +1816,9 @@ private fun SessionChatScreenBody(
                 OpenCodeDialogTextField(
                     value = uiState.forkDraftTitle,
                     onValueChange = viewModel::updateForkDraft,
-                    hint = "Title",
+                    hint = stringResource(R.string.session_chat_title_hint),
                     enabled = !uiState.forkSubmitting,
-                    errorMessage = uiState.forkErrorMessage,
+                    errorMessage = uiState.forkErrorMessage?.resolve(),
                 ),
             onDismissRequest = {
                 if (!uiState.forkSubmitting) {
@@ -1821,10 +1829,18 @@ private fun SessionChatScreenBody(
 
         OpenCodeDialog(
             visible = uiState.forkResultVisible,
-            title = "Session forked",
-            subtitle = "“${uiState.forkedSessionTitle}” is ready.",
-            primaryOption = OpenCodeDialogOption(title = "Open", onClick = viewModel::chooseForkOpen),
-            secondaryOption = OpenCodeDialogOption(title = "Stay here", onClick = viewModel::chooseForkStay),
+            title = stringResource(R.string.session_chat_fork_result_title),
+            subtitle = stringResource(R.string.session_chat_fork_result_message_ready, uiState.forkedSessionTitle),
+            primaryOption =
+                OpenCodeDialogOption(
+                    title = stringResource(R.string.session_chat_fork_result_open),
+                    onClick = viewModel::chooseForkOpen,
+                ),
+            secondaryOption =
+                OpenCodeDialogOption(
+                    title = stringResource(R.string.session_chat_fork_result_stay_here),
+                    onClick = viewModel::chooseForkStay,
+                ),
             onDismissRequest = viewModel::chooseForkStay,
         )
 
@@ -1873,6 +1889,9 @@ private fun SessionStatusBar(
 
 /** Temporarily off: bar currently only shows context usage. */
 private const val ShowsSessionStatusBar = false
+
+/** Animation label for tooling; not shown to users. */
+private const val SNACKBAR_INSET_ANIMATION_LABEL = "sessionChatSnackbarInset"
 
 private fun logChatAction(actionId: String) {
     ProductAnalytics.logUserAction(
@@ -1936,9 +1955,10 @@ private fun ComposerDictationUiState.toCardModel(elapsedLabel: String): Composer
     )
 }
 
+@Composable
 private fun SessionChatSnackbar.toOpenCodeSnackbarMessage(): OpenCodeSnackbarMessage =
     OpenCodeSnackbarMessage(
-        text = message,
+        text = message.resolve(),
         variant =
             when (tone) {
                 SessionChatSnackbarTone.Default -> OpenCodeSnackbarVariant.Default
@@ -1967,15 +1987,41 @@ private fun CommandsActionTileGrid(
                 action == ClientSlashAction.Files
         OpenCodeActionTile(
             icon = action.tileIcon(),
-            label = action.tileLabel,
+            label = stringResource(action.tileLabelRes()),
             onClick = { onAction(action) },
             enabled = !requiresLive || canMutate,
-            accessibilityLabel = action.description,
+            accessibilityLabel = stringResource(action.descriptionRes()),
             badge = if (action == ClientSlashAction.Mcp) mcpBadge else null,
             modifier = Modifier.fillMaxWidth(),
         )
     }
 }
+
+private fun ClientSlashAction.tileLabelRes(): Int =
+    when (this) {
+        ClientSlashAction.New -> R.string.session_chat_commands_new_label
+        ClientSlashAction.Fork -> R.string.session_chat_commands_fork_label
+        ClientSlashAction.Undo -> R.string.session_chat_commands_undo_label
+        ClientSlashAction.Redo -> R.string.session_chat_commands_redo_label
+        ClientSlashAction.Compact -> R.string.session_chat_commands_compact_label
+        ClientSlashAction.Terminal -> R.string.session_chat_commands_terminal_label
+        ClientSlashAction.Files -> R.string.session_chat_commands_files_label
+        ClientSlashAction.Mcp -> R.string.session_chat_commands_mcp_label
+        ClientSlashAction.Btw -> R.string.session_chat_commands_btw_label
+    }
+
+private fun ClientSlashAction.descriptionRes(): Int =
+    when (this) {
+        ClientSlashAction.New -> R.string.session_chat_commands_new_description
+        ClientSlashAction.Fork -> R.string.session_chat_commands_fork_description
+        ClientSlashAction.Undo -> R.string.session_chat_commands_undo_description
+        ClientSlashAction.Redo -> R.string.session_chat_commands_redo_description
+        ClientSlashAction.Compact -> R.string.session_chat_commands_compact_description
+        ClientSlashAction.Terminal -> R.string.session_chat_commands_terminal_description
+        ClientSlashAction.Files -> R.string.session_chat_commands_files_description
+        ClientSlashAction.Mcp -> R.string.session_chat_commands_mcp_description
+        ClientSlashAction.Btw -> R.string.session_chat_commands_btw_description
+    }
 
 private fun ClientSlashAction.tileIcon(): ImageVector =
     when (this) {
@@ -2023,7 +2069,7 @@ private fun SessionChatMoveToWorktreeSheet(
     val form = state.form
     OpenCodeBottomSheet(
         visible = state.sheetVisible,
-        title = if (form != null) WorktreeCreateCopy.FORM_TITLE else SessionChatWorktreeMoveCopy.SHEET_TITLE,
+        title = if (form != null) stringResource(R.string.worktree_form_title) else SessionChatWorktreeMoveCopy.SHEET_TITLE,
         onDismissRequest = onDismiss,
         headerTrailingAction = form?.let { worktreeCreateBackAction(it, formCallbacks) },
         keyboard = if (form != null && !form.basePickerVisible) OpenCodeBottomSheetKeyboard.Keep else OpenCodeBottomSheetKeyboard.Dismiss,
@@ -2057,7 +2103,7 @@ private fun SessionChatMoveToWorktreeRows(
                     {
                         Icon(
                             imageVector = OpenCodeIcons.Check,
-                            contentDescription = "Current worktree",
+                            contentDescription = stringResource(R.string.session_chat_move_worktree_current),
                             tint = openCodeColor("icon-strong-base"),
                             modifier = Modifier.size(20.dp),
                         )

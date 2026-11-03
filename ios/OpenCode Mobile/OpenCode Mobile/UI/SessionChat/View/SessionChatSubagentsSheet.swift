@@ -31,6 +31,15 @@ struct SessionChatBackgroundWorkList: View {
     let onOpen: (SessionChatSubagent) -> Void
     var onOpenShell: (AgentShell) -> Void = { _ in }
 
+    // OpenCodeActivitySectionLabel takes a String, so these resolve when drawn.
+    private static var subagentsTitle: String {
+        String(localized: "session_chat_sheet.background_work.subagents", defaultValue: "Subagents")
+    }
+
+    private static var shellsTitle: String {
+        String(localized: "session_chat_sheet.background_work.shells", defaultValue: "Shells")
+    }
+
     var body: some View {
         let tabs = SessionChatBackgroundWork.tabs(subagents)
         TimelineView(.periodic(from: .now, by: 1)) { context in
@@ -62,11 +71,11 @@ struct SessionChatBackgroundWorkList: View {
     private func runningRows(_ running: [SessionChatSubagent], nowMs: Int64) -> some View {
         if running.isEmpty, shells.isEmpty { emptyText(Self.runningEmptyText) }
         let sectioned = !running.isEmpty && !shells.isEmpty
-        if sectioned { OpenCodeActivitySectionLabel(text: "Subagents") }
+        if sectioned { OpenCodeActivitySectionLabel(text: Self.subagentsTitle) }
         ForEach(running) { subagentRow($0, nowMs: nowMs) }
         if !shells.isEmpty {
             if sectioned {
-                OpenCodeActivitySectionLabel(text: SessionChatShellPresentation.sectionTitle)
+                OpenCodeActivitySectionLabel(text: Self.shellsTitle)
                     .padding(.top, 8)
             }
             ForEach(shells) { shell in
@@ -93,7 +102,7 @@ struct SessionChatBackgroundWorkList: View {
         )
     }
 
-    private func emptyText(_ text: String) -> some View {
+    private func emptyText(_ text: LocalizedStringResource) -> some View {
         Text(text)
             .font(OpenCodeTypography.body)
             .foregroundStyle(OpenCodeColors.textWeak)
@@ -104,10 +113,20 @@ struct SessionChatBackgroundWorkList: View {
 
     private static let runningTabID = "running"
     private static let doneTabID = "done"
-    static let runningTitle = "Running"
-    static let doneTitle = "Done"
-    static let runningEmptyText = "Nothing running. Finished work is under Done."
-    static let doneEmptyText = "Nothing finished yet."
+    static let runningTitle = OpenCodeText(
+        LocalizedStringResource("session_chat_sheet.background_work.tab_running", defaultValue: "Running")
+    )
+    static let doneTitle = OpenCodeText(
+        LocalizedStringResource("session_chat_sheet.background_work.tab_done", defaultValue: "Done")
+    )
+    static let runningEmptyText = LocalizedStringResource(
+        "session_chat_sheet.background_work.running_empty",
+        defaultValue: "Nothing running. Finished work is under Done."
+    )
+    static let doneEmptyText = LocalizedStringResource(
+        "session_chat_sheet.background_work.done_empty",
+        defaultValue: "Nothing finished yet."
+    )
 }
 
 /// Opens on Running each time; reports while Done is on screen so the view model can clear
@@ -126,7 +145,7 @@ struct SessionChatBackgroundWorkSheetModifier: ViewModifier {
         content
             .openCodeBottomSheet(
                 isPresented: presentedBinding,
-                title: Self.title,
+                title: OpenCodeText(Self.title),
                 content: {
                     SessionChatBackgroundWorkList(
                         subagents: subagents,
@@ -153,7 +172,7 @@ struct SessionChatBackgroundWorkSheetModifier: ViewModifier {
             }
     }
 
-    static let title = "Background work"
+    static let title = LocalizedStringResource("session_chat_sheet.background_work.title", defaultValue: "Background work")
 
     private var presentedBinding: Binding<Bool> {
         Binding(

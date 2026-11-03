@@ -22,11 +22,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.theme.CodeTextStyle
@@ -190,6 +192,7 @@ fun OpenCodeUnifiedDiff(
     revealSelectedHunk: Boolean = true,
 ) {
     val shape = OpenCodeSmallShape
+    val fileSummary = file.summary()
     Column(
         modifier =
             modifier
@@ -201,7 +204,7 @@ fun OpenCodeUnifiedDiff(
             modifier =
                 Modifier
                     .horizontalScroll(rememberScrollState())
-                    .semantics { contentDescription = file.summary() },
+                    .semantics { contentDescription = fileSummary },
         ) {
             document.visibleRows(contextMode).forEach { row ->
                 val selected = row.id == selectedHunkId && row.kind == UnifiedDiffRowKind.Hunk
@@ -271,9 +274,18 @@ private fun UnifiedDiffRowView(
     }
 }
 
-private fun FileDiff.summary() = "${status.label()} file $path, $additions additions, $deletions deletions"
-
-private fun FileDiffStatus.label() = name.lowercase().replaceFirstChar(Char::uppercase)
+@Composable
+private fun FileDiff.summary(): String =
+    stringResource(
+        when (status) {
+            FileDiffStatus.Added -> R.string.component_unified_diff_summary_added
+            FileDiffStatus.Deleted -> R.string.component_unified_diff_summary_deleted
+            FileDiffStatus.Modified -> R.string.component_unified_diff_summary_modified
+        },
+        path,
+        additions,
+        deletions,
+    )
 
 private fun UnifiedDiffRowKind.marker() =
     when (this) {

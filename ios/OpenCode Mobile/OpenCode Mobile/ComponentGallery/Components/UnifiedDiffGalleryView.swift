@@ -9,7 +9,7 @@ struct UnifiedDiffGalleryView: View {
             Text("Interactive").font(OpenCodeTypography.heading)
             HStack {
                 ForEach(["Modified", "Added", "Deleted", "Unavailable"], id: \.self) { label in
-                    OpenCodeChoiceBadge(label: label, selected: sample == labels.firstIndex(of: label)) {
+                    OpenCodeChoiceBadge(label: .verbatim(label), selected: sample == labels.firstIndex(of: label)) {
                         sample = labels.firstIndex(of: label) ?? 0
                     }
                 }

@@ -12,17 +12,17 @@ struct AppearanceSettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: "Appearance",
+                title: "appearance.title",
                 leading: OpenCodeSplitPane.detailLeading(detailControl, back: { dismiss() }),
                 showDivider: true
             )
             ScrollView {
                 VStack(spacing: 8) {
                     OpenCodeListItem(
-                        title: "Theme",
-                        subtitle: "\(themeManager.currentTheme.name) · \(themeBlurb(themeManager.currentTheme.id))",
+                        title: "appearance.theme.title",
+                        subtitle: themeSubtitle,
                         style: .card,
-                        startDecorator: .icon(.widgets, accessibilityLabel: "Theme"),
+                        startDecorator: .icon(.widgets, accessibilityLabel: "appearance.theme.title"),
                         accessory: .disclosure,
                         action: {
                             ProductAnalytics.logUserAction(
@@ -35,10 +35,10 @@ struct AppearanceSettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Code highlight",
-                        subtitle: "\(themeManager.currentSyntaxPreset.name) · \(themeManager.currentSyntaxPreset.blurb)",
+                        title: "appearance.code_highlight.title",
+                        subtitle: syntaxSubtitle,
                         style: .card,
-                        startDecorator: .icon(.description, accessibilityLabel: "Code highlight"),
+                        startDecorator: .icon(.description, accessibilityLabel: "appearance.code_highlight.title"),
                         accessory: .disclosure,
                         action: {
                             ProductAnalytics.logUserAction(
@@ -70,6 +70,19 @@ struct AppearanceSettingsView: View {
             )
         }
     }
+
+    /// The preset name is theme data and stays an argument.
+    private var themeSubtitle: OpenCodeText {
+        let name = themeManager.currentTheme.name
+        let blurb = themeBlurb(themeManager.currentTheme.id)
+        return OpenCodeText(LocalizedStringResource("appearance.theme.subtitle", defaultValue: "\(name) · \(blurb)"))
+    }
+
+    /// Syntax preset name and blurb are preset data, shown as is.
+    private var syntaxSubtitle: OpenCodeText {
+        let preset = themeManager.currentSyntaxPreset
+        return .verbatim([preset.name, preset.blurb].joined(separator: " · "))
+    }
 }
 
 struct ThemePickerView: View {
@@ -81,7 +94,7 @@ struct ThemePickerView: View {
         let presets = themeManager.availablePresets()
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: "Theme",
+                title: "appearance.theme.title",
                 leading: .back(action: { dismiss() }),
                 showDivider: true
             )
@@ -134,7 +147,7 @@ struct SyntaxHighlightPickerView: View {
         let isDark = colorScheme == .dark
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: "Code highlight",
+                title: "appearance.code_highlight.title",
                 leading: .back(action: { dismiss() }),
                 showDivider: true
             )
@@ -182,17 +195,18 @@ private struct ThemePreviewCard: View {
     let action: () -> Void
 
     var body: some View {
-        OpenCodeSelectableCard(title: name, blurb: blurb, selected: selected, action: action) {
+        // Preset names are theme data; the blurb is localized when it is the app's own.
+        OpenCodeSelectableCard(title: .verbatim(name), blurb: .verbatim(blurb), selected: selected, action: action) {
             HStack(spacing: 8) {
-                MiniThemePane(label: "Light", tokens: light)
-                MiniThemePane(label: "Dark", tokens: dark)
+                MiniThemePane(label: "appearance.preview.light", tokens: light)
+                MiniThemePane(label: "appearance.preview.dark", tokens: dark)
             }
         }
     }
 }
 
 private struct MiniThemePane: View {
-    let label: String
+    let label: LocalizedStringKey
     let tokens: ResolvedTokens?
 
     var body: some View {
@@ -204,7 +218,7 @@ private struct MiniThemePane: View {
             Text(label)
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(ink)
-            Text("Walk the token store.")
+            Text("appearance.preview.sample_message")
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(ink)
                 .lineLimit(1)
@@ -214,7 +228,7 @@ private struct MiniThemePane: View {
                 .background(wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .padding(.leading, 28)
-            Text("Refreshing once, then retry.")
+            Text("appearance.preview.sample_reply")
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(ink)
                 .lineLimit(2)
@@ -236,7 +250,8 @@ private struct SyntaxPreviewCard: View {
     let action: () -> Void
 
     var body: some View {
-        OpenCodeSelectableCard(title: preset.name, blurb: preset.blurb, selected: selected, action: action) {
+        // Syntax preset name and blurb are preset data, shown as is.
+        OpenCodeSelectableCard(title: .verbatim(preset.name), blurb: .verbatim(preset.blurb), selected: selected, action: action) {
             OpenCodeCodeSnippet(syntaxSnippet(tokens), surface: .syntaxPreset(tokens))
         }
     }
@@ -294,13 +309,14 @@ private extension ThemePreset {
     }
 }
 
+/// Built-in presets' own blurb, resolved in the current locale; an unknown id shows as is.
 private func themeBlurb(_ id: String) -> String {
     switch id {
-    case "porcelain": "Near-white / near-black"
-    case "linen": "Warm paper / espresso"
-    case "signal": "True white / true black"
-    case "hotline": "Neutral chrome, loud pink"
-    case "phosphor": "Neutral chrome, CRT green"
+    case "porcelain": String(localized: "appearance.theme_blurb.porcelain", defaultValue: "Near-white / near-black")
+    case "linen": String(localized: "appearance.theme_blurb.linen", defaultValue: "Warm paper / espresso")
+    case "signal": String(localized: "appearance.theme_blurb.signal", defaultValue: "True white / true black")
+    case "hotline": String(localized: "appearance.theme_blurb.hotline", defaultValue: "Neutral chrome, loud pink")
+    case "phosphor": String(localized: "appearance.theme_blurb.phosphor", defaultValue: "Neutral chrome, CRT green")
     default: id
     }
 }

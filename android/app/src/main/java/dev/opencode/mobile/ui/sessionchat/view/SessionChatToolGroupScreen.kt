@@ -34,11 +34,13 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatGalleryImageLoader
 import dev.opencode.mobile.ui.sessionchat.SessionChatImageGalleries
 import dev.opencode.mobile.ui.sessionchat.SessionChatImageViewerState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.resolve
 
 internal data class SessionChatToolGroupTarget(
     val blockID: String,
-    val title: String,
-    val subtitle: String?,
+    val title: UiText,
+    val subtitle: UiText?,
     val members: List<SessionChatTimelineBlock.ToolCard>,
     val messageId: String,
 )
@@ -183,8 +185,8 @@ internal fun SessionChatToolGroupScreen(
                 .background(MaterialTheme.colorScheme.background),
     ) {
         OpenCodeTopBar(
-            title = target.title,
-            subtitle = target.subtitle,
+            title = target.title.resolve(),
+            subtitle = target.subtitle?.resolve(),
             leading =
                 OpenCodeTopBarLeading.Back(
                     onClick = {
@@ -206,11 +208,11 @@ internal fun SessionChatToolGroupScreen(
                 target.members.forEach { card ->
                     OpenCodeToolCallCard(
                         status = card.status.toGroupToolCallCardStatus(interrupted = card.isInterrupted),
-                        title = card.title,
-                        subtitle = card.subtitle,
+                        title = card.title.resolve(),
+                        subtitle = card.subtitle?.resolve(),
                         additions = card.additions,
                         deletions = card.deletions,
-                        errorText = card.errorText,
+                        errorText = card.errorText?.resolve(),
                         onClick =
                             toolGroupMemberOnClick(
                                 card = card,
@@ -254,7 +256,7 @@ private fun toolGroupMemberOnClick(
 ): (() -> Unit)? =
     when {
         card.childSessionId != null -> {
-            { onChildSessionTap(card.childSessionId, card.title) }
+            { onChildSessionTap(card.childSessionId, card.childSessionTitle) }
         }
         card.opensChangesReview && supportsSessionMessageDiff -> {
             { onChangesReviewTap(messageId, card.changesInitialFilePath) }

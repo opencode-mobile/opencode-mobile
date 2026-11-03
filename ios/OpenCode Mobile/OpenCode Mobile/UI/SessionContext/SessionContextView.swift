@@ -12,7 +12,7 @@ struct SessionContextView: View {
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: "Session Context",
+                title: "session_context.title",
                 leading: .back(action: {
                     logAction(ProductAnalytics.Action.sessionContextBack)
                     dismiss()
@@ -46,14 +46,14 @@ struct SessionContextView: View {
         switch viewModel.state {
         case .loading:
             OpenCodeStatusStack(
-                title: "Loading session context",
-                subtitle: "Fetching context…"
+                title: "session_context.loading.title",
+                subtitle: "session_context.loading.subtitle"
             )
         case let .error(message):
             OpenCodeEmptyState(
-                title: "Unable to load session context",
-                message: openCodeNonBlank(message, fallback: "The context didn't load."),
-                primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
+                title: "session_context.load_failed",
+                message: .verbatim(message, fallback: "session_context.load_failed_message"),
+                primaryAction: OpenCodeEmptyStateAction(title: "session_context.retry") {
                     logAction(ProductAnalytics.Action.sessionContextRetry)
                     Task { await viewModel.load() }
                 }
@@ -62,7 +62,7 @@ struct SessionContextView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     if let refreshErrorMessage = viewModel.refreshErrorMessage {
-                        OpenCodeInlineNotice(message: refreshErrorMessage, tone: .neutral)
+                        OpenCodeInlineNotice(message: .verbatim(refreshErrorMessage), tone: .neutral)
                     }
                     statsGrid(displayState.stats)
                     if !displayState.breakdown.isEmpty {
@@ -78,7 +78,7 @@ struct SessionContextView: View {
             }
             .overlay {
                 if viewModel.isRefreshing {
-                    OpenCodeStatusStack(spinner: "Refreshing session context")
+                    OpenCodeStatusStack(spinner: "session_context.refreshing")
                 }
             }
         }
@@ -94,7 +94,7 @@ struct SessionContextView: View {
 
     private func breakdown(_ items: [SessionContextBreakdownItem]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Context Breakdown")
+            Text("session_context.breakdown.title")
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textBase)
             GeometryReader { proxy in
@@ -114,25 +114,32 @@ struct SessionContextView: View {
                         RoundedRectangle(cornerRadius: 2)
                             .fill(color(for: item.kind))
                             .frame(width: 8, height: 8)
-                        Text("\(label(for: item.kind)) \(item.displayPercent, specifier: "%.1f")%")
+                        Text(legend(for: item))
                             .font(OpenCodeTypography.caption)
                             .foregroundStyle(OpenCodeColors.textBase)
                     }
                 }
             }
-            Text("Approximate breakdown of input tokens. Other includes tool definitions and overhead.")
+            Text("session_context.breakdown.footnote")
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textBase)
         }
     }
 
-    private func label(for kind: SessionContextBreakdownItem.Kind) -> String {
+    /// "System 12.5%": the part's name and its share with one decimal.
+    private func legend(for item: SessionContextBreakdownItem) -> LocalizedStringResource {
+        let name = String(localized: label(for: item.kind))
+        let percent = String(format: "%.1f%%", locale: .current, item.displayPercent)
+        return LocalizedStringResource("session_context.breakdown.legend", defaultValue: "\(name) \(percent)")
+    }
+
+    private func label(for kind: SessionContextBreakdownItem.Kind) -> LocalizedStringResource {
         switch kind {
-        case .system: "System"
-        case .user: "User"
-        case .assistant: "Assistant"
-        case .tool: "Tool Calls"
-        case .other: "Other"
+        case .system: LocalizedStringResource("session_context.breakdown.system", defaultValue: "System")
+        case .user: LocalizedStringResource("session_context.breakdown.user", defaultValue: "User")
+        case .assistant: LocalizedStringResource("session_context.breakdown.assistant", defaultValue: "Assistant")
+        case .tool: LocalizedStringResource("session_context.breakdown.tool_calls", defaultValue: "Tool Calls")
+        case .other: LocalizedStringResource("session_context.breakdown.other", defaultValue: "Other")
         }
     }
 

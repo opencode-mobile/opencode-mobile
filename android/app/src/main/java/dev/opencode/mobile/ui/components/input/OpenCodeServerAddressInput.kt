@@ -38,6 +38,7 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextRange
@@ -47,6 +48,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -72,7 +74,7 @@ fun OpenCodeServerAddressInput(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    hint: String = "Host",
+    hint: String = stringResource(R.string.component_server_address_host),
     accessibilityLabel: String? = null,
     enabled: Boolean = true,
     errorMessage: String? = null,
@@ -90,6 +92,7 @@ fun OpenCodeServerAddressInput(
         mutableStateOf(TextFieldValue(text = parsed.hostPort, selection = TextRange(parsed.hostPort.length)))
     }
     var showSchemeSheet by remember { mutableStateOf(false) }
+    val schemeDescription = stringResource(R.string.component_server_address_scheme_button_description, scheme.label)
     val focusManager = LocalFocusManager.current
     val hostInteractionSource = remember { MutableInteractionSource() }
     val schemeInteractionSource = remember { MutableInteractionSource() }
@@ -151,7 +154,7 @@ fun OpenCodeServerAddressInput(
                     Modifier
                         .fillMaxHeight()
                         .semantics {
-                            contentDescription = "Scheme ${scheme.label}. Opens scheme picker"
+                            contentDescription = schemeDescription
                         }.clip(SchemeStartShape)
                         .clickable(
                             enabled = enabled,
@@ -254,7 +257,7 @@ fun OpenCodeServerAddressInput(
 
     OpenCodeBottomSheet(
         visible = showSchemeSheet,
-        title = "Scheme",
+        title = stringResource(R.string.component_server_address_scheme),
         onDismissRequest = { showSchemeSheet = false },
     ) {
         ServerAddressScheme.entries.forEach { option ->

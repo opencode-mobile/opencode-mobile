@@ -259,7 +259,8 @@ private extension GraphicsContext {
             palette: palette
         )
         drawSkeletonCenteredText(
-            "UNOFFICIAL",
+            String(localized: "component.skeleton_illustration.unofficial", defaultValue: "Unofficial")
+                .uppercased(with: .current),
             in: pill,
             size: 11,
             weight: .bold,
@@ -276,7 +277,7 @@ private extension GraphicsContext {
         skeletonBar(x: 64, y: 32, w: 110, h: 10, palette: palette)
         skeletonCard(x: 64, y: 54, w: 208, h: 32, lit: false, palette: palette)
         draw(
-            Text("https://")
+            Text(verbatim: "https://")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(palette.textWeak),
             at: CGPoint(x: 76, y: 70),
@@ -292,7 +293,7 @@ private extension GraphicsContext {
             fill(dot, with: .color(palette.textWeaker))
         }
         skeletonGlow(x: 64, y: 138, w: 208, h: 34, palette: palette)
-        skeletonButton(x: 64, y: 138, w: 208, h: 34, title: "Connect", palette: palette)
+        skeletonButton(x: 64, y: 138, w: 208, h: 34, title: String(localized: "component.skeleton_illustration.connect", defaultValue: "Connect"), palette: palette)
     }
 
     mutating func drawSessionsLiveSkeleton(palette: SkeletonIllustrationPalette) {
@@ -316,7 +317,7 @@ private extension GraphicsContext {
             with: .color(palette.surfaceInteractiveWeak)
         )
         drawSkeletonCenteredText(
-            "Running",
+            String(localized: "session_list.status.running", defaultValue: "Running"),
             in: running,
             size: 10,
             weight: .bold,

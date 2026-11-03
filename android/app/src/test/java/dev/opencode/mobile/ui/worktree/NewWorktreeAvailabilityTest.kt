@@ -1,7 +1,9 @@
 package dev.opencode.mobile.ui.worktree
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeWorktree
+import dev.opencode.mobile.ui.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -16,14 +18,14 @@ class NewWorktreeAvailabilityTest {
         ) = NewWorktreeAvailability.runIn(on, git, projectId, server)
 
         assertEquals(
-            NewWorktreeAvailability(false, "Turn on Worktrees in Settings"),
+            NewWorktreeAvailability(false, UiText.resource(R.string.worktree_turn_on)),
             runIn(on = false, git = false, projectId = null, server = false),
         )
-        assertEquals(NewWorktreeAvailability(false, "Needs a git repository"), runIn(git = false, projectId = null, server = false))
-        assertEquals(NewWorktreeAvailability(false, "Needs a git repository with a commit"), runIn(projectId = "global", server = false))
-        assertEquals(NewWorktreeAvailability(false, "Needs a git repository with a commit"), runIn(projectId = null))
-        assertEquals(NewWorktreeAvailability(false, "This server can't create worktrees"), runIn(server = false))
-        assertEquals(NewWorktreeAvailability(true, "Create a checkout and start there"), runIn())
+        assertEquals(NewWorktreeAvailability(false, UiText.resource(R.string.worktree_not_git)), runIn(git = false, projectId = null, server = false))
+        assertEquals(NewWorktreeAvailability(false, UiText.resource(R.string.worktree_no_commit)), runIn(projectId = "global", server = false))
+        assertEquals(NewWorktreeAvailability(false, UiText.resource(R.string.worktree_no_commit)), runIn(projectId = null))
+        assertEquals(NewWorktreeAvailability(false, UiText.resource(R.string.worktree_unsupported)), runIn(server = false))
+        assertEquals(NewWorktreeAvailability(true, UiText.resource(R.string.worktree_run_in_subtitle)), runIn())
     }
 
     @Test
@@ -38,15 +40,15 @@ class NewWorktreeAvailabilityTest {
         ) = NewWorktreeAvailability.move(v2, on, created, git, projectId, server)
 
         assertEquals(
-            NewWorktreeAvailability(false, "Needs an opencode v2 server"),
+            NewWorktreeAvailability(false, UiText.resource(R.string.worktree_needs_v2)),
             move(v2 = false, on = false, created = false, git = false, server = false),
         )
-        assertEquals(NewWorktreeAvailability(false, "Turn on Worktrees in Settings"), move(on = false, created = false, git = false))
+        assertEquals(NewWorktreeAvailability(false, UiText.resource(R.string.worktree_turn_on)), move(on = false, created = false, git = false))
         assertEquals(NewWorktreeAvailability(false, null), move(created = false, git = false))
-        assertEquals(NewWorktreeAvailability(false, "Needs a git repository"), move(git = false, projectId = "global"))
-        assertEquals(NewWorktreeAvailability(false, "Needs a git repository with a commit"), move(projectId = "global", server = false))
-        assertEquals(NewWorktreeAvailability(false, "This server can't create worktrees"), move(server = false))
-        assertEquals(NewWorktreeAvailability(true, "Create a checkout and move there"), move())
+        assertEquals(NewWorktreeAvailability(false, UiText.resource(R.string.worktree_not_git)), move(git = false, projectId = "global"))
+        assertEquals(NewWorktreeAvailability(false, UiText.resource(R.string.worktree_no_commit)), move(projectId = "global", server = false))
+        assertEquals(NewWorktreeAvailability(false, UiText.resource(R.string.worktree_unsupported)), move(server = false))
+        assertEquals(NewWorktreeAvailability(true, UiText.resource(R.string.worktree_move_subtitle)), move())
     }
 
     @Test
@@ -74,8 +76,8 @@ class NewWorktreeAvailabilityTest {
         val plain = noCommit.copy(hasVcs = false)
 
         assertEquals(true, NewWorktreeAvailability.runIn(repo, worktreesEnabled = true, serverCanCreate = true).enabled)
-        assertEquals("Needs a git repository with a commit", NewWorktreeAvailability.runIn(noCommit, true, true).subtitle)
-        assertEquals("Needs a git repository", NewWorktreeAvailability.runIn(plain, true, true).subtitle)
-        assertEquals("Needs a git repository", NewWorktreeAvailability.runIn(null, true, true).subtitle)
+        assertEquals(UiText.resource(R.string.worktree_no_commit), NewWorktreeAvailability.runIn(noCommit, true, true).subtitle)
+        assertEquals(UiText.resource(R.string.worktree_not_git), NewWorktreeAvailability.runIn(plain, true, true).subtitle)
+        assertEquals(UiText.resource(R.string.worktree_not_git), NewWorktreeAvailability.runIn(null, true, true).subtitle)
     }
 }

@@ -8,7 +8,16 @@ enum OpenCodeAttachmentVariant: String {
     /// Any other file; it only exists as a server upload.
     case file
 
-    var label: String { rawValue.uppercased() }
+    /// The kind as the chip shows it, in capitals.
+    var label: String {
+        let name = switch self {
+        case .image: String(localized: "component.attachment.kind_image", defaultValue: "Image")
+        case .pdf: String(localized: "component.attachment.kind_pdf", defaultValue: "PDF")
+        case .text: String(localized: "component.attachment.kind_text", defaultValue: "Text")
+        case .file: String(localized: "component.attachment.kind_file", defaultValue: "File")
+        }
+        return name.uppercased(with: .current)
+    }
 }
 
 struct OpenCodeAttachmentPresentation: Identifiable {
@@ -38,7 +47,13 @@ struct OpenCodeAttachmentPresentation: Identifiable {
     }
 
     var detailLabel: String {
-        if let uploadFraction { return "Uploading \(Int((uploadFraction * 100).rounded(.down)))%" }
+        if let uploadFraction {
+            let percent = Int((uploadFraction * 100).rounded(.down))
+            return String(localized: LocalizedStringResource(
+                "component.attachment.uploading_percent",
+                defaultValue: "Uploading \(percent)%"
+            ))
+        }
         return detail ?? variant.label
     }
 }
@@ -82,7 +97,12 @@ struct OpenCodeAttachmentChip: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(
-                attachment.uploadFraction == nil ? "Remove \(attachment.filename)" : "Cancel upload of \(attachment.filename)"
+                Text(attachment.uploadFraction == nil
+                    ? LocalizedStringResource("component.attachment.remove", defaultValue: "Remove \(attachment.filename)")
+                    : LocalizedStringResource(
+                        "component.attachment.cancel_upload",
+                        defaultValue: "Cancel upload of \(attachment.filename)"
+                    ))
             )
         }
         .padding(.horizontal, 10)

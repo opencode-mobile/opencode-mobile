@@ -4,6 +4,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 
 class ToolResultInspectorTest {
     @Test
@@ -20,17 +22,17 @@ class ToolResultInspectorTest {
 
         val sheet = classify(toolName = "bash", command = "git status --short", output = output, exitCode = 0) as ToolResultPresentation.FileStatus
 
-        assertEquals("Shell", sheet.eyebrow)
-        assertEquals("6 files", sheet.title)
+        assertEquals("Shell", sheet.eyebrow?.english())
+        assertEquals("6 files", sheet.title.english())
         assertEquals(0, sheet.exitCode)
         assertEquals("git status --short", sheet.command)
         assertEquals(listOf("M", "M", "A", "D", "M", "R"), sheet.files.map { it.letter })
         assertEquals(ToolResultPresentation.StatusTone.Modified, sheet.files[4].tone)
         assertEquals("AppContainer.swift", sheet.files.last().name)
         assertEquals("ios/OpenCode Mobile/OpenCode Mobile/DI", sheet.files.last().directory)
-        assertEquals("3 modified", sheet.counts[0].label)
-        assertEquals("1 added", sheet.counts[1].label)
-        assertEquals("1 deleted", sheet.counts[2].label)
+        assertEquals("3 modified", sheet.counts[0].label.english())
+        assertEquals("1 added", sheet.counts[1].label.english())
+        assertEquals("1 deleted", sheet.counts[2].label.english())
         assertTrue(sheet.copiesOriginal)
     }
 
@@ -54,8 +56,8 @@ class ToolResultInspectorTest {
                 command = "find ~/.gradle/caches -name 'AndroidView*'",
                 output = output,
             ) as ToolResultPresentation.PathList
-        assertEquals("Shell", sheet.eyebrow)
-        assertEquals("2 paths", sheet.title)
+        assertEquals("Shell", sheet.eyebrow?.english())
+        assertEquals("2 paths", sheet.title.english())
         assertEquals("AndroidView.kt", sheet.paths[0].name)
         assertEquals("/Users/example/.gradle/caches/8.11/transforms/a91", sheet.paths[0].directory)
     }
@@ -64,7 +66,7 @@ class ToolResultInspectorTest {
     fun glob_usesGlobEyebrow() {
         val sheet =
             classify(toolName = "glob", pattern = "*.kt", output = "src/Main.kt\nsrc/App.kt") as ToolResultPresentation.PathList
-        assertEquals("Glob", sheet.eyebrow)
+        assertEquals("Glob", sheet.eyebrow?.english())
         assertEquals("*.kt", sheet.command)
         assertEquals(2, sheet.paths.size)
     }
@@ -89,7 +91,7 @@ class ToolResultInspectorTest {
         assertEquals("https://github.com/opencode-mobile/opencode-mobile/pull/812", sheet.url)
         assertEquals("feature/789-performance-overlay", sheet.branch)
         assertNull(sheet.pullTitle)
-        assertEquals("Pull request opened", sheet.title)
+        assertEquals("Pull request opened", sheet.title.english())
     }
 
     @Test
@@ -98,7 +100,7 @@ class ToolResultInspectorTest {
             "Sample from the frame callback, not a timer. A timer lies while the main thread is stalled.\n\n" +
                 "Keep a fixed ring of 120."
         val sheet = ToolResultInspector.thought(text, "8.7s")!!
-        assertEquals("Thought", sheet.title)
+        assertEquals("Thought", sheet.title.english())
         assertEquals("8.7s", sheet.durationLabel)
         assertEquals("Sample from the frame callback, not a timer.", sheet.callout)
         assertEquals(
@@ -125,10 +127,10 @@ class ToolResultInspectorTest {
                 offset = 12,
                 limit = 2,
             ) as ToolResultPresentation.Source
-        assertEquals("Read", sheet.eyebrow)
-        assertEquals("FrameTimeTracker.kt", sheet.title)
+        assertEquals("Read", sheet.eyebrow?.english())
+        assertEquals("FrameTimeTracker.kt", sheet.title.english())
         assertEquals("Kotlin", sheet.language)
-        assertEquals("lines 12–13", sheet.rangeLabel)
+        assertEquals("lines 12–13", sheet.rangeLabel?.english())
         assertEquals(listOf(12, 13), sheet.lines.map { it.number })
         assertEquals("class FrameTimeTracker(", sheet.lines[0].text)
     }
@@ -141,7 +143,7 @@ class ToolResultInspectorTest {
                 path = "ui/diagnostic/PerformanceOverlay.kt",
                 content = "fun overlay() = Unit\n",
             ) as ToolResultPresentation.Source
-        assertEquals("Write", sheet.eyebrow)
+        assertEquals("Write", sheet.eyebrow?.english())
         assertEquals("PerformanceOverlay.kt", sheet.filename)
         assertEquals("fun overlay() = Unit", sheet.lines.single().text)
     }
@@ -161,14 +163,14 @@ class ToolResultInspectorTest {
                     android/ui/PerformanceOverlay.kt:18:Choreographer.getInstance()
                     """.trimIndent(),
             ) as ToolResultPresentation.Grep
-        assertEquals("Choreographer", grouped.title)
+        assertEquals("Choreographer", grouped.title.english())
         assertEquals(3, grouped.matchCount)
         assertEquals(2, grouped.groups.size)
         assertEquals("FrameTimeTracker.kt", grouped.groups[0].name)
 
-        val broken = classify(toolName = "grep", pattern = "x", output = "not a match listing", fallbackTitle = "Grep")
+        val broken = classify(toolName = "grep", pattern = "x", output = "not a match listing", fallbackTitle = UiText.verbatim("Grep"))
         assertTrue(broken is ToolResultPresentation.Unrecognized)
-        assertEquals("Grep", broken.title)
+        assertEquals("Grep", broken.title.english())
     }
 
     @Test
@@ -180,7 +182,7 @@ class ToolResultInspectorTest {
                 oldString = "Text(\"fps\")",
                 newString = "Text(p95)",
             ) as ToolResultPresentation.Edit
-        assertEquals("Edit", sheet.eyebrow)
+        assertEquals("Edit", sheet.eyebrow?.english())
         assertEquals("PerformanceOverlay.kt", sheet.filename)
         assertEquals(1, sheet.additions)
         assertEquals(1, sheet.deletions)
@@ -194,11 +196,11 @@ class ToolResultInspectorTest {
         val sheet =
             classify(
                 toolName = "webfetch",
-                fallbackTitle = "Fetch",
+                fallbackTitle = UiText.verbatim("Fetch"),
                 output = "a long page",
                 error = "timed out",
             ) as ToolResultPresentation.Unrecognized
-        assertEquals("Fetch", sheet.title)
+        assertEquals("Fetch", sheet.title.english())
         assertNull(sheet.eyebrow)
         assertEquals("timed out", sheet.error)
         assertEquals("a long page", sheet.raw)
@@ -208,14 +210,14 @@ class ToolResultInspectorTest {
     @Test
     fun nothingToShow_isNull() {
         assertNull(
-            ToolResultInspector.classify(ToolResultRequest(toolName = "read", fallbackTitle = "Read", path = "A.kt")),
+            ToolResultInspector.classify(ToolResultRequest(toolName = "read", fallbackTitle = UiText.verbatim("Read"), path = "A.kt")),
         )
         assertNull(ToolResultInspector.thought("  ", "1s"))
     }
 
     private fun classify(
         toolName: String,
-        fallbackTitle: String = toolName,
+        fallbackTitle: UiText = UiText.verbatim(toolName),
         command: String? = null,
         path: String? = null,
         pattern: String? = null,

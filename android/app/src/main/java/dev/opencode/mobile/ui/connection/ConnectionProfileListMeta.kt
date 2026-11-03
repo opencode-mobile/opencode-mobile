@@ -6,9 +6,13 @@ import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
 
 internal fun ConnectionProfile.listCaption(isActive: Boolean): String? = serverProtocol?.takeIf { isActive }?.apiCaption
 
-internal fun ConnectionProfile.listStatus(isActive: Boolean): OpenCodeListItemStatus? =
+/** [activeLabel] is the localised "Active" text (`R.string.servers_status_active`). */
+internal fun ConnectionProfile.listStatus(
+    isActive: Boolean,
+    activeLabel: String,
+): OpenCodeListItemStatus? =
     when {
-        isActive -> OpenCodeListItemStatus("Active", OpenCodeListItemStatusTone.Interactive)
+        isActive -> OpenCodeListItemStatus(activeLabel, OpenCodeListItemStatusTone.Interactive)
         serverProtocol != null ->
             OpenCodeListItemStatus(serverProtocol.shortLabel, OpenCodeListItemStatusTone.Info)
         else -> null

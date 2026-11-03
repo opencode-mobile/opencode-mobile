@@ -23,16 +23,6 @@ object CleartextPolicy {
     /** mDNS, Tailscale MagicDNS, and the common private-DNS suffixes. */
     val trustedNameSuffixes: List<String> = listOf("local", "ts.net", "lan", "internal", "home.arpa")
 
-    const val WARNING_TITLE = "Connection isn't encrypted"
-
-    fun warningMessage(hosts: List<String>): String {
-        val subject = if (hosts.isEmpty()) "This address" else hosts.joinToString(", ")
-        val verb = if (hosts.size > 1) "use" else "uses"
-        return "$subject $verb plain http outside your local network or Tailscale. " +
-            "Your server password and everything in your sessions would travel unencrypted. " +
-            "Prefer https, a VPN, or a tunnel."
-    }
-
     fun verdict(raw: String): Verdict {
         val uri = parse(raw) ?: return Verdict.UntrustedCleartext
         val scheme = uri.scheme?.lowercase() ?: "http"

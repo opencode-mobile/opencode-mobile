@@ -1,13 +1,15 @@
 package dev.opencode.mobile.ui.worktree
 
+import androidx.annotation.StringRes
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeProjectGrouping
-import dev.opencode.mobile.domain.worktree.WorktreeCreateCopy
+import dev.opencode.mobile.ui.text.UiText
 
 /** Whether a "New worktree…" row works, and why not. The first failing check explains it. */
 data class NewWorktreeAvailability(
     val enabled: Boolean,
-    val subtitle: String? = null,
+    val subtitle: UiText? = null,
 ) {
     companion object {
         /** The Run in row of Home's New session sheet. */
@@ -18,8 +20,8 @@ data class NewWorktreeAvailability(
             serverCanCreate: Boolean,
         ): NewWorktreeAvailability =
             when {
-                !worktreesEnabled -> NewWorktreeAvailability(false, WorktreeCreateCopy.TURN_ON_WORKTREES)
-                else -> repositoryChecks(isRepository, projectId, serverCanCreate, WorktreeCreateCopy.RUN_IN_ROW_SUBTITLE)
+                !worktreesEnabled -> disabled(R.string.worktree_turn_on)
+                else -> repositoryChecks(isRepository, projectId, serverCanCreate, R.string.worktree_run_in_subtitle)
             }
 
         /** The row of Session Chat's Move to worktree sheet. */
@@ -32,10 +34,10 @@ data class NewWorktreeAvailability(
             serverCanCreate: Boolean,
         ): NewWorktreeAvailability =
             when {
-                !supportsMove -> NewWorktreeAvailability(false, WorktreeCreateCopy.NEEDS_V2)
-                !worktreesEnabled -> NewWorktreeAvailability(false, WorktreeCreateCopy.TURN_ON_WORKTREES)
+                !supportsMove -> disabled(R.string.worktree_needs_v2)
+                !worktreesEnabled -> disabled(R.string.worktree_turn_on)
                 !sessionCreated -> NewWorktreeAvailability(false)
-                else -> repositoryChecks(isRepository, projectId, serverCanCreate, WorktreeCreateCopy.MOVE_ROW_SUBTITLE)
+                else -> repositoryChecks(isRepository, projectId, serverCanCreate, R.string.worktree_move_subtitle)
             }
 
         fun runIn(
@@ -57,13 +59,17 @@ data class NewWorktreeAvailability(
             isRepository: Boolean,
             projectId: String?,
             serverCanCreate: Boolean,
-            enabledSubtitle: String,
+            @StringRes enabledSubtitle: Int,
         ): NewWorktreeAvailability =
             when {
-                !isRepository -> NewWorktreeAvailability(false, WorktreeCreateCopy.NOT_GIT)
-                isGlobal(projectId) -> NewWorktreeAvailability(false, WorktreeCreateCopy.NO_COMMIT)
-                !serverCanCreate -> NewWorktreeAvailability(false, WorktreeCreateCopy.UNSUPPORTED)
-                else -> NewWorktreeAvailability(true, enabledSubtitle)
+                !isRepository -> disabled(R.string.worktree_not_git)
+                isGlobal(projectId) -> disabled(R.string.worktree_no_commit)
+                !serverCanCreate -> disabled(R.string.worktree_unsupported)
+                else -> NewWorktreeAvailability(true, UiText.resource(enabledSubtitle))
             }
+
+        private fun disabled(
+            @StringRes reason: Int,
+        ): NewWorktreeAvailability = NewWorktreeAvailability(false, UiText.resource(reason))
     }
 }

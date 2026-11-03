@@ -63,9 +63,17 @@ struct UnifiedDiffParserTests {
 @MainActor
 struct ChangesViewModelTests {
     @Test func exposesTwoSourcesWithDesktopCopy() {
-        #expect(ChangeSource.workingTree.displayName == "Git changes")
-        #expect(ChangeSource.lastTurn.displayName == "Last turn changes")
+        #expect(ChangeSource.workingTree.displayName.resolved == "Git changes")
+        #expect(ChangeSource.lastTurn.displayName.resolved == "Last turn changes")
         #expect(ChangeSource.allCases == [.workingTree, .lastTurn])
+    }
+
+    @Test func accessibilityLabelsReadCountsAndPosition() {
+        let added = Self.file("src/A.swift", additions: 1, deletions: 0, status: .added)
+        let content = ChangesContentState(files: [added, Self.file("src/B.swift", additions: 2, deletions: 3)])
+
+        #expect(content.aggregateAccessibilityLabel == "2 changed files, 3 additions, 3 deletions")
+        #expect(content.fileAccessibilityLabel(added) == "src/A.swift, Added, file 1 of 2, 1 addition, 0 deletions")
     }
 
     @Test func loadsSortedSnapshotAndFilteredTotals() async {
@@ -241,8 +249,8 @@ struct ChangesViewModelTests {
         await viewModel.load()
         #expect(viewModel.state.phase == .noChanges)
         #expect(viewModel.state.otherSourceHint == ChangesOtherSourceHint(source: .workingTree, fileCount: 3))
-        #expect(viewModel.state.otherSourceHint?.message == "Git changes has 3 changed files.")
-        #expect(viewModel.state.otherSourceHint?.actionTitle == "Show Git changes")
+        #expect(viewModel.state.otherSourceHint?.message.resolved == "Git changes has 3 changed files.")
+        #expect(viewModel.state.otherSourceHint?.actionTitle.resolved == "Show Git changes")
     }
 
     @Test func emptyGitChangesPointsToLastTurn() async {
@@ -257,7 +265,7 @@ struct ChangesViewModelTests {
         )
         await viewModel.load()
         #expect(viewModel.state.otherSourceHint == ChangesOtherSourceHint(source: .lastTurn, fileCount: 1))
-        #expect(viewModel.state.otherSourceHint?.message == "The last turn changed 1 file.")
+        #expect(viewModel.state.otherSourceHint?.message.resolved == "The last turn changed 1 file.")
         #expect(repository.requests == [.init(sessionID: "s", messageID: "m", directory: "/w")])
     }
 

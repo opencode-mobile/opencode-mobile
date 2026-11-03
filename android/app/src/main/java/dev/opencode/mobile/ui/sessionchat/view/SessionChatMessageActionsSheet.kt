@@ -4,8 +4,10 @@ import android.content.ClipData
 import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
@@ -27,6 +29,8 @@ internal fun SessionChatMessageActionsSheet(
     onForkFromMessage: (messageId: String, messageText: String) -> Unit,
 ) {
     val context = LocalContext.current
+    val messageLabel = stringResource(R.string.session_chat_sheet_message_actions_title)
+    val codeLabel = stringResource(R.string.session_chat_sheet_message_actions_clip_label_code)
 
     ProductPresentedScreenViewEffect(
         screenId = ProductAnalytics.Screen.SESSION_MESSAGE_ACTIONS,
@@ -36,7 +40,7 @@ internal fun SessionChatMessageActionsSheet(
 
     OpenCodeBottomSheet(
         visible = target != null,
-        title = "Message",
+        title = messageLabel,
         onDismissRequest = {
             logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_DISMISS)
             onDismiss()
@@ -44,7 +48,7 @@ internal fun SessionChatMessageActionsSheet(
     ) {
         if (target?.showsRevertMessage == true) {
             OpenCodeBottomSheetEntry(
-                title = "Revert message",
+                title = stringResource(R.string.session_chat_sheet_message_actions_revert),
                 startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Undo),
                 onClick = {
                     logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_REVERT)
@@ -53,7 +57,7 @@ internal fun SessionChatMessageActionsSheet(
                 },
             )
             OpenCodeBottomSheetEntry(
-                title = "Fork from here",
+                title = stringResource(R.string.session_chat_sheet_message_actions_fork),
                 startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.CallSplit),
                 onClick = {
                     logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_FORK)
@@ -64,21 +68,21 @@ internal fun SessionChatMessageActionsSheet(
         }
         target?.codeBlock?.let { code ->
             OpenCodeBottomSheetEntry(
-                title = "Copy code block",
+                title = stringResource(R.string.session_chat_sheet_message_actions_copy_code_block),
                 startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Code),
                 onClick = {
                     logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_COPY_CODE_BLOCK)
-                    context.copyToClipboard(label = "Code", text = code)
+                    context.copyToClipboard(label = codeLabel, text = code)
                     onDismiss()
                 },
             )
         }
         OpenCodeBottomSheetEntry(
-            title = "Copy message",
+            title = stringResource(R.string.session_chat_sheet_message_actions_copy_message),
             startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.ContentCopy),
             onClick = {
                 logMessageActionsAction(ProductAnalytics.Action.MESSAGE_ACTIONS_COPY)
-                target?.text?.let { text -> context.copyToClipboard(label = "Message", text = text) }
+                target?.text?.let { text -> context.copyToClipboard(label = messageLabel, text = text) }
                 onDismiss()
             },
         )

@@ -159,6 +159,30 @@ enum UnifiedDiffParser {
 
 struct OpenCodeUnifiedDiff: View {
     let file: FileDiff
+
+    /// "Modified file src/a.swift, 3 additions, 1 deletions".
+    private var fileSummary: LocalizedStringResource {
+        let path = file.path
+        let additions = file.additions
+        let deletions = file.deletions
+        return switch file.status {
+        case .added:
+            LocalizedStringResource(
+                "component.unified_diff.summary_added",
+                defaultValue: "Added file \(path), \(additions) additions, \(deletions) deletions"
+            )
+        case .deleted:
+            LocalizedStringResource(
+                "component.unified_diff.summary_deleted",
+                defaultValue: "Deleted file \(path), \(additions) additions, \(deletions) deletions"
+            )
+        case .modified:
+            LocalizedStringResource(
+                "component.unified_diff.summary_modified",
+                defaultValue: "Modified file \(path), \(additions) additions, \(deletions) deletions"
+            )
+        }
+    }
     let document: UnifiedDiffDocument
     var contextMode: UnifiedDiffContextMode = .collapsed
     var selectedHunkID: Int?
@@ -189,7 +213,7 @@ struct OpenCodeUnifiedDiff: View {
             .accessibilityHidden(true)
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("\(file.status.rawValue.capitalized) file \(file.path), \(file.additions) additions, \(file.deletions) deletions")
+        .accessibilityLabel(Text(fileSummary))
     }
 
     private var rows: [UnifiedDiffRow] {

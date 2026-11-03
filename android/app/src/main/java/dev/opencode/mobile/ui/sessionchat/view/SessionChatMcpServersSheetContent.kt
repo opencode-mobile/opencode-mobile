@@ -1,12 +1,15 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.mcp.McpServer
 import dev.opencode.mobile.domain.mcp.McpServerStatus
 import dev.opencode.mobile.domain.mcp.McpServerSummary
@@ -36,21 +39,21 @@ fun SessionChatMcpServersSheetContent(
     when {
         loading && servers.isEmpty() ->
             OpenCodeStatusStack(
-                title = "Checking MCP servers",
-                subtitle = "Reading status from the opencode server",
+                title = stringResource(R.string.session_chat_sheet_mcp_loading_title),
+                subtitle = stringResource(R.string.session_chat_sheet_mcp_loading_subtitle),
                 modifier = modifier.padding(vertical = 24.dp),
             )
         errorMessage != null && servers.isEmpty() ->
             OpenCodeEmptyState(
-                title = "Couldn't load MCP servers",
-                message = errorMessage.ifBlank { "The MCP server list didn't load." },
+                title = stringResource(R.string.session_chat_sheet_mcp_error_title),
+                message = errorMessage.ifBlank { stringResource(R.string.session_chat_sheet_mcp_error_message) },
                 icon = OpenCodeIcons.Plug,
                 modifier = modifier,
             )
         servers.isEmpty() ->
             OpenCodeEmptyState(
-                title = "No MCP servers",
-                message = "None are configured on this opencode server.",
+                title = stringResource(R.string.session_chat_sheet_mcp_empty_title),
+                message = stringResource(R.string.session_chat_sheet_mcp_empty_message),
                 icon = OpenCodeIcons.Plug,
                 modifier = modifier,
             )
@@ -59,17 +62,34 @@ fun SessionChatMcpServersSheetContent(
                 modifier = modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                OpenCodeSectionHeader(title = summary.headline, variant = OpenCodeSectionHeaderVariant.Plain)
+                OpenCodeSectionHeader(
+                    title = stringResource(R.string.session_chat_sheet_mcp_headline, summary.connected, summary.total),
+                    variant = OpenCodeSectionHeaderVariant.Plain,
+                )
                 servers.forEach { server ->
                     OpenCodeListItem(
                         title = server.name,
                         subtitle = server.errorMessage,
-                        status = OpenCodeListItemStatus(text = server.status.label, tone = server.status.listItemTone()),
+                        status =
+                            OpenCodeListItemStatus(
+                                text = stringResource(server.status.labelRes()),
+                                tone = server.status.listItemTone(),
+                            ),
                     )
                 }
             }
     }
 }
+
+@StringRes
+private fun McpServerStatus.labelRes(): Int =
+    when (this) {
+        McpServerStatus.Connected -> R.string.session_chat_sheet_mcp_status_connected
+        McpServerStatus.Connecting -> R.string.session_chat_sheet_mcp_status_connecting
+        McpServerStatus.Disabled -> R.string.session_chat_sheet_mcp_status_disabled
+        McpServerStatus.Failed -> R.string.session_chat_sheet_mcp_status_failed
+        McpServerStatus.NeedsSignIn -> R.string.session_chat_sheet_mcp_status_needs_sign_in
+    }
 
 private fun McpServerStatus.listItemTone(): OpenCodeListItemStatusTone =
     when (this) {

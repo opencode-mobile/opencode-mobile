@@ -4,6 +4,8 @@ import dev.opencode.mobile.domain.message.ToolStatus
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 
 class StepParagraphChipsTest {
     // --- visibility ---
@@ -21,7 +23,7 @@ class StepParagraphChipsTest {
 
         assertEquals(
             listOf("e1", "e2", "c1", "c2", "c3", "x1", "x2", "x3", "a1", "a2", "a3", "s1", "s2", "s3", "s4"),
-            result.visible.map { it.label },
+            result.visible.map { it.label.english() },
         )
         assertEquals(2, result.hiddenCount)
     }
@@ -43,7 +45,7 @@ class StepParagraphChipsTest {
         val result = StepParagraphChips.visibility(chips)
 
         // x3, x5 and x6 are the three counting Command chips; attention chips ride along in order.
-        assertEquals(listOf("x1", "x2", "x3", "x4", "x5", "x6"), result.visible.map { it.label })
+        assertEquals(listOf("x1", "x2", "x3", "x4", "x5", "x6"), result.visible.map { it.label.english() })
         assertEquals(2, result.hiddenCount)
     }
 
@@ -79,7 +81,7 @@ class StepParagraphChipsTest {
 
         val result = StepParagraphChips.visibility(chips)
 
-        assertEquals(listOf("c1", "c2", "c3", "x1", "x2", "x3"), result.visible.map { it.label })
+        assertEquals(listOf("c1", "c2", "c3", "x1", "x2", "x3"), result.visible.map { it.label.english() })
         assertEquals(chips.size - result.visible.size, result.hiddenCount)
         assertEquals(4, result.hiddenCount)
     }
@@ -96,7 +98,7 @@ class StepParagraphChipsTest {
         // new ones get their own limit of three and a fresh `+2 more`.
         val later = atTap + (6..10).map { chip("x$it", ToolChipFamily.Command, arrivalIndex = it - 1) }
         val result = StepParagraphChips.visibility(later, expandedThrough = atTap.size)
-        assertEquals(listOf("x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8"), result.visible.map { it.label })
+        assertEquals(listOf("x1", "x2", "x3", "x4", "x5", "x6", "x7", "x8"), result.visible.map { it.label.english() })
         assertEquals(2, result.hiddenCount)
     }
 
@@ -120,7 +122,7 @@ class StepParagraphChipsTest {
 
         val result = StepParagraphChips.visibility(chips, expandedThrough = 4)
 
-        assertEquals(listOf("c1", "x1", "x2", "x3", "x4", "x5", "x6", "x7"), result.visible.map { it.label })
+        assertEquals(listOf("c1", "x1", "x2", "x3", "x4", "x5", "x6", "x7"), result.visible.map { it.label.english() })
         assertEquals(2, result.hiddenCount)
     }
 
@@ -201,14 +203,14 @@ class StepParagraphChipsTest {
             arrivalIndex = arrivalIndex,
             kind = ToolChipKind.Command,
             family = family,
-            label = label,
+            label = UiText.verbatim(label),
             status = status,
             card =
                 SessionChatTimelineBlock.ToolCard(
                     blockID = PresentationBlockId.direct(label),
                     toolName = label,
                     status = status,
-                    title = label,
+                    title = UiText.verbatim(label),
                 ),
         )
 }

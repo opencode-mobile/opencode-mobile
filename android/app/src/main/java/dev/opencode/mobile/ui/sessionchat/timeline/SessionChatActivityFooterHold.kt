@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.ui.text.UiText
+
 /**
  * What a live activity card's footer band shows (#779): a tool, running (title,
  * `+N`, elapsed) or in its settled form (settled title only), or idle text.
@@ -8,21 +10,21 @@ sealed interface SessionChatActivityFooter {
     data class Tool(
         val stepId: String,
         val family: SessionChatStepFamily?,
-        val title: String,
+        val title: UiText,
         val running: Boolean,
         val extraRunning: Int,
         val startedAtMs: Long?,
     ) : SessionChatActivityFooter
 
     data class Idle(
-        val text: String,
+        val text: UiText,
     ) : SessionChatActivityFooter
 
     companion object {
         /** The footer the steps ask for right now: the latest running tool, else idle text. */
         fun desired(
             steps: List<SessionChatStep>,
-            thinkingText: String = SessionChatActivityCard.THINKING,
+            thinkingText: UiText = SessionChatActivityCard.THINKING,
         ): SessionChatActivityFooter {
             val latest = SessionChatActivityCard.latestRunning(steps)
             if (latest != null) {
@@ -84,7 +86,7 @@ val SessionChatActivityFooter.contentKey: String
  */
 class SessionChatActivityFooterHold(
     private val holdMs: Long = HOLD_MS,
-    private val thinkingText: String = SessionChatActivityCard.THINKING,
+    private val thinkingText: UiText = SessionChatActivityCard.THINKING,
 ) {
     var displayed: SessionChatActivityFooter? = null
         private set

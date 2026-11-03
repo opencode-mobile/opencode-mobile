@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.home
 
+import dev.opencode.mobile.ui.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -161,7 +162,7 @@ class HomeSessionOrderStabilizerTest {
         HomeSessionLadderSection(
             id = "recent",
             kind = HomeSessionLadderKind.Recent,
-            title = "Recent",
+            title = UiText.verbatim("Recent"),
             items = items.toList(),
         )
 
@@ -169,7 +170,7 @@ class HomeSessionOrderStabilizerTest {
         HomeSessionLadderSection(
             id = "day-today",
             kind = HomeSessionLadderKind.Day,
-            title = "Today",
+            title = UiText.verbatim("Today"),
             items = items.toList(),
         )
 

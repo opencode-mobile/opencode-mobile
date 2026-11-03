@@ -26,19 +26,17 @@ struct AddProjectFolderItem: Identifiable, Equatable {
     var folderCount: Int? = nil
     var isGitRepository = false
 
-    /// "On Home", the folder count, or both joined with " · ". Nil when neither is known.
-    var subtitle: String? {
-        let parts = [isAdded ? AddProjectSheetState.onHomeLabel : nil, folderCount.map(Self.countLabel)]
-            .compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: " \u{00B7} ")
+    /// "On Home", the folder count, or "On Home · N folders". Nil when neither is known.
+    var subtitle: OpenCodeText? {
+        guard isAdded else { return folderCount.map(Self.countLabel) }
+        guard let folderCount else { return "add_project.on_home" }
+        let count = Self.countLabel(folderCount).resolved
+        return OpenCodeText(LocalizedStringResource("add_project.on_home_with_count", defaultValue: "On Home \u{00B7} \(count)"))
     }
 
-    static func countLabel(_ count: Int) -> String {
-        switch count {
-        case 0: "Empty"
-        case 1: "1 folder"
-        default: "\(count) folders"
-        }
+    static func countLabel(_ count: Int) -> OpenCodeText {
+        if count == 0 { return "add_project.folder_empty" }
+        return OpenCodeText(LocalizedStringResource("add_project.folder_count", defaultValue: "\(count) folders"))
     }
 }
 
@@ -53,7 +51,8 @@ struct AddProjectBarTarget: Equatable {
 /// mounted volume, a Windows drive or share).
 struct AddProjectRoot: Identifiable, Equatable {
     var id: String { path }
-    let label: String
+    /// "Home", else the root path or volume name verbatim.
+    let label: OpenCodeText
     let path: String
     let selected: Bool
 }
@@ -69,19 +68,25 @@ struct AddProjectSuggestion: Identifiable, Equatable {
 /// Add project sheet: a path field over the server's folders, root chips, and the server's own
 /// projects. Everything here is derived from the field text and the listings loaded so far.
 struct AddProjectSheetState: Equatable {
-    static let pickFolderTitle = "Pick a folder"
-    static let addThisFolderTitle = "Add this folder"
-    static let alreadyAddedTitle = "Already on Home"
-    static let homeFolderTitle = "Add home folder"
-    static let pathNotFoundTitle = "Path not found"
-    static let onHomeLabel = "On Home"
-    static let gitTag = "git"
-    static let noSubfoldersMessage = "No subfolders"
+    static let pickFolderTitle: OpenCodeText = "add_project.pick_a_folder"
+    static let addThisFolderTitle: OpenCodeText = "add_project.add_this_folder"
+    static let alreadyAddedTitle: OpenCodeText = "add_project.already_on_home"
+    static let homeFolderTitle: OpenCodeText = "add_project.add_home_folder"
+    static let pathNotFoundTitle: OpenCodeText = "add_project.path_not_found"
+    static let gitTag: OpenCodeText = "add_project.git_tag"
+    static let noSubfoldersMessage: OpenCodeText = "add_project.no_subfolders"
     /// Row listings loaded at once for folder counts and git tags.
     static let folderSummaryConcurrency = 4
-    static let truncatedListingHint = "Showing the first \(DirectoryListingPolicy.maxVisibleDirectories) folders. Type more of the name to narrow the list."
+    static var truncatedListingHint: OpenCodeText {
+        let limit = DirectoryListingPolicy.maxVisibleDirectories
+        return OpenCodeText(LocalizedStringResource(
+            "add_project.truncation_hint",
+            defaultValue: "Showing the first \(limit) folders. Type more of the name to narrow the list."
+        ))
+    }
+
     /// Listing failures never show server text, which can carry paths or HTML.
-    static let listErrorMessage = "Check the path and try again."
+    static let listErrorMessage: OpenCodeText = "add_project.list_error.message"
 
     var fieldText = ""
     /// The server's home (on v2, its working directory) in native form.
@@ -93,20 +98,20 @@ struct AddProjectSheetState: Equatable {
     /// Subfolders of `directory` whose names start with `filter`, capped after filtering.
     var entries: [AddProjectFolderItem] = []
     /// Non-interactive row under `entries` when more folders match than are shown.
-    var truncationHint: String?
+    var truncationHint: OpenCodeText?
     var isLoading = false
-    var listError: String?
+    var listError: OpenCodeText?
     /// The field's folder does not exist. The list shows `emptyMessage`; no Retry.
     var pathNotFound = false
     /// Shown when the listing loaded but no row matches, or the folder does not exist.
-    var emptyMessage: String?
+    var emptyMessage: OpenCodeText?
     var roots: [AddProjectRoot] = []
     var suggestions: [AddProjectSuggestion] = []
     /// False until this presentation has heard back from the server project list.
     var suggestionsResolved = false
     var showSuggestions = false
     /// Header over the folder rows while suggestions are shown above them.
-    var folderSectionTitle: String?
+    var folderSectionTitle: OpenCodeText?
     var upTarget: String?
     var addTarget: String?
     /// Target row of the browser's action bar; nil while the field names no folder.
@@ -116,20 +121,23 @@ struct AddProjectSheetState: Equatable {
     var addTitle = addThisFolderTitle
     var addEnabled = false
     var isValidating = false
-    var fieldError: String?
+    /// The server's or system's error text, verbatim.
+    var fieldError: OpenCodeText?
     /// True while Browse folders has replaced the suggestion sheet with the full-screen browser.
     var isBrowsing = false
-    static let browseFoldersTitle = "Browse folders"
-    static let noOtherProjectsMessage = "No other projects on this server."
 
     static let empty = AddProjectSheetState()
 
-    static func emptyFilterMessage(directory: String, filter: String) -> String {
-        "Nothing in \(ServerPathPolicy.name(directory)) starts with \u{201C}\(filter)\u{201D}"
+    static func emptyFilterMessage(directory: String, filter: String) -> OpenCodeText {
+        let folder = ServerPathPolicy.name(directory)
+        return OpenCodeText(LocalizedStringResource(
+            "add_project.nothing_starts_with",
+            defaultValue: "Nothing in \(folder) starts with \u{201C}\(filter)\u{201D}"
+        ))
     }
 
-    static func noFolderNamedTitle(_ filter: String) -> String {
-        "No folder named \u{201C}\(filter)\u{201D}"
+    static func noFolderNamedTitle(_ filter: String) -> OpenCodeText {
+        OpenCodeText(LocalizedStringResource("add_project.no_folder_named", defaultValue: "No folder named \u{201C}\(filter)\u{201D}"))
     }
 
     /// Builds the sheet from what the Screen Model has loaded for this presentation.
@@ -138,7 +146,7 @@ struct AddProjectSheetState: Equatable {
         sheet.fieldText = inputs.fieldText
         sheet.homePath = inputs.home
         sheet.isValidating = inputs.isValidating
-        sheet.fieldError = inputs.fieldError
+        sheet.fieldError = OpenCodeText.verbatim(ifPresent: inputs.fieldError)
         sheet.isBrowsing = inputs.isBrowsing
         sheet.suggestionsResolved = inputs.suggestionsResolved
         guard !inputs.home.isEmpty else {
@@ -186,7 +194,8 @@ struct AddProjectSheetState: Equatable {
         }
         sheet.showSuggestions = directory == inputs.home && filter.isEmpty && !sheet.suggestions.isEmpty
         if sheet.showSuggestions {
-            sheet.folderSectionTitle = "In \(ServerPathPolicy.name(directory))"
+            let folder = ServerPathPolicy.name(directory)
+            sheet.folderSectionTitle = OpenCodeText(LocalizedStringResource("add_project.in_folder", defaultValue: "In \(folder)"))
         }
 
         if let listing, !sheet.pathNotFound {
@@ -252,7 +261,7 @@ struct AddProjectSheetState: Equatable {
         directory: String?,
         filter: String
     ) -> [AddProjectRoot] {
-        var chips: [(label: String, path: String)] = [("Home", inputs.home)]
+        var chips: [(label: OpenCodeText, path: String)] = [("add_project.root_home", inputs.home)]
         if ServerPathPolicy.isWindows(inputs.home) {
             var seen: [String] = []
             let candidates = [inputs.home]
@@ -267,10 +276,10 @@ struct AddProjectSheetState: Equatable {
             let others = seen.filter { $0 != homeRoot }.sorted {
                 $0.localizedCaseInsensitiveCompare($1) == .orderedAscending
             }
-            chips += ([homeRoot] + others).map { (rootLabel($0), $0) }
+            chips += ([homeRoot] + others).map { (OpenCodeText.verbatim(rootLabel($0)), $0) }
         } else if ServerPathPolicy.root(inputs.home) == "/" {
-            chips.append(("/", "/"))
-            chips += inputs.volumes.map { ($0.name, $0.absolutePath) }
+            chips.append((.verbatim("/"), "/"))
+            chips += inputs.volumes.map { (OpenCodeText.verbatim($0.name), $0.absolutePath) }
         }
         var seenPaths = Set<String>()
         return chips.compactMap { chip in
@@ -294,12 +303,12 @@ struct AddProjectSheetState: Equatable {
 struct AddProjectSheetInputs: Equatable {
     var home = ""
     var fieldText = ""
-    var pathsError: String?
+    var pathsError: OpenCodeText?
     var added: [String] = []
     /// Successful full listings (every child folder, hidden ones included, uncapped) by
     /// canonical folder, kept for the sheet's lifetime.
     var listings: [String: DirectoryListing] = [:]
-    var listErrors: [String: String] = [:]
+    var listErrors: [String: OpenCodeText] = [:]
     /// Folders the server reported missing this session.
     var missingDirectories: Set<String> = []
     var serverProjects: [Project] = []
@@ -335,9 +344,9 @@ struct HomeSessionTitleDialogState: Equatable {
     var isVisible = false
     var draftTitle = ""
     var isSubmitting = false
-    var errorMessage: String?
+    var errorMessage: OpenCodeText?
     /// Set when the action cannot run at all (a fork with no user message); disables confirm.
-    var blockedMessage: String?
+    var blockedMessage: OpenCodeText?
 }
 
 struct HomeSessionForkResultState: Equatable {
@@ -346,7 +355,8 @@ struct HomeSessionForkResultState: Equatable {
 }
 
 struct HomeServersChrome: Equatable {
-    var title = "Sessions"
+    /// The active profile's name, verbatim, else "Sessions".
+    var title: OpenCodeText = "home.sessions_title"
     var isSwitcher = false
     var active: ConnectionProfile?
     var others: [ConnectionProfile] = []
@@ -361,7 +371,9 @@ enum ProjectLoadState: Equatable {
     /// The server load failed or never answered; Retry asks again.
     case failed(message: String)
 
-    static let failedMessage = "Couldn\u{2019}t load sessions"
+    static var failedMessage: String {
+        String(localized: "home.error.project_load_failed", defaultValue: "Couldn\u{2019}t load sessions")
+    }
 }
 
 /// Anti-flicker and safety timing for ``ProjectLoadState``. Tests inject short durations.
@@ -725,7 +737,7 @@ final class ProjectListHomeViewModel {
         let generation = switchPaintGeneration
         let previous = serversChrome.active
         serversChrome = HomeServersChrome(
-            title: target.displayName,
+            title: .verbatim(target.displayName),
             isSwitcher: true,
             active: target,
             others: ([previous].compactMap { $0 } + serversChrome.others).filter { $0.id != id },
@@ -796,7 +808,7 @@ final class ProjectListHomeViewModel {
         let active = await connectionProfileStore.activeProfile()
             ?? activeConnectionManager.currentProfile()
         serversChrome = HomeServersChrome(
-            title: active?.displayName ?? "Sessions",
+            title: active.map { OpenCodeText.verbatim($0.displayName) } ?? "home.sessions_title",
             isSwitcher: active != nil,
             active: active,
             others: profiles.filter { $0.id != active?.id },
@@ -1000,8 +1012,9 @@ final class ProjectListHomeViewModel {
             dismissAddProjectSheet()
             await runHomeLoad(skipProbe: true)
             pendingSelectedFilterId = worktree
+            let name = ProjectDomainAdapter.displayName(from: worktree)
             removalSnackbar = OpenCodeSnackbarMessage(
-                text: "\"\(ProjectDomainAdapter.displayName(from: worktree))\" is already on home"
+                text: String(localized: LocalizedStringResource("home.snackbar.already_on_home", defaultValue: "\"\(name)\" is already on home"))
             )
             return
         }
@@ -1049,7 +1062,9 @@ final class ProjectListHomeViewModel {
     func createSession(in worktree: String) async {
         guard liveUpdates.chrome.canMutate else {
             logCreateSession(outcome: ProductAnalytics.Outcome.blocked)
-            setProjectSessionCreateError("Reconnect to create a session")
+            setProjectSessionCreateError(
+                String(localized: "home.error.reconnect_to_create", defaultValue: "Reconnect to create a session")
+            )
             return
         }
         setProjectSessionCreateError(nil)
@@ -1057,7 +1072,7 @@ final class ProjectListHomeViewModel {
         revealNewestToken += 1
         pendingSessionOpen = SessionListItem(
             id: OptimisticSessionCreate.placeholderSessionID,
-            title: "New Session",
+            title: OptimisticSessionCreate.placeholderTitle,
             worktree: worktree,
             optimisticNavigationInstanceID: UUID()
         )
@@ -1247,7 +1262,10 @@ final class ProjectListHomeViewModel {
         }
         pendingProjectRemoval = nil
         await runHomeLoad(skipProbe: true)
-        removalSnackbar = OpenCodeSnackbarMessage(text: "Removed \"\(pending.displayName)\" from home")
+        let name = pending.displayName
+        removalSnackbar = OpenCodeSnackbarMessage(
+            text: String(localized: LocalizedStringResource("home.snackbar.removed", defaultValue: "Removed \"\(name)\" from home"))
+        )
     }
 
     func consumeProjectRemovalSnackbar() {

@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.filesystem
 
+import dev.opencode.mobile.ui.text.UiText
 import java.net.URLEncoder
 
 /** One File Browser row: a file or folder under the Session Chat worktree. */
@@ -54,9 +55,16 @@ sealed interface ProjectFileContent {
 class ProjectFilesException(
     message: String,
     /** One-line reason for the user, such as the HTTP status. */
-    val detail: String,
+    val detail: UiText,
     cause: Throwable? = null,
-) : Exception(message, cause)
+) : Exception(message, cause) {
+    /** A detail that is already user-facing text, shown as is. */
+    constructor(
+        message: String,
+        detail: String,
+        cause: Throwable? = null,
+    ) : this(message, UiText.verbatim(detail), cause)
+}
 
 object ProjectFileLimits {
     /** Text preview cap; larger files show the first 1 MiB. */

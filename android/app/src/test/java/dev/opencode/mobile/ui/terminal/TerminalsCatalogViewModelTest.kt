@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.terminal
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
@@ -9,6 +10,8 @@ import dev.opencode.mobile.domain.terminal.TerminalRepository
 import dev.opencode.mobile.domain.terminal.TerminalSession
 import dev.opencode.mobile.domain.terminal.TerminalSessionStatus
 import dev.opencode.mobile.network.ActiveConnectionManager
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -351,7 +354,8 @@ class TerminalsCatalogViewModelTest {
             assertEquals(null, row)
             assertEquals(existingRows, viewModel.uiState.value.rows)
             assertEquals(true, viewModel.uiState.value.isProjectPickerVisible)
-            assertEquals("Could not start a shell.", viewModel.uiState.value.createError)
+            assertEquals(UiText.resource(R.string.terminal_error_create), viewModel.uiState.value.createError)
+            assertEquals("Could not start a shell.", viewModel.uiState.value.createError?.english())
         }
 
     @Test

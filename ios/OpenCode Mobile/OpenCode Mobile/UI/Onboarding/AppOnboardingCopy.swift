@@ -5,16 +5,16 @@ enum AppOnboardingCopy {
 
     struct FeatureRow: Identifiable, Hashable {
         let id: String
-        let title: String
-        let detail: String
+        let title: OpenCodeText
+        let detail: OpenCodeText
     }
 
     struct Page: Identifiable, Hashable {
         let id: String
-        let title: String
-        let body: String?
-        let badge: String?
-        let setupLink: String?
+        let title: OpenCodeText
+        let body: OpenCodeText?
+        let badge: OpenCodeText?
+        let setupLink: OpenCodeText?
         let features: [FeatureRow]
         let illustration: OpenCodeSkeletonIllustrationTopic
     }
@@ -22,34 +22,38 @@ enum AppOnboardingCopy {
     static let pages: [Page] = [
         Page(
             id: "unofficial",
-            title: "An unofficial\nopencode client",
-            body: "OpenCode Mobile is a native client for opencode sessions — work in progress. It is not an official OpenCode product.",
-            badge: "Unofficial",
+            title: "onboarding.unofficial.title",
+            body: "onboarding.unofficial.body",
+            badge: "onboarding.unofficial.badge",
             setupLink: nil,
             features: [],
             illustration: .unofficial
         ),
         Page(
             id: "connect",
-            title: "Connect to\nyour servers",
-            body: "Point the app at an opencode server on your machine. We recommend Tailscale so your phone can reach it securely from anywhere.",
+            title: "onboarding.connect_page.title",
+            body: "onboarding.connect_page.body",
             badge: nil,
-            setupLink: "Need the server first?",
+            setupLink: "onboarding.connect_page.setup_link",
             features: [],
             illustration: .connectForm
         ),
         Page(
             id: "features",
-            title: "What you can\ndo from here",
+            title: "onboarding.features.title",
             body: nil,
             badge: nil,
             setupLink: nil,
             features: [
-                FeatureRow(id: "sessions", title: "Sessions", detail: "List, open, create, rename, fork, archive, delete"),
-                FeatureRow(id: "chat", title: "Chat & abort", detail: "Send prompts and stop work in flight"),
-                FeatureRow(id: "permissions", title: "Permissions", detail: "Approve or deny requests (no lasting remember)"),
-                FeatureRow(id: "changes", title: "Changes", detail: "Inspect session diffs"),
-                FeatureRow(id: "live", title: "Live while open", detail: "Foreground event stream; refresh after reconnect"),
+                FeatureRow(id: "sessions", title: "onboarding.features.sessions.title", detail: "onboarding.features.sessions.detail"),
+                FeatureRow(id: "chat", title: "onboarding.features.chat.title", detail: "onboarding.features.chat.detail"),
+                FeatureRow(
+                    id: "permissions",
+                    title: "onboarding.features.permissions.title",
+                    detail: "onboarding.features.permissions.detail"
+                ),
+                FeatureRow(id: "changes", title: "onboarding.features.changes.title", detail: "onboarding.features.changes.detail"),
+                FeatureRow(id: "live", title: "onboarding.features.live.title", detail: "onboarding.features.live.detail"),
             ],
             illustration: .sessionsLive
         ),

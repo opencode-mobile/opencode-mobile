@@ -112,7 +112,7 @@ final class TerminalsCatalogViewModel {
             createError = nil
             return row
         } catch {
-            createError = "Could not start a shell."
+            createError = String(localized: "terminal.error.create", defaultValue: "Could not start a shell.")
             return nil
         }
     }

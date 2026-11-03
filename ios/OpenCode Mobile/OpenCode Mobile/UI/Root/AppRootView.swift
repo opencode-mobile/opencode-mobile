@@ -88,8 +88,8 @@ struct AppRootView: View {
             switch rootViewModel.state {
             case .loading:
                 OpenCodeStatusStack(
-                    title: "Loading sessions",
-                    subtitle: "Checking server…",
+                    title: "common.loading_sessions",
+                    subtitle: "common.checking_server",
                     accessibilityIdentifier: "appRootLoading"
                 )
             case .appOnboarding:

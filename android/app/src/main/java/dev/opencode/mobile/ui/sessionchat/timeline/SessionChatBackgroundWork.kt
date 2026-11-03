@@ -1,5 +1,8 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import androidx.annotation.StringRes
+import androidx.compose.runtime.Composable
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.message.MessagePart
@@ -10,6 +13,8 @@ import dev.opencode.mobile.domain.session.QuestionRequest
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.domain.time.RelativeTimeFormatting
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -48,7 +53,7 @@ data class SessionChatSubagent(
     /** The agent as a small row tag; null for the default `general` agent or an unknown one. */
     val agentTag: String? = null,
     /** The latest child tool call ("Reading format.ts"); null when the server sends no child tool summary. */
-    val currentStep: String? = null,
+    val currentStep: UiText? = null,
     /** Child tool calls so far; null when the server sends no child tool summary. */
     val toolCount: Int? = null,
     /** Done: the first line of the result. Failed or stopped: the reason. Null when unknown. */
@@ -73,7 +78,7 @@ data class SessionChatSubagent(
     }
 
     /** When a finished subagent ended: "now", "4m ago"; null while active or when unknown. */
-    fun finishedAgo(nowMs: Long): String? {
+    fun finishedAgo(nowMs: Long): UiText? {
         if (isActive) return null
         val finished = ToolStartTime.normalizeEpochMs(finishedAtMs) ?: return null
         return RelativeTimeFormatting.format(finished, nowMs)
@@ -86,9 +91,9 @@ data class SessionChatSubagentRowText(
     val title: String,
     val tag: String?,
     /** Running: the current step ("Waiting for input" while it waits). Done: the result or failure reason. */
-    val detail: String?,
+    val detail: UiText?,
     /** Running: "12 tools". Done: when it finished, "4m ago". */
-    val detailCaption: String?,
+    val detailCaption: UiText?,
     /** Running: the live timer. Done: the real run time; null when unknown. */
     val time: String?,
 )
@@ -104,14 +109,22 @@ data class SessionChatBackgroundWorkTabs(
     val done: List<SessionChatSubagent>,
 )
 
-/** What the background work pill says. */
+/** What the background work pill says. Views resolve the text; agent names stay verbatim. */
 data class SessionChatBackgroundWorkPill(
     /** "3 subagents", "1 subagent · 2 shells", or "general needs input · 2 running". */
-    val label: String,
+    val labelText: UiText,
     /** A subagent waits for input: amber pill with a pulsing dot. */
     val needsInput: Boolean,
-    val accessibilityLabel: String,
-)
+    val accessibilityText: UiText,
+) {
+    /** [labelText] in the current language. */
+    val label: String
+        @Composable get() = labelText.resolve()
+
+    /** [accessibilityText] in the current language. */
+    val accessibilityLabel: String
+        @Composable get() = accessibilityText.resolve()
+}
 
 /** The waiting request the background work pill opens when a subagent needs input. */
 sealed interface SessionChatInboxTarget {
@@ -265,14 +278,23 @@ object SessionChatBackgroundWork {
         val title = subagent.title?.takeIf { it.isNotBlank() } ?: subagent.agentName
         val time = subagent.elapsed(nowMs)
         if (!subagent.isActive) {
-            return SessionChatSubagentRowText(title, subagent.agentTag, subagent.result, subagent.finishedAgo(nowMs), time)
+            val detail =
+                subagent.result?.let(UiText::verbatim)
+                    ?: UiText.resource(R.string.session_chat_sheet_background_work_stopped)
+                        .takeIf { subagent.status == SessionChatSubagentStatus.Stopped }
+            return SessionChatSubagentRowText(title, subagent.agentTag, detail, subagent.finishedAgo(nowMs), time)
         }
-        val detail = if (subagent.status == SessionChatSubagentStatus.WaitingForInput) WAITING_DETAIL else subagent.currentStep
+        val detail =
+            if (subagent.status == SessionChatSubagentStatus.WaitingForInput) {
+                UiText.resource(R.string.session_chat_sheet_background_work_waiting_for_input)
+            } else {
+                subagent.currentStep
+            }
         return SessionChatSubagentRowText(title, subagent.agentTag, detail, subagent.toolCount?.let(::toolCountLabel), time)
     }
 
     /** "1 tool", "12 tools". */
-    fun toolCountLabel(count: Int): String = if (count == 1) "1 tool" else "$count tools"
+    fun toolCountLabel(count: Int): UiText = UiText.plural(R.plurals.session_chat_sheet_background_work_tool_count, count)
 
     /** The agent tag rule: shown only for a named agent other than the default `general`. */
     fun agentTag(agentName: String?): String? = agentName?.trim()?.takeIf { it.isNotEmpty() && !it.equals(DEFAULT_AGENT, ignoreCase = true) }
@@ -280,7 +302,8 @@ object SessionChatBackgroundWork {
     /**
      * Done: the first line of the task output (v1 `<task_result>`, v2 `<subagent>` body), or
      * none for a background call, whose output only says it started. Failed or stopped: the
-     * error without its `Subagent failed (task_id: …):` lead, else "Stopped".
+     * error without its `Subagent failed (task_id: …):` lead; null when there is none (the row
+     * then says "Stopped" for a stopped call).
      */
     fun result(
         tool: MessagePart.Tool,
@@ -292,7 +315,6 @@ object SessionChatBackgroundWork {
             SessionChatSubagentStatus.Stopped,
             ->
                 SessionChatSubagentResult.reason(tool.error)
-                    ?: if (status == SessionChatSubagentStatus.Stopped) STOPPED_REASON else null
             SessionChatSubagentStatus.Running,
             SessionChatSubagentStatus.WaitingForInput,
             -> null
@@ -328,7 +350,8 @@ object SessionChatBackgroundWork {
         // The activity card's rule: the latest running call's running title, else the last call.
         val activity = SessionChatActivityCard.childActivity(listOf(Message(id = "summary", role = MessageRole.Assistant, text = "", parts = calls)))
         val step = activity.currentAction ?: activity.steps.lastOrNull()?.title
-        return SessionChatChildToolSummary(count = calls.size, currentStep = step?.takeIf { it.isNotBlank() })
+        val currentStep = step?.takeIf { it !is UiText.Verbatim || it.value.isNotBlank() }
+        return SessionChatChildToolSummary(count = calls.size, currentStep = currentStep)
     }
 
     /**
@@ -354,23 +377,28 @@ object SessionChatBackgroundWork {
         val firstWaiting = waiting.firstOrNull()
         if (firstWaiting == null) {
             if (running == 0 && runningShells == 0) return null
-            val label = listOfNotNull(subagentCount(running), shellCount(runningShells)).joinToString(" · ")
             return SessionChatBackgroundWorkPill(
-                label,
+                labelText = countLabel(running, runningShells),
                 needsInput = false,
-                accessibilityLabel = "${runningPhrase(running, runningShells)} running",
+                accessibilityText =
+                    UiText.resource(R.string.timeline_background_work_running_spoken, runningPhrase(running, runningShells)),
             )
         }
         val asking =
             if (waiting.size == 1) {
-                "${firstWaiting.agentName} needs input"
+                UiText.resource(R.string.timeline_background_work_agent_needs_input, UiText.verbatim(firstWaiting.agentName))
             } else {
-                "${subagentCount(waiting.size)} need input"
+                UiText.plural(R.plurals.timeline_background_work_subagents_need_input, waiting.size)
             }
         val busy = running + runningShells
-        val label = if (busy > 0) "$asking · $busy running" else asking
-        val spoken = if (busy > 0) "$asking, ${runningPhrase(running, runningShells)} running" else asking
-        return SessionChatBackgroundWorkPill(label, needsInput = true, accessibilityLabel = spoken)
+        val label = if (busy > 0) UiText.resource(R.string.timeline_background_work_needs_input_running, asking, busy) else asking
+        val spoken =
+            if (busy > 0) {
+                UiText.resource(R.string.timeline_background_work_needs_input_running_spoken, asking, runningPhrase(running, runningShells))
+            } else {
+                asking
+            }
+        return SessionChatBackgroundWorkPill(labelText = label, needsInput = true, accessibilityText = spoken)
     }
 
     /**
@@ -425,25 +453,35 @@ object SessionChatBackgroundWork {
         return next
     }
 
-    private fun subagentCount(count: Int): String? =
-        when (count) {
-            0 -> null
-            1 -> "1 subagent"
-            else -> "$count subagents"
-        }
+    private fun subagentCount(count: Int): UiText? =
+        if (count == 0) null else UiText.plural(R.plurals.timeline_background_work_subagent_count, count)
 
-    private fun shellCount(count: Int): String? =
-        when (count) {
-            0 -> null
-            1 -> "1 shell"
-            else -> "$count shells"
-        }
+    private fun shellCount(count: Int): UiText? =
+        if (count == 0) null else UiText.plural(R.plurals.timeline_background_work_shell_count, count)
+
+    /** "2 subagents", "1 shell", "1 subagent · 2 shells". */
+    private fun countLabel(
+        subagents: Int,
+        shells: Int,
+    ): UiText = joined(subagentCount(subagents), shellCount(shells), R.string.timeline_background_work_subagents_and_shells)
 
     /** "2 subagents", "1 shell", "1 subagent and 2 shells". */
     private fun runningPhrase(
         subagents: Int,
         shells: Int,
-    ): String = listOfNotNull(subagentCount(subagents), shellCount(shells)).joinToString(" and ")
+    ): UiText = joined(subagentCount(subagents), shellCount(shells), R.string.timeline_background_work_subagents_and_shells_spoken)
+
+    /** Both counts through [bothRes], or whichever one is present. At least one is non-null. */
+    private fun joined(
+        subagents: UiText?,
+        shells: UiText?,
+        @StringRes bothRes: Int,
+    ): UiText =
+        when {
+            subagents != null && shells != null -> UiText.resource(bothRes, subagents, shells)
+            subagents != null -> subagents
+            else -> shells ?: UiText.verbatim("")
+        }
 
     private fun rank(status: SessionChatSubagentStatus): Int =
         when (status) {
@@ -495,8 +533,6 @@ object SessionChatBackgroundWork {
     }
 
     private const val DEFAULT_AGENT = "general"
-    private const val STOPPED_REASON = "Stopped"
-    private const val WAITING_DETAIL = "Waiting for input"
 
     private fun childSessionId(tool: MessagePart.Tool): String? = string(tool.metadata, "sessionID") ?: string(tool.metadata, "sessionId")
 
@@ -509,7 +545,7 @@ object SessionChatBackgroundWork {
 /** What a task part says about its child's tool calls: how many, and the latest as a step title. */
 data class SessionChatChildToolSummary(
     val count: Int,
-    val currentStep: String?,
+    val currentStep: UiText?,
 )
 
 /** Result and failure lines of a subagent's task part. */

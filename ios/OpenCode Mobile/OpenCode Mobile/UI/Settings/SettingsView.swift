@@ -57,7 +57,7 @@ struct SettingsView: View {
     #endif
     @State private var showClearConfirmation = false
     @State private var showClearSessionCacheConfirmation = false
-    @State private var sessionCacheSizeLabel = "Empty"
+    @State private var sessionCacheSizeLabel = String(localized: "settings.session_cache.empty", defaultValue: "Empty")
     @State private var showAppearance = false
     @State private var showRecentWindowPicker = false
     @State private var showFollowUpPicker = false
@@ -72,7 +72,7 @@ struct SettingsView: View {
     @State private var developerToolsPreferences = DeveloperToolsPreferences.shared
     @State private var performanceOverlayPreferences = PerformanceOverlayPreferences.shared
     @State private var showServers = false
-    @State private var serversSubtitleState = "No servers saved"
+    @State private var serversSubtitleState: OpenCodeText = "settings.servers_summary.none"
     @State private var serversLetter: Character = "S"
     @State private var serversLetterAccent: LetterAccent = .blue
     /// False while another screen is pushed over Settings.
@@ -126,10 +126,10 @@ struct SettingsView: View {
         }
         .openCodeBottomSheet(
             isPresented: recentWindowPickerBinding,
-            title: "Recent Window",
+            title: "settings.recent_window.title",
             scrollTargetID: "hours-\(homeDisplayPreferences.recentWindowHours)"
         ) {
-            Text("Sessions stay in Recent while Running or Ready, or when updated within this window.")
+            Text("settings.recent_window.message")
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -138,7 +138,7 @@ struct SettingsView: View {
 
             ForEach(HomeSessionLadder.allowedWindowHours, id: \.self) { hours in
                 OpenCodeBottomSheetEntry(
-                    title: HomeSessionLadder.formatWindowHoursLabel(hours),
+                    title: Self.recentWindowHoursLabel(hours),
                     selected: hours == homeDisplayPreferences.recentWindowHours,
                     action: {
                         ProductAnalytics.logUserAction(
@@ -153,11 +153,11 @@ struct SettingsView: View {
                 .id("hours-\(hours)")
             }
         }
-        .openCodeBottomSheet(isPresented: $showTimelineStylePicker, title: "Timeline Style") {
+        .openCodeBottomSheet(isPresented: $showTimelineStylePicker, title: "settings.timeline_style.title") {
             ForEach(sessionChatDisplayPreferences.availableTimelineStyles, id: \.self) { style in
                 OpenCodeBottomSheetEntry(
-                    title: style.title,
-                    subtitle: style.subtitle,
+                    title: style.settingsTitle,
+                    subtitle: style.settingsSubtitle,
                     selected: style == sessionChatDisplayPreferences.effectiveTimelineStyle,
                     action: {
                         ProductAnalytics.logUserAction(
@@ -173,11 +173,11 @@ struct SettingsView: View {
                 )
             }
         }
-        .openCodeBottomSheet(isPresented: $showSessionRowsPicker, title: "Session rows") {
+        .openCodeBottomSheet(isPresented: $showSessionRowsPicker, title: "settings.session_rows.title") {
             ForEach(HomeSessionRowStyle.allCases, id: \.self) { style in
                 OpenCodeBottomSheetEntry(
-                    title: style.title,
-                    subtitle: style.subtitle,
+                    title: style.settingsTitle,
+                    subtitle: style.settingsSubtitle,
                     selected: style == homeDisplayPreferences.sessionRowStyle,
                     action: {
                         ProductAnalytics.logUserAction(
@@ -191,10 +191,10 @@ struct SettingsView: View {
                 )
             }
         }
-        .openCodeBottomSheet(isPresented: $showFollowUpPicker, title: "Follow-up send") {
+        .openCodeBottomSheet(isPresented: $showFollowUpPicker, title: "settings.follow_up.title") {
             ForEach(FollowUpDelivery.allCases, id: \.self) { mode in
                 OpenCodeBottomSheetEntry(
-                    title: mode == .steer ? "Steer" : "Queue",
+                    title: mode == .steer ? "settings.follow_up.steer" : "settings.follow_up.queue",
                     startDecorator: .icon(mode == .steer ? .arrowWarmUp : .arrowUpward),
                     selected: mode == sessionChatDisplayPreferences.followUpDelivery,
                     action: {
@@ -213,9 +213,9 @@ struct SettingsView: View {
         }
         .openCodeDialog(
             isPresented: $showClearSessionCacheConfirmation,
-            title: "Clear session cache?",
-            subtitle: "Removes cached sessions and messages. Your connection and credentials stay.",
-            primaryOption: OpenCodeDialogOption(title: "Clear") {
+            title: "settings.clear_session_cache.dialog_title",
+            subtitle: "settings.clear_session_cache.dialog_message",
+            primaryOption: OpenCodeDialogOption(title: "settings.clear") {
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.settingsClearCacheConfirm,
                     actionId: ProductAnalytics.Action.clearCacheConfirm
@@ -226,7 +226,7 @@ struct SettingsView: View {
                 }
                 showClearSessionCacheConfirmation = false
             },
-            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+            secondaryOption: OpenCodeDialogOption(title: "common.cancel") {
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.settingsClearCacheConfirm,
                     actionId: ProductAnalytics.Action.clearCacheCancel
@@ -236,9 +236,9 @@ struct SettingsView: View {
         )
         .openCodeDialog(
             isPresented: $showClearConfirmation,
-            title: "Clear all data?",
-            subtitle: "This cannot be undone.",
-            primaryOption: OpenCodeDialogOption(title: "Clear") {
+            title: "settings.clear_all_data.dialog_title",
+            subtitle: "settings.clear_all_data.dialog_message",
+            primaryOption: OpenCodeDialogOption(title: "settings.clear") {
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.settingsClearAllDataConfirm,
                     actionId: ProductAnalytics.Action.clearAllDataConfirm
@@ -249,7 +249,7 @@ struct SettingsView: View {
                 }
                 showClearConfirmation = false
             },
-            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+            secondaryOption: OpenCodeDialogOption(title: "common.cancel") {
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.settingsClearAllDataConfirm,
                     actionId: ProductAnalytics.Action.clearAllDataCancel
@@ -284,10 +284,16 @@ struct SettingsView: View {
         }
     }
 
+    private var appLockSubtitle: OpenCodeText {
+        appLockAuthenticator.canAuthenticate()
+            ? "settings.app_lock.subtitle_available"
+            : "settings.app_lock.subtitle_unavailable"
+    }
+
     private var settingsPane: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: "Settings",
+                title: "settings.title",
                 leading: .back(action: {
                     ProductAnalytics.logUserAction(
                         screenId: ProductAnalytics.Screen.settings,
@@ -300,10 +306,10 @@ struct SettingsView: View {
 
             ScrollView {
                 VStack(spacing: 8) {
-                    OpenCodeSectionHeader(title: "Server")
+                    OpenCodeSectionHeader(title: "settings.section.server")
 
                     OpenCodeListItem(
-                        title: "Servers",
+                        title: "servers.title",
                         subtitle: serversSubtitleState,
                         selected: isDetailSelected(.servers),
                         style: .card,
@@ -319,13 +325,13 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    OpenCodeSectionHeader(title: "Help & Feedback")
+                    OpenCodeSectionHeader(title: "settings.section.help_feedback")
 
                     OpenCodeListItem(
-                        title: "Send Feedback",
-                        subtitle: "Report a bug or share an idea",
+                        title: "settings.send_feedback.title",
+                        subtitle: "settings.send_feedback.subtitle",
                         style: .card,
-                        startDecorator: .icon(.edit, accessibilityLabel: "Send Feedback"),
+                        startDecorator: .icon(.edit, accessibilityLabel: "settings.send_feedback.title"),
                         action: {
                             // No capture here: the screen behind is Settings.
                             // "+ Screenshot" picks from Photos instead.
@@ -335,14 +341,14 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
                     .accessibilityIdentifier("settingsSendFeedback")
 
-                    OpenCodeSectionHeader(title: "Appearance")
+                    OpenCodeSectionHeader(title: "settings.section.appearance")
 
                     OpenCodeListItem(
-                        title: "Appearance",
-                        subtitle: "\(themeManager.currentTheme.name) · \(themeManager.currentSyntaxPreset.name)",
+                        title: "appearance.title",
+                        subtitle: appearanceSubtitle,
                         selected: isDetailSelected(.appearance),
                         style: .card,
-                        startDecorator: .icon(.widgets, accessibilityLabel: "Appearance"),
+                        startDecorator: .icon(.widgets, accessibilityLabel: "appearance.title"),
                         accessory: .disclosure,
                         action: {
                             logSettingsAction(ProductAnalytics.Action.settingsOpenAppearance)
@@ -352,10 +358,10 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Hide User Directory",
-                        subtitle: "Show ~/Projects/… instead of /Users/you/Projects/…",
+                        title: "settings.hide_user_directory.title",
+                        subtitle: "settings.hide_user_directory.subtitle",
                         style: .card,
-                        startDecorator: .icon(.folder, accessibilityLabel: "Hide User Directory"),
+                        startDecorator: .icon(.folder, accessibilityLabel: "settings.hide_user_directory.title"),
                         accessory: .toggle(
                             isOn: Binding(
                                 get: { homeDisplayPreferences.hideUserDirectoryPrefix },
@@ -366,18 +372,16 @@ struct SettingsView: View {
                                     homeDisplayPreferences.setHideUserDirectoryPrefix(newValue)
                                 }
                             ),
-                            accessibilityLabel: "Hide User Directory"
+                            accessibilityLabel: "settings.hide_user_directory.title"
                         )
                     )
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Recent Window",
-                        subtitle: HomeSessionLadder.formatWindowHoursLabel(
-                            homeDisplayPreferences.recentWindowHours
-                        ),
+                        title: "settings.recent_window.title",
+                        subtitle: Self.recentWindowHoursLabel(homeDisplayPreferences.recentWindowHours),
                         style: .card,
-                        startDecorator: .icon(.list, accessibilityLabel: "Recent Window"),
+                        startDecorator: .icon(.list, accessibilityLabel: "settings.recent_window.title"),
                         action: {
                             logSettingsAction(ProductAnalytics.Action.settingsOpenRecentWindowPicker)
                             ProductAnalytics.logScreenView(
@@ -391,10 +395,10 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Collapse Consecutive Tool Calls",
-                        subtitle: "Group back-to-back tools into one summary card",
+                        title: "settings.collapse_tool_calls.title",
+                        subtitle: "settings.collapse_tool_calls.subtitle",
                         style: .card,
-                        startDecorator: .icon(.collapseContent, accessibilityLabel: "Collapse Consecutive Tool Calls"),
+                        startDecorator: .icon(.collapseContent, accessibilityLabel: "settings.collapse_tool_calls.title"),
                         accessory: .toggle(
                             isOn: Binding(
                                 get: { sessionChatDisplayPreferences.collapseConsecutiveToolCalls },
@@ -405,29 +409,29 @@ struct SettingsView: View {
                                     sessionChatDisplayPreferences.setCollapseConsecutiveToolCalls(newValue)
                                 }
                             ),
-                            accessibilityLabel: "Collapse Consecutive Tool Calls"
+                            accessibilityLabel: "settings.collapse_tool_calls.title"
                         )
                     )
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Timeline Style",
-                        subtitle: sessionChatDisplayPreferences.effectiveTimelineStyle.title,
+                        title: "settings.timeline_style.title",
+                        subtitle: sessionChatDisplayPreferences.effectiveTimelineStyle.settingsTitle,
                         style: .card,
-                        startDecorator: .icon(.widgets, accessibilityLabel: "Timeline Style"),
+                        startDecorator: .icon(.widgets, accessibilityLabel: "settings.timeline_style.title"),
                         accessory: .disclosure,
                         action: { showTimelineStylePicker = true }
                     )
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Follow-up send",
+                        title: "settings.follow_up.title",
                         subtitle: followUpSubtitle,
                         enabled: supportsFollowUpDelivery,
                         style: .card,
                         startDecorator: .icon(
                             followUpIcon,
-                            accessibilityLabel: "Follow-up send"
+                            accessibilityLabel: "settings.follow_up.title"
                         ),
                         accessory: supportsFollowUpDelivery ? .disclosure : nil,
                         action: supportsFollowUpDelivery ? { showFollowUpPicker = true } : nil
@@ -435,18 +439,19 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     if let loadError = themeManager.loadError {
+                        // ThemeManager's own message; it moves to a key with the theme code.
                         OpenCodeInlineNotice(message: loadError, tone: .error)
                             .padding(.horizontal, 16)
                             .padding(.top, 4)
                     }
 
-                    OpenCodeSectionHeader(title: "Home")
+                    OpenCodeSectionHeader(title: "settings.section.home")
 
                     OpenCodeListItem(
-                        title: "Worktrees",
-                        subtitle: "Show each project\u{2019}s worktrees and branches on Home, and let New session pick a worktree when you hold it.",
+                        title: "settings.worktrees.title",
+                        subtitle: "settings.worktrees.subtitle",
                         style: .card,
-                        startDecorator: .icon(.callSplit, accessibilityLabel: "Worktrees"),
+                        startDecorator: .icon(.callSplit, accessibilityLabel: "settings.worktrees.title"),
                         accessory: .toggle(
                             isOn: Binding(
                                 get: { homeDisplayPreferences.showsWorktrees },
@@ -455,17 +460,17 @@ struct SettingsView: View {
                                     homeDisplayPreferences.setShowsWorktrees(newValue)
                                 }
                             ),
-                            accessibilityLabel: "Worktrees"
+                            accessibilityLabel: "settings.worktrees.title"
                         )
                     )
                     .padding(.horizontal, 16)
                     .accessibilityIdentifier("settingsWorktreesToggle")
 
                     OpenCodeListItem(
-                        title: "Session rows",
-                        subtitle: homeDisplayPreferences.sessionRowStyle.title,
+                        title: "settings.session_rows.title",
+                        subtitle: homeDisplayPreferences.sessionRowStyle.settingsTitle,
                         style: .card,
-                        startDecorator: .icon(.list, accessibilityLabel: "Session rows"),
+                        startDecorator: .icon(.list, accessibilityLabel: "settings.session_rows.title"),
                         accessory: .disclosure,
                         action: {
                             logSettingsAction(ProductAnalytics.Action.settingsOpenSessionRowsPicker)
@@ -475,21 +480,22 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
                     .accessibilityIdentifier("settingsSessionRows")
 
-                    OpenCodeSectionHeader(title: "Session Cache")
+                    OpenCodeSectionHeader(title: "settings.section.session_cache")
 
                     OpenCodeListItem(
-                        title: "Size",
-                        subtitle: sessionCacheSizeLabel,
+                        title: "settings.session_cache.size",
+                        // Already localized by SessionCacheSizeFormatter.
+                        subtitle: .verbatim(sessionCacheSizeLabel),
                         style: .card,
-                        startDecorator: .icon(.archive, accessibilityLabel: "Session Cache Size")
+                        startDecorator: .icon(.archive, accessibilityLabel: "settings.session_cache.size_label")
                     )
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Clear Session Cache",
-                        subtitle: "Remove cached sessions and messages",
+                        title: "settings.clear_session_cache.title",
+                        subtitle: "settings.clear_session_cache.subtitle",
                         style: .card,
-                        startDecorator: .icon(.close, accessibilityLabel: "Clear Session Cache"),
+                        startDecorator: .icon(.close, accessibilityLabel: "settings.clear_session_cache.title"),
                         action: {
                             logSettingsAction(ProductAnalytics.Action.settingsClearSessionCache)
                             ProductAnalytics.logScreenView(
@@ -502,15 +508,13 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    OpenCodeSectionHeader(title: "Privacy")
+                    OpenCodeSectionHeader(title: "settings.section.privacy")
 
                     OpenCodeListItem(
-                        title: "App Lock",
-                        subtitle: appLockAuthenticator.canAuthenticate()
-                            ? "Require Face ID, Touch ID or your passcode when the app returns from the background"
-                            : "Set a device passcode to use App Lock",
+                        title: "settings.app_lock.title",
+                        subtitle: appLockSubtitle,
                         style: .card,
-                        startDecorator: .icon(.lock, accessibilityLabel: "App Lock"),
+                        startDecorator: .icon(.lock, accessibilityLabel: "settings.app_lock.title"),
                         accessory: .toggle(
                             isOn: Binding(
                                 get: { appLockPreferences.enabled },
@@ -520,16 +524,16 @@ struct SettingsView: View {
                                     logSettingsAction(ProductAnalytics.Action.settingsToggleAppLock)
                                 }
                             ),
-                            accessibilityLabel: "App Lock"
+                            accessibilityLabel: "settings.app_lock.title"
                         )
                     )
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Privacy Policy",
-                        subtitle: "How the apps handle data",
+                        title: "settings.privacy_policy.title",
+                        subtitle: "settings.privacy_policy.subtitle",
                         style: .card,
-                        startDecorator: .icon(.description, accessibilityLabel: "Privacy Policy"),
+                        startDecorator: .icon(.description, accessibilityLabel: "settings.privacy_policy.title"),
                         accessory: .disclosure,
                         action: {
                             logSettingsAction(ProductAnalytics.Action.settingsOpenPrivacyPolicy)
@@ -539,10 +543,10 @@ struct SettingsView: View {
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Analytics & crash reports",
-                        subtitle: "Allow optional product usage events and crash reports. Off sends nothing to Firebase.",
+                        title: "settings.analytics.title",
+                        subtitle: "settings.analytics.subtitle",
                         style: .card,
-                        startDecorator: .icon(.description, accessibilityLabel: "Product Analytics"),
+                        startDecorator: .icon(.description, accessibilityLabel: "settings.analytics.label"),
                         accessory: .toggle(
                             isOn: Binding(
                                 get: { analyticsConsentPreferences.productAnalyticsConsented },
@@ -558,26 +562,26 @@ struct SettingsView: View {
                                     )
                                 }
                             ),
-                            accessibilityLabel: "Product Analytics"
+                            accessibilityLabel: "settings.analytics.label"
                         )
                     )
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Diagnostic Logs",
-                        subtitle: "Share a redacted rolling runtime log window",
+                        title: "diagnostics.title",
+                        subtitle: "settings.diagnostic_logs.subtitle",
                         selected: isDetailSelected(.diagnosticLogs),
                         style: .card,
-                        startDecorator: .icon(.description, accessibilityLabel: "Diagnostic Logs"),
+                        startDecorator: .icon(.description, accessibilityLabel: "diagnostics.title"),
                         action: { open(.diagnosticLogs) }
                     )
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Clear All Data",
-                        subtitle: "Remove connection and cache",
+                        title: "settings.clear_all_data.title",
+                        subtitle: "settings.clear_all_data.subtitle",
                         style: .card,
-                        startDecorator: .icon(.close, accessibilityLabel: "Clear All Data"),
+                        startDecorator: .icon(.close, accessibilityLabel: "settings.clear_all_data.title"),
                         action: {
                             logSettingsAction(ProductAnalytics.Action.settingsClearAllData)
                             ProductAnalytics.logScreenView(
@@ -590,54 +594,55 @@ struct SettingsView: View {
                     )
                     .padding(.horizontal, 16)
 
-                    OpenCodeSectionHeader(title: "About")
+                    OpenCodeSectionHeader(title: "settings.section.about")
 
                     OpenCodeListItem(
-                        title: "Version",
-                        subtitle: version,
+                        title: "settings.version",
+                        subtitle: .verbatim(version),
                         style: .card,
-                        startDecorator: .icon(.description, accessibilityLabel: "Version"),
+                        startDecorator: .icon(.description, accessibilityLabel: "settings.version"),
                         action: { UIPasteboard.general.string = version }
                     )
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Build",
-                        subtitle: build,
+                        title: "settings.build",
+                        subtitle: .verbatim(build),
                         style: .card,
-                        startDecorator: .icon(.settings, accessibilityLabel: "Build"),
+                        startDecorator: .icon(.settings, accessibilityLabel: "settings.build"),
                         action: { UIPasteboard.general.string = build }
                     )
                     .padding(.horizontal, 16)
 
                     OpenCodeListItem(
-                        title: "Source Code",
-                        subtitle: "GPL-3.0 on GitHub",
+                        title: "settings.source_code.title",
+                        subtitle: "settings.source_code.subtitle",
                         style: .card,
-                        startDecorator: .icon(.code, accessibilityLabel: "Source Code"),
+                        startDecorator: .icon(.code, accessibilityLabel: "settings.source_code.title"),
                         accessory: .disclosure,
                         action: { openURL(SourceCode.url) }
                     )
                     .padding(.horizontal, 16)
 
                     if developerToolsPreferences.unlocked {
-                        OpenCodeSectionHeader(title: "Developer Tools")
+                        // Developer Tools rows are developer-only and stay English.
+                        OpenCodeSectionHeader(title: .verbatim("Developer Tools"))
 
                         OpenCodeListItem(
-                            title: "Component Gallery",
-                            subtitle: "Design-system foundations and reusable components",
+                            title: .verbatim("Component Gallery"),
+                            subtitle: .verbatim("Design-system foundations and reusable components"),
                             selected: isDetailSelected(.componentGallery),
                             style: .card,
-                            startDecorator: .icon(.architecture, accessibilityLabel: "Component Gallery"),
+                            startDecorator: .icon(.architecture, accessibilityLabel: .verbatim("Component Gallery")),
                             action: { open(.componentGallery) }
                         )
                         .padding(.horizontal, 16)
 
                         OpenCodeListItem(
-                            title: "Session Chat Playground",
-                            subtitle: "The real chat over fake scenarios, no server",
+                            title: .verbatim("Session Chat Playground"),
+                            subtitle: .verbatim("The real chat over fake scenarios, no server"),
                             style: .card,
-                            startDecorator: .icon(.widgets, accessibilityLabel: "Session Chat Playground"),
+                            startDecorator: .icon(.widgets, accessibilityLabel: .verbatim("Session Chat Playground")),
                             accessory: .disclosure,
                             action: {
                                 let model = SessionChatPlaygroundModel()
@@ -650,11 +655,11 @@ struct SettingsView: View {
 
                         #if HIGHLIGHT_LAB
                         OpenCodeListItem(
-                            title: "Highlighting Lab",
-                            subtitle: "Data sets and on-device benchmarks",
+                            title: .verbatim("Highlighting Lab"),
+                            subtitle: .verbatim("Data sets and on-device benchmarks"),
                             selected: isDetailSelected(.highlightLab),
                             style: .card,
-                            startDecorator: .icon(.code, accessibilityLabel: "Highlighting Lab"),
+                            startDecorator: .icon(.code, accessibilityLabel: .verbatim("Highlighting Lab")),
                             action: { open(.highlightLab) }
                         )
                         .padding(.horizontal, 16)
@@ -662,26 +667,26 @@ struct SettingsView: View {
                         #endif
 
                         OpenCodeListItem(
-                            title: "Feature Flags",
-                            subtitle: "Remote flags with device overrides",
+                            title: .verbatim("Feature Flags"),
+                            subtitle: .verbatim("Remote flags with device overrides"),
                             selected: isDetailSelected(.featureFlags),
                             style: .card,
-                            startDecorator: .icon(.settings, accessibilityLabel: "Feature Flags"),
+                            startDecorator: .icon(.settings, accessibilityLabel: .verbatim("Feature Flags")),
                             action: { open(.featureFlags) }
                         )
                         .padding(.horizontal, 16)
 
                         OpenCodeListItem(
-                            title: "Performance Overlay",
-                            subtitle: "Live FPS and frame-time spikes",
+                            title: .verbatim("Performance Overlay"),
+                            subtitle: .verbatim("Live FPS and frame-time spikes"),
                             style: .card,
-                            startDecorator: .icon(.settings, accessibilityLabel: "Performance Overlay"),
+                            startDecorator: .icon(.settings, accessibilityLabel: .verbatim("Performance Overlay")),
                             accessory: .toggle(
                                 isOn: Binding(
                                     get: { performanceOverlayPreferences.enabled },
                                     set: { performanceOverlayPreferences.setEnabled($0) }
                                 ),
-                                accessibilityLabel: "Performance Overlay"
+                                accessibilityLabel: .verbatim("Performance Overlay")
                             )
                         )
                         .padding(.horizontal, 16)
@@ -777,25 +782,48 @@ struct SettingsView: View {
         let name = active?.displayName ?? "Servers"
         serversLetter = letterCharacter(for: name)
         serversLetterAccent = letterAccent(for: active?.id ?? name)
-        if profiles.isEmpty {
-            serversSubtitleState = "No servers saved"
-        } else if let activeName = active?.displayName {
-            serversSubtitleState = "\(profiles.count) saved · \(activeName) active"
-        } else {
-            serversSubtitleState = "\(profiles.count) saved"
-        }
+        serversSubtitleState = Self.serversSubtitle(count: profiles.count, activeName: active?.displayName)
     }
 
     private var supportsFollowUpDelivery: Bool {
         Container.shared.activeConnectionManager().capabilities.supportsFollowUpDelivery
     }
 
-    private var followUpSubtitle: String {
-        if supportsFollowUpDelivery {
-            let label = sessionChatDisplayPreferences.followUpDelivery == .steer ? "Steer" : "Queue"
-            return "\(label) · V2 servers only. V1 does not support this."
+    private var followUpSubtitle: OpenCodeText {
+        guard supportsFollowUpDelivery else { return "settings.follow_up.unsupported" }
+        return sessionChatDisplayPreferences.followUpDelivery == .steer
+            ? "settings.follow_up.subtitle_steer"
+            : "settings.follow_up.subtitle_queue"
+    }
+
+    /// Preset names are theme data, shown as is.
+    private var appearanceSubtitle: OpenCodeText {
+        let names = [themeManager.currentTheme.name, themeManager.currentSyntaxPreset.name]
+        return .verbatim(names.joined(separator: " · "))
+    }
+
+    /// The active profile name is user content and stays an argument.
+    static func serversSubtitle(count: Int, activeName: String?) -> OpenCodeText {
+        guard count > 0 else { return "settings.servers_summary.none" }
+        if let activeName {
+            return OpenCodeText(LocalizedStringResource(
+                "settings.servers_summary.saved_active",
+                defaultValue: "\(count) saved · \(activeName) active"
+            ))
         }
-        return "Not supported on V1. This server always sends immediately."
+        return OpenCodeText(LocalizedStringResource(
+            "settings.servers_summary.saved",
+            defaultValue: "\(count) saved"
+        ))
+    }
+
+    /// "4 hours" for the Recent Window row and picker.
+    static func recentWindowHoursLabel(_ hours: Int) -> OpenCodeText {
+        let sanitized = HomeSessionLadder.sanitizeWindowHours(hours)
+        return OpenCodeText(LocalizedStringResource(
+            "settings.recent_window.hours",
+            defaultValue: "\(sanitized) hours"
+        ))
     }
 
     private var followUpIcon: OpenCodeIcon {
@@ -827,6 +855,42 @@ struct SettingsView: View {
         )
     }
 
+}
+
+extension SessionChatTimelineStyle {
+    var settingsTitle: OpenCodeText {
+        switch self {
+        case .standard: "settings.timeline_style.standard.title"
+        case .chips: "settings.timeline_style.chips.title"
+        case .stepRail: "settings.timeline_style.step_rail.title"
+        case .activityCard: "settings.timeline_style.activity_card.title"
+        }
+    }
+
+    var settingsSubtitle: OpenCodeText {
+        switch self {
+        case .standard: "settings.timeline_style.standard.subtitle"
+        case .chips: "settings.timeline_style.chips.subtitle"
+        case .stepRail: "settings.timeline_style.step_rail.subtitle"
+        case .activityCard: "settings.timeline_style.activity_card.subtitle"
+        }
+    }
+}
+
+extension HomeSessionRowStyle {
+    var settingsTitle: OpenCodeText {
+        switch self {
+        case .compact: "settings.session_rows.compact.title"
+        case .classic: "settings.session_rows.classic.title"
+        }
+    }
+
+    var settingsSubtitle: OpenCodeText {
+        switch self {
+        case .compact: "settings.session_rows.compact.subtitle"
+        case .classic: "settings.session_rows.classic.subtitle"
+        }
+    }
 }
 
 #Preview {

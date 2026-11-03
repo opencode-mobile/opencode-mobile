@@ -18,7 +18,8 @@ enum WorktreeCreateBaseOptionsState: Equatable, Sendable {
 /// One row of the v2 base list. `ref == nil` is the default: the source checkout's HEAD.
 struct WorktreeCreateBaseOption: Identifiable, Equatable, Sendable {
     let ref: String?
-    let title: String
+    /// The branch, verbatim; the default row is "<branch> (current)" or "Current checkout".
+    let title: OpenCodeText
     let isSelected: Bool
 
     var id: String { ref ?? "" }
@@ -45,48 +46,55 @@ struct WorktreeCreateFormState: Equatable, Sendable {
     fileprivate(set) var basePickerVisible = false
     fileprivate(set) var submitting = false
     /// `Couldn't create the worktree: …`, shown above the button; the values stay.
-    fileprivate(set) var errorMessage: String?
+    fileprivate(set) var errorMessage: OpenCodeText?
 
-    var nameError: String? {
-        nameErrorVisible ? WorktreeNameRules.error(for: name) : nil
+    var nameError: OpenCodeText? {
+        guard nameErrorVisible, let error = WorktreeNameRules.error(for: name) else { return nil }
+        return OpenCodeText(error)
     }
 
     var canSubmit: Bool {
         WorktreeNameRules.error(for: name) == nil && !submitting
     }
 
-    var title: String { WorktreeCreateCopy.formTitle }
+    var title: OpenCodeText { OpenCodeText(WorktreeCreateCopy.formTitle) }
 
-    /// Branch row: read-only on both protocols.
-    var branchValue: String {
-        serverProtocol == .v2 ? WorktreeCreateCopy.v2NoBranch : WorktreeCreateCopy.v1Branch(name)
+    /// Branch row: read-only on both protocols. The v1 branch name is shown verbatim.
+    var branchValue: OpenCodeText {
+        if serverProtocol == .v2 { return OpenCodeText(WorktreeCreateCopy.v2NoBranch) }
+        return .verbatim(WorktreeCreateCopy.v1Branch(name))
     }
 
-    var branchNote: String {
-        serverProtocol == .v2 ? WorktreeCreateCopy.v2BranchNote : WorktreeCreateCopy.v1BranchNote
+    var branchNote: OpenCodeText {
+        OpenCodeText(serverProtocol == .v2 ? WorktreeCreateCopy.v2BranchNote : WorktreeCreateCopy.v1BranchNote)
     }
 
     /// v2 picks a base; v1 always creates from the project's current checkout.
     var baseSelectable: Bool { serverProtocol == .v2 }
 
-    var defaultBaseLabel: String {
-        sourceBranch.map { $0 + WorktreeCreateCopy.currentSuffix } ?? WorktreeCreateCopy.currentCheckout
+    var defaultBaseLabel: OpenCodeText {
+        guard let sourceBranch else { return OpenCodeText(WorktreeCreateCopy.currentCheckout) }
+        return OpenCodeText(WorktreeCreateCopy.currentBranch(sourceBranch))
     }
 
-    var baseValue: String {
-        if serverProtocol == .v2 { return selectedBaseRef ?? defaultBaseLabel }
-        return sourceBranch ?? WorktreeCreateCopy.currentCheckout
+    var baseValue: OpenCodeText {
+        if serverProtocol == .v2 {
+            guard let selectedBaseRef else { return defaultBaseLabel }
+            return .verbatim(selectedBaseRef)
+        }
+        guard let sourceBranch else { return OpenCodeText(WorktreeCreateCopy.currentCheckout) }
+        return .verbatim(sourceBranch)
     }
 
-    var baseNote: String {
-        serverProtocol == .v2 ? WorktreeCreateCopy.basePickHint : WorktreeCreateCopy.v1BaseNote
+    var baseNote: OpenCodeText {
+        OpenCodeText(serverProtocol == .v2 ? WorktreeCreateCopy.basePickHint : WorktreeCreateCopy.v1BaseNote)
     }
 
-    var submitTitle: String {
-        if submitting { return WorktreeCreateCopy.submitting }
+    var submitTitle: OpenCodeText {
+        if submitting { return OpenCodeText(WorktreeCreateCopy.submitting) }
         switch origin {
-        case .runIn: return WorktreeCreateCopy.submitRunIn
-        case .move: return WorktreeCreateCopy.submitMove
+        case .runIn: return OpenCodeText(WorktreeCreateCopy.submitRunIn)
+        case .move: return OpenCodeText(WorktreeCreateCopy.submitMove)
         }
     }
 
@@ -95,7 +103,7 @@ struct WorktreeCreateFormState: Equatable, Sendable {
         var rows = [WorktreeCreateBaseOption(ref: nil, title: defaultBaseLabel, isSelected: selectedBaseRef == nil)]
         var seen: Set<String> = []
         for ref in baseOptions where ref != sourceBranch && seen.insert(ref).inserted {
-            rows.append(WorktreeCreateBaseOption(ref: ref, title: ref, isSelected: selectedBaseRef == ref))
+            rows.append(WorktreeCreateBaseOption(ref: ref, title: .verbatim(ref), isSelected: selectedBaseRef == ref))
         }
         return rows
     }
@@ -223,7 +231,7 @@ final class WorktreeCreateModel {
         } catch {
             guard token == generation, state != nil else { return nil }
             state?.submitting = false
-            state?.errorMessage = WorktreeCreateCopy.failed(Self.message(error))
+            state?.errorMessage = OpenCodeText(WorktreeCreateCopy.failed(Self.message(error)))
             return nil
         }
     }

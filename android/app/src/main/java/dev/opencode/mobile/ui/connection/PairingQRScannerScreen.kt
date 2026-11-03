@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -41,6 +42,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.ui.components.OpenCodeCodeSnippet
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
@@ -74,7 +76,7 @@ fun PairingQRScannerScreen(
         )
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBar(
-                title = "Scan pairing QR",
+                title = stringResource(R.string.connection_scanner_title),
                 leading = OpenCodeTopBarLeading.Back(onClick = onDismiss),
             )
             PairingQRReticle(
@@ -104,13 +106,12 @@ private fun PairingQRInstructionCard(modifier: Modifier = Modifier) {
                 .padding(16.dp),
     ) {
         Text(
-            text = "OpenCode pairing QR",
+            text = stringResource(R.string.connection_scanner_card_title),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface,
         )
         Text(
-            text =
-                "From opencode pair --remote. Plain pair shows a QR only when the server is reachable beyond localhost.",
+            text = stringResource(R.string.connection_scanner_card_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp),

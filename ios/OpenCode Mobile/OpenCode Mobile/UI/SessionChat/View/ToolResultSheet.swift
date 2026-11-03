@@ -8,7 +8,7 @@ struct ToolResultPinnedHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let eyebrow = presentation.eyebrow {
-                Text(eyebrow)
+                Text(openCode: eyebrow.openCode)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeaker)
             }
@@ -39,11 +39,16 @@ struct ToolResultPinnedHeader: View {
     }
 
     private func grepSubline(_ grep: ToolResultPresentation.Grep) -> String {
-        var text = "\(grep.matchCount) matches · \(grep.groups.count) files"
+        let matchCount = grep.matchCount
+        let fileCount = grep.groups.count
+        var parts = [
+            String(localized: "session_chat_sheet.tool_result.matches", defaultValue: "\(matchCount) matches"),
+            String(localized: "session_chat_sheet.tool_result.files", defaultValue: "\(fileCount) files"),
+        ]
         if let searchPath = grep.searchPath, !searchPath.isEmpty {
-            text += " · \(searchPath)"
+            parts.append(searchPath)
         }
-        return text
+        return parts.joined(separator: " · ")
     }
 }
 
@@ -111,7 +116,7 @@ struct ToolResultCopyFooter: View {
     let raw: String
 
     var body: some View {
-        OpenCodeButton(variant: .fullWidthText(title: "Copy output")) {
+        OpenCodeButton(variant: .fullWidthText(title: "session_chat_sheet.copy_output")) {
             UIPasteboard.general.string = raw
         }
     }
@@ -159,7 +164,7 @@ private struct StartEllipsisText: View {
     }
 
     var body: some View {
-        Text("\u{202A}\(text)\u{202C}")
+        Text(verbatim: "\u{202A}\(text)\u{202C}")
             .font(OpenCodeTypography.bodySecondary)
             .foregroundStyle(OpenCodeColors.textWeaker)
             .lineLimit(1)
@@ -176,7 +181,7 @@ private struct PullRequestBody: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("#\(presentation.number)")
+            Text(verbatim: "#\(presentation.number)")
                 .font(OpenCodeTypography.display)
                 .foregroundStyle(OpenCodeColors.textStrong)
             Button {
@@ -190,7 +195,7 @@ private struct PullRequestBody: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(presentation.url)
-            .accessibilityHint("Copies the link")
+            .accessibilityHint(Text("session_chat_sheet.tool_result.copies_link_hint"))
             if let branch = presentation.branch {
                 Text(branch)
                     .font(OpenCodeTypography.body)
@@ -293,7 +298,17 @@ private struct SourceBody: View {
         .lineLimit(1)
         .fixedSize(horizontal: true, vertical: false)
         .frame(height: 20, alignment: .leading)
-        .accessibilityLabel("Line \(line.number), \(line.text)")
+        .accessibilityLabel(Text(lineAccessibilityLabel(line)))
+    }
+
+    /// "Line 12, let x = 1".
+    private func lineAccessibilityLabel(_ line: ToolResultPresentation.SourceLine) -> LocalizedStringResource {
+        let number = line.number
+        let code = line.text
+        return LocalizedStringResource(
+            "session_chat_sheet.tool_result.line_accessibility",
+            defaultValue: "Line \(number), \(code)"
+        )
     }
 
     private func lineOffsets(_ lines: [ToolResultPresentation.SourceLine]) -> [(start: Int, end: Int)] {
@@ -364,7 +379,7 @@ private struct EditBody: View {
     var body: some View {
         OpenCodeUnifiedDiff(
             file: FileDiff(
-                path: presentation.filename,
+                path: presentation.title.resolved,
                 patch: presentation.patch,
                 additions: presentation.additions,
                 deletions: presentation.deletions,
@@ -407,7 +422,7 @@ private func countLine(_ counts: [ToolResultPresentation.Count]) -> some View {
     } else {
         HStack(spacing: 10) {
             ForEach(Array(counts.enumerated()), id: \.offset) { _, count in
-                Text(count.label)
+                Text(openCode: count.label.openCode)
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(toneColor(count.tone))
             }
@@ -423,12 +438,16 @@ private func subline(_ text: String) -> some View {
         .truncationMode(.tail)
 }
 
+private func lineCountLabel(_ count: Int) -> String {
+    String(localized: "session_chat_sheet.tool_result.lines", defaultValue: "\(count) lines")
+}
+
 @ViewBuilder
 private func sourceSubline(_ source: ToolResultPresentation.Source) -> some View {
     let parts = [
         source.language,
-        source.lines.isEmpty ? nil : "\(source.lines.count) lines",
-        source.rangeLabel,
+        source.lines.isEmpty ? nil : lineCountLabel(source.lines.count),
+        source.rangeLabel?.resolved,
     ].compactMap { $0 }
     if parts.isEmpty {
         EmptyView()
@@ -453,7 +472,7 @@ private func commandStrip(_ command: String?, exitCode: Int?, durationLabel: Str
                         .fixedSize(horizontal: true, vertical: false)
                 }
                 if let exitCode {
-                    Text("exit \(exitCode)")
+                    Text(LocalizedStringResource("session_chat_sheet.tool_result.exit_code", defaultValue: "exit \(exitCode)"))
                         .font(OpenCodeTypography.caption)
                         .foregroundStyle(exitCode == 0 ? OpenCodeColors.success : OpenCodeColors.error)
                         .lineLimit(1)
@@ -473,12 +492,12 @@ private func commandStrip(_ command: String?, exitCode: Int?, durationLabel: Str
 private func diffCounts(additions: Int, deletions: Int) -> some View {
     HStack(spacing: 8) {
         if additions > 0 {
-            Text("+\(additions)")
+            Text(verbatim: "+\(additions)")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.diffAdd)
         }
         if deletions > 0 {
-            Text("−\(deletions)")
+            Text(verbatim: "−\(deletions)")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.diffDelete)
         }

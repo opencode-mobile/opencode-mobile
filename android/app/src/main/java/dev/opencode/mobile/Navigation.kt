@@ -1,5 +1,6 @@
 package dev.opencode.mobile
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -35,6 +36,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,6 +49,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.app.AppVersion
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.feedback.FeedbackScreen
@@ -303,13 +306,16 @@ fun MainNavigation() {
                     val diagnosticLogsViewModel: DiagnosticLogsViewModel = hiltViewModel()
                     val diagnosticLogsState by diagnosticLogsViewModel.state.collectAsStateWithLifecycle()
                     val context = LocalContext.current
+                    val shareSubject = stringResource(R.string.share_diagnostics_subject)
+                    val shareChooserTitle = stringResource(R.string.share_diagnostics_chooser_title)
                     DiagnosticLogsScreen(
                         state = diagnosticLogsState,
                         onNavigateBack = onNavigateBack,
                         detailControl = detailControl,
                         onShareViaApps = {
                             diagnosticLogsViewModel.shareViaApps { intent ->
-                                context.startActivity(intent)
+                                intent.putExtra(Intent.EXTRA_SUBJECT, shareSubject)
+                                context.startActivity(Intent.createChooser(intent, shareChooserTitle))
                             }
                         },
                         onSaveToUri = diagnosticLogsViewModel::saveToUri,
@@ -335,8 +341,8 @@ fun MainNavigation() {
                     AppRootState.Loading -> {
                         ProductRouteScreenViewEffect(screenId = ProductAnalytics.Screen.APP_LOADING)
                         OpenCodeStatusStack(
-                            title = "Loading sessions",
-                            subtitle = "Checking server…",
+                            title = stringResource(R.string.common_loading_sessions),
+                            subtitle = stringResource(R.string.common_checking_server),
                             testTag = "appRootLoading",
                             modifier = Modifier.fillMaxSize(),
                         )
@@ -968,8 +974,8 @@ private fun HomeSessionPane(
                         Column(modifier = Modifier.fillMaxSize()) {
                             OpenCodeTopBar(leading = openCodeDetailLeading(currentDetailControl) {})
                             OpenCodeEmptyState(
-                                title = "No session selected",
-                                message = "Choose a session from the list",
+                                title = stringResource(R.string.home_no_session_selected_title),
+                                message = stringResource(R.string.home_no_session_selected_message),
                                 icon = OpenCodeIcons.List,
                                 modifier =
                                     Modifier

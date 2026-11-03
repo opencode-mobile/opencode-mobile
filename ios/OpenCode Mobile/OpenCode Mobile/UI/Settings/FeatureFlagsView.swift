@@ -8,7 +8,7 @@ struct FeatureFlagsView: View {
 
     private var overflowMenuEntries: [OpenCodeOverflowMenuEntry] {
         [
-            OpenCodeOverflowMenuEntry(title: "Clear overrides", icon: nil) {
+            OpenCodeOverflowMenuEntry(title: "feature_flags.clear_overrides", icon: nil) {
                 featureFlags.clearOverrides()
             },
         ]
@@ -24,10 +24,10 @@ struct FeatureFlagsView: View {
                 entries: overflowMenuEntries
             ) {
                 OpenCodeTopBar(
-                    title: "Feature Flags",
+                    title: "feature_flags.title",
                     leading: OpenCodeSplitPane.detailLeading(detailControl, back: { dismiss() }),
                     actions: [
-                        .icon(.moreVert, accessibilityLabel: "More options") {
+                        .icon(.moreVert, accessibilityLabel: "feature_flags.more_options") {
                             menuExpanded = true
                         },
                     ],
@@ -37,17 +37,14 @@ struct FeatureFlagsView: View {
 
             ScrollView {
                 LazyVStack(spacing: 8) {
-                    Text(
-                        "Switching a flag sets a device override that wins over the remote value. "
-                            + "Remote values are fetched on launch and applied at the next launch."
-                    )
+                    Text("feature_flags.intro")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textBase)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 8)
 
-                    OpenCodeSectionHeader(title: "Flags")
+                    OpenCodeSectionHeader(title: "feature_flags.section.flags")
                     ForEach(FeatureFlag.allCases, id: \.self) { flag in
                         flagRow(flag)
                     }
@@ -65,21 +62,22 @@ struct FeatureFlagsView: View {
     private func flagRow(_ flag: FeatureFlag) -> some View {
         let resolution = featureFlags.resolution(flag)
         OpenCodeListItem(
-            title: flag.title,
-            subtitle: Self.subtitle(for: flag, resolution: resolution),
+            title: .verbatim(flag.title),
+            subtitle: .verbatim(Self.subtitle(for: flag, resolution: resolution)),
             style: .card,
-            startDecorator: .icon(.settings, accessibilityLabel: flag.title),
+            startDecorator: .icon(.settings, accessibilityLabel: .verbatim(flag.title)),
             accessory: .toggle(
                 isOn: Binding(
                     get: { featureFlags.resolution(flag).value },
                     set: { featureFlags.setOverride(flag, $0) }
                 ),
-                accessibilityLabel: flag.title
+                accessibilityLabel: .verbatim(flag.title)
             )
         )
         .padding(.horizontal, 16)
     }
 
+    /// Developer-only state line; stays English like the flag names.
     static func subtitle(for flag: FeatureFlag, resolution: FeatureFlagResolution) -> String {
         let state = resolution.value ? "On" : "Off"
         let source: String = switch resolution.source {

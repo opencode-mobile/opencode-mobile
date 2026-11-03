@@ -27,6 +27,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
@@ -41,6 +42,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductRouteScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.backwardRouteTransition
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.forwardRouteTransition
@@ -76,6 +78,8 @@ import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -162,8 +166,8 @@ fun ChangesScreen(
                     Column(Modifier.fillMaxSize()) {
                         OpenCodeTopBar(leading = openCodeDetailLeading(control) {})
                         OpenCodeEmptyState(
-                            title = "Select a file",
-                            message = "Choose a changed file to see the diff.",
+                            title = stringResource(R.string.changes_select_file_title),
+                            message = stringResource(R.string.changes_select_file_message),
                             icon = OpenCodeIcons.List,
                             modifier = Modifier.weight(1f),
                         )
@@ -238,10 +242,12 @@ private fun ChangedFilesScreen(
             entries =
                 state.availableSources.map { source ->
                     val selected = source == state.selectedSource
+                    val sourceName = source.displayName.resolve()
                     OpenCodeOverflowMenuEntry(
-                        title = source.displayName,
+                        title = sourceName,
                         icon = if (selected) OpenCodeIcons.Check else null,
-                        accessibilityLabel = if (selected) "${source.displayName}, selected" else source.displayName,
+                        accessibilityLabel =
+                            if (selected) stringResource(R.string.changes_source_menu_selected, sourceName) else sourceName,
                         onClick = {
                             if (source != state.selectedSource) {
                                 listResetToken += 1
@@ -253,8 +259,8 @@ private fun ChangedFilesScreen(
                 },
         ) {
             OpenCodeTopBar(
-                title = "Changes",
-                subtitle = state.selectedSource.displayName,
+                title = stringResource(R.string.changes_title),
+                subtitle = state.selectedSource.displayName.resolve(),
                 leading =
                     OpenCodeTopBarLeading.Back(
                         onClick = {
@@ -266,7 +272,7 @@ private fun ChangedFilesScreen(
                     listOf(
                         OpenCodeTopBarAction.Icon(
                             imageVector = OpenCodeIcons.MoreVert,
-                            contentDescription = "Choose change source",
+                            contentDescription = stringResource(R.string.changes_source_menu_label),
                             onClick = {
                                 logChangesAction(ProductAnalytics.Action.CHANGES_OPEN_SOURCE_MENU)
                                 menuExpanded = true
@@ -280,8 +286,8 @@ private fun ChangedFilesScreen(
             when (val phase = state.phase) {
                 ChangesPhase.Loading ->
                     OpenCodeStatusStack(
-                        title = "Loading changes",
-                        subtitle = "Fetching the diff…",
+                        title = stringResource(R.string.changes_loading_title),
+                        subtitle = stringResource(R.string.changes_loading_message),
                         modifier = Modifier.fillMaxSize(),
                     )
                 ChangesPhase.NoTurn ->
@@ -291,8 +297,8 @@ private fun ChangedFilesScreen(
                             logChangesAction(ProductAnalytics.Action.CHANGES_REFRESH)
                             viewModel.refresh()
                         },
-                        "No completed turn",
-                        "Send a prompt and wait for it to complete, then try again.",
+                        stringResource(R.string.changes_no_turn_title),
+                        stringResource(R.string.changes_no_turn_message),
                     )
                 ChangesPhase.NoChanges -> {
                     val hint = state.otherSourceHint
@@ -302,10 +308,12 @@ private fun ChangedFilesScreen(
                             logChangesAction(ProductAnalytics.Action.CHANGES_REFRESH)
                             viewModel.refresh()
                         },
-                        state.selectedSource.emptyTitle,
-                        listOfNotNull(state.selectedSource.emptyDetail, hint?.message).joinToString(" "),
+                        state.selectedSource.emptyTitle.resolve(),
                         hint?.let {
-                            OpenCodeEmptyStateAction(title = it.actionTitle) { viewModel.selectSource(it.source) }
+                            UiText.resource(R.string.changes_empty_detail_with_hint, state.selectedSource.emptyDetail, it.message)
+                        }?.resolve() ?: state.selectedSource.emptyDetail.resolve(),
+                        hint?.let {
+                            OpenCodeEmptyStateAction(title = it.actionTitle.resolve()) { viewModel.selectSource(it.source) }
                         },
                     )
                 }
@@ -313,10 +321,10 @@ private fun ChangedFilesScreen(
                     ChangedFilesContent(phase.changeSet, state, listResetToken, viewModel, onOpenFile, selectedPath)
                 is ChangesPhase.Error ->
                     OpenCodeEmptyState(
-                        title = "Unable to load changes",
-                        message = phase.message.ifBlank { "The changes didn't load." },
+                        title = stringResource(R.string.changes_error_title),
+                        message = phase.message.resolve().ifBlank { stringResource(R.string.changes_error_fallback) },
                         primaryAction =
-                            OpenCodeEmptyStateAction(title = "Retry") {
+                            OpenCodeEmptyStateAction(title = stringResource(R.string.common_retry)) {
                                 logChangesAction(ProductAnalytics.Action.CHANGES_RETRY)
                                 viewModel.retry()
                             },
@@ -364,11 +372,13 @@ private fun ChangedFilesContent(
                     .PaddingValues(16.dp),
         ) {
             item {
+                val summary = changeSet.summary.resolve()
+                val aggregateLabel = changeSet.aggregateAccessibilityLabel.resolve()
                 Text(
                     text =
                         buildAnnotatedString {
                             withStyle(SpanStyle(color = MaterialTheme.colorScheme.onSurfaceVariant)) {
-                                append("${changeSet.summary}  ")
+                                append("$summary  ")
                             }
                             append(
                                 openCodeDiffStatAnnotatedString(
@@ -378,16 +388,16 @@ private fun ChangedFilesContent(
                                 ),
                             )
                         },
-                    modifier = Modifier.semantics { contentDescription = changeSet.aggregateAccessibilityLabel },
+                    modifier = Modifier.semantics { contentDescription = aggregateLabel },
                     style = MaterialTheme.typography.labelLarge,
                 )
             }
             state.refreshError?.let { error ->
                 item {
                     OpenCodeInlineNotice(
-                        message = "Refresh failed: $error",
+                        message = stringResource(R.string.changes_refresh_failed, error.resolve()),
                         action =
-                            OpenCodeInlineNoticeAction(title = "Retry") {
+                            OpenCodeInlineNoticeAction(title = stringResource(R.string.common_retry)) {
                                 logChangesAction(ProductAnalytics.Action.CHANGES_RETRY)
                                 viewModel.refresh()
                             },
@@ -398,17 +408,17 @@ private fun ChangedFilesContent(
                 OpenCodeTextInput(
                     value = changeSet.filter,
                     onValueChange = viewModel::updateFilter,
-                    hint = "Filter",
-                    accessibilityLabel = "Filter changed files",
+                    hint = stringResource(R.string.changes_filter_hint),
+                    accessibilityLabel = stringResource(R.string.changes_filter_accessibility_label),
                 )
             }
             if (changeSet.filteredFiles.isEmpty()) {
                 item {
                     OpenCodeEmptyState(
-                        title = "No matching files",
-                        message = "Try another path or clear the filter.",
+                        title = stringResource(R.string.changes_no_matches_title),
+                        message = stringResource(R.string.changes_no_matches_message),
                         primaryAction =
-                            OpenCodeEmptyStateAction(title = "Clear filter") {
+                            OpenCodeEmptyStateAction(title = stringResource(R.string.changes_no_matches_clear_filter)) {
                                 // clearFilter() also runs when leaving Changes, so log the tap here.
                                 logChangesAction(ProductAnalytics.Action.CHANGES_CLEAR_FILTER)
                                 viewModel.clearFilter()
@@ -443,6 +453,7 @@ private fun FileRow(
     onOpenFile: (String) -> Unit,
     selectedPath: String? = null,
 ) {
+    val accessibilityLabel = changeSet.fileAccessibilityLabel(file).resolve()
     OpenCodeListItem(
         title = changedFileName(file.path),
         selected = file.path == selectedPath,
@@ -450,7 +461,7 @@ private fun FileRow(
             logChangesAction(ProductAnalytics.Action.CHANGES_OPEN_FILE)
             onOpenFile(file.path)
         },
-        modifier = Modifier.semantics { contentDescription = changeSet.fileAccessibilityLabel(file) },
+        modifier = Modifier.semantics { contentDescription = accessibilityLabel },
         accessory = OpenCodeListItemAccessory.Disclosure,
         trailing = {
             OpenCodeDiffStat(
@@ -493,8 +504,8 @@ private fun FileViewerScreen(
             if (!viewer.hasPreview) {
                 Centered {
                     OpenCodeEmptyState(
-                        title = "Preview unavailable",
-                        message = "A text preview is unavailable for this file.",
+                        title = stringResource(R.string.changes_preview_unavailable_title),
+                        message = stringResource(R.string.changes_preview_unavailable_message),
                     )
                 }
             } else {

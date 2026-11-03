@@ -1,12 +1,13 @@
 import SwiftUI
 
 enum OpenCodeButtonVariant {
-    case fullWidthText(title: String)
-    case compactText(title: String)
-    case link(title: String)
-    case iconSquare(OpenCodeIcon, accessibilityLabel: String?)
-    case iconCircle(OpenCodeIcon, accessibilityLabel: String?)
-    case iconCircleText(String, accessibilityLabel: String?)
+    case fullWidthText(title: OpenCodeText)
+    case compactText(title: OpenCodeText)
+    case link(title: OpenCodeText)
+    case iconSquare(OpenCodeIcon, accessibilityLabel: OpenCodeText?)
+    case iconCircle(OpenCodeIcon, accessibilityLabel: OpenCodeText?)
+    /// The glyph text is shown verbatim (a symbol such as "/", not a word).
+    case iconCircleText(String, accessibilityLabel: OpenCodeText?)
 }
 
 enum OpenCodeButtonContrast {
@@ -48,7 +49,7 @@ struct OpenCodeButton: View {
     var body: some View {
         if case let .link(title) = variant {
             Button(action: action) {
-                Text(title)
+                Text(openCode: title)
                     .font(OpenCodeTypography.body)
                     .fontWeight(.semibold)
                     .underline()
@@ -100,27 +101,27 @@ struct OpenCodeButton: View {
     private var label: some View {
         switch variant {
         case let .fullWidthText(title):
-            Text(title)
+            Text(openCode: title)
                 .font(OpenCodeTypography.button)
         case let .compactText(title):
-            Text(title)
+            Text(openCode: title)
                 .font(OpenCodeTypography.button)
                 .lineLimit(1)
         case let .iconSquare(icon, accessibilityLabel):
             OpenCodeIconImage(icon: icon, size: 18)
-                .accessibilityLabel(accessibilityLabel ?? "")
+                .accessibilityLabel(openCode: accessibilityLabel ?? .empty)
                 .accessibilityHidden(accessibilityLabel == nil)
         case let .iconCircle(icon, accessibilityLabel):
             OpenCodeIconImage(icon: icon, size: 18)
-                .accessibilityLabel(accessibilityLabel ?? "")
+                .accessibilityLabel(openCode: accessibilityLabel ?? .empty)
                 .accessibilityHidden(accessibilityLabel == nil)
         case let .iconCircleText(text, accessibilityLabel):
-            Text(text)
+            Text(verbatim: text)
                 .font(.system(size: 18, weight: .semibold))
-                .accessibilityLabel(accessibilityLabel ?? "")
+                .accessibilityLabel(openCode: accessibilityLabel ?? .empty)
                 .accessibilityHidden(accessibilityLabel == nil)
         case let .link(title):
-            Text(title)
+            Text(openCode: title)
                 .font(OpenCodeTypography.body)
                 .fontWeight(.semibold)
                 .underline()

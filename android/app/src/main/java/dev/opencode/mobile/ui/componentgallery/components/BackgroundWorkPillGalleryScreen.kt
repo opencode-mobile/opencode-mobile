@@ -24,6 +24,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatSubagent
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatBackgroundWorkList
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatBackgroundWorkPill
+import dev.opencode.mobile.ui.text.UiText
 
 @Composable
 fun BackgroundWorkPillGalleryScreen(modifier: Modifier = Modifier) {
@@ -107,7 +108,7 @@ private fun gallerySubagents(
         startedAtMs = nowMs - startedAgoMs,
         finishedAtMs = finishedAgoMs?.let { nowMs - it },
         agentTag = SessionChatBackgroundWork.agentTag(agent),
-        currentStep = currentStep,
+        currentStep = currentStep?.let(UiText::verbatim),
         toolCount = toolCount,
         result = result,
     )

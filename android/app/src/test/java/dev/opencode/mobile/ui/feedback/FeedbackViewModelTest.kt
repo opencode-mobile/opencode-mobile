@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.feedback
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogExportWindow
 import dev.opencode.mobile.domain.feedback.FeedbackAttachmentRenderer
 import dev.opencode.mobile.domain.feedback.FeedbackCooldownStore
@@ -12,6 +13,8 @@ import dev.opencode.mobile.domain.feedback.FeedbackSubmitResult
 import dev.opencode.mobile.domain.feedback.FeedbackSubmitter
 import dev.opencode.mobile.domain.feedback.ShareFeedbackSubmitter
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationPhase
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -54,9 +57,10 @@ class FeedbackViewModelTest {
         val viewModel = viewModel()
         viewModel.open(FeedbackScreen.Settings)
 
-        assertEquals("What happened? What did you expect?", viewModel.state.value.placeholder)
+        assertEquals(UiText.resource(R.string.feedback_placeholder_bug), viewModel.state.value.placeholder)
+        assertEquals("What happened? What did you expect?", viewModel.state.value.placeholder.english())
         viewModel.setKind(FeedbackKind.Feedback)
-        assertEquals("What would make OpenCode better for you?", viewModel.state.value.placeholder)
+        assertEquals("What would make OpenCode better for you?", viewModel.state.value.placeholder.english())
         assertEquals("Idea", FeedbackKind.Feedback.label)
     }
 
@@ -370,17 +374,17 @@ class FeedbackViewModelTest {
     fun dictation_morphsTheSheetIntoListening() {
         val viewModel = viewModel()
         viewModel.open(FeedbackScreen.Settings)
-        assertEquals("Report a problem", viewModel.state.value.sheetTitle)
+        assertEquals("Report a problem", viewModel.state.value.sheetTitle.english())
         assertFalse(viewModel.state.value.dictationTakesOverCompose)
 
         viewModel.beginDictation(languageLabel = "English", onDevice = true)
 
-        assertEquals("Listening", viewModel.state.value.sheetTitle)
+        assertEquals("Listening", viewModel.state.value.sheetTitle.english())
         assertTrue(viewModel.state.value.dictationTakesOverCompose)
 
         viewModel.dictationCancel()
 
-        assertEquals("Report a problem", viewModel.state.value.sheetTitle)
+        assertEquals("Report a problem", viewModel.state.value.sheetTitle.english())
         assertFalse(viewModel.state.value.dictationTakesOverCompose)
     }
 
@@ -392,7 +396,7 @@ class FeedbackViewModelTest {
         viewModel.beginDictationUnavailable(ComposerDictationPhase.PermissionDenied, "Microphone access is off")
 
         assertTrue(viewModel.state.value.dictationTakesOverCompose)
-        assertEquals("Report a problem", viewModel.state.value.sheetTitle)
+        assertEquals("Report a problem", viewModel.state.value.sheetTitle.english())
     }
 
     @Test
@@ -423,7 +427,7 @@ class FeedbackViewModelTest {
         viewModel.dictationStopped()
 
         assertEquals(ComposerDictationPhase.Stopped, viewModel.state.value.dictation?.phase)
-        assertEquals("Listening", viewModel.state.value.sheetTitle)
+        assertEquals("Listening", viewModel.state.value.sheetTitle.english())
         assertTrue(viewModel.state.value.dictationTakesOverCompose)
     }
 

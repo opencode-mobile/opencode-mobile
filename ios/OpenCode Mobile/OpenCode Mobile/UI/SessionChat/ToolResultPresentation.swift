@@ -21,7 +21,7 @@ nonisolated enum ToolResultPresentation: Equatable, Sendable {
     }
 
     nonisolated struct Count: Equatable, Sendable {
-        var label: String
+        var label: TimelineText
         var tone: StatusTone
     }
 
@@ -33,8 +33,11 @@ nonisolated enum ToolResultPresentation: Equatable, Sendable {
         var counts: [Count]
         var raw: String
 
-        var eyebrow: String { "Shell" }
-        var title: String { countTitle(files.count, singular: "file", plural: "files") }
+        var eyebrow: TimelineText { ToolResultPresentation.shellLabel }
+        var title: TimelineText {
+            let count = files.count
+            return .app("tool.count.file", "\(count) files")
+        }
     }
 
     nonisolated struct PathRow: Equatable, Sendable {
@@ -44,12 +47,15 @@ nonisolated enum ToolResultPresentation: Equatable, Sendable {
     }
 
     nonisolated struct PathList: Equatable, Sendable {
-        var eyebrow: String
+        var eyebrow: TimelineText
         var command: String?
         var paths: [PathRow]
         var raw: String
 
-        var title: String { countTitle(paths.count, singular: "path", plural: "paths") }
+        var title: TimelineText {
+            let count = paths.count
+            return .app("tool.count.path", "\(count) paths")
+        }
     }
 
     nonisolated struct PullRequest: Equatable, Sendable {
@@ -62,8 +68,8 @@ nonisolated enum ToolResultPresentation: Equatable, Sendable {
         var pullTitle: String?
         var raw: String
 
-        var eyebrow: String { "Shell" }
-        var title: String { "Pull request opened" }
+        var eyebrow: TimelineText { ToolResultPresentation.shellLabel }
+        var title: TimelineText { .app("tool.result.pull_request_opened", "Pull request opened") }
     }
 
     nonisolated struct Thought: Equatable, Sendable {
@@ -72,8 +78,8 @@ nonisolated enum ToolResultPresentation: Equatable, Sendable {
         var paragraphs: [String]
         var raw: String
 
-        var eyebrow: String { "Thought" }
-        var title: String { "Thought" }
+        var eyebrow: TimelineText { .app("tool.title.thought", "Thought") }
+        var title: TimelineText { .app("tool.title.thought", "Thought") }
     }
 
     nonisolated enum SourceKind: Equatable, Sendable {
@@ -88,15 +94,16 @@ nonisolated enum ToolResultPresentation: Equatable, Sendable {
 
     nonisolated struct Source: Equatable, Sendable {
         var kind: SourceKind
+        /// Empty when the tool sent no path.
         var filename: String
         var language: String?
         var highlightLanguage: String?
-        var rangeLabel: String?
+        var rangeLabel: TimelineText?
         var lines: [SourceLine]
         var raw: String
 
-        var eyebrow: String { kind == .read ? "Read" : "Write" }
-        var title: String { filename }
+        var eyebrow: TimelineText { kind == .read ? .app("tool.title.read", "Read") : .app("tool.title.write", "Write") }
+        var title: TimelineText { ToolResultPresentation.fileTitle(filename) }
     }
 
     nonisolated struct GrepHit: Equatable, Sendable {
@@ -117,27 +124,28 @@ nonisolated enum ToolResultPresentation: Equatable, Sendable {
         var groups: [GrepFile]
         var raw: String
 
-        var eyebrow: String { "Grep" }
-        var title: String { pattern }
+        var eyebrow: TimelineText { .app("tool.title.grep", "Grep") }
+        var title: TimelineText { .verbatim(pattern) }
     }
 
     nonisolated struct Edit: Equatable, Sendable {
-        var eyebrow: String
+        var eyebrow: TimelineText
+        /// Empty when the tool sent no path.
         var filename: String
         var additions: Int
         var deletions: Int
         var patch: String
         var raw: String
 
-        var title: String { filename }
+        var title: TimelineText { ToolResultPresentation.fileTitle(filename) }
     }
 
     nonisolated struct Unrecognized: Equatable, Sendable {
-        var title: String
+        var title: TimelineText
         var error: String?
         var raw: String
 
-        var eyebrow: String? { nil }
+        var eyebrow: TimelineText? { nil }
     }
 
     case fileStatus(FileStatus)
@@ -149,7 +157,7 @@ nonisolated enum ToolResultPresentation: Equatable, Sendable {
     case edit(Edit)
     case unrecognized(Unrecognized)
 
-    var title: String {
+    var title: TimelineText {
         switch self {
         case .fileStatus(let value): value.title
         case .pathList(let value): value.title
@@ -175,7 +183,7 @@ nonisolated enum ToolResultPresentation: Equatable, Sendable {
         }
     }
 
-    var eyebrow: String? {
+    var eyebrow: TimelineText? {
         switch self {
         case .fileStatus(let value): value.eyebrow
         case .pathList(let value): value.eyebrow
@@ -202,15 +210,19 @@ nonisolated enum ToolResultPresentation: Equatable, Sendable {
         return false
     }
 
-    static func countTitle(_ count: Int, singular: String, plural: String) -> String {
-        count == 1 ? "1 \(singular)" : "\(count) \(plural)"
+    static let shellLabel = TimelineText.app("tool.title.shell", "Shell")
+
+    /// A file name, or `File` when the tool sent no path.
+    static func fileTitle(_ filename: String) -> TimelineText {
+        filename.isEmpty ? .app("tool.result.file", "File") : .verbatim(filename)
     }
 }
 
 /// Inputs the classifier needs. Callers extract these from a tool part.
 nonisolated struct ToolResultRequest: Equatable, Sendable {
     var toolName: String
-    var fallbackTitle: String
+    /// The card title, used when the result has no shape of its own.
+    var fallbackTitle: TimelineText
     var command: String? = nil
     var path: String? = nil
     var pattern: String? = nil
@@ -270,7 +282,7 @@ nonisolated enum ToolResultInspector {
             if !rows.isEmpty {
                 return .pathList(
                     ToolResultPresentation.PathList(
-                        eyebrow: name == "glob" ? "Glob" : "Shell",
+                        eyebrow: name == "glob" ? .app("tool.title.glob", "Glob") : ToolResultPresentation.shellLabel,
                         command: command ?? request.pattern,
                         paths: rows,
                         raw: output
@@ -280,7 +292,7 @@ nonisolated enum ToolResultInspector {
         }
 
         if name == "read", let output {
-            let path = nonBlank(request.path) ?? "File"
+            let path = nonBlank(request.path) ?? ""
             return .source(source(kind: .read, path: path, body: output, request: request))
         }
         if name == "write" {
@@ -307,15 +319,19 @@ nonisolated enum ToolResultInspector {
         }
 
         if name == "edit" || name == "apply_patch" || name == "patch" {
-            let path = nonBlank(request.path) ?? "File"
+            let path = nonBlank(request.path) ?? ""
             let patch = request.patch.flatMap { $0.contains("@@") ? $0 : nil }
-                ?? syntheticPatch(path: path, old: request.oldString, new: request.newString)
+                ?? syntheticPatch(
+                    path: path.isEmpty ? syntheticPatchPath : path,
+                    old: request.oldString,
+                    new: request.newString
+                )
             if let patch {
                 let additions = request.patch.map { countPrefix($0, prefix: "+") } ?? request.newString.map(lineCount) ?? 0
                 let deletions = request.patch.map { countPrefix($0, prefix: "-") } ?? request.oldString.map(lineCount) ?? 0
                 return .edit(
                     ToolResultPresentation.Edit(
-                        eyebrow: name == "edit" ? "Edit" : "Patch",
+                        eyebrow: name == "edit" ? .app("tool.title.edit", "Edit") : .app("tool.title.patch", "Patch"),
                         filename: fileName(path),
                         additions: additions,
                         deletions: deletions,
@@ -328,7 +344,8 @@ nonisolated enum ToolResultInspector {
 
         guard let raw = output ?? error else { return nil }
         let shownError = error.flatMap { output != nil && $0 != output ? $0 : nil }
-        let title = isBlank(request.fallbackTitle) ? toolLabel(name) : request.fallbackTitle
+        let fallbackIsBlank = request.fallbackTitle.verbatimValue.map(isBlank) ?? false
+        let title = fallbackIsBlank ? toolLabel(name) : request.fallbackTitle
         return .unrecognized(
             ToolResultPresentation.Unrecognized(title: title, error: shownError, raw: raw)
         )
@@ -375,13 +392,14 @@ nonisolated enum ToolResultInspector {
             }
         }
         let end = lines.last?.number
-        let range: String?
+        let range: TimelineText?
         if let offset = request.offset, let limit = request.limit {
-            range = "lines \(offset)\u{2013}\(offset + limit - 1)"
+            let last = offset + limit - 1
+            range = .app("tool.result.lines_range", "lines \(offset)\u{2013}\(last)")
         } else if let offset = request.offset, let end {
-            range = "lines \(offset)\u{2013}\(end)"
+            range = .app("tool.result.lines_range", "lines \(offset)\u{2013}\(end)")
         } else if let limit = request.limit {
-            range = "first \(limit) lines"
+            range = .app("tool.result.first_lines", "first \(limit) lines")
         } else {
             range = nil
         }
@@ -517,10 +535,13 @@ nonisolated enum ToolResultInspector {
         let modified = files.filter { $0.tone == .modified }.count
         let added = files.filter { $0.tone == .added }.count
         let deleted = files.filter { $0.tone == .deleted }.count
+        let modifiedLabel = TimelineText.app("timeline.tool_result.files_modified", "\(modified) modified")
+        let addedLabel = TimelineText.app("timeline.tool_result.files_added", "\(added) added")
+        let deletedLabel = TimelineText.app("timeline.tool_result.files_deleted", "\(deleted) deleted")
         return [
-            modified > 0 ? ToolResultPresentation.Count(label: "\(modified) modified", tone: .modified) : nil,
-            added > 0 ? ToolResultPresentation.Count(label: "\(added) added", tone: .added) : nil,
-            deleted > 0 ? ToolResultPresentation.Count(label: "\(deleted) deleted", tone: .deleted) : nil,
+            modified > 0 ? ToolResultPresentation.Count(label: modifiedLabel, tone: .modified) : nil,
+            added > 0 ? ToolResultPresentation.Count(label: addedLabel, tone: .added) : nil,
+            deleted > 0 ? ToolResultPresentation.Count(label: deletedLabel, tone: .deleted) : nil,
         ].compactMap { $0 }
     }
 
@@ -695,17 +716,21 @@ nonisolated enum ToolResultInspector {
         value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private static func toolLabel(_ name: String) -> String {
+    /// Path in the header of a patch built from old and new text when the tool sent no path.
+    private static let syntheticPatchPath = "File"
+
+    private static func toolLabel(_ name: String) -> TimelineText {
         switch name {
-        case "bash", "shell": return "Shell"
-        case "grep": return "Grep"
-        case "glob": return "Glob"
-        case "read": return "Read"
-        case "write": return "Write"
-        case "edit": return "Edit"
+        case "bash", "shell": return ToolResultPresentation.shellLabel
+        case "grep": return .app("tool.title.grep", "Grep")
+        case "glob": return .app("tool.title.glob", "Glob")
+        case "read": return .app("tool.title.read", "Read")
+        case "write": return .app("tool.title.write", "Write")
+        case "edit": return .app("tool.title.edit", "Edit")
         default:
-            guard let first = name.first else { return name }
-            return String(first).uppercased() + name.dropFirst()
+            // Any other tool keeps its own name, which is server content.
+            guard let first = name.first else { return .verbatim(name) }
+            return .verbatim(String(first).uppercased() + name.dropFirst())
         }
     }
 

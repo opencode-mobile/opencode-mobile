@@ -24,6 +24,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -31,6 +32,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -59,6 +61,7 @@ fun OpenCodeDropOverlay(
     previews: List<OpenCodeAttachmentVariant> = emptyList(),
 ) {
     val accent = if (variant == OpenCodeDropOverlayVariant.Accept) openCodeColor("interactive") else openCodeColor("error")
+    val dropDescription = stringResource(R.string.component_drop_overlay_accessibility_label, title, subtitle)
     Box(
         modifier = modifier.fillMaxSize().background(Color.Black.copy(alpha = DROP_OVERLAY_SCRIM_ALPHA)),
         contentAlignment = Alignment.Center,
@@ -73,7 +76,7 @@ fun OpenCodeDropOverlay(
                     .padding(horizontal = 24.dp, vertical = 28.dp)
                     .semantics(mergeDescendants = true) {
                         liveRegion = LiveRegionMode.Polite
-                        contentDescription = "$title. $subtitle"
+                        contentDescription = dropDescription
                     },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -116,7 +119,7 @@ private fun DropPreviewTile(variant: OpenCodeAttachmentVariant) {
         contentAlignment = Alignment.Center,
     ) {
         Text(
-            text = if (variant == OpenCodeAttachmentVariant.Image) "IMG" else variant.label.uppercase(),
+            text = if (variant == OpenCodeAttachmentVariant.Image) "IMG" else variant.kindLabel(),
             style = MaterialTheme.typography.labelSmall,
             color = openCodeColor("text-weak"),
         )

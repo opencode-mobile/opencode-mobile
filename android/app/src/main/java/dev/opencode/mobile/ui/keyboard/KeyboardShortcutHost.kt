@@ -10,7 +10,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.AbstractComposeView
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ui.components.OpenCodeInputFocusRegistry
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.UiTextLookup
+import dev.opencode.mobile.ui.text.resolve
 
 /**
  * Window-level dispatcher for [KeyboardShortcutAction]s. Screens register a handler while the
@@ -95,18 +99,21 @@ class KeyboardShortcutHost(
         )
     }
 
-    /** Group for the system Keyboard Shortcuts Helper (Meta+/), or null when nothing applies. */
-    fun shortcutGroup(): KeyboardShortcutGroup? {
+    /**
+     * Group for the system Keyboard Shortcuts Helper (Meta+/), or null when nothing applies.
+     * [lookup] resolves the labels in the current configuration.
+     */
+    fun shortcutGroup(lookup: UiTextLookup): KeyboardShortcutGroup? {
         val actions = activeActions()
         if (actions.isEmpty()) return null
         return KeyboardShortcutGroup(
-            GROUP_LABEL,
-            actions.map { action -> KeyboardShortcutInfo(action.title, action.keyCode, action.metaState) },
+            GROUP_LABEL.resolve(lookup),
+            actions.map { action -> KeyboardShortcutInfo(action.title.resolve(lookup), action.keyCode, action.metaState) },
         )
     }
 
     private companion object {
-        const val GROUP_LABEL = "Sessions"
+        val GROUP_LABEL: UiText = UiText.resource(R.string.keyboard_shortcuts_group_sessions)
     }
 }
 

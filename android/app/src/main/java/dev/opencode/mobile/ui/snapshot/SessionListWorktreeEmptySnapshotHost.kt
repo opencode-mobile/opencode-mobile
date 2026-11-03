@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.snapshot
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -8,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
@@ -21,7 +23,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 @Composable
 fun SessionListWorktreeEmptySnapshotHost(
     modifier: Modifier = Modifier,
-    message: String = SnapshotEvidenceMocks.WORKTREE_EMPTY_MESSAGE,
+    @StringRes message: Int = SnapshotEvidenceMocks.WORKTREE_EMPTY_MESSAGE,
 ) {
     Box(
         modifier =
@@ -32,10 +34,10 @@ fun SessionListWorktreeEmptySnapshotHost(
         contentAlignment = Alignment.Center,
     ) {
         OpenCodeEmptyState(
-            title = SessionListWorktreeEmptyCopy.TITLE,
-            message = message,
+            title = stringResource(SessionListWorktreeEmptyCopy.TITLE),
+            message = stringResource(message),
             icon = OpenCodeIcons.CallSplit,
-            primaryAction = OpenCodeEmptyStateAction(title = SessionListWorktreeEmptyCopy.ACTION, onClick = {}),
+            primaryAction = OpenCodeEmptyStateAction(title = stringResource(SessionListWorktreeEmptyCopy.ACTION), onClick = {}),
         )
     }
 }

@@ -23,12 +23,13 @@ struct SessionChatActivityCardPresentation: Equatable {
                 worstStatus: card.worstStatus == .failed ? .failed : .completed,
                 stepCount: card.steps.count
             )
-            summary = SessionChatActivityCardBlock.usedToolNames(card.steps).joined(separator: ", ")
+            summary = SessionChatActivityCardBlock.usedToolNamesText(card.steps).resolved
             agents = card.childSteps.map { step in
-                OpenCodeActivityAgentRow(
+                let detail: String? = step.detail?.resolved
+                return OpenCodeActivityAgentRow(
                     id: step.id,
                     agentName: step.agentDisplayName,
-                    action: step.childSession?.result ?? step.childSession?.description ?? step.detail,
+                    action: step.childSession?.result ?? step.childSession?.description ?? detail,
                     startedAtMs: nil
                 )
             }
@@ -37,14 +38,15 @@ struct SessionChatActivityCardPresentation: Equatable {
             return
         }
         state = .live(startedAtMs: ToolStartTime.normalizeEpochMs(card.startedAtMs))
-        summary = SessionChatActivityCardBlock.summary(card.steps)
+        summary = SessionChatActivityCardBlock.summary(card.steps).resolved
         let runningChildren = card.runningChildren
         agents = runningChildren.map { step in
             let childID = step.childSession?.childSessionId
+            let detail: String? = step.detail?.resolved
             return OpenCodeActivityAgentRow(
                 id: step.id,
                 agentName: step.agentDisplayName,
-                action: childID.flatMap { childActions[$0] } ?? step.childSession?.description ?? step.detail,
+                action: childID.flatMap { childActions[$0] } ?? step.childSession?.description ?? detail,
                 startedAtMs: ToolStartTime.normalizeEpochMs(step.startedAtMs)
             )
         }
@@ -52,7 +54,7 @@ struct SessionChatActivityCardPresentation: Equatable {
         case .tool(let tool):
             current = OpenCodeActivityCurrentRow(
                 icon: tool.icon,
-                title: tool.title,
+                title: tool.title.resolved,
                 extraRunning: tool.extraRunning,
                 startedAtMs: tool.running ? ToolStartTime.normalizeEpochMs(tool.startedAtMs) : nil,
                 running: tool.running,
@@ -63,9 +65,10 @@ struct SessionChatActivityCardPresentation: Equatable {
         case .idle(let text):
             current = nil
             // "Waiting for you" is render-time state; the hold only knows Thinking and Waiting for agents.
-            idleText = awaitingUser && text == SessionChatActivityFooter.thinking
+            let shown: TimelineText = awaitingUser && text == SessionChatActivityFooter.thinking
                 ? SessionChatActivityCardBlock.idleText(hasRunningChildren: false, awaitingUser: true)
                 : text
+            idleText = shown.resolved
             return
         case nil:
             break
@@ -73,7 +76,7 @@ struct SessionChatActivityCardPresentation: Equatable {
         if let latest = card.latestRunningTool {
             current = OpenCodeActivityCurrentRow(
                 icon: latest.activityIcon,
-                title: latest.runningTitle,
+                title: latest.runningTitle.resolved,
                 extraRunning: card.runningTools.count - 1,
                 startedAtMs: ToolStartTime.normalizeEpochMs(latest.startedAtMs),
                 stepID: latest.id
@@ -84,7 +87,7 @@ struct SessionChatActivityCardPresentation: Equatable {
             idleText = SessionChatActivityCardBlock.idleText(
                 hasRunningChildren: !runningChildren.isEmpty,
                 awaitingUser: awaitingUser
-            )
+            ).resolved
         }
     }
 
@@ -130,7 +133,7 @@ struct SessionChatActivityCardPresentation: Equatable {
             guard let id = step.childSession?.childSessionId,
                   let action = activities[id]?.currentAction
             else { continue }
-            actions[id] = action
+            actions[id] = action.resolved
         }
         return actions
     }
@@ -138,7 +141,7 @@ struct SessionChatActivityCardPresentation: Equatable {
 
 extension SessionChatStep {
     var agentDisplayName: String {
-        OpenCodeToolChip.displayAgentName(childSession?.agent ?? title)
+        OpenCodeToolChip.displayAgentName(childSession?.agent ?? title.resolved)
     }
 
     var activityIcon: OpenCodeActivityLineIcon {

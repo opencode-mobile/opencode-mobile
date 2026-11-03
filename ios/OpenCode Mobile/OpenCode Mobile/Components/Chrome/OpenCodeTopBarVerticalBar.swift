@@ -87,7 +87,7 @@ enum OpenCodeVerticalBarLayout {
 /// One item `OpenCodeTopBar` hands to its vertical bar.
 struct OpenCodeTopBarRailItem {
     let icon: OpenCodeIcon
-    let accessibilityLabel: String
+    let accessibilityLabel: OpenCodeText
     let enabled: Bool
     /// The overflow menu of an `OpenCodeTopBarOverflowHost` opens from this item.
     let anchorsOverflowMenu: Bool
@@ -265,7 +265,7 @@ struct OpenCodeTopBarVerticalBarLayer: View {
         .openCodeRailGlass()
         .opacity(item.enabled ? 1 : 0.5)
         .disabled(!item.enabled)
-        .accessibilityLabel(item.accessibilityLabel)
+        .accessibilityLabel(openCode: item.accessibilityLabel)
     }
 
     @ViewBuilder

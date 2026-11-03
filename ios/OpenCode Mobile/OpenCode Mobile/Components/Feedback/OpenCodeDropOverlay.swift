@@ -13,8 +13,8 @@ enum OpenCodeDropOverlayVariant {
 /// accepted (at most four are shown); a `.reject` card shows none.
 struct OpenCodeDropOverlay: View {
     let variant: OpenCodeDropOverlayVariant
-    let title: String
-    let subtitle: String
+    let title: OpenCodeText
+    let subtitle: OpenCodeText
     var previews: [OpenCodeAttachmentVariant] = []
 
     private static let scrimAlpha: Double = 0.32
@@ -23,6 +23,15 @@ struct OpenCodeDropOverlay: View {
 
     private var accent: Color {
         variant == .accept ? OpenCodeColors.interactive : OpenCodeColors.error
+    }
+
+    private var accessibilityLabel: LocalizedStringResource {
+        let title = title.resolved
+        let subtitle = subtitle.resolved
+        return LocalizedStringResource(
+            "component.drop_overlay.accessibility_label",
+            defaultValue: "\(title). \(subtitle)"
+        )
     }
 
     var body: some View {
@@ -39,11 +48,11 @@ struct OpenCodeDropOverlay: View {
                         }
                     }
                 }
-                Text(title)
+                Text(openCode: title)
                     .font(OpenCodeTypography.heading)
                     .foregroundStyle(variant == .accept ? OpenCodeColors.textStrong : accent)
                     .multilineTextAlignment(.center)
-                Text(subtitle)
+                Text(openCode: subtitle)
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
                     .multilineTextAlignment(.center)
@@ -61,7 +70,7 @@ struct OpenCodeDropOverlay: View {
             )
             .padding(.horizontal, 32)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(title). \(subtitle)")
+            .accessibilityLabel(Text(accessibilityLabel))
         }
         .accessibilityIdentifier("session-chat-drop-overlay")
     }

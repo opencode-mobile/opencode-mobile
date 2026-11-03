@@ -98,7 +98,7 @@ struct OpenCodeTaskRow: View {
                         .foregroundStyle(OpenCodeColors.textStrong)
                         .lineLimit(1)
                     if let tag, !tag.trimmingCharacters(in: .whitespaces).isEmpty {
-                        OpenCodeTag(tag, size: .small)
+                        OpenCodeTag(.verbatim(tag), size: .small)
                             .fixedSize()
                     }
                 }

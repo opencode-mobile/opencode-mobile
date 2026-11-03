@@ -45,7 +45,7 @@ struct V2SessionRemote: SessionRemote, Sendable {
         if let title, !title.isEmpty, created.title != title {
             created.title = title
         } else if created.title.isEmpty {
-            created.title = "New Session"
+            created.title = OptimisticSessionCreate.placeholderTitle
         }
         return created
     }

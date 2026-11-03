@@ -7,15 +7,15 @@ struct ConnectionOnboardingView: View {
         VStack(spacing: 24) {
             Spacer()
             VStack(spacing: 12) {
-                Text("Connect to your server")
+                Text("connection.onboarding.title")
                     .font(OpenCodeTypography.heading)
                     .multilineTextAlignment(.center)
-                Text("OpenCode Mobile controls sessions on an opencode server running on your development machine.")
+                Text("connection.onboarding.body")
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textBase)
                     .multilineTextAlignment(.center)
             }
-            OpenCodeButton(variant: .fullWidthText(title: "Connect to server"), action: onConnectClick)
+            OpenCodeButton(variant: .fullWidthText(title: "connection.onboarding.connect"), action: onConnectClick)
             Spacer()
         }
         .padding(24)

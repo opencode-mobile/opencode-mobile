@@ -32,7 +32,7 @@ struct OutgoingMessageGalleryView: View {
             HStack(spacing: 8) {
                 ForEach(OutgoingMessageSample.allCases, id: \.self) { option in
                     OpenCodeChoiceBadge(
-                        label: option.rawValue,
+                        label: .verbatim(option.rawValue),
                         selected: sample == option,
                         action: { sample = option }
                     )

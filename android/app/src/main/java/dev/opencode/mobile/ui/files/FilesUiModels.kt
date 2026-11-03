@@ -1,8 +1,10 @@
 package dev.opencode.mobile.ui.files
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.filesystem.ProjectEntry
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.ui.components.OpenCodeCodeLine
+import dev.opencode.mobile.ui.text.UiText
 import java.util.Locale
 import kotlin.math.roundToLong
 
@@ -14,8 +16,9 @@ sealed interface FilesFolderState {
         val entries: List<ProjectEntry>,
     ) : FilesFolderState
 
+    /** [message] is the server's detail, verbatim, or app text when there is none. */
     data class Failed(
-        val message: String,
+        val message: UiText,
     ) : FilesFolderState
 }
 
@@ -45,7 +48,7 @@ sealed interface FilesTreeRow {
     data class FolderError(
         val folderPath: String,
         override val depth: Int,
-        val message: String,
+        val message: UiText,
     ) : FilesTreeRow {
         override val key: String get() = "error:$folderPath"
     }
@@ -61,7 +64,7 @@ sealed interface FilesFindState {
     ) : FilesFindState
 
     data class Failed(
-        val message: String,
+        val message: UiText,
     ) : FilesFindState
 }
 
@@ -79,8 +82,14 @@ sealed interface FilesViewerContent {
     ) : FilesViewerContent {
         val lineCount: Int get() = lines.size
 
-        val metaLabel: String
-            get() = "$languageName · $lineCount ${if (lineCount == 1) "line" else "lines"}"
+        /** "Kotlin · 2 lines". The language name stays verbatim. */
+        val metaLabel: UiText
+            get() =
+                UiText.resource(
+                    R.string.file_viewer_meta,
+                    UiText.verbatim(languageName),
+                    UiText.plural(R.plurals.file_viewer_line_count, lineCount),
+                )
     }
 
     class Image(
@@ -98,18 +107,17 @@ sealed interface FilesViewerContent {
     data class TooLarge(
         val byteCount: Long?,
     ) : FilesViewerContent {
-        val title: String get() = "Too large to preview"
+        val title: UiText get() = UiText.resource(R.string.file_viewer_too_large_title)
 
-        val message: String
-            get() = listOfNotNull(MESSAGE, byteCount?.let(::formatFileSize)).joinToString("\n")
-
-        private companion object {
-            const val MESSAGE = "This file is bigger than the app previews."
-        }
+        /** The message, plus the file size on a second line when known. */
+        val message: UiText
+            get() =
+                byteCount?.let { UiText.resource(R.string.file_viewer_too_large_message_size, formatFileSize(it)) }
+                    ?: UiText.resource(R.string.file_viewer_too_large_message)
     }
 
     data class Failed(
-        val message: String,
+        val message: UiText,
     ) : FilesViewerContent
 }
 
@@ -144,9 +152,12 @@ data class FilesUiState(
     val activeViewer: FilesViewerState? get() = activePath?.let(viewers::get)
 }
 
-/** Decimal file size such as `40 MB` or `1.5 KB`, matching the platform file-size formatters. */
-internal fun formatFileSize(bytes: Long): String {
-    if (bytes < 1_000) return if (bytes == 1L) "1 byte" else "$bytes bytes"
+/**
+ * Decimal file size such as `40 MB` or `1.5 KB`, matching the platform file-size formatters.
+ * Byte counts are a plural resource; unit symbols and the number format stay as they are.
+ */
+internal fun formatFileSize(bytes: Long): UiText {
+    if (bytes < 1_000) return UiText.plural(R.plurals.file_viewer_size_bytes, bytes.toInt())
     val units = listOf("KB", "MB", "GB", "TB")
     var value = bytes / 1_000.0
     var unit = 0
@@ -160,5 +171,5 @@ internal fun formatFileSize(bytes: Long): String {
         } else {
             value.roundToLong().toString()
         }
-    return "$number ${units[unit]}"
+    return UiText.verbatim("$number ${units[unit]}")
 }

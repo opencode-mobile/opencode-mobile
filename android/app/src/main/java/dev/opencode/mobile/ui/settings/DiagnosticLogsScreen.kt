@@ -21,6 +21,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
@@ -28,6 +30,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogAttachment
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
@@ -56,6 +59,8 @@ import dev.opencode.mobile.ui.components.OpenCodeStatusStackStyle
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -80,8 +85,8 @@ data class DiagnosticLogsUiState(
     val areaCounts: List<Pair<String, Int>> = emptyList(),
     val oldestTimestampLabel: String? = null,
     val newestTimestampLabel: String? = null,
-    val shareError: String? = null,
-    val saveMessage: String? = null,
+    val shareError: UiText? = null,
+    val saveMessage: UiText? = null,
 ) {
     val hasEntries: Boolean get() = entryCount > 0
 }
@@ -141,6 +146,7 @@ class DiagnosticLogsViewModel
             }
         }
 
+        /** Builds the share intent; the caller adds the subject and the chooser (app text). */
         fun shareViaApps(onReady: (Intent) -> Unit) {
             viewModelScope.launch {
                 runCatching {
@@ -148,7 +154,6 @@ class DiagnosticLogsViewModel
                     Intent(Intent.ACTION_SEND).apply {
                         type = EXPORT_MIME_TYPE
                         putExtra(Intent.EXTRA_STREAM, uri)
-                        putExtra(Intent.EXTRA_SUBJECT, "OpenCode diagnostic logs")
                         putExtra(Intent.EXTRA_TITLE, EXPORT_FILE_NAME)
                         clipData = ClipData.newUri(context.contentResolver, EXPORT_FILE_NAME, uri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -156,11 +161,11 @@ class DiagnosticLogsViewModel
                 }.onSuccess { intent ->
                     mutableState.value = mutableState.value.copy(shareError = null, saveMessage = null)
                     refresh()
-                    onReady(Intent.createChooser(intent, "Share diagnostic logs"))
+                    onReady(intent)
                 }.onFailure {
                     mutableState.value =
                         mutableState.value.copy(
-                            shareError = "Couldn't prepare diagnostic log for sharing.",
+                            shareError = UiText.resource(R.string.diagnostics_error_share),
                             saveMessage = null,
                         )
                 }
@@ -184,14 +189,14 @@ class DiagnosticLogsViewModel
                     mutableState.value =
                         mutableState.value.copy(
                             shareError = null,
-                            saveMessage = "Saved diagnostic log.",
+                            saveMessage = UiText.resource(R.string.diagnostics_saved),
                         )
                     refresh()
                     onDone()
                 }.onFailure {
                     mutableState.value =
                         mutableState.value.copy(
-                            shareError = "Couldn't save diagnostic log.",
+                            shareError = UiText.resource(R.string.diagnostics_error_save),
                             saveMessage = null,
                         )
                     onDone()
@@ -253,7 +258,7 @@ fun DiagnosticLogsScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
-            title = "Diagnostic Logs",
+            title = stringResource(R.string.diagnostics_title),
             leading = openCodeDetailLeading(detailControl, onNavigateBack),
             showDivider = true,
         )
@@ -263,7 +268,7 @@ fun DiagnosticLogsScreen(
                 when {
                     state.loading ->
                         OpenCodeStatusStack(
-                            title = "Loading diagnostic logs",
+                            title = stringResource(R.string.diagnostics_loading),
                             style = OpenCodeStatusStackStyle.Spinner,
                             modifier = Modifier.weight(1f).fillMaxWidth(),
                         )
@@ -278,60 +283,75 @@ fun DiagnosticLogsScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             OpenCodeListItem(
-                                title = "Entries",
+                                title = stringResource(R.string.diagnostics_entries_title),
                                 subtitle =
                                     if (state.hasEntries) {
-                                        "${state.entryCount} redacted lines in the kept window"
+                                        pluralStringResource(
+                                            R.plurals.diagnostics_entries_count,
+                                            state.entryCount,
+                                            state.entryCount,
+                                        )
                                     } else {
-                                        "No entries in the kept window yet"
+                                        stringResource(R.string.diagnostics_entries_empty)
                                     },
                                 style = OpenCodeListItemStyle.Card,
                             )
                             OpenCodeListItem(
-                                title = "Kept",
-                                subtitle = "Last ${state.retainMinutes} minutes",
+                                title = stringResource(R.string.diagnostics_kept_title),
+                                subtitle =
+                                    pluralStringResource(
+                                        R.plurals.diagnostics_last_minutes,
+                                        state.retainMinutes,
+                                        state.retainMinutes,
+                                    ),
                                 style = OpenCodeListItemStyle.Card,
                             )
                             OpenCodeListItem(
-                                title = "Export",
-                                subtitle = state.exportWindow.label,
+                                title = stringResource(R.string.diagnostics_export_title),
+                                subtitle = state.exportWindow.lastMinutesLabel(),
                                 style = OpenCodeListItemStyle.Card,
                                 onClick = { showExportWindowPicker = true },
                             )
                             OpenCodeListItem(
-                                title = "Soft cap",
+                                title = stringResource(R.string.diagnostics_soft_cap_title),
                                 subtitle =
                                     if (state.droppedBySoftCap > 0) {
-                                        "${state.softCap} max · ${state.droppedBySoftCap} dropped oldest"
+                                        stringResource(R.string.diagnostics_soft_cap_dropped, state.softCap, state.droppedBySoftCap)
                                     } else {
-                                        "${state.softCap} max · none dropped"
+                                        pluralStringResource(R.plurals.diagnostics_soft_cap_none_dropped, state.softCap, state.softCap)
                                     },
                                 style = OpenCodeListItemStyle.Card,
                             )
                             OpenCodeListItem(
-                                title = "Format",
-                                subtitle = "JSONL · secrets and message bodies redacted",
+                                title = stringResource(R.string.diagnostics_format_title),
+                                subtitle = stringResource(R.string.diagnostics_format_value),
                                 style = OpenCodeListItemStyle.Card,
                             )
                             val oldest = state.oldestTimestampLabel
                             val newest = state.newestTimestampLabel
                             if (oldest != null && newest != null) {
                                 OpenCodeListItem(
-                                    title = "Range",
-                                    subtitle = if (oldest == newest) oldest else "$oldest → $newest",
+                                    title = stringResource(R.string.diagnostics_range_title),
+                                    subtitle =
+                                        if (oldest == newest) {
+                                            oldest
+                                        } else {
+                                            stringResource(R.string.diagnostics_range_value, oldest, newest)
+                                        },
                                     style = OpenCodeListItemStyle.Card,
                                 )
                             }
                             if (state.areaCounts.isNotEmpty()) {
                                 OpenCodeListItem(
-                                    title = "Areas",
+                                    title = stringResource(R.string.diagnostics_areas_title),
+                                    // Area names are log wire values, shown as is.
                                     subtitle = state.areaCounts.joinToString(" · ") { "${it.first} ${it.second}" },
                                     style = OpenCodeListItemStyle.Card,
                                 )
                             }
                             state.saveMessage?.let { message ->
                                 Text(
-                                    text = message,
+                                    text = message.resolve(),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = openCodeColor("text-base"),
                                     modifier = Modifier.padding(top = 4.dp),
@@ -339,7 +359,7 @@ fun DiagnosticLogsScreen(
                             }
                             state.shareError?.let { error ->
                                 OpenCodeInlineNotice(
-                                    message = error,
+                                    message = error.resolve(),
                                     tone = OpenCodeInlineNoticeTone.Error,
                                     modifier = Modifier.padding(top = 4.dp),
                                 )
@@ -356,14 +376,14 @@ fun DiagnosticLogsScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     OpenCodeButton(
-                        variant = OpenCodeButtonVariant.FullWidthText("Clear"),
+                        variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.diagnostics_clear)),
                         contrast = OpenCodeButtonContrast.Low,
                         size = OpenCodeButtonSize.Large,
                         enabled = state.hasEntries,
                         onClick = { showClearConfirmation = true },
                     )
                     OpenCodeButton(
-                        variant = OpenCodeButtonVariant.FullWidthText("Share"),
+                        variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.diagnostics_share)),
                         contrast = OpenCodeButtonContrast.High,
                         size = OpenCodeButtonSize.Large,
                         onClick = { showExportSheet = true },
@@ -375,12 +395,12 @@ fun DiagnosticLogsScreen(
 
     OpenCodeBottomSheet(
         visible = showExportWindowPicker,
-        title = "Export window",
+        title = stringResource(R.string.diagnostics_export_window_title),
         onDismissRequest = { showExportWindowPicker = false },
     ) {
         DiagnosticLogExportWindow.entries.forEach { window ->
             OpenCodeBottomSheetEntry(
-                title = window.label,
+                title = window.lastMinutesLabel(),
                 selected = window == state.exportWindow,
                 onClick = {
                     onExportWindowChange(window)
@@ -392,11 +412,11 @@ fun DiagnosticLogsScreen(
 
     OpenCodeBottomSheet(
         visible = showExportSheet,
-        title = "Export diagnostic logs",
+        title = stringResource(R.string.diagnostics_export_sheet_title),
         onDismissRequest = { showExportSheet = false },
     ) {
         OpenCodeBottomSheetEntry(
-            title = "Share via apps",
+            title = stringResource(R.string.diagnostics_share_via_apps),
             startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Description),
             onClick = {
                 showExportSheet = false
@@ -404,7 +424,7 @@ fun DiagnosticLogsScreen(
             },
         )
         OpenCodeBottomSheetEntry(
-            title = "Save to files",
+            title = stringResource(R.string.diagnostics_save_to_files),
             startDecorator = BottomSheetEntryDecorator.Icon(OpenCodeIcons.Folder),
             onClick = {
                 showExportSheet = false
@@ -415,11 +435,11 @@ fun DiagnosticLogsScreen(
 
     OpenCodeDialog(
         visible = showClearConfirmation,
-        title = "Clear diagnostic logs?",
-        subtitle = "This removes the stored diagnostic log.",
+        title = stringResource(R.string.diagnostics_clear_dialog_title),
+        subtitle = stringResource(R.string.diagnostics_clear_dialog_message),
         primaryOption =
             OpenCodeDialogOption(
-                title = "Clear",
+                title = stringResource(R.string.diagnostics_clear),
                 onClick = {
                     showClearConfirmation = false
                     onClear()
@@ -427,12 +447,17 @@ fun DiagnosticLogsScreen(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = "Cancel",
+                title = stringResource(R.string.common_cancel),
                 onClick = { showClearConfirmation = false },
             ),
         onDismissRequest = { showClearConfirmation = false },
     )
 }
+
+/** "Last 15 minutes". */
+@Composable
+private fun DiagnosticLogExportWindow.lastMinutesLabel(): String =
+    pluralStringResource(R.plurals.diagnostics_last_minutes, minutes, minutes)
 
 @Preview(showBackground = true)
 @Composable

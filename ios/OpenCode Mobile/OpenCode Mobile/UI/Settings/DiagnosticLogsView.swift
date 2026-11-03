@@ -15,7 +15,7 @@ final class DiagnosticLogsViewModel {
     private(set) var oldestTimestampLabel: String?
     private(set) var newestTimestampLabel: String?
     private(set) var isLoading = true
-    private(set) var shareError: String?
+    private(set) var shareError: OpenCodeText?
     private(set) var shareFileURL: URL?
 
     private let buffer: DiagnosticLogBuffer
@@ -86,7 +86,7 @@ final class DiagnosticLogsViewModel {
             refresh()
         } catch {
             shareFileURL = nil
-            shareError = "Couldn't prepare diagnostic log for sharing."
+            shareError = "diagnostics.error.share"
         }
     }
 
@@ -109,7 +109,7 @@ struct DiagnosticLogsView: View {
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: "Diagnostic Logs",
+                title: "diagnostics.title",
                 leading: OpenCodeSplitPane.detailLeading(detailControl, back: { dismiss() }),
                 showDivider: true
             )
@@ -118,52 +118,49 @@ struct DiagnosticLogsView: View {
             ScrollView {
                 LazyVStack(spacing: 8) {
                     if model.isLoading {
-                        OpenCodeStatusStack(spinner: "Loading diagnostic logs")
+                        OpenCodeStatusStack(spinner: "diagnostics.loading")
                             .padding(24)
                     } else {
                         OpenCodeListItem(
-                            title: "Entries",
-                            subtitle: model.hasEntries
-                                ? "\(model.entryCount) redacted lines in the kept window"
-                                : "No entries in the kept window yet",
+                            title: "diagnostics.entries.title",
+                            subtitle: entriesSubtitle,
                             style: .card
                         )
                         OpenCodeListItem(
-                            title: "Kept",
-                            subtitle: "Last \(model.retainMinutes) minutes",
+                            title: "diagnostics.kept.title",
+                            subtitle: Self.lastMinutesLabel(model.retainMinutes),
                             style: .card
                         )
                         OpenCodeListItem(
-                            title: "Export",
-                            subtitle: model.exportWindow.label,
+                            title: "diagnostics.export.title",
+                            subtitle: Self.lastMinutesLabel(model.exportWindow.minutes),
                             style: .card,
                             action: { showExportWindowPicker = true }
                         )
                         OpenCodeListItem(
-                            title: "Soft cap",
-                            subtitle: model.droppedBySoftCap > 0
-                                ? "\(model.softCap) max · \(model.droppedBySoftCap) dropped oldest"
-                                : "\(model.softCap) max · none dropped",
+                            title: "diagnostics.soft_cap.title",
+                            subtitle: softCapSubtitle,
                             style: .card
                         )
                         OpenCodeListItem(
-                            title: "Format",
-                            subtitle: "JSONL · secrets and message bodies redacted",
+                            title: "diagnostics.format.title",
+                            subtitle: "diagnostics.format.value",
                             style: .card
                         )
                         if let oldest = model.oldestTimestampLabel, let newest = model.newestTimestampLabel {
                             OpenCodeListItem(
-                                title: "Range",
-                                subtitle: oldest == newest ? oldest : "\(oldest) → \(newest)",
+                                title: "diagnostics.range.title",
+                                subtitle: Self.rangeLabel(oldest: oldest, newest: newest),
                                 style: .card
                             )
                         }
                         if !model.areaCounts.isEmpty {
+                            // Area names are log wire values, shown as is.
                             OpenCodeListItem(
-                                title: "Areas",
-                                subtitle: model.areaCounts
+                                title: "diagnostics.areas.title",
+                                subtitle: .verbatim(model.areaCounts
                                     .map { "\($0.area) \($0.count)" }
-                                    .joined(separator: " · "),
+                                    .joined(separator: " · ")),
                                 style: .card
                             )
                         }
@@ -180,7 +177,7 @@ struct DiagnosticLogsView: View {
 
             VStack(spacing: 8) {
                 OpenCodeButton(
-                    variant: .fullWidthText(title: "Clear"),
+                    variant: .fullWidthText(title: "diagnostics.clear"),
                     size: .large,
                     enabled: model.hasEntries,
                     contrast: .low
@@ -188,7 +185,7 @@ struct DiagnosticLogsView: View {
                     showClearConfirmation = true
                 }
                 OpenCodeButton(
-                    variant: .fullWidthText(title: "Share"),
+                    variant: .fullWidthText(title: "diagnostics.share"),
                     size: .large,
                     contrast: .high
                 ) {
@@ -211,20 +208,20 @@ struct DiagnosticLogsView: View {
         .onAppear { model.refresh() }
         .openCodeDialog(
             isPresented: $showClearConfirmation,
-            title: "Clear diagnostic logs?",
-            subtitle: "This removes the stored diagnostic log.",
-            primaryOption: OpenCodeDialogOption(title: "Clear") {
+            title: "diagnostics.clear_dialog.title",
+            subtitle: "diagnostics.clear_dialog.message",
+            primaryOption: OpenCodeDialogOption(title: "diagnostics.clear") {
                 model.clear()
                 showClearConfirmation = false
             },
-            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+            secondaryOption: OpenCodeDialogOption(title: "common.cancel") {
                 showClearConfirmation = false
             }
         )
-        .openCodeBottomSheet(isPresented: $showExportWindowPicker, title: "Export window") {
+        .openCodeBottomSheet(isPresented: $showExportWindowPicker, title: "diagnostics.export_window.title") {
             ForEach(DiagnosticLogExportWindow.allCases, id: \.self) { window in
                 OpenCodeBottomSheetEntry(
-                    title: window.label,
+                    title: Self.lastMinutesLabel(window.minutes),
                     selected: window == model.exportWindow,
                     action: {
                         model.setExportWindow(window)
@@ -240,5 +237,40 @@ struct DiagnosticLogsView: View {
                 ActivityShareView(items: [url])
             }
         }
+    }
+
+    private var entriesSubtitle: OpenCodeText {
+        guard model.hasEntries else { return "diagnostics.entries.empty" }
+        let count = model.entryCount
+        return OpenCodeText(LocalizedStringResource(
+            "diagnostics.entries.count",
+            defaultValue: "\(count) redacted lines in the kept window"
+        ))
+    }
+
+    private var softCapSubtitle: OpenCodeText {
+        let softCap = model.softCap
+        let dropped = model.droppedBySoftCap
+        guard dropped > 0 else {
+            return OpenCodeText(LocalizedStringResource(
+                "diagnostics.soft_cap.none_dropped",
+                defaultValue: "\(softCap) max · none dropped"
+            ))
+        }
+        return OpenCodeText(LocalizedStringResource(
+            "diagnostics.soft_cap.dropped",
+            defaultValue: "\(softCap) max · \(dropped) dropped oldest"
+        ))
+    }
+
+    /// "Last 15 minutes", for the kept window and the export window.
+    static func lastMinutesLabel(_ minutes: Int) -> OpenCodeText {
+        OpenCodeText(LocalizedStringResource("diagnostics.last_minutes", defaultValue: "Last \(minutes) minutes"))
+    }
+
+    /// Timestamps are formatted by the system and stay arguments.
+    static func rangeLabel(oldest: String, newest: String) -> OpenCodeText {
+        guard oldest != newest else { return .verbatim(oldest) }
+        return OpenCodeText(LocalizedStringResource("diagnostics.range.value", defaultValue: "\(oldest) → \(newest)"))
     }
 }

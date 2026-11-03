@@ -44,7 +44,7 @@ struct SessionListGalleryView: View {
                     )
                     ForEach(HomeSessionRowStyle.allCases, id: \.self) { style in
                         OpenCodeChoiceBadge(
-                            label: style.title,
+                            label: .verbatim(style.title),
                             selected: rowStyle == style,
                             action: { rowStyle = style }
                         )
@@ -53,7 +53,7 @@ struct SessionListGalleryView: View {
                 HStack(spacing: 8) {
                     ForEach(SessionListDockGalleryLoad.allCases, id: \.self) { option in
                         OpenCodeChoiceBadge(
-                            label: option.label,
+                            label: .verbatim(option.label),
                             selected: load == option,
                             action: {
                                 load = option

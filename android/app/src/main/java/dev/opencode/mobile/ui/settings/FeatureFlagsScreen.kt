@@ -14,8 +14,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.featureflags.FeatureFlag
 import dev.opencode.mobile.domain.featureflags.FeatureFlagResolution
 import dev.opencode.mobile.domain.featureflags.FeatureFlagSource
@@ -36,6 +38,7 @@ import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
+/** Flag names, keys and the state line are developer-only and stay English. */
 data class FeatureFlagRow(
     val flag: FeatureFlag,
     val resolution: FeatureFlagResolution,
@@ -85,20 +88,20 @@ fun FeatureFlagsScreen(
             entries =
                 listOf(
                     OpenCodeOverflowMenuEntry(
-                        title = "Clear overrides",
+                        title = stringResource(R.string.feature_flags_clear_overrides),
                         icon = null,
                         onClick = onClearOverrides,
                     ),
                 ),
         ) {
             OpenCodeTopBar(
-                title = "Feature Flags",
+                title = stringResource(R.string.feature_flags_title),
                 leading = openCodeDetailLeading(detailControl, onNavigateBack),
                 actions =
                     listOf(
                         OpenCodeTopBarAction.Icon(
                             imageVector = OpenCodeIcons.MoreVert,
-                            contentDescription = "More options",
+                            contentDescription = stringResource(R.string.feature_flags_more_options),
                             onClick = { menuExpanded = true },
                         ),
                     ),
@@ -115,14 +118,12 @@ fun FeatureFlagsScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text =
-                        "Switching a flag sets a device override that wins over the remote value. " +
-                            "Remote values are fetched on launch and applied at the next launch.",
+                    text = stringResource(R.string.feature_flags_intro),
                     style = MaterialTheme.typography.bodySmall,
                     color = openCodeColor("text-base"),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
-                OpenCodeSectionHeader(title = "Flags")
+                OpenCodeSectionHeader(title = stringResource(R.string.feature_flags_section_flags))
                 rows.forEach { row ->
                     OpenCodeListItem(
                         title = row.flag.title,

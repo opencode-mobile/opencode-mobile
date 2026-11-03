@@ -9,7 +9,8 @@ enum OpenCodeKeyValueStyle {
 
 /// Label and value pair used for detail lines and stat cells.
 struct OpenCodeKeyValueRow: View {
-    let label: String
+    let label: OpenCodeText
+    /// Shown verbatim: values are data, not app text.
     let value: String
     var style: OpenCodeKeyValueStyle = .inline
 
@@ -17,11 +18,11 @@ struct OpenCodeKeyValueRow: View {
         switch style {
         case .inline:
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text(label)
+                Text(openCode: label)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textBase)
                 Spacer(minLength: 8)
-                Text(value)
+                Text(verbatim: value)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .multilineTextAlignment(.trailing)
@@ -29,10 +30,10 @@ struct OpenCodeKeyValueRow: View {
             .accessibilityElement(children: .combine)
         case .stacked:
             VStack(alignment: .leading, spacing: 6) {
-                Text(label)
+                Text(openCode: label)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textBase)
-                Text(value)
+                Text(verbatim: value)
                     .font(OpenCodeTypography.body)
                     .foregroundStyle(OpenCodeColors.textStrong)
                     .lineLimit(2)

@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
@@ -26,8 +27,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
+import java.util.Locale
 import kotlin.math.min
 
 private const val DESIGN_WIDTH = 336f
@@ -78,6 +81,9 @@ fun OpenCodeSkeletonIllustration(
             diffDelete = openCodeColor("diff-delete"),
         )
     val textMeasurer = rememberTextMeasurer()
+    val unofficialLabel = stringResource(R.string.component_skeleton_illustration_unofficial).uppercase(Locale.getDefault())
+    val connectLabel = stringResource(R.string.component_skeleton_illustration_connect)
+    val runningLabel = stringResource(R.string.session_list_status_running)
 
     Canvas(
         modifier =
@@ -94,9 +100,9 @@ fun OpenCodeSkeletonIllustration(
             scale(scale, scale, pivot = Offset.Zero)
         }) {
             when (topic) {
-                OpenCodeSkeletonIllustrationTopic.Unofficial -> drawUnofficial(colors, textMeasurer)
-                OpenCodeSkeletonIllustrationTopic.ConnectForm -> drawConnectForm(colors, textMeasurer)
-                OpenCodeSkeletonIllustrationTopic.SessionsLive -> drawSessionsLive(colors, textMeasurer)
+                OpenCodeSkeletonIllustrationTopic.Unofficial -> drawUnofficial(colors, textMeasurer, unofficialLabel)
+                OpenCodeSkeletonIllustrationTopic.ConnectForm -> drawConnectForm(colors, textMeasurer, connectLabel)
+                OpenCodeSkeletonIllustrationTopic.SessionsLive -> drawSessionsLive(colors, textMeasurer, runningLabel)
                 OpenCodeSkeletonIllustrationTopic.ChipTimelineGlance -> drawChipTimelineGlance(colors)
                 OpenCodeSkeletonIllustrationTopic.ChipTimelineLongRuns -> drawChipTimelineLongRuns(colors)
                 OpenCodeSkeletonIllustrationTopic.ChipTimelineDetails -> drawChipTimelineDetails(colors)
@@ -130,6 +136,7 @@ private data class SkeletonIllustrationColors(
 private fun DrawScope.drawUnofficial(
     colors: SkeletonIllustrationColors,
     textMeasurer: TextMeasurer,
+    label: String,
 ) {
     frame(colors)
     bar(colors, x = 64f, y = 32f, w = 90f, h = 10f)
@@ -145,7 +152,7 @@ private fun DrawScope.drawUnofficial(
     )
     drawCenteredText(
         textMeasurer = textMeasurer,
-        text = "UNOFFICIAL",
+        text = label,
         x = 64f,
         y = 64f,
         w = 118f,
@@ -166,6 +173,7 @@ private fun DrawScope.drawUnofficial(
 private fun DrawScope.drawConnectForm(
     colors: SkeletonIllustrationColors,
     textMeasurer: TextMeasurer,
+    connectLabel: String,
 ) {
     frame(colors)
     bar(colors, x = 64f, y = 32f, w = 110f, h = 10f)
@@ -188,12 +196,13 @@ private fun DrawScope.drawConnectForm(
         drawCircle(color = colors.textWeaker, radius = 3.5f, center = Offset(cx, 110f))
     }
     glow(colors, x = 64f, y = 138f, w = 208f, h = 34f)
-    button(colors, textMeasurer, x = 64f, y = 138f, w = 208f, h = 34f, title = "Connect")
+    button(colors, textMeasurer, x = 64f, y = 138f, w = 208f, h = 34f, title = connectLabel)
 }
 
 private fun DrawScope.drawSessionsLive(
     colors: SkeletonIllustrationColors,
     textMeasurer: TextMeasurer,
+    runningLabel: String,
 ) {
     frame(colors)
     bar(colors, x = 64f, y = 30f, w = 70f, h = 10f)
@@ -214,7 +223,7 @@ private fun DrawScope.drawSessionsLive(
     )
     drawCenteredText(
         textMeasurer = textMeasurer,
-        text = "Running",
+        text = runningLabel,
         x = 222f,
         y = 115f,
         w = 44f,

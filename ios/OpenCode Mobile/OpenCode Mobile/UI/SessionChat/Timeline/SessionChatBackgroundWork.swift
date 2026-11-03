@@ -289,7 +289,7 @@ nonisolated enum SessionChatBackgroundWork {
 
     /// "1 tool", "12 tools".
     static func toolCountLabel(_ count: Int) -> String {
-        count == 1 ? "1 tool" : "\(count) tools"
+        String(localized: "session_chat_sheet.background_work.tool_count", defaultValue: "\(count) tools")
     }
 
     /// The agent tag rule: shown only for a named agent other than the default `general`.
@@ -346,7 +346,7 @@ nonisolated enum SessionChatBackgroundWork {
             Message(id: "summary", role: .assistant, text: "", parts: calls.map { .tool($0) }, model: nil, mode: nil, sentAtEpochMs: nil),
         ])
         let step = activity.currentAction ?? activity.recentSteps.last?.title
-        return SessionChatChildToolSummary(count: calls.count, currentStep: nonEmpty(step))
+        return SessionChatChildToolSummary(count: calls.count, currentStep: nonEmpty(step?.resolved))
     }
 
     /// The pill for these rows and the open session's shells; nil when nothing works or waits.
@@ -361,24 +361,44 @@ nonisolated enum SessionChatBackgroundWork {
         let running = runningSubagents + runningShells
         guard let firstWaiting = waiting.first else {
             guard running > 0 else { return nil }
-            let label = [
-                runningSubagents > 0 ? subagentCount(runningSubagents) : nil,
-                runningShells > 0 ? shellCount(runningShells) : nil,
-            ].compactMap { $0 }.joined(separator: " · ")
+            let spoken = spokenCount(subagents: runningSubagents, shells: runningShells)
             return SessionChatBackgroundWorkPill(
-                label: label,
+                label: countLabel(subagents: runningSubagents, shells: runningShells),
                 needsInput: false,
-                accessibilityLabel: "\(spokenCount(subagents: runningSubagents, shells: runningShells)) running"
+                accessibilityLabel: String(
+                    localized: "timeline.background_work.running_spoken",
+                    defaultValue: "\(spoken) running"
+                )
             )
         }
-        let asking = waiting.count == 1
-            ? "\(firstWaiting.agentName) needs input"
-            : "\(subagentCount(waiting.count)) need input"
-        let label = running > 0 ? "\(asking) · \(running) running" : asking
-        let spoken = running > 0
-            ? "\(asking), \(spokenCount(subagents: runningSubagents, shells: runningShells)) running"
-            : asking
-        return SessionChatBackgroundWorkPill(label: label, needsInput: true, accessibilityLabel: spoken)
+        let asking = askingLabel(waiting: waiting.count, firstAgent: firstWaiting.agentName)
+        guard running > 0 else {
+            return SessionChatBackgroundWorkPill(label: asking, needsInput: true, accessibilityLabel: asking)
+        }
+        let spoken = spokenCount(subagents: runningSubagents, shells: runningShells)
+        let label = String(
+            localized: "timeline.background_work.needs_input_running",
+            defaultValue: "\(asking) · \(running) running"
+        )
+        let accessibilityLabel = String(
+            localized: "timeline.background_work.needs_input_running_spoken",
+            defaultValue: "\(asking), \(spoken) running"
+        )
+        return SessionChatBackgroundWorkPill(label: label, needsInput: true, accessibilityLabel: accessibilityLabel)
+    }
+
+    /// "general needs input" (the agent name is server content), or "2 subagents need input".
+    private static func askingLabel(waiting: Int, firstAgent: String) -> String {
+        guard waiting > 1 else {
+            return String(
+                localized: "timeline.background_work.agent_needs_input",
+                defaultValue: "\(firstAgent) needs input"
+            )
+        }
+        return String(
+            localized: "timeline.background_work.subagents_need_input",
+            defaultValue: "\(waiting) subagents need input"
+        )
     }
 
     /// Running shells of the panel's Shells section, in start order.
@@ -445,19 +465,37 @@ nonisolated enum SessionChatBackgroundWork {
     }
 
     private static func subagentCount(_ count: Int) -> String {
-        count == 1 ? "1 subagent" : "\(count) subagents"
+        String(localized: "timeline.background_work.subagent_count", defaultValue: "\(count) subagents")
     }
 
     private static func shellCount(_ count: Int) -> String {
-        count == 1 ? "1 shell" : "\(count) shells"
+        String(localized: "timeline.background_work.shell_count", defaultValue: "\(count) shells")
+    }
+
+    /// "1 subagent · 2 shells", "2 shells", "3 subagents".
+    private static func countLabel(subagents: Int, shells: Int) -> String {
+        guard subagents > 0, shells > 0 else {
+            return subagents > 0 ? subagentCount(subagents) : shellCount(shells)
+        }
+        let subagentText = subagentCount(subagents)
+        let shellText = shellCount(shells)
+        return String(
+            localized: "timeline.background_work.subagents_and_shells",
+            defaultValue: "\(subagentText) · \(shellText)"
+        )
     }
 
     /// "1 subagent and 2 shells", "2 shells", "3 subagents".
     private static func spokenCount(subagents: Int, shells: Int) -> String {
-        [
-            subagents > 0 ? subagentCount(subagents) : nil,
-            shells > 0 ? shellCount(shells) : nil,
-        ].compactMap { $0 }.joined(separator: " and ")
+        guard subagents > 0, shells > 0 else {
+            return subagents > 0 ? subagentCount(subagents) : shellCount(shells)
+        }
+        let subagentText = subagentCount(subagents)
+        let shellText = shellCount(shells)
+        return String(
+            localized: "timeline.background_work.subagents_and_shells_spoken",
+            defaultValue: "\(subagentText) and \(shellText)"
+        )
     }
 
     private static func rank(_ status: SessionChatSubagentStatus) -> Int {
@@ -497,8 +535,13 @@ nonisolated enum SessionChatBackgroundWork {
     }
 
     private static let defaultAgent = "general"
-    private static let stoppedReason = "Stopped"
-    private static let waitingDetail = "Waiting for input"
+    private static var stoppedReason: String {
+        String(localized: "session_chat_sheet.background_work.stopped", defaultValue: "Stopped")
+    }
+
+    private static var waitingDetail: String {
+        String(localized: "session_chat_sheet.background_work.waiting_for_input", defaultValue: "Waiting for input")
+    }
 
     private static func isBackground(_ tool: ToolPart) -> Bool {
         switch tool.metadata?["background"] {

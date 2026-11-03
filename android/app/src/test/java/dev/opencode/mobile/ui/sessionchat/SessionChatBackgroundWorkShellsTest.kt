@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.sessionchat
 import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.domain.shell.AgentShellStatus
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellsCopy
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -13,12 +14,12 @@ class SessionChatBackgroundWorkShellsTest {
     @Test
     fun pill_shellsAloneShowThePill() {
         assertEquals(
-            SessionChatBackgroundWorkPill("1 shell", needsInput = false, accessibilityLabel = "1 shell running"),
-            SessionChatBackgroundWork.pill(emptyList(), listOf(shell("sh_1"))),
+            EnglishPill("1 shell", needsInput = false, accessibilityLabel = "1 shell running"),
+            SessionChatBackgroundWork.pill(emptyList(), listOf(shell("sh_1"))).english(),
         )
         assertEquals(
-            SessionChatBackgroundWorkPill("3 shells", needsInput = false, accessibilityLabel = "3 shells running"),
-            SessionChatBackgroundWork.pill(emptyList(), listOf(shell("sh_1"), shell("sh_2"), shell("sh_3"))),
+            EnglishPill("3 shells", needsInput = false, accessibilityLabel = "3 shells running"),
+            SessionChatBackgroundWork.pill(emptyList(), listOf(shell("sh_1"), shell("sh_2"), shell("sh_3"))).english(),
         )
     }
 
@@ -27,12 +28,12 @@ class SessionChatBackgroundWorkShellsTest {
         val pill = SessionChatBackgroundWork.pill(listOf(subagent("prt_1")), listOf(shell("sh_1"), shell("sh_2")))
 
         assertEquals(
-            SessionChatBackgroundWorkPill(
+            EnglishPill(
                 "1 subagent · 2 shells",
                 needsInput = false,
                 accessibilityLabel = "1 subagent and 2 shells running",
             ),
-            pill,
+            pill.english(),
         )
     }
 
@@ -45,12 +46,12 @@ class SessionChatBackgroundWorkShellsTest {
             )
 
         assertEquals(
-            SessionChatBackgroundWorkPill(
+            EnglishPill(
                 "general needs input · 2 running",
                 needsInput = true,
                 accessibilityLabel = "general needs input, 1 subagent and 1 shell running",
             ),
-            pill,
+            pill.english(),
         )
     }
 
@@ -59,7 +60,7 @@ class SessionChatBackgroundWorkShellsTest {
         val ended = shell("sh_1").copy(status = AgentShellStatus.Exited(0))
 
         assertNull(SessionChatBackgroundWork.pill(emptyList(), listOf(ended)))
-        assertEquals("1 shell", SessionChatBackgroundWork.pill(emptyList(), listOf(ended, shell("sh_2")))?.label)
+        assertEquals("1 shell", SessionChatBackgroundWork.pill(emptyList(), listOf(ended, shell("sh_2")))?.labelText?.english())
     }
 
     @Test
@@ -81,23 +82,23 @@ class SessionChatBackgroundWorkShellsTest {
         val start = 1_000_000L
         val running = shell("sh_1", startedAtMs = start)
 
-        assertEquals("Running · 1 min 12 s", SessionChatShellsCopy.status(running, nowMs = start + 72_000))
-        assertEquals("Running · 4 s", SessionChatShellsCopy.status(running, nowMs = start + 4_000))
-        assertEquals("Running", SessionChatShellsCopy.status(running.copy(startedAtMs = null), nowMs = start))
+        assertEquals("Running · 1 min 12 s", SessionChatShellsCopy.status(running, nowMs = start + 72_000).english())
+        assertEquals("Running · 4 s", SessionChatShellsCopy.status(running, nowMs = start + 4_000).english())
+        assertEquals("Running", SessionChatShellsCopy.status(running.copy(startedAtMs = null), nowMs = start).english())
 
         fun ended(status: AgentShellStatus) = running.copy(status = status, finishedAtMs = start + 72_000)
-        assertEquals("Exited · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Exited(0)), nowMs = 0))
-        assertEquals("Exited · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Exited(null)), nowMs = 0))
-        assertEquals("Exited with code 1 · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Exited(1)), nowMs = 0))
-        assertEquals("Timed out · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.TimedOut), nowMs = 0))
-        assertEquals("Stopped · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Stopped), nowMs = 0))
-        assertEquals("Failed · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Failed), nowMs = 0))
-        assertEquals("12 s", SessionChatShellsCopy.duration(12_000))
-        assertEquals("0 s", SessionChatShellsCopy.duration(0))
-        assertEquals("1 min 12 s", SessionChatShellsCopy.duration(72_000))
-        assertEquals("2 min", SessionChatShellsCopy.duration(120_000))
-        assertEquals("1 h 5 min", SessionChatShellsCopy.duration((3600 + 5 * 60) * 1000L))
-        assertEquals("1 h", SessionChatShellsCopy.duration(3600 * 1000L + 30_000))
+        assertEquals("Exited · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Exited(0)), nowMs = 0).english())
+        assertEquals("Exited · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Exited(null)), nowMs = 0).english())
+        assertEquals("Exited with code 1 · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Exited(1)), nowMs = 0).english())
+        assertEquals("Timed out · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.TimedOut), nowMs = 0).english())
+        assertEquals("Stopped · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Stopped), nowMs = 0).english())
+        assertEquals("Failed · 1 min 12 s", SessionChatShellsCopy.status(ended(AgentShellStatus.Failed), nowMs = 0).english())
+        assertEquals("12 s", SessionChatShellsCopy.duration(12_000).english())
+        assertEquals("0 s", SessionChatShellsCopy.duration(0).english())
+        assertEquals("1 min 12 s", SessionChatShellsCopy.duration(72_000).english())
+        assertEquals("2 min", SessionChatShellsCopy.duration(120_000).english())
+        assertEquals("1 h 5 min", SessionChatShellsCopy.duration((3600 + 5 * 60) * 1000L).english())
+        assertEquals("1 h", SessionChatShellsCopy.duration(3600 * 1000L + 30_000).english())
     }
 
     @Test

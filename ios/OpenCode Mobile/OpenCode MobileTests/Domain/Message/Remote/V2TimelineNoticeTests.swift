@@ -153,7 +153,7 @@ struct V2TimelineNoticeTests {
 
     @Test func copy_movedLeadsWithTheGlyphVariantAndTheDirectory() {
         let row = present(.moved(directory: "/Users/me/repo"))
-        #expect(row == TimelineNoticePresentation(isMove: true, label: "Moved to", value: "/Users/me/repo"))
+        #expect(row == EnglishNotice(isMove: true, label: "Moved to", value: "/Users/me/repo"))
     }
 
     @Test func copy_agentChangedTitleCasesAndShowsPreviousOnlyWhenKnown() {
@@ -177,7 +177,7 @@ struct V2TimelineNoticeTests {
             for: TimelineNotice(id: "n", kind: .modelChanged(model: model, previous: nil)),
             modelNames: names
         )
-        #expect(named == TimelineNoticePresentation(isMove: false, label: "Switched to", value: "Claude Opus 4.5"))
+        #expect(EnglishNotice(named) == EnglishNotice(isMove: false, label: "Switched to", value: "Claude Opus 4.5"))
         #expect(present(.modelChanged(model: model, previous: nil)).value == "claude-opus-4-5")
         let otherModel = TimelineNoticeModel(providerID: "openai", modelID: "gpt-5", variant: "high")
         #expect(present(.modelChanged(model: otherModel, previous: model)).label == "Switched to")
@@ -189,21 +189,21 @@ struct V2TimelineNoticeTests {
         let none = TimelineNoticeModel(providerID: "openai", modelID: "gpt-5")
         let explicitDefault = TimelineNoticeModel(providerID: "openai", modelID: "gpt-5", variant: "default")
         #expect(present(.modelChanged(model: high, previous: base))
-            == TimelineNoticePresentation(isMove: false, label: "Switched variant to", value: "high"))
+            == EnglishNotice(isMove: false, label: "Switched variant to", value: "high"))
         #expect(present(.modelChanged(model: none, previous: base))
-            == TimelineNoticePresentation(isMove: false, label: "Switched variant to Default", value: nil))
+            == EnglishNotice(isMove: false, label: "Switched variant to Default", value: nil))
         #expect(present(.modelChanged(model: explicitDefault, previous: base)).label == "Switched variant to Default")
     }
 
     @Test func copy_instructionsSystemAndRestart() {
         #expect(present(.instructionsUpdated(sources: ["AGENTS.md", "CLAUDE.md"]))
-            == TimelineNoticePresentation(isMove: false, label: "Instructions updated", value: "AGENTS.md, CLAUDE.md"))
+            == EnglishNotice(isMove: false, label: "Instructions updated", value: "AGENTS.md, CLAUDE.md"))
         #expect(present(.instructionsUpdated(sources: []))
-            == TimelineNoticePresentation(isMove: false, label: "Instructions updated", value: nil))
+            == EnglishNotice(isMove: false, label: "Instructions updated", value: nil))
         #expect(present(.systemNote("Skills reloaded"))
-            == TimelineNoticePresentation(isMove: false, label: "Skills reloaded", value: nil))
+            == EnglishNotice(isMove: false, label: "Skills reloaded", value: nil))
         #expect(present(.restart)
-            == TimelineNoticePresentation(isMove: false, label: "Continuing after restart", value: nil))
+            == EnglishNotice(isMove: false, label: "Continuing after restart", value: nil))
     }
 
     // MARK: Live projection
@@ -305,8 +305,25 @@ struct V2TimelineNoticeTests {
         return notice
     }
 
-    private func present(_ kind: TimelineNoticeKind) -> TimelineNoticePresentation {
-        TimelineNoticeCopy.presentation(for: TimelineNotice(id: "n", kind: kind))
+    /// The notice row as the English users read.
+    private struct EnglishNotice: Equatable {
+        let isMove: Bool
+        let label: String
+        let value: String?
+
+        init(isMove: Bool, label: String, value: String?) {
+            self.isMove = isMove
+            self.label = label
+            self.value = value
+        }
+
+        init(_ presentation: TimelineNoticePresentation) {
+            self.init(isMove: presentation.isMove, label: presentation.label.resolved, value: presentation.value?.resolved)
+        }
+    }
+
+    private func present(_ kind: TimelineNoticeKind) -> EnglishNotice {
+        EnglishNotice(TimelineNoticeCopy.presentation(for: TimelineNotice(id: "n", kind: kind)))
     }
 
     /// The notice the store would parse from the projected `message.part.updated`.

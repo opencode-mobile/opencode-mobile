@@ -35,6 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -55,6 +57,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -210,26 +213,34 @@ fun OpenCodeActivityCard(
 }
 
 /** Settled step count: `1 step`, `3 steps`. */
-fun openCodeActivityStepCount(count: Int): String = if (count == 1) "1 step" else "$count steps"
+@Composable
+fun openCodeActivityStepCount(count: Int): String = pluralStringResource(R.plurals.component_activity_card_step_count, count, count)
 
 /** Section label: `Agent`, or `N agents` past one. */
-fun openCodeActivityAgentSectionLabel(count: Int): String = if (count == 1) "Agent" else "$count agents"
+@Composable
+fun openCodeActivityAgentSectionLabel(count: Int): String =
+    if (count == 1) {
+        stringResource(R.string.component_activity_card_agent)
+    } else {
+        pluralStringResource(R.plurals.component_activity_card_agent_count, count, count)
+    }
 
 @Composable
 private fun Header(
     elapsed: String?,
     shimmer: Boolean,
 ) {
+    val working = stringResource(R.string.component_activity_card_working)
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
                 .semantics(mergeDescendants = true) {
-                    contentDescription = listOfNotNull("Working", elapsed).joinToString(", ")
+                    contentDescription = listOfNotNull(working, elapsed).joinToString(", ")
                 }.padding(start = ActivityCardPaddingHorizontal, end = ActivityCardPaddingHorizontal, top = 10.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        OpenCodeActivityWorkingLabel(text = "Working", shimmer = shimmer, style = MaterialTheme.typography.bodyMedium)
+        OpenCodeActivityWorkingLabel(text = working, shimmer = shimmer, style = MaterialTheme.typography.bodyMedium)
         Box(modifier = Modifier.weight(1f))
         if (elapsed != null) {
             Text(text = elapsed, style = activityMonoCaption(), color = openCodeColor("text-weaker"), maxLines = 1)
@@ -320,12 +331,15 @@ private fun FooterBand(
         if (current != null) {
             listOfNotNull(
                 current.title,
-                running?.extraRunning?.takeIf { it > 0 }?.let { "$it more running" },
+                running?.extraRunning?.takeIf { it > 0 }?.let {
+                    pluralStringResource(R.plurals.component_activity_card_more_running, it, it)
+                },
                 elapsed,
             ).joinToString(", ")
         } else {
             idleText.orEmpty()
         }
+    val opensActivity = stringResource(R.string.component_activity_card_opens_activity, label)
     Box(
         modifier =
             Modifier
@@ -334,7 +348,7 @@ private fun FooterBand(
                 .background(openCodeColor("surface-raised-base"))
                 .clickable(onClick = onTap)
                 .semantics(mergeDescendants = true) {
-                    contentDescription = "$label, opens activity"
+                    contentDescription = opensActivity
                     role = Role.Button
                 },
     ) {
@@ -441,13 +455,18 @@ private fun SettledLine(
     onTap: () -> Unit,
     modifier: Modifier,
 ) {
-    val label = listOf(openCodeActivityStepCount(state.stepCount), names).filter { it.isNotEmpty() }.joinToString(" · ")
+    val stepCount = openCodeActivityStepCount(state.stepCount)
+    val label = listOf(stepCount, names).filter { it.isNotEmpty() }.joinToString(" · ")
+    val description =
+        stringResource(R.string.component_activity_card_opens_activity, "$label, ${state.worstStatus.spoken()}")
+    val countNumber = state.stepCount.toString()
+    val countStart = stepCount.indexOf(countNumber).takeIf { it >= 0 }
     Row(
         modifier =
             modifier
                 .clickable(onClick = onTap)
                 .semantics(mergeDescendants = true) {
-                    contentDescription = "$label, ${state.worstStatus.spoken()}, opens activity"
+                    contentDescription = description
                     role = Role.Button
                 }.heightIn(min = ActivityTapRowMinHeight)
                 .padding(horizontal = ActivityCardPaddingHorizontal, vertical = 10.dp),
@@ -458,11 +477,15 @@ private fun SettledLine(
         Text(
             text =
                 buildAnnotatedString {
-                    withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = openCodeColor("text-strong"))) {
-                        append(state.stepCount.toString())
-                    }
+                    // The count is bold inside the localised "N steps".
                     withStyle(SpanStyle(color = openCodeColor("text-strong"))) {
-                        append(if (state.stepCount == 1) " step" else " steps")
+                        if (countStart == null) {
+                            append(stepCount)
+                        } else {
+                            append(stepCount.substring(0, countStart))
+                            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) { append(countNumber) }
+                            append(stepCount.substring(countStart + countNumber.length))
+                        }
                     }
                     if (names.isNotEmpty()) {
                         withStyle(SpanStyle(color = openCodeColor("text-weak"))) { append(" · $names") }
@@ -620,14 +643,17 @@ internal fun OpenCodeActivityIcon.vector(): ImageVector =
         OpenCodeActivityIcon.Skill -> OpenCodeIcons.List
     }
 
+@Composable
 internal fun OpenCodeActivityStatus.spoken(): String =
-    when (this) {
-        OpenCodeActivityStatus.Pending -> "pending"
-        OpenCodeActivityStatus.Running -> "running"
-        OpenCodeActivityStatus.Completed -> "completed"
-        OpenCodeActivityStatus.Failed -> "failed"
-        OpenCodeActivityStatus.Interrupted -> "stopped"
-    }
+    stringResource(
+        when (this) {
+            OpenCodeActivityStatus.Pending -> R.string.component_activity_status_pending
+            OpenCodeActivityStatus.Running -> R.string.component_activity_status_running
+            OpenCodeActivityStatus.Completed -> R.string.component_activity_status_completed
+            OpenCodeActivityStatus.Failed -> R.string.component_activity_status_failed
+            OpenCodeActivityStatus.Interrupted -> R.string.component_activity_status_stopped
+        },
+    )
 
 
 /** Gallery and preview samples for the states the contract lists. */

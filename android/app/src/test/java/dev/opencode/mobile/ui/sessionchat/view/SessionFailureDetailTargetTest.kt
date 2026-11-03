@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.FailureAction
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessageRole
@@ -8,6 +9,8 @@ import dev.opencode.mobile.ui.sessionchat.DisplayMessageBody
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -17,28 +20,33 @@ class SessionFailureDetailTargetTest {
     fun compactWithoutABodyStillOpensASheet() {
         val target =
             sessionFailureDetailTarget(
-                text = "Context overflow",
+                text = UiText.verbatim("Context overflow"),
                 providerBody = null,
                 action = FailureAction.Compact,
-                actionLabel = "Compact",
+                actionLabel = SessionChatTimelineBlocks.failureActionLabel(FailureAction.Compact),
             )
-        assertEquals("Context overflow", target?.title)
+        assertEquals("Context overflow", target?.title?.english())
         assertEquals("", target?.body)
         assertEquals(false, target?.monospace)
         assertEquals(SessionFailureSheetAction.Compact, target?.sheetAction)
-        assertEquals("Compact", target?.sheetActionLabel)
+        assertEquals("Compact", target?.sheetActionLabel?.english())
     }
 
     @Test
     fun copyWithABodyUsesTheBodyCopyOnly() {
         val target =
             sessionFailureDetailTarget(
-                text = "Something went wrong",
+                text = UiText.verbatim("Something went wrong"),
                 providerBody = "{\"error\":1}",
                 action = FailureAction.Copy,
-                actionLabel = "Copy",
+                actionLabel = SessionChatTimelineBlocks.failureActionLabel(FailureAction.Copy),
             )
-        assertEquals("Provider response", target?.title)
+        assertEquals("Something went wrong", target?.title?.english())
+        assertEquals(
+            UiText.resource(R.string.session_chat_sheet_tool_detail_provider_response),
+            target?.localizedTitle,
+        )
+        assertEquals("Provider response", target?.localizedTitle?.english())
         assertEquals(true, target?.monospace)
         assertNull(target?.sheetAction)
     }
@@ -47,13 +55,14 @@ class SessionFailureDetailTargetTest {
     fun copyWithoutABodyCopiesTheCaption() {
         val target =
             sessionFailureDetailTarget(
-                text = "Something went wrong",
+                text = UiText.verbatim("Something went wrong"),
                 providerBody = "  ",
                 action = FailureAction.Copy,
-                actionLabel = "Copy",
+                actionLabel = SessionChatTimelineBlocks.failureActionLabel(FailureAction.Copy),
             )
         assertEquals(SessionFailureSheetAction.CopyCaption, target?.sheetAction)
-        assertEquals("Something went wrong", target?.title)
+        assertEquals("Something went wrong", target?.title?.english())
+        assertNull(target?.localizedTitle)
         assertEquals(false, target?.monospace)
     }
 
@@ -61,12 +70,12 @@ class SessionFailureDetailTargetTest {
     fun authWithABodyHasNoAction() {
         val target =
             sessionFailureDetailTarget(
-                text = "HTTP 401 · Sign in",
+                text = UiText.verbatim("HTTP 401 · Sign in"),
                 providerBody = "denied",
                 action = null,
                 actionLabel = null,
             )
-        assertEquals("Provider response", target?.title)
+        assertEquals("Provider response", target?.localizedTitle?.english())
         assertEquals("denied", target?.body)
         assertNull(target?.sheetAction)
         assertNull(target?.sheetLinkLabel)
@@ -76,7 +85,7 @@ class SessionFailureDetailTargetTest {
     fun markWithoutBodyOrActionDoesNotOpen() {
         assertNull(
             sessionFailureDetailTarget(
-                text = "Permission rejected",
+                text = UiText.verbatim("Permission rejected"),
                 providerBody = null,
                 action = null,
                 actionLabel = null,
@@ -88,7 +97,7 @@ class SessionFailureDetailTargetTest {
     fun liveLinkRidesAlongWithTheBody() {
         val target =
             sessionFailureDetailTarget(
-                text = "Slow down",
+                text = UiText.verbatim("Slow down"),
                 providerBody = "limited",
                 action = null,
                 actionLabel = null,
@@ -133,7 +142,7 @@ class SessionFailureDetailTargetTest {
                 .blocks
                 .filterIsInstance<SessionChatTimelineBlock.FailureLine>()
                 .single()
-        assertEquals("HTTP 429 · Free usage limit reached.", line.text)
+        assertEquals("HTTP 429 · Free usage limit reached.", line.text.english())
         assertEquals(61_000L, line.retryAtEpochMs)
         assertEquals(FailureAction.PickModel, line.action)
     }
@@ -179,7 +188,7 @@ class SessionFailureDetailTargetTest {
             listOf(
                 SessionChatTimelineBlock.FailureLine(
                     blockID = "$id:failure",
-                    text = "Slow down",
+                    text = UiText.verbatim("Slow down"),
                     providerBody = body,
                     coveredByLiveRetry = covered,
                     retryAtEpochMs = retryAt,

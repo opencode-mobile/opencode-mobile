@@ -1,7 +1,6 @@
 package dev.opencode.mobile.domain.connection
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CleartextPolicyTest {
@@ -64,11 +63,5 @@ class CleartextPolicyTest {
                 ),
             )
         assertEquals(listOf("203.0.113.5:4096", "devbox.example.com"), hosts)
-    }
-
-    @Test
-    fun warningMessage_namesTheHosts() {
-        assertTrue(CleartextPolicy.warningMessage(listOf("203.0.113.5:4096")).startsWith("203.0.113.5:4096 uses plain http"))
-        assertTrue(CleartextPolicy.warningMessage(listOf("a", "b")).startsWith("a, b use plain http"))
     }
 }

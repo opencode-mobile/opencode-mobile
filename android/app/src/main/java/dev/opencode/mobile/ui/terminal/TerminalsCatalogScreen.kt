@@ -19,11 +19,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
 import dev.opencode.mobile.theme.openCodeColor
@@ -46,6 +48,7 @@ import dev.opencode.mobile.ui.components.currentOpenCodeUsesSplitLayout
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -115,8 +118,8 @@ fun TerminalsCatalogScreen(
                     Column(Modifier.fillMaxSize()) {
                         OpenCodeTopBar(leading = openCodeDetailLeading(control) {})
                         OpenCodeEmptyState(
-                            title = "Select a shell",
-                            message = "Choose a shell from the list.",
+                            title = stringResource(R.string.terminal_select_title),
+                            message = stringResource(R.string.terminal_select_message),
                             icon = OpenCodeIcons.Terminal,
                             modifier = Modifier.weight(1f),
                         )
@@ -151,15 +154,15 @@ private fun CatalogColumn(
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
-            title = "Terminals",
+            title = stringResource(R.string.terminal_catalog_title),
             leading = OpenCodeTopBarLeading.Back(onClick = onNavigateBack),
             showDivider = true,
         )
         val catalogBody: @Composable BoxScope.() -> Unit = {
             if (uiState.isLoading) {
                 OpenCodeStatusStack(
-                    title = "Loading terminals",
-                    subtitle = "Checking server…",
+                    title = stringResource(R.string.terminal_catalog_loading),
+                    subtitle = stringResource(R.string.common_checking_server),
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {
@@ -173,8 +176,8 @@ private fun CatalogColumn(
                             contentAlignment = Alignment.Center,
                         ) {
                             OpenCodeEmptyState(
-                                title = "No running shells",
-                                message = "Start one for a project. It is not tied to a chat session.",
+                                title = stringResource(R.string.terminal_catalog_empty_title),
+                                message = stringResource(R.string.terminal_catalog_empty_message),
                             )
                         }
                     } else {
@@ -195,7 +198,7 @@ private fun CatalogColumn(
                                     onClick = { onOpenTerminal(row.worktree, row.projectTitle, row.id) },
                                     trailing = {
                                         OpenCodeButton(
-                                            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Close"),
+                                            variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, stringResource(R.string.terminal_close)),
                                             contrast = OpenCodeButtonContrast.Low,
                                             onClick = { viewModel.requestClose(row) },
                                         )
@@ -205,7 +208,7 @@ private fun CatalogColumn(
                         }
                     }
                     OpenCodeButton(
-                        variant = OpenCodeButtonVariant.FullWidthText("New shell"),
+                        variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.terminal_new_shell)),
                         onClick = viewModel::showProjectPicker,
                         modifier =
                             Modifier
@@ -224,29 +227,31 @@ private fun CatalogColumn(
     val pending = uiState.pendingClose
     OpenCodeDialog(
         visible = pending != null,
-        title = pending?.let { "Close “${it.title}”?" } ?: "Close this shell?",
-        subtitle = "This ends the shell on the server.",
+        title =
+            pending?.let { stringResource(R.string.terminal_close_dialog_title_named, it.title) }
+                ?: stringResource(R.string.terminal_close_dialog_title),
+        subtitle = stringResource(R.string.terminal_close_dialog_message),
         primaryOption =
             OpenCodeDialogOption(
-                title = "Close",
+                title = stringResource(R.string.terminal_close),
                 destructive = true,
                 onClick = viewModel::confirmClose,
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = "Cancel",
+                title = stringResource(R.string.common_cancel),
                 onClick = viewModel::dismissClose,
             ),
         onDismissRequest = viewModel::dismissClose,
     )
     OpenCodeBottomSheet(
         visible = uiState.isProjectPickerVisible,
-        title = "New shell",
+        title = stringResource(R.string.terminal_new_shell),
         onDismissRequest = viewModel::dismissProjectPicker,
     ) {
         uiState.createError?.let { error ->
             Text(
-                text = error,
+                text = error.resolve(),
                 color = openCodeColor("text-weak"),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.openCodeBottomSheetContentInset().padding(bottom = 8.dp),
@@ -254,8 +259,8 @@ private fun CatalogColumn(
         }
         if (uiState.projects.isEmpty()) {
             OpenCodeEmptyState(
-                title = "No projects yet",
-                message = "Add a project on home, then start a shell here.",
+                title = stringResource(R.string.terminal_projects_empty_title),
+                message = stringResource(R.string.terminal_projects_empty_message),
             )
         } else {
             uiState.projects.forEach { project ->

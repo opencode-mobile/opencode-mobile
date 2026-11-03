@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.region
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.domain.shell.AgentShellOutput
@@ -7,6 +8,7 @@ import dev.opencode.mobile.domain.shell.AgentShellRepository
 import dev.opencode.mobile.domain.shell.AgentShellSession
 import dev.opencode.mobile.domain.shell.AgentShellStatus
 import dev.opencode.mobile.ui.sessionchat.SessionChatBackgroundWork
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -18,43 +20,50 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 object SessionChatShellsCopy {
-    const val SECTION_TITLE = "Shells"
-    const val NO_OUTPUT = "No output yet"
-    const val TRUNCATED = "Showing the latest output"
-    const val COPY = "Copy"
-    const val STOP = "Stop shell"
-    const val STOPPING = "Stopping…"
-    const val STOP_FAILED = "Couldn't stop the shell. Try again."
+    val STOP_FAILED: UiText = UiText.resource(R.string.session_chat_shell_stop_failed)
 
     /** "Running · 1 min 12 s", "Exited with code 1 · 4 s"; just the state when the start is unknown. */
     fun status(
         shell: AgentShell,
         nowMs: Long,
-    ): String {
+    ): UiText {
         val state =
             when (val status = shell.status) {
-                AgentShellStatus.Running -> "Running"
+                AgentShellStatus.Running -> UiText.resource(R.string.session_chat_shell_status_running)
                 is AgentShellStatus.Exited ->
-                    if (status.code == null || status.code == 0) "Exited" else "Exited with code ${status.code}"
-                AgentShellStatus.TimedOut -> "Timed out"
-                AgentShellStatus.Stopped -> "Stopped"
-                AgentShellStatus.Failed -> "Failed"
+                    when (val code = status.code) {
+                        null, 0 -> UiText.resource(R.string.session_chat_shell_status_exited)
+                        else -> UiText.resource(R.string.tool_error_exit_code, code)
+                    }
+                AgentShellStatus.TimedOut -> UiText.resource(R.string.session_chat_shell_status_timed_out)
+                AgentShellStatus.Stopped -> UiText.resource(R.string.tool_status_stopped)
+                AgentShellStatus.Failed -> UiText.resource(R.string.tool_error_failed)
             }
         val start = shell.startedAtMs ?: return state
         val end = if (shell.isRunning) nowMs else shell.finishedAtMs ?: return state
-        return "$state · ${duration(end - start)}"
+        return UiText.resource(R.string.timeline_list_separator, state, duration(end - start))
     }
 
     /** "12 s", "1 min 12 s", "2 min", "1 h 5 min", "1 h": zero parts are dropped. */
-    fun duration(elapsedMs: Long): String {
+    fun duration(elapsedMs: Long): UiText {
         val total = (elapsedMs / 1000).coerceAtLeast(0)
-        val hours = total / 3600
-        val minutes = (total % 3600) / 60
-        val seconds = total % 60
+        val hours = (total / 3600).toInt()
+        val minutes = ((total % 3600) / 60).toInt()
+        val seconds = (total % 60).toInt()
         return when {
-            hours > 0 -> if (minutes > 0) "$hours h $minutes min" else "$hours h"
-            minutes > 0 -> if (seconds > 0) "$minutes min $seconds s" else "$minutes min"
-            else -> "$seconds s"
+            hours > 0 ->
+                if (minutes > 0) {
+                    UiText.resource(R.string.session_chat_shell_duration_hours_minutes, hours, minutes)
+                } else {
+                    UiText.resource(R.string.session_chat_shell_duration_hours, hours)
+                }
+            minutes > 0 ->
+                if (seconds > 0) {
+                    UiText.resource(R.string.session_chat_shell_duration_minutes_seconds, minutes, seconds)
+                } else {
+                    UiText.resource(R.string.session_chat_shell_duration_minutes, minutes)
+                }
+            else -> UiText.resource(R.string.session_chat_shell_duration_seconds, seconds)
         }
     }
 
@@ -73,7 +82,7 @@ data class SessionChatShellOutputUiState(
     /** Null until the first read answers. */
     val output: AgentShellOutput? = null,
     val isStopping: Boolean = false,
-    val stopError: String? = null,
+    val stopError: UiText? = null,
 ) {
     /** Stop shows only where the server can stop this shell, and only while it runs. */
     val showsStop: Boolean

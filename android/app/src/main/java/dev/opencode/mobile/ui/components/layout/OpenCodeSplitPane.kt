@@ -38,6 +38,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.onClick
@@ -48,6 +49,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.preferences.SplitPanePreferences
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -65,6 +67,7 @@ data class OpenCodeSplitPaneDetailControl(
  * Top bar leading affordance for a screen that can be the trailing pane of [OpenCodeSplitPane]:
  * the sidebar toggle when [control] is present, otherwise the regular back button.
  */
+@Composable
 fun openCodeDetailLeading(
     control: OpenCodeSplitPaneDetailControl?,
     onBack: () -> Unit,
@@ -72,7 +75,10 @@ fun openCodeDetailLeading(
     if (control != null) {
         OpenCodeTopBarLeading.CustomIcon(
             imageVector = OpenCodeIcons.Sidebar,
-            contentDescription = if (control.isCollapsed) "Show sidebar" else "Hide sidebar",
+            contentDescription =
+                stringResource(
+                    if (control.isCollapsed) R.string.component_split_pane_show_sidebar else R.string.component_split_pane_hide_sidebar,
+                ),
             onClick = control.toggle,
         )
     } else {
@@ -285,6 +291,8 @@ private fun SplitPaneHandle(
     val currentOnDrag by rememberUpdatedState(onDrag)
     val currentOnDragEnd by rememberUpdatedState(onDragEnd)
     val currentOnDragCancel by rememberUpdatedState(onDragCancel)
+    val resizeSidebarLabel = stringResource(R.string.component_split_pane_resize_sidebar)
+    val hideSidebarLabel = stringResource(R.string.component_split_pane_hide_sidebar)
     val touchWidth = OpenCodeSplitPaneLayout.HandleTouchWidth
     val dividerCenter = dividerOffset + OpenCodeSplitPaneLayout.DividerWidth / 2
 
@@ -303,8 +311,8 @@ private fun SplitPaneHandle(
                     .onGloballyPositioned(onHandlePositioned)
                     .semantics {
                         role = Role.Button
-                        contentDescription = "Resize sidebar"
-                        onClick(label = "Hide sidebar") {
+                        contentDescription = resizeSidebarLabel
+                        onClick(label = hideSidebarLabel) {
                             currentOnToggle()
                             true
                         }

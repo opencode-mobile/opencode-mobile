@@ -1,6 +1,8 @@
 package dev.opencode.mobile.domain.feedback
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogExportWindow
+import dev.opencode.mobile.ui.text.UiText
 import java.util.UUID
 
 /** What the user is reporting. Shown as Bug / Idea; [wireValue] is the report's `kind`. */
@@ -139,7 +141,7 @@ object FeedbackReference {
 
 /** What the share sheet gets in debug builds, or after Share Instead. */
 data class FeedbackSharePayload(
-    val subject: String,
+    val subject: UiText,
     val text: String,
     val attachments: List<FeedbackAttachment>,
 ) {
@@ -158,7 +160,13 @@ data class FeedbackSharePayload(
                     "Ref ${report.reference}",
                 )
             return FeedbackSharePayload(
-                subject = "OpenCode Mobile ${report.kind.label.lowercase()} report",
+                subject =
+                    UiText.resource(
+                        when (report.kind) {
+                            FeedbackKind.Bug -> R.string.share_feedback_subject_bug
+                            FeedbackKind.Feedback -> R.string.share_feedback_subject_idea
+                        },
+                    ),
                 text = report.message + "\n\n" + facts.joinToString(" · "),
                 attachments = report.attachments,
             )

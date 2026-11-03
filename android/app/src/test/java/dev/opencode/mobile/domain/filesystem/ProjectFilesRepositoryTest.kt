@@ -6,6 +6,8 @@ import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.network.ActiveConnectionManager
+import dev.opencode.mobile.ui.text.EnglishStrings
+import dev.opencode.mobile.ui.text.resolve
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -233,7 +235,7 @@ class ProjectFilesRepositoryTest {
                 fail("expected ProjectFilesException")
             } catch (error: ProjectFilesException) {
                 assertEquals("Couldn't open file", error.message)
-                assertEquals("The server responded with 500.", error.detail)
+                assertEquals("The server responded with 500.", error.detail.resolve(EnglishStrings))
             }
         }
 
@@ -490,7 +492,7 @@ class ProjectFilesRepositoryTest {
                 fail("expected ProjectFilesException")
             } catch (error: ProjectFilesException) {
                 assertEquals("Couldn't load folder", error.message)
-                assertEquals("The server responded with 404.", error.detail)
+                assertEquals("The server responded with 404.", error.detail.resolve(EnglishStrings))
             }
         }
 
