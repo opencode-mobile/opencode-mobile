@@ -33,6 +33,11 @@ import kotlinx.serialization.Serializable
 
 @Serializable data object TerminalsCatalog : NavKey
 
+/** Archived sessions of Home scope [scopeId] (`all`, a project key or a worktree scope id). */
+@Serializable data class ArchivedSessions(
+    val scopeId: String,
+) : NavKey
+
 @Serializable data object WorktreesHome : NavKey
 
 /** Root of the Home split view's trailing pane stack while no session is selected. */

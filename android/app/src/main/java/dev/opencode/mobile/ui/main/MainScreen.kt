@@ -54,6 +54,7 @@ import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
+import dev.opencode.mobile.ui.archived.HomeArchivedMenuEntry
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
@@ -136,6 +137,7 @@ data class HomeSessionActionsCallbacks(
 fun MainScreen(
     onSettingsClick: () -> Unit,
     onTerminalClick: () -> Unit = {},
+    onArchivedSessionsClick: (scopeId: String) -> Unit = {},
     onWorktreesClick: () -> Unit = {},
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnectionClick: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit,
@@ -157,6 +159,7 @@ fun MainScreen(
     val serversChrome by viewModel.serversChrome.collectAsStateWithLifecycle()
     val worktreeCreateForm by viewModel.worktreeCreateForm.collectAsStateWithLifecycle()
     val worktreeServerCanCreate by viewModel.worktreeServerCanCreate.collectAsStateWithLifecycle()
+    val archivedMenu by viewModel.archivedMenu.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         viewModel.onHomeRevealed()
     }
@@ -201,6 +204,9 @@ fun MainScreen(
             ),
         onSettingsClick = onSettingsClick,
         onTerminalClick = onTerminalClick,
+        archivedMenu = archivedMenu,
+        onHomeMenuOpen = viewModel::refreshArchivedMenu,
+        onArchivedSessionsClick = onArchivedSessionsClick,
         onWorktreesClick = onWorktreesClick,
         onSessionClick = onSessionClick,
         onRetryProbe = viewModel::retryProbe,
@@ -304,6 +310,10 @@ internal fun MainScreen(
     worktreeServerCanCreate: Boolean = true,
     onOpenRunInNewWorktree: (String) -> Unit = {},
     worktreeCreateCallbacks: WorktreeCreateFormCallbacks = WorktreeCreateFormCallbacks(),
+    /** Home menu's Archived sessions entry; null leaves it out (no archive support). */
+    archivedMenu: HomeArchivedMenuEntry? = null,
+    onHomeMenuOpen: (scopeId: String, worktreesEnabled: Boolean) -> Unit = { _, _ -> },
+    onArchivedSessionsClick: (scopeId: String) -> Unit = {},
 ) {
     var newSessionSheetMode by rememberSaveable(stateSaver = NewSessionSheetModeSaver) {
         mutableStateOf<SessionListHomeChrome.NewSessionSheetMode?>(null)
@@ -333,16 +343,33 @@ internal fun MainScreen(
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     var homeMenuExpanded by rememberSaveable { mutableStateOf(false) }
     val loadedWorktrees = remember(uiState) { (uiState as? MainScreenUiState.Loaded)?.worktreesSnapshot() }
+    val archivedMenuEntry =
+        archivedMenu?.let { entry ->
+            val scopeTitle = entry.scopeTitle.resolve()
+            OpenCodeOverflowMenuEntry(
+                title = stringResource(R.string.archived_sessions_title),
+                icon = OpenCodeIcons.Archive,
+                subtitle =
+                    entry.count?.let { stringResource(R.string.home_menu_archived_count, it, scopeTitle) } ?: scopeTitle,
+                testTag = HomeMenu.ARCHIVED_SESSIONS_TEST_TAG,
+                onClick = {
+                    homeMenuExpanded = false
+                    onArchivedSessionsClick(selectedFilterId)
+                },
+            )
+        }
     // Feature entries go in `features`, top to bottom; HomeMenu adds Settings last.
     val homeMenuEntries =
         HomeMenu.entries(
             features =
-                listOf(
+                listOfNotNull(
+                    archivedMenuEntry,
                     OpenCodeOverflowMenuEntry(
                         title = stringResource(R.string.worktrees_title),
                         icon = OpenCodeIcons.CallSplit,
                         subtitle = loadedWorktrees?.let { worktreesMenuSubtitle(it) },
                         onClick = {
+                            homeMenuExpanded = false
                             ProductAnalytics.logUserAction(
                                 screenId = ProductAnalytics.Screen.HOME,
                                 actionId = ProductAnalytics.Action.HOME_OPEN_WORKTREES,
@@ -460,6 +487,8 @@ internal fun MainScreen(
                                             screenId = ProductAnalytics.Screen.HOME,
                                             actionId = ProductAnalytics.Action.HOME_OPEN_MENU,
                                         )
+                                        // Before expanding, so the Archived sessions entry is in the menu from its first frame.
+                                        onHomeMenuOpen(selectedFilterId, worktreesEnabled)
                                         homeMenuExpanded = true
                                     },
                                 ),

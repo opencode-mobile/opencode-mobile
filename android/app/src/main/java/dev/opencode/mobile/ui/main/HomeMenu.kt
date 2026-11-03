@@ -9,6 +9,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
  */
 object HomeMenu {
     const val SETTINGS_TEST_TAG = "homeMenuSettings"
+    const val ARCHIVED_SESSIONS_TEST_TAG = "homeMenuArchivedSessions"
 
     fun entries(
         features: List<OpenCodeOverflowMenuEntry>,

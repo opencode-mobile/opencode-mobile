@@ -331,6 +331,7 @@ fun OpenCodeListItem(
                     caption = caption,
                     startDecorator = startDecorator,
                     enabled = enabled,
+                    trailing = trailing,
                 )
             } else {
                 Row(

@@ -101,4 +101,18 @@ class ServerProtocolClassifierTest {
             ServerCapabilities.forProtocol(ServerProtocol.V1, v2Features = V2ServerFeatures()).supportsSessionArchive,
         )
     }
+
+    @Test
+    fun archivedSessions_needV2WithArchive() {
+        // v1 archives through time.archived but cannot clear it, so it cannot list or restore.
+        assertEquals(
+            false,
+            ServerCapabilities.forProtocol(ServerProtocol.V1, v2Features = V2ServerFeatures(sessionArchive = true)).supportsArchivedSessions,
+        )
+        assertEquals(false, ServerCapabilities.forProtocol(ServerProtocol.V2).supportsArchivedSessions)
+        assertEquals(
+            true,
+            ServerCapabilities.forProtocol(ServerProtocol.V2, v2Features = V2ServerFeatures(sessionArchive = true)).supportsArchivedSessions,
+        )
+    }
 }

@@ -704,14 +704,20 @@ private fun SessionListFeedRows(
     }
 }
 
+/**
+ * Home's session row in either [rowStyle]. Other session lists (Archived sessions) reuse it;
+ * [showsStatus] false drops the status, and [trailing] adds a control after the row's text.
+ */
 @Composable
-private fun SessionListRow(
+internal fun SessionListRow(
     session: SessionListSession,
     showStatusDot: Boolean,
     selected: Boolean,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
     rowStyle: HomeSessionRowStyle,
+    showsStatus: Boolean = true,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     val status =
         session.status.toListItemStatus(
@@ -726,6 +732,8 @@ private fun SessionListRow(
             selected = selected,
             onSessionSelected = onSessionSelected,
             onSessionLongPress = onSessionLongPress,
+            showsStatus = showsStatus,
+            trailing = trailing,
         )
         return
     }
@@ -735,7 +743,7 @@ private fun SessionListRow(
         subtitle = if (lines == null) compactHomePath(session.subtitle) else null,
         subtitleSegments = lines?.subtitle,
         detailSegments = lines?.detail,
-        status = status,
+        status = status.takeIf { showsStatus },
         caption = session.caption.resolve().takeIf { it.isNotEmpty() },
         startDecorator =
             StartDecorator.Letter(
@@ -746,6 +754,7 @@ private fun SessionListRow(
         selected = selected,
         onClick = { onSessionSelected(session) },
         onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
+        trailing = trailing,
     )
 }
 
@@ -757,8 +766,10 @@ private fun SessionListCompactRow(
     selected: Boolean,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
+    showsStatus: Boolean = true,
+    trailing: (@Composable () -> Unit)? = null,
 ) {
-    val active = session.compactStatus(text = ResourcesUiTextLookup(LocalResources.current), status = status)
+    val active = session.compactStatus(text = ResourcesUiTextLookup(LocalResources.current), status = status).takeIf { showsStatus }
     OpenCodeListItem(
         title = session.title,
         variant = OpenCodeListItemVariant.Compact,
@@ -776,6 +787,7 @@ private fun SessionListCompactRow(
         selected = selected,
         onClick = { onSessionSelected(session) },
         onLongPress = onSessionLongPress?.let { handler -> { handler(session) } },
+        trailing = trailing,
     )
 }
 

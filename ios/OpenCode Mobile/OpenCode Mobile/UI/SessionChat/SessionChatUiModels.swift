@@ -365,6 +365,10 @@ struct SessionChatUiState: Equatable {
     var reviewChangesSummary: ReviewChangesSummary?
     var supportsSessionMessageDiff: Bool = true
     var supportsSessionArchive: Bool = true
+    /// When the open session was archived; Session Chat shows the archived banner while set.
+    var archivedAtEpochMs: Int64?
+    /// The archived banner offers Unarchive (servers that can restore archived sessions).
+    var supportsArchivedSessions: Bool = false
     /// Move to worktree is a v2 server feature.
     var supportsSessionMove: Bool = false
     var moveSheetVisible = false
@@ -869,6 +873,8 @@ struct SessionInfoRegionState: Equatable {
     var lifecycleErrorMessage: String?
     var shouldLeaveSession = false
     var errorMessage: String?
+    /// When the open session was archived; nil while it is not (or not loaded yet).
+    var archivedAtEpochMs: Int64?
 
     mutating func applyStatus(
         authoritative: String?,

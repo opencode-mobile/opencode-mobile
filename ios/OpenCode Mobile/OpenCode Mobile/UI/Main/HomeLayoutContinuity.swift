@@ -6,6 +6,8 @@ enum HomeRoute: Hashable {
     case session(SessionListItem)
     case terminalsCatalog
     case terminal(TerminalRoute)
+    /// Archived sessions of a Home scope id.
+    case archivedSessions(scopeID: String)
     case worktrees
 
     var session: SessionListItem? {

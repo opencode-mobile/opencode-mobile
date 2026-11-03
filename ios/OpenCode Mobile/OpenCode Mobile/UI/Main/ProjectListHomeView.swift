@@ -114,6 +114,10 @@ struct ProjectListHomeView: View {
                         projectTitle: terminal.projectTitle,
                         ptyId: terminal.ptyId
                     )
+                case let .archivedSessions(scopeID):
+                    ArchivedSessionsView(scopeID: scopeID) { session in
+                        openSession(session)
+                    }
                 case .worktrees:
                     WorktreesView(
                         feed: viewModel.homeWorktreesFeed,
@@ -893,7 +897,7 @@ struct ProjectListHomeView: View {
         OpenCodeText(LocalizedStringResource("home.fork_result.message", defaultValue: "\u{201C}\(title)\u{201D} is ready."))
     }
 
-    private static func deleteSessionMessage(_ title: String) -> OpenCodeText {
+    static func deleteSessionMessage(_ title: String) -> OpenCodeText {
         OpenCodeText(LocalizedStringResource("home.delete.message", defaultValue: "Delete session \u{201C}\(title)\u{201D}?"))
     }
 
@@ -914,6 +918,12 @@ struct ProjectListHomeView: View {
                     screenId: ProductAnalytics.Screen.home,
                     actionId: ProductAnalytics.Action.homeOpenMenu
                 )
+                // Before presenting, so the Archived sessions entry is in the menu from its first frame.
+                viewModel.archivedMenu.refresh(
+                    scopeID: selectedSessionFilterId,
+                    projects: viewModel.homeProjects,
+                    worktreesEnabled: homeDisplayPreferences.showsWorktrees
+                )
                 homeMenuPresented = true
             })
         )
@@ -922,16 +932,18 @@ struct ProjectListHomeView: View {
 
     /// Feature entries go in `features`, top to bottom; `HomeMenu` adds Settings last.
     private var homeMenuEntries: [OpenCodeOverflowMenuEntry] {
-        HomeMenu.entries(features: [
-            OpenCodeOverflowMenuEntry(
-                id: "homeMenuWorktrees",
-                title: "worktrees.title",
-                subtitle: .verbatim(WorktreesCopy.menuSubtitle(viewModel.homeWorktreesFeed.snapshot)),
-                icon: .callSplit,
-                accessibilityIdentifier: "homeMenuWorktrees",
-                action: openWorktrees
-            ),
-        ], openSettings: openSettings)
+        HomeMenu.entries(features: [archivedMenuEntry, worktreesMenuEntry].compactMap { $0 }, openSettings: openSettings)
+    }
+
+    private var worktreesMenuEntry: OpenCodeOverflowMenuEntry {
+        OpenCodeOverflowMenuEntry(
+            id: "homeMenuWorktrees",
+            title: "worktrees.title",
+            subtitle: .verbatim(WorktreesCopy.menuSubtitle(viewModel.homeWorktreesFeed.snapshot)),
+            icon: .callSplit,
+            accessibilityIdentifier: "homeMenuWorktrees",
+            action: openWorktrees
+        )
     }
 
     private func openWorktrees() {
@@ -939,7 +951,28 @@ struct ProjectListHomeView: View {
             screenId: ProductAnalytics.Screen.home,
             actionId: ProductAnalytics.Action.homeOpenWorktrees
         )
+        homeMenuPresented = false
         homeRoutes.append(.worktrees)
+    }
+
+    private var archivedMenuEntry: OpenCodeOverflowMenuEntry? {
+        guard let entry = viewModel.archivedMenu.entry else { return nil }
+        return OpenCodeOverflowMenuEntry(
+            id: HomeMenu.archivedSessionsID,
+            title: "archived_sessions.title",
+            subtitle: entry.count.map { count in
+                OpenCodeText(LocalizedStringResource(
+                    "home.menu.archived_count",
+                    defaultValue: "\(count) in \(entry.scopeTitle)"
+                ))
+            } ?? .verbatim(entry.scopeTitle),
+            icon: .archive,
+            accessibilityIdentifier: HomeMenu.archivedSessionsID,
+            action: {
+                homeMenuPresented = false
+                homeRoutes.append(.archivedSessions(scopeID: selectedSessionFilterId))
+            }
+        )
     }
 
     private func handleTerminalTap() {

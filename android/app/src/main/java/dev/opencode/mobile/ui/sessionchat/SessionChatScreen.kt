@@ -77,6 +77,7 @@ import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
 import dev.opencode.mobile.domain.session.SideQuestion
+import dev.opencode.mobile.domain.time.RelativeTimeFormatting
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
@@ -103,6 +104,7 @@ import dev.opencode.mobile.ui.components.OpenCodeDictationUnavailableReason
 import dev.opencode.mobile.ui.components.OpenCodeDropOverlay
 import dev.opencode.mobile.ui.components.OpenCodeDropOverlayVariant
 import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
+import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeAction
 import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeVariant
 import dev.opencode.mobile.ui.components.OpenCodeLayout
 import dev.opencode.mobile.ui.components.OpenCodeListItem
@@ -931,6 +933,28 @@ private fun SessionChatScreenBody(
                         logChatAction(ProductAnalytics.Action.CHAT_OPEN_SESSION_CONTEXT)
                         onSessionContextClick()
                     },
+                )
+            }
+            uiState.archivedAtEpochMs?.let { archivedAt ->
+                OpenCodeInlineNotice(
+                    message = stringResource(R.string.session_chat_archived_banner, RelativeTimeFormatting.format(archivedAt).resolve()),
+                    variant = OpenCodeInlineNoticeVariant.Banner,
+                    action =
+                        if (uiState.supportsArchivedSessions) {
+                            OpenCodeInlineNoticeAction(
+                                title = stringResource(R.string.archived_sessions_unarchive),
+                                onClick = viewModel::unarchiveSession,
+                            )
+                        } else {
+                            null
+                        },
+                    modifier =
+                        Modifier
+                            .align(Alignment.CenterHorizontally)
+                            .widthIn(max = OpenCodeLayout.ContentMaxWidth)
+                            .padding(horizontal = 14.dp)
+                            .padding(top = 8.dp, bottom = 8.dp)
+                            .testTag(SessionChatArchivedBannerTag),
                 )
             }
             uiState.composer.modelNotice?.let { notice ->
@@ -2184,3 +2208,6 @@ internal fun sessionChatActivityItems(
             if (uiState.pendingPrompts.isNotEmpty()) add(SessionChatActivityItem.Queued(uiState.pendingPrompts.size))
         }
     }
+
+/** Test tag of Session Chat's archived banner. */
+internal const val SessionChatArchivedBannerTag = "sessionChatArchivedBanner"
