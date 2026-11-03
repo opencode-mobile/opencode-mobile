@@ -55,6 +55,7 @@ import dev.opencode.mobile.ui.text.resolve
 
 object SessionSearchTags {
     const val SCREEN = "sessionSearch"
+    const val MENU_ENTRY = "homeMenuSearchSessions"
     const val FIELD = "sessionSearchField"
     const val SCOPE = "sessionSearchScope"
     const val RESULTS = "sessionSearchResults"

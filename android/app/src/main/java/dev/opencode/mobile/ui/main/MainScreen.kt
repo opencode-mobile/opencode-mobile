@@ -69,6 +69,7 @@ import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
@@ -343,19 +344,6 @@ internal fun MainScreen(
 
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     var homeMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    // Feature entries go in `features`, top to bottom; HomeMenu adds Settings last.
-    val homeMenuEntries =
-        HomeMenu.entries(
-            features = emptyList(),
-            settingsTitle = stringResource(R.string.common_settings),
-            onSettingsClick = {
-                ProductAnalytics.logUserAction(
-                    screenId = ProductAnalytics.Screen.HOME,
-                    actionId = ProductAnalytics.Action.HOME_OPEN_SETTINGS,
-                )
-                onSettingsClick()
-            },
-        )
     val worktreesEnabled = HomeDisplayPreferences.showsWorktrees
     val loaded = uiState as? MainScreenUiState.Loaded
     val homeSessions = remember(loaded, worktreesEnabled) { loaded?.homeSessions(worktreesEnabled).orEmpty() }
@@ -373,6 +361,28 @@ internal fun MainScreen(
     }
     // Ctrl+F: Search sessions, wherever Home shows its projects.
     KeyboardShortcutHandler(KeyboardShortcutAction.SearchSessions, enabled = loaded != null, onShortcut = openSearch)
+    // Feature entries go in `features`, top to bottom; HomeMenu adds Settings last.
+    val homeMenuEntries =
+        HomeMenu.entries(
+            features =
+                listOfNotNull(
+                    // Search needs Home's sessions, so it waits for a loaded Home.
+                    OpenCodeOverflowMenuEntry(
+                        title = stringResource(R.string.session_search_title),
+                        icon = OpenCodeIcons.Search,
+                        onClick = openSearch,
+                        testTag = SessionSearchTags.MENU_ENTRY,
+                    ).takeIf { loaded != null },
+                ),
+            settingsTitle = stringResource(R.string.common_settings),
+            onSettingsClick = {
+                ProductAnalytics.logUserAction(
+                    screenId = ProductAnalytics.Screen.HOME,
+                    actionId = ProductAnalytics.Action.HOME_OPEN_SETTINGS,
+                )
+                onSettingsClick()
+            },
+        )
     val startNewSession: (SessionListHomeChrome.NewSessionAction) -> Unit = { action ->
         when (action) {
             SessionListHomeChrome.NewSessionAction.None -> Unit

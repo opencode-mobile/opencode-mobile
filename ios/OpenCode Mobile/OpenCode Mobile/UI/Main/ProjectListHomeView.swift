@@ -828,7 +828,10 @@ struct ProjectListHomeView: View {
 
     /// Search needs Home's sessions: a loaded Home, visible, like Settings.
     private var acceptsSearchShortcut: Bool {
-        guard acceptsHomeShortcuts else { return false }
+        acceptsHomeShortcuts && homeLoaded
+    }
+
+    private var homeLoaded: Bool {
         if case .loaded = viewModel.state { return true }
         return false
     }
@@ -975,18 +978,17 @@ struct ProjectListHomeView: View {
 
     /// Feature entries go in `features`, top to bottom; `HomeMenu` adds Settings last.
     private var homeMenuEntries: [OpenCodeOverflowMenuEntry] {
-        HomeMenu.entries(
-            features: [
-                OpenCodeOverflowMenuEntry(
-                    id: Self.searchMenuEntryID,
-                    title: "session_search.title",
-                    icon: .search,
-                    accessibilityIdentifier: Self.searchMenuEntryID,
-                    action: openSearch
-                ),
-            ],
-            openSettings: openSettings
-        )
+        // Search needs Home's sessions, so it waits for a loaded Home.
+        let search: [OpenCodeOverflowMenuEntry] = homeLoaded ? [
+            OpenCodeOverflowMenuEntry(
+                id: Self.searchMenuEntryID,
+                title: "session_search.title",
+                icon: .search,
+                accessibilityIdentifier: Self.searchMenuEntryID,
+                action: openSearch
+            ),
+        ] : []
+        return HomeMenu.entries(features: search, openSettings: openSettings)
     }
 
     private func handleTerminalTap() {
