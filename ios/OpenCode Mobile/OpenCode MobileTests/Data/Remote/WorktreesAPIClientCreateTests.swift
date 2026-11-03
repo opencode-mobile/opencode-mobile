@@ -200,6 +200,12 @@ struct WorktreesAPIClientCreateTests {
 
     // MARK: Remove (#833)
 
+    @Test func listV2LeavesOutTheProjectDirectory() async throws {
+        CreateURLProtocol.reset(status: 200, body: #"[{"directory":"/wt/a","strategy":"git"},{"directory":"/tmp/repo"}]"#)
+
+        #expect(try await makeClient().listV2(projectID: "prj") == ["/wt/a"])
+    }
+
     @Test func removeV2DeletesWithProjectDirectoryAndForce() async throws {
         CreateURLProtocol.reset(status: 204, body: "")
 

@@ -1132,6 +1132,17 @@ final class ProjectListHomeViewModel {
         return true
     }
 
+    /// What the server listed as worktrees, minus every project's main checkout.
+    var removableWorktreeDirectories: Set<String> {
+        let mains = Set(homeProjects.flatMap { $0.worktrees.filter(\.isMain).map(\.directory) })
+        return Set(
+            worktreeDirectories.values
+                .flatMap { $0 }
+                .map { ServerPathPolicy.canonical($0.trimmingCharacters(in: .whitespacesAndNewlines)) }
+                .filter { !$0.isEmpty && !mains.contains($0) }
+        )
+    }
+
     /// Worktree directories removed from this app; their sessions stay on Home marked removed.
     var removedWorktreeDirectories: Set<String> { homeWorktreesFeed.removedDirectories }
 

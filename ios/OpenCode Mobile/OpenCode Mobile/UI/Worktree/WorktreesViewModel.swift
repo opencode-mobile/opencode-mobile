@@ -250,7 +250,7 @@ final class WorktreesViewModel {
 
     private func loadChangeCounts() {
         let directories = snapshot.projects
-            .flatMap { $0.worktrees.filter { !$0.isMain } }
+            .flatMap { snapshot.removableWorktrees($0) }
             .map(\.directory)
             .filter { changesRequested.insert($0).inserted }
         for directory in directories {
@@ -266,7 +266,7 @@ final class WorktreesViewModel {
     private func find(_ directory: String) -> (HomeProject, HomeWorktree)? {
         let canonical = ServerPathPolicy.canonical(directory.trimmingCharacters(in: .whitespacesAndNewlines))
         for project in snapshot.projects {
-            if let worktree = project.worktree(at: canonical), !worktree.isMain {
+            if let worktree = snapshot.removableWorktrees(project).first(where: { $0.directory == canonical }) {
                 return (project, worktree)
             }
         }
@@ -282,8 +282,8 @@ final class WorktreesViewModel {
                 displayName: project.displayName,
                 primaryPath: project.primaryPath,
                 mainCheckout: project.mainCheckoutDirectory,
-                worktrees: project.worktrees
-                    .filter { !$0.isMain && !removed.contains($0.directory) }
+                worktrees: snapshot.removableWorktrees(project)
+                    .filter { !removed.contains($0.directory) }
                     .map { worktree in
                         let sessions = snapshot.sessions(in: worktree.directory)
                         return WorktreeRowItem(

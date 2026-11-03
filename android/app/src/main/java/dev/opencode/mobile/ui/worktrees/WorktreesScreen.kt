@@ -161,7 +161,8 @@ private fun WorktreesList(
             }
         }
         item(key = "footer") {
-            WorktreesNote(stringResource(R.string.worktrees_footer), Modifier.padding(top = 8.dp))
+            // Animated too, so it moves up with the list instead of jumping under a leaving row.
+            WorktreesNote(stringResource(R.string.worktrees_footer), Modifier.animateItem().padding(top = 8.dp))
         }
     }
 }

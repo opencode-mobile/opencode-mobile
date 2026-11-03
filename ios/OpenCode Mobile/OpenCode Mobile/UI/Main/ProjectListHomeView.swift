@@ -575,7 +575,8 @@ struct ProjectListHomeView: View {
                     directory: ServerPathPolicy.canonical(session.directory),
                     isRunning: isRunning
                 )
-            }
+            },
+            removableDirectories: viewModel.removableWorktreeDirectories
         )
     }
 

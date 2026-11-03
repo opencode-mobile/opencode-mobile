@@ -29,7 +29,9 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         }
         let data = try await data(for: request)
         let listed = try decoder.decode([WorktreeDirectoryDTO].self, from: data)
-        return listed.map(\.directory)
+        // The project's own directory comes without a strategy; the server cannot remove it,
+        // and Home adds the main checkout itself.
+        return listed.filter { $0.strategy?.isEmpty == false }.map(\.directory)
     }
 
     func refreshV2(projectID: String) async throws {
@@ -136,6 +138,7 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
 
 private nonisolated struct WorktreeDirectoryDTO: Decodable {
     let directory: String
+    let strategy: String?
 }
 
 private nonisolated struct WorktreeCreateV2Body: Encodable {

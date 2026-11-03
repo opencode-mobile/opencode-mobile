@@ -342,7 +342,16 @@ internal fun MainScreen(
 
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     var homeMenuExpanded by rememberSaveable { mutableStateOf(false) }
-    val loadedWorktrees = remember(uiState) { (uiState as? MainScreenUiState.Loaded)?.worktreesSnapshot() }
+    // Counts only: the menu subtitle needs no session list.
+    val loadedWorktrees =
+        (uiState as? MainScreenUiState.Loaded)?.let { state ->
+            remember(state.projects, state.home.inventories) {
+                HomeWorktreesSnapshot(
+                    projects = state.projects,
+                    removableDirectories = state.home.removableWorktreeDirectories(state.projects),
+                )
+            }
+        }
     val archivedMenuEntry =
         archivedMenu?.let { entry ->
             val scopeTitle = entry.scopeTitle.resolve()
@@ -1281,6 +1290,7 @@ private fun worktreesMenuSubtitle(snapshot: HomeWorktreesSnapshot): String {
 internal fun MainScreenUiState.Loaded.worktreesSnapshot(): HomeWorktreesSnapshot =
     HomeWorktreesSnapshot(
         projects = projects,
+        removableDirectories = home.removableWorktreeDirectories(projects),
         sessions =
             homeSessions().map { session ->
                 HomeWorktreeSession(

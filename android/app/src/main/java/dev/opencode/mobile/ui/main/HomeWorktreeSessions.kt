@@ -27,6 +27,16 @@ data class HomeWorktreeIndex(
     /** Worktrees removed from this app, canonical directory to project key; their sessions stay on Home. */
     val removedWorktrees: Map<String, String> = emptyMap(),
 ) {
+    /** What the server listed as worktrees, minus every project's main checkout. */
+    fun removableWorktreeDirectories(projects: List<HomeProject>): Set<String> {
+        val mains = projects.flatMap { project -> project.worktrees.filter { it.isMain }.map { it.directory } }.toSet()
+        return inventories.values
+            .flatten()
+            .map { ServerPathPolicy.canonical(it.trim()) }
+            .filter { it.isNotBlank() && it !in mains }
+            .toSet()
+    }
+
     fun projects(addedPaths: List<String>): List<HomeProject> =
         HomeProjectGrouping.group(
             addedPaths = addedPaths,

@@ -226,6 +226,42 @@ class WorktreesViewModelTest {
     }
 
     @Test
+    fun aFolderTheServerDidNotListAsAWorktreeIsNotARow() =
+        runTest(dispatcher) {
+            // The added path /tmp/repo is the main checkout through a symlink: Home groups it as a
+            // non-main entry, but the server never listed it as a worktree.
+            val feed = HomeWorktreesFeed()
+            feed.publish(
+                HomeWorktreesSnapshot(
+                    projects =
+                        listOf(
+                            HomeProject(
+                                key = "acme",
+                                projectId = "acme",
+                                displayName = "Acme",
+                                memberPaths = listOf("/tmp/repo"),
+                                isRepository = true,
+                                worktrees =
+                                    listOf(
+                                        HomeWorktree("/private/tmp/repo", branch = "main", isMain = true),
+                                        HomeWorktree("/tmp/repo", branch = "main"),
+                                        HomeWorktree("/wt/a"),
+                                    ),
+                            ),
+                        ),
+                    removableDirectories = setOf("/wt/a"),
+                ),
+            )
+            val model = model(feed)
+            advanceUntilIdle()
+
+            assertEquals(listOf("/wt/a"), model.state.value.groups.single().worktrees.map { it.directory })
+            model.requestRemove("/tmp/repo")
+            assertNull(model.state.value.dialog)
+            assertEquals(1, feed.snapshot.value.worktreeCount)
+        }
+
+    @Test
     fun theMainCheckoutCannotBeRemoved() =
         runTest(dispatcher) {
             val model = model(feed())
@@ -281,6 +317,7 @@ class WorktreesViewModelTest {
                             ),
                         ),
                     sessions = sessions,
+                    removableDirectories = setOf("/wt/search", "/wt/typo"),
                 ),
             )
         }

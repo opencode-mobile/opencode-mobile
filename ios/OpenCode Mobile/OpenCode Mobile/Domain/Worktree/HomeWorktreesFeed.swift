@@ -15,19 +15,28 @@ nonisolated struct HomeWorktreeSession: Equatable, Sendable {
 nonisolated struct HomeWorktreesSnapshot: Equatable, Sendable {
     var projects: [HomeProject] = []
     var sessions: [HomeWorktreeSession] = []
+    /// Canonical directories the server listed as worktrees, never a main checkout. Only these can
+    /// be removed; other non-main entries of a project (an added path the server does not list)
+    /// are not worktrees the server knows.
+    var removableDirectories: Set<String> = []
+
+    /// A project's worktrees the server can remove.
+    func removableWorktrees(_ project: HomeProject) -> [HomeWorktree] {
+        project.worktrees.filter { !$0.isMain && removableDirectories.contains($0.directory) }
+    }
 
     func sessions(in directory: String) -> [HomeWorktreeSession] {
         let canonical = ServerPathPolicy.canonical(directory.trimmingCharacters(in: .whitespacesAndNewlines))
         return sessions.filter { $0.directory == canonical }
     }
 
-    /// Worktrees other than main checkouts, across every project.
+    /// Removable worktrees, across every project.
     var worktreeCount: Int {
-        projects.reduce(0) { $0 + $1.worktrees.filter { !$0.isMain }.count }
+        projects.reduce(0) { $0 + removableWorktrees($1).count }
     }
 
     var projectsWithWorktrees: Int {
-        projects.filter { $0.worktrees.contains { !$0.isMain } }.count
+        projects.filter { !removableWorktrees($0).isEmpty }.count
     }
 }
 

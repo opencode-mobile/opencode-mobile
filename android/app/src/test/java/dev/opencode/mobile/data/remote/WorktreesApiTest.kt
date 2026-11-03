@@ -39,6 +39,21 @@ class WorktreesApiTest {
         }
 
     @Test
+    fun v2ListLeavesOutTheProjectDirectory() =
+        runTest {
+            val api =
+                api(mutableListOf()) {
+                    respond(
+                        """[{"directory":"/wt/a","strategy":"git"},{"directory":"/tmp/repo"}]""",
+                        HttpStatusCode.OK,
+                        headersOf(HttpHeaders.ContentType, "application/json"),
+                    )
+                }
+
+            assertEquals(listOf("/wt/a"), api.listV2("proj"))
+        }
+
+    @Test
     fun refreshPostsProjectId() =
         runTest {
             val captured = mutableListOf<HttpRequestData>()

@@ -25,18 +25,28 @@ data class HomeWorktreeSession(
 data class HomeWorktreesSnapshot(
     val projects: List<HomeProject> = emptyList(),
     val sessions: List<HomeWorktreeSession> = emptyList(),
+    /**
+     * Canonical directories the server listed as worktrees, never a main checkout. Only these can
+     * be removed; other non-main entries of a project (an added path the server does not list)
+     * are not worktrees the server knows.
+     */
+    val removableDirectories: Set<String> = emptySet(),
 ) {
+    /** A project's worktrees the server can remove. */
+    fun removableWorktrees(project: HomeProject): List<HomeWorktree> =
+        project.worktrees.filter { !it.isMain && it.directory in removableDirectories }
+
     fun sessionsIn(directory: String): List<HomeWorktreeSession> {
         val canonical = ServerPathPolicy.canonical(directory.trim())
         return sessions.filter { it.directory == canonical }
     }
 
-    /** Worktrees other than main checkouts, across every project. */
+    /** Removable worktrees, across every project. */
     val worktreeCount: Int
-        get() = projects.sumOf { project -> project.worktrees.count { !it.isMain } }
+        get() = projects.sumOf { project -> removableWorktrees(project).size }
 
     val projectsWithWorktrees: Int
-        get() = projects.count { project -> project.worktrees.any { !it.isMain } }
+        get() = projects.count { project -> removableWorktrees(project).isNotEmpty() }
 }
 
 /** What the Worktrees screen asks Home to do. */

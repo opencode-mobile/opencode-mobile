@@ -326,7 +326,7 @@ class WorktreesViewModel
         private fun loadChangeCounts() {
             val directories =
                 snapshot.projects
-                    .flatMap { project -> project.worktrees.filterNot { it.isMain } }
+                    .flatMap { project -> snapshot.removableWorktrees(project) }
                     .map { it.directory }
                     .filter { changesRequested.add(it) }
             for (directory in directories) {
@@ -348,7 +348,7 @@ class WorktreesViewModel
         private fun find(directory: String): Pair<HomeProject, HomeWorktree>? {
             val canonical = ServerPathPolicy.canonical(directory.trim())
             for (project in snapshot.projects) {
-                val worktree = project.worktree(canonical)?.takeIf { !it.isMain } ?: continue
+                val worktree = snapshot.removableWorktrees(project).firstOrNull { it.directory == canonical } ?: continue
                 return project to worktree
             }
             return null
@@ -365,8 +365,9 @@ class WorktreesViewModel
                         primaryPath = project.primaryPath,
                         mainCheckout = project.mainCheckoutDirectory,
                         worktrees =
-                            project.worktrees
-                                .filter { !it.isMain && it.directory !in removed }
+                            snapshot
+                                .removableWorktrees(project)
+                                .filter { it.directory !in removed }
                                 .map { worktree ->
                                     val sessions = snapshot.sessionsIn(worktree.directory)
                                     WorktreeRowUi(

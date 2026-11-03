@@ -156,6 +156,35 @@ struct WorktreesViewModelTests {
         #expect(WorktreesCopy.menuSubtitle(HomeWorktreesSnapshot()) == "None")
     }
 
+    @Test func aFolderTheServerDidNotListAsAWorktreeIsNotARow() {
+        // The added path /tmp/repo is the main checkout through a symlink: Home groups it as a
+        // non-main entry, but the server never listed it as a worktree.
+        let feed = HomeWorktreesFeed()
+        feed.publish(HomeWorktreesSnapshot(
+            projects: [
+                HomeProject(
+                    key: "acme",
+                    projectID: "acme",
+                    displayName: "Acme",
+                    memberPaths: ["/tmp/repo"],
+                    isRepository: true,
+                    worktrees: [
+                        HomeWorktree(directory: "/private/tmp/repo", branch: "main", isMain: true),
+                        HomeWorktree(directory: "/tmp/repo", branch: "main", isMain: false),
+                        HomeWorktree(directory: "/wt/a", branch: nil, isMain: false),
+                    ]
+                ),
+            ],
+            removableDirectories: ["/wt/a"]
+        ))
+        let model = makeModel(feed)
+
+        #expect(model.groups.first?.worktrees.map(\.directory) == ["/wt/a"])
+        model.requestRemove(directory: "/tmp/repo")
+        #expect(model.dialog == nil)
+        #expect(feed.snapshot.worktreeCount == 1)
+    }
+
     @Test func theMainCheckoutCannotBeRemoved() {
         let model = makeModel(makeFeed())
 
@@ -249,7 +278,8 @@ struct WorktreesViewModelTests {
                     worktrees: []
                 ),
             ],
-            sessions: sessions
+            sessions: sessions,
+            removableDirectories: ["/wt/search", "/wt/typo"]
         ))
         return feed
     }

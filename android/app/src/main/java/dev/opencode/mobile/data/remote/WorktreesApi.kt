@@ -65,6 +65,7 @@ internal data class V1CreatedWorktreeDto(
 )
 
 interface WorktreeRemote {
+    /** V2 `GET /api/worktree?projectID=`: worktrees with a strategy, never the project's own directory. */
     suspend fun listV2(projectId: String): List<String>
 
     suspend fun refreshV2(projectId: String)
@@ -122,6 +123,9 @@ class WorktreesApi private constructor(
             .get("api/worktree") {
                 parameter("projectID", projectId)
             }.body<List<WorktreeDirectoryDto>>()
+            // The project's own directory comes without a strategy; the server cannot remove it,
+            // and Home adds the main checkout itself.
+            .filter { !it.strategy.isNullOrBlank() }
             .map { it.directory }
 
     override suspend fun refreshV2(projectId: String) {
