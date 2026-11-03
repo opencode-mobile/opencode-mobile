@@ -103,8 +103,8 @@ class StoreScreenshotTest {
     @Test
     fun settings() {
         waitForHome()
-        tapDesc(SETTINGS)
-        waitForText(SETTINGS)
+        tapDesc(MORE_OPTIONS)
+        tapText(SETTINGS)
         waitForText(SERVERS)
         settle()
         capture("05-settings.png")

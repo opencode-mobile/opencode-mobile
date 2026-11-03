@@ -4,6 +4,7 @@ import SwiftUI
 struct ProjectListHomeView: View {
     @State private var viewModel: ProjectListHomeViewModel
     @State private var showSettings = false
+    @State private var homeMenuPresented = false
     /// Home's stack as typed routes, so a layout flip can find the open session.
     /// The `NavigationStack` itself binds a type-erased `NavigationPath`: a typed
     /// path traps in SwiftUI (`comparisonTypeMismatch`) when the split's nested
@@ -69,8 +70,8 @@ struct ProjectListHomeView: View {
             }
             // ⌘N, ⌘, and ⌘1–9 (#869). Closures read live Home state when they fire.
             .openCodeKeyboardShortcut(.newSession, action: acceptsNewSessionShortcut ? { newSessionFromKeyboard() } : nil)
-            .openCodeKeyboardShortcut(.settings, action: acceptsHomeShortcuts ? { openSettingsFromKeyboard() } : nil)
-            .openCodeKeyboardShortcut(.searchSessions, action: acceptsSearchShortcut ? { openSearchFromKeyboard() } : nil)
+            .openCodeKeyboardShortcut(.settings, action: acceptsHomeShortcuts ? { openSettings() } : nil)
+            .openCodeKeyboardShortcut(.searchSessions, action: acceptsSearchShortcut ? { openSearch() } : nil)
             .openCodeProjectShortcuts(
                 titles: liveProjectTabs.map(\.dockTitle),
                 select: acceptsHomeShortcuts ? { index in selectProjectFromKeyboard(index) } : nil
@@ -684,15 +685,17 @@ struct ProjectListHomeView: View {
 
     private var homeListPane: some View {
         VStack(spacing: 0) {
-            OpenCodeTopBar(
-                title: viewModel.serversChrome.title,
-                subtitleAccessory: showsLiveUpdatesStatus
-                    ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
-                    : nil,
-                actions: homeTopBarActions,
-                onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
-                titleMenuExpanded: viewModel.serversChrome.sheetVisible
-            )
+            OpenCodeTopBarOverflowHost(isPresented: $homeMenuPresented, entries: homeMenuEntries) {
+                OpenCodeTopBar(
+                    title: viewModel.serversChrome.title,
+                    subtitleAccessory: showsLiveUpdatesStatus
+                        ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
+                        : nil,
+                    actions: homeTopBarActions,
+                    onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
+                    titleMenuExpanded: viewModel.serversChrome.sheetVisible
+                )
+            }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .id(viewModel.serversChrome.active?.id ?? "")
@@ -848,8 +851,9 @@ struct ProjectListHomeView: View {
         )
     }
 
-    /// ⌘F: opens search on Home's scope, or puts the caret back in its field.
-    private func openSearchFromKeyboard() {
+    /// From the Home menu or ⌘F: opens search on Home's scope, or puts the caret back in its field.
+    private func openSearch() {
+        homeMenuPresented = false
         if let control = splitSidebar.control, isSplitLayout, control.isCollapsed {
             control.toggle()
         }
@@ -861,11 +865,13 @@ struct ProjectListHomeView: View {
         sessionSearch.open(homeScopeId: liveHomeFilter.selectedId)
     }
 
-    private func openSettingsFromKeyboard() {
+    /// From the Home menu or ⌘,.
+    private func openSettings() {
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.home,
             actionId: ProductAnalytics.Action.homeOpenSettings
         )
+        homeMenuPresented = false
         showSettings = true
     }
 
@@ -954,15 +960,33 @@ struct ProjectListHomeView: View {
             )
         }
         actions.append(
-            .icon(.settings, accessibilityLabel: "common.settings", action: {
+            .icon(.moreVert, accessibilityLabel: "home.more_options", action: {
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.home,
-                    actionId: ProductAnalytics.Action.homeOpenSettings
+                    actionId: ProductAnalytics.Action.homeOpenMenu
                 )
-                showSettings = true
+                homeMenuPresented = true
             })
         )
         return actions
+    }
+
+    static let searchMenuEntryID = "homeMenuSearchSessions"
+
+    /// Feature entries go in `features`, top to bottom; `HomeMenu` adds Settings last.
+    private var homeMenuEntries: [OpenCodeOverflowMenuEntry] {
+        HomeMenu.entries(
+            features: [
+                OpenCodeOverflowMenuEntry(
+                    id: Self.searchMenuEntryID,
+                    title: "session_search.title",
+                    icon: .search,
+                    accessibilityIdentifier: Self.searchMenuEntryID,
+                    action: openSearch
+                ),
+            ],
+            openSettings: openSettings
+        )
     }
 
     private func handleTerminalTap() {

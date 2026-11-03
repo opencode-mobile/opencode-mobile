@@ -76,6 +76,7 @@ import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
+import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.SessionList
 import dev.opencode.mobile.ui.components.SessionListFilterTab
@@ -341,6 +342,20 @@ internal fun MainScreen(
         }
 
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
+    var homeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    // Feature entries go in `features`, top to bottom; HomeMenu adds Settings last.
+    val homeMenuEntries =
+        HomeMenu.entries(
+            features = emptyList(),
+            settingsTitle = stringResource(R.string.common_settings),
+            onSettingsClick = {
+                ProductAnalytics.logUserAction(
+                    screenId = ProductAnalytics.Screen.HOME,
+                    actionId = ProductAnalytics.Action.HOME_OPEN_SETTINGS,
+                )
+                onSettingsClick()
+            },
+        )
     val worktreesEnabled = HomeDisplayPreferences.showsWorktrees
     val loaded = uiState as? MainScreenUiState.Loaded
     val homeSessions = remember(loaded, worktreesEnabled) { loaded?.homeSessions(worktreesEnabled).orEmpty() }
@@ -405,50 +420,56 @@ internal fun MainScreen(
 
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            OpenCodeTopBar(
-                title = serversChrome.title.resolve(),
-                onTitleClick = if (serversChrome.isSwitcher) onTitleClick else null,
-                titleMenuExpanded = serversChrome.sheetVisible,
-                subtitleAccessory =
-                    if (showsLiveUpdatesStatus(uiState)) {
-                        OpenCodeTopBarSubtitleAccessory.StatusDot(
-                            liveUpdatesConnectionStatus.toOpenCodeSessionConnectionStatus(),
-                        )
-                    } else {
-                        null
-                    },
-                actions =
-                    buildList {
-                        if (showTerminalAction) {
+            OpenCodeTopBarOverflowHost(
+                expanded = homeMenuExpanded,
+                onDismissRequest = { homeMenuExpanded = false },
+                entries = homeMenuEntries,
+            ) {
+                OpenCodeTopBar(
+                    title = serversChrome.title.resolve(),
+                    onTitleClick = if (serversChrome.isSwitcher) onTitleClick else null,
+                    titleMenuExpanded = serversChrome.sheetVisible,
+                    subtitleAccessory =
+                        if (showsLiveUpdatesStatus(uiState)) {
+                            OpenCodeTopBarSubtitleAccessory.StatusDot(
+                                liveUpdatesConnectionStatus.toOpenCodeSessionConnectionStatus(),
+                            )
+                        } else {
+                            null
+                        },
+                    actions =
+                        buildList {
+                            if (showTerminalAction) {
+                                add(
+                                    OpenCodeTopBarAction.Icon(
+                                        imageVector = OpenCodeIcons.Terminal,
+                                        contentDescription = stringResource(R.string.common_terminal),
+                                        onClick = {
+                                            ProductAnalytics.logUserAction(
+                                                screenId = ProductAnalytics.Screen.HOME,
+                                                actionId = ProductAnalytics.Action.HOME_OPEN_TERMINAL,
+                                            )
+                                            onTerminalClick()
+                                        },
+                                    ),
+                                )
+                            }
                             add(
                                 OpenCodeTopBarAction.Icon(
-                                    imageVector = OpenCodeIcons.Terminal,
-                                    contentDescription = stringResource(R.string.common_terminal),
+                                    imageVector = OpenCodeIcons.MoreVert,
+                                    contentDescription = stringResource(R.string.home_more_options),
                                     onClick = {
                                         ProductAnalytics.logUserAction(
                                             screenId = ProductAnalytics.Screen.HOME,
-                                            actionId = ProductAnalytics.Action.HOME_OPEN_TERMINAL,
+                                            actionId = ProductAnalytics.Action.HOME_OPEN_MENU,
                                         )
-                                        onTerminalClick()
+                                        homeMenuExpanded = true
                                     },
                                 ),
                             )
-                        }
-                        add(
-                            OpenCodeTopBarAction.Icon(
-                                imageVector = OpenCodeIcons.Settings,
-                                contentDescription = stringResource(R.string.common_settings),
-                                onClick = {
-                                    ProductAnalytics.logUserAction(
-                                        screenId = ProductAnalytics.Screen.HOME,
-                                        actionId = ProductAnalytics.Action.HOME_OPEN_SETTINGS,
-                                    )
-                                    onSettingsClick()
-                                },
-                            ),
-                        )
-                    },
-            )
+                        },
+                )
+            }
 
             val activeServerId = serversChrome.active?.id.orEmpty()
             AnimatedContent(

@@ -41,8 +41,11 @@ final class ConnectionSetupUITests: XCTestCase {
         if skip.waitForExistence(timeout: 3) {
             skip.tap()
         }
-        let settings = app.buttons["Settings"]
-        XCTAssertTrue(settings.waitForExistence(timeout: 10))
+        let moreOptions = app.buttons["More options"]
+        XCTAssertTrue(moreOptions.waitForExistence(timeout: 10))
+        moreOptions.tap()
+        let settings = app.buttons["homeMenuSettings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5))
         settings.tap()
         let servers = app.staticTexts["Servers"]
         XCTAssertTrue(servers.waitForExistence(timeout: 5))
