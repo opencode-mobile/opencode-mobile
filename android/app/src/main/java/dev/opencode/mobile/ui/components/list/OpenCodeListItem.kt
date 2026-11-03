@@ -55,6 +55,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
@@ -78,6 +79,7 @@ import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 private val ListItemLetterBadgeSize = 32.dp
+private const val LIST_ITEM_TITLE_HIGHLIGHT_ALPHA = 0.24f
 private val ListItemLetterGlyphSize = 14.sp
 private val ListItemLetterStatusDotSize = 10.dp
 private val ListItemIconDecoratorSize = 24.dp
@@ -186,6 +188,8 @@ fun OpenCodeListItem(
     path: OpenCodeListItemPath? = null,
     /** Compact title in a heavier weight, for finished work not opened yet. */
     titleEmphasized: Boolean = false,
+    /** Part of [title] to mark, such as the text a search matched; out-of-range parts are ignored. */
+    titleHighlight: IntRange? = null,
 ) {
     require(subtitle == null || subtitleSegments == null) {
         "List Item accepts either a plain subtitle or semantic segments"
@@ -321,6 +325,7 @@ fun OpenCodeListItem(
                 CompactListItemContent(
                     title = title,
                     titleEmphasized = titleEmphasized,
+                    titleHighlight = titleHighlight,
                     path = path,
                     subtitle = subtitle,
                     status = status,
@@ -345,7 +350,7 @@ fun OpenCodeListItem(
                     ) {
                         val titleText = @Composable { titleModifier: Modifier ->
                             Text(
-                                text = title,
+                                text = listItemTitleText(title, titleHighlight),
                                 color = if (enabled) textStrong else textWeaker,
                                 style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
                                 maxLines = 1,
@@ -416,6 +421,30 @@ fun OpenCodeListItem(
             }
         }
     }
+}
+
+/** [title] with [highlight] marked on the interactive tint; plain when there is nothing to mark. */
+@Composable
+internal fun listItemTitleText(
+    title: String,
+    highlight: IntRange?,
+): AnnotatedString {
+    val range = highlight?.let { listItemTitleHighlightRange(title, it) } ?: return AnnotatedString(title)
+    val background = openCodeColor("interactive").copy(alpha = LIST_ITEM_TITLE_HIGHLIGHT_ALPHA)
+    return buildAnnotatedString {
+        append(title)
+        addStyle(SpanStyle(background = background), range.first, range.last + 1)
+    }
+}
+
+/** [highlight] clipped to [title]; null when nothing of it is inside. */
+internal fun listItemTitleHighlightRange(
+    title: String,
+    highlight: IntRange,
+): IntRange? {
+    val start = highlight.first.coerceAtLeast(0)
+    val end = highlight.last.coerceAtMost(title.length - 1)
+    return if (start > end) null else start..end
 }
 
 @Composable

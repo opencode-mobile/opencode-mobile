@@ -5,13 +5,16 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -138,8 +141,10 @@ fun MainScreen(
     selectedSessionId: String? = null,
     sessionKeyboardNavigationEnabled: Boolean = false,
     viewModel: MainScreenViewModel = hiltViewModel(),
+    searchViewModel: SessionSearchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val searchState by searchViewModel.uiState.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val liveUpdatesConnectionStatus by viewModel.liveUpdatesConnectionStatus.collectAsStateWithLifecycle()
     val removalSnackbar by viewModel.removalSnackbar.collectAsStateWithLifecycle()
@@ -248,6 +253,20 @@ fun MainScreen(
         modifier = modifier,
         selectedSessionId = selectedSessionId,
         sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
+        search =
+            HomeSessionSearch(
+                state = searchState,
+                callbacks =
+                    SessionSearchCallbacks(
+                        onClose = searchViewModel::close,
+                        onQueryChange = searchViewModel::updateQuery,
+                        onEscape = searchViewModel::escape,
+                        onSelectScope = searchViewModel::selectScope,
+                        onSearchAllProjects = searchViewModel::searchAllProjects,
+                    ),
+                onOpen = searchViewModel::open,
+                onHomeChanged = searchViewModel::homeChanged,
+            ),
     )
 }
 
@@ -294,6 +313,7 @@ internal fun MainScreen(
     worktreeServerCanCreate: Boolean = true,
     onOpenRunInNewWorktree: (String) -> Unit = {},
     worktreeCreateCallbacks: WorktreeCreateFormCallbacks = WorktreeCreateFormCallbacks(),
+    search: HomeSessionSearch = HomeSessionSearch(),
 ) {
     var newSessionSheetMode by rememberSaveable(stateSaver = NewSessionSheetModeSaver) {
         mutableStateOf<SessionListHomeChrome.NewSessionSheetMode?>(null)
@@ -330,6 +350,14 @@ internal fun MainScreen(
         }
     val showTerminalAction =
         SessionListHomeChrome.terminalAction(chromeProjects) is SessionListHomeChrome.TerminalAction.OpenCatalog
+    LaunchedEffect(loaded, worktreesEnabled) {
+        loaded?.let { search.onHomeChanged(SessionSearchHome.from(it, worktreesEnabled)) }
+    }
+    val openSearch: () -> Unit = {
+        search.onOpen(homeScopeId(selectedFilterId, loaded?.projects.orEmpty(), worktreesEnabled))
+    }
+    // Ctrl+F: Search sessions, wherever Home shows its projects.
+    KeyboardShortcutHandler(KeyboardShortcutAction.SearchSessions, enabled = loaded != null, onShortcut = openSearch)
     val startNewSession: (SessionListHomeChrome.NewSessionAction) -> Unit = { action ->
         when (action) {
             SessionListHomeChrome.NewSessionAction.None -> Unit
@@ -517,6 +545,27 @@ internal fun MainScreen(
                 }
                 }
             }
+        }
+
+        if (search.state.open && loaded != null) {
+            SessionSearchScreen(
+                state = search.state,
+                callbacks = search.callbacks,
+                onOpenSession = { session ->
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.HOME,
+                        actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
+                    )
+                    onSessionClick(SessionOpenTarget(sessionId = session.id, title = session.title, worktree = session.directory))
+                },
+                selectedSessionId = selectedSessionId,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                        .imePadding()
+                        .navigationBarsPadding(),
+            )
         }
 
         OpenCodeSnackbarHost(
@@ -1386,3 +1435,12 @@ fun MainScreenPreview() {
         )
     }
 }
+
+/** Search sessions (#929) as Home hosts it: the search Screen Model's state and actions. */
+data class HomeSessionSearch(
+    val state: SessionSearchUiState = SessionSearchUiState(),
+    val callbacks: SessionSearchCallbacks = SessionSearchCallbacks(),
+    /** Opens search in Home's scope id. */
+    val onOpen: (String) -> Unit = {},
+    val onHomeChanged: (SessionSearchHome) -> Unit = {},
+)

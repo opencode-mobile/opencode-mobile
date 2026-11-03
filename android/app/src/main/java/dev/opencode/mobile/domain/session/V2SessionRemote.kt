@@ -16,10 +16,7 @@ internal class V2SessionRemote(
         api.listPendingFormsV2(directory).map(adapter::toQuestionRequest)
 
     override suspend fun listSessions(directory: String?): List<Session> {
-        val projectId =
-            directory?.let { path ->
-                runCatching { listableProjectId(api.locationForSessionList(path)) }.getOrNull()
-            }
+        val projectId = projectIdForList(directory)
         return api
             .listSessionsV2(
                 directory = if (projectId == null) directory else null,
@@ -27,6 +24,27 @@ internal class V2SessionRemote(
                 archived = false,
             ).map(adapter::toSession)
     }
+
+    override suspend fun searchSessions(
+        query: String,
+        directory: String?,
+    ): List<Session> {
+        val projectId = projectIdForList(directory)
+        val sessions =
+            api.listSessionsV2(
+                directory = if (projectId == null) directory else null,
+                projectId = projectId,
+                archived = false,
+                rootsOnly = true,
+                search = SessionTitleSearch.normalizedQuery(query),
+            )
+        return SessionTitleSearch.filter(sessions.map(adapter::toSession), query)
+    }
+
+    private suspend fun projectIdForList(directory: String?): String? =
+        directory?.let { path ->
+            runCatching { listableProjectId(api.locationForSessionList(path)) }.getOrNull()
+        }
 
     override suspend fun createSession(
         parentId: String?,

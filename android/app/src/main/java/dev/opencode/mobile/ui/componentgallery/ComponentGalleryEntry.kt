@@ -56,6 +56,7 @@ enum class ComponentGalleryEntryId {
     ReorderableList,
     ChoiceBadge,
     FilterTabs,
+    MenuChip,
     ActionPill,
     ActionTile,
     FloatingPill,
@@ -151,6 +152,12 @@ val ComponentGalleryEntries =
             title = "Typography",
             description = "Review shared type roles and platform mappings.",
             category = ComponentGalleryCategory.Foundations,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.MenuChip,
+            title = "Menu Chip",
+            description = "Capsule that shows a filter's current choice and opens a menu of the others, such as a search scope.",
+            category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(
             id = ComponentGalleryEntryId.ActionPill,

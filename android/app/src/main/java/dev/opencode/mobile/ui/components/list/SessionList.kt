@@ -693,14 +693,16 @@ private fun SessionListFeedRows(
     }
 }
 
+/** A Home session row; search results (#929) mark the matched part of the title with [titleHighlight]. */
 @Composable
-private fun SessionListRow(
+internal fun SessionListRow(
     session: SessionListSession,
     showStatusDot: Boolean,
     selected: Boolean,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
     rowStyle: HomeSessionRowStyle,
+    titleHighlight: IntRange? = null,
 ) {
     val status =
         session.status.toListItemStatus(
@@ -715,12 +717,14 @@ private fun SessionListRow(
             selected = selected,
             onSessionSelected = onSessionSelected,
             onSessionLongPress = onSessionLongPress,
+            titleHighlight = titleHighlight,
         )
         return
     }
     val lines = session.locationLines()
     OpenCodeListItem(
         title = session.title,
+        titleHighlight = titleHighlight,
         subtitle = if (lines == null) compactHomePath(session.subtitle) else null,
         subtitleSegments = lines?.subtitle,
         detailSegments = lines?.detail,
@@ -746,10 +750,12 @@ private fun SessionListCompactRow(
     selected: Boolean,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
+    titleHighlight: IntRange? = null,
 ) {
     val active = session.compactStatus(text = ResourcesUiTextLookup(LocalResources.current), status = status)
     OpenCodeListItem(
         title = session.title,
+        titleHighlight = titleHighlight,
         variant = OpenCodeListItemVariant.Compact,
         path = session.compactPath(),
         titleEmphasized = session.status.isUnreadFinish,

@@ -99,6 +99,7 @@ import dev.opencode.mobile.ui.componentgallery.components.KeyValueRowGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.KeyboardHintGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListGroupGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.MenuChipGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageNoteGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ModalGalleryScreen
@@ -768,6 +769,7 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.ReorderableList -> ReorderableListGalleryScreen()
                                                         ComponentGalleryEntryId.ChoiceBadge -> ChoiceBadgeGalleryScreen()
                                                         ComponentGalleryEntryId.FilterTabs -> FilterTabsGalleryScreen()
+                                                        ComponentGalleryEntryId.MenuChip -> MenuChipGalleryScreen()
                                                         ComponentGalleryEntryId.ActionPill -> ActionPillGalleryScreen()
                                                         ComponentGalleryEntryId.ActionTile -> ActionTileGalleryScreen()
                                                         ComponentGalleryEntryId.FloatingPill -> FloatingPillGalleryScreen()
