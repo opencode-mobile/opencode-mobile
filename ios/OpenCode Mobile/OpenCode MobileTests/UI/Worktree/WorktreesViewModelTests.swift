@@ -172,7 +172,9 @@ struct WorktreesViewModelTests {
         repository: any WorktreeRepository = RemoveRepository(),
         changes: [String: Int] = [:]
     ) -> WorktreesViewModel {
-        WorktreesViewModel(feed: feed, repository: repository, changeCount: { changes[$0] })
+        let model = WorktreesViewModel(feed: feed, repository: repository, changeCount: { changes[$0] })
+        model.sync()
+        return model
     }
 
     private func makeFeed(sessions: [HomeWorktreeSession] = []) -> HomeWorktreesFeed {

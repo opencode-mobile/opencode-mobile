@@ -58,7 +58,10 @@ struct WorktreesView: View {
                 }
             )
         }
-        .onAppear { viewModel.homeShowsWorktrees = homeShowsWorktrees }
+        .onAppear {
+            viewModel.homeShowsWorktrees = homeShowsWorktrees
+            viewModel.sync()
+        }
         .onChange(of: feed.snapshot) { _, _ in viewModel.sync() }
         .onChange(of: viewModel.closeToken) { _, _ in dismiss() }
         .onChange(of: viewModel.sessionToOpen) { _, session in
@@ -144,7 +147,8 @@ struct WorktreesView: View {
     private func worktreeRow(_ row: WorktreeRowItem) -> some View {
         OpenCodeListItem(
             title: .verbatim(row.name),
-            subtitle: .verbatim(WorktreesCopy.rowDetail(directory: row.directory, sessions: row.sessionCount)),
+            subtitle: .verbatim(WorktreesCopy.sessions(row.sessionCount)),
+            detailSegments: [OpenCodeListItemSubtitleSegment(text: row.directory, tone: .tertiary)],
             status: row.isRemoving
                 ? OpenCodeListItemStatus(text: "worktrees.removing", tone: .stale)
                 : row.isRunning ? OpenCodeListItemStatus(text: "session_list.status.running", tone: .interactive) : nil,
@@ -225,11 +229,6 @@ enum WorktreesCopy {
     static func sessions(_ count: Int) -> String {
         guard count > 0 else { return String(localized: "worktrees.no_sessions", defaultValue: "no sessions") }
         return String(localized: LocalizedStringResource("worktrees.session_count", defaultValue: "\(count) sessions"))
-    }
-
-    static func rowDetail(directory: String, sessions count: Int) -> String {
-        let sessions = sessions(count)
-        return String(localized: LocalizedStringResource("worktrees.row_detail", defaultValue: "\(directory) · \(sessions)"))
     }
 
     static func changed(_ count: Int) -> String {

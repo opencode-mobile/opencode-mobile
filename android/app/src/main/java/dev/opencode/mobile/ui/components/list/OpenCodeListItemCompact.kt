@@ -29,12 +29,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -58,6 +61,11 @@ private const val STATUS_DOT_PULSE_MIN_ALPHA = 0.3f
 data class OpenCodeListItemPath(
     val project: String,
     val worktree: String? = null,
+    /**
+     * Set when the worktree no longer exists: the worktree is struck through and screen readers
+     * hear this note after it (for example "worktree removed").
+     */
+    val worktreeRemovedNote: String? = null,
 )
 
 /**
@@ -255,7 +263,8 @@ private fun ListItemPathText(
     val style = MaterialTheme.typography.bodySmall
     val projectStyle = style.copy(fontWeight = FontWeight.Medium)
     val projectColor = if (enabled) openCodeColor("text-strong").copy(alpha = 0.8f) else openCodeColor("text-weaker")
-    val worktreeColor = if (enabled) openCodeColor("text-base") else openCodeColor("text-weaker")
+    val removed = path.worktreeRemovedNote != null
+    val worktreeColor = if (enabled && !removed) openCodeColor("text-base") else openCodeColor("text-weaker")
     val separatorColor = if (enabled) openCodeColor("text-weak") else openCodeColor("text-weaker")
     val worktree = path.worktree
     if (worktree.isNullOrEmpty()) {
@@ -271,7 +280,14 @@ private fun ListItemPathText(
     }
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
-    BoxWithConstraints(modifier = modifier) {
+    BoxWithConstraints(
+        modifier =
+            modifier.then(
+                path.worktreeRemovedNote?.let { note ->
+                    Modifier.clearAndSetSemantics { contentDescription = "${path.project}, $worktree, $note" }
+                } ?: Modifier,
+            ),
+    ) {
         val maxWidthPx = constraints.maxWidth
         val fitted =
             remember(path, maxWidthPx, style, density) {
@@ -311,7 +327,7 @@ private fun ListItemPathText(
             Text(
                 text = fitted.worktree,
                 color = worktreeColor,
-                style = style,
+                style = if (removed) style.copy(textDecoration = TextDecoration.LineThrough) else style,
                 maxLines = 1,
                 overflow = TextOverflow.Clip,
                 softWrap = false,

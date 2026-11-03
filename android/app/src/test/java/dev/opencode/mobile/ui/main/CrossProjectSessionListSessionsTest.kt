@@ -302,6 +302,9 @@ class CrossProjectSessionListSessionsTest {
         val detail = sessions.first().locationLines(removedNote = "worktree removed")!!.detail!!
         assertEquals(listOf("wt-gone", " · ", "worktree removed"), detail.map { it.text })
         assertEquals(OpenCodeListItemSubtitleTone.Removed, detail.first().tone)
+        // Compact rows strike the worktree through and tell screen readers why.
+        assertEquals("worktree removed", sessions.first().compactPath(removedNote = "worktree removed").worktreeRemovedNote)
+        assertNull(sessions.last().compactPath(removedNote = "worktree removed").worktreeRemovedNote)
     }
 
     @Test

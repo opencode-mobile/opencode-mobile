@@ -1498,7 +1498,6 @@
         <item quantity="other">%1$d sessions</item>
     </plurals>
     <string name="worktrees_no_sessions">no sessions</string>
-    <string name="worktrees_row_detail">%1$s · %2$s</string>
     <string name="worktrees_none_in_project">No worktrees. New session → Choose project or worktree creates one.</string>
     <string name="worktrees_footer">Removing a worktree deletes its folder on the server. Its sessions stay, but can’t run in it again.</string>
     <string name="worktrees_more">More actions for %1$s</string>

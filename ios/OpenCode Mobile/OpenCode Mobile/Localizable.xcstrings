@@ -13671,17 +13671,6 @@
         }
       }
     },
-    "worktrees.row_detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@ · %2$@"
-          }
-        }
-      }
-    },
     "worktrees.session_count" : {
       "extractionState" : "manual",
       "localizations" : {

@@ -43,6 +43,8 @@ import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatus
 import dev.opencode.mobile.ui.components.OpenCodeListItemStatusTone
+import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleSegment
+import dev.opencode.mobile.ui.components.OpenCodeListItemSubtitleTone
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeaderTrailing
@@ -179,7 +181,8 @@ private fun WorktreeRow(
         row.changeCount?.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.worktrees_changed, it, it) }
     OpenCodeListItem(
         title = row.name,
-        subtitle = stringResource(R.string.worktrees_row_detail, row.directory, sessions),
+        subtitle = sessions,
+        detailSegments = listOf(OpenCodeListItemSubtitleSegment(row.directory, OpenCodeListItemSubtitleTone.Tertiary)),
         titleTag = changed.takeIf { !row.isRemoving },
         status =
             when {

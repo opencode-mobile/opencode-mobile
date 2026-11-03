@@ -1305,6 +1305,7 @@ private data class HomeRowSource(
                     ?.map { SessionListLocationPart(it.text, isBranch = it.isBranch, isRemoved = it.isRemoved) },
             projectName = project.displayName,
             compactWorktree = HomeCompactRowPath.worktreeLabel(project, directory, worktreesEnabled),
+            compactWorktreeRemoved = ServerPathPolicy.canonical(directory.trim()).let { it in removedDirectories && project.worktree(it) == null },
         )
     }
 }

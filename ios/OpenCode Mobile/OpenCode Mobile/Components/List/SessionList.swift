@@ -86,6 +86,8 @@ struct SessionListSession: Identifiable, Hashable {
     /// Worktree part of a compact row: the shortened branch, or the folder on a detached HEAD.
     /// Nil on the main checkout, for non-git projects, and while worktrees are off.
     let worktreeLabel: String?
+    /// `worktreeLabel` was removed from the server.
+    let worktreeRemoved: Bool
 
     init(
         id: String,
@@ -102,7 +104,8 @@ struct SessionListSession: Identifiable, Hashable {
         worktreeScopeID: String? = nil,
         location: HomeRowLocation? = nil,
         projectName: String? = nil,
-        worktreeLabel: String? = nil
+        worktreeLabel: String? = nil,
+        worktreeRemoved: Bool = false
     ) {
         self.id = id
         self.title = title
@@ -119,6 +122,7 @@ struct SessionListSession: Identifiable, Hashable {
         self.location = location
         self.projectName = projectName
         self.worktreeLabel = worktreeLabel
+        self.worktreeRemoved = worktreeRemoved
     }
 }
 
@@ -1132,7 +1136,11 @@ extension SessionListSession {
     var compactRow: SessionListCompactRow {
         let project = projectName.flatMap { $0.isEmpty ? nil : $0 } ?? ServerPathPolicy.name(subtitle)
         return SessionListCompactRow(
-            path: OpenCodeListItemPath(primary: project, secondary: worktreeLabel),
+            path: OpenCodeListItemPath(
+                primary: project,
+                secondary: worktreeLabel,
+                secondaryRemovedNote: worktreeRemoved ? HomeRowLocation.removedNote : nil
+            ),
             status: status == .idle ? nil : status.listItemStatus(isStale: statusIsStale),
             emphasized: status.isReady,
             pulsing: status == .running && !statusIsStale

@@ -249,6 +249,7 @@ private struct OpenCodeDialogCard: View {
                             tone: note.tone == .warning ? .error : .neutral,
                             variant: .banner
                         )
+                        .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }

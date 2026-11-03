@@ -110,13 +110,22 @@ data class SessionListSession(
     val projectName: String? = null,
     /** Worktree part of the compact row's `project / worktree`; null on the main checkout. */
     val compactWorktree: String? = null,
+    /** [compactWorktree] was removed from the server. */
+    val compactWorktreeRemoved: Boolean = false,
 ) {
-    /** Line 2 of the compact row: the project name (else the folder), then [compactWorktree]. */
-    fun compactPath(): OpenCodeListItemPath {
+    /**
+     * Line 2 of the compact row: the project name (else the folder), then [compactWorktree],
+     * struck through with [removedNote] for screen readers when it was removed.
+     */
+    fun compactPath(removedNote: String = ""): OpenCodeListItemPath {
         val project =
             projectName?.takeIf { it.isNotEmpty() }
                 ?: subtitle.trimEnd('/').substringAfterLast('/').ifEmpty { subtitle }
-        return OpenCodeListItemPath(project = project, worktree = compactWorktree?.takeIf { it.isNotEmpty() })
+        return OpenCodeListItemPath(
+            project = project,
+            worktree = compactWorktree?.takeIf { it.isNotEmpty() },
+            worktreeRemovedNote = removedNote.takeIf { compactWorktreeRemoved },
+        )
     }
 
     /**
@@ -753,7 +762,7 @@ private fun SessionListCompactRow(
     OpenCodeListItem(
         title = session.title,
         variant = OpenCodeListItemVariant.Compact,
-        path = session.compactPath(),
+        path = session.compactPath(removedNote = stringResource(R.string.session_list_worktree_removed)),
         titleEmphasized = session.status.isUnreadFinish,
         status = active,
         caption = session.caption.resolve().takeIf { it.isNotEmpty() },

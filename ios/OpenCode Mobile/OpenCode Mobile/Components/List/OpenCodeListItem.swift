@@ -55,10 +55,14 @@ enum OpenCodeListItemVariant {
 struct OpenCodeListItemPath: Equatable {
     let primary: String
     let secondary: String?
+    /// Set when the secondary no longer exists: it is struck through and VoiceOver hears this
+    /// note after it (for example "worktree removed").
+    let secondaryRemovedNote: String?
 
-    init(primary: String, secondary: String? = nil) {
+    init(primary: String, secondary: String? = nil, secondaryRemovedNote: String? = nil) {
         self.primary = primary
         self.secondary = secondary?.isEmpty == true ? nil : secondary
+        self.secondaryRemovedNote = secondaryRemovedNote
     }
 }
 
@@ -675,13 +679,18 @@ private struct OpenCodeListItemPathLine: View {
                     .lineLimit(1)
                     .fixedSize()
                 Text(secondary)
-                    .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
+                    .strikethrough(path.secondaryRemovedNote != nil)
+                    .foregroundStyle(
+                        enabled && path.secondaryRemovedNote == nil ? OpenCodeColors.textBase : OpenCodeColors.textWeaker
+                    )
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
             .font(listItemCompactPathFont)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(path.primary), \(secondary)")
+            .accessibilityLabel(
+                [path.primary, secondary, path.secondaryRemovedNote].compactMap { $0 }.joined(separator: ", ")
+            )
         } else {
             primaryText
                 .font(listItemCompactPathFont)

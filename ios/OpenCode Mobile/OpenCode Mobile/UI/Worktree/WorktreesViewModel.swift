@@ -94,10 +94,10 @@ final class WorktreesViewModel {
         self.feed = feed
         self.repository = repository
         self.changeCount = changeCount
-        sync()
     }
 
-    /// Reads Home's latest projects and sessions; the view calls it when the feed changes.
+    /// Reads Home's latest projects and sessions and loads change counts not asked for yet. The
+    /// view calls it on appear and whenever the feed changes.
     func sync() {
         snapshot = feed.snapshot
         loadChangeCounts()

@@ -1482,7 +1482,11 @@ extension Array where Element == ProjectSectionItem {
                         sessionDirectory: directory,
                         worktreesEnabled: worktreesEnabled
                     )
-                }
+                },
+                worktreeRemoved: project.map { project in
+                    let canonical = ServerPathPolicy.canonical(directory)
+                    return removedDirectories.contains(canonical) && project.worktree(at: canonical) == nil
+                } ?? false
             )
         }
     }
