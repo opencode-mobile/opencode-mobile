@@ -13,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
@@ -177,7 +178,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
                 ControlGroup(title = "Connection") {
                     OpenCodeSessionConnectionStatus.entries.forEach { option ->
                         OpenCodeChoiceBadge(
-                            label = option.label,
+                            label = stringResource(option.label),
                             selected = option == connectionStatus,
                             onClick = { statusName = option.name },
                         )

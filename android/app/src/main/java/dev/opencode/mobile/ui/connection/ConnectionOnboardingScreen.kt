@@ -10,8 +10,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
@@ -28,21 +30,20 @@ fun ConnectionOnboardingScreen(
         ) {
             Spacer(modifier = Modifier.weight(1f))
             Text(
-                text = "Connect to your server",
+                text = stringResource(R.string.connection_onboarding_title),
                 style = MaterialTheme.typography.titleLarge,
                 textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text =
-                    "OpenCode Mobile controls sessions on an opencode server running on your development machine.",
+                text = stringResource(R.string.connection_onboarding_body),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(24.dp))
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.FullWidthText("Connect to server"),
+                variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.connection_onboarding_connect)),
                 onClick = onConnectClick,
             )
             Spacer(modifier = Modifier.weight(1f))

@@ -54,9 +54,15 @@ struct FileImageDownsamplerTests {
 @MainActor
 struct FileViewerCopyTests {
     @Test func tooLargeCopyMatchesAndroid() {
-        #expect(FileViewerCopy.tooLargeTitle == "Too large to preview")
-        #expect(FileViewerCopy.tooLargeDetail(byteCount: nil) == "This file is bigger than the app previews.")
-        #expect(FileViewerCopy.tooLargeDetail(byteCount: 40_000_000) == "This file is bigger than the app previews.\n\(FileViewerCopy.fileSize(40_000_000))")
+        #expect(FileViewerCopy.tooLargeTitle.resolved == "Too large to preview")
+        #expect(FileViewerCopy.tooLargeDetail(byteCount: nil).resolved == "This file is bigger than the app previews.")
+        let size = FileViewerCopy.fileSize(40_000_000)
+        #expect(FileViewerCopy.tooLargeDetail(byteCount: 40_000_000).resolved == "This file is bigger than the app previews.\n\(size)")
+    }
+
+    @Test func binaryDetailKeepsTheMimeTypeVerbatim() {
+        #expect(FileViewerCopy.binaryDetail(mimeType: nil).resolved == "No preview for this file type.")
+        #expect(FileViewerCopy.binaryDetail(mimeType: "application/zip").resolved == "application/zip\nNo preview for this file type.")
     }
 
     @Test func fileSizeUsesDecimalUnits() {

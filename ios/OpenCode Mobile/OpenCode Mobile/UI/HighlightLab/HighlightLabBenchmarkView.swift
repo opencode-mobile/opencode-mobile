@@ -14,7 +14,7 @@ struct HighlightLabBenchmarkView: View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: "Benchmark",
-                subtitle: HighlightLabEnvironment.buildLabel,
+                subtitle: .verbatim(HighlightLabEnvironment.buildLabel),
                 leading: .back(action: { dismiss() }),
                 showDivider: true
             )
@@ -24,7 +24,7 @@ struct HighlightLabBenchmarkView: View {
                     engines(state)
                     runControls(state)
                     if let message = state.errorMessage {
-                        OpenCodeInlineNotice(message: message, tone: .error, variant: .banner)
+                        OpenCodeInlineNotice(message: .verbatim(message), tone: .error, variant: .banner)
                             .padding(.horizontal, 16)
                     }
                     results(state)
@@ -59,7 +59,7 @@ struct HighlightLabBenchmarkView: View {
             ForEach(state.dataSets) { dataSet in
                 let selected = state.selectedDataSetIDs.contains(dataSet.id)
                 OpenCodeListItem(
-                    title: dataSet.displayName,
+                    title: .verbatim(dataSet.displayName),
                     subtitle: "\(dataSet.sizeClass.label) · \(dataSet.kind.label)",
                     selected: selected,
                     enabled: !state.phase.isRunning,
@@ -81,7 +81,7 @@ struct HighlightLabBenchmarkView: View {
         ForEach(state.engines) { engine in
             let position = state.position(of: engine.id)
             OpenCodeListItem(
-                title: engine.name,
+                title: .verbatim(engine.name),
                 subtitle: position.map { $0 == 0 ? "1 · Baseline" : "\($0 + 1) · Compared with the baseline" } ?? "Not in this run",
                 selected: position != nil,
                 enabled: !state.phase.isRunning,

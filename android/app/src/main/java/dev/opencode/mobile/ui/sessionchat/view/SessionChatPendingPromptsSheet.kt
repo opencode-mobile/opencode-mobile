@@ -15,12 +15,15 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.FollowUpDelivery
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
@@ -54,20 +57,25 @@ internal fun SessionChatPendingPromptsSheet(
 
     OpenCodeBottomSheet(
         visible = visible,
-        title = "Up next",
+        title = stringResource(R.string.session_chat_sheet_pending_prompts_title),
         onDismissRequest = {
             logPendingPromptsAction(ProductAnalytics.Action.PENDING_PROMPTS_DISMISS)
             onDismiss()
         },
         pinnedTop = {
             OpenCodeSectionHeader(
-                title = "${prompts.size} waiting",
+                title =
+                    pluralStringResource(
+                        R.plurals.session_chat_sheet_pending_prompts_waiting,
+                        prompts.size,
+                        prompts.size,
+                    ),
                 variant = OpenCodeSectionHeaderVariant.Plain,
             )
         },
         pinnedBottom = {
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.FullWidthText("Clear all"),
+                variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.session_chat_sheet_pending_prompts_clear_all)),
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = {
                     logPendingPromptsAction(ProductAnalytics.Action.PENDING_PROMPTS_CLEAR)
@@ -154,7 +162,7 @@ private fun PendingPromptRow(
         }
         if (prompt.isSettling) {
             Text(
-                text = "Sending…",
+                text = stringResource(R.string.session_chat_sheet_pending_prompts_sending),
                 style = MaterialTheme.typography.labelSmall,
                 color = openCodeColor("text-weak"),
                 modifier = Modifier.padding(end = 16.dp),
@@ -165,12 +173,12 @@ private fun PendingPromptRow(
                     if (isSteer) {
                         OpenCodeButtonVariant.IconSquare(
                             OpenCodeIcons.ArrowUpward,
-                            "Move to queue",
+                            stringResource(R.string.session_chat_sheet_pending_prompts_move_to_queue),
                         )
                     } else {
                         OpenCodeButtonVariant.IconSquare(
                             OpenCodeIcons.ArrowWarmUp,
-                            "Steer now",
+                            stringResource(R.string.session_chat_sheet_pending_prompts_steer_now),
                         )
                     },
                 contrast = OpenCodeButtonContrast.Low,
@@ -185,7 +193,11 @@ private fun PendingPromptRow(
                 },
             )
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.Delete, "Delete"),
+                variant =
+                    OpenCodeButtonVariant.IconSquare(
+                        OpenCodeIcons.Delete,
+                        stringResource(R.string.session_chat_sheet_pending_prompts_delete),
+                    ),
                 contrast = OpenCodeButtonContrast.Low,
                 onClick = {
                     logPendingPromptsAction(ProductAnalytics.Action.PENDING_PROMPTS_DELETE)

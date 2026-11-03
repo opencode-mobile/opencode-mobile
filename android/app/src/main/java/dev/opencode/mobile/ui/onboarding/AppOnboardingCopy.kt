@@ -1,19 +1,21 @@
 package dev.opencode.mobile.ui.onboarding
 
+import androidx.annotation.StringRes
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ui.components.OpenCodeSkeletonIllustrationTopic
 
 internal data class AppOnboardingFeatureRow(
     val id: String,
-    val title: String,
-    val detail: String,
+    @param:StringRes val title: Int,
+    @param:StringRes val detail: Int,
 )
 
 internal data class AppOnboardingPage(
     val id: String,
-    val title: String,
-    val body: String?,
-    val badge: String? = null,
-    val setupLink: String? = null,
+    @param:StringRes val title: Int,
+    @param:StringRes val body: Int?,
+    @param:StringRes val badge: Int? = null,
+    @param:StringRes val setupLink: Int? = null,
     val features: List<AppOnboardingFeatureRow> = emptyList(),
     val illustration: OpenCodeSkeletonIllustrationTopic,
 )
@@ -25,53 +27,49 @@ internal object AppOnboardingCopy {
         listOf(
             AppOnboardingPage(
                 id = "unofficial",
-                title = "An unofficial\nopencode client",
-                body =
-                    "OpenCode Mobile is a native client for opencode sessions — work in progress. " +
-                        "It is not an official OpenCode product.",
-                badge = "Unofficial",
+                title = R.string.onboarding_unofficial_title,
+                body = R.string.onboarding_unofficial_body,
+                badge = R.string.onboarding_unofficial_badge,
                 illustration = OpenCodeSkeletonIllustrationTopic.Unofficial,
             ),
             AppOnboardingPage(
                 id = "connect",
-                title = "Connect to\nyour servers",
-                body =
-                    "Point the app at an opencode server on your machine. We recommend Tailscale " +
-                        "so your phone can reach it securely from anywhere.",
-                setupLink = "Need the server first?",
+                title = R.string.onboarding_connect_page_title,
+                body = R.string.onboarding_connect_page_body,
+                setupLink = R.string.onboarding_connect_page_setup_link,
                 illustration = OpenCodeSkeletonIllustrationTopic.ConnectForm,
             ),
             AppOnboardingPage(
                 id = "features",
-                title = "What you can\ndo from here",
+                title = R.string.onboarding_features_title,
                 body = null,
                 illustration = OpenCodeSkeletonIllustrationTopic.SessionsLive,
                 features =
                     listOf(
                         AppOnboardingFeatureRow(
                             id = "sessions",
-                            title = "Sessions",
-                            detail = "List, open, create, rename, fork, archive, delete",
+                            title = R.string.onboarding_features_sessions_title,
+                            detail = R.string.onboarding_features_sessions_detail,
                         ),
                         AppOnboardingFeatureRow(
                             id = "chat",
-                            title = "Chat & abort",
-                            detail = "Send prompts and stop work in flight",
+                            title = R.string.onboarding_features_chat_title,
+                            detail = R.string.onboarding_features_chat_detail,
                         ),
                         AppOnboardingFeatureRow(
                             id = "permissions",
-                            title = "Permissions",
-                            detail = "Approve or deny requests (no lasting remember)",
+                            title = R.string.onboarding_features_permissions_title,
+                            detail = R.string.onboarding_features_permissions_detail,
                         ),
                         AppOnboardingFeatureRow(
                             id = "changes",
-                            title = "Changes",
-                            detail = "Inspect session diffs",
+                            title = R.string.onboarding_features_changes_title,
+                            detail = R.string.onboarding_features_changes_detail,
                         ),
                         AppOnboardingFeatureRow(
                             id = "live",
-                            title = "Live while open",
-                            detail = "Foreground event stream; refresh after reconnect",
+                            title = R.string.onboarding_features_live_title,
+                            detail = R.string.onboarding_features_live_detail,
                         ),
                     ),
             ),

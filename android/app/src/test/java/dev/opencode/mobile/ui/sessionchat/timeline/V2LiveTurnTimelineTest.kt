@@ -26,6 +26,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import dev.opencode.mobile.ui.text.english
 
 /**
  * Live v2 turns end to end: wire events (shaped like the captured `/api/event`
@@ -414,7 +415,7 @@ class V2LiveTurnTimelineTest {
         val paragraph = chipBodies(store.messages(SESSION))[1].blocks.stepParagraphs().single()
         assertTrue(paragraph.errorLines.isEmpty())
         assertTrue(paragraph.chips.single().card.isInterrupted)
-        assertEquals("Stopped", paragraph.chips.single().card.errorText)
+        assertEquals("Stopped", paragraph.chips.single().card.errorText?.english())
 
         val rest =
             restMessages(
@@ -439,18 +440,18 @@ class V2LiveTurnTimelineTest {
         val fields = """"assistantMessageID":"a1","id":"call_sh","name":"bash""""
         apply(listOf(envelope("session.tool.input.started", 1_120, fields)))
         // Servers that do not stream tool input still show the placeholder until `ended`.
-        assertEquals("Writing command…", toolCard("a1").subtitle)
+        assertEquals("Writing command…", toolCard("a1").subtitle?.english())
         apply(listOf(inputDelta(fields, """{"comm""", at = 1_121)))
 
         val waiting = toolCard("a1")
         assertEquals(ToolStatus.Pending, waiting.status)
         assertTrue(waiting.isReceivingArguments)
-        assertEquals("Writing command…", waiting.subtitle)
+        assertEquals("Writing command…", waiting.subtitle?.english())
 
         apply(listOf(inputDelta(fields, """and":"ls -la /tm""", at = 1_122)))
-        assertEquals("ls -la /tm", toolCard("a1").subtitle)
+        assertEquals("ls -la /tm", toolCard("a1").subtitle?.english())
         apply(listOf(inputDelta(fields, """p/scratch","description":"List""", at = 1_123)))
-        assertEquals("ls -la /tmp/scratch", toolCard("a1").subtitle)
+        assertEquals("ls -la /tmp/scratch", toolCard("a1").subtitle?.english())
         val chip =
             chipBodies(store.messages(SESSION))[1]
                 .blocks
@@ -458,7 +459,7 @@ class V2LiveTurnTimelineTest {
                 .single()
                 .chips
                 .single()
-        assertEquals("ls -la /tmp/scratch", chip.label)
+        assertEquals("ls -la /tmp/scratch", chip.label.english())
 
         apply(
             listOf(
@@ -470,13 +471,13 @@ class V2LiveTurnTimelineTest {
         val called = toolCard("a1")
         assertEquals(ToolStatus.Running, called.status)
         assertFalse(called.isReceivingArguments)
-        assertEquals("ls -la /tmp", called.subtitle)
+        assertEquals("ls -la /tmp", called.subtitle?.english())
 
         apply(listOf(envelope("session.tool.success", 1_140, """$fields,"content":[{"type":"text","text":"ok"}]""")))
         val done = toolCard("a1")
         assertEquals(ToolStatus.Completed, done.status)
         assertFalse(done.isReceivingArguments)
-        assertEquals("ls -la /tmp", done.subtitle)
+        assertEquals("ls -la /tmp", done.subtitle?.english())
         assertEquals("ok", done.detailText)
     }
 
@@ -494,11 +495,11 @@ class V2LiveTurnTimelineTest {
             val fields = """"assistantMessageID":"a1","id":"call_$name","name":"$name""""
             val at = 1_200L + index * 10
             apply(listOf(envelope("session.tool.input.started", at, fields), inputDelta(fields, "{", at = at + 1)))
-            assertEquals(placeholder, toolCard("a1", "call_$name").subtitle)
+            assertEquals(placeholder, toolCard("a1", "call_$name").subtitle?.english())
             apply(listOf(inputDelta(fields, partial.removePrefix("{"), at = at + 2)))
             val card = toolCard("a1", "call_$name")
             assertTrue(card.isReceivingArguments)
-            assertEquals(if (name == "write") "/repo/NOTES" else "/repo/src/app.ts", card.subtitle)
+            assertEquals(if (name == "write") "/repo/NOTES" else "/repo/src/app.ts", card.subtitle?.english())
             assertFalse(card.opensChangesReview)
         }
     }
@@ -521,7 +522,7 @@ class V2LiveTurnTimelineTest {
         val card = toolCard("a1")
         assertEquals(ToolStatus.Pending, card.status)
         assertFalse(card.isReceivingArguments)
-        assertEquals("ls -la", card.subtitle)
+        assertEquals("ls -la", card.subtitle?.english())
     }
 
     @Test
@@ -538,7 +539,7 @@ class V2LiveTurnTimelineTest {
             )
         val card = toolCards(rest.single()).single()
         assertTrue(card.isReceivingArguments)
-        assertEquals("git st", card.subtitle)
+        assertEquals("git st", card.subtitle?.english())
     }
 
     @Test
@@ -546,7 +547,7 @@ class V2LiveTurnTimelineTest {
         val v1Pending = MessagePart.Tool(toolName = "bash", status = ToolStatus.Pending, id = "call_v1")
         val v1Card = toolCards(listOf(v1Pending)).single()
         assertFalse(v1Card.isReceivingArguments)
-        assertEquals(null, v1Card.subtitle)
+        assertEquals(null, v1Card.subtitle?.english())
 
         // A settled card ignores a stray preview the server never replaced.
         val stray = JsonObject(mapOf("preview" to JsonPrimitive("""{"command":"rm""")))
@@ -555,10 +556,10 @@ class V2LiveTurnTimelineTest {
                 toolCards(listOf(MessagePart.Tool(toolName = "bash", status = status, input = stray, id = "call_$status")))
                     .single()
             assertFalse(card.isReceivingArguments)
-            assertEquals(null, card.subtitle)
+            assertEquals(null, card.subtitle?.english())
         }
         val generic = MessagePart.Tool(toolName = "sim_task", status = ToolStatus.Pending, input = stray, id = "call_g")
-        assertEquals(null, toolCards(listOf(generic)).single().subtitle)
+        assertEquals(null, toolCards(listOf(generic)).single().subtitle?.english())
     }
 
     @Test
@@ -795,7 +796,7 @@ class V2LiveTurnTimelineTest {
             merged[1].blocks.stepParagraphs().map { it.text },
         )
         val marker = merged[2].blocks.single() as SessionChatTimelineBlock.ToolCard
-        assertEquals(SessionCompactChrome.MARKER_TITLE, marker.title)
+        assertEquals(SessionCompactChrome.markerTitle, marker.title)
         assertEquals(SUMMARY, marker.detailText)
     }
 

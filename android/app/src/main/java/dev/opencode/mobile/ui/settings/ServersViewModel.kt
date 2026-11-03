@@ -3,8 +3,10 @@ package dev.opencode.mobile.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,7 +18,18 @@ data class ServersUiState(
     val profiles: List<ConnectionProfile> = emptyList(),
     val activeId: String? = null,
     val pendingRemoval: ConnectionProfile? = null,
-)
+) {
+    /** Top bar subtitle, such as "2 Connection Profiles". */
+    val profileCountLabel: UiText
+        get() = UiText.plural(R.plurals.servers_profile_count, profiles.size)
+
+    /** Remove dialog title; the profile name is server content and stays verbatim. */
+    val removeDialogTitle: UiText
+        get() {
+            val pending = pendingRemoval ?: return UiText.resource(R.string.servers_remove_dialog_title)
+            return UiText.resource(R.string.servers_remove_dialog_title_named, UiText.verbatim(pending.displayName))
+        }
+}
 
 @HiltViewModel
 class ServersViewModel

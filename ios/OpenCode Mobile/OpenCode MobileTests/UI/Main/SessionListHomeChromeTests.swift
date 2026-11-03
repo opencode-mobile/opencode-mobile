@@ -286,8 +286,8 @@ struct SessionListHomeChromeTests {
         )
         #expect(options.map(\.directory) == ["/src/repo", "/src/repo-wt"])
         #expect(options.map(\.title) == ["main", "feature/x"])
-        #expect(options.map(\.subtitle) == ["main checkout", "repo-wt"])
-        #expect(options.map(\.trailing) == [nil, "2 running"])
+        #expect(options.map(\.subtitle.resolved) == ["main checkout", "repo-wt"])
+        #expect(options.map { $0.trailing?.resolved } == [nil, "2 running"])
     }
 
     @Test func projectLoad_loadingWinsOverFailure() {

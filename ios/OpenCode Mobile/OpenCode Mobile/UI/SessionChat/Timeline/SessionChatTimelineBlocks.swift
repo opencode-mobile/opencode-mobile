@@ -23,11 +23,11 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
     /// `retryAtEpochMs` is when the provider said to try again.
     case failureLine(
         blockID: String,
-        text: String,
+        text: TimelineText,
         providerBody: String?,
         isNeutral: Bool,
         action: FailureAction?,
-        actionLabel: String?,
+        actionLabel: TimelineText?,
         coveredByLiveRetry: Bool,
         retryAtEpochMs: Int64? = nil
     )
@@ -163,9 +163,10 @@ nonisolated enum SessionChatTimelineBlock: Equatable, Sendable {
 nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     let toolName: String
     let status: ToolStatus
-    let title: String
-    let subtitle: String?
-    let errorText: String?
+    /// App text (`Shell`, `Explored — 1 read`) or server content (agent name, tool name).
+    let title: TimelineText
+    let subtitle: TimelineText?
+    let errorText: TimelineText?
     let additions: Int?
     let deletions: Int?
     /// Non-nil when the card should open a Bottom Sheet with this body.
@@ -192,9 +193,9 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
     init(
         toolName: String,
         status: ToolStatus,
-        title: String,
-        subtitle: String? = nil,
-        errorText: String? = nil,
+        title: TimelineText,
+        subtitle: TimelineText? = nil,
+        errorText: TimelineText? = nil,
         additions: Int? = nil,
         deletions: Int? = nil,
         detailText: String? = nil,
@@ -227,7 +228,7 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
         self.images = images
     }
 
-    func markingFailed(_ errorText: String) -> SessionChatToolCardBlock {
+    func markingFailed(_ errorText: TimelineText) -> SessionChatToolCardBlock {
         SessionChatToolCardBlock(
             toolName: toolName,
             status: .error,
@@ -252,9 +253,9 @@ nonisolated struct SessionChatToolCardBlock: Equatable, Sendable {
 nonisolated struct SessionChatToolGroupBlock: Equatable, Sendable {
     let count: Int
     let status: ToolStatus
-    let title: String
-    let subtitle: String?
-    let errorText: String?
+    let title: TimelineText
+    let subtitle: TimelineText?
+    let errorText: TimelineText?
     let members: [SessionChatToolCardBlock]
 }
 
@@ -328,9 +329,9 @@ nonisolated enum SessionChatToolChipFamily: String, Sendable, CaseIterable {
 /// opens the tool group sheet with `title`, `subtitle` and `members`.
 nonisolated struct SessionChatExploreSummaryBlock: Equatable, Sendable {
     let blockID: String
-    let label: String
-    let title: String
-    let subtitle: String?
+    let label: TimelineText
+    let title: TimelineText
+    let subtitle: TimelineText?
     let status: ToolStatus
     let members: [SessionChatToolCardBlock]
 }
@@ -340,7 +341,7 @@ nonisolated struct SessionChatSkillUse: Equatable, Sendable, Identifiable {
     /// Chip id of the first run of this skill in the message.
     let id: String
     /// Chip label (`/name`).
-    let label: String
+    let label: TimelineText
     /// Skill directory reported by the server, when it settled.
     let directory: String?
     let status: ToolStatus
@@ -351,7 +352,8 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
     let id: String
     let kind: SessionChatToolChipKind
     let family: SessionChatToolChipFamily
-    let label: String
+    /// Mostly server content (a path, a command, `/skill`); app text for LSP, Plan and questions.
+    let label: TimelineText
     /// Agent chips: first line of the description / prompt. Skill chips: the
     /// skill directory the server reported.
     let brief: String?
@@ -378,7 +380,7 @@ nonisolated struct SessionChatToolChipBlock: Equatable, Sendable {
         id: String,
         kind: SessionChatToolChipKind,
         family: SessionChatToolChipFamily,
-        label: String,
+        label: TimelineText,
         brief: String? = nil,
         skillID: String? = nil,
         additions: Int? = nil,
@@ -481,7 +483,7 @@ nonisolated struct SessionChatStepParagraphBlock: Equatable, Sendable {
     /// Every tool that is not in `exploreSummary`, one chip per tool.
     let chips: [SessionChatToolChipBlock]
     /// One per failed chip: "<label>: <error>".
-    let errorLines: [String]
+    let errorLines: [TimelineText]
     /// Two or more explore tools that did not fail, folded into one chip.
     let exploreSummary: SessionChatExploreSummaryBlock?
 
@@ -491,7 +493,7 @@ nonisolated struct SessionChatStepParagraphBlock: Equatable, Sendable {
         text: String?,
         renderedMarkdown: NativeMarkdownDocument?,
         chips: [SessionChatToolChipBlock],
-        errorLines: [String],
+        errorLines: [TimelineText],
         exploreSummary: SessionChatExploreSummaryBlock? = nil
     ) {
         self.id = id
@@ -503,7 +505,7 @@ nonisolated struct SessionChatStepParagraphBlock: Equatable, Sendable {
         self.exploreSummary = exploreSummary
     }
 
-    static let placeholderText = "Worked without commentary"
+    static let placeholderText = TimelineText.app("timeline.step.no_commentary", "Worked without commentary")
 
     func withRenderedMarkdown(_ document: NativeMarkdownDocument?) -> SessionChatStepParagraphBlock {
         SessionChatStepParagraphBlock(
@@ -567,11 +569,15 @@ nonisolated enum SessionChatStepFamily: String, Sendable {
     case agent
 
     /// "1 read", "2 searches".
-    func counted(_ count: Int) -> String {
-        guard count != 1 else { return "1 \(rawValue)" }
+    func counted(_ count: Int) -> TimelineText {
         switch self {
-        case .search, .fetch: return "\(count) \(rawValue)es"
-        default: return "\(count) \(rawValue)s"
+        case .read: .app("tool.count.read", "\(count) reads")
+        case .search: .app("tool.count.search", "\(count) searches")
+        case .fetch: .app("tool.count.fetch", "\(count) fetches")
+        case .edit: .app("tool.count.edit", "\(count) edits")
+        case .command: .app("timeline.activity.count_command", "\(count) commands")
+        case .thought: .app("timeline.activity.count_thought", "\(count) thoughts")
+        case .agent: .app("timeline.activity.count_agent", "\(count) agents")
         }
     }
 }
@@ -583,15 +589,15 @@ nonisolated struct SessionChatStep: Equatable, Sendable, Identifiable {
     let kind: SessionChatStepKind
     let status: SessionChatStepStatus
     /// `runningTitle` while in flight, else `settledTitle`.
-    let title: String
+    let title: TimelineText
     /// With a verb: "Reading X", "Running cmd".
-    let runningTitle: String
+    let runningTitle: TimelineText
     /// Without the verb; a shell command keeps "Ran cmd".
-    let settledTitle: String
+    let settledTitle: TimelineText
     /// Nil for tools outside the counted families (skills, questions, other tools).
     let family: SessionChatStepFamily?
     /// One short line under or beside the title; nil when there is nothing to add.
-    let detail: String?
+    let detail: TimelineText?
     let additions: Int?
     let deletions: Int?
     let startedAtMs: Int64?
@@ -610,11 +616,11 @@ nonisolated struct SessionChatStep: Equatable, Sendable, Identifiable {
         id: String,
         kind: SessionChatStepKind,
         status: SessionChatStepStatus,
-        title: String,
-        runningTitle: String? = nil,
-        settledTitle: String? = nil,
+        title: TimelineText,
+        runningTitle: TimelineText? = nil,
+        settledTitle: TimelineText? = nil,
         family: SessionChatStepFamily? = nil,
-        detail: String? = nil,
+        detail: TimelineText? = nil,
         additions: Int? = nil,
         deletions: Int? = nil,
         startedAtMs: Int64? = nil,
@@ -668,7 +674,7 @@ nonisolated struct SessionChatStep: Equatable, Sendable, Identifiable {
 
     /// The title in a list of steps (activity sheet): without the verb, except
     /// a command still running, whose settled title would read "Ran cmd".
-    var listTitle: String {
+    var listTitle: TimelineText {
         status.isInFlight && family == .command ? runningTitle : settledTitle
     }
 
@@ -785,65 +791,80 @@ nonisolated struct SessionChatActivityCardBlock: Equatable, Sendable {
 
     /// Live card's second line: "6 steps · 3 reads · 1 search · 1 agent".
     /// Counts every step, running or settled.
-    static func summary(_ steps: [SessionChatStep]) -> String {
-        joined(steps.count == 1 ? "1 step" : "\(steps.count) steps", families(steps))
+    static func summary(_ steps: [SessionChatStep]) -> TimelineText {
+        let count = steps.count
+        let head = TimelineText.app("timeline.activity.count_step", "\(count) steps")
+        return TimelineText.joined([head] + familyCounts(steps)) ?? head
     }
 
-    /// Family counts in first-seen order: "3 reads · 1 search".
-    static func families(_ steps: [SessionChatStep]) -> String {
+    /// Family counts in first-seen order: "3 reads · 1 search"; nil without counted steps.
+    static func families(_ steps: [SessionChatStep]) -> TimelineText? {
+        TimelineText.joined(familyCounts(steps))
+    }
+
+    private static func familyCounts(_ steps: [SessionChatStep]) -> [TimelineText] {
         var order: [SessionChatStepFamily] = []
         var counts: [SessionChatStepFamily: Int] = [:]
         for family in steps.compactMap(\.family) {
             if counts[family] == nil { order.append(family) }
             counts[family, default: 0] += 1
         }
-        return order.map { $0.counted(counts[$0] ?? 0) }.joined(separator: " \u{00B7} ")
+        return order.map { $0.counted(counts[$0] ?? 0) }
     }
 
     /// Settled line's tool names, deduplicated in first-seen order: "Read, Edit, Agent".
-    static func usedToolNames(_ steps: [SessionChatStep]) -> [String] {
-        var seen: Set<String> = []
+    static func usedToolNames(_ steps: [SessionChatStep]) -> [TimelineText] {
+        var seen: Set<TimelineText> = []
         return steps.compactMap { step in
             let name = usedToolName(step)
             return seen.insert(name).inserted ? name : nil
         }
     }
 
-    /// Live footer with no running tool: waiting on child sessions, on the
-    /// user (a permission or question), or on the model.
-    static func idleText(hasRunningChildren: Bool, awaitingUser: Bool) -> String {
-        if hasRunningChildren { return "Waiting for agents" }
-        if awaitingUser { return "Waiting for you" }
-        return "Thinking\u{2026}"
+    /// The settled line's tool names as one list: "Read, Edit, Agent".
+    static func usedToolNamesText(_ steps: [SessionChatStep]) -> TimelineText {
+        let names = usedToolNames(steps)
+        guard var result = names.first else { return .verbatim("") }
+        for next in names.dropFirst() {
+            let head = result.resolved
+            let tail = next.resolved
+            result = .app("timeline.list_comma", "\(head), \(tail)")
+        }
+        return result
     }
 
-    private static func usedToolName(_ step: SessionChatStep) -> String {
+    /// Live footer with no running tool: waiting on child sessions, on the
+    /// user (a permission or question), or on the model.
+    static func idleText(hasRunningChildren: Bool, awaitingUser: Bool) -> TimelineText {
+        if hasRunningChildren { return .app("timeline.activity.waiting_for_agents", "Waiting for agents") }
+        if awaitingUser { return .app("timeline.activity.waiting_for_you", "Waiting for you") }
+        return .app("timeline.activity.thinking", "Thinking\u{2026}")
+    }
+
+    private static func usedToolName(_ step: SessionChatStep) -> TimelineText {
         switch step.kind {
-        case .thought: return "Thought"
-        case .childSession: return "Agent"
+        case .thought: return .app("tool.title.thought", "Thought")
+        case .childSession: return .app("tool.title.agent", "Agent")
         case .tool: break
         }
         let tool = step.card?.toolName.lowercased() ?? ""
         switch tool {
-        case "read": return "Read"
-        case "glob": return "Glob"
-        case "grep": return "Grep"
-        case "websearch", "codesearch": return "Search"
-        case "webfetch": return "Fetch"
-        case "edit", "apply_patch", "patch": return "Edit"
-        case "write": return "Write"
-        case "bash", "shell": return "Shell"
-        case "task", "subagent": return "Agent"
-        case "skill": return "Skill"
-        case "question": return "Question"
+        case "read": return .app("tool.title.read", "Read")
+        case "glob": return .app("tool.title.glob", "Glob")
+        case "grep": return .app("tool.title.grep", "Grep")
+        case "websearch", "codesearch": return .app("tool.title.search", "Search")
+        case "webfetch": return .app("tool.title.fetch", "Fetch")
+        case "edit", "apply_patch", "patch": return .app("tool.title.edit", "Edit")
+        case "write": return .app("tool.title.write", "Write")
+        case "bash", "shell": return .app("tool.title.shell", "Shell")
+        case "task", "subagent": return .app("tool.title.agent", "Agent")
+        case "skill": return .app("tool.title.skill", "Skill")
+        case "question": return .app("tool.title.question", "Question")
         // An unavailable tool keeps the name the model asked for.
         case "invalid", "": return step.title
-        default: return tool.prefix(1).uppercased() + tool.dropFirst()
+        // Any other tool keeps its own name, which is server content.
+        default: return .verbatim(tool.prefix(1).uppercased() + tool.dropFirst())
         }
-    }
-
-    private static func joined(_ head: String, _ tail: String) -> String {
-        tail.isEmpty ? head : "\(head) \u{00B7} \(tail)"
     }
 }
 
@@ -851,7 +872,7 @@ nonisolated struct SessionChatActivityCardBlock: Equatable, Sendable {
 /// while an activity card shows it live (#779).
 nonisolated struct SessionChatChildActivity: Equatable, Sendable {
     /// `runningTitle` of the child's most recently started running tool.
-    let currentAction: String?
+    let currentAction: TimelineText?
     /// Up to `recentLimit` of the child's latest steps, oldest first.
     let recentSteps: [SessionChatChildActivityStep]
     /// Visible tools the child has run or is running.
@@ -863,7 +884,7 @@ nonisolated struct SessionChatChildActivity: Equatable, Sendable {
 
 nonisolated struct SessionChatChildActivityStep: Equatable, Sendable, Identifiable {
     let id: String
-    let title: String
+    let title: TimelineText
     let isRunning: Bool
 }
 
@@ -1153,6 +1174,27 @@ nonisolated enum SessionChatTimelineBlocks {
         .map(withStopNote)
     }
 
+    /// Caption under a failed reply: the server message, or app text when it sent none.
+    static func failureLineText(_ failure: SessionFailure) -> TimelineText {
+        let message = failure.message
+        let isBlank = message.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        guard let status = failure.status else {
+            return isBlank ? .app("timeline.failure.session_work_failed", "Session work failed") : .verbatim(message)
+        }
+        let shown = isBlank ? TimelineText.app("timeline.failure.session_work_failed", "Session work failed").resolved : message
+        return .app("timeline.failure.http_status", "HTTP \(status) · \(shown)")
+    }
+
+    /// The failure sheet's action button.
+    static func failureActionLabel(_ action: FailureAction?) -> TimelineText? {
+        switch action {
+        case .pickModel: .app("timeline.failure.pick_model", "Pick a model")
+        case .compact: .app("timeline.failure.compact", "Compact")
+        case .copy: .app("timeline.failure.copy", "Copy")
+        case nil: nil
+        }
+    }
+
     /// An assistant reply that ended early keeps a note under its last block, then any failure caption.
     private static func withStopNote(_ body: DisplayMessageBody) -> DisplayMessageBody {
         var blocks = body.blocks
@@ -1167,7 +1209,7 @@ nonisolated enum SessionChatTimelineBlocks {
                 guard case let .toolCard(id, card) = block, card.toolName == SessionCompactChrome.markerToolName else {
                     return block
                 }
-                return .toolCard(blockID: id, card: card.markingFailed(failure.line()))
+                return .toolCard(blockID: id, card: card.markingFailed(failureLineText(failure)))
             }
         }
         let compactionInline = body.message.failure?.type?.hasPrefix("compaction.") == true
@@ -1183,11 +1225,11 @@ nonisolated enum SessionChatTimelineBlocks {
             blocks.append(
                 .failureLine(
                     blockID: "\(body.message.id):failure",
-                    text: failure.line(),
+                    text: failureLineText(failure),
                     providerBody: failure.providerBody,
                     isNeutral: failure.isNeutral,
                     action: failure.action(),
-                    actionLabel: failure.actionLabel(),
+                    actionLabel: failureActionLabel(failure.action()),
                     coveredByLiveRetry: failure.coversLiveRetry(),
                     retryAtEpochMs: failure.retryAtEpochMs()
                 )
@@ -1330,7 +1372,7 @@ nonisolated enum SessionChatTimelineBlocks {
             card: SessionChatToolCardBlock(
                 toolName: SessionCompactChrome.markerToolName,
                 status: part.completed ? .completed : .running,
-                title: part.completed ? SessionCompactChrome.markerTitle : SessionCompactChrome.statusLabel,
+                title: part.completed ? SessionCompactChrome.markerTitle : SessionCompactChrome.markerStatus,
                 subtitle: part.auto ? SessionCompactChrome.markerAutoSubtitle : nil,
                 detailText: summary,
                 detailIsMarkdown: true
@@ -1540,7 +1582,8 @@ nonisolated enum SessionChatTimelineBlocks {
             id: partId,
             kind: .thought,
             status: .completed,
-            title: duration.map { "Thought \u{00B7} \($0)" } ?? "Thought",
+            title: duration.map { TimelineText.app("timeline.step.thought_duration", "Thought · \($0)") }
+                ?? .app("tool.title.thought", "Thought"),
             family: .thought,
             startedAtMs: reasoning.timeStartEpochMs,
             endedAtMs: reasoning.timeEndEpochMs,
@@ -1559,23 +1602,30 @@ nonisolated enum SessionChatTimelineBlocks {
             let description = (inputString(tool.input, keys: "description", "prompt") ?? childSessionTitle(tool))
                 .flatMap(firstLine)
             let toolsSoFar = childToolCount(tool)
-            let detail: String? =
+            let describedAs = TimelineText.verbatim(ifPresent: nonEmpty(description))
+            let detail: TimelineText? =
                 if inFlight, let toolsSoFar {
-                    [description, toolsSoFar == 1 ? "1 tool so far" : "\(toolsSoFar) tools so far"]
-                        .compactMap { $0 }
-                        .joined(separator: " \u{00B7} ")
+                    TimelineText.joined(
+                        [
+                            describedAs,
+                            TimelineText.app(
+                                "session_chat_sheet.activity.tools_so_far",
+                                "\(toolsSoFar) tools so far"
+                            ),
+                        ].compactMap { $0 }
+                    )
                 } else if status == .failed, !card.isInterrupted {
-                    card.errorText.flatMap(firstLine) ?? description
+                    card.errorText.flatMap { firstLine($0) } ?? describedAs
                 } else {
-                    description
+                    describedAs
                 }
             return SessionChatStep(
                 id: partId,
                 kind: .childSession,
                 status: status,
-                title: agent,
+                title: .verbatim(agent),
                 family: .agent,
-                detail: nonEmpty(detail),
+                detail: detail,
                 startedAtMs: startedAtMs,
                 isInterrupted: card.isInterrupted,
                 childSession: SessionChatStepChildSession(
@@ -1596,8 +1646,8 @@ nonisolated enum SessionChatTimelineBlocks {
                 id: partId,
                 kind: .tool,
                 status: .failed,
-                title: requested ?? "Unknown tool",
-                detail: "Tool not available",
+                title: requested.map { TimelineText.verbatim($0) } ?? .app("tool.unknown.title", "Unknown tool"),
+                detail: .app("tool.unknown.detail", "Tool not available"),
                 card: card
             )
         }
@@ -1651,42 +1701,63 @@ nonisolated enum SessionChatTimelineBlocks {
     /// Product words, no raw tool names. A running step leads with a verb
     /// ("Reading", "Searching", …); a settled one drops it, except a shell
     /// command ("Ran …") so it still reads as a command.
-    private static func stepTitle(_ tool: ToolPart, card: SessionChatToolCardBlock, running: Bool) -> String {
-        func titled(_ verb: String, _ target: String?) -> String {
-            guard let target = nonEmpty(target) else { return running ? "\(verb)\u{2026}" : card.title }
-            return running ? "\(verb) \(target)" : target
-        }
+    private static func stepTitle(_ tool: ToolPart, card: SessionChatToolCardBlock, running: Bool) -> TimelineText {
+        // A card subtitle is server content (a path, a command) unless it is a placeholder.
+        let subtitle = card.subtitle?.verbatimValue
         if isQuestionTool(tool) { return card.title }
         switch tool.toolName.lowercased() {
         case "read":
-            return titled("Reading", readPath(tool).map(lastPathComponent))
+            let target = nonEmpty(readPath(tool).map(lastPathComponent))
+            guard let target else { return running ? .app("timeline.step.reading", "Reading\u{2026}") : card.title }
+            return running ? .app("timeline.step.reading_named", "Reading \(target)") : .verbatim(target)
         case "grep", "glob":
-            return titled("Searching", inputString(tool.input, keys: "pattern") ?? patternPathSubtitle(tool.input))
+            let target = nonEmpty(inputString(tool.input, keys: "pattern") ?? patternPathSubtitle(tool.input))
+            guard let target else { return running ? .app("timeline.step.searching", "Searching\u{2026}") : card.title }
+            return running ? .app("timeline.step.searching_named", "Searching \(target)") : .verbatim(target)
         case "list", "ls":
-            return titled("Listing", pathSubtitle(tool.input).map(lastPathComponent) ?? inputString(tool.input, keys: "directory"))
+            let target = nonEmpty(
+                pathSubtitle(tool.input).map(lastPathComponent) ?? inputString(tool.input, keys: "directory")
+            )
+            guard let target else { return running ? .app("timeline.step.listing", "Listing\u{2026}") : card.title }
+            return running ? .app("timeline.step.listing_named", "Listing \(target)") : .verbatim(target)
         case "websearch":
-            return titled("Searching", inputString(tool.input, keys: "query"))
+            let target = nonEmpty(inputString(tool.input, keys: "query"))
+            guard let target else { return running ? .app("timeline.step.searching", "Searching\u{2026}") : card.title }
+            return running ? .app("timeline.step.searching_named", "Searching \(target)") : .verbatim(target)
         case "webfetch":
-            return titled("Fetching", inputString(tool.input, keys: "url").map(hostLabel))
+            let target = nonEmpty(inputString(tool.input, keys: "url").map(hostLabel))
+            guard let target else { return running ? .app("timeline.step.fetching", "Fetching\u{2026}") : card.title }
+            return running ? .app("timeline.step.fetching_named", "Fetching \(target)") : .verbatim(target)
         case "edit", "apply_patch", "patch":
-            return titled("Editing", card.subtitle.map(lastPathComponent))
+            let target = nonEmpty(subtitle.map(lastPathComponent))
+            guard let target else { return running ? .app("timeline.step.editing", "Editing\u{2026}") : card.title }
+            return running ? .app("timeline.step.editing_named", "Editing \(target)") : .verbatim(target)
         case "write":
-            return titled("Writing", card.subtitle.map(lastPathComponent))
+            let target = nonEmpty(subtitle.map(lastPathComponent))
+            guard let target else { return running ? .app("timeline.step.writing", "Writing\u{2026}") : card.title }
+            return running ? .app("timeline.step.writing_named", "Writing \(target)") : .verbatim(target)
         case "bash", "shell":
-            let command = (inputString(tool.input, keys: "command") ?? card.subtitle).map(stepCommandLabel)
-            guard let command = nonEmpty(command) else { return running ? "Running\u{2026}" : card.title }
-            return running ? "Running \(command)" : "Ran \(command)"
+            let command = (inputString(tool.input, keys: "command") ?? subtitle).map(stepCommandLabel)
+            guard let command = nonEmpty(command) else {
+                return running ? .app("timeline.step.running", "Running\u{2026}") : .app("timeline.step.ran_command", "Ran command")
+            }
+            return running ? .app("timeline.step.running_named", "Running \(command)") : .app("timeline.step.ran_named", "Ran \(command)")
         case "skill":
-            let name = skillName(tool) ?? card.subtitle
-            guard let name = nonEmpty(name) else { return running ? "Loading skill\u{2026}" : "Skill" }
-            return running ? "Loading skill \(name)" : "Skill \(name)"
+            let name = skillName(tool) ?? subtitle
+            guard let name = nonEmpty(name) else {
+                return running ? .app("timeline.step.loading_skill", "Loading skill\u{2026}") : .app("tool.title.skill", "Skill")
+            }
+            return running ? .app("timeline.step.loading_skill_named", "Loading skill \(name)") : .app("timeline.step.skill_named", "Skill \(name)")
         case "lsp", "plan_exit", "execute":
-            return card.subtitle.map { "\(card.title) \($0)" } ?? card.title
+            guard let cardSubtitle = card.subtitle else { return card.title }
+            let title = card.title.resolved
+            let detail = cardSubtitle.resolved
+            return .app("timeline.step.tool_named", "\(title) \(detail)")
         default:
             if let title = nonEmpty(tool.title), title.compare(tool.toolName, options: .caseInsensitive) != .orderedSame {
-                return title
+                return .verbatim(title)
             }
-            return capitalizedToolName(tool.toolName)
+            return .verbatim(capitalizedToolName(tool.toolName))
         }
     }
 
@@ -1711,11 +1782,11 @@ nonisolated enum SessionChatTimelineBlocks {
         _ tool: ToolPart,
         card: SessionChatToolCardBlock,
         status: SessionChatStepStatus
-    ) -> String? {
+    ) -> TimelineText? {
         if status == .failed {
             if card.isInterrupted { return card.errorText }
-            if card.isMalformed { return "Not run: malformed tool call" }
-            return card.errorText.flatMap(firstLine)
+            if card.isMalformed { return .app("tool.error.malformed", "Not run: malformed tool call") }
+            return card.errorText.flatMap { firstLine($0) }
         }
         guard status == .completed else { return nil }
         // A settled question reads like its card: the answer under "Asked N questions".
@@ -1725,7 +1796,7 @@ nonisolated enum SessionChatTimelineBlocks {
             guard let raw = tool.metadata?["matches"] ?? tool.metadata?["count"], let count = intValue(raw) else {
                 return nil
             }
-            return count == 1 ? "1 match" : "\(count) matches"
+            return .app("tool.count.match", "\(count) matches")
         default:
             return nil
         }
@@ -1830,10 +1901,12 @@ nonisolated enum SessionChatTimelineBlocks {
             // Text always precedes chips inside one paragraph, so the first
             // part id stays put while later tools stream in.
             let firstPartId = textIds.first ?? toolIds[0]
-            let errorLines = chips.compactMap { chip -> String? in
+            let errorLines = chips.compactMap { chip -> TimelineText? in
                 guard chip.status == .error, !chip.card.isInterrupted else { return nil }
-                if chip.card.isMalformed { return "Not run: malformed tool call" }
-                return "\(chip.label): \(chip.card.errorText ?? "Failed")"
+                if chip.card.isMalformed { return .app("tool.error.malformed", "Not run: malformed tool call") }
+                let label = chip.label.resolved
+                let error = (chip.card.errorText ?? .app("tool.error.failed", "Failed")).resolved
+                return .app("tool.error.line", "\(label): \(error)")
             }
             pendingText.removeAll()
             pendingTools.removeAll()
@@ -1938,11 +2011,13 @@ nonisolated enum SessionChatTimelineBlocks {
         }
         guard members.count == tools.count else { return nil }
         let running = tools.contains { $0.status == .running || $0.status == .pending }
-        let counts = exploreCounts(tools)
+        let counts = exploreCounts(tools).resolved
         return SessionChatExploreSummaryBlock(
             blockID: PresentationBlockId.toolGroup(memberIds),
-            label: (running ? "Exploring" : "Explored") + " \u{00B7} " + counts,
-            title: "Explored \u{2014} \(counts)",
+            label: running
+                ? .app("timeline.explore.label_running", "Exploring · \(counts)")
+                : .app("timeline.explore.label", "Explored · \(counts)"),
+            title: .app("timeline.explore.title", "Explored — \(counts)"),
             subtitle: exploredGroupSubtitle(tools),
             status: running ? .running : .completed,
             members: members
@@ -1950,7 +2025,15 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     /// `4 reads · 2 greps` in first-encounter order.
-    private static func exploreCounts(_ tools: [ToolPart]) -> String {
+    private static func exploreCounts(_ tools: [ToolPart]) -> TimelineText {
+        let (order, counts) = countsByToolName(tools)
+        return TimelineText.joined(order.map { name in
+            exploreCountPhrase(name, count: counts[name, default: 0])
+        }) ?? .verbatim("")
+    }
+
+    /// Tool names in first-encounter order, with how often each ran.
+    private static func countsByToolName(_ tools: [ToolPart]) -> ([String], [String: Int]) {
         var order: [String] = []
         var counts: [String: Int] = [:]
         for tool in tools {
@@ -1960,19 +2043,17 @@ nonisolated enum SessionChatTimelineBlocks {
             }
             counts[key, default: 0] += 1
         }
-        return order.map { name in
-            exploreCountPhrase(name, count: counts[name, default: 0])
-        }.joined(separator: " \u{00B7} ")
+        return (order, counts)
     }
 
-    private static func exploreCountPhrase(_ name: String, count: Int) -> String {
+    private static func exploreCountPhrase(_ name: String, count: Int) -> TimelineText {
         switch name {
-        case "read": return count == 1 ? "1 read" : "\(count) reads"
-        case "grep": return count == 1 ? "1 grep" : "\(count) greps"
-        case "glob": return count == 1 ? "1 glob" : "\(count) globs"
-        case "websearch": return count == 1 ? "1 search" : "\(count) searches"
-        case "webfetch": return count == 1 ? "1 fetch" : "\(count) fetches"
-        default: return "\(count) \(name)"
+        case "read": .app("tool.count.read", "\(count) reads")
+        case "grep": .app("tool.count.grep", "\(count) greps")
+        case "glob": .app("tool.count.glob", "\(count) globs")
+        case "websearch": .app("tool.count.search", "\(count) searches")
+        case "webfetch": .app("tool.count.fetch", "\(count) fetches")
+        default: .app("tool.count.named", "\(count) \(name)")
         }
     }
 
@@ -2001,7 +2082,7 @@ nonisolated enum SessionChatTimelineBlocks {
         for block in blocks {
             guard case .stepParagraph(_, let paragraph) = block else { continue }
             for chip in paragraph.chips where chip.kind == .skill {
-                let key = chip.skillID ?? chip.label
+                let key = chip.skillID ?? chip.label.resolved
                 if let index = indexByKey[key] {
                     uses[index] = SessionChatSkillUse(
                         id: uses[index].id,
@@ -2107,8 +2188,11 @@ nonisolated enum SessionChatTimelineBlocks {
         let kind: SessionChatToolChipKind
         let family: SessionChatToolChipFamily
         var label: String?
+        // App text the chip shows instead of a server value (LSP, Plan, a question, a placeholder).
+        var appLabel: TimelineText?
         var brief: String?
         var skillID: String?
+        let subtitle = card.subtitle?.verbatimValue
         if isChildSessionTool(name) {
             kind = .agent
             family = .agent
@@ -2120,7 +2204,8 @@ nonisolated enum SessionChatTimelineBlocks {
             case "read":
                 kind = .file
                 family = .explore
-                label = readPath(tool).map(lastPathComponent) ?? (card.isReceivingArguments ? card.subtitle : nil)
+                label = readPath(tool).map(lastPathComponent)
+                if label == nil, card.isReceivingArguments { appLabel = card.subtitle }
             case "glob":
                 kind = .file
                 family = .explore
@@ -2140,32 +2225,38 @@ nonisolated enum SessionChatTimelineBlocks {
             case "edit", "write", "apply_patch", "patch":
                 kind = .file
                 family = .change
-                label = card.subtitle.map(lastPathComponent)
+                label = subtitle.map(lastPathComponent)
             case "bash", "shell", "execute":
                 kind = .command
                 family = .command
-                label = (inputString(tool.input, keys: "command") ?? card.subtitle).map(commandChipLabel)
+                label = (inputString(tool.input, keys: "command") ?? subtitle).map(commandChipLabel)
+                if label == nil { appLabel = card.subtitle }
             case "skill":
                 kind = .skill
                 family = .skill
-                label = (skillName(tool) ?? card.subtitle).map { "/\($0)" }
+                label = (skillName(tool) ?? subtitle).map { "/\($0)" }
                 brief = skillDirectory(tool)
                 skillID = requestedSkillID(tool)
             case "lsp", "plan_exit":
                 kind = .command
                 family = .command
-                label = card.title
+                appLabel = card.title
             default:
                 kind = .command
                 family = .command
-                label = isQuestionTool(tool) ? card.title : customToolLabel(tool)
+                if isQuestionTool(tool) {
+                    appLabel = card.title
+                } else {
+                    label = customToolLabel(tool)
+                }
             }
         }
+        let chipLabel: TimelineText = nonEmpty(label).map { TimelineText.verbatim($0) } ?? appLabel ?? .verbatim(tool.toolName)
         return SessionChatToolChipBlock(
             id: PresentationBlockId.direct(partId),
             kind: kind,
             family: family,
-            label: nonEmpty(label) ?? tool.toolName,
+            label: chipLabel,
             brief: nonEmpty(brief),
             skillID: nonEmpty(skillID),
             additions: family == .change ? card.additions : nil,
@@ -2305,6 +2396,12 @@ nonisolated enum SessionChatTimelineBlocks {
             .first
             .map { $0.trimmingCharacters(in: .whitespaces) }
         return nonEmpty(line)
+    }
+
+    /// First line of server text; app text is already one line.
+    private static func firstLine(_ text: TimelineText) -> TimelineText? {
+        guard case .verbatim(let string) = text else { return text }
+        return firstLine(string).map { TimelineText.verbatim($0) }
     }
 
     private static func hostLabel(_ url: String) -> String {
@@ -2617,63 +2714,51 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     /// Context-only groups match TUI (`Explored — 1 read`). Mixed groups stay `N tools`.
-    private static func groupTitle(_ tools: [ToolPart]) -> String {
+    private static func groupTitle(_ tools: [ToolPart]) -> TimelineText {
         if !tools.isEmpty, tools.allSatisfy({ isContextTool($0.toolName) }) {
             return exploredTitle(tools)
         }
-        return "\(tools.count) tools"
+        return toolCount(tools.count)
+    }
+
+    private static func toolCount(_ count: Int) -> TimelineText {
+        .app("tool.count.tool", "\(count) tools")
     }
 
     /// Family one-liner in encounter order (`Edit · Write · 5 shells`).
     /// Context-only groups keep the first path as subtitle.
-    private static func groupSubtitle(_ tools: [ToolPart]) -> String? {
+    private static func groupSubtitle(_ tools: [ToolPart]) -> TimelineText? {
         if !tools.isEmpty, tools.allSatisfy({ isContextTool($0.toolName) }) {
             return exploredGroupSubtitle(tools)
         }
-        var order: [String] = []
-        var counts: [String: Int] = [:]
-        for tool in tools {
-            let key = tool.toolName.lowercased()
-            if counts[key] == nil {
-                order.append(key)
-            }
-            counts[key, default: 0] += 1
-        }
-        return order.map { name in
+        let (order, counts) = countsByToolName(tools)
+        return TimelineText.joined(order.map { name in
             familyPhrase(name, count: counts[name, default: 0])
-        }.joined(separator: " · ")
+        })
     }
 
     /// One explore tool keeps its argument (a glob pattern, a path); several are `4 tools` (the title
     /// already counts each kind, and each row keeps its own argument).
-    private static func exploredGroupSubtitle(_ tools: [ToolPart]) -> String? {
-        if tools.count == 1, let tool = tools.first { return contextSubtitle(tool) }
-        return "\(tools.count) tools"
+    private static func exploredGroupSubtitle(_ tools: [ToolPart]) -> TimelineText? {
+        if tools.count == 1, let tool = tools.first { return TimelineText.verbatim(ifPresent: contextSubtitle(tool)) }
+        return toolCount(tools.count)
     }
 
-    private static func exploredTitle(_ tools: [ToolPart]) -> String {
-        var order: [String] = []
-        var counts: [String: Int] = [:]
-        for tool in tools {
-            let key = tool.toolName.lowercased()
-            if counts[key] == nil {
-                order.append(key)
-            }
-            counts[key, default: 0] += 1
-        }
-        let summary = order.map { name in
+    private static func exploredTitle(_ tools: [ToolPart]) -> TimelineText {
+        let (order, counts) = countsByToolName(tools)
+        let summary = (TimelineText.joined(order.map { name in
             exploredFamilyPhrase(name, count: counts[name, default: 0])
-        }.joined(separator: " · ")
-        return "Explored — \(summary)"
+        }) ?? .verbatim("")).resolved
+        return .app("timeline.explore.title", "Explored — \(summary)")
     }
 
-    private static func exploredFamilyPhrase(_ name: String, count: Int) -> String {
+    private static func exploredFamilyPhrase(_ name: String, count: Int) -> TimelineText {
         switch name {
-        case "read": return count == 1 ? "1 read" : "\(count) reads"
-        case "grep": return count == 1 ? "1 grep" : "\(count) greps"
-        case "glob": return count == 1 ? "1 glob" : "\(count) globs"
-        case "websearch": return count == 1 ? "1 search" : "\(count) searches"
-        default: return familyPhrase(name, count: count)
+        case "read": .app("tool.count.read", "\(count) reads")
+        case "grep": .app("tool.count.grep", "\(count) greps")
+        case "glob": .app("tool.count.glob", "\(count) globs")
+        case "websearch": .app("tool.count.search", "\(count) searches")
+        default: familyPhrase(name, count: count)
         }
     }
 
@@ -2686,26 +2771,31 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
-    private static func familyPhrase(_ name: String, count: Int) -> String {
+    /// One run is the tool's title (`Shell`); more are a count (`5 shells`).
+    private static func familyPhrase(_ name: String, count: Int) -> TimelineText {
+        let one = count == 1
         switch name {
-        case "read": return count == 1 ? "Read" : "\(count) reads"
-        case "grep": return count == 1 ? "Grep" : "\(count) greps"
-        case "glob": return count == 1 ? "Glob" : "\(count) globs"
-        case "bash", "shell": return count == 1 ? "Shell" : "\(count) shells"
-        case "execute": return count == 1 ? "Execute" : "\(count) executes"
-        case "lsp": return count == 1 ? "LSP" : "\(count) LSPs"
-        case "plan_exit": return count == 1 ? "Plan" : "\(count) plans"
-        case "edit": return count == 1 ? "Edit" : "\(count) edits"
-        case "write": return count == 1 ? "Write" : "\(count) writes"
-        case "webfetch": return count == 1 ? "Fetch" : "\(count) fetches"
-        case "websearch": return count == 1 ? "Search" : "\(count) searches"
+        case "read": return one ? .app("tool.title.read", "Read") : .app("tool.count.read", "\(count) reads")
+        case "grep": return one ? .app("tool.title.grep", "Grep") : .app("tool.count.grep", "\(count) greps")
+        case "glob": return one ? .app("tool.title.glob", "Glob") : .app("tool.count.glob", "\(count) globs")
+        case "bash", "shell": return one ? .app("tool.title.shell", "Shell") : .app("tool.count.shell", "\(count) shells")
+        case "execute": return one ? .app("tool.title.execute", "Execute") : .app("tool.count.execute", "\(count) executes")
+        case "lsp": return one ? .app("tool.title.lsp", "LSP") : .app("tool.count.lsp", "\(count) LSPs")
+        case "plan_exit": return one ? .app("tool.title.plan", "Plan") : .app("tool.count.plan", "\(count) plans")
+        case "edit": return one ? .app("tool.title.edit", "Edit") : .app("tool.count.edit", "\(count) edits")
+        case "write": return one ? .app("tool.title.write", "Write") : .app("tool.count.write", "\(count) writes")
+        case "webfetch": return one ? .app("tool.title.fetch", "Fetch") : .app("tool.count.fetch", "\(count) fetches")
+        case "websearch": return one ? .app("tool.title.search", "Search") : .app("tool.count.search", "\(count) searches")
         case "question": return askedQuestionsTitle(count)
-        case "skill": return count == 1 ? "Skill" : "\(count) skills"
-        case "apply_patch", "patch": return count == 1 ? "Patch" : "\(count) patches"
-        case "linear_get_issue": return count == 1 ? "Get issue" : "\(count) Get issues"
-        case "linear_save_issue": return count == 1 ? "Save issue" : "\(count) Save issues"
+        case "skill": return one ? .app("tool.title.skill", "Skill") : .app("tool.count.skill", "\(count) skills")
+        case "apply_patch", "patch": return one ? .app("tool.title.patch", "Patch") : .app("tool.count.patch", "\(count) patches")
+        case "linear_get_issue":
+            return one ? .app("tool.title.get_issue", "Get issue") : .app("tool.count.get_issue", "\(count) Get issues")
+        case "linear_save_issue":
+            return one ? .app("tool.title.save_issue", "Save issue") : .app("tool.count.save_issue", "\(count) Save issues")
         default:
-            return count == 1 ? name : "\(count) \(name)"
+            // Any other tool keeps its own name, which is server content.
+            return one ? .verbatim(name) : .app("tool.count.named", "\(count) \(name)")
         }
     }
 
@@ -2751,13 +2841,13 @@ nonisolated enum SessionChatTimelineBlocks {
         let chrome = specializedChrome(name: name, tool: tool) ?? genericChrome(tool)
         let failedExit = failedShellExitCode(name: name, tool: tool)
         let interrupted = failedExit == nil && tool.status == .error && tool.isInterrupted
-        let errorText: String? =
+        let errorText: TimelineText? =
             if let failedExit {
-                "Exited with code \(failedExit)"
+                .app("tool.error.exit_code", "Exited with code \(failedExit)")
             } else if interrupted {
                 interruptedToolText(tool.error)
             } else if tool.status == .error {
-                tool.error.flatMap { $0.isEmpty ? nil : $0 }
+                TimelineText.verbatim(ifPresent: tool.error.flatMap { $0.isEmpty ? nil : $0 })
             } else {
                 nil
             }
@@ -2789,7 +2879,7 @@ nonisolated enum SessionChatTimelineBlocks {
     /// part has a start but no end, and an exit is taken only from metadata.
     private static func toolResultPresentation(
         _ tool: ToolPart,
-        fallbackTitle: String
+        fallbackTitle: TimelineText
     ) -> ToolResultPresentation? {
         ToolResultInspector.classify(
             ToolResultRequest(
@@ -2846,20 +2936,22 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     /// What a card says while its arguments stream in and none can be read yet (TUI v2 copy).
-    private static func receivingArgumentsPlaceholder(_ name: String) -> String? {
+    private static func receivingArgumentsPlaceholder(_ name: String) -> TimelineText? {
         switch name {
-        case "bash", "shell": "Writing command…"
-        case "read": "Preparing read…"
-        case "edit": "Preparing edit…"
-        case "write": "Preparing write…"
+        case "bash", "shell": .app("tool.placeholder.writing_command", "Writing command…")
+        case "read": .app("tool.placeholder.preparing_read", "Preparing read…")
+        case "edit": .app("tool.placeholder.preparing_edit", "Preparing edit…")
+        case "write": .app("tool.placeholder.preparing_write", "Preparing write…")
         default: nil
         }
     }
 
     /// Neutral copy for a tool the user stopped or declined (never the raw abort text).
-    static func interruptedToolText(_ error: String?) -> String {
+    static func interruptedToolText(_ error: String?) -> TimelineText {
         let text = (error ?? "").lowercased()
-        return text.contains("declined") || text.contains("rejected") ? "Declined" : "Stopped"
+        return text.contains("declined") || text.contains("rejected")
+            ? .app("tool.status.declined", "Declined")
+            : .app("tool.status.stopped", "Stopped")
     }
 
     /// A shell run the server reports as completed but whose command exited
@@ -2881,8 +2973,8 @@ nonisolated enum SessionChatTimelineBlocks {
     }
 
     private struct Chrome {
-        let title: String
-        let subtitle: String?
+        let title: TimelineText
+        let subtitle: TimelineText?
         let additions: Int?
         let deletions: Int?
         let detailText: String?
@@ -2891,8 +2983,8 @@ nonisolated enum SessionChatTimelineBlocks {
         let changesInitialFilePath: String?
 
         init(
-            title: String,
-            subtitle: String?,
+            title: TimelineText,
+            subtitle: TimelineText?,
             additions: Int? = nil,
             deletions: Int? = nil,
             detailText: String? = nil,
@@ -2923,8 +3015,8 @@ nonisolated enum SessionChatTimelineBlocks {
             ?? inputPreview(tool.input)
             ?? distinctFromName(tool.title)
         return Chrome(
-            title: ToolPartIdentity.calledTitle(tool.toolName),
-            subtitle: subtitle,
+            title: .verbatim(ToolPartIdentity.calledTitle(tool.toolName)),
+            subtitle: TimelineText.verbatim(ifPresent: subtitle),
             detailText: settledDetail(tool)
         )
     }
@@ -2947,28 +3039,28 @@ nonisolated enum SessionChatTimelineBlocks {
         case "plan_exit":
             return planExitChrome(tool)
         case "webfetch":
-            return networkChrome(tool: tool, displayTitle: "Fetch", subtitleKey: "url")
+            return networkChrome(tool: tool, displayTitle: .app("tool.title.fetch", "Fetch"), subtitleKey: "url")
         case "websearch":
             return contextChrome(tool: tool, subtitle: inputString(tool.input, keys: "query"))
         case "skill":
             return Chrome(
-                title: "Skill",
-                subtitle: skillName(tool) ?? runningTitleOverride(tool)
+                title: .app("tool.title.skill", "Skill"),
+                subtitle: TimelineText.verbatim(ifPresent: skillName(tool) ?? runningTitleOverride(tool))
             )
         case "task", "subagent":
             return taskChrome(tool)
         case "edit":
-            return fileChangeChrome(tool: tool, displayTitle: "Edit")
+            return fileChangeChrome(tool: tool, displayTitle: .app("tool.title.edit", "Edit"))
         case "write":
-            return fileChangeChrome(tool: tool, displayTitle: "Write")
+            return fileChangeChrome(tool: tool, displayTitle: .app("tool.title.write", "Write"))
         case "apply_patch", "patch":
-            return fileChangeChrome(tool: tool, displayTitle: "Patch")
+            return fileChangeChrome(tool: tool, displayTitle: .app("tool.title.patch", "Patch"))
         default:
             return nil
         }
     }
 
-    private static func fileChangeChrome(tool: ToolPart, displayTitle: String) -> Chrome {
+    private static func fileChangeChrome(tool: ToolPart, displayTitle: TimelineText) -> Chrome {
         let filesArray: [AnyCodable]? = {
             guard case let .array(array)? = tool.metadata?["files"] else { return nil }
             return array
@@ -2977,9 +3069,10 @@ nonisolated enum SessionChatTimelineBlocks {
         if let filesArray, filesArray.count > 1 {
             let additions = positiveCount(patchFiles.reduce(0) { $0 + ($1.additions ?? 0) })
             let deletions = positiveCount(patchFiles.reduce(0) { $0 + ($1.deletions ?? 0) })
+            let fileCount = filesArray.count
             return Chrome(
-                title: "Patch",
-                subtitle: "\(filesArray.count) files",
+                title: .app("tool.title.patch", "Patch"),
+                subtitle: .app("tool.count.file", "\(fileCount) files"),
                 additions: additions,
                 deletions: deletions,
                 opensChangesReview: canOpenChangesReview(tool.status),
@@ -3002,7 +3095,7 @@ nonisolated enum SessionChatTimelineBlocks {
         let opens = path != nil && canOpenChangesReview(tool.status)
         return Chrome(
             title: displayTitle,
-            subtitle: path,
+            subtitle: TimelineText.verbatim(ifPresent: path),
             additions: path == nil ? nil : additions,
             deletions: path == nil ? nil : deletions,
             opensChangesReview: opens,
@@ -3095,14 +3188,14 @@ nonisolated enum SessionChatTimelineBlocks {
         let description =
             inputString(tool.input, keys: "description", "prompt")
             ?? runningTitleOverride(tool)
-        let subtitle: String?
+        let subtitle: TimelineText?
         if let description, isTruthyMetadata(tool.metadata, key: "background") {
-            subtitle = "\(description) (background)"
+            subtitle = .app("tool.subtitle.background", "\(description) (background)")
         } else {
-            subtitle = description
+            subtitle = TimelineText.verbatim(ifPresent: description)
         }
         return Chrome(
-            title: title,
+            title: .verbatim(title),
             subtitle: subtitle,
             childSessionId: childSessionId(tool)
         )
@@ -3140,7 +3233,7 @@ nonisolated enum SessionChatTimelineBlocks {
     private static func contextChrome(tool: ToolPart, subtitle: String?) -> Chrome {
         Chrome(
             title: exploredTitle([tool]),
-            subtitle: runningTitleOverride(tool) ?? subtitle,
+            subtitle: TimelineText.verbatim(ifPresent: runningTitleOverride(tool) ?? subtitle),
             detailText: settledDetail(tool)
         )
     }
@@ -3149,25 +3242,29 @@ nonisolated enum SessionChatTimelineBlocks {
         let command = inputString(tool.input, keys: "command")
             ?? runningTitleOverride(tool)
             ?? ToolArgumentsPreview.string(tool, keys: "command")
-        return Chrome(title: "Shell", subtitle: command, detailText: settledDetail(tool))
+        return Chrome(
+            title: .app("tool.title.shell", "Shell"),
+            subtitle: TimelineText.verbatim(ifPresent: command),
+            detailText: settledDetail(tool)
+        )
     }
 
     private static func executeChrome(_ tool: ToolPart) -> Chrome {
         let calls = executeCallPreviews(tool.metadata)
-        let subtitle: String? =
+        let subtitle: TimelineText? =
             if calls.isEmpty {
-                runningTitleOverride(tool) ?? nonEmpty(tool.title)
+                TimelineText.verbatim(ifPresent: runningTitleOverride(tool) ?? nonEmpty(tool.title))
             } else if calls.count == 1 {
-                calls[0]
+                .verbatim(calls[0])
             } else {
-                "\(calls.count) tools"
+                toolCount(calls.count)
             }
         var detailParts = calls
         if let extra = settledDetail(tool) {
             detailParts.append(extra)
         }
         return Chrome(
-            title: "Execute",
+            title: .app("tool.title.execute", "Execute"),
             subtitle: subtitle,
             detailText: detailParts.isEmpty ? nil : detailParts.joined(separator: calls.isEmpty || settledDetail(tool) == nil ? "\n" : "\n\n")
         )
@@ -3202,13 +3299,18 @@ nonisolated enum SessionChatTimelineBlocks {
             } else {
                 operation ?? location ?? runningTitleOverride(tool) ?? nonEmpty(tool.title)
             }
-        return Chrome(title: "LSP", subtitle: subtitle, detailText: settledDetail(tool))
+        return Chrome(
+            title: .app("tool.title.lsp", "LSP"),
+            subtitle: TimelineText.verbatim(ifPresent: subtitle),
+            detailText: settledDetail(tool)
+        )
     }
 
     private static func planExitChrome(_ tool: ToolPart) -> Chrome {
         Chrome(
-            title: "Plan",
-            subtitle: nonEmpty(tool.title) ?? "Ready to implement?",
+            title: .app("tool.title.plan", "Plan"),
+            subtitle: TimelineText.verbatim(ifPresent: nonEmpty(tool.title))
+                ?? .app("tool.subtitle.plan_ready", "Ready to implement?"),
             detailText: settledDetail(tool)
         )
     }
@@ -3267,7 +3369,7 @@ nonisolated enum SessionChatTimelineBlocks {
         }
     }
 
-    private static func networkChrome(tool: ToolPart, displayTitle: String, subtitleKey: String) -> Chrome {
+    private static func networkChrome(tool: ToolPart, displayTitle: TimelineText, subtitleKey: String) -> Chrome {
         let subtitle = inputString(tool.input, keys: subtitleKey) ?? runningTitleOverride(tool)
         let detail: String? =
             switch tool.status {
@@ -3276,7 +3378,7 @@ nonisolated enum SessionChatTimelineBlocks {
             case .pending, .running:
                 nil
             }
-        return Chrome(title: displayTitle, subtitle: subtitle, detailText: detail)
+        return Chrome(title: displayTitle, subtitle: TimelineText.verbatim(ifPresent: subtitle), detailText: detail)
     }
 
     private static func runningTitleOverride(_ tool: ToolPart) -> String? {
@@ -3317,8 +3419,8 @@ nonisolated enum SessionChatTimelineBlocks {
         ToolPartIdentity.isQuestion(name: tool.toolName, input: tool.input)
     }
 
-    private static func askedQuestionsTitle(_ count: Int) -> String {
-        count == 1 ? "Asked 1 question" : "Asked \(count) questions"
+    private static func askedQuestionsTitle(_ count: Int) -> TimelineText {
+        .app("tool.title.asked_questions", "Asked \(count) questions")
     }
 
     private static func questionChrome(_ tool: ToolPart) -> Chrome {
@@ -3331,7 +3433,7 @@ nonisolated enum SessionChatTimelineBlocks {
         let count = max(questions.count, firstQuestion == nil ? 0 : 1)
         return Chrome(
             title: askedQuestionsTitle(count),
-            subtitle: answers.first,
+            subtitle: TimelineText.verbatim(ifPresent: answers.first),
             detailText: questionDetail(
                 questions: questions.isEmpty ? [firstQuestion].compactMap { $0 } : questions,
                 answers: answers,

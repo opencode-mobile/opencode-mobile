@@ -31,6 +31,10 @@ enum OpenCodeRenderedMarkdownParser {
         }
     }
 
+    /// Internal diagnostic for logs and tests; never shown to users, so not localised.
+    nonisolated private static let bridgeFallbackDiagnostic =
+        "Rendered Markdown fell back to literal text after the KMP parser bridge failed."
+
     nonisolated private static func fallbackDocument(for markdown: String) -> NativeMarkdownDocument {
         NativeMarkdownDocument(
             sourceHash: markdown.hashValue,
@@ -38,7 +42,7 @@ enum OpenCodeRenderedMarkdownParser {
             diagnostics: [
                 NativeMarkdownDiagnostic(
                     kind: "SwiftBridgeFallback",
-                    message: "Rendered Markdown fell back to literal text after the KMP parser bridge failed."
+                    message: Self.bridgeFallbackDiagnostic
                 )
             ]
         )

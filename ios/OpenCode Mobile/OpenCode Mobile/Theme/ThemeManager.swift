@@ -24,7 +24,8 @@ final class ThemeManager {
     private(set) var resolvedLight: ResolvedTokens
     private(set) var resolvedDark: ResolvedTokens
     private(set) var revision: UInt64 = 0
-    private(set) var loadError: String?
+    /// Why the last theme or syntax preset change failed; shown in Settings.
+    private(set) var loadError: OpenCodeText?
 
     private let defaults: UserDefaults
     private var cachedManifestPresets: [ThemePreset]?
@@ -82,7 +83,7 @@ final class ThemeManager {
 
     func applySyntaxPreset(id: String) {
         guard let preset = syntaxPresets().first(where: { $0.id == id }) else {
-            loadError = "Syntax highlight preset not found"
+            loadError = "theme.error.syntax_preset_not_found"
             return
         }
         currentSyntaxPreset = preset
@@ -93,7 +94,7 @@ final class ThemeManager {
 
     func applyPreset(id: String) {
         guard let theme = Self.loadPreset(id: id) else {
-            loadError = "Theme preset not found"
+            loadError = "theme.error.preset_not_found"
             return
         }
         do {
@@ -103,7 +104,10 @@ final class ThemeManager {
             ThemePersistence.saveSelectedThemeID(id, defaults: defaults)
             loadError = nil
         } catch {
-            loadError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            loadError = .verbatim(
+                (error as? LocalizedError)?.errorDescription ?? error.localizedDescription,
+                fallback: "theme.error.apply_failed"
+            )
         }
     }
 

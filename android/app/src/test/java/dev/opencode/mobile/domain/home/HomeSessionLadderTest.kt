@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.home
 
+import dev.opencode.mobile.ui.text.EnglishStrings
+import dev.opencode.mobile.ui.text.resolve
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -104,7 +106,7 @@ class HomeSessionLadderTest {
 
         val sections = group(sessions, windowHours = 1)
         assertTrue(sections.none { it.kind == HomeSessionLadderKind.Recent })
-        assertEquals(listOf("Today", "Yesterday"), sections.map { it.title })
+        assertEquals(listOf("Today", "Yesterday"), sections.map { it.title.resolve(EnglishStrings) })
         assertEquals(listOf("today"), sections[0].items.map { it.id })
         assertEquals(listOf("yesterday"), sections[1].items.map { it.id })
     }
@@ -127,7 +129,7 @@ class HomeSessionLadderTest {
             )
         assertEquals(1, sections.size)
         assertEquals(HomeSessionLadderKind.Week, sections[0].kind)
-        assertTrue(sections[0].title.startsWith("Week of "))
+        assertTrue(sections[0].title.resolve(EnglishStrings).startsWith("Week of "))
         assertEquals(listOf("old"), sections[0].items.map { it.id })
     }
 

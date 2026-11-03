@@ -94,19 +94,27 @@ enum SessionChatNavigationPill: Equatable {
 
     var label: String {
         switch self {
-        case let .scrollToEnd(newCount): newCount > 0 ? "\(newCount) new" : "Scroll to end"
+        case let .scrollToEnd(newCount):
+            newCount > 0
+                ? String(localized: "session_chat.navigation.new_count", defaultValue: "\(newCount) new")
+                : Self.scrollToEnd
         }
     }
 
     var accessibilityLabel: String {
         switch self {
         case let .scrollToEnd(newCount):
-            switch newCount {
-            case ..<1: "Scroll to end"
-            case 1: "Scroll to end, 1 new message"
-            default: "Scroll to end, \(newCount) new messages"
-            }
+            newCount > 0
+                ? String(
+                    localized: "session_chat.navigation.scroll_to_end_new_messages",
+                    defaultValue: "Scroll to end, \(newCount) new messages"
+                )
+                : Self.scrollToEnd
         }
+    }
+
+    private static var scrollToEnd: String {
+        String(localized: "session_chat.navigation.scroll_to_end", defaultValue: "Scroll to end")
     }
 }
 

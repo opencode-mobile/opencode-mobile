@@ -22,7 +22,9 @@ nonisolated final class HighlightCoreFileSession: @unchecked Sendable {
     /// Built on the queue by `open`.
     private var sourceLines = FileSourceLines(text: "")
     private let cancelFlag = HighlightCancelFlag()
-    private let queue = DispatchQueue(label: "dev.opencode.mobile.highlight-core.file")
+    /// Not user-facing.
+    private static let queueLabel = "dev.opencode.mobile.highlight-core.file"
+    private let queue = DispatchQueue(label: HighlightCoreFileSession.queueLabel)
 
     /// nil when highlight-core has no lexer for `language`.
     init?(document: FileTextDocument, language: String) {

@@ -9,6 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import dev.opencode.mobile.ui.text.english
 
 class ToolInterruptionTest {
     private val adapter = MessageDomainAdapter()
@@ -45,9 +46,9 @@ class ToolInterruptionTest {
     fun interruptedCopy() {
         assertEquals(
             "Declined",
-            SessionChatTimelineBlocks.interruptedToolText("The user declined this tool call"),
+            SessionChatTimelineBlocks.interruptedToolText("The user declined this tool call").english(),
         )
-        assertEquals("Stopped", SessionChatTimelineBlocks.interruptedToolText("Tool execution interrupted"))
+        assertEquals("Stopped", SessionChatTimelineBlocks.interruptedToolText("Tool execution interrupted").english())
     }
 
     @Test

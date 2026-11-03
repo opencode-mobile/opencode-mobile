@@ -13,10 +13,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -71,7 +73,7 @@ fun OpenCodeModal(
                     content = content,
                 )
                 OpenCodeButton(
-                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, "Close"),
+                    variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, stringResource(R.string.component_close)),
                     contrast = OpenCodeButtonContrast.Low,
                     onClick = onDismissRequest,
                     modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),

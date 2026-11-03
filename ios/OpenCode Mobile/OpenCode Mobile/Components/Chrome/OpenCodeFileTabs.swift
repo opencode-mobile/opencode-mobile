@@ -104,7 +104,7 @@ struct OpenCodeFileTabs: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Close \(tab.title)")
+            .accessibilityLabel(Text(LocalizedStringResource("component.file_tabs.close", defaultValue: "Close \(tab.title)")))
         }
         .background(selected ? OpenCodeColors.surfaceRaisedBase : Color.clear, in: shape)
         .overlay(shape.strokeBorder(selected ? OpenCodeColors.borderWeakBase : Color.clear, lineWidth: 1))

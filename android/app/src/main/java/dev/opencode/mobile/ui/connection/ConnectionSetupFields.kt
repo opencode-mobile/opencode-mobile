@@ -26,12 +26,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
 import dev.opencode.mobile.domain.connection.PairingQRPayload
 import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
@@ -41,8 +43,10 @@ import dev.opencode.mobile.ui.components.OpenCodeServerAddressInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 import dev.opencode.mobile.ui.components.OpenCodeTextInputSubmitAction
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.resolve
 
-internal fun qrAddressHint(urls: List<String>): String {
+internal fun qrAddressHint(urls: List<String>): UiText {
     val tunnel = urls.filter(PairingQRPayload::isRemoteTunnelUrl)
     val tailscale = urls.filter(PairingQRPayload::isTailscaleUrl)
     val local =
@@ -50,25 +54,27 @@ internal fun qrAddressHint(urls: List<String>): String {
             !PairingQRPayload.isTailscaleUrl(url) && !PairingQRPayload.isRemoteTunnelUrl(url)
         }
     if (tunnel.isNotEmpty() && tailscale.isEmpty() && local.isEmpty()) {
-        return "Remote tunnel saved. Nothing else to pick. It stays until you turn remote access off."
+        return UiText.resource(R.string.connection_setup_addresses_hint_tunnel_only)
     }
     if (tailscale.isNotEmpty() && local.isNotEmpty() && tunnel.isEmpty()) {
-        return "Tailscale is used when it answers. Local network is the fallback."
+        return UiText.resource(R.string.connection_setup_addresses_hint_tailscale_fallback)
     }
-    return "Saved addresses are tried until one answers. Tailscale is preferred when it answers."
+    return UiText.resource(R.string.connection_setup_addresses_hint_default)
 }
 
-internal fun qrAddressTitle(url: String): String =
-    when {
-        PairingQRPayload.isTailscaleUrl(url) -> "Tailscale"
-        PairingQRPayload.isRemoteTunnelUrl(url) -> "Remote tunnel"
-        else -> "Local network"
-    }
+internal fun qrAddressTitle(url: String): UiText =
+    UiText.resource(
+        when {
+            PairingQRPayload.isTailscaleUrl(url) -> R.string.connection_setup_address_tailscale
+            PairingQRPayload.isRemoteTunnelUrl(url) -> R.string.connection_setup_address_remote_tunnel
+            else -> R.string.connection_setup_address_local_network
+        },
+    )
 
 internal data class QrAddressRowUi(
-    val title: String,
-    val subtitle: String,
-    val badge: String,
+    val title: UiText,
+    val subtitle: UiText,
+    val badge: UiText,
     val dimmed: Boolean,
 )
 
@@ -78,11 +84,14 @@ internal fun qrAddressRows(uiState: ConnectionSetupUiState): List<QrAddressRowUi
         val normalized = ConnectionProfileIdentity.normalizeBaseUrl(url)
         val unreachable = uiState.addressProbeFinished && normalized in uiState.unreachableUrls
         val isChosen = chosen != null && ConnectionProfileIdentity.normalizeBaseUrl(chosen) == normalized
-        val host = ConnectionProfileIdentity.hostLabel(url)
+        val host = UiText.verbatim(ConnectionProfileIdentity.hostLabel(url))
         QrAddressRowUi(
             title = qrAddressTitle(url),
-            subtitle = if (unreachable) "$host · not reachable" else host,
-            badge = if (isChosen) "Using now" else "Saved",
+            subtitle = if (unreachable) UiText.resource(R.string.connection_setup_address_not_reachable, host) else host,
+            badge =
+                UiText.resource(
+                    if (isChosen) R.string.connection_setup_address_using_now else R.string.connection_setup_address_saved,
+                ),
             dimmed = unreachable,
         )
     }
@@ -124,7 +133,7 @@ fun ConnectionSetupFields(
         val pairAgainMessage = uiState.pairAgainMessage
         if (pairAgainMessage != null && uiState.usesQrLayout) {
             Text(
-                text = pairAgainMessage,
+                text = pairAgainMessage.resolve(),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
             )
@@ -134,7 +143,7 @@ fun ConnectionSetupFields(
         }
         if (uiState.usesQrLayout) {
             Text(
-                text = qrAddressHint(uiState.serverUrls),
+                text = qrAddressHint(uiState.serverUrls).resolve(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(start = 2.dp),
@@ -145,7 +154,7 @@ fun ConnectionSetupFields(
             OpenCodeTextInput(
                 value = uiState.name,
                 onValueChange = onNameChanged,
-                hint = "Optional name",
+                hint = stringResource(R.string.connection_setup_name_hint),
                 submitAction = OpenCodeTextInputSubmitAction.Next,
                 enabled = !uiState.isBusy,
             )
@@ -158,13 +167,13 @@ fun ConnectionSetupFields(
         OpenCodeServerAddressInput(
             value = uiState.baseUrl,
             onValueChange = onBaseUrlChanged,
-            hint = "macbook.local:4096",
-            accessibilityLabel = "Host",
+            hint = stringResource(R.string.connection_setup_host_hint),
+            accessibilityLabel = stringResource(R.string.connection_setup_host_label),
             submitAction = OpenCodeTextInputSubmitAction.Next,
             enabled = !uiState.isBusy,
         )
         Text(
-            text = "LAN, Tailscale MagicDNS, or tunnel — not localhost on a phone.",
+            text = stringResource(R.string.connection_setup_host_help),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp, start = 2.dp),
@@ -173,7 +182,7 @@ fun ConnectionSetupFields(
         OpenCodeTextInput(
             value = uiState.name,
             onValueChange = onNameChanged,
-            hint = "Optional name",
+            hint = stringResource(R.string.connection_setup_name_hint),
             submitAction = OpenCodeTextInputSubmitAction.Next,
             enabled = !uiState.isBusy,
         )
@@ -189,7 +198,7 @@ fun ConnectionSetupFields(
                 OpenCodeTextInput(
                     value = uiState.username,
                     onValueChange = onUsernameChanged,
-                    hint = "Username",
+                    hint = stringResource(R.string.connection_setup_username_hint),
                     kind = OpenCodeTextInputKind.Username,
                     submitAction = OpenCodeTextInputSubmitAction.Next,
                     enabled = !uiState.isBusy,
@@ -198,13 +207,13 @@ fun ConnectionSetupFields(
                 OpenCodeTextInput(
                     value = uiState.password,
                     onValueChange = onPasswordChanged,
-                    hint = "Password, optional",
+                    hint = stringResource(R.string.connection_setup_password_hint),
                     kind = OpenCodeTextInputKind.Password,
                     enabled = !uiState.isBusy,
                     modifier = Modifier.focusRequester(passwordFocusRequester),
                 )
                 Text(
-                    text = "Default user is opencode. Password is optional.",
+                    text = stringResource(R.string.connection_setup_password_help),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp, start = 2.dp),
@@ -214,12 +223,12 @@ fun ConnectionSetupFields(
                 OpenCodeTextInput(
                     value = uiState.pairingCode,
                     onValueChange = onPairingCodeChanged,
-                    hint = "Pairing code",
+                    hint = stringResource(R.string.connection_setup_pairing_code_hint),
                     kind = OpenCodeTextInputKind.Url,
                     enabled = !uiState.isBusy,
                 )
                 Text(
-                    text = "From the pair link. Works once and expires in 5 minutes.",
+                    text = stringResource(R.string.connection_setup_pairing_code_help),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 6.dp, start = 2.dp),
@@ -232,27 +241,26 @@ fun ConnectionSetupFields(
 @Composable
 private fun PairingInstructions() {
     Text(
-        text = "On your computer, run this, then scan the QR.",
+        text = stringResource(R.string.connection_setup_instructions_run),
         style = MaterialTheme.typography.bodyLarge,
         color = MaterialTheme.colorScheme.onSurface,
     )
     Spacer(modifier = Modifier.height(12.dp))
     OpenCodeCodeSnippet(code = "opencode pair --remote")
     Text(
-        text =
-            "First run takes about a minute. Needs OpenCode 2.0.25 or later. The service starts if it is not already running.",
+        text = stringResource(R.string.connection_setup_instructions_first_run),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 8.dp),
     )
     Text(
-        text = "Same Wi-Fi instead",
+        text = stringResource(R.string.connection_setup_instructions_same_wifi_title),
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.onSurface,
         modifier = Modifier.padding(top = 20.dp),
     )
     Text(
-        text = "Plain pair shows a QR only after the server is reachable beyond localhost.",
+        text = stringResource(R.string.connection_setup_instructions_same_wifi_body),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(top = 6.dp),
@@ -284,8 +292,8 @@ private fun CredentialSegmentControl(
                 .padding(2.dp),
     ) {
         listOf(
-            ConnectionCredentialSegment.Password to "Password",
-            ConnectionCredentialSegment.PairingCode to "Pairing code",
+            ConnectionCredentialSegment.Password to stringResource(R.string.connection_setup_segment_password),
+            ConnectionCredentialSegment.PairingCode to stringResource(R.string.connection_setup_segment_pairing_code),
         ).forEach { (segment, label) ->
             val isSelected = segment == selected
             Box(
@@ -347,18 +355,18 @@ private fun QrAddressRow(row: QrAddressRowUi) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = row.title,
+                text = row.title.resolve(),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
             )
             Text(
-                text = row.subtitle,
+                text = row.subtitle.resolve(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Text(
-            text = row.badge,
+            text = row.badge.resolve(),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

@@ -24,11 +24,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import dev.opencode.mobile.ProductAnalytics
-import dev.opencode.mobile.domain.connection.CleartextPolicy
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
@@ -37,10 +38,12 @@ import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
+import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.resolve
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -112,7 +115,7 @@ fun ConnectionSetupScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             OpenCodeTopBar(
-                title = uiState.screenTitle,
+                title = uiState.screenTitle.resolve(),
                 leading =
                     OpenCodeTopBarLeading.Back(
                         onClick = {
@@ -128,7 +131,7 @@ fun ConnectionSetupScreen(
                         listOf(
                             OpenCodeTopBarAction.Icon(
                                 imageVector = OpenCodeIcons.Delete,
-                                contentDescription = "Remove server",
+                                contentDescription = stringResource(R.string.connection_setup_remove_server),
                                 enabled = !uiState.isBusy,
                                 onClick = { showRemoveConfirm = true },
                             ),
@@ -184,7 +187,10 @@ fun ConnectionSetupScreen(
             }
         }
         OpenCodeSnackbarHost(
-            message = uiState.snackbar,
+            message =
+                uiState.snackbar?.let { snackbar ->
+                    OpenCodeSnackbarMessage(text = snackbar.text.resolve(), variant = snackbar.variant, id = snackbar.id)
+                },
             onDismissed = onSnackbarDismissed,
             modifier =
                 Modifier
@@ -209,12 +215,16 @@ fun ConnectionSetupScreen(
 
     OpenCodeDialog(
         visible = showRemoveConfirm,
-        title = "Remove “${uiState.name.ifBlank { "server" }}”?",
-        subtitle =
-            "This device forgets the Connection Profile. Sessions stay on that server. If it’s the active server, you’ll pick another — or land on Connect if none remain.",
+        title =
+            if (uiState.name.isBlank()) {
+                stringResource(R.string.connection_setup_remove_dialog_title_unnamed)
+            } else {
+                stringResource(R.string.servers_remove_dialog_title_named, uiState.name)
+            },
+        subtitle = stringResource(R.string.servers_remove_dialog_message),
         primaryOption =
             OpenCodeDialogOption(
-                title = "Remove",
+                title = stringResource(R.string.common_remove),
                 destructive = true,
                 onClick = {
                     showRemoveConfirm = false
@@ -223,7 +233,7 @@ fun ConnectionSetupScreen(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = "Cancel",
+                title = stringResource(R.string.common_cancel),
                 onClick = { showRemoveConfirm = false },
             ),
         onDismissRequest = { showRemoveConfirm = false },
@@ -231,10 +241,14 @@ fun ConnectionSetupScreen(
 
     OpenCodeDialog(
         visible = uiState.cleartextWarningHosts != null,
-        title = CleartextPolicy.WARNING_TITLE,
-        subtitle = uiState.cleartextWarningMessage,
-        primaryOption = OpenCodeDialogOption(title = "Connect anyway", onClick = onConfirmCleartext),
-        secondaryOption = OpenCodeDialogOption(title = "Cancel", onClick = onDismissCleartext),
+        title = stringResource(R.string.connection_cleartext_title),
+        subtitle = uiState.cleartextWarningMessage.resolve(),
+        primaryOption =
+            OpenCodeDialogOption(
+                title = stringResource(R.string.connection_cleartext_connect_anyway),
+                onClick = onConfirmCleartext,
+            ),
+        secondaryOption = OpenCodeDialogOption(title = stringResource(R.string.common_cancel), onClick = onDismissCleartext),
         onDismissRequest = onDismissCleartext,
     )
 }
@@ -255,7 +269,7 @@ private fun ConnectionSetupActions(
     when {
         showingPairAgain -> {
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.FullWidthText("Scan a new QR"),
+                variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.connection_setup_action_scan_new_qr)),
                 enabled = !uiState.isBusy,
                 onClick = onScan,
                 modifier = Modifier.fillMaxWidth(),
@@ -264,7 +278,7 @@ private fun ConnectionSetupActions(
         showingAddresses -> {
             if (uiState.showsPrimaryAction) {
                 OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel),
+                    variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel.resolve()),
                     enabled = uiState.primaryEnabled,
                     onClick = onSubmit,
                     modifier = Modifier.fillMaxWidth(),
@@ -275,7 +289,7 @@ private fun ConnectionSetupActions(
             if (!WindowInsets.isImeVisible) {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     OpenCodeButton(
-                        variant = OpenCodeButtonVariant.Link("Scan a QR instead"),
+                        variant = OpenCodeButtonVariant.Link(stringResource(R.string.connection_setup_action_scan_qr_instead)),
                         enabled = !uiState.isBusy,
                         onClick = onScanInstead,
                     )
@@ -283,7 +297,7 @@ private fun ConnectionSetupActions(
             }
             if (uiState.showsPrimaryAction) {
                 OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel),
+                    variant = OpenCodeButtonVariant.FullWidthText(uiState.primaryActionLabel.resolve()),
                     enabled = uiState.primaryEnabled,
                     onClick = onSubmit,
                     modifier = Modifier.fillMaxWidth(),
@@ -292,13 +306,13 @@ private fun ConnectionSetupActions(
         }
         else -> {
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.FullWidthText("Scan QR"),
+                variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.connection_setup_action_scan_qr)),
                 enabled = !uiState.isBusy,
                 onClick = onScan,
                 modifier = Modifier.fillMaxWidth(),
             )
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.FullWidthText("Enter a pairing code"),
+                variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.connection_setup_action_enter_pairing_code)),
                 contrast = OpenCodeButtonContrast.Low,
                 enabled = !uiState.isBusy,
                 onClick = onEnterPairingCode,
@@ -306,7 +320,7 @@ private fun ConnectionSetupActions(
             )
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 OpenCodeButton(
-                    variant = OpenCodeButtonVariant.Link("Use a host and password"),
+                    variant = OpenCodeButtonVariant.Link(stringResource(R.string.connection_setup_action_use_host_password)),
                     enabled = !uiState.isBusy,
                     onClick = onUseHostAndPassword,
                 )

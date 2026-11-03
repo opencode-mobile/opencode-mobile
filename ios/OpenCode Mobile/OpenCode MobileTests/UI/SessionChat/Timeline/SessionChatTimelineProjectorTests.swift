@@ -384,7 +384,7 @@ struct SessionChatTimelineProjectorTests {
         #expect(blockID == PresentationBlockId.stepParagraph(["t1", "b1"]))
         #expect(paragraph.textBlockID == PresentationBlockId.direct("t1"))
         #expect(paragraph.renderedMarkdown?.sourceHash == root.sourceHash)
-        #expect(paragraph.chips.map(\.label) == ["ls -la"])
+        #expect(paragraph.chips.map(\.label.resolved) == ["ls -la"])
 
         // Per-block cache lookup keys on the merged-text id a `.text` block would have had.
         let cache = BlockDecorationCache(maxEntries: 4)

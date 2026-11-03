@@ -61,17 +61,30 @@ enum ProjectFileViewerBody: Equatable {
 }
 
 /// File Viewer copy shared with Android.
-nonisolated enum FileViewerCopy {
-    static let tooLargeTitle = "Too large to preview"
-    static let tooLargeMessage = "This file is bigger than the app previews."
+enum FileViewerCopy {
+    static var tooLargeTitle: OpenCodeText { "file_viewer.too_large.title" }
 
     /// The message plus the file size on a second line when known.
-    static func tooLargeDetail(byteCount: Int?) -> String {
-        [tooLargeMessage, byteCount.map { fileSize($0) }].compactMap { $0 }.joined(separator: "\n")
+    static func tooLargeDetail(byteCount: Int?) -> OpenCodeText {
+        guard let byteCount else { return "file_viewer.too_large.message" }
+        let size = fileSize(byteCount)
+        return OpenCodeText(LocalizedStringResource(
+            "file_viewer.too_large.message_size",
+            defaultValue: "This file is bigger than the app previews.\n\(size)"
+        ))
+    }
+
+    /// The MIME type, when known, on the line above the message. The type stays verbatim.
+    static func binaryDetail(mimeType: String?) -> OpenCodeText {
+        guard let mimeType else { return "file_viewer.binary.message" }
+        return OpenCodeText(LocalizedStringResource(
+            "file_viewer.binary.message_type",
+            defaultValue: "\(mimeType)\nNo preview for this file type."
+        ))
     }
 
     /// Decimal file-size units (`1.5 KB`, `40 MB`), like Android's platform formatter.
-    static func fileSize(_ bytes: Int) -> String {
+    nonisolated static func fileSize(_ bytes: Int) -> String {
         Int64(bytes).formatted(.byteCount(style: .file))
     }
 }
@@ -123,7 +136,9 @@ struct FilesUiState: Equatable {
 @Observable
 @MainActor
 final class FilesViewModel {
-    static let copiedPathMessage = "Path copied"
+    static var copiedPathMessage: String {
+        String(localized: "files.path_copied", defaultValue: "Path copied")
+    }
 
     private(set) var state: FilesUiState
 

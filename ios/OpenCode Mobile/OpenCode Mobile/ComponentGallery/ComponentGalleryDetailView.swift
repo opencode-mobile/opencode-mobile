@@ -13,7 +13,7 @@ struct ComponentGalleryDetailView: View {
                 messageListTopBar
             } else {
                 OpenCodeTopBar(
-                    title: entry.title,
+                    title: .verbatim(entry.title),
                     leading: .back(action: { dismiss() }),
                     showDivider: true
                 )
@@ -224,7 +224,7 @@ struct ComponentGalleryDetailView: View {
     private var messageListTopBar: some View {
         ZStack(alignment: .trailing) {
             OpenCodeTopBar(
-                title: entry.title,
+                title: .verbatim(entry.title),
                 leading: .back(action: { dismiss() }),
                 showDivider: true
             )

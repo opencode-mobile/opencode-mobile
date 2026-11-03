@@ -124,7 +124,17 @@ android {
         }
     }
 
+    androidResources {
+        // Lists the app in the system per-app language setting. Needs
+        // res/resources.properties for the default (unqualified) locale.
+        generateLocaleConfig = true
+    }
+
     buildTypes {
+        debug {
+            // en-XA (long text) and ar-XB (right-to-left) pseudo-locales for layout checks.
+            isPseudoLocalesEnabled = true
+        }
         release {
             isMinifyEnabled = true
             // Resource shrinking stays off until minify is proven on Play-internal.

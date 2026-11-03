@@ -18,13 +18,13 @@ struct WorktreeCreateForm: View {
 
     private func form(_ state: WorktreeCreateFormState) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            OpenCodeSectionHeader(title: WorktreeCreateCopy.nameLabel)
+            OpenCodeSectionHeader(title: OpenCodeText(WorktreeCreateCopy.nameLabel))
             OpenCodeTextInput(
                 text: Binding(
                     get: { model.state?.name ?? "" },
                     set: { model.updateName($0) }
                 ),
-                hint: WorktreeCreateCopy.nameLabel,
+                hint: OpenCodeText(WorktreeCreateCopy.nameLabel),
                 enabled: !state.submitting,
                 errorMessage: state.nameError,
                 submitAction: .go,
@@ -34,7 +34,7 @@ struct WorktreeCreateForm: View {
             )
             .accessibilityIdentifier("worktreeCreateName")
             .padding(.horizontal, 16)
-            OpenCodeSectionHeader(title: WorktreeCreateCopy.branchLabel)
+            OpenCodeSectionHeader(title: OpenCodeText(WorktreeCreateCopy.branchLabel))
             OpenCodeListItem(
                 title: state.branchValue,
                 subtitle: state.branchNote,
@@ -42,7 +42,7 @@ struct WorktreeCreateForm: View {
                 startDecorator: .icon(.callSplit)
             )
             .accessibilityIdentifier("worktreeCreateBranch")
-            OpenCodeSectionHeader(title: WorktreeCreateCopy.baseLabel)
+            OpenCodeSectionHeader(title: OpenCodeText(WorktreeCreateCopy.baseLabel))
             OpenCodeListItem(
                 title: state.baseValue,
                 subtitle: state.baseNote,
@@ -77,10 +77,10 @@ struct WorktreeCreateForm: View {
         baseRow(rows[0])
         switch state.baseOptionsState {
         case .loading:
-            OpenCodeListItem(title: WorktreeCreateCopy.baseLoading, enabled: false)
+            OpenCodeListItem(title: OpenCodeText(WorktreeCreateCopy.baseLoading), enabled: false)
                 .accessibilityIdentifier("worktreeCreateBaseLoading")
         case .failed:
-            OpenCodeListItem(title: WorktreeCreateCopy.baseFailed, enabled: false)
+            OpenCodeListItem(title: OpenCodeText(WorktreeCreateCopy.baseFailed), enabled: false)
                 .accessibilityIdentifier("worktreeCreateBaseFailed")
         case .loaded:
             ForEach(rows.dropFirst()) { row in
@@ -113,7 +113,7 @@ enum WorktreeCreateSheetChrome {
         guard let state = model.state else { return nil }
         return OpenCodeBottomSheetHeaderAction(
             icon: .arrowBack,
-            accessibilityLabel: WorktreeCreateCopy.back,
+            accessibilityLabel: "top_bar.back",
             enabled: !state.submitting,
             accessibilityIdentifier: "worktreeCreateBack",
             action: { model.back() }
@@ -135,8 +135,8 @@ struct NewWorktreeRow: View {
 
     var body: some View {
         OpenCodeListItem(
-            title: WorktreeCreateCopy.newWorktreeRow,
-            subtitle: availability.subtitle,
+            title: OpenCodeText(WorktreeCreateCopy.newWorktreeRow),
+            subtitle: availability.subtitle.map(OpenCodeText.init),
             enabled: availability.enabled,
             startDecorator: .icon(.add),
             action: availability.enabled ? action : nil

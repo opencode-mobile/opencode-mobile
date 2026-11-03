@@ -54,10 +54,4 @@ struct CleartextPolicyTests {
         ])
         #expect(hosts == ["203.0.113.5:4096", "devbox.example.com"])
     }
-
-    @Test func warningMessage_namesTheHosts() {
-        let message = CleartextPolicy.warningMessage(hosts: ["203.0.113.5:4096"])
-        #expect(message.hasPrefix("203.0.113.5:4096 uses plain http"))
-        #expect(CleartextPolicy.warningMessage(hosts: ["a", "b"]).hasPrefix("a, b use plain http"))
-    }
 }

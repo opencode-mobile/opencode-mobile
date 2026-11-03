@@ -12,7 +12,7 @@ struct PairingQRScannerView: View {
             scannerContent
             VStack(spacing: 0) {
                 OpenCodeTopBar(
-                    title: "Scan pairing QR",
+                    title: "connection.scanner.title",
                     leading: .back(action: onDismiss)
                 )
                 PairingQRReticle()
@@ -44,10 +44,10 @@ struct PairingQRScannerView: View {
 
     private var instructionCard: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("OpenCode pairing QR")
+            Text("connection.scanner.card_title")
                 .font(OpenCodeTypography.heading)
                 .foregroundStyle(OpenCodeColors.textStrong)
-            Text("From opencode pair --remote. Plain pair shows a QR only when the server is reachable beyond localhost.")
+            Text("connection.scanner.card_body")
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
             OpenCodeCodeSnippet("opencode pair --remote")

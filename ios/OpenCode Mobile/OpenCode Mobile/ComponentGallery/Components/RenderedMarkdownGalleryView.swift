@@ -8,7 +8,7 @@ struct RenderedMarkdownGalleryView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(RenderedMarkdownGalleryMocks.samples) { sample in
-                        OpenCodeChoiceBadge(label: sample.label, selected: sample.id == viewModel.selectedSample.id) {
+                        OpenCodeChoiceBadge(label: .verbatim(sample.label), selected: sample.id == viewModel.selectedSample.id) {
                             viewModel.selectSample(sample.id)
                         }
                     }

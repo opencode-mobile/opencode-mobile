@@ -141,7 +141,10 @@ struct OpenCodeCodeFile: View {
         .padding(.horizontal, OpenCodeCodeFileMetrics.horizontalPadding)
         .frame(minHeight: OpenCodeCodeFileMetrics.lineMinHeight, alignment: .leading)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Line \(index + 1), \(lines[index])")
+        .accessibilityLabel(Text(LocalizedStringResource(
+            "component.code_file.line_label",
+            defaultValue: "Line \(index + 1), \(lines[index])"
+        )))
         .onAppear { onLineAppear?(index) }
     }
 

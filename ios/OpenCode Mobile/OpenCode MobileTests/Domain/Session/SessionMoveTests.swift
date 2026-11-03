@@ -149,8 +149,8 @@ struct SessionChatMoveToWorktreeTests {
         )
     }
 
-    private let rowEnabled = NewWorktreeAvailability(enabled: true, subtitle: "Create a checkout and move there")
-    private let rowDisabled = NewWorktreeAvailability(enabled: false, subtitle: "Needs a git repository")
+    private let rowEnabled = NewWorktreeAvailability(enabled: true, subtitle: WorktreeCreateCopy.moveRowSubtitle)
+    private let rowDisabled = NewWorktreeAvailability(enabled: false, subtitle: WorktreeCreateCopy.notGit)
 
     private var singleRepo: HomeProject {
         HomeProjectGrouping.group(
@@ -220,7 +220,7 @@ struct SessionChatMoveToWorktreeTests {
         let unsupported = SessionChatMoveToWorktree.newWorktreeAvailability(
             supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: singleRepo, serverCanCreate: false
         )
-        #expect(unsupported.subtitle == "This server can't create worktrees")
+        #expect(unsupported.subtitle.map { String(localized: $0) } == "This server can't create worktrees")
         #expect(
             SessionChatMoveToWorktree.availability(
                 supportsMove: true, worktreesEnabled: true, sessionCreated: true, project: singleRepo, newWorktree: unsupported

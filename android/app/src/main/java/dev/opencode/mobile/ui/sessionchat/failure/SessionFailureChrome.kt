@@ -21,10 +21,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.message.SessionFailure
 import dev.opencode.mobile.theme.openCodeColor
 import kotlinx.coroutines.delay
@@ -117,7 +119,7 @@ fun SessionProviderResponseBody(
 ) {
     Column(modifier) {
         TextButton(onClick = onCopy) {
-            Text("Copy")
+            Text(stringResource(R.string.timeline_failure_copy))
         }
         Text(
             text = body,

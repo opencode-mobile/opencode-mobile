@@ -12,6 +12,7 @@ import dev.opencode.mobile.ui.components.SessionListSession
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.components.visibleForFilter
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -197,7 +198,7 @@ class CrossProjectSessionListSessionsTest {
             letterAccent = LetterAccent.Red,
             subtitle = "/repo",
             status = SessionListStatus.Idle,
-            caption = "",
+            caption = UiText.verbatim(""),
             location = location,
             projectName = project,
         )

@@ -52,7 +52,7 @@ struct ChildSessionRowGalleryView: View {
                     OpenCodeChoiceBadge(label: "None", selected: status == nil, action: { status = nil })
                     ForEach(OpenCodeChildSessionRowStatus.allCases, id: \.self) { option in
                         OpenCodeChoiceBadge(
-                            label: option.label.capitalized,
+                            label: .verbatim(option.label.capitalized),
                             selected: status == option,
                             action: { status = option }
                         )

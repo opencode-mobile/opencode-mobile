@@ -1,7 +1,10 @@
 package dev.opencode.mobile.ui.keyboard
 
 import android.view.KeyEvent
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ui.components.OpenCodeFocusedTextInput
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -69,7 +72,15 @@ class KeyboardShortcutRulesTest {
     fun titles_matchIosLabels() {
         assertEquals(
             listOf("Toggle Sidebar", "Next Session", "Previous Session", "Focus Composer"),
-            KeyboardShortcutAction.entries.map { it.title },
+            KeyboardShortcutAction.entries.map { it.title.english() },
+        )
+    }
+
+    @Test
+    fun title_isAStringResource() {
+        assertEquals(
+            UiText.resource(R.string.keyboard_shortcuts_toggle_sidebar),
+            KeyboardShortcutAction.ToggleSidebar.title,
         )
     }
 

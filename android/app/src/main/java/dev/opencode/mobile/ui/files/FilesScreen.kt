@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation3.runtime.NavKey
@@ -21,6 +22,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.R
 import dev.opencode.mobile.backwardRouteTransition
 import dev.opencode.mobile.forwardRouteTransition
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
@@ -64,10 +66,11 @@ fun FilesScreen(
     val useSplitLayout = currentOpenCodeUsesSplitLayout()
     val context = LocalContext.current
     var snackbar by remember { mutableStateOf<OpenCodeSnackbarMessage?>(null) }
+    val pathCopied = stringResource(R.string.files_path_copied)
     val copyPath: (String) -> Unit = { path ->
         logFilesAction(ProductAnalytics.Action.FILES_VIEWER_COPY_PATH, viewer = true)
         copyFilePathToClipboard(context, path)
-        snackbar = OpenCodeSnackbarMessage("Path copied")
+        snackbar = OpenCodeSnackbarMessage(pathCopied)
     }
     val treeActions =
         FilesTreeActions(
@@ -147,8 +150,8 @@ fun FilesScreen(
                         Column(Modifier.fillMaxSize()) {
                             OpenCodeTopBar(leading = openCodeDetailLeading(control) {})
                             OpenCodeEmptyState(
-                                title = "Open a file from the tree",
-                                message = "Opened files stay as tabs",
+                                title = stringResource(R.string.files_no_file_title),
+                                message = stringResource(R.string.files_no_file_message),
                                 icon = OpenCodeIcons.Description,
                                 modifier = Modifier.weight(1f),
                             )

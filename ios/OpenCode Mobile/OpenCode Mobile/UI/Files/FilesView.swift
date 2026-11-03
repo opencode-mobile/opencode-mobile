@@ -94,11 +94,11 @@ struct FilesView: View {
         VStack(spacing: 0) {
             OpenCodeTopBarOverflowHost(isPresented: $treeMenuPresented, entries: treeMenuEntries) {
                 OpenCodeTopBar(
-                    title: "Files",
-                    subtitle: viewModel.state.projectName,
+                    title: "files.title",
+                    subtitle: .verbatim(viewModel.state.projectName),
                     leading: .back(action: exitFiles),
                     actions: [
-                        .icon(.moreVert, accessibilityLabel: "More options") {
+                        .icon(.moreVert, accessibilityLabel: "files.more_options") {
                             treeMenuPresented = true
                         },
                     ],
@@ -114,8 +114,8 @@ struct FilesView: View {
                             viewModel.setQuery(value)
                         }
                     ),
-                    hint: "Find file",
-                    accessibilityLabel: "Find file",
+                    hint: "files.find_hint",
+                    accessibilityLabel: "files.find_hint",
                     kind: .filter
                 )
                 .padding(.horizontal, 16)
@@ -141,9 +141,9 @@ struct FilesView: View {
         return [
             OpenCodeOverflowMenuEntry(
                 id: "files-show-hidden",
-                title: "Show hidden files",
+                title: "files.show_hidden",
                 icon: showHidden ? .check : nil,
-                accessibilityLabel: showHidden ? "Show hidden files, on" : "Show hidden files, off",
+                accessibilityLabel: showHidden ? "files.show_hidden_on" : "files.show_hidden_off",
                 action: {
                     logAction(ProductAnalytics.Action.filesToggleHidden)
                     treeMenuPresented = false
@@ -152,7 +152,7 @@ struct FilesView: View {
             ),
             OpenCodeOverflowMenuEntry(
                 id: "files-refresh",
-                title: "Refresh",
+                title: "files.refresh",
                 icon: nil,
                 action: {
                     logAction(ProductAnalytics.Action.filesRefresh)
@@ -167,12 +167,12 @@ struct FilesView: View {
     private func treeContent(selectedPath: String?, onOpenFile: @escaping (String) -> Void) -> some View {
         switch viewModel.state.rootPhase {
         case .loading:
-            OpenCodeStatusStack(title: "Loading files", subtitle: "Fetching the folder…")
+            OpenCodeStatusStack(title: "files.loading.title", subtitle: "files.loading.subtitle")
         case .failed:
             OpenCodeEmptyState(
-                title: "Couldn't load folder",
-                message: "Check the connection and try again.",
-                primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
+                title: "files.folder_error",
+                message: "files.error.check_server_connection",
+                primaryAction: OpenCodeEmptyStateAction(title: "files.retry") {
                     logAction(ProductAnalytics.Action.filesRetry)
                     viewModel.retryRoot()
                 }
@@ -180,8 +180,8 @@ struct FilesView: View {
         case .loaded:
             if viewModel.state.treeRows.isEmpty {
                 OpenCodeEmptyState(
-                    title: "Empty folder",
-                    message: "This project has no files to show.",
+                    title: "files.empty_folder",
+                    message: "files.empty_project",
                     icon: .folder
                 )
             } else {
@@ -218,7 +218,7 @@ struct FilesView: View {
                 depth: depth,
                 state: isLoading ? .loading : (entry.relativePath == selectedPath ? .selected : .normal),
                 isDimmed: entry.isIgnored,
-                tag: entry.isIgnored ? "ignored" : nil
+                tag: entry.isIgnored ? String(localized: "files.ignored", defaultValue: "ignored") : nil
             ) {
                 if entry.isDirectory {
                     logAction(ProductAnalytics.Action.filesToggleFolder)
@@ -229,16 +229,16 @@ struct FilesView: View {
                 }
             }
         case let .emptyFolder(_, depth):
-            Text("Empty folder")
+            Text("files.empty_folder")
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textWeak)
                 .padding(.leading, OpenCodeTreeRow.contentInset(depth: depth))
                 .frame(maxWidth: .infinity, minHeight: 32, alignment: .leading)
         case let .folderError(parentPath, depth):
             OpenCodeInlineNotice(
-                message: "Couldn't load folder",
+                message: "files.folder_error",
                 tone: .error,
-                action: OpenCodeInlineNoticeAction(title: "Retry") {
+                action: OpenCodeInlineNoticeAction(title: "files.retry") {
                     logAction(ProductAnalytics.Action.filesRetry)
                     viewModel.retryFolder(parentPath)
                 }
@@ -253,12 +253,12 @@ struct FilesView: View {
     private func findContent(selectedPath: String?, onOpenFile: @escaping (String) -> Void) -> some View {
         switch viewModel.state.find {
         case .idle, .searching:
-            OpenCodeStatusStack(spinner: "Finding files")
+            OpenCodeStatusStack(spinner: "files.finding")
         case .failed:
             OpenCodeEmptyState(
-                title: "Couldn't search files",
-                message: "Check the connection and try again.",
-                primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
+                title: "files.find_error",
+                message: "files.error.check_server_connection",
+                primaryAction: OpenCodeEmptyStateAction(title: "files.retry") {
                     logAction(ProductAnalytics.Action.filesRetry)
                     viewModel.retryFind()
                 }
@@ -266,8 +266,8 @@ struct FilesView: View {
         case let .results(results):
             if results.isEmpty {
                 OpenCodeEmptyState(
-                    title: "No files match “\(viewModel.state.query.trimmingCharacters(in: .whitespacesAndNewlines))”",
-                    message: "Server search skips ignored folders.",
+                    title: Self.noMatchTitle(query: viewModel.state.query),
+                    message: "files.find_no_match_detail",
                     icon: .search
                 )
             } else {
@@ -293,6 +293,12 @@ struct FilesView: View {
                 .accessibilityIdentifier("filesFindResults")
             }
         }
+    }
+
+    /// The query is user input and stays verbatim inside the text.
+    private static func noMatchTitle(query: String) -> OpenCodeText {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return OpenCodeText(LocalizedStringResource("files.find_no_match", defaultValue: "No files match “\(trimmed)”"))
     }
 
     private func exitFiles() {
@@ -344,11 +350,11 @@ private struct FilesTabbedViewer: View {
                 entries: active.map { FileViewerMenu.entries(viewModel: viewModel, relativePath: $0.relativePath, dismissMenu: { menuPresented = false }) } ?? []
             ) {
                 OpenCodeTopBar(
-                    title: active?.name ?? "Files",
-                    subtitle: active?.relativePath,
+                    title: active.map { OpenCodeText.verbatim($0.name) } ?? "files.title",
+                    subtitle: .verbatim(ifPresent: active?.relativePath),
                     leading: OpenCodeSplitPane.detailLeading(detailControl, back: {}),
                     actions: active == nil ? [] : [
-                        .icon(.moreVert, accessibilityLabel: "More options") { menuPresented = true },
+                        .icon(.moreVert, accessibilityLabel: "files.more_options") { menuPresented = true },
                     ],
                     showDivider: true
                 )
@@ -358,8 +364,8 @@ private struct FilesTabbedViewer: View {
                     .id(active.relativePath)
             } else {
                 OpenCodeEmptyState(
-                    title: "Open a file from the tree",
-                    message: "Opened files stay as tabs",
+                    title: "files.no_file.title",
+                    message: "files.no_file.message",
                     icon: .description
                 )
             }

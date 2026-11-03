@@ -26,7 +26,7 @@ struct ActivityCardGalleryView: View {
                 OpenCodeChipFlowLayout(spacing: 8, lineSpacing: 8) {
                     ForEach(Sample.allCases) { option in
                         OpenCodeChoiceBadge(
-                            label: option.rawValue,
+                            label: .verbatim(option.rawValue),
                             selected: sample == option,
                             action: {
                                 sample = option

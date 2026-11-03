@@ -38,6 +38,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -49,6 +50,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.markdown.CodeSpan
 import dev.opencode.mobile.markdown.CodeTokenRole
 import dev.opencode.mobile.theme.CodeTextStyle
@@ -265,6 +267,7 @@ private fun CodeFileRow(
     wrapLines: Boolean,
     horizontalOffset: () -> Float,
 ) {
+    val lineLabel = stringResource(R.string.component_code_file_line_label, number, line.text)
     val annotated =
         remember(line, colors, markColor) {
             val highlighted = buildCodeAnnotatedString(line.text, line.spans, colors)
@@ -288,7 +291,7 @@ private fun CodeFileRow(
                 .fillMaxWidth()
                 .height(IntrinsicSize.Min)
                 .heightIn(min = CodeFileLineMinHeight)
-                .semantics(mergeDescendants = true) { contentDescription = "Line $number, ${line.text}" },
+                .semantics(mergeDescendants = true) { contentDescription = lineLabel },
     ) {
         Text(
             text = number.toString(),

@@ -13,7 +13,7 @@ extension View {
     ) -> some View {
         openCodeBottomSheet(
             isPresented: isPresented,
-            title: current.label,
+            title: .verbatim(current.label),
             leadingAction: OpenCodeBottomSheetHeaderAction(
                 icon: .chevronLeft,
                 accessibilityLabel: "Previous scenario",
@@ -30,13 +30,13 @@ extension View {
             height: .half
         ) {
             ForEach(PlaygroundScenarioGroup.allCases, id: \.self) { group in
-                OpenCodeSectionHeader(title: group.title)
+                OpenCodeSectionHeader(title: .verbatim(group.title))
                 ForEach(PlaygroundScenarioID.allCases.filter { $0.group == group }, id: \.self) { id in
                     let steps = stepCounts[id] ?? 0
                     OpenCodeListItem(
-                        title: id.label,
-                        subtitle: id.summary,
-                        caption: steps > 0 ? "\(steps) steps" : nil,
+                        title: .verbatim(id.label),
+                        subtitle: .verbatim(id.summary),
+                        caption: .verbatim(ifPresent: steps > 0 ? "\(steps) steps" : nil),
                         selected: id == current,
                         action: { onSelect(id) }
                     )

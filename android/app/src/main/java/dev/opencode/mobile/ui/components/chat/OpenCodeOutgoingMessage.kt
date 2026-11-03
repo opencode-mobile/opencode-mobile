@@ -23,6 +23,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.command.commandTokenHighlightRanges
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.theme.OpenCodeSmallShape
@@ -271,21 +273,25 @@ fun outgoingMessageAccessibilityValue(
     return listOfNotNull(time?.day, metadataLabel).joinToString(", ")
 }
 
+@Composable
 private fun outgoingMessageInteractionModifier(
     onClick: (() -> Unit)?,
     onLongClick: (() -> Unit)?,
     accessibilityValue: String,
-): Modifier =
-    when {
+): Modifier {
+    val showActions = stringResource(R.string.component_outgoing_message_show_actions)
+    val label = stringResource(R.string.component_outgoing_message_label)
+    val labelWithActions = stringResource(R.string.component_outgoing_message_label_with_actions)
+    return when {
         onLongClick != null ->
             Modifier
                 .combinedClickable(
                     onClick = onClick ?: {},
                     onLongClick = onLongClick,
-                    onLongClickLabel = "Show message actions",
+                    onLongClickLabel = showActions,
                     role = Role.Button,
                 ).semantics {
-                    contentDescription = "Outgoing message"
+                    contentDescription = label
                     if (accessibilityValue.isNotEmpty()) stateDescription = accessibilityValue
                 }
 
@@ -294,7 +300,7 @@ private fun outgoingMessageInteractionModifier(
                 .clickable(onClick = onClick)
                 .semantics {
                     role = Role.Button
-                    contentDescription = "Outgoing message. Shows message actions"
+                    contentDescription = labelWithActions
                     if (accessibilityValue.isNotEmpty()) stateDescription = accessibilityValue
                 }
 
@@ -302,6 +308,7 @@ private fun outgoingMessageInteractionModifier(
 
         else -> Modifier
     }
+}
 
 @Preview(showBackground = true)
 @Composable

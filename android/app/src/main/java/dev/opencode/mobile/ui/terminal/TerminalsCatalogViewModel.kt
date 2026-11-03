@@ -3,12 +3,14 @@ package dev.opencode.mobile.ui.terminal
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionProfileStore
 import dev.opencode.mobile.domain.project.ProjectDomainAdapter
 import dev.opencode.mobile.domain.terminal.RunningTerminal
 import dev.opencode.mobile.domain.terminal.TerminalRepository
 import dev.opencode.mobile.domain.terminal.TerminalSession
 import dev.opencode.mobile.network.ActiveConnectionManager
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,7 +39,7 @@ data class TerminalsCatalogUiState(
     val projects: List<TerminalCatalogProject> = emptyList(),
     val isProjectPickerVisible: Boolean = false,
     val isCreating: Boolean = false,
-    val createError: String? = null,
+    val createError: UiText? = null,
 )
 
 @HiltViewModel
@@ -129,7 +131,7 @@ class TerminalsCatalogViewModel
                     row
                 },
                 onFailure = {
-                    _uiState.update { it.copy(isCreating = false, createError = "Could not start a shell.") }
+                    _uiState.update { it.copy(isCreating = false, createError = UiText.resource(R.string.terminal_error_create)) }
                     null
                 },
             )

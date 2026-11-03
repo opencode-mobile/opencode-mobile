@@ -1,11 +1,14 @@
 package dev.opencode.mobile.ui.keyboard
 
 import android.view.KeyEvent
+import androidx.annotation.StringRes
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ui.components.OpenCodeFocusedTextInput
+import dev.opencode.mobile.ui.text.UiText
 
 /** Hardware keyboard shortcuts for the tablet split layout and Session Chat. */
 enum class KeyboardShortcutAction(
-    val title: String,
+    @param:StringRes private val titleRes: Int,
     val keyCode: Int,
     val ctrl: Boolean,
     val alt: Boolean = false,
@@ -14,14 +17,14 @@ enum class KeyboardShortcutAction(
     val repeats: Boolean = false,
 ) {
     /** Ctrl+Alt+S: Home and Settings while they show the split layout. */
-    ToggleSidebar(title = "Toggle Sidebar", keyCode = KeyEvent.KEYCODE_S, ctrl = true, alt = true),
+    ToggleSidebar(titleRes = R.string.keyboard_shortcuts_toggle_sidebar, keyCode = KeyEvent.KEYCODE_S, ctrl = true, alt = true),
 
     /** Ctrl+Tab: Home split layout. */
-    NextSession(title = "Next Session", keyCode = KeyEvent.KEYCODE_TAB, ctrl = true, repeats = true),
+    NextSession(titleRes = R.string.keyboard_shortcuts_next_session, keyCode = KeyEvent.KEYCODE_TAB, ctrl = true, repeats = true),
 
     /** Ctrl+Shift+Tab: Home split layout. */
     PreviousSession(
-        title = "Previous Session",
+        titleRes = R.string.keyboard_shortcuts_previous_session,
         keyCode = KeyEvent.KEYCODE_TAB,
         ctrl = true,
         shift = true,
@@ -29,8 +32,12 @@ enum class KeyboardShortcutAction(
     ),
 
     /** Ctrl+L: any visible Session Chat with a prompt composer. */
-    FocusComposer(title = "Focus Composer", keyCode = KeyEvent.KEYCODE_L, ctrl = true),
+    FocusComposer(titleRes = R.string.keyboard_shortcuts_focus_composer, keyCode = KeyEvent.KEYCODE_L, ctrl = true),
     ;
+
+    /** Label in the system Keyboard Shortcuts Helper. */
+    val title: UiText
+        get() = UiText.resource(titleRes)
 
     /** `KeyEvent.META_*` mask for `KeyboardShortcutInfo`. */
     val metaState: Int

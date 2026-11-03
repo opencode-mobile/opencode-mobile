@@ -317,8 +317,8 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(blockID == PresentationBlockId.direct("bash-1"))
-        #expect(tool.title == "Shell")
-        #expect(tool.subtitle == "ls")
+        #expect(english(tool.title) == "Shell")
+        #expect(english(tool.subtitle) == "ls")
         #expect(tool.detailText == "a.txt")
         #expect(blocks[2] == .text(blockID: "p:t2", text: "After", renderedMarkdown: nil))
     }
@@ -361,8 +361,8 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(blockID == PresentationBlockId.direct("q3"))
-        #expect(tool.title == "Asked 1 question")
-        #expect(tool.subtitle == nil)
+        #expect(english(tool.title) == "Asked 1 question")
+        #expect(english(tool.subtitle) == nil)
         #expect(tool.detailText == "Which option?")
     }
 
@@ -388,8 +388,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Asked 1 question")
-        #expect(tool.errorText == "The user dismissed this question")
+        #expect(english(tool.title) == "Asked 1 question")
+        #expect(english(tool.errorText) == "The user dismissed this question")
         #expect(
             tool.detailText ==
                 "What would you like to do in this session?\n\nThe user dismissed this question"
@@ -422,8 +422,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Asked 1 question")
-        #expect(tool.subtitle == "Build a third sibling")
+        #expect(english(tool.title) == "Asked 1 question")
+        #expect(english(tool.subtitle) == "Build a third sibling")
         #expect(
             tool.detailText ==
                 "What should we do with these two projects this session?\nBuild a third sibling"
@@ -466,7 +466,7 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Asked 3 questions")
+        #expect(english(tool.title) == "Asked 3 questions")
     }
 
     @Test func build_hidesPlaceholderToolNameWithoutQuestions() {
@@ -525,8 +525,8 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(blockID == PresentationBlockId.direct("read-1"))
-        #expect(tool.title == "Explored — 1 read")
-        #expect(tool.subtitle == "src/Main.kt")
+        #expect(english(tool.title) == "Explored — 1 read")
+        #expect(english(tool.subtitle) == "src/Main.kt")
         #expect(tool.detailText == nil)
     }
 
@@ -548,8 +548,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Explored — 1 read")
-        #expect(tool.subtitle == "src/app.ts")
+        #expect(english(tool.title) == "Explored — 1 read")
+        #expect(english(tool.subtitle) == "src/app.ts")
         #expect(tool.detailText == "1: export function handler()")
     }
 
@@ -561,8 +561,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Explored — 1 glob")
-        #expect(tool.subtitle == nil)
+        #expect(english(tool.title) == "Explored — 1 glob")
+        #expect(english(tool.subtitle) == nil)
     }
 
     @Test func build_runningContextPrefersToolTitleSubtitle() {
@@ -583,8 +583,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Explored — 1 grep")
-        #expect(tool.subtitle == "Searching…")
+        #expect(english(tool.title) == "Explored — 1 grep")
+        #expect(english(tool.subtitle) == "Searching…")
     }
 
     @Test func build_consecutiveContextToolsBecomeToolGroup() {
@@ -602,8 +602,8 @@ struct SessionChatTimelineBlocksTests {
         #expect(blockID == PresentationBlockId.toolGroup(["r1", "g1", "l1"]))
         #expect(group.count == 3)
         #expect(group.status == .running)
-        #expect(group.title == "Explored — 1 read · 1 grep · 1 glob")
-        #expect(group.subtitle == "3 tools")
+        #expect(english(group.title) == "Explored — 1 read · 1 grep · 1 glob")
+        #expect(english(group.subtitle) == "3 tools")
     }
 
     @Test func build_consecutiveWebsearchesUseExploredSearchChrome() {
@@ -617,8 +617,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool group")
             return
         }
-        #expect(group.title == "Explored — 2 searches")
-        #expect(group.subtitle == "2 tools")
+        #expect(english(group.title) == "Explored — 2 searches")
+        #expect(english(group.subtitle) == "2 tools")
     }
 
     @Test func build_textBreaksContextGroup() {
@@ -685,7 +685,7 @@ struct SessionChatTimelineBlocksTests {
         }
         #expect(blockID == PresentationBlockId.toolGroup(["r1", "g1", "l1"]))
         #expect(group.status == .error)
-        #expect(group.errorText == "boom")
+        #expect(english(group.errorText) == "boom")
     }
 
     @Test func build_pendingBashHasNoSheetDetail() {
@@ -705,8 +705,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Shell")
-        #expect(tool.subtitle == "echo hi")
+        #expect(english(tool.title) == "Shell")
+        #expect(english(tool.subtitle) == "echo hi")
         #expect(tool.detailText == nil)
     }
 
@@ -728,9 +728,9 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Shell")
-        #expect(tool.subtitle == "false")
-        #expect(tool.errorText == "exit 1")
+        #expect(english(tool.title) == "Shell")
+        #expect(english(tool.subtitle) == "false")
+        #expect(english(tool.errorText) == "exit 1")
         #expect(tool.detailText == "exit 1")
     }
 
@@ -752,8 +752,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Shell")
-        #expect(tool.subtitle == "git status")
+        #expect(english(tool.title) == "Shell")
+        #expect(english(tool.subtitle) == "git status")
     }
 
     @Test func build_networkFetchAndSearchChrome() {
@@ -774,8 +774,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected fetch card")
             return
         }
-        #expect(fetch.title == "Fetch")
-        #expect(fetch.subtitle == "https://example.com")
+        #expect(english(fetch.title) == "Fetch")
+        #expect(english(fetch.subtitle) == "https://example.com")
         #expect(fetch.detailText == "ok")
 
         let searchBlocks = okBlocks(
@@ -795,8 +795,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected search card")
             return
         }
-        #expect(search.title == "Explored — 1 search")
-        #expect(search.subtitle == "opencode mobile")
+        #expect(english(search.title) == "Explored — 1 search")
+        #expect(english(search.subtitle) == "opencode mobile")
         #expect(search.detailText == "https://a.example\nhttps://b.example")
     }
 
@@ -818,7 +818,7 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Fetch")
+        #expect(english(tool.title) == "Fetch")
         #expect(tool.detailText == nil)
     }
 
@@ -839,8 +839,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Skill")
-        #expect(tool.subtitle == "tdd")
+        #expect(english(tool.title) == "Skill")
+        #expect(english(tool.subtitle) == "tdd")
         #expect(tool.detailText == nil)
     }
 
@@ -1101,9 +1101,9 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "build")
-        #expect(tool.subtitle == "Ship it")
-        #expect(tool.errorText == "child failed")
+        #expect(english(tool.title) == "build")
+        #expect(english(tool.subtitle) == "Ship it")
+        #expect(english(tool.errorText) == "child failed")
         #expect(tool.childSessionId == "ses-err")
     }
 
@@ -1130,8 +1130,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Edit")
-        #expect(tool.subtitle == "src/Main.kt")
+        #expect(english(tool.title) == "Edit")
+        #expect(english(tool.subtitle) == "src/Main.kt")
         #expect(tool.additions == 3)
         #expect(tool.deletions == 1)
         #expect(tool.opensChangesReview)
@@ -1164,8 +1164,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Write")
-        #expect(tool.subtitle == "README.md")
+        #expect(english(tool.title) == "Write")
+        #expect(english(tool.subtitle) == "README.md")
         #expect(tool.additions == 5)
         #expect(tool.deletions == nil)
         #expect(tool.opensChangesReview)
@@ -1180,8 +1180,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Edit")
-        #expect(tool.subtitle == nil)
+        #expect(english(tool.title) == "Edit")
+        #expect(english(tool.subtitle) == nil)
         #expect(tool.additions == nil)
         #expect(tool.deletions == nil)
         #expect(!tool.opensChangesReview)
@@ -1205,8 +1205,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Edit")
-        #expect(tool.subtitle == nil)
+        #expect(english(tool.title) == "Edit")
+        #expect(english(tool.subtitle) == nil)
         #expect(!tool.opensChangesReview)
     }
 
@@ -1228,8 +1228,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Edit")
-        #expect(tool.subtitle == "App.kt")
+        #expect(english(tool.title) == "Edit")
+        #expect(english(tool.subtitle) == "App.kt")
         #expect(!tool.opensChangesReview)
         #expect(tool.changesInitialFilePath == nil)
     }
@@ -1264,8 +1264,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Patch")
-        #expect(tool.subtitle == "2 files")
+        #expect(english(tool.title) == "Patch")
+        #expect(english(tool.subtitle) == "2 files")
         #expect(tool.additions == 6)
         #expect(tool.deletions == 1)
         #expect(tool.opensChangesReview)
@@ -1302,8 +1302,8 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Patch")
-        #expect(tool.subtitle == "3 files")
+        #expect(english(tool.title) == "Patch")
+        #expect(english(tool.subtitle) == "3 files")
         #expect(tool.additions == 3)
         #expect(tool.deletions == 4)
         #expect(tool.opensChangesReview)
@@ -1335,11 +1335,11 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool card")
             return
         }
-        #expect(tool.title == "Patch")
-        #expect(tool.subtitle == "solo.kt")
+        #expect(english(tool.title) == "Patch")
+        #expect(english(tool.subtitle) == "solo.kt")
         #expect(tool.additions == 1)
         #expect(tool.deletions == 1)
-        #expect(tool.errorText == "conflict")
+        #expect(english(tool.errorText) == "conflict")
         #expect(tool.opensChangesReview)
         #expect(tool.changesInitialFilePath == "solo.kt")
     }
@@ -1353,7 +1353,7 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(blockID == PresentationBlockId.direct("custom-1"))
-        #expect(tool.title == "Called custom_mcp")
+        #expect(english(tool.title) == "Called custom_mcp")
         #expect(tool.detailText == nil)
         #expect(tool.childSessionId == nil)
         #expect(!tool.opensChangesReview)
@@ -1503,8 +1503,8 @@ struct SessionChatTimelineBlocksTests {
         }
         #expect(blockID == PresentationBlockId.toolGroup(["bash-1", "edit-1", "read-1"]))
         #expect(group.count == 3)
-        #expect(group.title == "3 tools")
-        #expect(group.subtitle == "Shell · Edit · Read")
+        #expect(english(group.title) == "3 tools")
+        #expect(english(group.subtitle) == "Shell · Edit · Read")
     }
 
     @Test func build_collapseOn_mixedFamilyTitleCounts() {
@@ -1522,8 +1522,8 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(group.count == 4)
-        #expect(group.title == "4 tools")
-        #expect(group.subtitle == "2 reads · Shell · Edit")
+        #expect(english(group.title) == "4 tools")
+        #expect(english(group.subtitle) == "2 reads · Shell · Edit")
     }
 
     @Test func build_groupMembersUseCommandAndPath() {
@@ -1548,13 +1548,13 @@ struct SessionChatTimelineBlocksTests {
             Issue.record("Expected tool group")
             return
         }
-        #expect(group.title == "2 tools")
-        #expect(group.subtitle == "Shell · Edit")
+        #expect(english(group.title) == "2 tools")
+        #expect(english(group.subtitle) == "Shell · Edit")
         #expect(group.members.count == 2)
-        #expect(group.members[0].title == "Shell")
-        #expect(group.members[0].subtitle == "xcodebuild build")
-        #expect(group.members[1].title == "Edit")
-        #expect(group.members[1].subtitle == "App.swift")
+        #expect(english(group.members[0].title) == "Shell")
+        #expect(english(group.members[0].subtitle) == "xcodebuild build")
+        #expect(english(group.members[1].title) == "Edit")
+        #expect(english(group.members[1].subtitle) == "App.swift")
         #expect(group.members[1].opensChangesReview)
     }
 
@@ -1602,8 +1602,8 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(group.count == 2)
-        #expect(group.title == "2 tools")
-        #expect(group.subtitle == "2 shells")
+        #expect(english(group.title) == "2 tools")
+        #expect(english(group.subtitle) == "2 shells")
     }
 
     @Test func build_collapseOn_hiddenToolDoesNotBreakGroup() {
@@ -1620,8 +1620,8 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(group.count == 2)
-        #expect(group.title == "Explored — 2 reads")
-        #expect(group.subtitle == "2 tools")
+        #expect(english(group.title) == "Explored — 2 reads")
+        #expect(english(group.subtitle) == "2 tools")
         #expect(blockID == PresentationBlockId.toolGroup(["r1", "r2"]))
     }
 
@@ -1639,7 +1639,7 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(group.status == .error)
-        #expect(group.errorText == "boom")
+        #expect(english(group.errorText) == "boom")
     }
 
     @Test func build_collapseOn_taskNeverGroups() {
@@ -1696,8 +1696,8 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(group.count == 3)
-        #expect(group.title == "3 tools")
-        #expect(group.subtitle == "3 shells")
+        #expect(english(group.title) == "3 tools")
+        #expect(english(group.subtitle) == "3 shells")
     }
 
     @Test func merge_collapseOff_keepsConsecutiveBashMessagesSeparate() {
@@ -1773,8 +1773,8 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(blockID == PresentationBlockId.toolGroup(["r1", "r2"]))
-        #expect(group.title == "Explored — 2 reads")
-        #expect(group.subtitle == "2 tools")
+        #expect(english(group.title) == "Explored — 2 reads")
+        #expect(english(group.subtitle) == "2 tools")
         guard case .toolCard = blocks[1] else {
             Issue.record("Expected bash card")
             return
@@ -1824,11 +1824,11 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         guard let paragraph = paragraph(blocks.single) else { return }
-        #expect(paragraph.chips.map(\.label) == ["/feature", "/linear-project-tracking"])
+        #expect(paragraph.chips.map { english($0.label) } == ["/feature", "/linear-project-tracking"])
         #expect(paragraph.chips.map(\.kind) == [.skill, .skill])
         #expect(paragraph.chips[0].brief == nil)
         #expect(paragraph.chips[1].brief == "/repo/.agents/skills/linear-project-tracking")
-        #expect(paragraph.chips[1].card.subtitle == "linear-project-tracking")
+        #expect(english(paragraph.chips[1].card.subtitle) == "linear-project-tracking")
     }
 
     @Test func skillUses_collectsAcrossParagraphsInFirstUseOrder() throws {
@@ -1852,7 +1852,7 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         let uses = SessionChatTimelineBlocks.skillUses(in: blocks)
-        #expect(uses.map(\.label) == ["/feature", "/linear"])
+        #expect(uses.map { english($0.label) } == ["/feature", "/linear"])
         #expect(uses[0].id == PresentationBlockId.direct("s1"))
         #expect(uses[0].status == .error)
         #expect(uses[0].directory == "/repo/.agents/skills/feature")
@@ -1881,7 +1881,7 @@ struct SessionChatTimelineBlocksTests {
         let uses = SessionChatTimelineBlocks.skillUses(in: blocks)
         #expect(uses.count == 1)
         #expect(uses[0].id == PresentationBlockId.direct("s1"))
-        #expect(uses[0].label == "/feature")
+        #expect(english(uses[0].label) == "/feature")
         #expect(uses[0].status == .running)
         #expect(uses[0].directory == "/repo/.agents/skills/feature")
     }
@@ -1913,7 +1913,7 @@ struct SessionChatTimelineBlocksTests {
         guard let paragraph = paragraph(blocks.single) else { return }
         #expect(paragraph.text == "Looking at the view")
         #expect(paragraph.textBlockID == PresentationBlockId.mergedText(["t1"]))
-        #expect(paragraph.chips.map(\.label) == ["SessionChatView.swift", "xcodebuild test -scheme App"])
+        #expect(paragraph.chips.map { english($0.label) } == ["SessionChatView.swift", "xcodebuild test -scheme App"])
         #expect(paragraph.chips.map(\.kind) == [.file, .command])
         #expect(paragraph.chips.map(\.family) == [.explore, .command])
         #expect(paragraph.errorLines.isEmpty)
@@ -1933,10 +1933,10 @@ struct SessionChatTimelineBlocksTests {
         guard let first = paragraph(blocks[0]), let second = paragraph(blocks[1]) else { return }
         #expect(first.text == nil)
         #expect(first.textBlockID == nil)
-        #expect(first.chips.map(\.label) == ["a.swift"])
+        #expect(first.chips.map { english($0.label) } == ["a.swift"])
         #expect(blocks[0].blockID == PresentationBlockId.stepParagraph(["r1"]))
         #expect(second.text == "Now editing")
-        #expect(second.chips.map(\.label) == ["b.swift"])
+        #expect(second.chips.map { english($0.label) } == ["b.swift"])
         #expect(second.chips[0].family == .change)
         #expect(blocks[1].blockID == PresentationBlockId.stepParagraph(["t1", "e1"]))
     }
@@ -1975,7 +1975,7 @@ struct SessionChatTimelineBlocksTests {
         let chip = paragraph.chips[0]
         #expect(chip.kind == .agent)
         #expect(chip.family == .agent)
-        #expect(chip.label == "Explore")
+        #expect(english(chip.label) == "Explore")
         #expect(chip.brief == "Find the session list")
         #expect(chip.status == .running)
         #expect(chip.trailingText == nil)
@@ -1992,7 +1992,7 @@ struct SessionChatTimelineBlocksTests {
         )
         guard let paragraph = paragraph(blocks.single) else { return }
         #expect(paragraph.chips[0].status == .error)
-        #expect(paragraph.errorLines == ["npm test: exit 1"])
+        #expect(paragraph.errorLines.map(\.resolved) == ["npm test: exit 1"])
     }
 
     @Test func chipTimeline_labelsPerTool() throws {
@@ -2013,14 +2013,14 @@ struct SessionChatTimelineBlocksTests {
         // The four explore tools fold into the summary; the rest keep the
         // group order change, command, skill.
         let summary = try #require(paragraph.exploreSummary)
-        #expect(summary.label == "Explored \u{00B7} 1 glob \u{00B7} 1 grep \u{00B7} 1 search \u{00B7} 1 fetch")
-        #expect(summary.title == "Explored \u{2014} 1 glob \u{00B7} 1 grep \u{00B7} 1 search \u{00B7} 1 fetch")
+        #expect(english(summary.label) == "Explored \u{00B7} 1 glob \u{00B7} 1 grep \u{00B7} 1 search \u{00B7} 1 fetch")
+        #expect(english(summary.title) == "Explored \u{2014} 1 glob \u{00B7} 1 grep \u{00B7} 1 search \u{00B7} 1 fetch")
         // The detail subtitle sums up the group; each member row keeps its own argument.
-        #expect(summary.subtitle == "4 tools")
+        #expect(english(summary.subtitle) == "4 tools")
         #expect(summary.status == .completed)
         #expect(summary.blockID == PresentationBlockId.toolGroup(["g1", "gr", "ws", "wf"]))
         #expect(summary.members.map(\.toolName) == ["glob", "grep", "websearch", "webfetch"])
-        #expect(paragraph.chips.map(\.label) == [
+        #expect(paragraph.chips.map { english($0.label) } == [
             "New.swift",
             "./gradlew :app:testDebugUnitTest --info", "linear_get_issue",
             "/feature",
@@ -2098,8 +2098,8 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         guard let paragraph = paragraph(blocks.single) else { return }
-        #expect(paragraph.chips.map(\.label) == ["npm test"])
-        #expect(paragraph.chips[0].card.subtitle == command)
+        #expect(paragraph.chips.map { english($0.label) } == ["npm test"])
+        #expect(english(paragraph.chips[0].card.subtitle) == command)
     }
 
     @Test func chipTimeline_commandLabel_shortCommandUnchanged() {
@@ -2110,7 +2110,7 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         guard let paragraph = paragraph(blocks.single) else { return }
-        #expect(paragraph.chips.map(\.label) == ["gh pr list --state open --limit 50"])
+        #expect(paragraph.chips.map { english($0.label) } == ["gh pr list --state open --limit 50"])
     }
 
     @Test func chipTimeline_consecutiveThoughts_collapseIntoOneRowWithSummedDuration() {
@@ -2160,7 +2160,7 @@ struct SessionChatTimelineBlocksTests {
         #expect(firstDuration == 3_000)
         guard let first = paragraph(blocks[1]) else { return }
         #expect(first.text == nil)
-        #expect(first.exploreSummary?.label == "Explored \u{00B7} 2 reads")
+        #expect(english(first.exploreSummary?.label) == "Explored \u{00B7} 2 reads")
         #expect(first.chips.isEmpty)
         guard case .reasoning(let thirdID, _, _, _) = blocks[2] else {
             Issue.record("Expected the post-narration thought third")
@@ -2169,7 +2169,7 @@ struct SessionChatTimelineBlocksTests {
         #expect(thirdID == PresentationBlockId.direct("th3"))
         guard let second = paragraph(blocks[3]) else { return }
         #expect(second.text == "Now narration")
-        #expect(second.chips.map(\.label) == ["c.swift"])
+        #expect(second.chips.map { english($0.label) } == ["c.swift"])
     }
 
     @Test func chipTimeline_thoughtAfterPendingNarration_collapsesIntoOneRow() {
@@ -2192,7 +2192,7 @@ struct SessionChatTimelineBlocksTests {
         #expect(duration == 2_000)
         guard let narration = paragraph(blocks[1]) else { return }
         #expect(narration.text == "Narration")
-        #expect(narration.chips.map(\.label) == ["a.swift"])
+        #expect(narration.chips.map { english($0.label) } == ["a.swift"])
     }
 
     @Test func chipTimeline_consecutiveStepThoughts_collapseUntilAParagraphFlushes() {
@@ -2218,7 +2218,7 @@ struct SessionChatTimelineBlocksTests {
         #expect(duration == 2_500)
         guard let first = paragraph(blocks[1]) else { return }
         #expect(first.text == "Step one")
-        #expect(first.chips.map(\.label) == ["a.swift"])
+        #expect(first.chips.map { english($0.label) } == ["a.swift"])
         guard case .reasoning(_, let third, false, let thirdDuration) = blocks[2] else {
             Issue.record("Expected the thought after the flushed paragraph")
             return
@@ -2227,7 +2227,7 @@ struct SessionChatTimelineBlocksTests {
         #expect(thirdDuration == 500)
         guard let second = paragraph(blocks[3]) else { return }
         #expect(second.text == "Step two")
-        #expect(second.chips.map(\.label) == ["b.swift"])
+        #expect(second.chips.map { english($0.label) } == ["b.swift"])
         guard let last = paragraph(blocks[4]) else { return }
         #expect(last.text == "Step three")
         #expect(last.chips.isEmpty)
@@ -2306,7 +2306,7 @@ struct SessionChatTimelineBlocksTests {
         guard let paragraph = paragraph(blocks[2]) else { return }
         #expect(paragraph.text == "Before")
         // Both reads land in the same paragraph, so they fold into its summary.
-        #expect(paragraph.exploreSummary?.label == "Explored \u{00B7} 2 reads")
+        #expect(english(paragraph.exploreSummary?.label) == "Explored \u{00B7} 2 reads")
         #expect(paragraph.chips.isEmpty)
         #expect(blocks[2].blockID == PresentationBlockId.stepParagraph(["t1", "r1", "r2"]))
     }
@@ -2507,9 +2507,9 @@ struct SessionChatTimelineBlocksTests {
             id: PresentationBlockId.direct(label),
             kind: kind,
             family: family,
-            label: label,
+            label: .verbatim(label),
             status: status,
-            card: SessionChatToolCardBlock(toolName: label, status: status, title: label),
+            card: SessionChatToolCardBlock(toolName: label, status: status, title: .verbatim(label)),
             arrivalIndex: arrivalIndex
         )
     }
@@ -2528,7 +2528,7 @@ struct SessionChatTimelineBlocksTests {
         let row = SessionChatTimelineBlocks.chipRow(
             chips(.explore, "e", 2) + chips(.change, "c", 4) + chips(.command, "b", 4) + chips(.agent, "a", 3) + chips(.skill, "s", 4)
         )
-        #expect(row.visible.map(\.label) == ["e1", "e2", "c1", "c2", "c3", "b1", "b2", "b3", "a1", "a2", "a3", "s1", "s2", "s3", "s4"])
+        #expect(row.visible.map { english($0.label) } == ["e1", "e2", "c1", "c2", "c3", "b1", "b2", "b3", "a1", "a2", "a3", "s1", "s2", "s3", "s4"])
         #expect(row.hiddenCount == 2)
     }
 
@@ -2545,7 +2545,7 @@ struct SessionChatTimelineBlocksTests {
                 chip(.command, "b8"),
             ]
         )
-        #expect(row.visible.map(\.label) == ["b1", "b2", "b3", "b4", "b5", "b6"])
+        #expect(row.visible.map { english($0.label) } == ["b1", "b2", "b3", "b4", "b5", "b6"])
         #expect(row.hiddenCount == 2)
     }
 
@@ -2566,7 +2566,7 @@ struct SessionChatTimelineBlocksTests {
     @Test func chipRow_oneExpanderCountsAllFamilies() {
         let input = chips(.change, "c", 5) + chips(.command, "b", 5)
         let row = SessionChatTimelineBlocks.chipRow(input)
-        #expect(row.visible.map(\.label) == ["c1", "c2", "c3", "b1", "b2", "b3"])
+        #expect(row.visible.map { english($0.label) } == ["c1", "c2", "c3", "b1", "b2", "b3"])
         #expect(row.hiddenCount == 4)
     }
 
@@ -2580,7 +2580,7 @@ struct SessionChatTimelineBlocksTests {
         // new ones get their own limit of three and a fresh `+2 more`.
         let later = atTap + (6...10).map { chip(.command, "b\($0)", arrivalIndex: $0 - 1) }
         let row = SessionChatTimelineBlocks.chipRow(later, expandedThrough: atTap.count)
-        #expect(row.visible.map(\.label) == ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8"])
+        #expect(row.visible.map { english($0.label) } == ["b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8"])
         #expect(row.hiddenCount == 2)
     }
 
@@ -2591,7 +2591,7 @@ struct SessionChatTimelineBlocksTests {
             + (1...4).map { chip(.command, "b\($0)", arrivalIndex: $0 - 1) }
             + (5...9).map { chip(.command, "b\($0)", arrivalIndex: $0) }
         let row = SessionChatTimelineBlocks.chipRow(input, expandedThrough: 4)
-        #expect(row.visible.map(\.label) == ["c1", "b1", "b2", "b3", "b4", "b5", "b6", "b7"])
+        #expect(row.visible.map { english($0.label) } == ["c1", "b1", "b2", "b3", "b4", "b5", "b6", "b7"])
         #expect(row.hiddenCount == 2)
     }
 
@@ -2610,12 +2610,12 @@ struct SessionChatTimelineBlocksTests {
         )
         let step = try #require(paragraph(blocks.single))
         let summary = try #require(step.exploreSummary)
-        #expect(summary.label == "Exploring \u{00B7} 2 reads \u{00B7} 1 grep")
+        #expect(english(summary.label) == "Exploring \u{00B7} 2 reads \u{00B7} 1 grep")
         #expect(summary.status == .running)
-        #expect(summary.subtitle == "3 tools")
+        #expect(english(summary.subtitle) == "3 tools")
         #expect(summary.blockID == PresentationBlockId.toolGroup(["r1", "r2", "g1"]))
         #expect(summary.members.count == 3)
-        #expect(step.chips.map(\.label) == ["ls"])
+        #expect(step.chips.map { english($0.label) } == ["ls"])
         #expect(blocks[0].blockID == PresentationBlockId.stepParagraph(["t1", "r1", "r2", "g1", "b1"]))
     }
 
@@ -2629,7 +2629,7 @@ struct SessionChatTimelineBlocksTests {
         )
         let step = try #require(paragraph(blocks.single))
         #expect(step.exploreSummary == nil)
-        #expect(step.chips.map(\.label) == ["b.swift", "ls"])
+        #expect(step.chips.map { english($0.label) } == ["b.swift", "ls"])
     }
 
     @Test func chipTimeline_failedExploreToolStaysAnAttentionChipOutsideTheSummary() throws {
@@ -2642,11 +2642,11 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         let step = try #require(paragraph(blocks.single))
-        #expect(step.exploreSummary?.label == "Explored \u{00B7} 1 read \u{00B7} 1 grep")
+        #expect(english(step.exploreSummary?.label) == "Explored \u{00B7} 1 read \u{00B7} 1 grep")
         #expect(step.exploreSummary?.blockID == PresentationBlockId.toolGroup(["r1", "g1"]))
-        #expect(step.chips.map(\.label) == ["missing.swift"])
+        #expect(step.chips.map { english($0.label) } == ["missing.swift"])
         #expect(step.chips[0].status == .error)
-        #expect(step.errorLines == ["missing.swift: ENOENT"])
+        #expect(step.errorLines.map(\.resolved) == ["missing.swift: ENOENT"])
     }
 
     @Test func chipTimeline_foldedChipKeepsFirstRunIdAndArrivalIndex() throws {
@@ -2713,7 +2713,7 @@ struct SessionChatTimelineBlocksTests {
             chip(.change, "b.swift"),
             chip(.command, "b.swift"),
         ])
-        #expect(folded.map(\.label) == ["a.swift", "b.swift", "b.swift", "b.swift"])
+        #expect(folded.map { english($0.label) } == ["a.swift", "b.swift", "b.swift", "b.swift"])
         #expect(folded.map(\.repeatCount) == [1, 2, 1, 1])
     }
 
@@ -2758,7 +2758,7 @@ struct SessionChatTimelineBlocksTests {
             chipTimeline: true
         )
         guard let paragraph = paragraph(blocks.single) else { return }
-        #expect(paragraph.chips.map(\.label) == ["npm test"])
+        #expect(paragraph.chips.map { english($0.label) } == ["npm test"])
     }
 
     @Test func displayTrailingText_combinesRepeatCountWithExistingText() {
@@ -2766,10 +2766,10 @@ struct SessionChatTimelineBlocksTests {
             id: "p:b1",
             kind: .command,
             family: .command,
-            label: "npm test",
+            label: .verbatim("npm test"),
             status: .completed,
             trailingText: "12s",
-            card: SessionChatToolCardBlock(toolName: "bash", status: .completed, title: "Shell")
+            card: SessionChatToolCardBlock(toolName: "bash", status: .completed, title: .app("tool.title.shell", "Shell"))
         )
         #expect(base.displayTrailingText == "12s")
         #expect(base.withRepeatCount(2).displayTrailingText == "\u{00D7}2 · 12s")
@@ -2805,13 +2805,13 @@ struct SessionChatTimelineBlocksTests {
             .tool(ToolPart(id: id, toolName: "read", status: .completed, input: ["path": .string(path)], output: "body of \(path)"))
         }
         guard let lone = paragraph(okBlocks(parts: [read("r1", "src/app.ts")], chipTimeline: true).single) else { return }
-        #expect(lone.chips.map(\.label) == ["app.ts"])
+        #expect(lone.chips.map { english($0.label) } == ["app.ts"])
 
         guard let folded = paragraph(
             okBlocks(parts: [read("r1", "README.md"), read("r2", "src/app.ts")], chipTimeline: true).single
         ) else { return }
         let members = folded.exploreSummary?.members ?? []
-        #expect(members.map(\.subtitle) == ["README.md", "src/app.ts"])
+        #expect(members.map { english($0.subtitle) } == ["README.md", "src/app.ts"])
         #expect(members.map(\.detailText) == ["body of README.md", "body of src/app.ts"])
     }
 
@@ -2842,13 +2842,13 @@ struct SessionChatTimelineBlocksTests {
         guard let paragraph = paragraph(
             okBlocks(parts: [.tool(running), .tool(failed), .tool(mcp), .tool(bare)], chipTimeline: true).single
         ) else { return }
-        #expect(paragraph.chips.map(\.label) == [
+        #expect(paragraph.chips.map { english($0.label) } == [
             "Run migrations \u{00B7} step 3/6", "Backfill users", "Add handler tests", "sim_task",
         ])
-        #expect(paragraph.errorLines == ["Backfill users: Backfill aborted: lock timeout"])
+        #expect(paragraph.errorLines.map(\.resolved) == ["Backfill users: Backfill aborted: lock timeout"])
         // The tool name stays the detail sheet title.
-        #expect(paragraph.chips[2].card.title == "Called github_create_issue")
-        #expect(paragraph.chips[2].card.subtitle == "Add handler tests")
+        #expect(english(paragraph.chips[2].card.title) == "Called github_create_issue")
+        #expect(english(paragraph.chips[2].card.subtitle) == "Add handler tests")
         #expect(paragraph.chips[2].card.detailText == "Created issue #42")
     }
 
@@ -2866,7 +2866,7 @@ struct SessionChatTimelineBlocksTests {
             metadata: ["answers": .array([.array([.string("Postgres")]), .array([.string("eu-west")])])]
         )
         guard let paragraph = paragraph(okBlocks(parts: [.tool(question)], chipTimeline: true).single) else { return }
-        #expect(paragraph.chips.map(\.label) == ["Asked 2 questions"])
+        #expect(paragraph.chips.map { english($0.label) } == ["Asked 2 questions"])
     }
 
     @Test func build_shellNonZeroExit_isFailedWithExitCode() {
@@ -2890,12 +2890,12 @@ struct SessionChatTimelineBlocksTests {
             return
         }
         #expect(card.status == .error)
-        #expect(card.errorText == "Exited with code 3")
+        #expect(english(card.errorText) == "Exited with code 3")
         #expect(card.detailText == "about to fail\nCommand exited with code 3.")
 
         guard let paragraph = paragraph(okBlocks(parts: [.tool(shell), .tool(ok)], chipTimeline: true).single) else { return }
         #expect(paragraph.chips.map(\.status) == [.error, .completed])
-        #expect(paragraph.errorLines == ["echo 'about to fail' && exit 3: Exited with code 3"])
+        #expect(paragraph.errorLines.map(\.resolved) == ["echo 'about to fail' && exit 3: Exited with code 3"])
     }
 
     @Test func chipTimeline_inFlightChipsCarryTheirStartForElapsedTime() {
@@ -2937,7 +2937,7 @@ struct SessionChatTimelineBlocksTests {
         guard let paragraph = paragraph(okBlocks(parts: [.tool(write), .tool(overwrite)], chipTimeline: true).single) else {
             return
         }
-        #expect(paragraph.chips[0].label == "todo.md")
+        #expect(english(paragraph.chips[0].label) == "todo.md")
         #expect(paragraph.chips[0].additions == 4)
         #expect(paragraph.chips[0].deletions == nil)
         #expect(paragraph.chips[1].additions == nil)

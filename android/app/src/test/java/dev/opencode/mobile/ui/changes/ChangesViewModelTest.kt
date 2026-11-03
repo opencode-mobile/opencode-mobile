@@ -26,6 +26,8 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
 import dev.opencode.mobile.ui.sessionchat.SessionChatUiState
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -52,9 +54,17 @@ class ChangesViewModelTest {
     @After fun tearDown() = Dispatchers.resetMain()
 
     @Test fun exposesTwoSourcesWithDesktopCopy() {
-        assertEquals("Git changes", ChangeSource.WorkingTree.displayName)
-        assertEquals("Last turn changes", ChangeSource.LastTurn.displayName)
+        assertEquals("Git changes", ChangeSource.WorkingTree.displayName.english())
+        assertEquals("Last turn changes", ChangeSource.LastTurn.displayName.english())
         assertEquals(listOf(ChangeSource.WorkingTree, ChangeSource.LastTurn), ChangeSource.entries)
+    }
+
+    @Test fun accessibilityLabelsReadCountsAndPosition() {
+        val added = file("src/A.kt", additions = 1, deletions = 0, status = FileDiffStatus.Added)
+        val content = ChangesContentState(listOf(added, file("src/B.kt", additions = 2, deletions = 3)))
+
+        assertEquals("2 changed files, 3 additions, 3 deletions", content.aggregateAccessibilityLabel.english())
+        assertEquals("src/A.kt, Added, file 1 of 2, 1 addition, 0 deletions", content.fileAccessibilityLabel(added).english())
     }
 
     @Test fun loadsSortedSnapshotAndFilteredTotals() =
@@ -79,20 +89,20 @@ class ChangesViewModelTest {
 
             var content = (viewModel.uiState.value.phase as ChangesPhase.Content).changeSet
             assertEquals(listOf("A.kt", "B.kt"), content.files.map(FileDiff::path))
-            assertEquals("2 changed files", content.summary)
+            assertEquals("2 changed files", content.summary.english())
             assertEquals(5, content.additions)
             assertEquals(listOf(Request("s", "m", "/repo")), repository.requests)
 
             viewModel.updateFilter("B")
             content = (viewModel.uiState.value.phase as ChangesPhase.Content).changeSet
             assertEquals(listOf("B.kt"), content.filteredFiles.map(FileDiff::path))
-            assertEquals("1 changed file", content.summary)
+            assertEquals("1 changed file", content.summary.english())
             assertEquals(3, content.additions)
             assertEquals(2, content.deletions)
 
             viewModel.updateFilter("missing")
             content = (viewModel.uiState.value.phase as ChangesPhase.Content).changeSet
-            assertEquals("0 changed files", content.summary)
+            assertEquals("0 changed files", content.summary.english())
             assertEquals(0, content.additions)
             assertEquals(0, content.deletions)
         }
@@ -145,7 +155,7 @@ class ChangesViewModelTest {
             val content = (viewModel.uiState.value.phase as ChangesPhase.Content).changeSet
             assertEquals(listOf("keep.kt"), content.files.map(FileDiff::path))
             assertEquals("latest", content.filter)
-            assertEquals("offline", viewModel.uiState.value.refreshError)
+            assertEquals("offline", viewModel.uiState.value.refreshError?.english())
             assertFalse(viewModel.uiState.value.isRefreshing)
         }
 
@@ -185,7 +195,7 @@ class ChangesViewModelTest {
             val retryable = ChangesViewModel(transient)
             retryable.bind("s", "/w", "m", ChangeSource.WorkingTree)
             advanceUntilIdle()
-            assertEquals(ChangesPhase.Error("offline"), retryable.uiState.value.phase)
+            assertEquals(ChangesPhase.Error(UiText.verbatim("offline")), retryable.uiState.value.phase)
         }
 
     @Test fun missingGitDiffEndpointFallsBackToLastTurn() =
@@ -560,7 +570,8 @@ class ChangesViewModelTest {
             val viewModel = ChangesViewModel(repository)
             viewModel.bind("s", "/w", "user", ChangeSource.LastTurn)
             advanceUntilIdle()
-            assertEquals(ChangesPhase.Error(TurnDiffUnavailable.MESSAGE), viewModel.uiState.value.phase)
+            val error = viewModel.uiState.value.phase as ChangesPhase.Error
+            assertEquals(TurnDiffUnavailable.MESSAGE, error.message.english())
         }
 
     private fun row(

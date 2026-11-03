@@ -10,8 +10,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import dev.opencode.mobile.domain.worktree.WorktreeCreateCopy
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetHeaderTextAction
 import dev.opencode.mobile.ui.components.OpenCodeButton
@@ -26,6 +27,7 @@ import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.resolve
 
 /** User actions of the New worktree form. */
 data class WorktreeCreateFormCallbacks(
@@ -46,8 +48,8 @@ fun NewWorktreeRow(
     onClick: () -> Unit,
 ) {
     OpenCodeListItem(
-        title = WorktreeCreateCopy.NEW_WORKTREE_ROW,
-        subtitle = availability.subtitle,
+        title = stringResource(R.string.worktree_new_row),
+        subtitle = availability.subtitle?.resolve(),
         enabled = availability.enabled,
         startDecorator = StartDecorator.Icon(OpenCodeIcons.Add, null),
         onClick = if (availability.enabled) onClick else null,
@@ -56,12 +58,13 @@ fun NewWorktreeRow(
 }
 
 /** Header "Back": from the base list to the form, from the form to the list. */
+@Composable
 fun worktreeCreateBackAction(
     state: WorktreeCreateFormState,
     callbacks: WorktreeCreateFormCallbacks,
 ): OpenCodeBottomSheetHeaderTextAction =
     OpenCodeBottomSheetHeaderTextAction(
-        title = WorktreeCreateCopy.BACK,
+        title = stringResource(R.string.top_bar_back),
         onClick = if (state.basePickerVisible) callbacks.onHideBasePicker else callbacks.onBack,
         testTag = WorktreeCreateTags.BACK,
     )
@@ -76,13 +79,13 @@ fun ColumnScope.WorktreeCreateFormBody(
         WorktreeBaseList(state, callbacks)
         return
     }
-    OpenCodeSectionHeader(title = WorktreeCreateCopy.NAME_LABEL)
+    OpenCodeSectionHeader(title = stringResource(R.string.worktree_name))
     OpenCodeTextInput(
         value = state.name,
         onValueChange = callbacks.onNameChange,
-        hint = WorktreeCreateCopy.NAME_LABEL,
+        hint = stringResource(R.string.worktree_name),
         enabled = !state.submitting,
-        errorMessage = state.nameError,
+        errorMessage = state.nameError?.resolve(),
         onSubmit = callbacks.onSubmit,
         modifier =
             Modifier
@@ -90,18 +93,18 @@ fun ColumnScope.WorktreeCreateFormBody(
                 .padding(horizontal = OpenCodeLayout.ScreenGutter)
                 .testTag(WorktreeCreateTags.NAME),
     )
-    OpenCodeSectionHeader(title = WorktreeCreateCopy.BRANCH_LABEL)
+    OpenCodeSectionHeader(title = stringResource(R.string.worktree_branch))
     OpenCodeListItem(
-        title = state.branchValue,
-        subtitle = state.branchNote,
+        title = state.branchValue.resolve(),
+        subtitle = state.branchNote.resolve(),
         enabled = false,
         startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, null),
         modifier = Modifier.testTag(WorktreeCreateTags.BRANCH),
     )
-    OpenCodeSectionHeader(title = WorktreeCreateCopy.BASE_LABEL)
+    OpenCodeSectionHeader(title = stringResource(R.string.worktree_base))
     OpenCodeListItem(
-        title = state.baseValue,
-        subtitle = state.baseNote,
+        title = state.baseValue.resolve(),
+        subtitle = state.baseNote.resolve(),
         enabled = state.baseSelectable && !state.submitting,
         accessory = if (state.baseSelectable) OpenCodeListItemAccessory.Disclosure else null,
         onClick = if (state.baseSelectable && !state.submitting) callbacks.onShowBasePicker else null,
@@ -119,14 +122,14 @@ fun WorktreeCreateFormActions(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         state.errorMessage?.let { message ->
             OpenCodeInlineNotice(
-                message = message,
+                message = message.resolve(),
                 tone = OpenCodeInlineNoticeTone.Error,
                 variant = OpenCodeInlineNoticeVariant.Banner,
                 modifier = Modifier.testTag(WorktreeCreateTags.ERROR),
             )
         }
         OpenCodeButton(
-            variant = OpenCodeButtonVariant.FullWidthText(state.submitLabel),
+            variant = OpenCodeButtonVariant.FullWidthText(state.submitLabel.resolve()),
             onClick = callbacks.onSubmit,
             enabled = state.canSubmit,
             modifier = Modifier.testTag(WorktreeCreateTags.SUBMIT),
@@ -141,7 +144,7 @@ private fun WorktreeBaseList(
 ) {
     state.baseRows.forEach { row ->
         OpenCodeListItem(
-            title = row.title,
+            title = row.title.resolve(),
             selected = row.checked,
             startDecorator = StartDecorator.Icon(OpenCodeIcons.CallSplit, null),
             onClick = { callbacks.onSelectBase(row.ref) },
@@ -151,7 +154,7 @@ private fun WorktreeBaseList(
                     {
                         Icon(
                             imageVector = OpenCodeIcons.Check,
-                            contentDescription = "Selected",
+                            contentDescription = stringResource(R.string.common_selected),
                             tint = openCodeColor("icon-strong-base"),
                             modifier = Modifier.size(20.dp),
                         )
@@ -162,6 +165,6 @@ private fun WorktreeBaseList(
         )
     }
     state.baseStatus?.let { status ->
-        OpenCodeListItem(title = status, enabled = false)
+        OpenCodeListItem(title = status.resolve(), enabled = false)
     }
 }

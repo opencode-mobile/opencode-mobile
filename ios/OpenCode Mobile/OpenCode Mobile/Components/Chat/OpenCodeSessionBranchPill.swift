@@ -147,7 +147,7 @@ struct OpenCodeSessionBranchPill: View {
                 accessibilityLabel: summary.accessibilityLabel,
                 action: { isPopoverPresented = true }
             )
-            .accessibilityHint("Shows branch details")
+            .accessibilityHint(Text("component.branch_pill.shows_details_hint"))
         } card: {
             OpenCodeSessionBranchPopoverContent(
                 summary: summary,
@@ -188,9 +188,9 @@ struct OpenCodeSessionBranchPopoverContent: View {
             divider
             VStack(alignment: .leading, spacing: 0) {
                 if summary.hasChanges {
-                    actionRow(title: "View all changes", icon: .description, action: onViewAllChanges)
+                    actionRow(title: "component.branch_pill.view_all_changes", icon: .description, action: onViewAllChanges)
                 }
-                actionRow(title: "Copy branch name", icon: .contentCopy, action: onCopyBranchName)
+                actionRow(title: "component.branch_pill.copy_branch_name", icon: .contentCopy, action: onCopyBranchName)
             }
             .padding(.vertical, Self.actionsPaddingVertical)
         }
@@ -210,7 +210,7 @@ struct OpenCodeSessionBranchPopoverContent: View {
                     .truncationMode(.middle)
                     .textSelection(.enabled)
                 if let base = summary.visibleBaseBranch {
-                    Text("Based on \(base)")
+                    Text(LocalizedStringResource("component.branch_pill.based_on", defaultValue: "Based on \(base)"))
                         .font(OpenCodeTypography.caption)
                         .foregroundStyle(OpenCodeColors.textWeak)
                         .lineLimit(1)
@@ -257,7 +257,7 @@ struct OpenCodeSessionBranchPopoverContent: View {
             .frame(height: 1)
     }
 
-    private func actionRow(title: String, icon: OpenCodeIcon, action: @escaping () -> Void) -> some View {
+    private func actionRow(title: LocalizedStringKey, icon: OpenCodeIcon, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: Self.iconSpacing) {
                 OpenCodeIconImage(icon: icon, size: Self.iconSize)

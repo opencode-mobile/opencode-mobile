@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -282,6 +284,7 @@ private fun TileFrame(
     modifier: Modifier,
     content: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
 ) {
+    val viewFullScreen = stringResource(R.string.component_image_view_full_screen)
     Box(
         modifier =
             modifier
@@ -290,7 +293,7 @@ private fun TileFrame(
                 .border(1.dp, openCodeColor("border-weaker-base"), OpenCodeSmallShape)
                 .then(
                     if (onClick != null) {
-                        Modifier.clickable(onClickLabel = "View full screen", role = Role.Button, onClick = onClick)
+                        Modifier.clickable(onClickLabel = viewFullScreen, role = Role.Button, onClick = onClick)
                     } else {
                         Modifier
                     },
@@ -339,7 +342,7 @@ private fun FailedTile(name: String?) {
             textAlign = TextAlign.Center,
         )
         Text(
-            text = "Couldn't load",
+            text = stringResource(R.string.component_image_could_not_load),
             style = MaterialTheme.typography.labelSmall,
             color = openCodeColor("text-weaker"),
         )

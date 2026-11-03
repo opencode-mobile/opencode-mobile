@@ -12,18 +12,18 @@ private struct SessionChatSideQuestionSheetModifier: ViewModifier {
         content
             .openCodeBottomSheet(
                 isPresented: presentedBinding,
-                title: "/btw",
+                title: .verbatim("/btw"),
                 content: {
                     SessionChatSideQuestionSheetBody(answer: answer)
                 },
                 pinnedBottom: {
                     HStack(spacing: 8) {
-                        OpenCodeButton(variant: .fullWidthText(title: "Copy"), contrast: .low) {
+                        OpenCodeButton(variant: .fullWidthText(title: "session_chat_sheet.copy"), contrast: .low) {
                             guard let answer else { return }
                             UIPasteboard.general.string = answer.answer
                             onCopy()
                         }
-                        OpenCodeButton(variant: .fullWidthText(title: "Done")) {
+                        OpenCodeButton(variant: .fullWidthText(title: "session_chat_sheet.side_question.done")) {
                             onClose()
                         }
                     }
@@ -62,7 +62,7 @@ private struct SessionChatSideQuestionSheetBody: View {
                         .font(OpenCodeTypography.body)
                         .foregroundStyle(OpenCodeColors.textStrong)
                 }
-                Text("Not added to the conversation")
+                Text("session_chat_sheet.side_question.not_added")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeak)
             }

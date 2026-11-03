@@ -57,6 +57,7 @@ import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -67,6 +68,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -118,10 +120,12 @@ fun <T> OpenCodeReorderableList(
     onMove: ((from: Int, to: Int) -> Unit)? = null,
     onContextAction: ((T) -> Unit)? = null,
     supportsContextAction: (T) -> Boolean = { true },
-    contextActionLabel: String = "Remove",
+    contextActionLabel: String = stringResource(R.string.common_remove),
     row: @Composable OpenCodeReorderableRowScope.(T) -> Unit,
 ) {
     val density = LocalDensity.current
+    val moveUpLabel = stringResource(R.string.component_reorderable_list_move_up)
+    val moveDownLabel = stringResource(R.string.component_reorderable_list_move_down)
     val haptic = LocalHapticFeedback.current
     val fallbackHeightPx = with(density) { ReorderableRowFallbackHeight.toPx() }
     val revealWidthDp = ReorderableListMath.SWIPE_REVEAL_WIDTH_DP.dp
@@ -395,14 +399,14 @@ fun <T> OpenCodeReorderableList(
                                     }
                                     if (previousMovable != null) {
                                         actions +=
-                                            CustomAccessibilityAction("Move up") {
+                                            CustomAccessibilityAction(moveUpLabel) {
                                                 onMove?.invoke(index, previousMovable)
                                                 true
                                             }
                                     }
                                     if (nextMovable != null) {
                                         actions +=
-                                            CustomAccessibilityAction("Move down") {
+                                            CustomAccessibilityAction(moveDownLabel) {
                                                 onMove?.invoke(index, nextMovable)
                                                 true
                                             }

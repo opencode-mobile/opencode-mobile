@@ -8,8 +8,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
@@ -17,6 +19,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.SessionTodoStatus
 import dev.opencode.mobile.theme.openCodeColor
@@ -41,7 +44,7 @@ internal fun SessionChatTodosSheet(
 
     OpenCodeBottomSheet(
         visible = visible,
-        title = "Session todos",
+        title = stringResource(R.string.session_chat_sheet_todos_title),
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.SESSION_TODOS,
@@ -54,27 +57,18 @@ internal fun SessionChatTodosSheet(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(0.dp),
         ) {
+            // The raw pattern (no arguments) keeps the translated word order; the counts are bold.
+            val progressPattern = stringResource(R.string.session_chat_sheet_todos_progress)
+            val progressDescription = stringResource(R.string.session_chat_sheet_todos_progress, completedCount, totalCount)
+            val countStyle =
+                SpanStyle(
+                    color = openCodeColor("text-strong"),
+                    fontWeight = FontWeight.SemiBold,
+                )
             Text(
                 text =
                     buildAnnotatedString {
-                        withStyle(
-                            SpanStyle(
-                                color = openCodeColor("text-strong"),
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                        ) {
-                            append("$completedCount")
-                        }
-                        append(" of ")
-                        withStyle(
-                            SpanStyle(
-                                color = openCodeColor("text-strong"),
-                                fontWeight = FontWeight.SemiBold,
-                            ),
-                        ) {
-                            append("$totalCount")
-                        }
-                        append(" completed")
+                        appendPattern(progressPattern, listOf(completedCount.toString(), totalCount.toString()), countStyle)
                     },
                 modifier =
                     Modifier
@@ -82,7 +76,7 @@ internal fun SessionChatTodosSheet(
                         .openCodeBottomSheetContentInset()
                         .padding(bottom = 4.dp)
                         .semantics {
-                            contentDescription = "$completedCount of $totalCount completed"
+                            contentDescription = progressDescription
                         },
                 style = MaterialTheme.typography.labelMedium,
                 color = openCodeColor("text-base"),
@@ -105,3 +99,20 @@ private fun SessionTodoStatus.toSessionTodoItemStatus(): OpenCodeSessionTodoItem
         SessionTodoStatus.Completed -> OpenCodeSessionTodoItemStatus.Completed
         SessionTodoStatus.Cancelled -> OpenCodeSessionTodoItemStatus.Cancelled
     }
+
+private val PositionalPlaceholder = Regex("""%(\d+)\$[ds]""")
+
+/** Appends [pattern] with each `%N$d` / `%N$s` replaced by `args[N - 1]` in [argStyle]. */
+private fun AnnotatedString.Builder.appendPattern(
+    pattern: String,
+    args: List<String>,
+    argStyle: SpanStyle,
+) {
+    var cursor = 0
+    PositionalPlaceholder.findAll(pattern).forEach { match ->
+        append(pattern.substring(cursor, match.range.first))
+        withStyle(argStyle) { append(args.getOrElse(match.groupValues[1].toInt() - 1) { "" }) }
+        cursor = match.range.last + 1
+    }
+    append(pattern.substring(cursor))
+}

@@ -3,9 +3,9 @@ import SwiftUI
 /// Offline Home empty state for a worktree with no sessions, for on-demand snapshot evidence.
 /// No Screen Model, no network. Renders the same `OpenCodeEmptyState` Session List shows.
 struct SessionListWorktreeEmptySnapshotHost: View {
-    let message: String
+    let message: OpenCodeText
 
-    init(message: String = SnapshotEvidenceMocks.worktreeEmptyMessage) {
+    init(message: OpenCodeText = SnapshotEvidenceMocks.worktreeEmptyMessage) {
         self.message = message
     }
 

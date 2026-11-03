@@ -46,6 +46,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
@@ -53,6 +54,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
@@ -140,7 +142,7 @@ fun OpenCodeImageGalleryViewer(
             }
             val chromePage = pagerState.currentPage.coerceIn(0, count - 1)
             ViewerChrome(
-                title = "${chromePage + 1} of $count",
+                title = stringResource(R.string.component_image_viewer_position, chromePage + 1, count),
                 name = images[chromePage].name,
                 onDismiss = onDismiss,
                 onShare = onShare?.let { share -> { share(chromePage) } },
@@ -166,7 +168,7 @@ private fun ViewerChrome(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         IconButton(onClick = onDismiss, modifier = Modifier.size(48.dp)) {
-            Icon(OpenCodeIcons.Close, contentDescription = "Close", tint = Color.White)
+            Icon(OpenCodeIcons.Close, contentDescription = stringResource(R.string.component_close), tint = Color.White)
         }
         Column(
             modifier = Modifier.weight(1f),
@@ -185,7 +187,11 @@ private fun ViewerChrome(
         }
         if (onShare != null) {
             TextButton(onClick = onShare) {
-                Text(text = "Share", style = MaterialTheme.typography.labelLarge, color = Color.White)
+                Text(
+                    text = stringResource(R.string.component_image_viewer_share),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color.White,
+                )
             }
         } else {
             // Keeps the title centred when there is no trailing action.
@@ -263,7 +269,9 @@ private fun ZoomableImagePage(
             GalleryBitmap.Loading -> Unit
             GalleryBitmap.Failed ->
                 Text(
-                    text = "Couldn't load ${image.name ?: "this image"}",
+                    text =
+                        image.name?.let { stringResource(R.string.component_image_viewer_could_not_load_named, it) }
+                            ?: stringResource(R.string.component_image_viewer_could_not_load_this),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.75f),
                 )

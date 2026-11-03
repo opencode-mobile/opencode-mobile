@@ -14,7 +14,8 @@ struct SessionContextDisplayState: Equatable {
 
 struct SessionContextStatItem: Equatable, Identifiable {
     let id: String
-    let label: String
+    let label: OpenCodeText
+    /// Session content and formatted numbers, shown as is.
     let value: String
 }
 
@@ -75,7 +76,10 @@ final class SessionContextViewModel {
         } catch let error as URLError where error.code == .cancelled {
             return
         } catch {
-            let message = errorMessage(error, fallback: setRefreshing ? "Unable to refresh session context" : "Unable to load session context")
+            let fallback = setRefreshing
+                ? String(localized: "session_context.refresh_failed", defaultValue: "Unable to refresh session context")
+                : String(localized: "session_context.load_failed", defaultValue: "Unable to load session context")
+            let message = errorMessage(error, fallback: fallback)
             if setRefreshing, case .loaded = state {
                 refreshErrorMessage = message
             } else {
@@ -93,26 +97,26 @@ final class SessionContextViewModel {
     private func displayState(from snapshot: SessionContextSnapshot) -> SessionContextDisplayState {
         let tokenStats = snapshot.tokenStats
         let stats = [
-            SessionContextStatItem(id: "session", label: "Session", value: snapshot.sessionTitle),
-            SessionContextStatItem(id: "messages", label: "Messages", value: number(snapshot.messageCounts.total)),
-            SessionContextStatItem(id: "provider", label: "Provider", value: snapshot.providerLabel ?? "—"),
-            SessionContextStatItem(id: "model", label: "Model", value: snapshot.modelLabel ?? "—"),
-            SessionContextStatItem(id: "limit", label: "Context Limit", value: number(tokenStats?.contextLimit)),
-            SessionContextStatItem(id: "total", label: "Total Tokens", value: number(tokenStats?.total)),
-            SessionContextStatItem(id: "usage", label: "Usage", value: percent(tokenStats?.usagePercent)),
-            SessionContextStatItem(id: "input", label: "Input Tokens", value: number(tokenStats?.input)),
-            SessionContextStatItem(id: "output", label: "Output Tokens", value: number(tokenStats?.output)),
-            SessionContextStatItem(id: "reasoning", label: "Reasoning Tokens", value: number(tokenStats?.reasoning)),
+            SessionContextStatItem(id: "session", label: "session_context.stat.session", value: snapshot.sessionTitle),
+            SessionContextStatItem(id: "messages", label: "session_context.stat.messages", value: number(snapshot.messageCounts.total)),
+            SessionContextStatItem(id: "provider", label: "session_context.stat.provider", value: snapshot.providerLabel ?? "—"),
+            SessionContextStatItem(id: "model", label: "session_context.stat.model", value: snapshot.modelLabel ?? "—"),
+            SessionContextStatItem(id: "limit", label: "session_context.stat.context_limit", value: number(tokenStats?.contextLimit)),
+            SessionContextStatItem(id: "total", label: "session_context.stat.total_tokens", value: number(tokenStats?.total)),
+            SessionContextStatItem(id: "usage", label: "session_context.stat.usage", value: percent(tokenStats?.usagePercent)),
+            SessionContextStatItem(id: "input", label: "session_context.stat.input_tokens", value: number(tokenStats?.input)),
+            SessionContextStatItem(id: "output", label: "session_context.stat.output_tokens", value: number(tokenStats?.output)),
+            SessionContextStatItem(id: "reasoning", label: "session_context.stat.reasoning_tokens", value: number(tokenStats?.reasoning)),
             SessionContextStatItem(
                 id: "cache",
-                label: "Cache Tokens (read/write)",
+                label: "session_context.stat.cache_tokens",
                 value: "\(number(tokenStats?.cacheRead)) / \(number(tokenStats?.cacheWrite))"
             ),
-            SessionContextStatItem(id: "user", label: "User Messages", value: number(snapshot.messageCounts.user)),
-            SessionContextStatItem(id: "assistant", label: "Assistant Messages", value: number(snapshot.messageCounts.assistant)),
-            SessionContextStatItem(id: "cost", label: "Total Cost", value: currency(snapshot.totalCost)),
-            SessionContextStatItem(id: "created", label: "Session Created", value: time(snapshot.createdAtEpochMs)),
-            SessionContextStatItem(id: "activity", label: "Last Activity", value: time(snapshot.lastActivityEpochMs)),
+            SessionContextStatItem(id: "user", label: "session_context.stat.user_messages", value: number(snapshot.messageCounts.user)),
+            SessionContextStatItem(id: "assistant", label: "session_context.stat.assistant_messages", value: number(snapshot.messageCounts.assistant)),
+            SessionContextStatItem(id: "cost", label: "session_context.stat.total_cost", value: currency(snapshot.totalCost)),
+            SessionContextStatItem(id: "created", label: "session_context.stat.created", value: time(snapshot.createdAtEpochMs)),
+            SessionContextStatItem(id: "activity", label: "session_context.stat.last_activity", value: time(snapshot.lastActivityEpochMs)),
         ]
         return SessionContextDisplayState(stats: stats, breakdown: snapshot.breakdown)
     }

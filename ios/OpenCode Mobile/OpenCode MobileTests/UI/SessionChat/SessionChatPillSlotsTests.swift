@@ -315,6 +315,25 @@ struct SessionChatPillSlotsTests {
         ) == nil)
     }
 
+    @Test func activityPillTextComesFromTheStringCatalog() {
+        #expect(SessionChatActivitySlotView.layout(.sideQuestionsFailed(count: 2)) == .closable(label: "/btw failed ×2 · Retry"))
+        #expect(SessionChatActivitySlotView.layout(.sideQuestionsFailed(count: 1)) == .closable(label: "/btw failed · Retry"))
+        #expect(SessionChatActivitySlotView.accessibilityLabel(.sideQuestionsFailed(count: 2)) == "2 side questions failed. Retry")
+        #expect(SessionChatActivitySlotView.accessibilityLabel(.queued(count: 1)) == "1 queued prompt. Open Up next")
+        #expect(
+            SessionChatActivitySlotView.collapsedAccessibilityLabel(.reviewPermission, count: 2, stackOpen: false)
+                == "Review permission request. Show 2 activities"
+        )
+        #expect(
+            SessionChatActivitySlotView.collapsedAccessibilityLabel(.reviewPermission, count: 2, stackOpen: true)
+                == "Review permission request. Hide 2 activities"
+        )
+        #expect(
+            SessionChatActivitySlotView.collapsedAccessibilityLabel(.reviewPermission, count: 1, stackOpen: false)
+                == "Review permission request. Show 1 activity"
+        )
+    }
+
     private func user(_ id: String) -> SessionChatRow {
         SessionChatRow(id: id, role: .user, text: "Hi", metadataLabel: "")
     }
@@ -326,7 +345,7 @@ struct SessionChatPillSlotsTests {
     private func failure(_ blockID: String, neutral: Bool = false) -> SessionChatTimelineBlock {
         .failureLine(
             blockID: blockID,
-            text: "HTTP 500 · Server error",
+            text: .verbatim("HTTP 500 · Server error"),
             providerBody: nil,
             isNeutral: neutral,
             action: nil,

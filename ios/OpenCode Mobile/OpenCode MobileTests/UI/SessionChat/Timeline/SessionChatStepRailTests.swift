@@ -61,7 +61,7 @@ struct SessionChatStepRailTests {
         let rails = try rails([
             .tool(ToolPart(id: "q", toolName: "question", status: .completed, input: questionInput)),
         ])
-        #expect(rails[0].steps.map(\.title) == ["Asked 1 question"])
+        #expect(rails[0].steps.map(\.title.resolved) == ["Asked 1 question"])
     }
 
     @Test func settledQuestion_detailIsTheAnswer() throws {
@@ -74,7 +74,7 @@ struct SessionChatStepRailTests {
                 metadata: ["answers": .array([.array([.string("Invoice field")])])]
             )),
         ])
-        #expect(rails[0].steps[0].detail == "Invoice field")
+        #expect(rails[0].steps[0].detail?.resolved == "Invoice field")
     }
 
     @Test func settledThought_isAStepWithDuration() throws {
@@ -84,7 +84,7 @@ struct SessionChatStepRailTests {
         ])
         let thought = rails[0].steps[0]
         #expect(thought.kind == .thought)
-        #expect(thought.title == "Thought \u{00B7} 2.1s")
+        #expect(thought.title.resolved == "Thought \u{00B7} 2.1s")
         #expect(thought.thoughtText == "Plan")
     }
 
@@ -131,7 +131,7 @@ struct SessionChatStepRailTests {
             bash("b1", status: .running),
             child("c1", status: .running),
         ])[0].steps
-        #expect(running.map(\.title) == [
+        #expect(running.map(\.title.resolved) == [
             "Reading View.swift",
             "Searching chipTimeline",
             "Editing Blocks.swift",
@@ -140,7 +140,7 @@ struct SessionChatStepRailTests {
         ])
 
         let settled = try rails([read("r1"), grep("g1"), edit("e1"), bash("b1"), child("c1")])[0].steps
-        #expect(settled.map(\.title) == [
+        #expect(settled.map(\.title.resolved) == [
             "View.swift",
             "chipTimeline",
             "Blocks.swift",
@@ -151,7 +151,7 @@ struct SessionChatStepRailTests {
         #expect(settled[2].deletions == 4)
         #expect(settled[4].kind == .childSession)
         #expect(settled[4].childSession?.childSessionId == "ses-child")
-        #expect(settled[4].detail == "Find callers")
+        #expect(settled[4].detail?.resolved == "Find callers")
     }
 
     @Test func longCommand_isCutForTheTitle() throws {
@@ -159,7 +159,7 @@ struct SessionChatStepRailTests {
         let steps = try rails([
             .tool(ToolPart(id: "b1", toolName: "bash", status: .running, input: ["command": .string(command)])),
         ])[0].steps
-        #expect(steps[0].title == "Running " + String(repeating: "x", count: 40) + "\u{2026}")
+        #expect(steps[0].title.resolved == "Running " + String(repeating: "x", count: 40) + "\u{2026}")
     }
 
     @Test func runningChildSession_detailCountsToolsSoFar() throws {
@@ -171,7 +171,7 @@ struct SessionChatStepRailTests {
             metadata: ["summary": .array([.dictionary([:]), .dictionary([:])])]
         )
         let step = try rails([.tool(tool)])[0].steps[0]
-        #expect(step.detail == "Find callers \u{00B7} 2 tools so far")
+        #expect(step.detail?.resolved == "Find callers \u{00B7} 2 tools so far")
         #expect(step.childSession?.toolsSoFar == 2)
     }
 
@@ -180,7 +180,7 @@ struct SessionChatStepRailTests {
             .tool(ToolPart(id: "x1", toolName: "linear_get_issue", status: .completed, title: "OPE-12")),
             .tool(ToolPart(id: "x2", toolName: "linear_get_issue", status: .completed)),
         ])[0].steps
-        #expect(steps.map(\.title) == ["OPE-12", "Linear get issue"])
+        #expect(steps.map(\.title.resolved) == ["OPE-12", "Linear get issue"])
     }
 
     @Test func invalidTool_isAFailedStepNamedForTheRequestedTool() throws {
@@ -193,8 +193,8 @@ struct SessionChatStepRailTests {
                 input: ["tool": .string("edit"), "error": .string("Model tried to call unavailable tool 'edit'.")]
             )),
         ])[0].steps[0]
-        #expect(step.title == "Edit")
-        #expect(step.detail == "Tool not available")
+        #expect(step.title.resolved == "Edit")
+        #expect(step.detail?.resolved == "Tool not available")
         #expect(step.status == .failed)
     }
 

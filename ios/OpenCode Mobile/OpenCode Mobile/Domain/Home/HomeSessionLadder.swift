@@ -88,7 +88,7 @@ enum HomeSessionLadder {
                 HomeSessionLadderSection(
                     id: "recent",
                     kind: .recent,
-                    title: "Recent",
+                    title: String(localized: "session_list.section.recent", defaultValue: "Recent"),
                     hint: recentHint,
                     items: recent
                 )
@@ -117,8 +117,8 @@ enum HomeSessionLadder {
             guard !items.isEmpty else { continue }
             let title: String
             switch offset {
-            case 0: title = "Today"
-            case 1: title = "Yesterday"
+            case 0: title = String(localized: "session_list.section.today", defaultValue: "Today")
+            case 1: title = String(localized: "session_list.section.yesterday", defaultValue: "Yesterday")
             default: title = weekdayFormatter.string(from: dayStart)
             }
             let dayId = ISO8601DateFormatter().string(from: dayStart)
@@ -170,8 +170,12 @@ enum HomeSessionLadder {
             .sorted { $0.weekStart > $1.weekStart }
             .forEach { bucket in
                 let weekEnd = calendar.date(byAdding: .day, value: 6, to: bucket.weekStart) ?? bucket.weekStart
-                let title =
-                    "Week of \(weekFormatter.string(from: bucket.weekStart)) – \(weekFormatter.string(from: weekEnd))"
+                let start = weekFormatter.string(from: bucket.weekStart)
+                let end = weekFormatter.string(from: weekEnd)
+                let title = String(localized: LocalizedStringResource(
+                    "session_list.section.week_of",
+                    defaultValue: "Week of \(start) – \(end)"
+                ))
                 let weekId = ISO8601DateFormatter().string(from: bucket.weekStart)
                 sections.append(
                     HomeSessionLadderSection(

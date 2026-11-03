@@ -25,7 +25,7 @@ struct DictationUnavailableCopyTests {
     @Test func downloading_disablesTheAction() {
         #expect(OpenCodeDictationUnavailableReason.modelDownloading(progress: 0.5).actionEnabled == false)
         #expect(OpenCodeDictationUnavailableReason.modelDownloadFailed.actionEnabled)
-        #expect(OpenCodeDictationUnavailableReason.modelDownloadFailed.actionTitle == "Try Again")
+        #expect(OpenCodeDictationUnavailableReason.modelDownloadFailed.actionTitle.resolved == "Try Again")
     }
 
     @Test func recognizerError_usesTheMessageOrDefault() {

@@ -35,8 +35,8 @@ struct HighlightLabDataSetsView: View {
                     }
                     ForEach(state.rows) { row in
                         OpenCodeListItem(
-                            title: row.displayName,
-                            subtitle: row.subtitle,
+                            title: .verbatim(row.displayName),
+                            subtitle: .verbatim(row.subtitle),
                             style: .card,
                             accessory: .disclosure,
                             action: { opened = .catalog(id: row.id) }
@@ -106,8 +106,8 @@ struct HighlightLabViewerView: View {
         let state = model.state
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: state.title,
-                subtitle: state.subtitle,
+                title: .verbatim(state.title),
+                subtitle: .verbatim(state.subtitle),
                 leading: presentedModally ? .close(action: { dismiss() }) : .back(action: { dismiss() }),
                 actions: state.phase.highlightedEngineID == nil ? [] : [
                     .label(title: "Show plain") { model.showPlain() },
@@ -166,7 +166,7 @@ struct HighlightLabViewerView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(state.engines) { engine in
-                        OpenCodeChoiceBadge(label: engine.name, selected: engine.id == selected, enabled: engine.isEnabled) {
+                        OpenCodeChoiceBadge(label: .verbatim(engine.name), selected: engine.id == selected, enabled: engine.isEnabled) {
                             model.select(engine.id)
                         }
                         .accessibilityHint(engine.unsupportedReason ?? "")

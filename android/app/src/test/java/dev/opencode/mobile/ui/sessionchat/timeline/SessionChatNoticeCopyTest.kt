@@ -11,6 +11,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import dev.opencode.mobile.ui.text.english
 
 class SessionChatNoticeCopyTest {
     private val names =
@@ -25,28 +26,42 @@ class SessionChatNoticeCopyTest {
             ),
         )
 
-    private fun line(notice: TimelineNotice) = SessionChatNoticeCopy.line(notice, names)
+    /** The notice line as the English users read. */
+    private data class EnglishLine(
+        val label: String,
+        val value: String? = null,
+        val isMove: Boolean = false,
+    ) {
+        var accessibilityLabel: String = ""
+    }
+
+    private fun line(notice: TimelineNotice): EnglishLine {
+        val line = SessionChatNoticeCopy.line(notice, names)
+        return EnglishLine(line.label.english(), line.value?.english(), line.isMove).also {
+            it.accessibilityLabel = line.accessibilityLabel.english()
+        }
+    }
 
     @Test
     fun moved_showsTheGlyphAndTheFullDirectory() {
         val line = line(TimelineNotice.Moved("/repo/.worktrees/feat", previousDirectory = "/repo"))
 
-        assertEquals(SessionChatNoticeLine(label = "Moved to", value = "/repo/.worktrees/feat", isMove = true), line)
+        assertEquals(EnglishLine(label = "Moved to", value = "/repo/.worktrees/feat", isMove = true), line)
         assertEquals("Moved to /repo/.worktrees/feat", line.accessibilityLabel)
     }
 
     @Test
     fun agentChanged_titleCasesAndArrowsOnlyWhenThePreviousAgentDiffers() {
         assertEquals(
-            SessionChatNoticeLine(label = "Agent changed", value = "Build → Plan"),
+            EnglishLine(label = "Agent changed", value = "Build → Plan"),
             line(TimelineNotice.AgentChanged("plan", previous = "build")),
         )
         assertEquals(
-            SessionChatNoticeLine(label = "Agent changed", value = "Build"),
+            EnglishLine(label = "Agent changed", value = "Build"),
             line(TimelineNotice.AgentChanged("build")),
         )
         assertEquals(
-            SessionChatNoticeLine(label = "Agent changed", value = "Build"),
+            EnglishLine(label = "Agent changed", value = "Build"),
             line(TimelineNotice.AgentChanged("build", previous = "build")),
         )
     }
@@ -54,7 +69,7 @@ class SessionChatNoticeCopyTest {
     @Test
     fun modelChanged_namesTheModelFromTheCatalogElseItsId() {
         assertEquals(
-            SessionChatNoticeLine(label = "Switched to", value = "Claude Opus 5.5"),
+            EnglishLine(label = "Switched to", value = "Claude Opus 5.5"),
             line(
                 TimelineNotice.ModelChanged(
                     model = NoticeModelRef("anthropic", "claude-opus-5-5"),
@@ -63,7 +78,7 @@ class SessionChatNoticeCopyTest {
             ),
         )
         assertEquals(
-            SessionChatNoticeLine(label = "Switched to", value = "gpt-5"),
+            EnglishLine(label = "Switched to", value = "gpt-5"),
             line(TimelineNotice.ModelChanged(model = NoticeModelRef("openai", "gpt-5", variant = "high"))),
         )
     }
@@ -72,15 +87,15 @@ class SessionChatNoticeCopyTest {
     fun modelChanged_variantOnlyShowsTheVariantOrDefault() {
         val previous = NoticeModelRef("openai", "gpt-5", variant = "low")
         assertEquals(
-            SessionChatNoticeLine(label = "Switched variant to", value = "high"),
+            EnglishLine(label = "Switched variant to", value = "high"),
             line(TimelineNotice.ModelChanged(NoticeModelRef("openai", "gpt-5", variant = "high"), previous)),
         )
         assertEquals(
-            SessionChatNoticeLine(label = "Switched variant to Default"),
+            EnglishLine(label = "Switched variant to Default"),
             line(TimelineNotice.ModelChanged(NoticeModelRef("openai", "gpt-5"), previous)),
         )
         assertEquals(
-            SessionChatNoticeLine(label = "Switched variant to Default"),
+            EnglishLine(label = "Switched variant to Default"),
             line(TimelineNotice.ModelChanged(NoticeModelRef("openai", "gpt-5", variant = "default"), previous)),
         )
     }
@@ -88,16 +103,16 @@ class SessionChatNoticeCopyTest {
     @Test
     fun instructionsSystemAndRestart() {
         assertEquals(
-            SessionChatNoticeLine(label = "Instructions updated", value = "AGENTS.md, CLAUDE.md"),
+            EnglishLine(label = "Instructions updated", value = "AGENTS.md, CLAUDE.md"),
             line(TimelineNotice.InstructionsUpdated(listOf("AGENTS.md", "CLAUDE.md"))),
         )
         assertEquals(
-            SessionChatNoticeLine(label = "Instructions updated"),
+            EnglishLine(label = "Instructions updated"),
             line(TimelineNotice.InstructionsUpdated(emptyList())),
         )
-        assertEquals(SessionChatNoticeLine(label = "Tools changed"), line(TimelineNotice.SystemNote("Tools changed")))
+        assertEquals(EnglishLine(label = "Tools changed"), line(TimelineNotice.SystemNote("Tools changed")))
         val restart = line(TimelineNotice.Restart)
-        assertEquals(SessionChatNoticeLine(label = "Continuing after restart"), restart)
+        assertEquals(EnglishLine(label = "Continuing after restart"), restart)
         assertEquals("Continuing after restart", restart.accessibilityLabel)
     }
 

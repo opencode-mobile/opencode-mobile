@@ -74,7 +74,7 @@ struct DefaultWorktreeRepository: WorktreeRepository {
         if await protocolProvider() == .v2 {
             let projectID = request.projectID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             guard !projectID.isEmpty, projectID != HomeProjectGrouping.globalProjectID else {
-                throw WorktreeCreateError(message: WorktreeCreateCopy.noCommit)
+                throw WorktreeCreateError(message: WorktreeCreateCopy.noCommitError)
             }
             do {
                 let directory = ServerPathPolicy.canonical(
@@ -97,7 +97,7 @@ struct DefaultWorktreeRepository: WorktreeRepository {
         } catch WorktreeRemoteError.http(404, _) {
             // No experimental worktree routes on this server: stop listing and creating.
             state.markStopped()
-            throw WorktreeCreateError(message: WorktreeCreateCopy.unsupported)
+            throw WorktreeCreateError(message: WorktreeCreateCopy.unsupportedError)
         } catch {
             throw Self.createError(error)
         }

@@ -15,6 +15,8 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 
 class SessionChatActivityCardTest {
     private fun tool(
@@ -46,7 +48,7 @@ class SessionChatActivityCardTest {
         id = id,
         kind = if (family == SessionChatStepFamily.Agent) SessionChatStepKind.ChildSession else SessionChatStepKind.Tool,
         status = status,
-        title = id,
+        title = UiText.verbatim(id),
         family = family,
         isInterrupted = interrupted,
     )
@@ -65,9 +67,9 @@ class SessionChatActivityCardTest {
         id = id,
         kind = SessionChatStepKind.Tool,
         status = SessionChatStepStatus.Running,
-        title = runningTitle,
-        runningTitle = runningTitle,
-        settledTitle = id,
+        title = UiText.verbatim(runningTitle),
+        runningTitle = UiText.verbatim(runningTitle),
+        settledTitle = UiText.verbatim(id),
         family = family,
         startedAtMs = startedAtMs,
     )
@@ -85,9 +87,9 @@ class SessionChatActivityCardTest {
         id = id,
         kind = SessionChatStepKind.ChildSession,
         status = status,
-        title = "explore",
+        title = UiText.verbatim("explore"),
         family = SessionChatStepFamily.Agent,
-        detail = detail,
+        detail = detail?.let(UiText::verbatim),
         startedAtMs = startedAtMs,
         childSession =
             SessionChatStepChildSession(
@@ -215,13 +217,13 @@ class SessionChatActivityCardTest {
                 ),
             ).single()
         val byId = card.steps.associateBy { it.id }
-        assertEquals("Reading App.kt", byId.getValue("r1").runningTitle)
-        assertEquals("App.kt", byId.getValue("r1").settledTitle)
-        assertEquals("Searching branchPill", byId.getValue("g1").runningTitle)
-        assertEquals("branchPill", byId.getValue("g1").settledTitle)
-        assertEquals("Editing App.kt", byId.getValue("e1").runningTitle)
-        assertEquals("Running npm test", byId.getValue("b1").runningTitle)
-        assertEquals("Ran npm test", byId.getValue("b1").settledTitle)
+        assertEquals("Reading App.kt", byId.getValue("r1").runningTitle.english())
+        assertEquals("App.kt", byId.getValue("r1").settledTitle.english())
+        assertEquals("Searching branchPill", byId.getValue("g1").runningTitle.english())
+        assertEquals("branchPill", byId.getValue("g1").settledTitle.english())
+        assertEquals("Editing App.kt", byId.getValue("e1").runningTitle.english())
+        assertEquals("Running npm test", byId.getValue("b1").runningTitle.english())
+        assertEquals("Ran npm test", byId.getValue("b1").settledTitle.english())
         assertEquals(
             listOf(
                 SessionChatStepFamily.Read,
@@ -258,7 +260,7 @@ class SessionChatActivityCardTest {
     fun question_isNotCountedAsAFamily() {
         val card = cards(listOf(tool("q1", "question"), tool("p1"))).single()
         assertEquals(null, card.steps[0].family)
-        assertEquals("2 steps · 1 read", SessionChatActivityCard.settledSummary(card.steps))
+        assertEquals("2 steps · 1 read", SessionChatActivityCard.settledSummary(card.steps).english())
     }
 
     @Test
@@ -277,8 +279,8 @@ class SessionChatActivityCardTest {
                     },
             )
         val steps = cards(listOf(answered, tool("g1", "grep", metadata = buildJsonObject { put("matches", 4) }))).single().steps
-        assertEquals("Invoice field", SessionChatActivityCard.sheetDetail(steps[0]))
-        assertEquals("4 matches", SessionChatActivityCard.sheetDetail(steps[1]))
+        assertEquals("Invoice field", SessionChatActivityCard.sheetDetail(steps[0])?.english())
+        assertEquals("4 matches", SessionChatActivityCard.sheetDetail(steps[1])?.english())
     }
 
     @Test
@@ -311,22 +313,22 @@ class SessionChatActivityCardTest {
             )
         assertEquals(
             "9 steps · 3 reads · 1 search · 2 edits · 1 agent · 2 commands",
-            SessionChatActivityCard.settledSummary(steps),
+            SessionChatActivityCard.settledSummary(steps).english(),
         )
         assertEquals(
             "9 steps · 3 reads · 1 search · 2 edits · 1 agent · 2 commands",
-            SessionChatActivityCard.live(card(steps)).summary,
+            SessionChatActivityCard.live(card(steps)).summary.english(),
         )
     }
 
     @Test
     fun summary_singularAndPlural() {
         fun two(family: SessionChatStepFamily) = listOf(step("x", family), step("y", family))
-        assertEquals("1 step · 1 read", SessionChatActivityCard.settledSummary(listOf(step("a", SessionChatStepFamily.Read))))
-        assertEquals("2 searches", SessionChatActivityCard.familySummary(two(SessionChatStepFamily.Search)))
-        assertEquals("2 fetches", SessionChatActivityCard.familySummary(two(SessionChatStepFamily.Fetch)))
-        assertEquals("2 thoughts", SessionChatActivityCard.familySummary(two(SessionChatStepFamily.Thought)))
-        assertEquals("2 agents", SessionChatActivityCard.familySummary(two(SessionChatStepFamily.Agent)))
+        assertEquals("1 step · 1 read", SessionChatActivityCard.settledSummary(listOf(step("a", SessionChatStepFamily.Read))).english())
+        assertEquals("2 searches", SessionChatActivityCard.familySummary(two(SessionChatStepFamily.Search)).english())
+        assertEquals("2 fetches", SessionChatActivityCard.familySummary(two(SessionChatStepFamily.Fetch)).english())
+        assertEquals("2 thoughts", SessionChatActivityCard.familySummary(two(SessionChatStepFamily.Thought)).english())
+        assertEquals("2 agents", SessionChatActivityCard.familySummary(two(SessionChatStepFamily.Agent)).english())
         assertEquals(
             "1 fetch · 1 thought · 1 command",
             SessionChatActivityCard.familySummary(
@@ -335,7 +337,7 @@ class SessionChatActivityCardTest {
                     step("b", SessionChatStepFamily.Thought),
                     step("c", SessionChatStepFamily.Command),
                 ),
-            ),
+            ).english(),
         )
     }
 
@@ -376,8 +378,8 @@ class SessionChatActivityCardTest {
         val live = SessionChatActivityCard.live(card(steps), children)
         assertEquals(listOf("c1", "c2"), live.agents.map { it.id })
         assertEquals("Explore", live.agents[0].agentName)
-        assertEquals("Searching pill", live.agents[0].action)
-        assertEquals("Review the diff", live.agents[1].action)
+        assertEquals("Searching pill", live.agents[0].action.english())
+        assertEquals("Review the diff", live.agents[1].action.english())
         assertEquals(1_000L, live.agents[0].startedAtMs)
     }
 
@@ -394,7 +396,7 @@ class SessionChatActivityCardTest {
         val live = SessionChatActivityCard.live(card(steps))
         val current = live.current!!
         assertEquals("r2", current.stepId)
-        assertEquals("Editing App.kt", current.title)
+        assertEquals("Editing App.kt", current.title.english())
         assertEquals(SessionChatStepFamily.Edit, current.family)
         assertEquals(2, current.extraRunning)
         assertEquals(9_000L, current.startedAtMs)
@@ -412,9 +414,9 @@ class SessionChatActivityCardTest {
     fun live_idleText_waitingForAgentsOrThinking() {
         val waiting = SessionChatActivityCard.live(card(listOf(step("a", SessionChatStepFamily.Read), child("c1"))))
         assertEquals(null, waiting.current)
-        assertEquals("Waiting for agents", waiting.idleText)
+        assertEquals("Waiting for agents", waiting.idleText?.english())
         val thinking = SessionChatActivityCard.live(card(listOf(step("a", SessionChatStepFamily.Read), child("c1", SessionChatStepStatus.Completed))))
-        assertEquals("Thinking…", thinking.idleText)
+        assertEquals("Thinking…", thinking.idleText?.english())
         assertTrue(thinking.agents.isEmpty())
     }
 
@@ -467,7 +469,7 @@ class SessionChatActivityCardTest {
         val block = settledBlocks(listOf(task("c1", "Find the pill", output = "Found it"))).single()
         val card = block as SessionChatTimelineBlock.ActivityCard
         val settled = SessionChatActivityCard.settled(card)
-        assertEquals(listOf(SessionChatActivitySettled.Agent(id = "c1", agentName = "Explore", action = "Found it")), settled.agents)
+        assertEquals(listOf(SessionChatActivitySettled.Agent(id = "c1", agentName = "Explore", action = UiText.verbatim("Found it"))), settled.agents)
     }
 
     @Test
@@ -531,7 +533,7 @@ class SessionChatActivityCardTest {
         assertEquals(15, settled.stepCount)
         assertEquals(
             listOf("Thought", "Read", "Grep", "Edit", "Write", "Shell", "Fetch", "Search", "Glob", "Skill", "Question", "Mcp_lookup", "Agent"),
-            settled.names,
+            settled.names.map { it.english() },
         )
         assertEquals(SessionChatStepStatus.Completed, settled.worstStatus)
     }
@@ -552,9 +554,9 @@ class SessionChatActivityCardTest {
         assertEquals(4, settled.stepCount)
         assertEquals(
             listOf(
-                SessionChatActivitySettled.Agent(id = "c1", agentName = "Explore", action = "Found 3 call sites"),
-                SessionChatActivitySettled.Agent(id = "c2", agentName = "Explore", action = "Review the header"),
-                SessionChatActivitySettled.Agent(id = "c3", agentName = "Explore", action = ""),
+                SessionChatActivitySettled.Agent(id = "c1", agentName = "Explore", action = UiText.verbatim("Found 3 call sites")),
+                SessionChatActivitySettled.Agent(id = "c2", agentName = "Explore", action = UiText.verbatim("Review the header")),
+                SessionChatActivitySettled.Agent(id = "c3", agentName = "Explore", action = UiText.verbatim("")),
             ),
             settled.agents,
         )
@@ -603,14 +605,14 @@ class SessionChatActivityCardTest {
         assertEquals(5, sheet.stepCount)
         assertEquals(listOf("a", "r1"), sheet.steps.map { it.id })
         assertEquals(listOf("c1", "c2", "c3"), sheet.agents.map { it.step.id })
-        assertEquals("4 tools so far", sheet.agents[0].caption)
+        assertEquals("4 tools so far", sheet.agents[0].caption?.english())
         assertEquals(listOf("x2", "x3", "x4"), sheet.agents[0].recent.map { it.id })
-        assertEquals("Found it in Header.kt", sheet.agents[1].caption)
+        assertEquals("Found it in Header.kt", sheet.agents[1].caption?.english())
         assertTrue(sheet.agents[1].recent.isEmpty())
-        assertEquals("boom", sheet.agents[2].caption)
+        assertEquals("boom", sheet.agents[2].caption?.english())
 
         val unobserved = SessionChatActivityCard.sheet(messages, "ac:a")!!
-        assertEquals("2 tools so far", unobserved.agents[0].caption)
+        assertEquals("2 tools so far", unobserved.agents[0].caption?.english())
         assertTrue(unobserved.agents[0].recent.isEmpty())
 
         assertFalse(SessionChatActivityCard.sheet(messages, "ac:z")!!.isLive)
@@ -646,7 +648,7 @@ class SessionChatActivityCardTest {
         val steps = cards(parts).single().steps.associateBy { it.id }
 
         val thought = sessionChatStepDetail(steps.getValue("r1"), supportsSessionMessageDiff = true)
-        assertEquals("Thought", thought?.title)
+        assertEquals("Thought", thought?.title?.english())
         assertEquals("Plan the fix", thought?.body)
 
         val shell = sessionChatStepDetail(steps.getValue("b1"), supportsSessionMessageDiff = true)
@@ -708,7 +710,7 @@ class SessionChatActivityCardTest {
         val activity = SessionChatActivityCard.childActivity(messages)
         assertEquals(listOf("r1", "r2"), activity.steps.map { it.id })
         assertEquals(2, activity.toolCount)
-        assertEquals("Reading App.kt", activity.currentAction)
+        assertEquals("Reading App.kt", activity.currentAction?.english())
     }
 
     @Test

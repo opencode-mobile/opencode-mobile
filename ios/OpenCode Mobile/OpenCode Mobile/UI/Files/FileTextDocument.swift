@@ -29,8 +29,10 @@ nonisolated final class FileTextDocument: Equatable, @unchecked Sendable {
     var languageName: String { language?.displayName ?? ProjectFileLanguage.plainTextName }
 
     /// `"Swift · 120 lines"`.
+    /// The language name stays verbatim; the line count is a catalog plural.
     var metaText: String {
-        "\(languageName) · \(lines.count) \(lines.count == 1 ? "line" : "lines")"
+        let lineCount = String(localized: "file_viewer.line_count", defaultValue: "\(lines.count) lines")
+        return String(localized: "file_viewer.meta", defaultValue: "\(languageName) · \(lineCount)")
     }
 
     static func == (lhs: FileTextDocument, rhs: FileTextDocument) -> Bool {

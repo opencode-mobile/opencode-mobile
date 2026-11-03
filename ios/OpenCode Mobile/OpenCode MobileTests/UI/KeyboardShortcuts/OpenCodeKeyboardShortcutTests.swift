@@ -15,11 +15,20 @@ import Testing
     }
 
     @Test func titles_areTheOverlayLabels() {
-        #expect(OpenCodeKeyboardShortcut.allCases.map(\.title) == [
+        #expect(OpenCodeKeyboardShortcut.allCases.map { String(localized: $0.title) } == [
             "Toggle Sidebar",
             "Next Session",
             "Previous Session",
             "Focus Composer",
+        ])
+    }
+
+    @Test func titles_areCatalogKeys() {
+        #expect(OpenCodeKeyboardShortcut.allCases.map(\.title.key) == [
+            "keyboard_shortcuts.toggle_sidebar",
+            "keyboard_shortcuts.next_session",
+            "keyboard_shortcuts.previous_session",
+            "keyboard_shortcuts.focus_composer",
         ])
     }
 

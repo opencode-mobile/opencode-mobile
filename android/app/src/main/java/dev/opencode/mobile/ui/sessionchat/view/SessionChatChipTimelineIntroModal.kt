@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -18,9 +19,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
@@ -31,26 +34,26 @@ import dev.opencode.mobile.ui.components.OpenCodeSkeletonIllustrationTopic
 
 /** One page of the Chip timeline intro carousel. */
 internal data class SessionChatChipTimelineIntroPage(
-    val title: String,
-    val body: String,
+    @StringRes val title: Int,
+    @StringRes val body: Int,
     val illustration: OpenCodeSkeletonIllustrationTopic,
 )
 
 internal val ChipTimelineIntroPages =
     listOf(
         SessionChatChipTimelineIntroPage(
-            title = "See the work at a glance",
-            body = "Tool calls show as chips under the sentence that explains them.",
+            title = R.string.session_chat_sheet_chip_timeline_intro_glance_title,
+            body = R.string.session_chat_sheet_chip_timeline_intro_glance_body,
             illustration = OpenCodeSkeletonIllustrationTopic.ChipTimelineGlance,
         ),
         SessionChatChipTimelineIntroPage(
-            title = "Long runs, short timeline",
-            body = "Twenty tool calls take a few chips instead of a screen of rows.",
+            title = R.string.session_chat_sheet_chip_timeline_intro_long_runs_title,
+            body = R.string.session_chat_sheet_chip_timeline_intro_long_runs_body,
             illustration = OpenCodeSkeletonIllustrationTopic.ChipTimelineLongRuns,
         ),
         SessionChatChipTimelineIntroPage(
-            title = "Details stay one tap away",
-            body = "Tap a chip for its diffs, command output, or files.",
+            title = R.string.session_chat_sheet_chip_timeline_intro_details_title,
+            body = R.string.session_chat_sheet_chip_timeline_intro_details_body,
             illustration = OpenCodeSkeletonIllustrationTopic.ChipTimelineDetails,
         ),
     )
@@ -90,7 +93,7 @@ internal fun SessionChatChipTimelineIntroModal(
             modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 16.dp, bottom = 22.dp),
         )
         OpenCodeButton(
-            variant = OpenCodeButtonVariant.FullWidthText("Turn on Chip timeline"),
+            variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.session_chat_sheet_chip_timeline_intro_enable)),
             onClick = onEnable,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -98,8 +101,8 @@ internal fun SessionChatChipTimelineIntroModal(
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         ) {
-            ChipTimelineIntroTextAction("Later", onLater)
-            ChipTimelineIntroTextAction("Don't show again", onNever)
+            ChipTimelineIntroTextAction(stringResource(R.string.session_chat_sheet_chip_timeline_intro_later), onLater)
+            ChipTimelineIntroTextAction(stringResource(R.string.session_chat_sheet_chip_timeline_intro_never), onNever)
         }
     }
 }
@@ -132,13 +135,13 @@ private fun ChipTimelineIntroPageContent(page: SessionChatChipTimelineIntroPage)
                     .padding(top = 20.dp),
         )
         Text(
-            text = page.title,
+            text = stringResource(page.title),
             style = MaterialTheme.typography.titleLarge,
             color = openCodeColor("text-strong"),
             modifier = Modifier.padding(top = 6.dp),
         )
         Text(
-            text = page.body,
+            text = stringResource(page.body),
             style = MaterialTheme.typography.bodyMedium,
             color = openCodeColor("text-base"),
         )

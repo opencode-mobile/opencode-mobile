@@ -59,6 +59,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -69,6 +71,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogExportWindow
 import dev.opencode.mobile.domain.feedback.FeedbackKind
 import dev.opencode.mobile.domain.feedback.FeedbackReport
@@ -112,6 +115,8 @@ import dev.opencode.mobile.ui.sessionchat.dictation.cardPhase
 import dev.opencode.mobile.ui.sessionchat.dictation.dictationLanguageLabel
 import dev.opencode.mobile.ui.sessionchat.dictation.formatDictationElapsed
 import dev.opencode.mobile.ui.sessionchat.dictation.probeDictationSupport
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -188,7 +193,7 @@ fun FeedbackSheet(
         if (state.dictationTakesOverCompose) state.dictation?.toCardModel(dictation.elapsedLabel) else null
     OpenCodeBottomSheet(
         visible = sheetState.visible,
-        title = state.sheetTitle,
+        title = state.sheetTitle.resolve(),
         onDismissRequest = {
             if (page == FeedbackPage.HideParts || page == FeedbackPage.LogPreview) {
                 viewModel.closePage()
@@ -198,7 +203,11 @@ fun FeedbackSheet(
         },
         headerLeadingAction =
             if (page == FeedbackPage.HideParts || page == FeedbackPage.LogPreview) {
-                OpenCodeBottomSheetHeaderAction(OpenCodeIcons.ArrowBack, "Back", viewModel::closePage)
+                OpenCodeBottomSheetHeaderAction(
+                    OpenCodeIcons.ArrowBack,
+                    stringResource(R.string.top_bar_back),
+                    viewModel::closePage,
+                )
             } else {
                 null
             },
@@ -253,14 +262,14 @@ fun FeedbackSheet(
                         FeedbackPage.HideParts ->
                             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                 OpenCodeButton(
-                                    variant = OpenCodeButtonVariant.FullWidthText("Undo"),
+                                    variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.feedback_undo)),
                                     contrast = OpenCodeButtonContrast.Low,
                                     enabled = state.screenshot?.hiddenRects?.isNotEmpty() == true,
                                     onClick = viewModel::undoHiddenArea,
                                     modifier = Modifier.weight(1f),
                                 )
                                 OpenCodeButton(
-                                    variant = OpenCodeButtonVariant.FullWidthText("Done"),
+                                    variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.feedback_done)),
                                     onClick = viewModel::closePage,
                                     modifier = Modifier.weight(1f),
                                 )
@@ -268,7 +277,7 @@ fun FeedbackSheet(
                         FeedbackPage.LogPreview -> Unit
                         null ->
                             OpenCodeButton(
-                                variant = OpenCodeButtonVariant.FullWidthText("Done"),
+                                variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.feedback_done)),
                                 onClick = ::dismiss,
                             )
                     }
@@ -281,7 +290,7 @@ fun FeedbackSheet(
                 fadeIn(tween(durationMillis = 240)) togetherWith fadeOut(tween(durationMillis = 160))
             },
             contentKey = { it != null },
-            label = "feedback-dictation-morph",
+            label = DICTATION_MORPH_ANIMATION_LABEL,
         ) { card ->
             if (card != null) {
                 FeedbackDictation(
@@ -319,7 +328,11 @@ private fun KindSwitch(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         FeedbackKind.entries.forEach { value ->
-            OpenCodeChoiceBadge(label = value.label, selected = kind == value, onClick = { onKindChange(value) })
+            OpenCodeChoiceBadge(
+                label = stringResource(value.badgeLabelRes()),
+                selected = kind == value,
+                onClick = { onKindChange(value) },
+            )
         }
     }
 }
@@ -335,7 +348,7 @@ private fun LogWindowSwitch(
     ) {
         DiagnosticLogExportWindow.entries.forEach { value ->
             OpenCodeChoiceBadge(
-                label = "${value.minutes} min",
+                label = pluralStringResource(R.plurals.feedback_log_window_minutes, value.minutes, value.minutes),
                 selected = window == value,
                 onClick = { onWindowChange(value) },
             )
@@ -370,13 +383,18 @@ private fun ComposeBody(
                         attachment =
                             OpenCodeAttachmentPresentation(
                                 id = "screenshot",
-                                filename = if (hidden == 0) "Screenshot" else "Screenshot · $hidden hidden",
+                                filename =
+                                    if (hidden == 0) {
+                                        stringResource(R.string.feedback_attachment_screenshot)
+                                    } else {
+                                        pluralStringResource(R.plurals.feedback_attachment_screenshot_hidden, hidden, hidden)
+                                    },
                                 variant = OpenCodeAttachmentVariant.Image,
                                 imageBytes = shot.jpeg,
                             ),
                         onRemove = { viewModel.removeScreenshot() },
                         onClick = viewModel::openHideParts,
-                        onClickLabel = "Hide parts",
+                        onClickLabel = stringResource(R.string.feedback_title_hide_parts),
                         enabled = editable,
                     )
                 }
@@ -385,12 +403,17 @@ private fun ComposeBody(
                         attachment =
                             OpenCodeAttachmentPresentation(
                                 id = "logs",
-                                filename = "Logs · ${state.logWindow.minutes} min",
+                                filename =
+                                    pluralStringResource(
+                                        R.plurals.feedback_attachment_logs_minutes,
+                                        state.logWindow.minutes,
+                                        state.logWindow.minutes,
+                                    ),
                                 variant = OpenCodeAttachmentVariant.Text,
                             ),
                         onRemove = { viewModel.setIncludeLogs(false) },
                         onClick = viewModel::openLogPreview,
-                        onClickLabel = "Diagnostic log",
+                        onClickLabel = stringResource(R.string.feedback_title_log_preview),
                         enabled = editable,
                     )
                 }
@@ -399,20 +422,21 @@ private fun ComposeBody(
         OpenCodeTextInput(
             value = state.message,
             onValueChange = viewModel::updateMessage,
-            hint = state.placeholder,
+            hint = state.placeholder.resolve(),
             enabled = editable,
             minLines = FEEDBACK_MESSAGE_MIN_LINES,
             maxLines = FEEDBACK_MESSAGE_MAX_LINES,
             maxLength = FeedbackReport.MAX_MESSAGE_LENGTH,
         )
         Text(
-            text = FeedbackCopy.PRIVACY_NOTE,
+            text = stringResource(R.string.feedback_privacy_note),
             style = MaterialTheme.typography.bodySmall,
             color = openCodeColor("text-weak"),
         )
     }
 }
 
+private const val DICTATION_MORPH_ANIMATION_LABEL = "feedback-dictation-morph"
 private const val FEEDBACK_MESSAGE_MIN_LINES = 4
 private const val FEEDBACK_MESSAGE_MAX_LINES = 8
 
@@ -429,6 +453,7 @@ private fun FeedbackActions(
     val focusManager = LocalFocusManager.current
     val sending = state.status == FeedbackSendStatus.Sending
     var addMenuOpen by remember { mutableStateOf(false) }
+    val sendingLabel = stringResource(R.string.feedback_sending)
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -440,13 +465,13 @@ private fun FeedbackActions(
             entries =
                 listOf(
                     OpenCodeOverflowMenuEntry(
-                        title = "Screenshot",
+                        title = stringResource(R.string.feedback_attachment_screenshot),
                         icon = null,
                         onClick = onAddScreenshot,
                         enabled = state.screenshot == null,
                     ),
                     OpenCodeOverflowMenuEntry(
-                        title = "Logs",
+                        title = stringResource(R.string.feedback_attachment_logs),
                         icon = null,
                         onClick = onAddLogs,
                         enabled = !state.includeLogs,
@@ -454,7 +479,7 @@ private fun FeedbackActions(
                 ),
         ) {
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, "Add attachment"),
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Add, stringResource(R.string.feedback_add_attachment)),
                 contrast = OpenCodeButtonContrast.Low,
                 enabled = !sending && (state.screenshot == null || !state.includeLogs),
                 onClick = { addMenuOpen = true },
@@ -462,7 +487,7 @@ private fun FeedbackActions(
         }
         if (showsMic) {
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Mic, "Dictate"),
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Mic, stringResource(R.string.feedback_dictate)),
                 contrast = OpenCodeButtonContrast.Low,
                 enabled = !sending,
                 onClick = onDictate,
@@ -471,7 +496,7 @@ private fun FeedbackActions(
         Spacer(Modifier.weight(1f))
         if (sending) {
             Box(
-                modifier = Modifier.size(40.dp).semantics { contentDescription = "Sending" },
+                modifier = Modifier.size(40.dp).semantics { contentDescription = sendingLabel },
                 contentAlignment = Alignment.Center,
             ) {
                 CircularProgressIndicator(
@@ -482,7 +507,7 @@ private fun FeedbackActions(
             }
         } else {
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, "Send"),
+                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.ArrowUpward, stringResource(R.string.feedback_send)),
                 contrast = OpenCodeButtonContrast.Accent,
                 enabled = state.canSend,
                 onClick = {
@@ -538,13 +563,15 @@ private fun HidePartsBody(
         remember(screenshot.jpeg) {
             BitmapFactory.decodeByteArray(screenshot.jpeg, 0, screenshot.jpeg.size)?.asImageBitmap()
         } ?: return
+    val hidden = screenshot.hiddenRects.size
+    val imageLabel = pluralStringResource(R.plurals.feedback_hide_parts_image_hidden, hidden, hidden)
     Column(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "Tap an area to cover it.",
+            text = stringResource(R.string.feedback_hide_parts_instructions),
             style = MaterialTheme.typography.bodyMedium,
             color = openCodeColor("text-base"),
         )
@@ -555,7 +582,7 @@ private fun HidePartsBody(
                     .fillMaxWidth()
                     .aspectRatio(bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1))
                     .clip(OpenCodeSmallShape)
-                    .semantics { contentDescription = "Screenshot. Tap an area to cover it." }
+                    .semantics { contentDescription = imageLabel }
                     .pointerInput(Unit) {
                         detectTapGestures { offset ->
                             viewModel.hideArea(offset.x / size.width, offset.y / size.height)
@@ -588,7 +615,12 @@ private fun LogPreviewBody(state: FeedbackUiState) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            text = "Last ${state.logWindow.minutes} minutes · gzipped on upload. Redacted on this phone.",
+            text =
+                pluralStringResource(
+                    R.plurals.feedback_log_preview_summary,
+                    state.logWindow.minutes,
+                    state.logWindow.minutes,
+                ),
             style = MaterialTheme.typography.bodySmall,
             color = openCodeColor("text-base"),
         )
@@ -596,8 +628,14 @@ private fun LogPreviewBody(state: FeedbackUiState) {
         Text(
             text =
                 when {
-                    lines == null -> "Loading…"
-                    lines.isEmpty() -> "No log lines in this window."
+                    lines == null -> stringResource(R.string.feedback_log_preview_loading)
+                    lines.isEmpty() ->
+                        pluralStringResource(
+                            R.plurals.feedback_log_preview_empty_message,
+                            state.logWindow.minutes,
+                            state.logWindow.minutes,
+                        )
+                    // Redacted log lines are log content, shown as is.
                     else -> lines.joinToString("\n")
                 },
             style = CodeTextStyle,
@@ -627,23 +665,25 @@ private fun SentBody(state: FeedbackUiState) {
             Icon(OpenCodeIcons.Check, contentDescription = null, tint = openCodeColor("icon-strong-base"))
         }
         Text(
-            text = "Thanks — report sent",
+            text = stringResource(R.string.feedback_sent_title),
             style = MaterialTheme.typography.titleMedium,
             color = openCodeColor("text-strong"),
             textAlign = TextAlign.Center,
         )
         Text(
             text =
-                when (state.kind) {
-                    FeedbackKind.Bug -> "The team will look into it."
-                    FeedbackKind.Feedback -> "Thanks for the idea."
-                },
+                stringResource(
+                    when (state.kind) {
+                        FeedbackKind.Bug -> R.string.feedback_sent_bug
+                        FeedbackKind.Feedback -> R.string.feedback_sent_idea
+                    },
+                ),
             style = MaterialTheme.typography.bodyMedium,
             color = openCodeColor("text-base"),
             textAlign = TextAlign.Center,
         )
         Text(
-            text = "Ref $reference",
+            text = stringResource(R.string.feedback_sent_reference, reference),
             style = CodeTextStyle,
             color = openCodeColor("text-strong"),
             modifier =
@@ -655,29 +695,32 @@ private fun SentBody(state: FeedbackUiState) {
     }
 }
 
-internal object FeedbackCopy {
-    const val PRIVACY_NOTE =
-        "Goes to the OpenCode Mobile team only. Never includes your server address, username or password. " +
-            "Logs are redacted on this phone."
-    const val OFFLINE = "You're offline. Your report is kept here — try again when you're connected."
-    const val UNVERIFIED =
-        "Couldn't verify this copy of the app. Reports can only be sent from an App Store, TestFlight or Play install."
-    const val FAILED = "Couldn't send the report."
+/** Bug / Idea switch label. The domain label stays English: it names the report in the share subject. */
+private fun FeedbackKind.badgeLabelRes(): Int =
+    when (this) {
+        FeedbackKind.Bug -> R.string.feedback_kind_bug
+        FeedbackKind.Feedback -> R.string.feedback_kind_idea
+    }
 
-    fun rateLimited(seconds: Int): String = "You just sent a report. Try again in $seconds s."
-}
-
+@Composable
 private fun FeedbackSendStatus.errorNotice(
     onTryAgain: () -> Unit,
     onShareInstead: () -> Unit,
-): Pair<String, OpenCodeInlineNoticeAction?>? =
-    when (this) {
-        FeedbackSendStatus.Offline -> FeedbackCopy.OFFLINE to OpenCodeInlineNoticeAction("Try Again", onTryAgain)
-        is FeedbackSendStatus.RateLimited -> FeedbackCopy.rateLimited(retryAfterSeconds) to null
-        FeedbackSendStatus.Unverified -> FeedbackCopy.UNVERIFIED to OpenCodeInlineNoticeAction("Share Instead", onShareInstead)
-        FeedbackSendStatus.Failed -> FeedbackCopy.FAILED to OpenCodeInlineNoticeAction("Try Again", onTryAgain)
+): Pair<String, OpenCodeInlineNoticeAction?>? {
+    val tryAgain = stringResource(R.string.feedback_action_try_again)
+    return when (this) {
+        FeedbackSendStatus.Offline ->
+            stringResource(R.string.feedback_error_offline) to OpenCodeInlineNoticeAction(tryAgain, onTryAgain)
+        is FeedbackSendStatus.RateLimited ->
+            pluralStringResource(R.plurals.feedback_error_rate_limited, retryAfterSeconds, retryAfterSeconds) to null
+        FeedbackSendStatus.Unverified ->
+            stringResource(R.string.feedback_error_unverified) to
+                OpenCodeInlineNoticeAction(stringResource(R.string.feedback_action_share_instead), onShareInstead)
+        FeedbackSendStatus.Failed ->
+            stringResource(R.string.feedback_error_failed) to OpenCodeInlineNoticeAction(tryAgain, onTryAgain)
         FeedbackSendStatus.Idle, FeedbackSendStatus.Sending, is FeedbackSendStatus.Sent -> null
     }
+}
 
 private fun ComposerDictationUiState.toCardModel(elapsedLabel: String): ComposerDictationCardModel {
     val (variant, reason) =
@@ -907,9 +950,9 @@ private suspend fun shareIntent(
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
         }
-    send.putExtra(Intent.EXTRA_SUBJECT, payload.subject)
+    send.putExtra(Intent.EXTRA_SUBJECT, payload.subject.resolve(ResourcesUiTextLookup(context.resources)))
     send.putExtra(Intent.EXTRA_TEXT, payload.text)
-    return Intent.createChooser(send, "Share report")
+    return Intent.createChooser(send, context.getString(R.string.feedback_share_chooser_title))
 }
 
 private tailrec fun Context.findActivity(): Activity? =

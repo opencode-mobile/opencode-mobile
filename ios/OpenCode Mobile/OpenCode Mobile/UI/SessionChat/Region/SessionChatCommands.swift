@@ -269,7 +269,9 @@ final class SessionChatCommands {
         return trimmed.isEmpty ? "Forked session" : "Fork of \(trimmed)"
     }
 
-    static let forkRenameFailedMessage = "Fork created, but it couldn't be renamed."
+    static var forkRenameFailedMessage: String {
+        String(localized: "session_chat.fork.rename_failed", defaultValue: "Fork created, but it couldn't be renamed.")
+    }
 
     func updateForkDraft(_ text: String) {
         state.forkDraftTitle = text
@@ -289,7 +291,10 @@ final class SessionChatCommands {
         guard state.forkDialogVisible, !state.forkSubmitting else { return }
         let title = state.forkDraftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         if title.isEmpty {
-            state.forkErrorMessage = "Enter a session title"
+            state.forkErrorMessage = String(
+                localized: "session_chat.fork_dialog.error_empty_title",
+                defaultValue: "Enter a session title"
+            )
             notifyChange()
             return
         }
@@ -398,7 +403,7 @@ final class SessionChatCommands {
             isBusy: isBusy,
             restoreComposerText: restoreComposerText,
             operation: "undo",
-            failureMessage: "Couldn't undo last message."
+            failureMessage: String(localized: "session_chat.revert.undo_failed", defaultValue: "Couldn't undo last message.")
         )
     }
 
@@ -409,7 +414,7 @@ final class SessionChatCommands {
             isBusy: isBusy,
             restoreComposerText: restoreComposerText,
             operation: "revert",
-            failureMessage: "Couldn't revert message."
+            failureMessage: String(localized: "session_chat.revert.failed", defaultValue: "Couldn't revert message.")
         )
     }
 
@@ -419,7 +424,7 @@ final class SessionChatCommands {
             isBusy: isBusy,
             clearComposerRestore: clearComposerRestore,
             operation: "redo",
-            failureMessage: "Couldn't redo."
+            failureMessage: String(localized: "session_chat.revert.redo_failed", defaultValue: "Couldn't redo.")
         )
     }
 
@@ -428,7 +433,7 @@ final class SessionChatCommands {
             isBusy: isBusy,
             clearComposerRestore: clearComposerRestore,
             operation: "cancel-revert",
-            failureMessage: "Couldn't cancel revert."
+            failureMessage: String(localized: "session_chat.revert.cancel_failed", defaultValue: "Couldn't cancel revert.")
         )
     }
 
@@ -451,7 +456,7 @@ final class SessionChatCommands {
         guard currentRevertMessageID != nil else { return }
         let sessionID = sessionID
         guard try await sessionRepository.commitRevert(id: sessionID) else {
-            throw SessionError.http(statusCode: 0, message: "Couldn't commit revert.")
+            throw SessionChatRevertCommitFailure()
         }
         OpenCodeLog.sessionChat.info("revert committed before prompt session=\(sessionID)")
     }
@@ -658,5 +663,13 @@ private final class PendingCompaction {
     init(beforeContextFraction: Float?, awaitAfterContextFraction: @escaping () async -> Float?) {
         self.beforeContextFraction = beforeContextFraction
         self.awaitAfterContextFraction = awaitAfterContextFraction
+    }
+}
+
+/// The pending revert could not be committed, so the prompt was not sent. The send
+/// failure shows `errorDescription`, which comes from the String Catalog.
+struct SessionChatRevertCommitFailure: LocalizedError {
+    var errorDescription: String? {
+        String(localized: "session_chat.revert.commit_failed", defaultValue: "Couldn't commit revert.")
     }
 }

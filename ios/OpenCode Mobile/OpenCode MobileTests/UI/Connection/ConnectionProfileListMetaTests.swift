@@ -20,20 +20,20 @@ struct ConnectionProfileListMetaTests {
     @Test func activeWithProtocol_captionAndActivePill() {
         let profile = profile(api: .v2)
         #expect(ConnectionProfileListMeta.caption(profile, isActive: true) == "API v2")
-        #expect(ConnectionProfileListMeta.status(profile, isActive: true)?.text == "Active")
+        #expect(ConnectionProfileListMeta.status(profile, isActive: true)?.text.resolved == "Active")
     }
 
     @Test func otherWithProtocol_compactInfoPill() {
         let profile = profile(api: .v1)
         #expect(ConnectionProfileListMeta.caption(profile, isActive: false) == nil)
-        #expect(ConnectionProfileListMeta.status(profile, isActive: false)?.text == "v1")
+        #expect(ConnectionProfileListMeta.status(profile, isActive: false)?.text == .verbatim("v1"))
     }
 
     @Test func unknownProtocol_omitsApiIndicator() {
         let profile = profile(api: nil)
         #expect(ConnectionProfileListMeta.caption(profile, isActive: true) == nil)
         #expect(ConnectionProfileListMeta.caption(profile, isActive: false) == nil)
-        #expect(ConnectionProfileListMeta.status(profile, isActive: true)?.text == "Active")
+        #expect(ConnectionProfileListMeta.status(profile, isActive: true)?.text.resolved == "Active")
         #expect(ConnectionProfileListMeta.status(profile, isActive: false) == nil)
     }
 

@@ -9,6 +9,8 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.Failed
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.Running
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.Stopped
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus.WaitingForInput
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -71,19 +73,24 @@ class SessionChatBackgroundWorkTabsTest {
 
     @Test
     fun rowText_runningShowsStepCountAndLiveTimer() {
-        val subagent = row("prt-1", Running).copy(title = "Find float money math", currentStep = "Searching toFixed", toolCount = 12)
+        val subagent =
+            row("prt-1", Running).copy(
+                title = "Find float money math",
+                currentStep = UiText.verbatim("Searching toFixed"),
+                toolCount = 12,
+            )
 
         val text = SessionChatBackgroundWork.rowText(subagent, START + 64_000)
 
-        assertEquals(SessionChatSubagentRowText("Find float money math", null, "Searching toFixed", "12 tools", "1:04"), text)
-        assertEquals("1 tool", SessionChatBackgroundWork.toolCountLabel(1))
+        assertEquals(listOf("Find float money math", null, "Searching toFixed", "12 tools", "1:04"), text.english())
+        assertEquals("1 tool", SessionChatBackgroundWork.toolCountLabel(1).english())
     }
 
     @Test
     fun rowText_waitingSaysSoAndLeavesOutMissingBits() {
         val text = SessionChatBackgroundWork.rowText(row("prt-1", WaitingForInput), START + 5_000)
 
-        assertEquals(SessionChatSubagentRowText("general", null, "Waiting for input", null, "0:05"), text)
+        assertEquals(listOf("general", null, "Waiting for input", null, "0:05"), text.english())
     }
 
     @Test
@@ -92,7 +99,7 @@ class SessionChatBackgroundWorkTabsTest {
 
         val text = SessionChatBackgroundWork.rowText(subagent, START + 151_000 + 4 * 60_000)
 
-        assertEquals(SessionChatSubagentRowText("Map invoice flow", "explore", "parse → render", "4m ago", "2:31"), text)
+        assertEquals(listOf("Map invoice flow", "explore", "parse → render", "4m ago", "2:31"), text.english())
     }
 
     @Test
@@ -167,7 +174,7 @@ class SessionChatBackgroundWorkTabsTest {
         val row = subagents(tool).single()
 
         assertEquals(2, row.toolCount)
-        assertTrue(row.currentStep.orEmpty().contains("toFixed"))
+        assertTrue(row.currentStep?.english().orEmpty().contains("toFixed"))
     }
 
     @Test
@@ -261,8 +268,11 @@ class SessionChatBackgroundWorkTabsTest {
         val row = subagents(tool).single()
 
         assertEquals(Stopped, row.status)
-        assertEquals("Stopped", row.result)
+        assertNull(row.result)
+        assertEquals("Stopped", SessionChatBackgroundWork.rowText(row, START + 60_000).detail?.english())
     }
+
+    private fun SessionChatSubagentRowText.english(): List<String?> = listOf(title, tag, detail?.english(), detailCaption?.english(), time)
 
     private fun subagents(vararg parts: MessagePart) =
         SessionChatBackgroundWork.subagents(

@@ -48,12 +48,13 @@ struct ServersView: View {
     var detailControl: OpenCodeSplitPaneDetailControl? = nil
 
     var body: some View {
-        let countLabel = viewModel.profiles.count == 1
-            ? "1 Connection Profile"
-            : "\(viewModel.profiles.count) Connection Profiles"
+        let countLabel = OpenCodeText(LocalizedStringResource(
+            "servers.profile_count",
+            defaultValue: "\(viewModel.profiles.count) Connection Profiles"
+        ))
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: "Servers",
+                title: "servers.title",
                 subtitle: countLabel,
                 leading: OpenCodeSplitPane.detailLeading(detailControl, back: { dismiss() }),
                 showDivider: true
@@ -61,7 +62,7 @@ struct ServersView: View {
             VStack(spacing: 0) {
             ScrollView {
                 VStack(spacing: 8) {
-                    OpenCodeSectionHeader(title: "Saved")
+                    OpenCodeSectionHeader(title: "servers.saved")
                         .contentShape(Rectangle())
                         .onTapGesture {
                             let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
@@ -79,10 +80,10 @@ struct ServersView: View {
                     ForEach(viewModel.profiles, id: \.id) { profile in
                         let isActive = profile.id == viewModel.activeId
                         OpenCodeListItem(
-                            title: profile.displayName,
-                            subtitle: ConnectionProfileIdentity.hostLabel(profile.baseURL),
+                            title: .verbatim(profile.displayName),
+                            subtitle: .verbatim(ConnectionProfileIdentity.hostLabel(profile.baseURL)),
                             status: ConnectionProfileListMeta.status(profile, isActive: isActive),
-                            caption: ConnectionProfileListMeta.caption(profile, isActive: isActive),
+                            caption: .verbatim(ifPresent: ConnectionProfileListMeta.caption(profile, isActive: isActive)),
                             style: .card,
                             startDecorator: .letter(
                                 letterCharacter(for: profile.displayName),
@@ -91,7 +92,13 @@ struct ServersView: View {
                             action: { onEditProfile(profile) },
                             trailing: {
                                 OpenCodeButton(
-                                    variant: .iconCircle(.close, accessibilityLabel: "Remove \(profile.displayName)"),
+                                    variant: .iconCircle(
+                                        .close,
+                                        accessibilityLabel: OpenCodeText(LocalizedStringResource(
+                                            "servers.remove_profile",
+                                            defaultValue: "Remove \(profile.displayName)"
+                                        ))
+                                    ),
                                     contrast: .low,
                                     action: { viewModel.requestRemove(profile) }
                                 )
@@ -103,7 +110,7 @@ struct ServersView: View {
                 .padding(.bottom, 88)
             }
             OpenCodeButton(
-                variant: .fullWidthText(title: "Add server"),
+                variant: .fullWidthText(title: "servers.add"),
                 action: onAddServer
             )
             .padding(.horizontal, 20)
@@ -125,13 +132,17 @@ struct ServersView: View {
                 get: { viewModel.pendingRemoval != nil },
                 set: { if !$0 { viewModel.dismissRemove() } }
             ),
-            title: viewModel.pendingRemoval.map { "Remove “\($0.displayName)”?" } ?? "Remove server?",
-            subtitle:
-            "This device forgets the Connection Profile. Sessions stay on that server. If it’s the active server, you’ll pick another — or land on Connect if none remain.",
-            primaryOption: OpenCodeDialogOption(title: "Remove", destructive: true) {
+            title: viewModel.pendingRemoval.map { profile in
+                OpenCodeText(LocalizedStringResource(
+                    "servers.remove_dialog.title_named",
+                    defaultValue: "Remove “\(profile.displayName)”?"
+                ))
+            } ?? "servers.remove_dialog.title",
+            subtitle: "servers.remove_dialog.message",
+            primaryOption: OpenCodeDialogOption(title: "common.remove", destructive: true) {
                 Task { await viewModel.confirmRemove() }
             },
-            secondaryOption: OpenCodeDialogOption(title: "Cancel") {
+            secondaryOption: OpenCodeDialogOption(title: "common.cancel") {
                 viewModel.dismissRemove()
             }
         )

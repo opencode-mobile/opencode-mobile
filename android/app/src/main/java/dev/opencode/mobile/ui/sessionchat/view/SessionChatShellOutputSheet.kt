@@ -15,6 +15,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -26,6 +27,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
@@ -36,6 +38,7 @@ import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellOutputUiState
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellsCopy
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.delay
 
 /**
@@ -69,7 +72,7 @@ internal fun SessionChatShellOutputSheet(
     val clipboard = LocalClipboardManager.current
     OpenCodeBottomSheet(
         visible = sheet != null,
-        title = SHELL_OUTPUT_TITLE,
+        title = stringResource(R.string.session_chat_sheet_shell_title),
         onDismissRequest = onDismiss,
         height = OpenCodeBottomSheetHeight.Half,
         scrollTargetKey = sheet?.shell?.id,
@@ -118,7 +121,7 @@ private fun SessionChatShellOutputHeader(sheet: SessionChatShellOutputUiState) {
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = SessionChatShellsCopy.status(sheet.shell, nowMs),
+            text = SessionChatShellsCopy.status(sheet.shell, nowMs).resolve(),
             style = MaterialTheme.typography.bodySmall,
             color =
                 if (SessionChatShellsCopy.isProblem(sheet.shell.status)) {
@@ -144,7 +147,7 @@ private fun SessionChatShellOutputBody(sheet: SessionChatShellOutputUiState) {
     ) {
         if (output?.isTruncated == true) {
             Text(
-                text = SessionChatShellsCopy.TRUNCATED,
+                text = stringResource(R.string.session_chat_sheet_shell_truncated),
                 style = MaterialTheme.typography.bodySmall,
                 color = openCodeColor("text-weak"),
             )
@@ -152,7 +155,7 @@ private fun SessionChatShellOutputBody(sheet: SessionChatShellOutputUiState) {
         val text = output?.text.orEmpty()
         if (text.isEmpty()) {
             Text(
-                text = SessionChatShellsCopy.NO_OUTPUT,
+                text = stringResource(R.string.session_chat_sheet_shell_no_output),
                 style = MaterialTheme.typography.bodyMedium,
                 color = openCodeColor("text-weak"),
             )
@@ -175,7 +178,7 @@ private fun SessionChatShellOutputActions(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         sheet.stopError?.let { error ->
             Text(
-                text = error,
+                text = error.resolve(),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -183,7 +186,7 @@ private fun SessionChatShellOutputActions(
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OpenCodeButton(
-                variant = OpenCodeButtonVariant.FullWidthText(SessionChatShellsCopy.COPY),
+                variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.session_chat_sheet_copy)),
                 contrast = OpenCodeButtonContrast.Low,
                 enabled = !sheet.output?.text.isNullOrEmpty(),
                 onClick = onCopy,
@@ -193,7 +196,13 @@ private fun SessionChatShellOutputActions(
                 OpenCodeButton(
                     variant =
                         OpenCodeButtonVariant.FullWidthText(
-                            if (sheet.isStopping) SessionChatShellsCopy.STOPPING else SessionChatShellsCopy.STOP,
+                            stringResource(
+                                if (sheet.isStopping) {
+                                    R.string.session_chat_sheet_shell_stopping
+                                } else {
+                                    R.string.session_chat_sheet_shell_stop
+                                },
+                            ),
                         ),
                     contrast = OpenCodeButtonContrast.Destructive,
                     enabled = !sheet.isStopping,
@@ -204,5 +213,3 @@ private fun SessionChatShellOutputActions(
         }
     }
 }
-
-internal const val SHELL_OUTPUT_TITLE = "Shell"

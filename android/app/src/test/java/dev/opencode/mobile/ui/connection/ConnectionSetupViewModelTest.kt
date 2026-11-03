@@ -20,6 +20,7 @@ import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
+import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -57,7 +58,7 @@ class ConnectionSetupViewModelTest {
         viewModel.configure(initialProfile = null, mode = ConnectionSetupMode.Add)
         val state = viewModel.uiState.value
         assertEquals("", state.baseUrl)
-        assertEquals("Connect", state.primaryActionLabel)
+        assertEquals("Connect", state.primaryActionLabel.english())
         assertEquals(ConnectionCredentialSegment.Password, state.credentialSegment)
         assertTrue(ConnectionSetupViewModel.hostIsBlank(state.baseUrl))
     }
@@ -74,7 +75,7 @@ class ConnectionSetupViewModelTest {
             assertEquals(
                 "Enter a host",
                 viewModel.uiState.value.snackbar
-                    ?.text,
+                    ?.text?.english(),
             )
         }
 
@@ -120,7 +121,7 @@ class ConnectionSetupViewModelTest {
             val state = viewModel.uiState.value
             assertEquals(ConnectionCredentialSegment.Password, state.credentialSegment)
             assertTrue(state.requestPasswordFocus)
-            assertEquals("Authentication failed", state.snackbar?.text)
+            assertEquals("Authentication failed", state.snackbar?.text?.english())
             assertEquals(OpenCodeSnackbarVariant.Error, state.snackbar?.variant)
         }
 
@@ -144,7 +145,7 @@ class ConnectionSetupViewModelTest {
             assertEquals(
                 "Unable to reach the server",
                 failing.uiState.value.snackbar
-                    ?.text,
+                    ?.text?.english(),
             )
         }
 
@@ -169,7 +170,7 @@ class ConnectionSetupViewModelTest {
                     ),
                 mode = ConnectionSetupMode.Edit,
             )
-            assertEquals("Save", viewModel.uiState.value.primaryActionLabel)
+            assertEquals("Save", viewModel.uiState.value.primaryActionLabel.english())
             assertEquals(ConnectionCredentialSegment.Password, viewModel.uiState.value.credentialSegment)
             assertTrue(viewModel.uiState.value.canSubmitWithoutProbe)
 
@@ -210,7 +211,7 @@ class ConnectionSetupViewModelTest {
             )
             val before = viewModel.uiState.value
             assertTrue(before.showsPrimaryAction)
-            assertEquals("Save", before.primaryActionLabel)
+            assertEquals("Save", before.primaryActionLabel.english())
             assertTrue(before.usesQrLayout)
             assertTrue(before.canSubmitWithoutProbe)
 
@@ -235,14 +236,14 @@ class ConnectionSetupViewModelTest {
                     serverUrls = listOf("https://Box.OpenTunnel.XYZ/"),
                 ),
             )
-        assertEquals("Remote tunnel", rows.single().title)
+        assertEquals("Remote tunnel", rows.single().title.english())
     }
 
     @Test
     fun qrAddressHint_tunnelOnly() {
         assertEquals(
             "Remote tunnel saved. Nothing else to pick. It stays until you turn remote access off.",
-            qrAddressHint(listOf("https://a.opentunnel.xyz/", "https://b.opentunnel.xyz/")),
+            qrAddressHint(listOf("https://a.opentunnel.xyz/", "https://b.opentunnel.xyz/")).english(),
         )
     }
 
@@ -250,7 +251,7 @@ class ConnectionSetupViewModelTest {
     fun qrAddressHint_tailscalePlusLocalNetwork() {
         assertEquals(
             "Tailscale is used when it answers. Local network is the fallback.",
-            qrAddressHint(listOf("http://192.168.1.60:4096/", "http://100.64.0.15:4096/")),
+            qrAddressHint(listOf("http://192.168.1.60:4096/", "http://100.64.0.15:4096/")).english(),
         )
     }
 
@@ -284,7 +285,7 @@ class ConnectionSetupViewModelTest {
             assertTrue(state.usesQrLayout)
             assertFalse(state.requestPasswordFocus)
             assertEquals(SavedAddressRecovery.Unreachable, state.addressRecovery)
-            assertEquals("Can't reach the saved address. Pair again.", state.pairAgainMessage)
+            assertEquals("Can't reach the saved address. Pair again.", state.pairAgainMessage?.english())
             assertEquals(null, state.snackbar)
         }
 
@@ -316,7 +317,7 @@ class ConnectionSetupViewModelTest {
             assertEquals(SavedAddressRecovery.Unauthorized, state.addressRecovery)
             assertEquals(
                 "This server rejected the saved sign-in. Pair again. A new password logs every device out.",
-                state.pairAgainMessage,
+                state.pairAgainMessage?.english(),
             )
             assertEquals(null, state.snackbar)
         }
@@ -342,11 +343,11 @@ class ConnectionSetupViewModelTest {
         assertEquals("secret", state.password)
         assertTrue(state.usesQrLayout)
         assertEquals(listOf("http://192.168.1.60:4096/"), state.serverUrls)
-        assertEquals(listOf("Saved"), qrAddressRows(state).map { it.badge })
-        assertEquals("Local network", qrAddressRows(state).single().title)
+        assertEquals(listOf("Saved"), qrAddressRows(state).map { it.badge.english() })
+        assertEquals("Local network", qrAddressRows(state).single().title.english())
         assertEquals(
             "Saved addresses are tried until one answers. Tailscale is preferred when it answers.",
-            qrAddressHint(state.serverUrls),
+            qrAddressHint(state.serverUrls).english(),
         )
         assertEquals(null, state.snackbar)
     }
@@ -383,7 +384,7 @@ class ConnectionSetupViewModelTest {
             advanceUntilIdle()
             assertFalse(saved)
             assertEquals(listOf("203.0.113.5:4096"), viewModel.uiState.value.cleartextWarningHosts)
-            assertTrue(viewModel.uiState.value.cleartextWarningMessage.startsWith("203.0.113.5:4096 uses plain http"))
+            assertTrue(viewModel.uiState.value.cleartextWarningMessage.english().startsWith("203.0.113.5:4096 uses plain http"))
             assertTrue(probed.isEmpty())
             assertTrue(store.saved.isEmpty())
             assertEquals(ConnectionSetupState.Idle, viewModel.uiState.value.state)
@@ -645,7 +646,7 @@ class ConnectionSetupViewModelTest {
             assertFalse(saved)
             assertTrue(store.saved.isEmpty())
             assertEquals(ConnectionSetupState.Idle, viewModel.uiState.value.state)
-            assertEquals(SecureCredentialStoreException.USER_MESSAGE, viewModel.uiState.value.snackbar?.text)
+            assertEquals(SecureCredentialStoreException.USER_MESSAGE, viewModel.uiState.value.snackbar?.text?.english())
         }
 
     @Test
@@ -717,8 +718,8 @@ class ConnectionSetupViewModelTest {
             assertTrue(viewModel.uiState.value.usesQrLayout)
             assertEquals("http://100.64.0.15:4096/", viewModel.uiState.value.baseUrl)
             val rows = qrAddressRows(viewModel.uiState.value)
-            assertEquals("Using now", rows.first { it.title == "Tailscale" }.badge)
-            assertEquals("Saved", rows.first { it.title == "Local network" }.badge)
+            assertEquals("Using now", rows.first { it.title.english() == "Tailscale" }.badge.english())
+            assertEquals("Saved", rows.first { it.title.english() == "Local network" }.badge.english())
             assertFalse(rows.any { it.dimmed })
         }
 
@@ -753,11 +754,11 @@ class ConnectionSetupViewModelTest {
             )
             assertEquals("http://192.168.1.60:4096/", viewModel.uiState.value.baseUrl)
             val rows = qrAddressRows(viewModel.uiState.value)
-            assertEquals("Using now", rows.first { it.title == "Local network" }.badge)
-            val tailscale = rows.first { it.title == "Tailscale" }
-            assertEquals("Saved", tailscale.badge)
+            assertEquals("Using now", rows.first { it.title.english() == "Local network" }.badge.english())
+            val tailscale = rows.first { it.title.english() == "Tailscale" }
+            assertEquals("Saved", tailscale.badge.english())
             assertTrue(tailscale.dimmed)
-            assertTrue(tailscale.subtitle.endsWith("· not reachable"))
+            assertTrue(tailscale.subtitle.english().endsWith("· not reachable"))
         }
 
     @Test
@@ -785,8 +786,8 @@ class ConnectionSetupViewModelTest {
             assertEquals(ConnectionCredentialSegment.Password, state.credentialSegment)
             assertTrue(state.showsPrimaryAction)
             assertTrue(state.primaryEnabled)
-            assertEquals("Connect", state.primaryActionLabel)
-            assertEquals(qrScanFailureMessage, state.snackbar?.text)
+            assertEquals("Connect", state.primaryActionLabel.english())
+            assertEquals(qrScanFailureMessage, state.snackbar?.text?.english())
             assertEquals(OpenCodeSnackbarVariant.Error, state.snackbar?.variant)
             assertTrue(state.showsManualForm)
             assertTrue(store.saved.isEmpty())
@@ -847,11 +848,11 @@ class ConnectionSetupViewModelTest {
             assertEquals("opencode", state.username)
             assertEquals("paired-token", state.password)
             assertTrue(state.qrPairingReady)
-            assertEquals("Save", state.primaryActionLabel)
+            assertEquals("Save", state.primaryActionLabel.english())
             assertTrue(state.showsPrimaryAction)
             assertTrue(store.saved.isEmpty())
             assertEquals(null, state.snackbar)
-            assertEquals("Using now", qrAddressRows(state).first { it.title == "Tailscale" }.badge)
+            assertEquals("Using now", qrAddressRows(state).first { it.title.english() == "Tailscale" }.badge.english())
         }
 
     @Test
@@ -883,8 +884,8 @@ class ConnectionSetupViewModelTest {
             )
             assertTrue(viewModel.uiState.value.usesQrLayout)
             val rows = qrAddressRows(viewModel.uiState.value)
-            assertEquals("Using now", rows.first { it.title == "Tailscale" }.badge)
-            assertEquals("Saved", rows.first { it.title == "Local network" }.badge)
+            assertEquals("Using now", rows.first { it.title.english() == "Tailscale" }.badge.english())
+            assertEquals("Saved", rows.first { it.title.english() == "Local network" }.badge.english())
         }
 
     @Test
@@ -952,7 +953,7 @@ class ConnectionSetupViewModelTest {
             assertEquals(ConnectionCredentialSegment.Password, state.credentialSegment)
             assertTrue(state.showsPrimaryAction)
             assertTrue(state.primaryEnabled)
-            assertEquals(qrScanFailureMessage, state.snackbar?.text)
+            assertEquals(qrScanFailureMessage, state.snackbar?.text?.english())
             assertEquals(OpenCodeSnackbarVariant.Error, state.snackbar?.variant)
         }
 
@@ -983,7 +984,7 @@ class ConnectionSetupViewModelTest {
             assertEquals("", state.password)
             assertEquals(ConnectionCredentialSegment.Password, state.credentialSegment)
             assertTrue(state.showsPrimaryAction)
-            assertEquals(qrScanFailureMessage, state.snackbar?.text)
+            assertEquals(qrScanFailureMessage, state.snackbar?.text?.english())
             assertEquals(OpenCodeSnackbarVariant.Error, state.snackbar?.variant)
         }
 
@@ -1041,10 +1042,10 @@ class ConnectionSetupViewModelTest {
             assertTrue(state.serverUrls.isEmpty())
             assertTrue(state.showsPrimaryAction)
             assertTrue(state.primaryEnabled)
-            assertEquals("Connect", state.primaryActionLabel)
+            assertEquals("Connect", state.primaryActionLabel.english())
             assertEquals("http://192.168.1.83:4096/", state.baseUrl)
             assertEquals("opencode", state.username)
-            assertEquals("Unable to reach the server", state.snackbar?.text)
+            assertEquals("Unable to reach the server", state.snackbar?.text?.english())
             assertEquals(OpenCodeSnackbarVariant.Error, state.snackbar?.variant)
 
             viewModel.consumeSnackbar()
@@ -1053,10 +1054,10 @@ class ConnectionSetupViewModelTest {
             assertFalse(saved)
             assertTrue(store.saved.isEmpty())
             assertTrue(viewModel.uiState.value.showsPrimaryAction)
-            assertEquals("Connect", viewModel.uiState.value.primaryActionLabel)
+            assertEquals("Connect", viewModel.uiState.value.primaryActionLabel.english())
             assertEquals(
                 "Unable to reach the server",
-                viewModel.uiState.value.snackbar?.text,
+                viewModel.uiState.value.snackbar?.text?.english(),
             )
         }
 
@@ -1093,7 +1094,7 @@ class ConnectionSetupViewModelTest {
         assertEquals(
             "This isn't an OpenCode 2 pairing QR",
             viewModel.uiState.value.snackbar
-                ?.text,
+                ?.text?.english(),
         )
         assertEquals("", viewModel.uiState.value.baseUrl)
     }
@@ -1106,7 +1107,7 @@ class ConnectionSetupViewModelTest {
         assertEquals(
             "Allow camera access to scan the pairing QR",
             viewModel.uiState.value.snackbar
-                ?.text,
+                ?.text?.english(),
         )
     }
 
@@ -1118,7 +1119,7 @@ class ConnectionSetupViewModelTest {
         assertEquals(
             "Camera isn't available on this device",
             viewModel.uiState.value.snackbar
-                ?.text,
+                ?.text?.english(),
         )
     }
 
@@ -1234,7 +1235,7 @@ class ConnectionSetupViewModelTest {
             assertTrue(redeem.calls.isEmpty())
             assertEquals(
                 "Enter a pairing code",
-                viewModel.uiState.value.snackbar?.text,
+                viewModel.uiState.value.snackbar?.text?.english(),
             )
         }
 
@@ -1255,7 +1256,7 @@ class ConnectionSetupViewModelTest {
             advanceUntilIdle()
             assertFalse(saved)
             assertTrue(redeem.calls.isEmpty())
-            assertEquals("Enter a host", viewModel.uiState.value.snackbar?.text)
+            assertEquals("Enter a host", viewModel.uiState.value.snackbar?.text?.english())
         }
 
     @Test

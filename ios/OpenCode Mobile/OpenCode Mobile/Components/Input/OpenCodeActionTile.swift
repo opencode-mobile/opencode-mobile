@@ -22,16 +22,16 @@ struct OpenCodeActionTileBadge: Equatable {
 
 struct OpenCodeActionTile: View {
     let icon: OpenCodeIcon
-    let label: String
-    let accessibilityLabel: String
+    let label: OpenCodeText
+    let accessibilityLabel: OpenCodeText
     let enabled: Bool
     let badge: OpenCodeActionTileBadge?
     let action: () -> Void
 
     init(
         icon: OpenCodeIcon,
-        label: String,
-        accessibilityLabel: String? = nil,
+        label: OpenCodeText,
+        accessibilityLabel: OpenCodeText? = nil,
         enabled: Bool = true,
         badge: OpenCodeActionTileBadge? = nil,
         action: @escaping () -> Void
@@ -49,7 +49,7 @@ struct OpenCodeActionTile: View {
             VStack(alignment: .leading, spacing: Self.contentGap) {
                 OpenCodeIconImage(icon: icon, size: Self.iconSize)
                     .foregroundStyle(iconColor)
-                Text(label)
+                Text(openCode: label)
                     .font(OpenCodeTypography.body)
                     .foregroundStyle(labelColor)
                     .lineLimit(1)
@@ -69,7 +69,7 @@ struct OpenCodeActionTile: View {
         }
         .buttonStyle(OpenCodeActionTilePressStyle(enabled: enabled))
         .disabled(!enabled)
-        .accessibilityLabel(accessibilityLabel)
+        .accessibilityLabel(openCode: accessibilityLabel)
     }
 
     private var iconColor: Color {

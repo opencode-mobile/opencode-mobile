@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.command.ClientSlashAction
 import dev.opencode.mobile.domain.command.CommandError
 import dev.opencode.mobile.domain.command.CommandRepository
@@ -97,6 +98,8 @@ import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatComposer
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatReviewChanges
 import dev.opencode.mobile.ui.sessionchat.region.SessionChatSideQuestionsCopy
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import dev.opencode.mobile.ui.worktree.NewWorktreeAvailability
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -219,7 +222,7 @@ class SessionChatViewModelTest {
             assertTrue(SessionChatDisplayPreferences.chipTimelineIntroDone)
             assertEquals(
                 SessionChatViewModel.CHIP_TIMELINE_INTRO_ENABLED_NOTICE,
-                viewModel.uiState.value.snackbar?.message,
+                viewModel.uiState.value.snackbar?.message?.english(),
             )
         }
 
@@ -378,7 +381,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Timeline: Step Rail. Change it any time in Settings.",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
         }
 
@@ -399,7 +403,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Timeline: Activity Card. Change it any time in Settings.",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
         }
 
@@ -447,7 +452,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Couldn't archive session.",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -499,7 +505,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Couldn't delete session.",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -528,7 +535,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Couldn't delete session.",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -773,12 +781,12 @@ class SessionChatViewModelTest {
 
             val state = viewModel.uiState.value
             assertEquals(
-                SessionChatBackgroundWorkPill(
+                EnglishPill(
                     label = "general needs input · 2 running",
                     needsInput = true,
                     accessibilityLabel = "general needs input, 2 subagents running",
                 ),
-                state.backgroundWorkPill,
+                state.backgroundWorkPill.english(),
             )
             assertEquals(listOf("prt-a", "prt-b", "prt-c"), state.subagents.map { it.id })
             assertEquals("child-a", state.subagents.first().childSessionId)
@@ -833,8 +841,8 @@ class SessionChatViewModelTest {
             val state = viewModel.uiState.value
             assertEquals(listOf("prt-1"), state.shells.map { it.id })
             assertEquals(
-                SessionChatBackgroundWorkPill("1 shell", needsInput = false, accessibilityLabel = "1 shell running"),
-                state.backgroundWorkPill,
+                EnglishPill("1 shell", needsInput = false, accessibilityLabel = "1 shell running"),
+                state.backgroundWorkPill.english(),
             )
 
             viewModel.openShellOutput("prt-1")
@@ -1002,7 +1010,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Unable to refresh permission session tree",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -2413,7 +2422,7 @@ class SessionChatViewModelTest {
             repository.catchUpChrome.value = true
             advanceUntilIdle()
 
-            assertEquals(SessionMessageSyncChrome.STATUS_LABEL, viewModel.uiState.value.syncingIndicatorLabel)
+            assertEquals(SessionMessageSyncChrome.statusLabel, viewModel.uiState.value.syncingIndicatorLabel)
 
             repository.catchUpChrome.value = false
             advanceUntilIdle()
@@ -2492,7 +2501,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "parts.0.type Required",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -2518,7 +2528,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Unable to reach the server",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -2983,7 +2994,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "This model does not support PDF attachments.",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -3032,7 +3044,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "send failed",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -3355,7 +3368,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Session is busy",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -4267,7 +4281,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "send failed",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -4342,7 +4357,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Unable to reach the server",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -4399,7 +4415,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Image exceeds the size limit",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -4600,7 +4617,7 @@ class SessionChatViewModelTest {
             val item = requireNotNull(viewModel.toMessageItem(message))
             assertFalse(item.isStreaming)
             val tool = item.blocks.single() as SessionChatTimelineBlock.ToolCard
-            assertEquals("Shell", tool.title)
+            assertEquals("Shell", tool.title.english())
         }
 
     @Test
@@ -4859,7 +4876,7 @@ class SessionChatViewModelTest {
             singlePlain.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
             assertEquals("This project has no other worktrees", singlePlain.uiState.value.moveToWorktree.availability.subtitle)
-            assertEquals("Needs a git repository", singlePlain.uiState.value.moveToWorktree.newWorktree.subtitle)
+            assertEquals("Needs a git repository", singlePlain.uiState.value.moveToWorktree.newWorktree.subtitle?.english())
 
             val v2 =
                 createViewModel(
@@ -4919,7 +4936,7 @@ class SessionChatViewModelTest {
             viewModel.bind("ses-1", "Title", "/repo")
             advanceUntilIdle()
             assertEquals(
-                NewWorktreeAvailability(true, "Create a checkout and move there"),
+                NewWorktreeAvailability(true, UiText.resource(R.string.worktree_move_subtitle)),
                 viewModel.uiState.value.moveToWorktree.newWorktree,
             )
 
@@ -4929,7 +4946,7 @@ class SessionChatViewModelTest {
             val form = viewModel.uiState.value.moveToWorktree.form!!
             assertEquals("/repo", form.sourceDirectory)
             assertEquals("dev", form.sourceBranch)
-            assertEquals("Create and move", form.submitLabel)
+            assertEquals("Create and move", form.submitLabel.english())
             viewModel.updateNewWorktreeName("brave-otter")
             viewModel.selectNewWorktreeBase("main")
             viewModel.submitNewWorktree()
@@ -4970,7 +4987,7 @@ class SessionChatViewModelTest {
             assertTrue(sessionRepository.moveSessionRequests.isEmpty())
             val move = viewModel.uiState.value.moveToWorktree
             assertTrue(move.sheetVisible)
-            assertEquals("Couldn't create the worktree: fatal: invalid reference: nope", move.form?.errorMessage)
+            assertEquals("Couldn't create the worktree: fatal: invalid reference: nope", move.form?.errorMessage?.english())
 
             viewModel.closeNewWorktreeForm()
             advanceUntilIdle()
@@ -5138,7 +5155,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             val snackbar = viewModel.uiState.value.snackbar
-            assertEquals("/btw failed: “Why?”", snackbar?.message)
+            assertEquals("/btw failed: “Why?”", snackbar?.message?.english())
             assertEquals(SessionChatSnackbarTone.Error, snackbar?.tone)
             val retry = snackbar?.action as SessionChatSnackbarAction.RetrySideQuestion
             assertEquals(1, viewModel.uiState.value.sideQuestions.failedCount)
@@ -5908,7 +5925,7 @@ class SessionChatViewModelTest {
             assertTrue(viewModel.uiState.value.forkResultVisible)
             assertEquals("Original (fork #1)", viewModel.uiState.value.forkedSessionTitle)
             val snackbar = requireNotNull(viewModel.uiState.value.snackbar)
-            assertEquals("Fork created, but it couldn't be renamed.", snackbar.message)
+            assertEquals("Fork created, but it couldn't be renamed.", snackbar.message.english())
             assertEquals(SessionChatSnackbarTone.Error, snackbar.tone)
             assertEquals(
                 "Try again",
@@ -5981,7 +5998,7 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertTrue(viewModel.uiState.value.forkDialogVisible)
-            assertEquals("Enter a session title", viewModel.uiState.value.forkErrorMessage)
+            assertEquals("Enter a session title", viewModel.uiState.value.forkErrorMessage?.english())
             assertEquals(0, sessionRepository.forkSessionCallCount)
             assertNull(sessionRepository.updateRequest)
         }
@@ -6150,7 +6167,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Session is busy",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertTrue(viewModel.uiState.value.hasPendingRevert)
         }
@@ -6767,9 +6785,10 @@ class SessionChatViewModelTest {
                 sessionRepository.summarizeRequest,
             )
             assertEquals(
-                SessionCompactChrome.FALLBACK_SUCCESS,
+                SessionCompactChrome.fallbackSuccess.english(),
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Default,
@@ -6803,9 +6822,10 @@ class SessionChatViewModelTest {
             runCurrent()
 
             assertEquals(
-                SessionCompactChrome.FALLBACK_SUCCESS,
+                SessionCompactChrome.fallbackSuccess.english(),
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertNull(viewModel.uiState.value.sessionStatusLabel)
             assertEquals(WorkingTurnIndicator.IDLE_LABEL, viewModel.uiState.value.workingIndicatorLabel)
@@ -6852,9 +6872,10 @@ class SessionChatViewModelTest {
 
             assertNull(viewModel.uiState.value.sessionStatusLabel)
             assertEquals(
-                SessionCompactChrome.FALLBACK_SUCCESS,
+                SessionCompactChrome.fallbackSuccess.english(),
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
         }
 
@@ -6912,9 +6933,10 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
             assertNull(viewModel.uiState.value.sessionStatusLabel)
             assertEquals(
-                SessionCompactChrome.FALLBACK_SUCCESS,
+                SessionCompactChrome.fallbackSuccess.english(),
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
 
             viewModel.consumeSnackbar()
@@ -6957,14 +6979,14 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             viewModel.branchNameCopied()
-            assertEquals(SessionChatViewModel.BRANCH_COPIED_MESSAGE, viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatViewModel.BRANCH_COPIED_MESSAGE, viewModel.uiState.value.snackbar?.message?.english())
             val firstId = viewModel.uiState.value.snackbar?.id
 
             viewModel.consumeSnackbar()
             assertNull(viewModel.uiState.value.snackbar)
 
             viewModel.branchNameCopied()
-            assertEquals(SessionChatViewModel.BRANCH_COPIED_MESSAGE, viewModel.uiState.value.snackbar?.message)
+            assertEquals(SessionChatViewModel.BRANCH_COPIED_MESSAGE, viewModel.uiState.value.snackbar?.message?.english())
             assertNotEquals(firstId, viewModel.uiState.value.snackbar?.id)
         }
 
@@ -6990,9 +7012,10 @@ class SessionChatViewModelTest {
             hold.complete(Unit)
             advanceUntilIdle()
             assertEquals(
-                SessionCompactChrome.FALLBACK_SUCCESS,
+                SessionCompactChrome.fallbackSuccess.english(),
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
 
             viewModel.consumeSnackbar()
@@ -7031,9 +7054,10 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
             assertNull(viewModel.uiState.value.sessionStatusLabel)
             assertEquals(
-                SessionCompactChrome.FALLBACK_SUCCESS,
+                SessionCompactChrome.fallbackSuccess.english(),
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
         }
 
@@ -7121,9 +7145,10 @@ class SessionChatViewModelTest {
             advanceUntilIdle()
 
             assertEquals(
-                SessionCompactChrome.FAILURE,
+                SessionCompactChrome.failure.english(),
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -7274,7 +7299,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 SessionChatComposer.PENDING_SEND_TIMEOUT_ERROR,
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertEquals(
                 SessionChatSnackbarTone.Error,
@@ -7823,7 +7849,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "This file has already been uploaded",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
         }
 
@@ -7850,7 +7877,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Folders can't be attached.",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
         }
 
@@ -7873,7 +7901,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Folders can't be attached.",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
         }
 
@@ -7896,7 +7925,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "This file has already been uploaded",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
         }
 
@@ -7918,7 +7948,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "The attachment could not be read.",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
         }
 
@@ -7963,7 +7994,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Upload failed",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
             assertFalse(uploads.contractMissed)
         }
@@ -8011,7 +8043,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 AttachmentLimits.TOO_LARGE_ERROR,
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
         }
 
@@ -8032,7 +8065,8 @@ class SessionChatViewModelTest {
             assertEquals(
                 "Only images, PDFs, or text files can be attached here.",
                 viewModel.uiState.value.snackbar
-                    ?.message,
+                    ?.message
+                    ?.english(),
             )
         }
 

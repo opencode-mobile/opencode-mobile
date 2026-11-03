@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessioncontext
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,11 +27,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.sessioncontext.SessionContextBreakdownItem
 import dev.opencode.mobile.domain.sessioncontext.SessionContextBreakdownKind
 import dev.opencode.mobile.theme.openCodeColor
@@ -43,6 +46,8 @@ import dev.opencode.mobile.ui.components.OpenCodeReadableColumn
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.resolve
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,7 +65,7 @@ fun SessionContextScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
-            title = "Session Context",
+            title = stringResource(R.string.session_context_title),
             leading =
                 OpenCodeTopBarLeading.Back(
                     onClick = {
@@ -75,16 +80,18 @@ fun SessionContextScreen(
                 when (uiState.timeline) {
                     SessionContextTimelineState.Loading ->
                         OpenCodeStatusStack(
-                            title = "Loading session context",
-                            subtitle = "Fetching context…",
+                            title = stringResource(R.string.session_context_loading_title),
+                            subtitle = stringResource(R.string.session_context_loading_subtitle),
                             modifier = Modifier.weight(1f).fillMaxWidth(),
                         )
                     SessionContextTimelineState.Error ->
                         OpenCodeEmptyState(
-                            title = "Unable to load session context",
-                            message = uiState.errorMessage?.takeIf { it.isNotBlank() } ?: "The context didn't load.",
+                            title = stringResource(R.string.session_context_load_failed),
+                            message =
+                                uiState.errorMessage?.resolve()?.takeIf { it.isNotBlank() }
+                                    ?: stringResource(R.string.session_context_load_failed_message),
                             primaryAction =
-                                OpenCodeEmptyStateAction(title = "Retry") {
+                                OpenCodeEmptyStateAction(title = stringResource(R.string.session_context_retry)) {
                                     // load() also runs on bind, so the retry tap is logged here.
                                     logSessionContextAction(ProductAnalytics.Action.SESSION_CONTEXT_RETRY)
                                     viewModel.load()
@@ -122,7 +129,7 @@ private fun logSessionContextAction(actionId: String) {
 @Composable
 private fun SessionContextContent(
     display: SessionContextDisplayState,
-    errorMessage: String?,
+    errorMessage: UiText?,
 ) {
     Column(
         modifier =
@@ -133,7 +140,7 @@ private fun SessionContextContent(
         verticalArrangement = Arrangement.spacedBy(28.dp),
     ) {
         if (errorMessage != null) {
-            OpenCodeInlineNotice(message = errorMessage)
+            OpenCodeInlineNotice(message = errorMessage.resolve())
         }
         StatGrid(display.stats)
         if (display.breakdown.isNotEmpty()) {
@@ -153,7 +160,7 @@ private fun StatGrid(stats: List<SessionContextStatItem>) {
     ) {
         stats.forEach { stat ->
             OpenCodeKeyValueRow(
-                label = stat.label,
+                label = stat.label.resolve(),
                 value = stat.value,
                 style = OpenCodeKeyValueStyle.Stacked,
                 modifier = Modifier.weight(1f).fillMaxWidth(0.5f),
@@ -167,7 +174,7 @@ private fun StatGrid(stats: List<SessionContextStatItem>) {
 private fun ContextBreakdown(items: List<SessionContextBreakdownItem>) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
-            text = "Context Breakdown",
+            text = stringResource(R.string.session_context_breakdown_title),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -199,7 +206,12 @@ private fun ContextBreakdown(items: List<SessionContextBreakdownItem>) {
                                 .background(colorFor(item.kind), RoundedCornerShape(2.dp)),
                     )
                     Text(
-                        text = "${labelFor(item.kind)} ${"%.1f".format(item.displayPercent)}%",
+                        text =
+                            stringResource(
+                                R.string.session_context_breakdown_legend,
+                                stringResource(labelFor(item.kind)),
+                                percentText(item.displayPercent),
+                            ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -207,7 +219,7 @@ private fun ContextBreakdown(items: List<SessionContextBreakdownItem>) {
             }
         }
         Text(
-            text = "Approximate breakdown of input tokens. Other includes tool definitions and overhead.",
+            text = stringResource(R.string.session_context_breakdown_footnote),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -224,11 +236,15 @@ private fun colorFor(kind: SessionContextBreakdownKind): Color =
         SessionContextBreakdownKind.Other -> openCodeColor("syntax-comment")
     }
 
-private fun labelFor(kind: SessionContextBreakdownKind): String =
+@StringRes
+private fun labelFor(kind: SessionContextBreakdownKind): Int =
     when (kind) {
-        SessionContextBreakdownKind.System -> "System"
-        SessionContextBreakdownKind.User -> "User"
-        SessionContextBreakdownKind.Assistant -> "Assistant"
-        SessionContextBreakdownKind.Tool -> "Tool Calls"
-        SessionContextBreakdownKind.Other -> "Other"
+        SessionContextBreakdownKind.System -> R.string.session_context_breakdown_system
+        SessionContextBreakdownKind.User -> R.string.session_context_breakdown_user
+        SessionContextBreakdownKind.Assistant -> R.string.session_context_breakdown_assistant
+        SessionContextBreakdownKind.Tool -> R.string.session_context_breakdown_tool_calls
+        SessionContextBreakdownKind.Other -> R.string.session_context_breakdown_other
     }
+
+/** One decimal and a percent sign, as before: `12.5%`. */
+private fun percentText(value: Double): String = "%.1f%%".format(value)

@@ -18,11 +18,11 @@ enum OpenCodeTextInputSubmitAction {
 
 struct OpenCodeTextInput: View {
     @Binding var text: String
-    var hint: String = ""
-    var accessibilityLabel: String?
+    var hint: OpenCodeText = .empty
+    var accessibilityLabel: OpenCodeText?
     var kind: OpenCodeTextInputKind = .text
     var enabled = true
-    var errorMessage: String?
+    var errorMessage: OpenCodeText?
     var submitAction: OpenCodeTextInputSubmitAction = .done
     var isFocused: Binding<Bool>?
     var onSubmit: (() -> Void)?
@@ -41,11 +41,11 @@ struct OpenCodeTextInput: View {
 
     init(
         text: Binding<String>,
-        hint: String = "",
-        accessibilityLabel: String? = nil,
+        hint: OpenCodeText = .empty,
+        accessibilityLabel: OpenCodeText? = nil,
         kind: OpenCodeTextInputKind = .text,
         enabled: Bool = true,
-        errorMessage: String? = nil,
+        errorMessage: OpenCodeText? = nil,
         submitAction: OpenCodeTextInputSubmitAction = .done,
         isFocused: Binding<Bool>? = nil,
         onSubmit: (() -> Void)? = nil,
@@ -58,7 +58,7 @@ struct OpenCodeTextInput: View {
         precondition(maxLines == 1 || kind == .text, "Only text inputs can be multi-line")
         precondition(maxLength == nil || maxLines > 1, "maxLength needs a multi-line input")
         precondition(
-            Self.resolveAccessibilityLabel(hint: hint, accessibilityLabel: accessibilityLabel) != nil,
+            Self.resolveAccessibilityLabel(hint: hint.resolved, accessibilityLabel: accessibilityLabel?.resolved) != nil,
             "OpenCodeTextInput requires a non-blank hint or accessibilityLabel"
         )
         _text = text
@@ -98,7 +98,7 @@ struct OpenCodeTextInput: View {
                 .opacity(enabled ? 1 : 0.6)
 
             if let errorMessage {
-                Text(errorMessage)
+                Text(openCode: errorMessage)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.error)
             }
@@ -131,25 +131,25 @@ struct OpenCodeTextInput: View {
     private var field: some View {
         Group {
             if kind == .password {
-                SecureField(hint, text: $text)
+                SecureField(hint.resolved, text: $text)
                     .textContentType(.password)
             } else if multiline {
                 OpenCodeMultilineTextView(
                     text: $text,
                     focused: $multilineFocused,
-                    placeholder: hint,
+                    placeholder: hint.resolved,
                     minLines: minLines,
                     maxLines: maxLines,
                     maxLength: maxLength,
                     enabled: enabled
                 )
             } else {
-                TextField(hint, text: $text)
+                TextField(hint.resolved, text: $text)
                     .textContentType(contentType)
                     .keyboardType(kind == .url ? .URL : .default)
             }
         }
-        .accessibilityLabel(Self.resolveAccessibilityLabel(hint: hint, accessibilityLabel: accessibilityLabel)!)
+        .accessibilityLabel(Self.resolveAccessibilityLabel(hint: hint.resolved, accessibilityLabel: accessibilityLabel?.resolved)!)
     }
 
     /// What an edit of `range` to `replacement` leaves in `text`, keeping within

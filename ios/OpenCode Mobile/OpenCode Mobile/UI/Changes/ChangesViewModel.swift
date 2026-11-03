@@ -5,19 +5,33 @@ enum ChangeSource: String, CaseIterable, Sendable, Equatable, Hashable {
     case workingTree
     case lastTurn
 
-    private var metadata: (displayName: String, emptyTitle: String, emptyDetail: String, logValue: String) {
+    var displayName: OpenCodeText {
         switch self {
-        case .workingTree:
-            ("Git changes", "No Git changes", "The working tree has no uncommitted changes.", "git-changes")
-        case .lastTurn:
-            ("Last turn changes", "No changes", "The latest completed turn did not change any files.", "last-turn")
+        case .workingTree: "changes.source.working_tree.name"
+        case .lastTurn: "changes.source.last_turn.name"
         }
     }
 
-    var displayName: String { metadata.displayName }
-    var emptyTitle: String { metadata.emptyTitle }
-    var emptyDetail: String { metadata.emptyDetail }
-    var logValue: String { metadata.logValue }
+    var emptyTitle: OpenCodeText {
+        switch self {
+        case .workingTree: "changes.source.working_tree.empty_title"
+        case .lastTurn: "changes.source.last_turn.empty_title"
+        }
+    }
+
+    var emptyDetail: OpenCodeText {
+        switch self {
+        case .workingTree: "changes.source.working_tree.empty_message"
+        case .lastTurn: "changes.source.last_turn.empty_message"
+        }
+    }
+
+    var logValue: String {
+        switch self {
+        case .workingTree: "git-changes"
+        case .lastTurn: "last-turn"
+        }
+    }
 }
 
 enum ChangesPhase: Equatable {
@@ -51,20 +65,39 @@ struct ChangesContentState: Equatable {
     var deletions: Int { filteredFiles.reduce(0) { $0 + $1.deletions } }
 
     var summary: String {
-        "\(filteredFiles.count) \(plural(filteredFiles.count, singular: "changed file", plural: "changed files"))"
+        let count = filteredFiles.count
+        return String(localized: "changes.summary.changed_files", defaultValue: "\(count) changed files")
     }
 
     var aggregateAccessibilityLabel: String {
-        "\(summary), "
-            + "\(additions) \(plural(additions, singular: "addition", plural: "additions")), "
-            + "\(deletions) \(plural(deletions, singular: "deletion", plural: "deletions"))"
+        let filesLabel = summary
+        let addedLabel = Self.additionsLabel(additions)
+        let deletedLabel = Self.deletionsLabel(deletions)
+        return String(
+            localized: "changes.accessibility.summary",
+            defaultValue: "\(filesLabel), \(addedLabel), \(deletedLabel)"
+        )
     }
 
     func fileAccessibilityLabel(_ file: FileDiff) -> String {
-        let position = max(0, filteredFiles.firstIndex { $0.path == file.path } ?? 0)
-        return "\(file.path), \(file.status.displayName), file \(position + 1) of \(filteredFiles.count), "
-            + "\(file.additions) \(plural(file.additions, singular: "addition", plural: "additions")), "
-            + "\(file.deletions) \(plural(file.deletions, singular: "deletion", plural: "deletions"))"
+        let path = file.path
+        let status = file.status.displayName
+        let position = max(0, filteredFiles.firstIndex { $0.path == file.path } ?? 0) + 1
+        let total = filteredFiles.count
+        let addedLabel = Self.additionsLabel(file.additions)
+        let deletedLabel = Self.deletionsLabel(file.deletions)
+        return String(
+            localized: "changes.accessibility.file",
+            defaultValue: "\(path), \(status), file \(position) of \(total), \(addedLabel), \(deletedLabel)"
+        )
+    }
+
+    private static func additionsLabel(_ count: Int) -> String {
+        String(localized: "changes.count.additions", defaultValue: "\(count) additions")
+    }
+
+    private static func deletionsLabel(_ count: Int) -> String {
+        String(localized: "changes.count.deletions", defaultValue: "\(count) deletions")
     }
 }
 
@@ -250,8 +283,9 @@ final class ChangesViewModel {
             let loadedFiles: [FileDiff]
             do {
                 loadedFiles = try await loadFiles(source: selectedSource)
-            } catch let SessionError.http(statusCode, _) where statusCode == 404 && selectedSource == .workingTree {
-                guard capabilities.supportsSessionMessageDiff else { throw SessionError.http(statusCode: statusCode, message: "missing") }
+            } catch let SessionError.http(statusCode, message) where statusCode == 404 && selectedSource == .workingTree {
+                // No fallback source: show the server's own error, as Android does.
+                guard capabilities.supportsSessionMessageDiff else { throw SessionError.http(statusCode: statusCode, message: message) }
                 log(source: selectedSource, fileCount: 0, startedAt: startedAt, result: "unsupported-fallback")
                 availableSources = [.lastTurn]
                 selectedSource = .lastTurn
@@ -298,11 +332,11 @@ final class ChangesViewModel {
                     phase: restoredPhase,
                     selectedSource: requestedSource,
                     availableSources: availableSources,
-                    refreshError: TurnDiffUnavailable.userFacing(error) ?? error.localizedDescription
+                    refreshError: changesErrorMessage(error)
                 )
             } else {
                 state = ChangesState(
-                    phase: .error(TurnDiffUnavailable.userFacing(error) ?? error.localizedDescription),
+                    phase: .error(changesErrorMessage(error)),
                     selectedSource: activeSource,
                     availableSources: availableSources
                 )
@@ -406,9 +440,22 @@ private struct PreviewChangesRepository: SessionRepository {
 #endif
 
 private extension FileDiffStatus {
-    var displayName: String { rawValue.capitalized }
+    var displayName: String {
+        switch self {
+        case .added: String(localized: "changes.file_status.added", defaultValue: "Added")
+        case .deleted: String(localized: "changes.file_status.deleted", defaultValue: "Deleted")
+        case .modified: String(localized: "changes.file_status.modified", defaultValue: "Modified")
+        }
+    }
 }
 
-private func plural(_ count: Int, singular: String, plural: String) -> String {
-    count == 1 ? singular : plural
+/// The moved-folders text, or the error's own description (usually the server's message) verbatim.
+private func changesErrorMessage(_ error: Error) -> String {
+    if TurnDiffUnavailable.userFacing(error) != nil {
+        return String(
+            localized: "changes.error.turn_moved_folders",
+            defaultValue: "This turn moved folders, so its changes can't be shown together."
+        )
+    }
+    return error.localizedDescription
 }

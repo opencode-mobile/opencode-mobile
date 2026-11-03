@@ -470,7 +470,8 @@ class SessionChatTimeline(
 
     fun failOptimisticSend(
         optimisticId: String,
-        error: String,
+        /** Null when the failure is reported elsewhere (an app-text snackbar). */
+        error: String?,
     ) {
         mergePendingWhileSending = false
         pendingOptimisticRows = emptyList()

@@ -5,14 +5,14 @@ enum ComposerPickerKind {
     case mode
     case variant
 
-    var sheetTitle: String {
+    var sheetTitle: OpenCodeText {
         switch self {
         case .model:
-            "Model"
+            "session_chat_sheet.picker.model"
         case .mode:
-            "Agent mode"
+            "session_chat_sheet.picker.agent_mode"
         case .variant:
-            "Variant"
+            "session_chat_sheet.picker.variant"
         }
     }
 }
@@ -89,16 +89,18 @@ struct SessionChatPickerSheetModifier: ViewModifier {
         return modelSelectionCatalog.providers.first { $0.id == activeModelProviderID }
     }
 
-    private var modelPickerSheetTitle: String {
-        guard activePicker == .model else { return activePicker?.sheetTitle ?? "" }
-        return activeModelProvider?.label ?? ComposerPickerKind.model.sheetTitle
+    /// The picker name, or the open provider's label from the server, verbatim.
+    private var modelPickerSheetTitle: OpenCodeText {
+        guard activePicker == .model else { return activePicker?.sheetTitle ?? .empty }
+        guard let provider = activeModelProvider else { return ComposerPickerKind.model.sheetTitle }
+        return .verbatim(provider.label)
     }
 
     private var modelPickerHeaderLeadingAction: OpenCodeBottomSheetHeaderAction? {
         guard activePicker == .model, activeModelProvider != nil else { return nil }
         return OpenCodeBottomSheetHeaderAction(
             icon: .arrowBack,
-            accessibilityLabel: "Back to providers",
+            accessibilityLabel: "session_chat_sheet.picker.back_to_providers",
             action: {
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.sessionModelPicker,
@@ -145,14 +147,14 @@ struct SessionChatPickerSheetModifier: ViewModifier {
             let filtered = filteredModels(in: provider)
             if filtered.isEmpty {
                 OpenCodeBottomSheetEntry(
-                    title: "No models match your filter",
+                    title: "session_chat_sheet.picker.no_models_match",
                     enabled: false,
                     action: {}
                 )
             } else {
                 ForEach(filtered) { model in
                     OpenCodeBottomSheetEntry(
-                        title: model.modelLabel,
+                        title: .verbatim(model.modelLabel),
                         selected: model == composer.selectedModel?.option,
                         action: {
                             onSelectModel(model)
@@ -167,7 +169,7 @@ struct SessionChatPickerSheetModifier: ViewModifier {
         } else {
             ForEach(modelSelectionCatalog.providers) { provider in
                 OpenCodeBottomSheetEntry(
-                    title: provider.label,
+                    title: .verbatim(provider.label),
                     selected: provider.id == composer.selectedModel?.option.providerID,
                     action: {
                         ProductAnalytics.logUserAction(
@@ -190,7 +192,7 @@ struct SessionChatPickerSheetModifier: ViewModifier {
         case .mode:
             ForEach(composer.selectableAgents) { agent in
                 OpenCodeBottomSheetEntry(
-                    title: agent.displayName,
+                    title: .verbatim(agent.displayName),
                     selected: agent.id.compare(composer.selectedMode, options: .caseInsensitive) == .orderedSame,
                     action: {
                         onSelectMode(agent.id)
@@ -201,7 +203,7 @@ struct SessionChatPickerSheetModifier: ViewModifier {
         case .variant:
             ForEach(composer.variantOptions, id: \.self) { level in
                 OpenCodeBottomSheetEntry(
-                    title: TitleCaseIdentifier.displayName(for: level),
+                    title: .verbatim(TitleCaseIdentifier.displayName(for: level)),
                     selected: level.compare(
                         composer.selectedVariant ?? ModelSelection.defaultVariantLabel,
                         options: .caseInsensitive
@@ -226,7 +228,7 @@ private struct ModelPickerFilterField: View {
     var body: some View {
         OpenCodeTextInput(
             text: $text,
-            hint: "Filter models...",
+            hint: "session_chat_sheet.picker.filter_models_hint",
             kind: .filter
         )
         .onChange(of: text) { _, _ in

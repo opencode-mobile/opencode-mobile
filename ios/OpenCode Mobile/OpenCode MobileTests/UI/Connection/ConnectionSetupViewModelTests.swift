@@ -16,7 +16,7 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.baseURL.isEmpty)
         #expect(viewModel.showsInstructionEssay)
         #expect(viewModel.showsManualForm == false)
-        #expect(viewModel.primaryActionLabel == "Scan QR")
+        #expect(viewModel.primaryActionLabel.resolved == "Scan QR")
         #expect(viewModel.credentialSegment == .password)
         #expect(ConnectionSetupViewModel.hostIsBlank(viewModel.baseURL))
     }
@@ -142,7 +142,7 @@ struct ConnectionSetupViewModelTests {
             ),
             mode: .edit
         )
-        #expect(viewModel.primaryActionLabel == "Save")
+        #expect(viewModel.primaryActionLabel.resolved == "Save")
         #expect(viewModel.showsManualForm)
         #expect(viewModel.credentialSegment == .password)
         #expect(viewModel.canSubmitWithoutProbe == true)
@@ -185,7 +185,7 @@ struct ConnectionSetupViewModelTests {
             mode: .edit
         )
         #expect(viewModel.showsPrimaryAction)
-        #expect(viewModel.primaryActionLabel == "Save")
+        #expect(viewModel.primaryActionLabel.resolved == "Save")
         #expect(viewModel.usesQRLayout)
         #expect(viewModel.canSubmitWithoutProbe)
         viewModel.name = "Studio"
@@ -223,7 +223,7 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.password == "secret")
         #expect(viewModel.usesQRLayout)
         #expect(viewModel.qrPairingReady)
-        #expect(viewModel.primaryActionLabel == "Save")
+        #expect(viewModel.primaryActionLabel.resolved == "Save")
         #expect(viewModel.showsPrimaryAction)
         #expect(viewModel.snackbar == nil)
     }
@@ -292,7 +292,7 @@ struct ConnectionSetupViewModelTests {
         let saved = await viewModel.submit()
         #expect(saved == false)
         #expect(viewModel.cleartextWarningHosts == ["203.0.113.5:4096"])
-        #expect(viewModel.cleartextWarningMessage.hasPrefix("203.0.113.5:4096 uses plain http"))
+        #expect(viewModel.cleartextWarningMessage.resolved.hasPrefix("203.0.113.5:4096 uses plain http"))
         #expect(probe.probed.isEmpty)
         #expect(store.saved.isEmpty)
         #expect(viewModel.state == .idle)
@@ -570,7 +570,7 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.credentialSegment == .password)
         #expect(viewModel.showsPrimaryAction)
         #expect(viewModel.primaryEnabled)
-        #expect(viewModel.primaryActionLabel == "Connect")
+        #expect(viewModel.primaryActionLabel.resolved == "Connect")
         #expect(viewModel.snackbar?.text == qrScanFailureMessage)
         #expect(viewModel.snackbar?.variant == .error)
         #expect(store.saved.isEmpty)
@@ -639,12 +639,12 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.username == "opencode")
         #expect(viewModel.password == "paired-token")
         #expect(viewModel.qrPairingReady)
-        #expect(viewModel.primaryActionLabel == "Save")
+        #expect(viewModel.primaryActionLabel.resolved == "Save")
         #expect(viewModel.showsPrimaryAction)
         #expect(store.saved.isEmpty)
         #expect(viewModel.snackbar == nil)
         #expect(viewModel.usesQRLayout)
-        #expect(viewModel.savedAddressRows.first { $0.url.contains("100.64") }?.badge == "Using now")
+        #expect(viewModel.savedAddressRows.first { $0.url.contains("100.64") }?.badge.resolved == "Using now")
     }
 
     @Test func submit_pairingCode_bothAuthFailed_redeemsTailscaleOnce() async {
@@ -665,8 +665,8 @@ struct ConnectionSetupViewModelTests {
             "http://100.64.0.3:49374/",
         ]))
         #expect(viewModel.usesQRLayout)
-        #expect(viewModel.savedAddressRows.first { $0.url.contains("100.64") }?.badge == "Using now")
-        #expect(viewModel.savedAddressRows.first { $0.url.contains("192.168") }?.badge == "Saved")
+        #expect(viewModel.savedAddressRows.first { $0.url.contains("100.64") }?.badge.resolved == "Using now")
+        #expect(viewModel.savedAddressRows.first { $0.url.contains("192.168") }?.badge.resolved == "Saved")
         #expect(viewModel.savedAddressRows.allSatisfy { !$0.dimmed })
         #expect(viewModel.snackbar == nil)
     }
@@ -691,9 +691,9 @@ struct ConnectionSetupViewModelTests {
         let tailscale = viewModel.savedAddressRows.first { $0.url.contains("100.64") }
         let lan = viewModel.savedAddressRows.first { $0.url.contains("192.168") }
         #expect(tailscale?.dimmed == true)
-        #expect(tailscale?.badge == "Saved")
-        #expect(tailscale?.subtitle.contains("not reachable") == true)
-        #expect(lan?.badge == "Using now")
+        #expect(tailscale?.badge.resolved == "Saved")
+        #expect(tailscale?.subtitle.resolved.contains("not reachable") == true)
+        #expect(lan?.badge.resolved == "Using now")
         #expect(lan?.dimmed == false)
     }
 
@@ -779,7 +779,7 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.serverURLs.isEmpty)
         #expect(viewModel.showsPrimaryAction)
         #expect(viewModel.primaryEnabled)
-        #expect(viewModel.primaryActionLabel == "Connect")
+        #expect(viewModel.primaryActionLabel.resolved == "Connect")
         #expect(viewModel.baseURL == "http://192.168.1.83:4096/")
         #expect(viewModel.username == "opencode")
         #expect(viewModel.snackbar?.text == "Unable to reach the server")
@@ -789,7 +789,7 @@ struct ConnectionSetupViewModelTests {
         #expect(retried == false)
         #expect(store.saved.isEmpty)
         #expect(viewModel.showsPrimaryAction)
-        #expect(viewModel.primaryActionLabel == "Connect")
+        #expect(viewModel.primaryActionLabel.resolved == "Connect")
         #expect(viewModel.snackbar?.text == "Unable to reach the server")
     }
 
@@ -956,11 +956,11 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.credentialSegment == .pairingCode)
         viewModel.showScanInstructions()
         #expect(viewModel.showsInstructionEssay)
-        #expect(viewModel.primaryActionLabel == "Scan QR")
+        #expect(viewModel.primaryActionLabel.resolved == "Scan QR")
         viewModel.showHostPasswordForm()
         #expect(viewModel.showsManualForm)
         #expect(viewModel.credentialSegment == .password)
-        #expect(viewModel.primaryActionLabel == "Connect")
+        #expect(viewModel.primaryActionLabel.resolved == "Connect")
     }
 
     @Test func savedOpenTunnelAddress_rowTitleIsRemoteTunnel() {
@@ -968,14 +968,14 @@ struct ConnectionSetupViewModelTests {
             urls: ["https://Route.ABC.OpenTunnel.XYZ/"],
             probe: FakeConnectionProbeService(result: .success(.v2))
         )
-        #expect(viewModel.savedAddressRows.map(\.title) == ["Remote tunnel"])
+        #expect(viewModel.savedAddressRows.map(\.title.resolved) == ["Remote tunnel"])
         #expect(PairingQRPayload.isTailscaleURL(viewModel.serverURLs[0]) == false)
     }
 
     @Test func savedAddressesHint_tunnelOnly() {
         let urls = ["https://ab12.cd34.opentunnel.xyz/", "https://other.route.opentunnel.xyz/"]
         #expect(
-            ConnectionSetupViewModel.savedAddressesHint(for: urls)
+            ConnectionSetupViewModel.savedAddressesHint(for: urls).resolved
                 == "Remote tunnel saved. Nothing else to pick. It stays until you turn remote access off."
         )
     }
@@ -986,9 +986,9 @@ struct ConnectionSetupViewModelTests {
             urls: urls,
             probe: FakeConnectionProbeService(result: .success(.v2))
         )
-        #expect(viewModel.savedAddressRows.map(\.title) == ["Local network", "Tailscale"])
+        #expect(viewModel.savedAddressRows.map(\.title.resolved) == ["Local network", "Tailscale"])
         #expect(
-            ConnectionSetupViewModel.savedAddressesHint(for: urls)
+            ConnectionSetupViewModel.savedAddressesHint(for: urls).resolved
                 == "Tailscale is used when it answers. Local network is the fallback."
         )
     }
@@ -996,7 +996,7 @@ struct ConnectionSetupViewModelTests {
     @Test func savedAddressesHint_otherMix() {
         let urls = ["https://ab12.cd34.opentunnel.xyz/", "http://192.168.1.60:4096/"]
         #expect(
-            ConnectionSetupViewModel.savedAddressesHint(for: urls)
+            ConnectionSetupViewModel.savedAddressesHint(for: urls).resolved
                 == "Saved addresses are tried until one answers. Tailscale is preferred when it answers."
         )
     }
@@ -1013,8 +1013,8 @@ struct ConnectionSetupViewModelTests {
         #expect(saved == false)
         #expect(viewModel.requestPasswordFocus == false)
         #expect(viewModel.addressRecovery == .unreachable)
-        #expect(viewModel.addressRecovery?.message == "Can't reach the saved address. Pair again.")
-        #expect(viewModel.primaryActionLabel == "Scan a new QR")
+        #expect(viewModel.addressRecovery?.message.resolved == "Can't reach the saved address. Pair again.")
+        #expect(viewModel.primaryActionLabel.resolved == "Scan a new QR")
         #expect(viewModel.usesQRLayout)
         #expect(viewModel.snackbar == nil)
     }
@@ -1032,12 +1032,57 @@ struct ConnectionSetupViewModelTests {
         #expect(viewModel.requestPasswordFocus == false)
         #expect(viewModel.addressRecovery == .unauthorized)
         #expect(
-            viewModel.addressRecovery?.message
+            viewModel.addressRecovery?.message.resolved
                 == "This server rejected the saved sign-in. Pair again. A new password logs every device out."
         )
-        #expect(viewModel.primaryActionLabel == "Scan a new QR")
+        #expect(viewModel.primaryActionLabel.resolved == "Scan a new QR")
         #expect(viewModel.usesQRLayout)
         #expect(viewModel.snackbar == nil)
+    }
+
+    @Test func screenTitle_isTheModeKey() {
+        let viewModel = ConnectionSetupViewModel(
+            connectionProbeService: FakeConnectionProbeService(result: .success(.v2)),
+            connectionSessionCoordinator: ConnectionSessionCoordinator(
+                activeConnectionManager: ActiveConnectionManager(),
+                connectionProfileStore: FakeSetupConnectionProfileStore()
+            ),
+            mode: .add
+        )
+        #expect(viewModel.screenTitle == "connection.setup.title.add")
+        #expect(viewModel.screenTitle.resolved == "Add server")
+    }
+
+    @Test func cleartextWarning_oneHost_namesTheHostVerbatim() {
+        let message = ConnectionSetupViewModel.cleartextWarningMessage(hosts: ["203.0.113.5:4096"]).resolved
+        #expect(message == "203.0.113.5:4096 uses plain http outside your local network or Tailscale. "
+            + "Your server password and everything in your sessions would travel unencrypted. "
+            + "Prefer https, a VPN, or a tunnel.")
+    }
+
+    @Test func cleartextWarning_severalHosts_joinsTheHosts() {
+        let message = ConnectionSetupViewModel.cleartextWarningMessage(hosts: ["a.example.com", "b.example.com"]).resolved
+        #expect(message.hasPrefix("a.example.com, b.example.com use plain http outside"))
+    }
+
+    @Test func cleartextWarning_noHosts_namesThisAddress() {
+        let message = ConnectionSetupViewModel.cleartextWarningMessage(hosts: []).resolved
+        #expect(message.hasPrefix("This address uses plain http outside"))
+    }
+
+    @Test func probeFailureMessage_mapsErrors() {
+        #expect(ConnectionSetupViewModel.probeFailureMessage(.http(statusCode: 403, message: nil)) == "Authentication failed")
+        #expect(ConnectionSetupViewModel.probeFailureMessage(.http(statusCode: 500, message: nil)) == "Unable to reach the server")
+        #expect(ConnectionSetupViewModel.probeFailureMessage(.transport("down")) == "Unable to reach the server")
+        #expect(ConnectionSetupViewModel.probeFailureMessage(.unhealthy(version: nil)) == "Server reported unhealthy")
+    }
+
+    @Test func savedAddressRow_keepsTheHostVerbatim() {
+        let viewModel = makeSavedAddressViewModel(
+            urls: ["http://192.168.1.2:4096/"],
+            probe: FakeConnectionProbeService(result: .success(.v2))
+        )
+        #expect(viewModel.savedAddressRows.first?.subtitle == .verbatim("192.168.1.2:4096"))
     }
 }
 

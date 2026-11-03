@@ -2,8 +2,8 @@ import SwiftUI
 
 struct SessionChatToolGroupTarget: Hashable {
     let blockID: String
-    let title: String
-    let subtitle: String?
+    let title: TimelineText
+    let subtitle: TimelineText?
     let members: [SessionChatToolCardBlock]
     let messageID: String
 
@@ -38,8 +38,8 @@ struct SessionChatToolGroupView: View {
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: target.title,
-                subtitle: target.subtitle,
+                title: target.title.openCode,
+                subtitle: target.subtitle?.openCode,
                 leading: .back(action: {
                     ProductAnalytics.logUserAction(
                         screenId: ProductAnalytics.Screen.sessionToolGroup,
@@ -54,11 +54,11 @@ struct SessionChatToolGroupView: View {
                     ForEach(Array(target.members.enumerated()), id: \.offset) { _, card in
                         OpenCodeToolCallCard(
                             status: card.isInterrupted ? .interrupted : card.status.toolGroupCardStatus,
-                            title: card.title,
-                            subtitle: card.subtitle,
+                            title: card.title.resolved,
+                            subtitle: card.subtitle?.resolved,
                             additions: card.additions,
                             deletions: card.deletions,
-                            errorText: card.errorText,
+                            errorText: card.errorText?.resolved,
                             action: toolCardAction(for: card)
                         )
                         if !card.images.isEmpty {
@@ -110,7 +110,7 @@ struct SessionChatToolGroupView: View {
                 )
                 childSessionTarget = ChildSessionNavigationTarget(
                     sessionID: childSessionId,
-                    sessionTitle: card.title,
+                    sessionTitle: card.title.resolved,
                     worktree: worktree,
                     optimisticNavigationInstanceID: nil,
                     parentID: parentSessionID

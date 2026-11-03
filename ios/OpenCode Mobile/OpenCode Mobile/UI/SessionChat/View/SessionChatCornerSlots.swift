@@ -44,9 +44,7 @@ struct SessionChatActivitySlotView: View {
                         OpenCodeFloatingPill(
                             layout: .label("+\(slot.overflow.count)"),
                             state: .ready,
-                            accessibilityLabel: stackOpen
-                                ? "Hide \(slot.overflow.count) more"
-                                : "Show \(slot.overflow.count) more",
+                            accessibilityLabel: Self.overflowAccessibilityLabel(count: slot.overflow.count, stackOpen: stackOpen),
                             action: { stackOpen.toggle() }
                         )
                         .padding(.trailing, Self.spacing)
@@ -75,14 +73,13 @@ struct SessionChatActivitySlotView: View {
         let collapsed = slot.isCollapsed
         let count = slot.allItems.count
         let pending: Bool = if case .queued = primary { true } else { false }
-        let label = Self.accessibilityLabel(primary)
         return pill(
             primary,
             compact: collapsed || slot.primaryCompact,
             summary: collapsed ? OpenCodeFloatingPillSummary(count: count, pending: pending) : nil,
-            accessibilityLabel: !collapsed ? nil : stackOpen
-                ? "Hide \(count) activities"
-                : (count > 1 ? "Show \(count) activities. \(label)" : label),
+            accessibilityLabel: collapsed
+                ? Self.collapsedAccessibilityLabel(primary, count: count, stackOpen: stackOpen)
+                : nil,
             action: collapsed ? { stackOpen.toggle() } : nil
         )
     }
@@ -117,24 +114,39 @@ struct SessionChatActivitySlotView: View {
     static func layout(_ item: SessionChatActivityItem) -> OpenCodeFloatingPillLayout {
         switch item {
         case .reviewPermission:
-            .iconLabel(icon: .arrowUpward, label: "Review permission")
+            .iconLabel(icon: .arrowUpward, label: String(localized: "session_chat.activity.review_permission", defaultValue: "Review permission"))
         case .answerQuestion:
-            .iconLabel(icon: .arrowUpward, label: "Answer question")
+            .iconLabel(icon: .arrowUpward, label: String(localized: "session_chat.activity.answer_question", defaultValue: "Answer question"))
         case let .subagents(pill):
             .counter(label: pill.label, waiting: pill.needsInput)
         case .requestFailed:
-            .closable(label: "Request failed")
+            .closable(label: String(localized: "session_chat.activity.request_failed", defaultValue: "Request failed"))
         case let .sideQuestionsFailed(count):
-            .closable(label: "/btw failed" + countSuffix(count) + " · Retry")
+            .closable(label: btwFailedLabel(count))
         case let .sideQuestionsReady(count):
-            .iconLabel(icon: .check, label: "/btw answer ready" + countSuffix(count))
+            .iconLabel(icon: .check, label: btwReadyLabel(count))
         case let .sideQuestionsRunning(count):
-            .counter(label: "/btw" + countSuffix(count))
+            // The `/btw` command and the count; no words to translate.
+            .counter(label: count > 1 ? "/btw \u{00D7}\(count)" : "/btw")
         case let .queued(count):
-            .label("\(count) queued")
+            .label(String(localized: "session_chat.activity.queued", defaultValue: "\(count) queued"))
         case let .finished(_, label, _):
             .label(label)
         }
+    }
+
+    private static func btwFailedLabel(_ count: Int) -> String {
+        guard count > 1 else {
+            return String(localized: "session_chat.activity.btw_failed", defaultValue: "/btw failed · Retry")
+        }
+        return String(localized: "session_chat.activity.btw_failed_count", defaultValue: "/btw failed \u{00D7}\(count) · Retry")
+    }
+
+    private static func btwReadyLabel(_ count: Int) -> String {
+        guard count > 1 else {
+            return String(localized: "session_chat.activity.btw_ready", defaultValue: "/btw answer ready")
+        }
+        return String(localized: "session_chat.activity.btw_ready_count", defaultValue: "/btw answer ready \u{00D7}\(count)")
     }
 
     static func state(_ item: SessionChatActivityItem) -> OpenCodeFloatingPillState {
@@ -162,31 +174,83 @@ struct SessionChatActivitySlotView: View {
         }
     }
 
+    /// What VoiceOver reads: the item's state, then what a tap does.
     static func accessibilityLabel(_ item: SessionChatActivityItem) -> String {
+        let statusText = Self.status(item)
+        guard let tapAction = Self.action(item) else { return statusText }
+        let actionText = String(localized: tapAction)
+        return String(
+            localized: "session_chat.activity.status_action",
+            defaultValue: "\(statusText). \(actionText)"
+        )
+    }
+
+    /// The round pill that stands for every item: the primary's state, then that a tap shows or hides them.
+    static func collapsedAccessibilityLabel(_ primary: SessionChatActivityItem, count: Int, stackOpen: Bool) -> String {
+        let statusText = Self.status(primary)
+        let toggleText = stackOpen
+            ? String(localized: "session_chat.activity.collapsed.hide_count", defaultValue: "Hide \(count) activities")
+            : String(localized: "session_chat.activity.collapsed.show_count", defaultValue: "Show \(count) activities")
+        return String(
+            localized: "session_chat.activity.status_action",
+            defaultValue: "\(statusText). \(toggleText)"
+        )
+    }
+
+    static func overflowAccessibilityLabel(count: Int, stackOpen: Bool) -> String {
+        stackOpen
+            ? String(localized: "session_chat.activity.hide_more", defaultValue: "Hide \(count) more")
+            : String(localized: "session_chat.activity.show_more", defaultValue: "Show \(count) more")
+    }
+
+    /// The item's state, as read aloud.
+    private static func status(_ item: SessionChatActivityItem) -> String {
         switch item {
         case .reviewPermission:
-            "Review permission request"
+            String(localized: "session_chat.activity.review_permission_request", defaultValue: "Review permission request")
         case .answerQuestion:
-            "Answer question"
+            String(localized: "session_chat.activity.answer_question", defaultValue: "Answer question")
         case let .subagents(pill):
-            "\(pill.accessibilityLabel). \(pill.needsInput ? "Open request" : "Open background work")"
+            pill.accessibilityLabel
         case .requestFailed:
-            "Request failed. Show in chat"
+            String(localized: "session_chat.activity.request_failed", defaultValue: "Request failed")
         case let .sideQuestionsFailed(count):
-            count > 1 ? "\(count) side questions failed. Retry" : "Side question failed. Retry"
+            count > 1
+                ? String(localized: "session_chat.activity.side_questions_failed", defaultValue: "\(count) side questions failed")
+                : String(localized: "session_chat.activity.side_question_failed", defaultValue: "Side question failed")
         case let .sideQuestionsReady(count):
-            count > 1 ? "\(count) side question answers ready. Open" : "Side question answer ready. Open"
+            count > 1
+                ? String(localized: "session_chat.activity.side_questions_ready", defaultValue: "\(count) side question answers ready")
+                : String(localized: "session_chat.activity.side_question_ready", defaultValue: "Side question answer ready")
         case let .sideQuestionsRunning(count):
-            count > 1 ? "\(count) side questions running" : "Side question running"
+            count > 1
+                ? String(localized: "session_chat.activity.side_questions_running", defaultValue: "\(count) side questions running")
+                : String(localized: "session_chat.activity.side_question_running", defaultValue: "Side question running")
         case let .queued(count):
-            count == 1 ? "1 queued prompt. Open Up next" : "\(count) queued prompts. Open Up next"
+            String(localized: "session_chat.activity.queued_prompts", defaultValue: "\(count) queued prompts")
         case let .finished(_, label, _):
-            "\(label), Done"
+            String(localized: "session_chat.activity.finished", defaultValue: "\(label), Done")
         }
     }
 
-    private static func countSuffix(_ count: Int) -> String {
-        count > 1 ? " ×\(count)" : ""
+    /// What a tap does, read after the state; nil when the pill does nothing.
+    private static func action(_ item: SessionChatActivityItem) -> LocalizedStringResource? {
+        switch item {
+        case .reviewPermission, .answerQuestion, .sideQuestionsRunning, .finished:
+            nil
+        case let .subagents(pill):
+            pill.needsInput
+                ? LocalizedStringResource("session_chat.activity.action.open_request", defaultValue: "Open request")
+                : LocalizedStringResource("session_chat.activity.action.open_background_work", defaultValue: "Open background work")
+        case .requestFailed:
+            LocalizedStringResource("session_chat.activity.action.show_in_chat", defaultValue: "Show in chat")
+        case .sideQuestionsFailed:
+            LocalizedStringResource("session_chat.activity.action.retry", defaultValue: "Retry")
+        case .sideQuestionsReady:
+            LocalizedStringResource("session_chat.activity.action.open", defaultValue: "Open")
+        case .queued:
+            LocalizedStringResource("session_chat.activity.action.open_up_next", defaultValue: "Open Up next")
+        }
     }
 }
 
@@ -204,7 +268,10 @@ struct SessionChatContextSlotView: View {
                 switch item {
                 case let .todos(completed, total):
                     OpenCodeFloatingPill(
-                        layout: .iconLabel(icon: .list, label: "\(completed)/\(total)"),
+                        layout: .iconLabel(
+                            icon: .list,
+                            label: String(localized: "session_chat.todos.progress", defaultValue: "\(completed)/\(total)")
+                        ),
                         state: .ready,
                         accessibilityLabel: todosAccessibilityLabel,
                         action: onTodosTap

@@ -27,12 +27,12 @@ enum ConnectionAddressRecovery: Equatable {
     case unreachable
     case unauthorized
 
-    var message: String {
+    var message: OpenCodeText {
         switch self {
         case .unreachable:
-            "Can't reach the saved address. Pair again."
+            "connection.setup.pair_again.unreachable"
         case .unauthorized:
-            "This server rejected the saved sign-in. Pair again. A new password logs every device out."
+            "connection.setup.pair_again.unauthorized"
         }
     }
 }
@@ -44,9 +44,10 @@ private enum ConnectFailureOrigin {
 
 struct ConnectionSetupAddressRow: Identifiable, Equatable {
     var url: String
-    var title: String
-    var subtitle: String
-    var badge: String
+    var title: OpenCodeText
+    /// Host, verbatim; or "host · not reachable".
+    var subtitle: OpenCodeText
+    var badge: OpenCodeText
     var dimmed: Bool
     var isCurrent: Bool
 
@@ -56,27 +57,61 @@ struct ConnectionSetupAddressRow: Identifiable, Equatable {
 @MainActor
 @Observable
 final class ConnectionSetupViewModel {
-    static let qrScanFailureMessage = "QR didn't connect. OpenCode 2's pairing API is still changing, so a scan can fail while this app is working. Enter the host and connect. Password is optional. A pairing code works too."
-
-    static func savedAddressesHint(for urls: [String]) -> String {
-        let kinds = urls.map { savedAddressKind(for: $0) }
-        if !kinds.isEmpty, kinds.allSatisfy({ $0 == .tunnel }) {
-            return "Remote tunnel saved. Nothing else to pick. It stays until you turn remote access off."
-        }
-        if kinds.contains(.tailscale), kinds.contains(.local), !kinds.contains(.tunnel) {
-            return "Tailscale is used when it answers. Local network is the fallback."
-        }
-        return "Saved addresses are tried until one answers. Tailscale is preferred when it answers."
+    static var qrScanFailureMessage: String {
+        String(
+            localized: "connection.error.qr_scan_failed",
+            defaultValue: "QR didn't connect. OpenCode 2's pairing API is still changing, so a scan can fail while this app is working. Enter the host and connect. Password is optional. A pairing code works too."
+        )
     }
 
-    static func savedAddressTitle(for url: String) -> String {
+    static func savedAddressesHint(for urls: [String]) -> OpenCodeText {
+        let kinds = urls.map { savedAddressKind(for: $0) }
+        if !kinds.isEmpty, kinds.allSatisfy({ $0 == .tunnel }) {
+            return "connection.setup.addresses.hint_tunnel_only"
+        }
+        if kinds.contains(.tailscale), kinds.contains(.local), !kinds.contains(.tunnel) {
+            return "connection.setup.addresses.hint_tailscale_fallback"
+        }
+        return "connection.setup.addresses.hint_default"
+    }
+
+    static func savedAddressTitle(for url: String) -> OpenCodeText {
         switch savedAddressKind(for: url) {
         case .tailscale:
-            "Tailscale"
+            "connection.setup.address.tailscale"
         case .tunnel:
-            "Remote tunnel"
+            "connection.setup.address.remote_tunnel"
         case .local:
-            "Local network"
+            "connection.setup.address.local_network"
+        }
+    }
+
+    /// Body of the "Connection isn't encrypted" warning. Hosts are server content and stay verbatim.
+    static func cleartextWarningMessage(hosts: [String]) -> OpenCodeText {
+        guard !hosts.isEmpty else { return "connection.cleartext.message_this_address" }
+        if hosts.count == 1 {
+            let host = hosts[0]
+            return OpenCodeText(LocalizedStringResource(
+                "connection.cleartext.message_one_host",
+                defaultValue: "\(host) uses plain http outside your local network or Tailscale. Your server password and everything in your sessions would travel unencrypted. Prefer https, a VPN, or a tunnel."
+            ))
+        }
+        let joined = hosts.joined(separator: ", ")
+        return OpenCodeText(LocalizedStringResource(
+            "connection.cleartext.message_hosts",
+            defaultValue: "\(joined) use plain http outside your local network or Tailscale. Your server password and everything in your sessions would travel unencrypted. Prefer https, a VPN, or a tunnel."
+        ))
+    }
+
+    /// Probe failure shown to the user.
+    static func probeFailureMessage(_ error: ServerProbeError) -> String {
+        switch error {
+        case let .http(statusCode, _) where statusCode == 401 || statusCode == 403:
+            String(localized: "connection.error.auth_failed", defaultValue: "Authentication failed")
+        case .unhealthy:
+            String(localized: "connection.error.unhealthy", defaultValue: "Server reported unhealthy")
+        case .transport, .http:
+            String(localized: "connection.error.unreachable", defaultValue: "Unable to reach the server")
         }
     }
 
@@ -177,11 +212,18 @@ final class ConnectionSetupViewModel {
             let unreachable = addressProbeFinished && unreachableAddresses.contains(normalized)
             let isCurrent = addressProbeFinished && normalized == chosen && !unreachable
             let label = ConnectionProfileIdentity.hostLabel(normalized)
+            let subtitle: OpenCodeText = unreachable
+                ? OpenCodeText(LocalizedStringResource(
+                    "connection.setup.address.not_reachable",
+                    defaultValue: "\(label) · not reachable"
+                ))
+                : .verbatim(label)
+            let badge: OpenCodeText = isCurrent ? "connection.setup.address.using_now" : "connection.setup.address.saved"
             return ConnectionSetupAddressRow(
                 url: normalized,
                 title: Self.savedAddressTitle(for: normalized),
-                subtitle: unreachable ? "\(label) · not reachable" : label,
-                badge: isCurrent ? "Using now" : "Saved",
+                subtitle: subtitle,
+                badge: badge,
                 dimmed: unreachable,
                 isCurrent: isCurrent
             )
@@ -237,35 +279,35 @@ final class ConnectionSetupViewModel {
         }
     }
 
-    var screenTitle: String {
+    var screenTitle: OpenCodeText {
         switch mode {
-        case .first: "Connect to server"
-        case .add: "Add server"
-        case .edit: "Edit server"
+        case .first: "connection.setup.title.first"
+        case .add: "connection.setup.title.add"
+        case .edit: "connection.setup.title.edit"
         }
     }
 
-    var primaryActionLabel: String {
+    var primaryActionLabel: OpenCodeText {
         if addressRecovery != nil {
             switch state {
             case .connecting:
-                return mode == .edit ? "Saving…" : "Connecting…"
+                return mode == .edit ? "connection.setup.action.saving" : "connection.setup.action.connecting"
             case .saving:
-                return "Saving…"
+                return "connection.setup.action.saving"
             case .idle:
-                return "Scan a new QR"
+                return "connection.setup.action.scan_new_qr"
             }
         }
         if showsInstructionEssay {
-            return "Scan QR"
+            return "connection.setup.action.scan_qr"
         }
         switch state {
         case .connecting:
-            return mode == .edit ? "Saving…" : "Connecting…"
+            return mode == .edit ? "connection.setup.action.saving" : "connection.setup.action.connecting"
         case .saving:
-            return "Saving…"
+            return "connection.setup.action.saving"
         case .idle:
-            return mode == .edit || qrPairingReady ? "Save" : "Connect"
+            return mode == .edit || qrPairingReady ? "connection.setup.action.save" : "connection.setup.action.connect"
         }
     }
 
@@ -357,7 +399,7 @@ final class ConnectionSetupViewModel {
             await completeScannedPairing()
         case .failure(.invalidPayload):
             snackbar = OpenCodeSnackbarMessage(
-                text: "This isn't an OpenCode 2 pairing QR",
+                text: String(localized: "connection.error.invalid_qr", defaultValue: "This isn't an OpenCode 2 pairing QR"),
                 variant: .error
             )
             logConnectionAction(
@@ -366,7 +408,7 @@ final class ConnectionSetupViewModel {
             )
         case .failure(.noReachableURL):
             snackbar = OpenCodeSnackbarMessage(
-                text: "That QR only has a localhost address",
+                text: String(localized: "connection.error.localhost_qr", defaultValue: "That QR only has a localhost address"),
                 variant: .error
             )
             logConnectionAction(
@@ -378,14 +420,17 @@ final class ConnectionSetupViewModel {
 
     func pairingQRCameraDenied() {
         snackbar = OpenCodeSnackbarMessage(
-            text: "Allow camera access to scan the pairing QR",
+            text: String(
+                localized: "connection.error.camera_denied",
+                defaultValue: "Allow camera access to scan the pairing QR"
+            ),
             variant: .error
         )
     }
 
     func pairingQRCameraUnavailable() {
         snackbar = OpenCodeSnackbarMessage(
-            text: "Camera isn't available on this device",
+            text: String(localized: "connection.error.camera_unavailable", defaultValue: "Camera isn't available on this device"),
             variant: .error
         )
     }
@@ -401,7 +446,10 @@ final class ConnectionSetupViewModel {
             return await persist()
         }
         if Self.hostIsBlank(baseURL) {
-            snackbar = OpenCodeSnackbarMessage(text: "Enter a host", variant: .error)
+            snackbar = OpenCodeSnackbarMessage(
+                text: String(localized: "connection.error.enter_host", defaultValue: "Enter a host"),
+                variant: .error
+            )
             return false
         }
         let adoptedLink = adoptPastedConnectLink()
@@ -434,7 +482,10 @@ final class ConnectionSetupViewModel {
         case .pairingCode:
             let code = pairingCode.trimmingCharacters(in: .whitespacesAndNewlines)
             if code.isEmpty {
-                snackbar = OpenCodeSnackbarMessage(text: "Enter a pairing code", variant: .error)
+                snackbar = OpenCodeSnackbarMessage(
+                    text: String(localized: "connection.error.enter_pairing_code", defaultValue: "Enter a pairing code"),
+                    variant: .error
+                )
                 return false
             }
             // Typed codes redeem for user opencode. The username field is hidden here.
@@ -458,8 +509,8 @@ final class ConnectionSetupViewModel {
         return true
     }
 
-    var cleartextWarningMessage: String {
-        CleartextPolicy.warningMessage(hosts: cleartextWarningHosts ?? [])
+    var cleartextWarningMessage: OpenCodeText {
+        Self.cleartextWarningMessage(hosts: cleartextWarningHosts ?? [])
     }
 
     /// "Connect anyway": remembers the hosts for this screen and continues the interrupted action.
@@ -572,7 +623,10 @@ final class ConnectionSetupViewModel {
                     addressRecovery = nil
                     state = .idle
                     snackbar = OpenCodeSnackbarMessage(
-                        text: "This pairing link expired or was already used",
+                        text: String(
+                            localized: "connection.error.pairing_link_expired",
+                            defaultValue: "This pairing link expired or was already used"
+                        ),
                         variant: .error
                     )
                 }
@@ -782,7 +836,7 @@ final class ConnectionSetupViewModel {
         if authFailed, credentialSegment == .password, !usesQRLayout {
             requestPasswordFocus = true
         }
-        snackbar = OpenCodeSnackbarMessage(text: error.probeUserMessage, variant: .error)
+        snackbar = OpenCodeSnackbarMessage(text: Self.probeFailureMessage(error), variant: .error)
     }
 
     /// Pair again only for a saved address list. A pasted link is not saved yet.
@@ -848,7 +902,10 @@ final class ConnectionSetupViewModel {
         } catch is DuplicateConnectionProfileException {
             state = .idle
             snackbar = OpenCodeSnackbarMessage(
-                text: "A server with this host and username is already saved",
+                text: String(
+                    localized: "connection.error.duplicate_profile",
+                    defaultValue: "A server with this host and username is already saved"
+                ),
                 variant: .error
             )
             logConnectionAction(

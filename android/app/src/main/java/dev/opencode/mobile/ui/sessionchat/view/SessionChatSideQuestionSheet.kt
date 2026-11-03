@@ -12,10 +12,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.markdown.MarkdownDocument
 import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
@@ -44,12 +46,12 @@ internal fun SessionChatSideQuestionSheet(
     val clipboard = LocalClipboardManager.current
     OpenCodeBottomSheet(
         visible = answer != null,
-        title = "/btw",
+        title = SIDE_QUESTION_COMMAND,
         onDismissRequest = onClose,
         pinnedBottom = {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText("Copy"),
+                    variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.session_chat_sheet_copy)),
                     contrast = OpenCodeButtonContrast.Low,
                     onClick = {
                         val text = answer?.answer ?: return@OpenCodeButton
@@ -59,7 +61,7 @@ internal fun SessionChatSideQuestionSheet(
                     modifier = Modifier.weight(1f),
                 )
                 OpenCodeButton(
-                    variant = OpenCodeButtonVariant.FullWidthText("Done"),
+                    variant = OpenCodeButtonVariant.FullWidthText(stringResource(R.string.session_chat_sheet_side_question_done)),
                     onClick = onClose,
                     modifier = Modifier.weight(1f),
                 )
@@ -105,9 +107,12 @@ private fun SessionChatSideQuestionBody(answer: SessionChatSideQuestionAnswer) {
             )
         }
         Text(
-            text = "Not added to the conversation",
+            text = stringResource(R.string.session_chat_sheet_side_question_not_added),
             style = MaterialTheme.typography.bodySmall,
             color = openCodeColor("text-weak"),
         )
     }
 }
+
+/** The slash command name, shown as is. */
+private const val SIDE_QUESTION_COMMAND = "/btw"

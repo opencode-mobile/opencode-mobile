@@ -10,26 +10,26 @@ struct SessionChatActivityFooterHoldTests {
             id: id,
             kind: .tool,
             status: status,
-            title: id,
-            runningTitle: "Running \(id)",
-            settledTitle: "Ran \(id)",
+            title: .verbatim(id),
+            runningTitle: .verbatim("Running \(id)"),
+            settledTitle: .verbatim("Ran \(id)"),
             family: .command,
             startedAtMs: startedAtMs
         )
     }
 
     private func agent(_ id: String) -> SessionChatStep {
-        SessionChatStep(id: id, kind: .childSession, status: .running, title: "explore", family: .agent)
+        SessionChatStep(id: id, kind: .childSession, status: .running, title: .verbatim("explore"), family: .agent)
     }
 
     private let thinking = SessionChatActivityFooter.idle(SessionChatActivityFooter.thinking)
 
     private func running(_ id: String, extra: Int = 0, startedAtMs: Int64? = nil) -> SessionChatActivityFooter {
-        .tool(.init(stepID: id, icon: .command, title: "Running \(id)", running: true, extraRunning: extra, startedAtMs: startedAtMs))
+        .tool(.init(stepID: id, icon: .command, title: .verbatim("Running \(id)"), running: true, extraRunning: extra, startedAtMs: startedAtMs))
     }
 
     private func settled(_ id: String) -> SessionChatActivityFooter {
-        .tool(.init(stepID: id, icon: .command, title: "Ran \(id)", running: false, extraRunning: 0, startedAtMs: nil))
+        .tool(.init(stepID: id, icon: .command, title: .verbatim("Ran \(id)"), running: false, extraRunning: 0, startedAtMs: nil))
     }
 
     @Test func firstValue_showsImmediately() {
@@ -114,7 +114,7 @@ struct SessionChatActivityFooterHoldTests {
         var hold = SessionChatActivityFooterHold()
         hold.submit([], nowMs: 0)
         hold.submit([agent("c1")], nowMs: 100)
-        #expect(hold.expire(nowMs: 1_200) == .idle("Waiting for agents"))
+        #expect(hold.expire(nowMs: 1_200) == .idle(SessionChatActivityCardBlock.idleText(hasRunningChildren: true, awaitingUser: false)))
     }
 
     @Test func settledSegment_dropsHoldAndNewOneStartsFresh() {
@@ -216,6 +216,6 @@ struct SessionChatActivityFooterHoldTests {
         #expect(waiting.current == nil)
         #expect(waiting.idleText == "Waiting for you")
         let held = SessionChatActivityCardPresentation(card: card, childActions: [:], awaitingUser: false, footer: thinking)
-        #expect(held.idleText == SessionChatActivityFooter.thinking)
+        #expect(held.idleText == SessionChatActivityFooter.thinking.resolved)
     }
 }

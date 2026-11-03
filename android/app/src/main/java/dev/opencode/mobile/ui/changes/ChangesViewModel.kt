@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ServerCapabilities
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
@@ -20,6 +21,7 @@ import dev.opencode.mobile.ui.components.UnifiedDiffDocument
 import dev.opencode.mobile.ui.components.UnifiedDiffParser
 import dev.opencode.mobile.ui.sessionchat.LastTurnReviewChangesStore
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,13 +32,37 @@ import kotlinx.serialization.Serializable
 import javax.inject.Inject
 
 @Serializable
-enum class ChangeSource(
-    val displayName: String,
-    val emptyTitle: String,
-    val emptyDetail: String,
-) {
-    WorkingTree("Git changes", "No Git changes", "The working tree has no uncommitted changes."),
-    LastTurn("Last turn changes", "No changes", "The latest completed turn did not change any files."),
+enum class ChangeSource {
+    WorkingTree,
+    LastTurn,
+    ;
+
+    val displayName: UiText
+        get() =
+            UiText.resource(
+                when (this) {
+                    WorkingTree -> R.string.changes_source_working_tree_name
+                    LastTurn -> R.string.changes_source_last_turn_name
+                },
+            )
+
+    val emptyTitle: UiText
+        get() =
+            UiText.resource(
+                when (this) {
+                    WorkingTree -> R.string.changes_source_working_tree_empty_title
+                    LastTurn -> R.string.changes_source_last_turn_empty_title
+                },
+            )
+
+    val emptyDetail: UiText
+        get() =
+            UiText.resource(
+                when (this) {
+                    WorkingTree -> R.string.changes_source_working_tree_empty_message
+                    LastTurn -> R.string.changes_source_last_turn_empty_message
+                },
+            )
 }
 
 sealed interface ChangesPhase {
@@ -50,8 +76,9 @@ sealed interface ChangesPhase {
         val changeSet: ChangesContentState,
     ) : ChangesPhase
 
+    /** [message] is usually the server's error, verbatim; the screen shows a fallback when it is blank. */
     data class Error(
-        val message: String,
+        val message: UiText,
     ) : ChangesPhase
 }
 
@@ -60,7 +87,7 @@ data class ChangesUiState(
     val selectedSource: ChangeSource = ChangeSource.LastTurn,
     val availableSources: List<ChangeSource> = listOf(ChangeSource.LastTurn),
     val isRefreshing: Boolean = false,
-    val refreshError: String? = null,
+    val refreshError: UiText? = null,
 )
 
 data class ChangesContentState(
@@ -78,25 +105,28 @@ data class ChangesContentState(
 
     val additions: Int get() = filteredFiles.sumOf(FileDiff::additions)
     val deletions: Int get() = filteredFiles.sumOf(FileDiff::deletions)
-    val summary: String get() = countLabel(filteredFiles.size, "changed file", "changed files")
+    val summary: UiText get() = UiText.plural(R.plurals.changes_summary_changed_files, filteredFiles.size)
 
-    val aggregateAccessibilityLabel: String
+    val aggregateAccessibilityLabel: UiText
         get() =
-            listOf(
+            UiText.resource(
+                R.string.changes_accessibility_summary,
                 summary,
-                countLabel(additions, "addition", "additions"),
-                countLabel(deletions, "deletion", "deletions"),
-            ).joinToString()
+                additionsLabel(additions),
+                deletionsLabel(deletions),
+            )
 
-    fun fileAccessibilityLabel(file: FileDiff): String {
+    fun fileAccessibilityLabel(file: FileDiff): UiText {
         val position = filteredFiles.indexOfFirst { it.path == file.path }.coerceAtLeast(0)
-        return listOf(
-            file.path,
+        return UiText.resource(
+            R.string.changes_accessibility_file,
+            UiText.verbatim(file.path),
             file.status.displayName(),
-            "file ${position + 1} of ${filteredFiles.size}",
-            countLabel(file.additions, "addition", "additions"),
-            countLabel(file.deletions, "deletion", "deletions"),
-        ).joinToString()
+            position + 1,
+            filteredFiles.size,
+            additionsLabel(file.additions),
+            deletionsLabel(file.deletions),
+        )
     }
 }
 
@@ -486,17 +516,26 @@ private fun ChangeSource.logValue() = name.replace(Regex("([a-z])([A-Z])"), "$1-
 
 private fun Throwable.isUnsupportedVcs() = this is SessionError.Http && statusCode == 404
 
-private fun Throwable.userMessage(): String =
-    TurnDiffUnavailable.userFacing(this)
-        ?: when (this) {
-            is SessionError.Transport -> cause.message ?: "Request failed"
-            else -> message ?: "Request failed"
+/** The moved-folders text, the server's own message verbatim, or a fallback when it has none. */
+private fun Throwable.userMessage(): UiText {
+    if (TurnDiffUnavailable.userFacing(this) != null) return UiText.resource(R.string.changes_error_turn_moved_folders)
+    val serverMessage =
+        when (this) {
+            is SessionError.Transport -> cause.message
+            else -> message
         }
+    return serverMessage?.let(UiText::verbatim) ?: UiText.resource(R.string.changes_error_request_failed)
+}
 
-private fun FileDiffStatus.displayName() = name.replaceFirstChar(Char::uppercase)
+private fun FileDiffStatus.displayName(): UiText =
+    UiText.resource(
+        when (this) {
+            FileDiffStatus.Added -> R.string.changes_file_status_added
+            FileDiffStatus.Deleted -> R.string.changes_file_status_deleted
+            FileDiffStatus.Modified -> R.string.changes_file_status_modified
+        },
+    )
 
-private fun countLabel(
-    count: Int,
-    singular: String,
-    plural: String,
-) = "$count ${if (count == 1) singular else plural}"
+private fun additionsLabel(count: Int): UiText = UiText.plural(R.plurals.changes_count_additions, count)
+
+private fun deletionsLabel(count: Int): UiText = UiText.plural(R.plurals.changes_count_deletions, count)

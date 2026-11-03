@@ -24,22 +24,22 @@ struct AddProjectSuggestions: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             OpenCodeListItem(
-                title: AddProjectSheetState.browseFoldersTitle,
-                subtitle: "Pick any folder on this server",
+                title: "add_project.browse_folders",
+                subtitle: "add_project.browse_folders_subtitle",
                 enabled: !sheet.isValidating,
                 startDecorator: .icon(.folder),
                 accessory: .disclosure,
                 action: onBrowse
             )
             if let fieldError = sheet.fieldError {
-                Text(fieldError)
+                Text(openCode: fieldError)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.error)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 12)
             }
-            OpenCodeSectionHeader(title: "On this server")
+            OpenCodeSectionHeader(title: "add_project.on_this_server")
                 .opacity(isListError ? 0 : 1)
                 .accessibilityHidden(isListError)
             suggestionFrame
@@ -54,18 +54,18 @@ struct AddProjectSuggestions: View {
                 }
             }
             if sheet.isValidating {
-                OpenCodeStatusStack(spinner: "Checking folder")
+                OpenCodeStatusStack(spinner: "add_project.checking_folder")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if isListError {
                 OpenCodeEmptyState(
-                    title: "Unable to list this folder",
+                    title: "add_project.list_error.title",
                     message: sheet.listError ?? AddProjectSheetState.listErrorMessage,
                     fillsAvailableSpace: false,
-                    primaryAction: OpenCodeEmptyStateAction(title: "Retry", action: onRetry)
+                    primaryAction: OpenCodeEmptyStateAction(title: "common.retry", action: onRetry)
                 )
                 .padding(20)
             } else if showsEmptySuggestions {
-                Text(AddProjectSheetState.noOtherProjectsMessage)
+                Text("add_project.no_other_projects")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeak)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -77,19 +77,24 @@ struct AddProjectSuggestions: View {
             if isLoadingSuggestions {
                 frame
                     .accessibilityElement(children: .ignore)
-                    .accessibilityLabel("Loading projects")
+                    .accessibilityLabel(Text("add_project.loading_projects"))
             } else {
                 frame
             }
         }
     }
 
+    private static let rulerTitle = "Project"
+    private static let rulerSubtitle = "/Users/placeholder"
+    private static let rulerCaption = "1d ago"
+
     /// A hidden suggestion row keeps every slot the height of a real row, loaded or not.
     private var suggestionRuler: some View {
+        // Invisible and hidden from accessibility; it only sizes the slot, so it is not app text.
         OpenCodeListItem(
-            title: "Project",
-            subtitle: "/Users/placeholder",
-            caption: "1d ago",
+            title: .verbatim(Self.rulerTitle),
+            subtitle: .verbatim(Self.rulerSubtitle),
+            caption: .verbatim(Self.rulerCaption),
             enabled: false,
             startDecorator: .icon(.folder),
             action: {}
@@ -107,9 +112,9 @@ struct AddProjectSuggestions: View {
             } else if !sheet.isValidating, !isListError, sheet.showSuggestions, index < sheet.suggestions.count {
                 let suggestion = sheet.suggestions[index]
                 OpenCodeListItem(
-                    title: suggestion.name,
-                    subtitle: suggestion.path,
-                    caption: suggestion.activityLabel,
+                    title: .verbatim(suggestion.name),
+                    subtitle: .verbatim(suggestion.path),
+                    caption: .localized(ifPresent: suggestion.activityLabel),
                     startDecorator: .icon(.folder),
                     action: { onSelectSuggestion(suggestion.path) }
                 )
@@ -166,7 +171,7 @@ struct AddProjectBrowser: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            OpenCodeTopBar(title: "Add project", leading: .back(action: onBack))
+            OpenCodeTopBar(title: "add_project.title", leading: .back(action: onBack))
                 .padding(.horizontal, addProjectTopBarGutterInset)
                 .background(OpenCodeColors.backgroundBase)
             AddProjectPathChrome(
@@ -227,7 +232,7 @@ struct AddProjectPathChrome: View {
             HStack(alignment: .top, spacing: 8) {
                 OpenCodeTextInput(
                     text: Binding(get: { sheet.fieldText }, set: onFieldChange),
-                    hint: "Folder path",
+                    hint: "add_project.folder_path",
                     kind: .filter,
                     enabled: !sheet.isValidating,
                     errorMessage: sheet.fieldError,
@@ -236,7 +241,7 @@ struct AddProjectPathChrome: View {
                     onSubmit: onSubmit
                 )
                 OpenCodeButton(
-                    variant: .iconSquare(.arrowUpward, accessibilityLabel: "Up one folder"),
+                    variant: .iconSquare(.arrowUpward, accessibilityLabel: "add_project.up_one_folder"),
                     size: .large,
                     enabled: sheet.upTarget != nil && !sheet.isValidating,
                     contrast: .low,
@@ -277,23 +282,23 @@ struct AddProjectFolderList: View {
 
     var body: some View {
         if sheet.isValidating {
-            OpenCodeStatusStack(spinner: "Checking folder")
+            OpenCodeStatusStack(spinner: "add_project.checking_folder")
                 .frame(maxWidth: .infinity)
                 .padding(24)
         } else if sheet.isLoading {
-            OpenCodeStatusStack(spinner: "Loading folders")
+            OpenCodeStatusStack(spinner: "add_project.loading_folders")
                 .frame(maxWidth: .infinity)
                 .padding(24)
         } else if let listError = sheet.listError {
             OpenCodeEmptyState(
-                title: "Unable to list this folder",
+                title: "add_project.list_error.title",
                 message: listError,
                 fillsAvailableSpace: false,
-                primaryAction: OpenCodeEmptyStateAction(title: "Retry", action: onRetry)
+                primaryAction: OpenCodeEmptyStateAction(title: "common.retry", action: onRetry)
             )
             .padding(OpenCodeLayout.screenGutter)
         } else if let emptyMessage = sheet.emptyMessage {
-            Text(emptyMessage)
+            Text(openCode: emptyMessage)
                 .font(OpenCodeTypography.body)
                 .foregroundStyle(OpenCodeColors.textWeak)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -303,7 +308,7 @@ struct AddProjectFolderList: View {
             LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(sheet.entries) { entry in
                     OpenCodeListItem(
-                        title: entry.name,
+                        title: .verbatim(entry.name),
                         subtitle: entry.subtitle,
                         titleTag: entry.isGitRepository ? AddProjectSheetState.gitTag : nil,
                         enabled: !sheet.isValidating,
@@ -315,7 +320,7 @@ struct AddProjectFolderList: View {
                     .onDisappear { onRowDisappeared(entry.path) }
                 }
                 if let truncationHint = sheet.truncationHint {
-                    Text(truncationHint)
+                    Text(openCode: truncationHint)
                         .font(OpenCodeTypography.caption)
                         .foregroundStyle(OpenCodeColors.textWeak)
                         .frame(maxWidth: .infinity, alignment: .leading)

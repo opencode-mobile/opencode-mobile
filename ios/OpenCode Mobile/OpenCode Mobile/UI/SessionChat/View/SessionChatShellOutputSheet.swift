@@ -27,7 +27,7 @@ private struct SessionChatShellOutputSheetModifier: ViewModifier {
                 get: { state != nil },
                 set: { presented in if !presented { onDismiss() } }
             ),
-            title: "Shell",
+            title: "session_chat_sheet.shell.title",
             followsBottom: state?.shell.status.isRunning == true,
             height: .half,
             pinnedTop: {
@@ -63,7 +63,7 @@ struct SessionChatShellOutputHeader: View {
                 .lineLimit(2)
                 .truncationMode(.tail)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityLabel("Command, \(shell.command)")
+                .accessibilityLabel(Text(commandAccessibilityLabel))
             TimelineView(.periodic(from: .now, by: 1)) { context in
                 let nowMs = Int64(context.date.timeIntervalSince1970 * 1_000)
                 Text(SessionChatShellPresentation.statusLine(shell, nowMs: nowMs))
@@ -72,6 +72,12 @@ struct SessionChatShellOutputHeader: View {
             }
         }
         .padding(.bottom, 8)
+    }
+
+    /// "Command, npm test".
+    private var commandAccessibilityLabel: LocalizedStringResource {
+        let command = shell.command
+        return LocalizedStringResource("session_chat_sheet.shell.command_accessibility", defaultValue: "Command, \(command)")
     }
 
     private var statusColor: Color {
@@ -91,12 +97,12 @@ struct SessionChatShellOutputBody: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if output.isTruncated {
-                Text(SessionChatShellPresentation.truncatedNotice)
+                Text("session_chat_sheet.shell.truncated")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeaker)
             }
             if output.text.isEmpty {
-                Text(SessionChatShellPresentation.emptyOutput)
+                Text("session_chat_sheet.shell.no_output")
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textWeak)
             } else {
@@ -128,20 +134,20 @@ struct SessionChatShellOutputActions: View {
             }
             HStack(spacing: 8) {
                 OpenCodeButton(
-                    variant: .fullWidthText(title: SessionChatShellPresentation.copyLabel),
+                    variant: .fullWidthText(title: "session_chat_sheet.copy"),
                     enabled: !state.output.text.isEmpty,
                     contrast: .low
                 ) {
                     UIPasteboard.general.string = state.output.text
                     onCopy()
                 }
-                .accessibilityLabel("Copy output")
+                .accessibilityLabel(Text("session_chat_sheet.copy_output"))
                 if state.canStop {
                     OpenCodeButton(
                         variant: .fullWidthText(
                             title: state.isStopping
-                                ? SessionChatShellPresentation.stoppingLabel
-                                : SessionChatShellPresentation.stopLabel
+                                ? "session_chat_sheet.shell.stopping"
+                                : "session_chat_sheet.shell.stop"
                         ),
                         enabled: !state.isStopping,
                         contrast: .destructive
