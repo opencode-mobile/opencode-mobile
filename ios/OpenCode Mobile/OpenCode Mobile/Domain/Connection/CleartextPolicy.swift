@@ -37,16 +37,6 @@ enum CleartextPolicy {
         }
     }
 
-    static let warningTitle = "Connection isn't encrypted"
-
-    static func warningMessage(hosts: [String]) -> String {
-        let subject = hosts.isEmpty ? "This address" : hosts.joined(separator: ", ")
-        let verb = hosts.count > 1 ? "use" : "uses"
-        return "\(subject) \(verb) plain http outside your local network or Tailscale. "
-            + "Your server password and everything in your sessions would travel unencrypted. "
-            + "Prefer https, a VPN, or a tunnel."
-    }
-
     static func isTrustedCleartextHost(_ rawHost: String) -> Bool {
         var host = rawHost.lowercased()
         if host.hasPrefix("[") { host.removeFirst() }

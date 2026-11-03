@@ -4,8 +4,10 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.serialization.json.Json
 
 object ThemeManager {
@@ -32,7 +34,8 @@ object ThemeManager {
     var resolvedDark: ResolvedTokens by mutableStateOf(ResolvedTokens())
         private set
 
-    var loadError: String? by mutableStateOf(null)
+    /** Why the last theme or syntax preset change failed; shown in Settings. */
+    var loadError: UiText? by mutableStateOf(null)
         private set
 
     private var appContext: Context? = null
@@ -88,7 +91,7 @@ object ThemeManager {
     fun applySyntaxPreset(id: String) {
         val preset = syntaxPresets().firstOrNull { it.id == id }
         if (preset == null) {
-            loadError = "Syntax highlight preset not found"
+            loadError = UiText.resource(R.string.theme_error_syntax_preset_not_found)
             return
         }
         currentSyntaxPreset = preset
@@ -100,7 +103,7 @@ object ThemeManager {
     fun applyPreset(id: String) {
         val theme = loadPreset(id)
         if (theme == null) {
-            loadError = "Theme preset not found"
+            loadError = UiText.resource(R.string.theme_error_preset_not_found)
             return
         }
         try {
@@ -110,7 +113,7 @@ object ThemeManager {
             saveSelectedThemeID(id)
             loadError = null
         } catch (e: Exception) {
-            loadError = e.message ?: "Failed to apply theme preset"
+            loadError = e.message?.let(UiText::verbatim) ?: UiText.resource(R.string.theme_error_apply_failed)
             DiagnosticLog.error(DiagnosticLogArea.Connection, "Failed to apply preset $id", e)
         }
     }

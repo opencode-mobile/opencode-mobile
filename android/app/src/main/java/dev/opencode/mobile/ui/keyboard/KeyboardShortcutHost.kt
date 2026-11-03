@@ -24,6 +24,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.AbstractComposeView
 import androidx.compose.ui.platform.LocalFocusManager
 import dev.opencode.mobile.ui.components.OpenCodeInputFocusRegistry
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.UiTextLookup
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.delay
 
 /**
@@ -37,7 +40,7 @@ class KeyboardShortcutHost(
 ) {
     private class Registration(
         val action: KeyboardShortcutAction,
-        val title: String,
+        val title: UiText,
         val handler: () -> Unit,
     )
 
@@ -93,7 +96,7 @@ class KeyboardShortcutHost(
 
     fun register(
         action: KeyboardShortcutAction,
-        title: String = action.title,
+        title: UiText = action.title,
         handler: () -> Unit,
     ): Any = Registration(action, title, handler).also(registrations::add)
 
@@ -304,21 +307,22 @@ class KeyboardShortcutHost(
     }
 
     /** Titles of the chords that apply now, as the Keyboard Shortcuts Helper lists them. */
-    fun activeShortcutTitles(): Map<KeyboardShortcutAction, String> =
+    fun activeShortcutTitles(): Map<KeyboardShortcutAction, UiText> =
         activeActions().associateWith { action -> registrations.last { it.action == action }.title }
 
     /**
      * Groups for the system Keyboard Shortcuts Helper (Meta+/): Session, Prompt, Go, each with
-     * the chords that apply now. Empty groups are left out.
+     * the chords that apply now. Empty groups are left out. [lookup] resolves the labels in the
+     * current configuration.
      */
-    fun shortcutGroups(): List<KeyboardShortcutGroup> {
+    fun shortcutGroups(lookup: UiTextLookup): List<KeyboardShortcutGroup> {
         val titles = activeShortcutTitles()
         return KeyboardShortcutGroupKind.entries.mapNotNull { kind ->
             val infos =
                 titles
                     .filterKeys { it.group == kind }
-                    .map { (action, title) -> KeyboardShortcutInfo(title, action.keyCode, action.metaState) }
-            if (infos.isEmpty()) null else KeyboardShortcutGroup(kind.label, infos)
+                    .map { (action, title) -> KeyboardShortcutInfo(title.resolve(lookup), action.keyCode, action.metaState) }
+            if (infos.isEmpty()) null else KeyboardShortcutGroup(kind.label.resolve(lookup), infos)
         }
     }
 }
@@ -344,8 +348,8 @@ val LocalKeyboardShortcutHost = staticCompositionLocalOf<KeyboardShortcutHost?> 
 fun KeyboardShortcutHandler(
     action: KeyboardShortcutAction,
     enabled: Boolean = true,
-    /** Helper title for this context, such as "Submit" for Ctrl+Enter on a question. */
-    title: String = action.title,
+    /** Helper title for this context, such as "Submit Answers" for Ctrl+Enter on a question. */
+    title: UiText = action.title,
     onShortcut: () -> Unit,
 ) {
     val host = LocalKeyboardShortcutHost.current

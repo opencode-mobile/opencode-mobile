@@ -25,6 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -36,6 +38,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.session.FileDiff
 import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.markdown.CodeSpan
@@ -48,6 +51,7 @@ import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
 import dev.opencode.mobile.ui.components.UnifiedDiffParser
 import dev.opencode.mobile.ui.components.codeColors
 import dev.opencode.mobile.ui.sessionchat.ToolResultPresentation
+import dev.opencode.mobile.ui.text.resolve
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -59,7 +63,7 @@ internal fun ToolResultPinnedHeader(presentation: ToolResultPresentation) {
     ) {
         presentation.eyebrow?.let { eyebrow ->
             Text(
-                text = eyebrow,
+                text = eyebrow.resolve(),
                 style = MaterialTheme.typography.labelSmall,
                 color = openCodeColor("text-weaker"),
             )
@@ -77,10 +81,19 @@ internal fun ToolResultPinnedHeader(presentation: ToolResultPresentation) {
             is ToolResultPresentation.Source -> SourceSubline(presentation)
             is ToolResultPresentation.Grep ->
                 Subline(
-                    buildString {
-                        append("${presentation.matchCount} matches · ${presentation.groups.size} files")
-                        presentation.searchPath?.let { append(" · $it") }
-                    },
+                    listOfNotNull(
+                        pluralStringResource(
+                            R.plurals.session_chat_sheet_tool_result_matches,
+                            presentation.matchCount,
+                            presentation.matchCount,
+                        ),
+                        pluralStringResource(
+                            R.plurals.session_chat_sheet_tool_result_files,
+                            presentation.groups.size,
+                            presentation.groups.size,
+                        ),
+                        presentation.searchPath,
+                    ).joinToString(SUBLINE_SEPARATOR),
                 )
             is ToolResultPresentation.Edit -> DiffCounts(presentation.additions, presentation.deletions)
             is ToolResultPresentation.Unrecognized -> Unit
@@ -129,7 +142,7 @@ private fun CountLine(counts: List<ToolResultPresentation.Count>) {
     if (counts.isEmpty()) return
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         counts.forEach { count ->
-            Text(text = count.label, style = MaterialTheme.typography.bodySmall, color = toneColor(count.tone))
+            Text(text = count.label.resolve(), style = MaterialTheme.typography.bodySmall, color = toneColor(count.tone))
         }
     }
 }
@@ -152,7 +165,7 @@ private fun CommandStrip(command: String?, exitCode: Int?, durationLabel: String
         }
         exitCode?.let { code ->
             Text(
-                text = "exit $code",
+                text = stringResource(R.string.session_chat_sheet_tool_result_exit_code, code),
                 style = MaterialTheme.typography.labelSmall,
                 color = openCodeColor(if (code == 0) "success" else "error"),
                 maxLines = 1,
@@ -200,7 +213,7 @@ private fun FileResultRow(
             directory?.let { dir ->
                 CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                     Text(
-                        text = "\u202A$dir\u202C",
+                        text = leftToRightIsolated(dir),
                         style = MaterialTheme.typography.bodySmall,
                         color = openCodeColor("text-weaker"),
                         maxLines = 1,
@@ -217,9 +230,10 @@ private fun FileResultRow(
 @Composable
 private fun PullRequestBody(presentation: ToolResultPresentation.PullRequest) {
     val clipboard = LocalClipboardManager.current
+    val copyLinkDescription = stringResource(R.string.session_chat_sheet_tool_result_copy_link, presentation.url)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(
-            text = "#${presentation.number}",
+            text = PULL_REQUEST_NUMBER_PREFIX + presentation.number,
             style = MaterialTheme.typography.headlineSmall,
             color = openCodeColor("text-strong"),
         )
@@ -231,7 +245,7 @@ private fun PullRequestBody(presentation: ToolResultPresentation.PullRequest) {
             modifier =
                 Modifier
                     .clickable { clipboard.setText(AnnotatedString(presentation.url)) }
-                    .semantics { contentDescription = "Copy ${presentation.url}" },
+                    .semantics { contentDescription = copyLinkDescription },
             style = MaterialTheme.typography.bodyMedium,
             color = openCodeColor("interactive"),
             maxLines = 1,
@@ -271,13 +285,19 @@ private fun ThoughtBody(presentation: ToolResultPresentation.Thought) {
 
 @Composable
 private fun SourceSubline(presentation: ToolResultPresentation.Source) {
+    val lineCount =
+        pluralStringResource(
+            R.plurals.session_chat_sheet_tool_result_lines,
+            presentation.lines.size,
+            presentation.lines.size,
+        )
     val parts =
         listOfNotNull(
             presentation.language,
-            "${presentation.lines.size} lines".takeIf { presentation.lines.isNotEmpty() },
-            presentation.rangeLabel,
+            lineCount.takeIf { presentation.lines.isNotEmpty() },
+            presentation.rangeLabel?.resolve(),
         )
-    if (parts.isNotEmpty()) Subline(parts.joinToString(" · "))
+    if (parts.isNotEmpty()) Subline(parts.joinToString(SUBLINE_SEPARATOR))
 }
 
 @Composable
@@ -339,7 +359,7 @@ private fun GrepBody(presentation: ToolResultPresentation.Grep) {
                 group.directory?.let { dir ->
                     CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
                         Text(
-                            text = "\u202A$dir\u202C",
+                            text = leftToRightIsolated(dir),
                             style = MaterialTheme.typography.bodySmall,
                             color = openCodeColor("text-weaker"),
                             maxLines = 1,
@@ -379,7 +399,7 @@ private fun EditBody(presentation: ToolResultPresentation.Edit) {
     OpenCodeUnifiedDiff(
         file =
             FileDiff(
-                path = presentation.filename,
+                path = presentation.title.resolve(),
                 patch = presentation.patch,
                 additions = presentation.additions,
                 deletions = presentation.deletions,
@@ -394,10 +414,10 @@ private fun EditBody(presentation: ToolResultPresentation.Edit) {
 private fun DiffCounts(additions: Int, deletions: Int) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         if (additions > 0) {
-            Text("+$additions", style = MaterialTheme.typography.bodySmall, color = openCodeColor("diff-add"))
+            Text(ADDITIONS_PREFIX + additions, style = MaterialTheme.typography.bodySmall, color = openCodeColor("diff-add"))
         }
         if (deletions > 0) {
-            Text("−$deletions", style = MaterialTheme.typography.bodySmall, color = openCodeColor("diff-delete"))
+            Text(DELETIONS_PREFIX + deletions, style = MaterialTheme.typography.bodySmall, color = openCodeColor("diff-delete"))
         }
     }
 }
@@ -492,3 +512,12 @@ private fun highlighted(
         if (cursor < text.length) append(text.substring(cursor))
     }
 }
+
+/** Joins the parts of a subline: counts, a language, a path. */
+private const val SUBLINE_SEPARATOR = " · "
+private const val PULL_REQUEST_NUMBER_PREFIX = "#"
+private const val ADDITIONS_PREFIX = "+"
+private const val DELETIONS_PREFIX = "−"
+
+/** A path laid out left to right inside right-aligned text, so its start truncates first. */
+private fun leftToRightIsolated(path: String): String = "\u202A$path\u202C"

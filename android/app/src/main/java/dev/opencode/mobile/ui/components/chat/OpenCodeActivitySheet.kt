@@ -21,6 +21,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -32,6 +33,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -130,7 +132,9 @@ fun OpenCodeActivitySheet(
 ) {
     val animationsOn = rememberActivityAnimationsOn()
     val now by rememberActivityClock(ticking = visible && live)
-    val title = if (live) "Working $stepCount" else openCodeActivityStepCount(stepCount)
+    val working = stringResource(R.string.component_activity_card_working)
+    val title =
+        if (live) stringResource(R.string.component_activity_sheet_working_count, stepCount) else openCodeActivityStepCount(stepCount)
     val elapsed = if (live) SessionChatChildSessionElapsed.format(startedAtMs, now) else null
     // Each list/detail switch gets a fresh key, so the body scrolls once per switch.
     val panes = remember { SheetPaneMemory() }
@@ -154,7 +158,7 @@ fun OpenCodeActivitySheet(
         ) {
             val style = MaterialTheme.typography.titleMedium
             if (live) {
-                OpenCodeActivityWorkingLabel(text = "Working", shimmer = animationsOn, style = style)
+                OpenCodeActivityWorkingLabel(text = working, shimmer = animationsOn, style = style)
                 Text(text = stepCount.toString(), style = style, color = openCodeColor("text-strong"), maxLines = 1)
             } else {
                 Text(text = title, style = style, color = openCodeColor("text-strong"), maxLines = 1)
@@ -176,7 +180,7 @@ fun OpenCodeActivitySheet(
             detail?.let {
                 OpenCodeBottomSheetHeaderAction(
                     imageVector = OpenCodeIcons.ArrowBack,
-                    contentDescription = "Back to activity",
+                    contentDescription = stringResource(R.string.component_activity_sheet_back),
                     onClick = onDetailBack,
                 )
             },
@@ -200,7 +204,7 @@ fun OpenCodeActivitySheet(
             }
             if (steps.isNotEmpty()) {
                 OpenCodeActivitySectionLabel(
-                    text = "Steps",
+                    text = stringResource(R.string.component_activity_sheet_steps),
                     modifier = Modifier.padding(start = SheetRowHorizontal, end = SheetRowHorizontal, top = 10.dp, bottom = 4.dp),
                 )
             }
@@ -233,6 +237,7 @@ private fun AgentRow(
     val running = agent.status.isInFlight
     val elapsed = if (running) SessionChatChildSessionElapsed.format(agent.startedAtMs, nowMs) else null
     val tint = openCodeColor("info")
+    val spokenStatus = agent.status.spoken()
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier =
@@ -241,7 +246,7 @@ private fun AgentRow(
                     .then(if (agent.tappable) Modifier.openCodeFocusRing(OpenCodeSmallShape).clickable(onClick = onTap) else Modifier)
                     .semantics(mergeDescendants = true) {
                         contentDescription =
-                            listOfNotNull(agent.agentName, agent.description, agent.status.spoken(), agent.caption, elapsed)
+                            listOfNotNull(agent.agentName, agent.description, spokenStatus, agent.caption, elapsed)
                                 .joinToString(", ")
                         if (agent.tappable) role = Role.Button
                     }.heightIn(min = SheetRowMinHeight)
@@ -314,13 +319,14 @@ private fun StepRow(
 ) {
     val running = step.status.isInFlight
     val elapsed = if (running) SessionChatChildSessionElapsed.format(step.startedAtMs, nowMs) else null
+    val spokenStatus = step.status.spoken()
     Row(
         modifier =
             modifier
                 .fillMaxWidth()
                 .then(if (step.tappable) Modifier.openCodeFocusRing(OpenCodeSmallShape).clickable(onClick = onTap) else Modifier)
                 .semantics(mergeDescendants = true) {
-                    contentDescription = listOfNotNull(step.title, step.detail, step.status.spoken(), elapsed).joinToString(", ")
+                    contentDescription = listOfNotNull(step.title, step.detail, spokenStatus, elapsed).joinToString(", ")
                     if (step.tappable) role = Role.Button
                 }.heightIn(min = SheetRowMinHeight)
                     .padding(horizontal = SheetRowHorizontal, vertical = SheetRowVertical),

@@ -63,9 +63,17 @@ struct UnifiedDiffParserTests {
 @MainActor
 struct ChangesViewModelTests {
     @Test func exposesTwoSourcesWithDesktopCopy() {
-        #expect(ChangeSource.workingTree.displayName == "Git changes")
-        #expect(ChangeSource.lastTurn.displayName == "Last turn changes")
+        #expect(ChangeSource.workingTree.displayName.resolved == "Git changes")
+        #expect(ChangeSource.lastTurn.displayName.resolved == "Last turn changes")
         #expect(ChangeSource.allCases == [.workingTree, .lastTurn])
+    }
+
+    @Test func accessibilityLabelsReadCountsAndPosition() {
+        let added = Self.file("src/A.swift", additions: 1, deletions: 0, status: .added)
+        let content = ChangesContentState(files: [added, Self.file("src/B.swift", additions: 2, deletions: 3)])
+
+        #expect(content.aggregateAccessibilityLabel == "2 changed files, 3 additions, 3 deletions")
+        #expect(content.fileAccessibilityLabel(added) == "src/A.swift, Added, file 1 of 2, 1 addition, 0 deletions")
     }
 
     @Test func loadsSortedSnapshotAndFilteredTotals() async {
@@ -188,6 +196,102 @@ struct ChangesViewModelTests {
         #expect(viewModel.state.availableSources == [.workingTree, .lastTurn])
         #expect(viewModel.state.selectedSource == .workingTree)
         #expect(repository.vcsRequests == [.init(mode: .workingTree, directory: "/w", context: 12)])
+    }
+
+    private static let turnDiffV2 = ServerCapabilities.forProtocol(.v2, v2Features: V2ServerFeatures(sessionTurnDiff: true))
+    private static let cold = VcsInfo(currentBranch: nil, defaultBranch: nil, isSettled: false)
+
+    private static func status(_ path: String) -> VcsFileStatus {
+        VcsFileStatus(path: path, status: .modified, additions: 1, deletions: 1)
+    }
+
+    @Test func coldVcsAnswerKeepsGitChanges() async {
+        let repository = ChangesSessionRepository(
+            results: [],
+            vcsInfoResults: [.success(Self.cold), .success(VcsInfo(currentBranch: "main", defaultBranch: "main"))],
+            vcsDiffResults: [.success([Self.file("git.swift")])]
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s", worktree: "/w", messageID: "m", initialSource: .workingTree,
+            repository: repository, capabilities: Self.turnDiffV2, vcsSettleDelay: .zero
+        )
+        await viewModel.load()
+        #expect(repository.vcsInfoRequests == 2)
+        #expect(viewModel.state.availableSources == [.workingTree, .lastTurn])
+        #expect(viewModel.state.selectedSource == .workingTree)
+        #expect(repository.vcsRequests == [.init(mode: .workingTree, directory: "/w", context: 12)])
+    }
+
+    @Test func folderThatNeverSettlesFallsBackToLastTurn() async {
+        let repository = ChangesSessionRepository(
+            results: [.success([Self.file("last.swift")])],
+            vcsInfoResults: Array(repeating: .success(Self.cold), count: 5)
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s", worktree: "/w", messageID: "m", initialSource: .workingTree,
+            repository: repository, capabilities: Self.turnDiffV2, vcsSettleDelay: .zero
+        )
+        await viewModel.load()
+        #expect(repository.vcsInfoRequests == 5)
+        #expect(viewModel.state.availableSources == [.lastTurn])
+        #expect(viewModel.state.selectedSource == .lastTurn)
+    }
+
+    @Test func emptyLastTurnPointsToGitChanges() async {
+        let repository = ChangesSessionRepository(
+            results: [.success([])],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "main", defaultBranch: "main"))],
+            vcsStatusResults: [.success((0..<3).map { Self.status("f\($0).swift") })]
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s", worktree: "/w", messageID: "m", repository: repository, capabilities: Self.turnDiffV2
+        )
+        await viewModel.load()
+        #expect(viewModel.state.phase == .noChanges)
+        #expect(viewModel.state.otherSourceHint == ChangesOtherSourceHint(source: .workingTree, fileCount: 3))
+        #expect(viewModel.state.otherSourceHint?.message.resolved == "Git changes has 3 changed files.")
+        #expect(viewModel.state.otherSourceHint?.actionTitle.resolved == "Show Git changes")
+    }
+
+    @Test func emptyGitChangesPointsToLastTurn() async {
+        let repository = ChangesSessionRepository(
+            results: [.success([Self.file("format.swift")])],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "main", defaultBranch: "main"))],
+            vcsDiffResults: [.success([])]
+        )
+        let viewModel = ChangesViewModel(
+            sessionID: "s", worktree: "/w", messageID: "m", initialSource: .workingTree,
+            repository: repository, capabilities: Self.turnDiffV2
+        )
+        await viewModel.load()
+        #expect(viewModel.state.otherSourceHint == ChangesOtherSourceHint(source: .lastTurn, fileCount: 1))
+        #expect(viewModel.state.otherSourceHint?.message.resolved == "The last turn changed 1 file.")
+        #expect(repository.requests == [.init(sessionID: "s", messageID: "m", directory: "/w")])
+    }
+
+    @Test func noHintWhenBothSourcesAreEmptyOrTheLookupFails() async {
+        let bothEmpty = ChangesSessionRepository(
+            results: [.success([])],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "main", defaultBranch: "main"))],
+            vcsStatusResults: [.success([])]
+        )
+        let empty = ChangesViewModel(
+            sessionID: "s", worktree: "/w", messageID: "m", repository: bothEmpty, capabilities: Self.turnDiffV2
+        )
+        await empty.load()
+        #expect(empty.state.phase == .noChanges)
+        #expect(empty.state.otherSourceHint == nil)
+
+        let failing = ChangesSessionRepository(
+            results: [.success([])],
+            vcsInfoResults: [.success(VcsInfo(currentBranch: "main", defaultBranch: "main"))]
+        )
+        let failed = ChangesViewModel(
+            sessionID: "s", worktree: "/w", messageID: "m", repository: failing, capabilities: Self.turnDiffV2
+        )
+        await failed.load()
+        #expect(failed.state.phase == .noChanges)
+        #expect(failed.state.otherSourceHint == nil)
     }
 
     @Test func unsupportedGitFallsBackButTransientFailureIsRetryable() async {
@@ -656,15 +760,24 @@ private final class ChangesSessionRepository: SessionRepository, @unchecked Send
     private var results: [Result<[FileDiff], Error>]
     private var vcsInfoResults: [Result<VcsInfo, Error>]
     private var vcsDiffResults: [Result<[FileDiff], Error>]
+    private var vcsStatusResults: [Result<[VcsFileStatus], Error>]
+    var vcsInfoRequests = 0
 
     init(
         results: [Result<[FileDiff], Error>],
         vcsInfoResults: [Result<VcsInfo, Error>] = [],
-        vcsDiffResults: [Result<[FileDiff], Error>] = []
+        vcsDiffResults: [Result<[FileDiff], Error>] = [],
+        vcsStatusResults: [Result<[VcsFileStatus], Error>] = []
     ) {
         self.results = results
         self.vcsInfoResults = vcsInfoResults
         self.vcsDiffResults = vcsDiffResults
+        self.vcsStatusResults = vcsStatusResults
+    }
+
+    func getVcsStatus(directory: String?) async throws -> [VcsFileStatus] {
+        guard !vcsStatusResults.isEmpty else { throw SessionError.http(statusCode: 404, message: "unsupported") }
+        return try vcsStatusResults.removeFirst().get()
     }
 
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] {
@@ -672,6 +785,7 @@ private final class ChangesSessionRepository: SessionRepository, @unchecked Send
         return try results.removeFirst().get()
     }
     func getVcsInfo(directory: String?) async throws -> VcsInfo {
+        vcsInfoRequests += 1
         guard !vcsInfoResults.isEmpty else { throw SessionError.http(statusCode: 404, message: "unsupported") }
         return try vcsInfoResults.removeFirst().get()
     }

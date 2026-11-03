@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.files
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.filesystem.ProjectFileContent
@@ -18,6 +19,7 @@ import dev.opencode.mobile.markdown.OpenCodeHighlightCoreCodeHighlighter
 import dev.opencode.mobile.markdown.OpenCodeMarkdownParser
 import dev.opencode.mobile.ui.components.OpenCodeCodeLine
 import dev.opencode.mobile.ui.components.OpenCodeCodeLines
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -503,7 +505,9 @@ class FilesViewModel internal constructor(
             return rows
         }
 
-        private fun Exception.userDetail(): String =
-            (this as? ProjectFilesException)?.detail ?: "Check the connection to the server and try again."
+        /** The server's detail stays verbatim; without one, app text asks to check the connection. */
+        private fun Exception.userDetail(): UiText =
+            (this as? ProjectFilesException)?.detail
+                ?: UiText.resource(R.string.files_error_check_server_connection)
     }
 }

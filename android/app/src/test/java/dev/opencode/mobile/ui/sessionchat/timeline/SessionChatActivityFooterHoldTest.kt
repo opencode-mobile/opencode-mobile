@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.sessionchat
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
+import dev.opencode.mobile.ui.text.UiText
 
 class SessionChatActivityFooterHoldTest {
     private val running = SessionChatStepStatus.Running
@@ -16,9 +17,9 @@ class SessionChatActivityFooterHoldTest {
         id = id,
         kind = SessionChatStepKind.Tool,
         status = status,
-        title = id,
-        runningTitle = "Running $id",
-        settledTitle = "Ran $id",
+        title = UiText.verbatim(id),
+        runningTitle = UiText.verbatim("Running $id"),
+        settledTitle = UiText.verbatim("Ran $id"),
         family = SessionChatStepFamily.Command,
         startedAtMs = startedAtMs,
     )
@@ -26,7 +27,7 @@ class SessionChatActivityFooterHoldTest {
     private fun agent(
         id: String,
         status: SessionChatStepStatus = running,
-    ) = SessionChatStep(id = id, kind = SessionChatStepKind.ChildSession, status = status, title = "explore", family = SessionChatStepFamily.Agent)
+    ) = SessionChatStep(id = id, kind = SessionChatStepKind.ChildSession, status = status, title = UiText.verbatim("explore"), family = SessionChatStepFamily.Agent)
 
     private val thinking = SessionChatActivityFooter.Idle(SessionChatActivityCard.THINKING)
 
@@ -37,7 +38,7 @@ class SessionChatActivityFooterHoldTest {
     ) = SessionChatActivityFooter.Tool(
         stepId = id,
         family = SessionChatStepFamily.Command,
-        title = "Running $id",
+        title = UiText.verbatim("Running $id"),
         running = true,
         extraRunning = extra,
         startedAtMs = startedAtMs,
@@ -47,7 +48,7 @@ class SessionChatActivityFooterHoldTest {
         SessionChatActivityFooter.Tool(
             stepId = id,
             family = SessionChatStepFamily.Command,
-            title = "Ran $id",
+            title = UiText.verbatim("Ran $id"),
             running = false,
             extraRunning = 0,
             startedAtMs = null,

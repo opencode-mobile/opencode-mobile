@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.components
 
 import android.graphics.BitmapFactory
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,23 +26,30 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import java.util.Locale
 
 enum class OpenCodeAttachmentVariant(
-    val label: String,
+    @param:StringRes val label: Int,
 ) {
-    Image("Image"),
-    Pdf("PDF"),
-    Text("Text"),
-    File("File"),
+    Image(R.string.component_attachment_kind_image),
+    Pdf(R.string.component_attachment_kind_pdf),
+    Text(R.string.component_attachment_kind_text),
+    File(R.string.component_attachment_kind_file),
 }
+
+/** The kind as the chip shows it, in capitals. */
+@Composable
+internal fun OpenCodeAttachmentVariant.kindLabel(): String = stringResource(label).uppercase(Locale.getDefault())
 
 /** Where the full image of an attachment lives, so the timeline can show more than the thumbnail. */
 sealed interface OpenCodeAttachmentImageSource {
@@ -93,7 +101,7 @@ fun OpenCodeAttachmentChip(
     onClickLabel: String? = null,
     enabled: Boolean = true,
 ) {
-    val kindLabel = attachment.variant.label.uppercase()
+    val kindLabel = attachment.variant.kindLabel()
     val uploading = attachment.uploadState as? OpenCodeAttachmentUploadState.InProgress
     Box(
         modifier =
@@ -132,7 +140,11 @@ fun OpenCodeAttachmentChip(
                 Icon(
                     OpenCodeIcons.Close,
                     contentDescription =
-                        if (uploading != null) "Cancel upload of ${attachment.filename}" else "Remove ${attachment.filename}",
+                        if (uploading != null) {
+                            stringResource(R.string.component_attachment_cancel_upload, attachment.filename)
+                        } else {
+                            stringResource(R.string.component_attachment_remove, attachment.filename)
+                        },
                     tint = openCodeColor("icon-strong-base"),
                 )
             }
@@ -151,8 +163,10 @@ fun OpenCodeAttachmentChip(
     }
 }
 
+@Composable
 private fun uploadDetail(upload: OpenCodeAttachmentUploadState.InProgress): String =
-    upload.percent?.let { "Uploading $it%" } ?: "Uploading…"
+    upload.percent?.let { stringResource(R.string.component_attachment_uploading_percent, it) }
+        ?: stringResource(R.string.component_attachment_uploading)
 
 /**
  * A sent attachment in the timeline. Images show inline at their own aspect ratio, capped in
@@ -179,7 +193,7 @@ private fun OpenCodeMessageAttachmentChip(
     attachment: OpenCodeAttachmentPresentation,
     modifier: Modifier,
 ) {
-    val kindLabel = attachment.variant.label.uppercase()
+    val kindLabel = attachment.variant.kindLabel()
     Row(
         modifier =
             modifier
@@ -244,7 +258,7 @@ private fun AttachmentLabels(
             overflow = TextOverflow.Ellipsis,
         )
         Text(
-            text = detail ?: attachment.variant.label.uppercase(),
+            text = detail ?: attachment.variant.kindLabel(),
             style = MaterialTheme.typography.bodySmall,
             color = openCodeColor("text-base"),
         )

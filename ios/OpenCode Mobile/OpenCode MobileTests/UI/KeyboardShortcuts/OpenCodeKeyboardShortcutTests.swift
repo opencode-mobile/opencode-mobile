@@ -16,7 +16,7 @@ import Testing
     }
 
     @Test func titles_areTheOverlayLabels() {
-        #expect(OpenCodeKeyboardShortcut.allCases.map(\.title) == [
+        #expect(OpenCodeKeyboardShortcut.allCases.map { String(localized: $0.title) } == [
             "Toggle Sidebar",
             "Next Session",
             "Previous Session",
@@ -31,6 +31,29 @@ import Testing
             "Always Allow",
             "Deny",
         ])
+    }
+
+    @Test func titles_areCatalogKeys() {
+        #expect(OpenCodeKeyboardShortcut.allCases.map(\.title.key) == [
+            "keyboard_shortcuts.toggle_sidebar",
+            "keyboard_shortcuts.next_session",
+            "keyboard_shortcuts.previous_session",
+            "keyboard_shortcuts.focus_composer",
+            "keyboard_shortcuts.new_session",
+            "keyboard_shortcuts.command_palette",
+            "keyboard_shortcuts.choose_model",
+            "keyboard_shortcuts.settings",
+        ] + Array(repeating: "keyboard_shortcuts.project", count: 9) + [
+            "keyboard_shortcuts.allow_once",
+            "keyboard_shortcuts.always_allow",
+            "keyboard_shortcuts.deny",
+        ])
+    }
+
+    @Test func projectSwitch_namesTheProject() {
+        let title = OpenCodeKeyboardShortcut.showProjectTitle("acme-invoices")
+        #expect(title.key == "keyboard_shortcuts.show_project")
+        #expect(String(localized: title) == "Show acme-invoices")
     }
 
     @Test func bindings_areUnique() {

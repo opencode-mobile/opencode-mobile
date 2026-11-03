@@ -15,10 +15,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 
@@ -30,10 +32,11 @@ fun OpenCodePageIndicator(
     modifier: Modifier = Modifier,
 ) {
     require(pageCount > 0) { "Page Indicator needs at least one page" }
+    val description = stringResource(R.string.component_page_indicator_label, currentPage + 1, pageCount)
     Row(
         modifier =
             modifier.clearAndSetSemantics {
-                contentDescription = "Page ${currentPage + 1} of $pageCount"
+                contentDescription = description
             },
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,

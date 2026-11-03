@@ -1,4 +1,1482 @@
 <resources>
     <string name="app_name">OpenCode Mobile</string>
     <string name="bottom_sheet_close">Close</string>
+    <string name="top_bar_back">Back</string>
+
+    <!-- Keys match iOS Localizable.xcstrings: iOS `area.name` is Android `area_name`.
+         scripts/check-string-keys.mjs checks both sides. -->
+
+    <string name="common_cancel">Cancel</string>
+    <string name="common_remove">Remove</string>
+
+    <string name="common_loading_sessions">Loading sessions</string>
+    <string name="common_checking_server">Checking server…</string>
+
+    <!-- Connection setup -->
+    <string name="connection_setup_title_first">Connect to server</string>
+    <string name="connection_setup_title_add">Add server</string>
+    <string name="connection_setup_title_edit">Edit server</string>
+    <string name="connection_setup_action_connect">Connect</string>
+    <string name="connection_setup_action_connecting">Connecting…</string>
+    <string name="connection_setup_action_save">Save</string>
+    <string name="connection_setup_action_saving">Saving…</string>
+    <string name="connection_setup_action_scan_qr">Scan QR</string>
+    <string name="connection_setup_action_scan_new_qr">Scan a new QR</string>
+    <string name="connection_setup_action_enter_pairing_code">Enter a pairing code</string>
+    <string name="connection_setup_action_use_host_password">Use a host and password</string>
+    <string name="connection_setup_action_scan_qr_instead">Scan a QR instead</string>
+    <string name="connection_setup_remove_server">Remove server</string>
+    <string name="connection_setup_remove_dialog_title_unnamed">Remove “server”?</string>
+    <string name="connection_setup_instructions_run">On your computer, run this, then scan the QR.</string>
+    <string name="connection_setup_instructions_first_run">First run takes about a minute. Needs OpenCode 2.0.25 or later. The service starts if it is not already running.</string>
+    <string name="connection_setup_instructions_same_wifi_title">Same Wi-Fi instead</string>
+    <string name="connection_setup_instructions_same_wifi_body">Plain pair shows a QR only after the server is reachable beyond localhost.</string>
+    <!-- Example host in an empty address field. -->
+    <string name="connection_setup_host_hint">macbook.local:4096</string>
+    <string name="connection_setup_host_label">Host</string>
+    <string name="connection_setup_host_help">LAN, Tailscale MagicDNS, or tunnel — not localhost on a phone.</string>
+    <string name="connection_setup_name_hint">Optional name</string>
+    <string name="connection_setup_username_hint">Username</string>
+    <string name="connection_setup_password_hint">Password, optional</string>
+    <string name="connection_setup_password_help">Default user is opencode. Password is optional.</string>
+    <string name="connection_setup_pairing_code_hint">Pairing code</string>
+    <string name="connection_setup_pairing_code_help">From the pair link. Works once and expires in 5 minutes.</string>
+    <string name="connection_setup_segment_password">Password</string>
+    <string name="connection_setup_segment_pairing_code">Pairing code</string>
+    <string name="connection_setup_addresses_hint_tunnel_only">Remote tunnel saved. Nothing else to pick. It stays until you turn remote access off.</string>
+    <string name="connection_setup_addresses_hint_tailscale_fallback">Tailscale is used when it answers. Local network is the fallback.</string>
+    <string name="connection_setup_addresses_hint_default">Saved addresses are tried until one answers. Tailscale is preferred when it answers.</string>
+    <string name="connection_setup_address_tailscale">Tailscale</string>
+    <string name="connection_setup_address_remote_tunnel">Remote tunnel</string>
+    <string name="connection_setup_address_local_network">Local network</string>
+    <!-- %1$s is the server host. -->
+    <string name="connection_setup_address_not_reachable">%1$s · not reachable</string>
+    <string name="connection_setup_address_using_now">Using now</string>
+    <string name="connection_setup_address_saved">Saved</string>
+    <string name="connection_setup_pair_again_unreachable">Can\'t reach the saved address. Pair again.</string>
+    <string name="connection_setup_pair_again_unauthorized">This server rejected the saved sign-in. Pair again. A new password logs every device out.</string>
+
+    <string name="connection_cleartext_title">Connection isn\'t encrypted</string>
+    <!-- %1$s is one server host. -->
+    <string name="connection_cleartext_message_one_host">%1$s uses plain http outside your local network or Tailscale. Your server password and everything in your sessions would travel unencrypted. Prefer https, a VPN, or a tunnel.</string>
+    <!-- %1$s is a list of server hosts joined with commas. -->
+    <string name="connection_cleartext_message_hosts">%1$s use plain http outside your local network or Tailscale. Your server password and everything in your sessions would travel unencrypted. Prefer https, a VPN, or a tunnel.</string>
+    <string name="connection_cleartext_message_this_address">This address uses plain http outside your local network or Tailscale. Your server password and everything in your sessions would travel unencrypted. Prefer https, a VPN, or a tunnel.</string>
+    <string name="connection_cleartext_connect_anyway">Connect anyway</string>
+
+    <string name="connection_error_invalid_qr">This isn\'t an OpenCode 2 pairing QR</string>
+    <string name="connection_error_localhost_qr">That QR only has a localhost address</string>
+    <string name="connection_error_camera_denied">Allow camera access to scan the pairing QR</string>
+    <string name="connection_error_camera_unavailable">Camera isn\'t available on this device</string>
+    <string name="connection_error_enter_host">Enter a host</string>
+    <string name="connection_error_enter_pairing_code">Enter a pairing code</string>
+    <string name="connection_error_pairing_link_expired">This pairing link expired or was already used</string>
+    <string name="connection_error_duplicate_profile">A server with this host and username is already saved</string>
+    <string name="connection_error_qr_scan_failed">QR didn\'t connect. OpenCode 2\'s pairing API is still changing, so a scan can fail while this app is working. Enter the host and connect. Password is optional. A pairing code works too.</string>
+    <string name="connection_error_unreachable">Unable to reach the server</string>
+    <string name="connection_error_auth_failed">Authentication failed</string>
+    <string name="connection_error_unhealthy">Server reported unhealthy</string>
+
+    <string name="connection_scanner_title">Scan pairing QR</string>
+    <string name="connection_scanner_card_title">OpenCode pairing QR</string>
+    <string name="connection_scanner_card_body">From opencode pair --remote. Plain pair shows a QR only when the server is reachable beyond localhost.</string>
+
+    <string name="connection_onboarding_title">Connect to your server</string>
+    <string name="connection_onboarding_body">OpenCode Mobile controls sessions on an opencode server running on your development machine.</string>
+    <string name="connection_onboarding_connect">Connect to server</string>
+
+    <!-- App onboarding -->
+    <string name="onboarding_skip">Skip</string>
+    <string name="onboarding_next">Next</string>
+    <string name="onboarding_connect">Connect to server</string>
+    <string name="onboarding_unofficial_title">An unofficial\nopencode client</string>
+    <string name="onboarding_unofficial_body">OpenCode Mobile is a native client for opencode sessions — work in progress. It is not an official OpenCode product.</string>
+    <string name="onboarding_unofficial_badge">Unofficial</string>
+    <string name="onboarding_connect_page_title">Connect to\nyour servers</string>
+    <string name="onboarding_connect_page_body">Point the app at an opencode server on your machine. We recommend Tailscale so your phone can reach it securely from anywhere.</string>
+    <string name="onboarding_connect_page_setup_link">Need the server first?</string>
+    <string name="onboarding_features_title">What you can\ndo from here</string>
+    <string name="onboarding_features_sessions_title">Sessions</string>
+    <string name="onboarding_features_sessions_detail">List, open, create, rename, fork, archive, delete</string>
+    <string name="onboarding_features_chat_title">Chat &amp; abort</string>
+    <string name="onboarding_features_chat_detail">Send prompts and stop work in flight</string>
+    <string name="onboarding_features_permissions_title">Permissions</string>
+    <string name="onboarding_features_permissions_detail">Approve or deny requests (no lasting remember)</string>
+    <string name="onboarding_features_changes_title">Changes</string>
+    <string name="onboarding_features_changes_detail">Inspect session diffs</string>
+    <string name="onboarding_features_live_title">Live while open</string>
+    <string name="onboarding_features_live_detail">Foreground event stream; refresh after reconnect</string>
+    <string name="onboarding_setup_title">Set up opencode serve</string>
+    <string name="onboarding_setup_intro">The app talks to an opencode server you run. Short path below — full detail in the official docs.</string>
+    <!-- %1$d is the step number. Shown in capitals. -->
+    <string name="onboarding_setup_step_number">Step %1$d</string>
+    <string name="onboarding_setup_step1_title">Start the server on your machine</string>
+    <string name="onboarding_setup_step1_body">In your project, run the opencode server (headless). Keep it running while you use the phone.</string>
+    <string name="onboarding_setup_step2_title">Require a password</string>
+    <string name="onboarding_setup_step2_body">Set OPENCODE_SERVER_PASSWORD. Username defaults to opencode unless you set OPENCODE_SERVER_USERNAME.</string>
+    <string name="onboarding_setup_step3_title">Reach it from your phone</string>
+    <string name="onboarding_setup_step3_body">Recommended: Tailscale — install Tailscale on the machine and phone, then use the machine’s Tailscale IP or MagicDNS name as the server URL.\n\nAlso fine: same LAN, VPN, HTTPS, or another tunnel you manage. The app does not create a relay for you.</string>
+    <string name="onboarding_setup_step4_title">Connect in the app</string>
+    <string name="onboarding_setup_step4_body">Enter base URL + password. The app checks GET /global/health, then saves a Connection Profile on this device.</string>
+    <string name="onboarding_setup_open_docs">Open server docs</string>
+
+    <!-- Privacy cover (App Lock) -->
+    <string name="privacy_cover_title">OpenCode Mobile</string>
+    <string name="privacy_cover_locked_label">OpenCode Mobile is locked</string>
+    <string name="privacy_cover_unlock">Unlock</string>
+
+    <string name="servers_title">Servers</string>
+    <plurals name="servers_profile_count">
+        <item quantity="one">%1$d Connection Profile</item>
+        <item quantity="other">%1$d Connection Profiles</item>
+    </plurals>
+    <string name="servers_saved">Saved</string>
+    <string name="servers_status_active">Active</string>
+    <string name="servers_add">Add server</string>
+    <string name="servers_remove_profile">Remove %1$s</string>
+    <string name="servers_remove_dialog_title">Remove server?</string>
+    <string name="servers_remove_dialog_title_named">Remove “%1$s”?</string>
+    <string name="servers_remove_dialog_message">This device forgets the Connection Profile. Sessions stay on that server. If it’s the active server, you’ll pick another — or land on Connect if none remain.</string>
+    <string name="common_retry">Retry</string>
+    <string name="common_save">Save</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_edit">Edit</string>
+    <string name="common_done">Done</string>
+    <string name="common_open">Open</string>
+    <string name="common_settings">Settings</string>
+    <string name="common_terminal">Terminal</string>
+    <string name="common_selected">Selected</string>
+    <string name="home_sessions_title">Sessions</string>
+    <string name="home_servers_sheet_using_now">Using now</string>
+    <string name="home_servers_sheet_switch_to">Switch to</string>
+    <string name="home_servers_sheet_manage">Manage in Settings</string>
+    <string name="home_new_session">New session</string>
+    <string name="home_no_projects">No projects</string>
+    <string name="home_filter_sheet_title">Filter by project</string>
+    <string name="home_empty_title">No projects yet</string>
+    <string name="home_empty_message">Tap the Add project icon below to choose a folder on your server.</string>
+    <string name="home_no_session_selected_title">No session selected</string>
+    <string name="home_no_session_selected_message">Choose a session from the list</string>
+    <string name="home_probe_failed_title">Unable to connect</string>
+    <string name="home_probe_failed_message">Unable to connect.</string>
+    <string name="home_probe_failed_edit_connection">Edit connection</string>
+    <string name="home_error_load_projects">Unable to load projects</string>
+    <string name="home_error_project_load_failed">Couldn’t load sessions</string>
+    <string name="home_error_reconnect_to_create">Reconnect to create a session</string>
+    <string name="home_remove_project_title">Remove from home?</string>
+    <string name="home_remove_project_message">Remove \"%1$s\" from home? Its sessions stay on the server.</string>
+    <string name="home_snackbar_removed">Removed \"%1$s\" from home</string>
+    <string name="home_snackbar_already_on_home">\"%1$s\" is already on home</string>
+    <string name="home_snackbar_joined_project">Same repo as %1$s. Showing it as a worktree there.</string>
+    <string name="home_all">All</string>
+    <string name="home_all_projects">All projects</string>
+    <plurals name="home_project_count">
+        <item quantity="one">%1$d project</item>
+        <item quantity="other">%1$d projects</item>
+    </plurals>
+    <string name="home_run_in">Run in</string>
+    <string name="home_other_projects">Other projects</string>
+    <string name="home_main_checkout">main checkout</string>
+    <plurals name="home_worktree_count">
+        <item quantity="one">%1$d worktree</item>
+        <item quantity="other">%1$d worktrees</item>
+    </plurals>
+    <plurals name="home_all_worktrees">
+        <item quantity="one">All %1$d worktree</item>
+        <item quantity="other">All %1$d worktrees</item>
+    </plurals>
+    <plurals name="home_running_count">
+        <item quantity="one">%1$d running</item>
+        <item quantity="other">%1$d running</item>
+    </plurals>
+    <plurals name="home_show_all">
+        <item quantity="one">Show all %1$d</item>
+        <item quantity="other">Show all %1$d</item>
+    </plurals>
+    <string name="home_show_fewer">Show fewer</string>
+    <string name="home_show_worktrees">Show worktrees of %1$s</string>
+    <string name="home_hide_worktrees">Hide worktrees of %1$s</string>
+    <string name="home_reorder_note">Drag to reorder. Worktrees stay with their project.</string>
+    <string name="home_session_actions_title">Session actions</string>
+    <string name="home_session_actions_rename">Rename session</string>
+    <string name="home_session_actions_fork">Fork session</string>
+    <string name="home_session_actions_archive">Archive</string>
+    <string name="home_rename_title">Rename session</string>
+    <string name="home_session_title_hint">Title</string>
+    <string name="home_fork_title">Fork session</string>
+    <string name="home_fork_confirm">Fork</string>
+    <string name="home_fork_result_title">Session forked</string>
+    <string name="home_fork_result_message">“%1$s” is ready.</string>
+    <string name="home_fork_result_stay">Stay here</string>
+    <string name="home_delete_title">Delete session</string>
+    <string name="home_delete_message">Delete session “%1$s”?</string>
+    <string name="home_session_error_empty_title">Enter a session title</string>
+    <string name="home_session_error_nothing_to_fork">Nothing to fork yet</string>
+    <string name="home_session_error_archive_failed">Couldn\'t archive session.</string>
+    <string name="home_session_error_delete_failed">Couldn\'t delete session.</string>
+    <string name="home_session_error_request_failed">Request failed</string>
+    <string name="home_session_error_unreadable_response">Unable to read server response</string>
+    <string name="home_session_error_generic">Something went wrong</string>
+    <string name="add_project_title">Add project</string>
+    <string name="add_project_browse_folders">Browse folders</string>
+    <string name="add_project_browse_folders_subtitle">Pick any folder on this server</string>
+    <string name="add_project_on_this_server">On this server</string>
+    <string name="add_project_checking_folder">Checking folder</string>
+    <string name="add_project_loading_projects">Loading projects</string>
+    <string name="add_project_loading_folders">Loading folders</string>
+    <string name="add_project_list_error_title">Unable to list this folder</string>
+    <string name="add_project_list_error_message">Check the path and try again.</string>
+    <string name="add_project_no_other_projects">No other projects on this server.</string>
+    <string name="add_project_folder_path">Folder path</string>
+    <string name="add_project_up_one_folder">Up one folder</string>
+    <string name="add_project_git_tag">git</string>
+    <string name="add_project_pick_a_folder">Pick a folder</string>
+    <string name="add_project_already_on_home">Already on Home</string>
+    <string name="add_project_add_home_folder">Add home folder</string>
+    <string name="add_project_add_this_folder">Add this folder</string>
+    <string name="add_project_path_not_found">Path not found</string>
+    <string name="add_project_no_folder_named">No folder named “%1$s”</string>
+    <string name="add_project_on_home">On Home</string>
+    <string name="add_project_on_home_with_count">On Home · %1$s</string>
+    <string name="add_project_folder_empty">Empty</string>
+    <plurals name="add_project_folder_count">
+        <item quantity="one">%1$d folder</item>
+        <item quantity="other">%1$d folders</item>
+    </plurals>
+    <string name="add_project_no_subfolders">No subfolders</string>
+    <string name="add_project_nothing_starts_with">Nothing in %1$s starts with “%2$s”</string>
+    <plurals name="add_project_truncation_hint">
+        <item quantity="one">Showing the first %1$d folder. Type more of the name to narrow the list.</item>
+        <item quantity="other">Showing the first %1$d folders. Type more of the name to narrow the list.</item>
+    </plurals>
+    <string name="add_project_in_folder">In %1$s</string>
+    <string name="add_project_root_home">Home</string>
+    <string name="add_project_error_add_failed">Unable to add this directory</string>
+    <string name="worktree_new_row">New worktree…</string>
+    <string name="worktree_run_in_subtitle">Create a checkout and start there</string>
+    <string name="worktree_move_subtitle">Create a checkout and move there</string>
+    <string name="worktree_needs_v2">Needs an opencode v2 server</string>
+    <string name="worktree_turn_on">Turn on Worktrees in Settings</string>
+    <string name="worktree_not_git">Needs a git repository</string>
+    <string name="worktree_no_commit">Needs a git repository with a commit</string>
+    <string name="worktree_unsupported">This server can\'t create worktrees</string>
+    <string name="worktree_form_title">New worktree</string>
+    <string name="worktree_name">Name</string>
+    <string name="worktree_branch">Branch</string>
+    <string name="worktree_base">Create from</string>
+    <string name="worktree_v1_branch_note">opencode v1 names it after the worktree</string>
+    <string name="worktree_v2_no_branch">No branch (detached)</string>
+    <string name="worktree_v2_branch_note">opencode v2 checkouts have no branch</string>
+    <string name="worktree_current_checkout">Current checkout</string>
+    <string name="worktree_v1_base_note">opencode v1 uses the current checkout</string>
+    <string name="worktree_base_pick_hint">Tap to pick a branch</string>
+    <string name="worktree_current_branch">%1$s (current)</string>
+    <string name="worktree_base_loading">Loading branches…</string>
+    <string name="worktree_base_failed">Couldn\'t load branches</string>
+    <string name="worktree_name_empty">Enter a name</string>
+    <string name="worktree_name_chars">Use letters, numbers, dots, dashes or underscores</string>
+    <plurals name="worktree_name_long">
+        <item quantity="one">Use at most %1$d character</item>
+        <item quantity="other">Use at most %1$d characters</item>
+    </plurals>
+    <string name="worktree_submit_run_in">Create and start</string>
+    <string name="worktree_submit_move">Create and move</string>
+    <string name="worktree_submitting">Creating…</string>
+    <string name="worktree_create_failed">Couldn\'t create the worktree: %1$s</string>
+    <string name="worktree_unknown_error">Unknown error</string>
+    <!-- Files and Terminal -->
+    <string name="files_title">Files</string>
+    <string name="files_more_options">More options</string>
+    <string name="files_show_hidden">Show hidden files</string>
+    <string name="files_show_hidden_on">Show hidden files, on</string>
+    <string name="files_show_hidden_off">Show hidden files, off</string>
+    <string name="files_refresh">Refresh</string>
+    <string name="files_find_hint">Find file</string>
+    <string name="files_loading_title">Loading files</string>
+    <string name="files_loading_subtitle">Fetching the folder…</string>
+    <string name="files_folder_error">Couldn\'t load folder</string>
+    <string name="files_retry">Retry</string>
+    <string name="files_empty_folder">Empty folder</string>
+    <string name="files_empty_project">This project has no files to show.</string>
+    <string name="files_ignored">ignored</string>
+    <string name="files_finding">Finding files</string>
+    <string name="files_find_error">Couldn\'t search files</string>
+    <string name="files_find_no_match">No files match “%1$s”</string>
+    <string name="files_find_no_match_detail">Server search skips ignored folders.</string>
+    <string name="files_error_check_server_connection">Check the connection to the server and try again.</string>
+    <string name="files_no_file_title">Open a file from the tree</string>
+    <string name="files_no_file_message">Opened files stay as tabs</string>
+    <string name="files_path_copied">Path copied</string>
+    <string name="file_viewer_copy_path">Copy path</string>
+    <string name="file_viewer_wrap_lines">Wrap lines</string>
+    <string name="file_viewer_wrap_lines_on">Wrap lines, on</string>
+    <string name="file_viewer_wrap_lines_off">Wrap lines, off</string>
+    <string name="file_viewer_loading">Loading file</string>
+    <string name="file_viewer_loading_image">Loading image</string>
+    <string name="file_viewer_rendering_preview">Rendering preview</string>
+    <string name="file_viewer_image_preview">Image preview</string>
+    <string name="file_viewer_error_title">Couldn\'t open file</string>
+    <string name="file_viewer_empty_title">Empty file</string>
+    <string name="file_viewer_empty_message">This file has no content.</string>
+    <string name="file_viewer_truncated">Showing the first 1 MB of this file.</string>
+    <string name="file_viewer_tab_preview">Preview</string>
+    <string name="file_viewer_tab_source">Source</string>
+    <string name="file_viewer_binary_title">Binary file</string>
+    <string name="file_viewer_binary_message">No preview for this file type.</string>
+    <string name="file_viewer_binary_message_type">%1$s\nNo preview for this file type.</string>
+    <string name="file_viewer_too_large_title">Too large to preview</string>
+    <string name="file_viewer_too_large_message">This file is bigger than the app previews.</string>
+    <string name="file_viewer_too_large_message_size">This file is bigger than the app previews.\n%1$s</string>
+    <plurals name="file_viewer_line_count">
+        <item quantity="one">%1$d line</item>
+        <item quantity="other">%1$d lines</item>
+    </plurals>
+    <string name="file_viewer_meta">%1$s · %2$s</string>
+    <plurals name="file_viewer_size_bytes">
+        <item quantity="one">%1$d byte</item>
+        <item quantity="other">%1$d bytes</item>
+    </plurals>
+    <string name="terminal_title">Terminal</string>
+    <string name="terminal_catalog_title">Terminals</string>
+    <string name="terminal_catalog_loading">Loading terminals</string>
+    <string name="terminal_catalog_empty_title">No running shells</string>
+    <string name="terminal_catalog_empty_message">Start one for a project. It is not tied to a chat session.</string>
+    <string name="terminal_select_title">Select a shell</string>
+    <string name="terminal_select_message">Choose a shell from the list.</string>
+    <string name="terminal_new_shell">New shell</string>
+    <string name="terminal_close">Close</string>
+    <string name="terminal_close_dialog_title">Close this shell?</string>
+    <string name="terminal_close_dialog_title_named">Close “%1$s”?</string>
+    <string name="terminal_close_dialog_message">This ends the shell on the server.</string>
+    <string name="terminal_projects_empty_title">No projects yet</string>
+    <string name="terminal_projects_empty_message">Add a project on home, then start a shell here.</string>
+    <string name="terminal_error_create">Could not start a shell.</string>
+    <string name="terminal_connecting_title">Connecting</string>
+    <string name="terminal_connecting_subtitle">Starting shell…</string>
+    <string name="terminal_connect_failed_title">Connect failed</string>
+    <string name="terminal_connect_failed_message">Could not start a shell for this project.</string>
+    <string name="terminal_exited">Shell ended</string>
+    <string name="terminal_retry">Retry</string>
+    <string name="terminal_key_ctrl_c">Ctrl-C</string>
+    <string name="terminal_key_esc">Esc</string>
+    <string name="terminal_key_tab">Tab</string>
+    <string name="terminal_key_up">Up</string>
+    <string name="terminal_key_down">Down</string>
+    <string name="terminal_key_left">Left</string>
+    <string name="terminal_key_right">Right</string>
+    <!-- Session Chat screen and timeline -->
+    <string name="session_chat_loading">Loading session</string>
+    <string name="session_chat_more_options">More options</string>
+    <string name="session_chat_menu_rename">Rename session</string>
+    <string name="session_chat_menu_review_changes">Review changes</string>
+    <string name="session_chat_menu_fork">Fork session</string>
+    <string name="session_chat_menu_browse_files">Browse files</string>
+    <string name="session_chat_menu_session_context">Session context</string>
+    <string name="session_chat_menu_copy_session_id">Copy session ID</string>
+    <string name="session_chat_menu_archive">Archive</string>
+    <string name="session_chat_menu_report_problem">Report a problem</string>
+    <string name="session_chat_menu_delete">Delete</string>
+    <string name="session_chat_delete_dialog_title">Delete session</string>
+    <string name="session_chat_delete_dialog_message">Delete session “%1$s”?</string>
+    <string name="session_chat_delete_dialog_confirm">Delete</string>
+    <string name="session_chat_rename_dialog_title">Rename session</string>
+    <string name="session_chat_rename_dialog_save">Save</string>
+    <string name="session_chat_title_hint">Title</string>
+    <string name="session_chat_fork_dialog_title">Fork session</string>
+    <string name="session_chat_fork_dialog_confirm">Fork</string>
+    <string name="session_chat_fork_dialog_error_empty_title">Enter a session title</string>
+    <string name="session_chat_fork_dialog_error_failed">Couldn\'t fork session.</string>
+    <string name="session_chat_fork_result_title">Session forked</string>
+    <string name="session_chat_fork_result_message_ready">“%1$s” is ready.</string>
+    <string name="session_chat_fork_result_open">Open</string>
+    <string name="session_chat_fork_result_stay_here">Stay here</string>
+    <string name="session_chat_attachment_source_title">Add attachment</string>
+    <string name="session_chat_attachment_source_photos">Photos</string>
+    <string name="session_chat_attachment_source_files">Files</string>
+    <string name="session_chat_attachment_source_log_file">Log file</string>
+    <string name="session_chat_commands_title">Commands</string>
+    <string name="session_chat_commands_mcp_title">MCP servers</string>
+    <string name="session_chat_commands_back">Back to commands</string>
+    <string name="session_chat_commands_new_label">New</string>
+    <string name="session_chat_commands_new_description">Start a new session</string>
+    <string name="session_chat_commands_fork_label">Fork</string>
+    <string name="session_chat_commands_fork_description">Fork this session</string>
+    <string name="session_chat_commands_undo_label">Undo</string>
+    <string name="session_chat_commands_undo_description">Undo last message</string>
+    <string name="session_chat_commands_redo_label">Redo</string>
+    <string name="session_chat_commands_redo_description">Redo undone message</string>
+    <string name="session_chat_commands_compact_label">Compact</string>
+    <string name="session_chat_commands_compact_description">Compact session context</string>
+    <string name="session_chat_commands_terminal_label">Terminal</string>
+    <string name="session_chat_commands_terminal_description">Open project shell</string>
+    <string name="session_chat_commands_files_label">Files</string>
+    <string name="session_chat_commands_files_description">Browse project files</string>
+    <string name="session_chat_commands_mcp_label">MCP servers</string>
+    <string name="session_chat_commands_mcp_description">Show MCP server status</string>
+    <string name="session_chat_commands_btw_label">Btw</string>
+    <string name="session_chat_commands_btw_description">Ask a side question</string>
+    <string name="session_chat_suggestion_file">File</string>
+    <string name="session_chat_suggestion_no_matches">No matches</string>
+    <string name="session_chat_suggestion_no_commands">No commands</string>
+    <string name="session_chat_suggestion_badge_skill">skill</string>
+    <string name="session_chat_suggestion_badge_mcp">mcp</string>
+    <string name="session_chat_move_worktree_current">Current worktree</string>
+    <string name="session_chat_activity_review_permission">Review permission</string>
+    <string name="session_chat_activity_review_permission_request">Review permission request</string>
+    <string name="session_chat_activity_answer_question">Answer question</string>
+    <string name="session_chat_activity_request_failed">Request failed</string>
+    <string name="session_chat_activity_btw_failed">/btw failed · Retry</string>
+    <string name="session_chat_activity_btw_failed_count">/btw failed ×%1$d · Retry</string>
+    <string name="session_chat_activity_btw_ready">/btw answer ready</string>
+    <string name="session_chat_activity_btw_ready_count">/btw answer ready ×%1$d</string>
+    <plurals name="session_chat_activity_queued">
+        <item quantity="one">%1$d queued</item>
+        <item quantity="other">%1$d queued</item>
+    </plurals>
+    <plurals name="session_chat_activity_queued_prompts">
+        <item quantity="one">%1$d queued prompt</item>
+        <item quantity="other">%1$d queued prompts</item>
+    </plurals>
+    <string name="session_chat_activity_side_question_failed">Side question failed</string>
+    <plurals name="session_chat_activity_side_questions_failed">
+        <item quantity="one">%1$d side question failed</item>
+        <item quantity="other">%1$d side questions failed</item>
+    </plurals>
+    <string name="session_chat_activity_side_question_ready">Side question answer ready</string>
+    <plurals name="session_chat_activity_side_questions_ready">
+        <item quantity="one">%1$d side question answer ready</item>
+        <item quantity="other">%1$d side question answers ready</item>
+    </plurals>
+    <string name="session_chat_activity_side_question_running">Side question running</string>
+    <plurals name="session_chat_activity_side_questions_running">
+        <item quantity="one">%1$d side question running</item>
+        <item quantity="other">%1$d side questions running</item>
+    </plurals>
+    <string name="session_chat_activity_finished">%1$s, Done</string>
+    <string name="session_chat_activity_status_action">%1$s. %2$s</string>
+    <string name="session_chat_activity_action_open_request">Open request</string>
+    <string name="session_chat_activity_action_open_background_work">Open background work</string>
+    <string name="session_chat_activity_action_show_in_chat">Show in chat</string>
+    <string name="session_chat_activity_action_retry">Retry</string>
+    <string name="session_chat_activity_action_open">Open</string>
+    <string name="session_chat_activity_action_open_up_next">Open Up next</string>
+    <plurals name="session_chat_activity_collapsed_show_count">
+        <item quantity="one">Show %1$d activity</item>
+        <item quantity="other">Show %1$d activities</item>
+    </plurals>
+    <plurals name="session_chat_activity_collapsed_hide_count">
+        <item quantity="one">Hide %1$d activity</item>
+        <item quantity="other">Hide %1$d activities</item>
+    </plurals>
+    <string name="session_chat_activity_show_more">Show %1$d more</string>
+    <string name="session_chat_activity_hide_more">Hide %1$d more</string>
+    <string name="session_chat_navigation_scroll_to_end">Scroll to end</string>
+    <plurals name="session_chat_navigation_new_count">
+        <item quantity="one">%1$d new</item>
+        <item quantity="other">%1$d new</item>
+    </plurals>
+    <plurals name="session_chat_navigation_scroll_to_end_new_messages">
+        <item quantity="one">Scroll to end, %1$d new message</item>
+        <item quantity="other">Scroll to end, %1$d new messages</item>
+    </plurals>
+    <string name="timeline_state_creating_title">Starting session…</string>
+    <string name="timeline_state_creating_subtitle">Creating on server…</string>
+    <string name="timeline_state_loading_title">Loading messages</string>
+    <string name="timeline_state_loading_subtitle">Fetching timeline…</string>
+    <string name="timeline_state_error_title">Unable to load messages</string>
+    <string name="timeline_state_error_fallback">The timeline didn\'t load.</string>
+    <string name="timeline_state_retry">Retry</string>
+    <string name="timeline_state_empty">No messages yet. Send a prompt to start.</string>
+    <string name="timeline_state_refreshing">Refreshing messages</string>
+    <string name="timeline_message_assistant">Assistant message</string>
+    <string name="timeline_message_actions_hint_long_press">Long press to show message actions</string>
+    <string name="timeline_message_actions_hint">Shows message actions</string>
+    <string name="timeline_fallback_message">%1$s: %2$s</string>
+    <string name="timeline_step_no_commentary">Worked without commentary</string>
+    <string name="timeline_failure_copy">Copy</string>
+    <string name="timeline_retry_retrying_in">retrying in %1$ds</string>
+    <string name="timeline_retry_attempt_retrying_in">attempt %1$d, retrying in %2$ds</string>
+    <plurals name="timeline_background_work_subagent_count">
+        <item quantity="one">%1$d subagent</item>
+        <item quantity="other">%1$d subagents</item>
+    </plurals>
+    <plurals name="timeline_background_work_shell_count">
+        <item quantity="one">%1$d shell</item>
+        <item quantity="other">%1$d shells</item>
+    </plurals>
+    <string name="timeline_background_work_subagents_and_shells">%1$s · %2$s</string>
+    <string name="timeline_background_work_subagents_and_shells_spoken">%1$s and %2$s</string>
+    <string name="timeline_background_work_running_spoken">%1$s running</string>
+    <string name="timeline_background_work_agent_needs_input">%1$s needs input</string>
+    <plurals name="timeline_background_work_subagents_need_input">
+        <item quantity="one">%1$d subagent needs input</item>
+        <item quantity="other">%1$d subagents need input</item>
+    </plurals>
+    <string name="timeline_background_work_needs_input_running">%1$s · %2$d running</string>
+    <string name="timeline_background_work_needs_input_running_spoken">%1$s, %2$s running</string>
+    <plurals name="timeline_tool_result_files_modified">
+        <item quantity="one">%1$d modified</item>
+        <item quantity="other">%1$d modified</item>
+    </plurals>
+    <plurals name="timeline_tool_result_files_added">
+        <item quantity="one">%1$d added</item>
+        <item quantity="other">%1$d added</item>
+    </plurals>
+    <plurals name="timeline_tool_result_files_deleted">
+        <item quantity="one">%1$d deleted</item>
+        <item quantity="other">%1$d deleted</item>
+    </plurals>
+    <!-- Session Chat timeline, tool cards, activity and chat screen messages -->
+    <!-- Tool name on a tool card, chip or step. -->
+    <string name="tool_title_read">Read</string>
+    <string name="tool_title_grep">Grep</string>
+    <string name="tool_title_glob">Glob</string>
+    <string name="tool_title_search">Search</string>
+    <string name="tool_title_fetch">Fetch</string>
+    <string name="tool_title_shell">Shell</string>
+    <string name="tool_title_execute">Execute</string>
+    <string name="tool_title_lsp">LSP</string>
+    <string name="tool_title_plan">Plan</string>
+    <string name="tool_title_edit">Edit</string>
+    <string name="tool_title_write">Write</string>
+    <string name="tool_title_skill">Skill</string>
+    <string name="tool_title_patch">Patch</string>
+    <string name="tool_title_get_issue">Get issue</string>
+    <string name="tool_title_save_issue">Save issue</string>
+    <string name="tool_title_question">Question</string>
+    <string name="tool_title_agent">Agent</string>
+    <string name="tool_title_thought">Thought</string>
+    <plurals name="tool_title_asked_questions">
+        <item quantity="one">Asked %1$d question</item>
+        <item quantity="other">Asked %1$d questions</item>
+    </plurals>
+    <plurals name="tool_count_read">
+        <item quantity="one">%1$d read</item>
+        <item quantity="other">%1$d reads</item>
+    </plurals>
+    <plurals name="tool_count_grep">
+        <item quantity="one">%1$d grep</item>
+        <item quantity="other">%1$d greps</item>
+    </plurals>
+    <plurals name="tool_count_glob">
+        <item quantity="one">%1$d glob</item>
+        <item quantity="other">%1$d globs</item>
+    </plurals>
+    <plurals name="tool_count_search">
+        <item quantity="one">%1$d search</item>
+        <item quantity="other">%1$d searches</item>
+    </plurals>
+    <plurals name="tool_count_fetch">
+        <item quantity="one">%1$d fetch</item>
+        <item quantity="other">%1$d fetches</item>
+    </plurals>
+    <plurals name="tool_count_shell">
+        <item quantity="one">%1$d shell</item>
+        <item quantity="other">%1$d shells</item>
+    </plurals>
+    <plurals name="tool_count_execute">
+        <item quantity="one">%1$d execute</item>
+        <item quantity="other">%1$d executes</item>
+    </plurals>
+    <plurals name="tool_count_lsp">
+        <item quantity="one">%1$d LSP</item>
+        <item quantity="other">%1$d LSPs</item>
+    </plurals>
+    <plurals name="tool_count_plan">
+        <item quantity="one">%1$d plan</item>
+        <item quantity="other">%1$d plans</item>
+    </plurals>
+    <plurals name="tool_count_edit">
+        <item quantity="one">%1$d edit</item>
+        <item quantity="other">%1$d edits</item>
+    </plurals>
+    <plurals name="tool_count_write">
+        <item quantity="one">%1$d write</item>
+        <item quantity="other">%1$d writes</item>
+    </plurals>
+    <plurals name="tool_count_skill">
+        <item quantity="one">%1$d skill</item>
+        <item quantity="other">%1$d skills</item>
+    </plurals>
+    <plurals name="tool_count_patch">
+        <item quantity="one">%1$d patch</item>
+        <item quantity="other">%1$d patches</item>
+    </plurals>
+    <plurals name="tool_count_get_issue">
+        <item quantity="one">%1$d Get issue</item>
+        <item quantity="other">%1$d Get issues</item>
+    </plurals>
+    <plurals name="tool_count_save_issue">
+        <item quantity="one">%1$d Save issue</item>
+        <item quantity="other">%1$d Save issues</item>
+    </plurals>
+    <plurals name="tool_count_tool">
+        <item quantity="one">%1$d tool</item>
+        <item quantity="other">%1$d tools</item>
+    </plurals>
+    <plurals name="tool_count_file">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <plurals name="tool_count_match">
+        <item quantity="one">%1$d match</item>
+        <item quantity="other">%1$d matches</item>
+    </plurals>
+    <plurals name="tool_count_path">
+        <item quantity="one">%1$d path</item>
+        <item quantity="other">%1$d paths</item>
+    </plurals>
+    <!-- %1$d is how many times a tool ran, %2$s the tool name. -->
+    <string name="tool_count_named">%1$d %2$s</string>
+    <string name="tool_error_malformed">Not run: malformed tool call</string>
+    <!-- Error line under a failed tool chip. %1$s is the chip label, %2$s the error. -->
+    <string name="tool_error_line">%1$s: %2$s</string>
+    <string name="tool_error_failed">Failed</string>
+    <string name="tool_error_exit_code">Exited with code %1$d</string>
+    <string name="tool_status_declined">Declined</string>
+    <string name="tool_status_stopped">Stopped</string>
+    <string name="tool_placeholder_writing_command">Writing command…</string>
+    <string name="tool_placeholder_preparing_read">Preparing read…</string>
+    <string name="tool_placeholder_preparing_edit">Preparing edit…</string>
+    <string name="tool_placeholder_preparing_write">Preparing write…</string>
+    <!-- %1$s is the subagent task description. -->
+    <string name="tool_subtitle_background">%1$s (background)</string>
+    <string name="tool_subtitle_plan_ready">Ready to implement?</string>
+    <string name="tool_unknown_title">Unknown tool</string>
+    <string name="tool_unknown_detail">Tool not available</string>
+    <string name="tool_result_pull_request_opened">Pull request opened</string>
+    <!-- Title of a file result when the tool sent no path. -->
+    <string name="tool_result_file">File</string>
+    <string name="tool_result_lines_range">lines %1$d–%2$d</string>
+    <plurals name="tool_result_first_lines">
+        <item quantity="one">first %1$d line</item>
+        <item quantity="other">first %1$d lines</item>
+    </plurals>
+    <string name="timeline_step_reading">Reading…</string>
+    <!-- %1$s is a file, pattern, query or host. -->
+    <string name="timeline_step_reading_named">Reading %1$s</string>
+    <string name="timeline_step_searching">Searching…</string>
+    <string name="timeline_step_searching_named">Searching %1$s</string>
+    <string name="timeline_step_listing">Listing…</string>
+    <string name="timeline_step_listing_named">Listing %1$s</string>
+    <string name="timeline_step_editing">Editing…</string>
+    <string name="timeline_step_editing_named">Editing %1$s</string>
+    <string name="timeline_step_writing">Writing…</string>
+    <string name="timeline_step_writing_named">Writing %1$s</string>
+    <string name="timeline_step_fetching">Fetching…</string>
+    <string name="timeline_step_fetching_named">Fetching %1$s</string>
+    <string name="timeline_step_running">Running…</string>
+    <!-- %1$s is a shell command. -->
+    <string name="timeline_step_running_named">Running %1$s</string>
+    <!-- %1$s is a shell command. -->
+    <string name="timeline_step_ran_named">Ran %1$s</string>
+    <string name="timeline_step_ran_command">Ran command</string>
+    <string name="timeline_step_loading_skill">Loading skill…</string>
+    <string name="timeline_step_loading_skill_named">Loading skill %1$s</string>
+    <string name="timeline_step_skill_named">Skill %1$s</string>
+    <!-- %1$s is how long the model thought, such as 6.4s. -->
+    <string name="timeline_step_thought_duration">Thought · %1$s</string>
+    <!-- %1$s is a tool title (LSP, Plan), %2$s its argument. -->
+    <string name="timeline_step_tool_named">%1$s %2$s</string>
+    <!-- %1$s is a list of counts, such as 4 reads · 2 greps. -->
+    <string name="timeline_explore_label">Explored · %1$s</string>
+    <string name="timeline_explore_label_running">Exploring · %1$s</string>
+    <string name="timeline_explore_title">Explored — %1$s</string>
+    <!-- Joins two parts of a list. -->
+    <string name="timeline_list_separator">%1$s · %2$s</string>
+    <!-- Joins two tool names in a list. -->
+    <string name="timeline_list_comma">%1$s, %2$s</string>
+    <plurals name="timeline_activity_count_step">
+        <item quantity="one">%1$d step</item>
+        <item quantity="other">%1$d steps</item>
+    </plurals>
+    <plurals name="timeline_activity_count_command">
+        <item quantity="one">%1$d command</item>
+        <item quantity="other">%1$d commands</item>
+    </plurals>
+    <plurals name="timeline_activity_count_thought">
+        <item quantity="one">%1$d thought</item>
+        <item quantity="other">%1$d thoughts</item>
+    </plurals>
+    <plurals name="timeline_activity_count_agent">
+        <item quantity="one">%1$d agent</item>
+        <item quantity="other">%1$d agents</item>
+    </plurals>
+    <string name="timeline_activity_thinking">Thinking…</string>
+    <string name="timeline_activity_waiting_for_agents">Waiting for agents</string>
+    <string name="timeline_activity_waiting_for_you">Waiting for you</string>
+    <string name="timeline_notice_moved_to">Moved to</string>
+    <string name="timeline_notice_agent_changed">Agent changed</string>
+    <!-- Previous agent → new agent. -->
+    <string name="timeline_notice_agent_change">%1$s → %2$s</string>
+    <string name="timeline_notice_switched_to">Switched to</string>
+    <string name="timeline_notice_variant_switched">Switched variant to</string>
+    <string name="timeline_notice_variant_default">Switched variant to Default</string>
+    <string name="timeline_notice_instructions_updated">Instructions updated</string>
+    <string name="timeline_notice_restart">Continuing after restart</string>
+    <!-- Accessibility label: the notice label, then its value. -->
+    <string name="timeline_notice_accessibility">%1$s %2$s</string>
+    <string name="timeline_compaction_title">Context compacted</string>
+    <string name="timeline_compaction_automatic">Automatic</string>
+    <string name="timeline_syncing">Syncing…</string>
+    <string name="timeline_failure_session_work_failed">Session work failed</string>
+    <!-- %1$d is the HTTP status, %2$s the failure message. -->
+    <string name="timeline_failure_http_status">HTTP %1$d · %2$s</string>
+    <string name="timeline_failure_pick_model">Pick a model</string>
+    <string name="timeline_failure_compact">Compact</string>
+    <string name="session_chat_compact_status">Compacting…</string>
+    <string name="session_chat_compact_success">Session compacted.</string>
+    <!-- Context usage before and after, in percent. -->
+    <string name="session_chat_compact_success_usage">Context compacted · %1$d%% → %2$d%%</string>
+    <string name="session_chat_compact_failure">Couldn\'t compact session context.</string>
+    <string name="session_chat_revert_undo_failed">Couldn\'t undo last message.</string>
+    <string name="session_chat_revert_failed">Couldn\'t revert message.</string>
+    <string name="session_chat_revert_redo_failed">Couldn\'t redo.</string>
+    <string name="session_chat_revert_cancel_failed">Couldn\'t cancel revert.</string>
+    <string name="session_chat_revert_commit_failed">Couldn\'t commit revert.</string>
+    <string name="session_chat_fork_rename_failed">Fork created, but it couldn\'t be renamed.</string>
+    <string name="session_chat_pending_prompt_update_failed">Couldn\'t update pending prompt</string>
+    <string name="session_chat_shell_stop_failed">Couldn\'t stop the shell. Try again.</string>
+    <string name="session_chat_shell_status_running">Running</string>
+    <string name="session_chat_shell_status_exited">Exited</string>
+    <string name="session_chat_shell_status_timed_out">Timed out</string>
+    <string name="session_chat_shell_duration_seconds">%1$d s</string>
+    <string name="session_chat_shell_duration_minutes">%1$d min</string>
+    <string name="session_chat_shell_duration_minutes_seconds">%1$d min %2$d s</string>
+    <string name="session_chat_shell_duration_hours">%1$d h</string>
+    <string name="session_chat_shell_duration_hours_minutes">%1$d h %2$d min</string>
+    <!-- Todos pill: completed todos / all todos. -->
+    <string name="session_chat_todos_progress">%1$d/%2$d</string>
+    <!-- Session Chat sheets and Session Context -->
+    <string name="session_chat_sheet_copy">Copy</string>
+    <string name="session_chat_sheet_copy_output">Copy output</string>
+    <string name="session_chat_sheet_message_actions_title">Message</string>
+    <string name="session_chat_sheet_message_actions_revert">Revert message</string>
+    <string name="session_chat_sheet_message_actions_fork">Fork from here</string>
+    <string name="session_chat_sheet_message_actions_copy_code_block">Copy code block</string>
+    <string name="session_chat_sheet_message_actions_copy_message">Copy message</string>
+    <!-- Android clipboard label for a copied code block. -->
+    <string name="session_chat_sheet_message_actions_clip_label_code">Code</string>
+    <string name="session_chat_sheet_mcp_loading_title">Checking MCP servers</string>
+    <string name="session_chat_sheet_mcp_loading_subtitle">Reading status from the opencode server</string>
+    <string name="session_chat_sheet_mcp_error_title">Couldn\'t load MCP servers</string>
+    <string name="session_chat_sheet_mcp_error_message">The MCP server list didn\'t load.</string>
+    <string name="session_chat_sheet_mcp_empty_title">No MCP servers</string>
+    <string name="session_chat_sheet_mcp_empty_message">None are configured on this opencode server.</string>
+    <!-- %1$d connected MCP servers, %2$d configured. -->
+    <string name="session_chat_sheet_mcp_headline">%1$d of %2$d connected</string>
+    <string name="session_chat_sheet_mcp_status_connected">Connected</string>
+    <string name="session_chat_sheet_mcp_status_connecting">Connecting</string>
+    <string name="session_chat_sheet_mcp_status_disabled">Disabled</string>
+    <string name="session_chat_sheet_mcp_status_failed">Failed</string>
+    <string name="session_chat_sheet_mcp_status_needs_sign_in">Needs sign-in</string>
+    <string name="session_chat_sheet_pending_prompts_title">Up next</string>
+    <plurals name="session_chat_sheet_pending_prompts_waiting">
+        <item quantity="one">%1$d waiting</item>
+        <item quantity="other">%1$d waiting</item>
+    </plurals>
+    <string name="session_chat_sheet_pending_prompts_clear_all">Clear all</string>
+    <string name="session_chat_sheet_pending_prompts_sending">Sending…</string>
+    <string name="session_chat_sheet_pending_prompts_move_to_queue">Move to queue</string>
+    <string name="session_chat_sheet_pending_prompts_steer_now">Steer now</string>
+    <string name="session_chat_sheet_pending_prompts_delete">Delete</string>
+    <string name="session_chat_sheet_chip_timeline_intro_glance_title">See the work at a glance</string>
+    <string name="session_chat_sheet_chip_timeline_intro_glance_body">Tool calls show as chips under the sentence that explains them.</string>
+    <string name="session_chat_sheet_chip_timeline_intro_long_runs_title">Long runs, short timeline</string>
+    <string name="session_chat_sheet_chip_timeline_intro_long_runs_body">Twenty tool calls take a few chips instead of a screen of rows.</string>
+    <string name="session_chat_sheet_chip_timeline_intro_details_title">Details stay one tap away</string>
+    <string name="session_chat_sheet_chip_timeline_intro_details_body">Tap a chip for its diffs, command output, or files.</string>
+    <string name="session_chat_sheet_chip_timeline_intro_enable">Turn on Chip timeline</string>
+    <string name="session_chat_sheet_chip_timeline_intro_later">Later</string>
+    <string name="session_chat_sheet_chip_timeline_intro_never">Don\'t show again</string>
+    <string name="session_chat_sheet_side_question_done">Done</string>
+    <string name="session_chat_sheet_side_question_not_added">Not added to the conversation</string>
+    <string name="session_chat_sheet_todos_title">Session todos</string>
+    <!-- %1$d completed todos, %2$d todos in total. The numbers are shown in bold. -->
+    <string name="session_chat_sheet_todos_progress">%1$d of %2$d completed</string>
+    <string name="session_chat_sheet_skills_title">Skills</string>
+    <string name="session_chat_sheet_skills_status_loading">Loading</string>
+    <string name="session_chat_sheet_skills_status_failed">Failed</string>
+    <string name="session_chat_sheet_timeline_style_picker_title">New: choose your timeline</string>
+    <string name="session_chat_sheet_timeline_style_picker_explainer">This update adds new ways to follow what the agent is doing.</string>
+    <string name="session_chat_sheet_timeline_style_picker_footnote">You can change this any time in Settings → Timeline Style.</string>
+    <!-- %1$s is the selected Timeline Style name. -->
+    <string name="session_chat_sheet_timeline_style_picker_use">Use %1$s</string>
+    <string name="session_chat_sheet_timeline_style_picker_recommended">Recommended</string>
+    <string name="session_chat_sheet_timeline_style_picker_current">Current</string>
+    <string name="session_chat_sheet_timeline_style_picker_standard_title">Standard</string>
+    <string name="session_chat_sheet_timeline_style_picker_standard_subtitle">Tool cards and groups between the agent\'s messages</string>
+    <string name="session_chat_sheet_timeline_style_picker_chips_title">Chips</string>
+    <string name="session_chat_sheet_timeline_style_picker_chips_subtitle">Tools as chips under the agent\'s narration</string>
+    <string name="session_chat_sheet_timeline_style_picker_step_rail_title">Step Rail</string>
+    <string name="session_chat_sheet_timeline_style_picker_step_rail_subtitle">One line per step on a rail, live while the agent works</string>
+    <string name="session_chat_sheet_timeline_style_picker_activity_card_title">Activity Card</string>
+    <string name="session_chat_sheet_timeline_style_picker_activity_card_subtitle">Running steps on one live card that folds into a summary</string>
+    <string name="session_chat_sheet_picker_model">Model</string>
+    <string name="session_chat_sheet_picker_agent_mode">Agent mode</string>
+    <string name="session_chat_sheet_picker_variant">Variant</string>
+    <string name="session_chat_sheet_picker_back_to_providers">Back to providers</string>
+    <string name="session_chat_sheet_picker_no_models_match">No models match your filter</string>
+    <string name="session_chat_sheet_picker_filter_models_hint">Filter models...</string>
+    <string name="session_chat_sheet_tool_detail_provider_response">Provider response</string>
+    <string name="session_chat_sheet_tool_detail_tool">Tool</string>
+    <!-- Process exit code of a tool command. -->
+    <string name="session_chat_sheet_tool_result_exit_code">exit %1$d</string>
+    <plurals name="session_chat_sheet_tool_result_matches">
+        <item quantity="one">%1$d match</item>
+        <item quantity="other">%1$d matches</item>
+    </plurals>
+    <plurals name="session_chat_sheet_tool_result_files">
+        <item quantity="one">%1$d file</item>
+        <item quantity="other">%1$d files</item>
+    </plurals>
+    <plurals name="session_chat_sheet_tool_result_lines">
+        <item quantity="one">%1$d line</item>
+        <item quantity="other">%1$d lines</item>
+    </plurals>
+    <!-- Android accessibility label. %1$s is a pull request URL. -->
+    <string name="session_chat_sheet_tool_result_copy_link">Copy %1$s</string>
+    <!-- iOS accessibility hint on a pull request URL. -->
+    <string name="session_chat_sheet_tool_result_copies_link_hint">Copies the link</string>
+    <!-- iOS accessibility label. %1$d is the line number, %2$s the line's code. -->
+    <string name="session_chat_sheet_tool_result_line_accessibility">Line %1$d, %2$s</string>
+    <string name="session_chat_sheet_shell_title">Shell</string>
+    <!-- iOS accessibility label. %1$s is the shell command. -->
+    <string name="session_chat_sheet_shell_command_accessibility">Command, %1$s</string>
+    <string name="session_chat_sheet_shell_no_output">No output yet</string>
+    <string name="session_chat_sheet_shell_truncated">Showing the latest output</string>
+    <string name="session_chat_sheet_shell_stop">Stop shell</string>
+    <string name="session_chat_sheet_shell_stopping">Stopping…</string>
+    <string name="session_chat_sheet_background_work_title">Background work</string>
+    <string name="session_chat_sheet_background_work_subagents">Subagents</string>
+    <string name="session_chat_sheet_background_work_shells">Shells</string>
+    <string name="session_chat_sheet_background_work_tab_running">Running</string>
+    <string name="session_chat_sheet_background_work_tab_done">Done</string>
+    <string name="session_chat_sheet_background_work_running_empty">Nothing running. Finished work is under Done.</string>
+    <string name="session_chat_sheet_background_work_done_empty">Nothing finished yet.</string>
+    <string name="session_chat_sheet_background_work_waiting_for_input">Waiting for input</string>
+    <string name="session_chat_sheet_background_work_stopped">Stopped</string>
+    <plurals name="session_chat_sheet_background_work_tool_count">
+        <item quantity="one">%1$d tool</item>
+        <item quantity="other">%1$d tools</item>
+    </plurals>
+    <!-- Title while a run of steps is live. %1$d is the step count. -->
+    <plurals name="session_chat_sheet_activity_working">
+        <item quantity="one">Working %1$d</item>
+        <item quantity="other">Working %1$d</item>
+    </plurals>
+    <string name="session_chat_sheet_activity_back_to_steps">Back to steps</string>
+    <string name="session_chat_sheet_activity_steps">Steps</string>
+    <plurals name="session_chat_sheet_activity_tools_so_far">
+        <item quantity="one">%1$d tool so far</item>
+        <item quantity="other">%1$d tools so far</item>
+    </plurals>
+    <plurals name="session_chat_sheet_activity_tools">
+        <item quantity="one">%1$d tool</item>
+        <item quantity="other">%1$d tools</item>
+    </plurals>
+    <string name="session_chat_sheet_activity_stopped">Stopped</string>
+    <string name="session_context_title">Session Context</string>
+    <string name="session_context_loading_title">Loading session context</string>
+    <string name="session_context_loading_subtitle">Fetching context…</string>
+    <string name="session_context_load_failed">Unable to load session context</string>
+    <string name="session_context_load_failed_message">The context didn\'t load.</string>
+    <string name="session_context_refresh_failed">Unable to refresh session context</string>
+    <!-- iOS accessibility label of the refresh spinner. -->
+    <string name="session_context_refreshing">Refreshing session context</string>
+    <string name="session_context_retry">Retry</string>
+    <string name="session_context_stat_session">Session</string>
+    <string name="session_context_stat_messages">Messages</string>
+    <string name="session_context_stat_provider">Provider</string>
+    <string name="session_context_stat_model">Model</string>
+    <string name="session_context_stat_context_limit">Context Limit</string>
+    <string name="session_context_stat_total_tokens">Total Tokens</string>
+    <string name="session_context_stat_usage">Usage</string>
+    <string name="session_context_stat_input_tokens">Input Tokens</string>
+    <string name="session_context_stat_output_tokens">Output Tokens</string>
+    <string name="session_context_stat_reasoning_tokens">Reasoning Tokens</string>
+    <string name="session_context_stat_cache_tokens">Cache Tokens (read/write)</string>
+    <string name="session_context_stat_user_messages">User Messages</string>
+    <string name="session_context_stat_assistant_messages">Assistant Messages</string>
+    <string name="session_context_stat_total_cost">Total Cost</string>
+    <string name="session_context_stat_created">Session Created</string>
+    <string name="session_context_stat_last_activity">Last Activity</string>
+    <string name="session_context_breakdown_title">Context Breakdown</string>
+    <string name="session_context_breakdown_system">System</string>
+    <string name="session_context_breakdown_user">User</string>
+    <string name="session_context_breakdown_assistant">Assistant</string>
+    <string name="session_context_breakdown_tool_calls">Tool Calls</string>
+    <string name="session_context_breakdown_other">Other</string>
+    <!-- %1$s is a breakdown part (System, User…), %2$s its share, such as 12.5%. -->
+    <string name="session_context_breakdown_legend">%1$s %2$s</string>
+    <string name="session_context_breakdown_footnote">Approximate breakdown of input tokens. Other includes tool definitions and overhead.</string>
+    <!-- Settings, Diagnostics, Appearance, Feature Flags, Feedback, keyboard shortcuts -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_section_server">Server</string>
+    <string name="settings_section_help_feedback">Help &amp; Feedback</string>
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_section_home">Home</string>
+    <string name="settings_section_session_cache">Session Cache</string>
+    <string name="settings_section_privacy">Privacy</string>
+    <string name="settings_section_about">About</string>
+    <string name="settings_servers_summary_none">No servers saved</string>
+    <plurals name="settings_servers_summary_saved">
+        <item quantity="one">%1$d saved</item>
+        <item quantity="other">%1$d saved</item>
+    </plurals>
+    <string name="settings_servers_summary_saved_active">%1$d saved · %2$s active</string>
+    <string name="settings_send_feedback_title">Send Feedback</string>
+    <string name="settings_send_feedback_subtitle">Report a bug or share an idea</string>
+    <string name="settings_hide_user_directory_title">Hide User Directory</string>
+    <string name="settings_hide_user_directory_subtitle">Show ~/Projects/… instead of /Users/you/Projects/…</string>
+    <string name="settings_recent_window_title">Recent Window</string>
+    <string name="settings_recent_window_message">Sessions stay in Recent while Running or Ready, or when updated within this window.</string>
+    <plurals name="settings_recent_window_hours">
+        <item quantity="one">%1$d hour</item>
+        <item quantity="other">%1$d hours</item>
+    </plurals>
+    <string name="settings_collapse_tool_calls_title">Collapse Consecutive Tool Calls</string>
+    <string name="settings_collapse_tool_calls_subtitle">Group back-to-back tools into one summary card</string>
+    <string name="settings_timeline_style_title">Timeline Style</string>
+    <string name="settings_timeline_style_standard_title">Standard</string>
+    <string name="settings_timeline_style_standard_subtitle">Tool cards and groups between the agent\'s messages</string>
+    <string name="settings_timeline_style_chips_title">Chips</string>
+    <string name="settings_timeline_style_chips_subtitle">Tools as chips under the agent\'s narration</string>
+    <string name="settings_timeline_style_step_rail_title">Step Rail</string>
+    <string name="settings_timeline_style_step_rail_subtitle">One line per step on a rail, live while the agent works</string>
+    <string name="settings_timeline_style_activity_card_title">Activity Card</string>
+    <string name="settings_timeline_style_activity_card_subtitle">Running steps on one live card that folds into a summary</string>
+    <string name="settings_follow_up_title">Follow-up send</string>
+    <string name="settings_follow_up_steer">Steer</string>
+    <string name="settings_follow_up_queue">Queue</string>
+    <string name="settings_follow_up_subtitle_steer">Steer · V2 servers only. V1 does not support this.</string>
+    <string name="settings_follow_up_subtitle_queue">Queue · V2 servers only. V1 does not support this.</string>
+    <string name="settings_follow_up_unsupported">Not supported on V1. This server always sends immediately.</string>
+    <string name="settings_worktrees_title">Worktrees</string>
+    <string name="settings_worktrees_subtitle">Show each project’s worktrees and branches on Home, and let New session pick a worktree when you hold it.</string>
+    <string name="settings_session_rows_title">Session rows</string>
+    <string name="settings_session_rows_compact_title">Compact</string>
+    <string name="settings_session_rows_compact_subtitle">Two lines: title and time, then project / worktree</string>
+    <string name="settings_session_rows_classic_title">Classic</string>
+    <string name="settings_session_rows_classic_subtitle">Project and worktree on their own lines</string>
+    <string name="settings_session_cache_size">Size</string>
+    <string name="settings_session_cache_size_label">Session Cache Size</string>
+    <string name="settings_session_cache_empty">Empty</string>
+    <string name="settings_session_cache_bytes">%1$d B</string>
+    <string name="settings_session_cache_kilobytes">%1$d KB</string>
+    <string name="settings_session_cache_megabytes">%1$s MB</string>
+    <string name="settings_session_cache_gigabytes">%1$s GB</string>
+    <string name="settings_clear_session_cache_title">Clear Session Cache</string>
+    <string name="settings_clear_session_cache_subtitle">Remove cached sessions and messages</string>
+    <string name="settings_clear_session_cache_dialog_title">Clear session cache?</string>
+    <string name="settings_clear_session_cache_dialog_message">Removes cached sessions and messages. Your connection and credentials stay.</string>
+    <string name="settings_clear">Clear</string>
+    <string name="settings_app_lock_title">App Lock</string>
+    <string name="settings_app_lock_subtitle_available">Require your face, fingerprint or device passcode when the app returns from the background</string>
+    <string name="settings_app_lock_subtitle_unavailable">Set a device passcode to use App Lock</string>
+    <string name="settings_privacy_policy_title">Privacy Policy</string>
+    <string name="settings_privacy_policy_subtitle">How the apps handle data</string>
+    <string name="settings_analytics_title">Analytics &amp; crash reports</string>
+    <string name="settings_analytics_subtitle">Allow optional product usage events and crash reports. Off sends nothing to Firebase.</string>
+    <string name="settings_analytics_label">Product Analytics</string>
+    <string name="settings_diagnostic_logs_subtitle">Share a redacted rolling runtime log window</string>
+    <string name="settings_clear_all_data_title">Clear All Data</string>
+    <string name="settings_clear_all_data_subtitle">Remove connection and cache</string>
+    <string name="settings_clear_all_data_dialog_title">Clear all data?</string>
+    <string name="settings_clear_all_data_dialog_message">This cannot be undone.</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_build">Build</string>
+    <string name="settings_source_code_title">Source Code</string>
+    <string name="settings_source_code_subtitle">GPL-3.0 on GitHub</string>
+    <string name="diagnostics_title">Diagnostic Logs</string>
+    <string name="diagnostics_loading">Loading diagnostic logs</string>
+    <string name="diagnostics_entries_title">Entries</string>
+    <plurals name="diagnostics_entries_count">
+        <item quantity="one">%1$d redacted line in the kept window</item>
+        <item quantity="other">%1$d redacted lines in the kept window</item>
+    </plurals>
+    <string name="diagnostics_entries_empty">No entries in the kept window yet</string>
+    <string name="diagnostics_kept_title">Kept</string>
+    <plurals name="diagnostics_last_minutes">
+        <item quantity="one">Last %1$d minute</item>
+        <item quantity="other">Last %1$d minutes</item>
+    </plurals>
+    <string name="diagnostics_export_title">Export</string>
+    <string name="diagnostics_soft_cap_title">Soft cap</string>
+    <string name="diagnostics_soft_cap_dropped">%1$d max · %2$d dropped oldest</string>
+    <plurals name="diagnostics_soft_cap_none_dropped">
+        <item quantity="one">%1$d max · none dropped</item>
+        <item quantity="other">%1$d max · none dropped</item>
+    </plurals>
+    <string name="diagnostics_format_title">Format</string>
+    <string name="diagnostics_format_value">JSONL · secrets and message bodies redacted</string>
+    <string name="diagnostics_range_title">Range</string>
+    <string name="diagnostics_range_value">%1$s → %2$s</string>
+    <string name="diagnostics_areas_title">Areas</string>
+    <string name="diagnostics_clear">Clear</string>
+    <string name="diagnostics_share">Share</string>
+    <string name="diagnostics_export_window_title">Export window</string>
+    <string name="diagnostics_export_sheet_title">Export diagnostic logs</string>
+    <string name="diagnostics_share_via_apps">Share via apps</string>
+    <string name="diagnostics_save_to_files">Save to files</string>
+    <string name="diagnostics_clear_dialog_title">Clear diagnostic logs?</string>
+    <string name="diagnostics_clear_dialog_message">This removes the stored diagnostic log.</string>
+    <string name="diagnostics_error_share">Couldn\'t prepare diagnostic log for sharing.</string>
+    <string name="diagnostics_error_save">Couldn\'t save diagnostic log.</string>
+    <string name="diagnostics_saved">Saved diagnostic log.</string>
+    <string name="appearance_title">Appearance</string>
+    <string name="appearance_theme_title">Theme</string>
+    <string name="appearance_theme_subtitle">%1$s · %2$s</string>
+    <string name="appearance_code_highlight_title">Code highlight</string>
+    <string name="appearance_theme_blurb_porcelain">Near-white / near-black</string>
+    <string name="appearance_theme_blurb_linen">Warm paper / espresso</string>
+    <string name="appearance_theme_blurb_signal">True white / true black</string>
+    <string name="appearance_theme_blurb_hotline">Neutral chrome, loud pink</string>
+    <string name="appearance_theme_blurb_phosphor">Neutral chrome, CRT green</string>
+    <string name="appearance_preview_light">Light</string>
+    <string name="appearance_preview_dark">Dark</string>
+    <string name="appearance_preview_sample_message">Walk the token store.</string>
+    <string name="appearance_preview_sample_reply">Refreshing once, then retry.</string>
+    <string name="feature_flags_title">Feature Flags</string>
+    <string name="feature_flags_clear_overrides">Clear overrides</string>
+    <string name="feature_flags_more_options">More options</string>
+    <string name="feature_flags_intro">Switching a flag sets a device override that wins over the remote value. Remote values are fetched on launch and applied at the next launch.</string>
+    <string name="feature_flags_section_flags">Flags</string>
+    <string name="feedback_title_report">Report a problem</string>
+    <string name="feedback_title_hide_parts">Hide parts</string>
+    <string name="feedback_title_log_preview">Diagnostic log</string>
+    <string name="feedback_title_listening">Listening</string>
+    <string name="feedback_kind_bug">Bug</string>
+    <string name="feedback_kind_idea">Idea</string>
+    <string name="feedback_placeholder_bug">What happened? What did you expect?</string>
+    <string name="feedback_placeholder_idea">What would make OpenCode better for you?</string>
+    <string name="feedback_privacy_note">Goes to the OpenCode Mobile team only. Never includes your server address, username or password. Logs are redacted on this phone.</string>
+    <string name="feedback_error_offline">You\'re offline. Your report is kept here — try again when you\'re connected.</string>
+    <plurals name="feedback_error_rate_limited">
+        <item quantity="one">You just sent a report. Try again in %1$d s.</item>
+        <item quantity="other">You just sent a report. Try again in %1$d s.</item>
+    </plurals>
+    <string name="feedback_error_unverified">Couldn\'t verify this copy of the app. Reports can only be sent from an App Store, TestFlight or Play install.</string>
+    <string name="feedback_error_failed">Couldn\'t send the report.</string>
+    <string name="feedback_action_try_again">Try Again</string>
+    <string name="feedback_action_share_instead">Share Instead</string>
+    <string name="feedback_undo">Undo</string>
+    <string name="feedback_done">Done</string>
+    <string name="feedback_add_attachment">Add attachment</string>
+    <string name="feedback_dictate">Dictate</string>
+    <string name="feedback_send">Send report</string>
+    <string name="feedback_sending">Sending report</string>
+    <string name="feedback_attachment_screenshot">Screenshot</string>
+    <plurals name="feedback_attachment_screenshot_hidden">
+        <item quantity="one">Screenshot · %1$d hidden</item>
+        <item quantity="other">Screenshot · %1$d hidden</item>
+    </plurals>
+    <plurals name="feedback_attachment_hidden_count">
+        <item quantity="one">%1$d hidden</item>
+        <item quantity="other">%1$d hidden</item>
+    </plurals>
+    <string name="feedback_attachment_tap_to_hide">Tap to hide parts</string>
+    <string name="feedback_attachment_tap_to_preview">Tap to preview</string>
+    <string name="feedback_attachment_logs">Logs</string>
+    <plurals name="feedback_attachment_logs_minutes">
+        <item quantity="one">Logs · %1$d min</item>
+        <item quantity="other">Logs · %1$d min</item>
+    </plurals>
+    <plurals name="feedback_log_window_minutes">
+        <item quantity="one">%1$d min</item>
+        <item quantity="other">%1$d min</item>
+    </plurals>
+    <string name="feedback_hide_parts_instructions">Tap an area to cover it.</string>
+    <plurals name="feedback_hide_parts_image_hidden">
+        <item quantity="one">Screenshot, %1$d area hidden</item>
+        <item quantity="other">Screenshot, %1$d areas hidden</item>
+    </plurals>
+    <plurals name="feedback_log_preview_summary">
+        <item quantity="one">Last %1$d minute · gzipped on upload. Redacted on this phone.</item>
+        <item quantity="other">Last %1$d minutes · gzipped on upload. Redacted on this phone.</item>
+    </plurals>
+    <string name="feedback_log_preview_loading">Loading…</string>
+    <string name="feedback_log_preview_empty_title">No log lines</string>
+    <plurals name="feedback_log_preview_empty_message">
+        <item quantity="one">Nothing was logged in the last %1$d minute.</item>
+        <item quantity="other">Nothing was logged in the last %1$d minutes.</item>
+    </plurals>
+    <string name="feedback_sent_title">Thanks — report sent</string>
+    <string name="feedback_sent_bug">The team will look into it.</string>
+    <string name="feedback_sent_idea">Thanks for the idea.</string>
+    <string name="feedback_sent_reference">Ref %1$s</string>
+    <string name="feedback_share_chooser_title">Share report</string>
+    <string name="feedback_dictation_microphone_off">Microphone access is off</string>
+    <string name="feedback_dictation_listening">Listening · %1$s</string>
+    <string name="feedback_dictation_listening_on_device">Listening · %1$s · on-device</string>
+    <string name="keyboard_shortcuts_group_session">Session</string>
+    <string name="keyboard_shortcuts_group_prompt">Prompt</string>
+    <string name="keyboard_shortcuts_group_go">Go</string>
+    <string name="keyboard_shortcuts_new_session">New Session</string>
+    <string name="keyboard_shortcuts_command_palette">Command Palette</string>
+    <string name="keyboard_shortcuts_choose_model">Choose Model</string>
+    <string name="keyboard_shortcuts_settings">Settings</string>
+    <string name="keyboard_shortcuts_project">Project %1$d</string>
+    <string name="keyboard_shortcuts_show_project">Show %1$s</string>
+    <string name="keyboard_shortcuts_allow_once">Allow Once</string>
+    <string name="keyboard_shortcuts_always_allow">Always Allow</string>
+    <string name="keyboard_shortcuts_deny">Deny</string>
+    <string name="keyboard_shortcuts_next_question">Next Question</string>
+    <string name="keyboard_shortcuts_submit_answers">Submit Answers</string>
+    <string name="keyboard_shortcuts_dismiss_question">Dismiss Question</string>
+    <string name="keyboard_shortcuts_toggle_sidebar">Toggle Sidebar</string>
+    <string name="keyboard_shortcuts_next_session">Next Session</string>
+    <string name="keyboard_shortcuts_previous_session">Previous Session</string>
+    <string name="keyboard_shortcuts_focus_composer">Focus Composer</string>
+    <!-- Changes -->
+    <string name="changes_title">Changes</string>
+    <string name="changes_source_menu_label">Choose change source</string>
+    <!-- Accessibility label of the selected change source. %1$s is the source name. -->
+    <string name="changes_source_menu_selected">%1$s, selected</string>
+    <string name="changes_source_working_tree_name">Git changes</string>
+    <string name="changes_source_working_tree_empty_title">No Git changes</string>
+    <string name="changes_source_working_tree_empty_message">The working tree has no uncommitted changes.</string>
+    <string name="changes_source_last_turn_name">Last turn changes</string>
+    <!-- Shown under an empty source when the other source has changed files. -->
+    <plurals name="changes_other_source_working_tree">
+        <item quantity="one">Git changes has %1$d changed file.</item>
+        <item quantity="other">Git changes has %1$d changed files.</item>
+    </plurals>
+    <plurals name="changes_other_source_last_turn">
+        <item quantity="one">The last turn changed %1$d file.</item>
+        <item quantity="other">The last turn changed %1$d files.</item>
+    </plurals>
+    <!-- Button that switches to the other source. %1$s is the source name. -->
+    <string name="changes_other_source_show">Show %1$s</string>
+    <!-- %1$s says the selected source is empty, %2$s points to the other source. -->
+    <string name="changes_empty_detail_with_hint">%1$s %2$s</string>
+    <string name="changes_source_last_turn_empty_title">No changes</string>
+    <string name="changes_source_last_turn_empty_message">The latest completed turn did not change any files.</string>
+    <string name="changes_loading_title">Loading changes</string>
+    <string name="changes_loading_message">Fetching the diff…</string>
+    <string name="changes_no_turn_title">No completed turn</string>
+    <string name="changes_no_turn_message">Send a prompt and wait for it to complete, then try again.</string>
+    <string name="changes_error_title">Unable to load changes</string>
+    <string name="changes_error_fallback">The changes didn\'t load.</string>
+    <!-- Shown when a failed request has no message of its own. -->
+    <string name="changes_error_request_failed">Request failed</string>
+    <string name="changes_error_turn_moved_folders">This turn moved folders, so its changes can\'t be shown together.</string>
+    <!-- %1$s is the error message, often from the server. -->
+    <string name="changes_refresh_failed">Refresh failed: %1$s</string>
+    <string name="changes_filter_hint">Filter</string>
+    <string name="changes_filter_accessibility_label">Filter changed files</string>
+    <string name="changes_no_matches_title">No matching files</string>
+    <string name="changes_no_matches_message">Try another path or clear the filter.</string>
+    <string name="changes_no_matches_clear_filter">Clear filter</string>
+    <string name="changes_select_file_title">Select a file</string>
+    <string name="changes_select_file_message">Choose a changed file to see the diff.</string>
+    <string name="changes_preview_unavailable_title">Preview unavailable</string>
+    <string name="changes_preview_unavailable_message">A text preview is unavailable for this file.</string>
+    <plurals name="changes_summary_changed_files">
+        <item quantity="one">%1$d changed file</item>
+        <item quantity="other">%1$d changed files</item>
+    </plurals>
+    <plurals name="changes_count_additions">
+        <item quantity="one">%1$d addition</item>
+        <item quantity="other">%1$d additions</item>
+    </plurals>
+    <plurals name="changes_count_deletions">
+        <item quantity="one">%1$d deletion</item>
+        <item quantity="other">%1$d deletions</item>
+    </plurals>
+    <string name="changes_file_status_added">Added</string>
+    <string name="changes_file_status_deleted">Deleted</string>
+    <string name="changes_file_status_modified">Modified</string>
+    <!-- Accessibility label of the change summary. %1$s changed files, %2$s additions, %3$s deletions, each with its count. -->
+    <string name="changes_accessibility_summary">%1$s, %2$s, %3$s</string>
+    <!-- Accessibility label of a changed file. %1$s path, %2$s status (Added, Deleted, Modified), %3$d position, %4$d file count, %5$s additions, %6$s deletions. -->
+    <string name="changes_accessibility_file">%1$s, %2$s, file %3$d of %4$d, %5$s, %6$s</string>
+    <string name="component_unified_diff_summary_added">Added file %1$s, %2$d additions, %3$d deletions</string>
+    <string name="component_activity_status_running">running</string>
+    <!-- Accessibility: read after a filter tab that has something new since it was last viewed. -->
+    <string name="component_filter_tabs_unseen">new</string>
+    <string name="component_composer_reverting_title">Reverting this message</string>
+    <!-- Title of a session that has none yet. -->
+    <string name="session_new_title">New Session</string>
+    <string name="session_list_dock_add_project">Add project</string>
+    <string name="theme_error_preset_not_found">Theme preset not found</string>
+    <string name="component_composer_submit">Submit</string>
+    <string name="component_composer_select_all_that_apply">Select all that apply</string>
+    <string name="component_unified_diff_summary_modified">Modified file %1$s, %2$d additions, %3$d deletions</string>
+    <string name="component_hunk_navigation_collapse_context">Collapse context</string>
+    <!-- %1$s is the project letter, %2$s the subtitle. -->
+    <string name="component_top_bar_project_subtitle">Project %1$s %2$s</string>
+    <string name="component_composer_dismiss">Dismiss</string>
+    <string name="dictation_model_downloading_detail">This is a system download. It keeps going if you close this card.</string>
+    <string name="session_list_scope_load_loading">Loading sessions…</string>
+    <string name="dictation_insert">Insert</string>
+    <string name="dictation_action_check_again">Check Again</string>
+    <string name="component_activity_sheet_steps">Steps</string>
+    <string name="component_list_item_show_actions">Show actions</string>
+    <!-- %1$s is Listening or Ready to insert, %2$s the language. -->
+    <string name="dictation_status_line">%1$s · %2$s</string>
+    <string name="component_attachment_kind_image">Image</string>
+    <string name="component_composer_hide_question">Hide question</string>
+    <string name="live_updates_status_connecting">connecting</string>
+    <!-- %1$s is the system (Android or iOS). -->
+    <string name="dictation_model_queued_detail">%1$s queued the download. It may wait for Wi-Fi, charging, or free storage. Check again in a few minutes.</string>
+    <!-- %1$s is the system (Android or iOS). -->
+    <string name="dictation_model_not_installed_detail">Dictation runs on this device, so your voice is never uploaded. %1$s downloads the model once and keeps it for every app.</string>
+    <string name="component_outgoing_message_shows_actions_hint">Shows message actions</string>
+    <string name="component_activity_status_stopped">stopped</string>
+    <string name="dictation_action_try_again">Try Again</string>
+    <!-- %1$s is the model name, %2$s the effort variant. -->
+    <string name="component_composer_model_effort">Model %1$s, effort %2$s</string>
+    <string name="component_activity_card_working">Working</string>
+    <!-- %1$s describes the activity row. -->
+    <string name="component_activity_card_opens_activity">%1$s, opens activity</string>
+    <!-- %1$s describes the image. -->
+    <string name="component_image_loading_label">%1$s, loading</string>
+    <string name="session_list_dock_new_session">New session</string>
+    <!-- %1$s lists the patterns Always would save. -->
+    <string name="component_composer_always_allows">Always allows: %1$s</string>
+    <string name="component_composer_leave_side_question_mode">Leave side question mode</string>
+    <string name="session_list_worktree_empty_other_projects">Clear the filter to see sessions on other projects.</string>
+    <string name="component_attachment_uploading">Uploading…</string>
+    <string name="component_composer_deny">Deny</string>
+    <string name="dictation_stopped">Dictation stopped</string>
+    <string name="component_composer_question_position">%1$d of %2$d</string>
+    <string name="session_list_status_ready">Ready</string>
+    <string name="session_list_dock_hint_swipe">Opens the project filter. Swipe to switch projects.</string>
+    <string name="component_composer_select_one">Select one</string>
+    <string name="component_session_list_skeleton_row">Loading session</string>
+    <string name="component_split_pane_resize_sidebar">Resize sidebar</string>
+    <string name="session_list_section_recent">Recent</string>
+    <!-- Hint beside the Recent section of the session list. -->
+    <string name="session_list_section_recent_hint">Needs a glance</string>
+    <string name="component_activity_status_completed">completed</string>
+    <string name="share_diagnostics_chooser_title">Share diagnostic logs</string>
+    <!-- %1$s is the system (Android or iOS), %2$s the speech model. -->
+    <string name="dictation_model_queued_title">%1$s will download the %2$s later</string>
+    <string name="session_list_dock_choose_project_or_worktree">Choose project or worktree</string>
+    <!-- %1$s is the worktree name. -->
+    <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
+    <!-- %1$s describes the image. -->
+    <string name="component_image_could_not_load_label">%1$s, could not load</string>
+    <string name="component_composer_question">Question</string>
+    <!-- Accessibility label of the worktree mark. -->
+    <string name="component_worktree">Worktree</string>
+    <string name="session_list_worktree_empty_other_worktrees">Clear the filter to see sessions on other worktrees.</string>
+    <string name="component_composer_side_question_mode">Side question mode</string>
+    <string name="component_page_indicator_label">Page %1$d of %2$d</string>
+    <string name="component_composer_next">Next</string>
+    <!-- %1$s is the image file name. -->
+    <string name="component_message_image_label">Image %1$s</string>
+    <string name="component_composer_leave_shell_mode">Leave shell mode</string>
+    <string name="dictation_action_downloading">Downloading…</string>
+    <string name="component_image_viewer_share">Share</string>
+    <string name="session_list_status_failed">Failed</string>
+    <string name="component_composer_custom_answer_title">Type your own answer</string>
+    <string name="component_composer_always">Always</string>
+    <string name="component_composer_send_side_question">Ask side question</string>
+    <string name="component_composer_select_exactly">Select %1$d</string>
+    <string name="dictation_action_open_settings">Open Settings</string>
+    <string name="component_composer_open_commands">Open commands</string>
+    <string name="component_thinking_ellipsis">Thinking…</string>
+    <!-- Short relative time, days. -->
+    <plurals name="relative_time_days_ago">
+        <item quantity="one">%1$dd ago</item>
+        <item quantity="other">%1$dd ago</item>
+    </plurals>
+    <!-- %1$s is the URL scheme, such as https://. -->
+    <string name="component_server_address_scheme_button_description">Scheme %1$s. Opens scheme picker</string>
+    <string name="share_diagnostics_subject">OpenCode diagnostic logs</string>
+    <string name="component_reorderable_list_move_up">Move up</string>
+    <!-- %1$s is the project name. -->
+    <string name="session_list_scope_load_failed_title">Couldn\'t load %1$s</string>
+    <string name="dictation_status_listening">Listening</string>
+    <string name="dictation_downloading_model">Downloading speech model</string>
+    <string name="session_list_worktree_empty_every_worktree">Clear the filter to see every worktree.</string>
+    <string name="component_overflow_menu_more_options">More options</string>
+    <!-- %1$d is the retry attempt number. -->
+    <string name="session_list_status_retrying_attempt">Retrying · %1$d</string>
+    <string name="live_updates_status_offline">offline</string>
+    <string name="component_attachment_kind_text">Text</string>
+    <string name="component_composer_next_question">Next question</string>
+    <string name="component_split_pane_show_sidebar">Show sidebar</string>
+    <string name="component_composer_placeholder">Ask anything...</string>
+    <string name="component_server_address_host">Host</string>
+    <!-- Short relative time, hours. -->
+    <plurals name="relative_time_hours_ago">
+        <item quantity="one">%1$dh ago</item>
+        <item quantity="other">%1$dh ago</item>
+    </plurals>
+    <plurals name="component_activity_card_step_count">
+        <item quantity="one">%1$d step</item>
+        <item quantity="other">%1$d steps</item>
+    </plurals>
+    <string name="theme_error_apply_failed">Failed to apply theme preset</string>
+    <string name="component_unified_diff_summary_deleted">Deleted file %1$s, %2$d additions, %3$d deletions</string>
+    <string name="session_list_status_running">Running</string>
+    <!-- %1$s is the number of earlier steps, such as 3 earlier steps. -->
+    <string name="component_step_rail_expands">%1$s, expands</string>
+    <string name="session_list_status_done">Done</string>
+    <!-- Components and shared text (#886). -->
+    <string name="session_list_status_idle">Idle</string>
+    <string name="component_attachment_kind_file">File</string>
+    <string name="component_composer_run_shell_command">Run shell command</string>
+    <string name="component_image_could_not_load">Couldn\'t load</string>
+    <string name="component_outgoing_message_show_actions">Show message actions</string>
+    <!-- %1$s is the live updates status, such as live or offline. -->
+    <string name="live_updates_accessibility_label">Live updates %1$s</string>
+    <string name="component_composer_previous_question">Previous question</string>
+    <string name="component_activity_card_agent">Agent</string>
+    <string name="session_list_section_today">Today</string>
+    <string name="component_composer_child_lockout">Child sessions cannot be prompted.</string>
+    <!-- %1$d is the upload percentage. -->
+    <string name="component_attachment_uploading_percent">Uploading %1$d%%</string>
+    <string name="component_composer_custom_answer_hint">Enter a custom answer</string>
+    <string name="component_composer_cancel_revert">Cancel revert</string>
+    <string name="session_list_scope_load_slow_caption">Still loading — large projects can take a moment</string>
+    <string name="component_outgoing_message_label_with_actions">Outgoing message. Shows message actions</string>
+    <string name="session_list_scope_load_failed_subtitle">Couldn\'t load sessions</string>
+    <plurals name="component_activity_card_more_running">
+        <item quantity="one">%1$d more running</item>
+        <item quantity="other">%1$d more running</item>
+    </plurals>
+    <!-- Shown for two or more agents. -->
+    <plurals name="component_activity_card_agent_count">
+        <item quantity="one">%1$d agents</item>
+        <item quantity="other">%1$d agents</item>
+    </plurals>
+    <string name="theme_error_syntax_preset_not_found">Syntax highlight preset not found</string>
+    <string name="session_list_scope_load_slow">Still loading…</string>
+    <string name="session_list_dock_hint">Opens the project filter.</string>
+    <string name="component_hunk_navigation_next">Next hunk</string>
+    <string name="session_list_scope_load_failed_message">The server didn\'t return this project\'s sessions.</string>
+    <!-- %1$s is the drop overlay title, %2$s its subtitle. -->
+    <string name="component_drop_overlay_accessibility_label">%1$s. %2$s</string>
+    <string name="component_image_view_full_screen">View full screen</string>
+    <string name="component_activity_sheet_back">Back to activity</string>
+    <!-- %1$s is the file name. -->
+    <string name="component_file_tabs_close">Close %1$s</string>
+    <string name="dictation_action_download">Download</string>
+    <string name="component_attachment_kind_pdf">PDF</string>
+    <string name="session_list_dock_next_project">Next project</string>
+    <string name="component_composer_allow_once">Allow once</string>
+    <string name="session_list_worktree_empty_title">No sessions in this worktree</string>
+    <string name="component_activity_card_opens_activity_hint">Opens activity</string>
+    <string name="dictation_speech_model">speech model</string>
+    <string name="session_list_dock_previous_project">Previous project</string>
+    <!-- Short relative time, minutes. -->
+    <plurals name="relative_time_minutes_ago">
+        <item quantity="one">%1$dm ago</item>
+        <item quantity="other">%1$dm ago</item>
+    </plurals>
+    <string name="component_composer_request_position">%1$d of %2$d</string>
+    <string name="component_composer_side_question_placeholder">Side question, not added to chat</string>
+    <string name="session_list_worktree_empty_every_project">Clear the filter to see every project.</string>
+    <!-- %1$s is the image file name. -->
+    <string name="component_image_viewer_could_not_load_named">Couldn\'t load %1$s</string>
+    <string name="component_composer_select_up_to">Select up to %1$d</string>
+    <string name="live_updates_status_live">live</string>
+    <string name="component_image_viewer_could_not_load_this">Couldn\'t load this image</string>
+    <string name="session_list_worktree_empty_action">Clear filter</string>
+    <string name="dictation_model_download_failed_detail">Check the connection and free storage on this device, then try again.</string>
+    <string name="component_composer_send_queue">Send as Queue</string>
+    <string name="session_list_dock_new_session_hint">Use Choose project or worktree to start somewhere else.</string>
+    <string name="session_list_section_yesterday">Yesterday</string>
+    <!-- %1$d is the line number, %2$s the line's code. -->
+    <string name="component_code_file_line_label">Line %1$d, %2$s</string>
+    <string name="share_feedback_subject_idea">OpenCode Mobile idea report</string>
+    <string name="component_hunk_navigation_previous">Previous hunk</string>
+    <!-- %1$s and %2$s are the first and last day of the week, such as Mar 3. -->
+    <string name="session_list_section_week_of">Week of %1$s – %2$s</string>
+    <!-- Spoken after the project name in the dock. -->
+    <plurals name="session_list_dock_session_count">
+        <item quantity="one">%1$d sessions</item>
+        <item quantity="other">%1$d sessions</item>
+    </plurals>
+    <!-- %1$s is the system (Android or iOS), %2$s the speech model. -->
+    <string name="dictation_model_download_failed_title">%1$s couldn\'t download the %2$s</string>
+    <string name="component_activity_status_pending">pending</string>
+    <!-- Tag on the pending revert chip; shown in capitals. -->
+    <string name="component_composer_revert_tag">Revert</string>
+    <!-- %1$s is the model name. -->
+    <string name="component_composer_model">Model %1$s</string>
+    <plurals name="component_step_rail_earlier_steps">
+        <item quantity="one">%1$d earlier step</item>
+        <item quantity="other">%1$d earlier steps</item>
+    </plurals>
+    <string name="component_outgoing_message_long_press_hint">Long press to show message actions</string>
+    <string name="component_composer_hide_permission">Hide permission request</string>
+    <!-- %1$s is the download progress, such as 40%. -->
+    <string name="dictation_downloading_model_progress">Downloading speech model, %1$s</string>
+    <string name="component_branch_pill_copy_branch_name">Copy branch name</string>
+    <string name="component_outgoing_message_label">Outgoing message</string>
+    <string name="session_list_status_stopped">Stopped</string>
+    <!-- %1$s is the file name. -->
+    <string name="component_attachment_cancel_upload">Cancel upload of %1$s</string>
+    <string name="dictation_cancel_description">Cancel dictation</string>
+    <string name="component_composer_shell_mode">Shell mode</string>
+    <string name="component_skeleton_illustration_connect">Connect</string>
+    <string name="component_composer_not_selected">Not selected</string>
+    <string name="component_composer_shell_mode_description">Shell mode. Leave shell mode</string>
+    <!-- %1$s is the base branch name. -->
+    <string name="component_branch_pill_based_on">Based on %1$s</string>
+    <string name="component_composer_add_attachment">Add attachment</string>
+    <string name="dictation_microphone_off">Microphone access is off</string>
+    <string name="component_composer_shell">Shell</string>
+    <string name="live_updates_status_auth_failed">Authentication failed</string>
+    <string name="component_branch_pill_view_all_changes">View all changes</string>
+    <string name="component_composer_send">Send</string>
+    <!-- %1$s is Loading sessions, %2$s the slow-loading caption. -->
+    <string name="component_session_list_skeleton_slow_label">%1$s. %2$s</string>
+    <string name="component_close">Close</string>
+    <string name="relative_time_now">now</string>
+    <string name="component_composer_previous_permission">Previous permission request</string>
+    <string name="component_composer_dictate">Dictate</string>
+    <string name="component_composer_side_question_mode_description">Side question mode. Leave side question mode</string>
+    <string name="component_composer_abort">Abort active work</string>
+    <!-- %1$s is the URL scheme, such as https://. -->
+    <string name="component_server_address_scheme_button">Scheme %1$s</string>
+    <string name="component_composer_open_subagent_session">Open subagent session</string>
+    <string name="component_composer_question_step">Step %1$d of %2$d</string>
+    <string name="share_feedback_subject_bug">OpenCode Mobile bug report</string>
+    <string name="component_activity_card_opens_child_session_hint">Opens the child session</string>
+    <string name="component_activity_status_failed">failed</string>
+    <!-- %1$s is the system (Android or iOS), %2$s the speech model. -->
+    <string name="dictation_model_not_installed_title">%1$s needs its %2$s</string>
+    <string name="component_composer_back_to_main_session">Back to main session</string>
+    <!-- %1$d is the number of steps so far. -->
+    <string name="component_activity_sheet_working_count">Working %1$d</string>
+    <string name="session_list_status_retrying">Retrying</string>
+    <!-- %1$s is the file name. -->
+    <string name="component_attachment_remove">Remove %1$s</string>
+    <string name="component_composer_send_steer">Send as Steer</string>
+    <string name="component_composer_next_permission">Next permission request</string>
+    <string name="session_list_dock_project_filter">Project filter</string>
+    <string name="component_split_pane_resize_hint">Double-tap to hide the sidebar</string>
+    <string name="component_branch_pill_shows_details_hint">Shows branch details</string>
+    <string name="component_composer_permission_requested">Permission requested</string>
+    <string name="component_thinking">Thinking</string>
+    <!-- %1$s is the system (Android or iOS), %2$s the speech model. -->
+    <string name="dictation_model_downloading_title">%1$s is downloading the %2$s</string>
+    <string name="component_hunk_navigation_expand_context">Expand context</string>
+    <string name="dictation_listening_placeholder">Listening…</string>
+    <!-- Badge in an illustration; shown in capitals. -->
+    <string name="component_skeleton_illustration_unofficial">Unofficial</string>
+    <string name="dictation_status_ready">Ready to insert</string>
+    <string name="dictation_starting">Starting…</string>
+    <!-- %1$s is the dictation language, such as English. -->
+    <string name="dictation_language_speech_model">%1$s speech model</string>
+    <string name="component_reorderable_list_move_down">Move down</string>
+    <plurals name="component_section_header_item_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <string name="component_server_address_scheme">Scheme</string>
+    <string name="component_server_address_scheme_picker_hint">Opens scheme picker</string>
+    <string name="component_split_pane_hide_sidebar">Hide sidebar</string>
+    <string name="component_composer_select_range">Select %1$d to %2$d</string>
+    <string name="component_image_viewer_position">%1$d of %2$d</string>
+    <!-- %1$s is Listening or Ready to insert, %2$s the language. -->
+    <string name="dictation_status_line_on_device">%1$s · %2$s · on-device</string>
+    <string name="component_composer_select_at_least">Select at least %1$d</string>
+    <string name="dictation_insert_description">Insert transcript</string>
 </resources>

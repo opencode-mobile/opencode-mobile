@@ -40,6 +40,24 @@ struct SessionContextViewModelTests {
         #expect(viewModel.refreshErrorMessage == "Refresh failed")
     }
 
+    @Test func statLabelsAreCatalogKeysAndValuesStayVerbatim() async {
+        let repository = FakeSessionContextRepository(results: [.success(Self.snapshot(title: "Loaded"))])
+        let viewModel = SessionContextViewModel(sessionID: "ses-1", worktree: "/repo", repository: repository)
+
+        await viewModel.load()
+
+        guard case let .loaded(display) = viewModel.state else {
+            Issue.record("Expected loaded state")
+            return
+        }
+        let session = display.stats.first { $0.id == "session" }
+        let sessionKey: OpenCodeText = "session_context.stat.session"
+        #expect(session?.label == sessionKey)
+        #expect(session?.label.resolved == "Session")
+        #expect(session?.value == "Loaded")
+        #expect(display.stats.first { $0.id == "cache" }?.label.resolved == "Cache Tokens (read/write)")
+    }
+
     private static func snapshot(title: String) -> SessionContextSnapshot {
         SessionContextSnapshot(
             sessionID: "ses-1",

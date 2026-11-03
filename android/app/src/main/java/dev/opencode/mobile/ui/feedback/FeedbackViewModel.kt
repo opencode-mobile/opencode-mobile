@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.feedback
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogExportWindow
 import dev.opencode.mobile.domain.feedback.FeedbackAttachment
 import dev.opencode.mobile.domain.feedback.FeedbackAttachmentRenderer
@@ -18,6 +19,7 @@ import dev.opencode.mobile.domain.feedback.FeedbackSubmitResult
 import dev.opencode.mobile.domain.feedback.FeedbackSubmitter
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationPhase
 import dev.opencode.mobile.ui.sessionchat.ComposerDictationUiState
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -72,12 +74,14 @@ data class FeedbackUiState(
     /** A share sheet the screen should open once, then [FeedbackViewModel.consumeShare]. */
     val pendingShare: FeedbackSharePayload? = null,
 ) {
-    val placeholder: String
+    val placeholder: UiText
         get() =
-            when (kind) {
-                FeedbackKind.Bug -> "What happened? What did you expect?"
-                FeedbackKind.Feedback -> "What would make OpenCode better for you?"
-            }
+            UiText.resource(
+                when (kind) {
+                    FeedbackKind.Bug -> R.string.feedback_placeholder_bug
+                    FeedbackKind.Feedback -> R.string.feedback_placeholder_idea
+                },
+            )
 
     val canSend: Boolean
         get() = message.isNotBlank() && status != FeedbackSendStatus.Sending && dictation == null
@@ -86,14 +90,16 @@ data class FeedbackUiState(
     val addScreenshotPicksPhoto: Boolean get() = capturedScreenshot == null
 
     /** Sheet title. Listening replaces the report title while the orb is up. */
-    val sheetTitle: String
+    val sheetTitle: UiText
         get() =
-            when {
-                page == FeedbackPage.HideParts -> "Hide parts"
-                page == FeedbackPage.LogPreview -> "Diagnostic log"
-                showsListeningTitle -> "Listening"
-                else -> "Report a problem"
-            }
+            UiText.resource(
+                when {
+                    page == FeedbackPage.HideParts -> R.string.feedback_title_hide_parts
+                    page == FeedbackPage.LogPreview -> R.string.feedback_title_log_preview
+                    showsListeningTitle -> R.string.feedback_title_listening
+                    else -> R.string.feedback_title_report
+                },
+            )
 
     /** The dictation card replaces the compose form, so the sheet is one surface. */
     val dictationTakesOverCompose: Boolean

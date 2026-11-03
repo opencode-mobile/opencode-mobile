@@ -54,7 +54,8 @@ Triple fall back to another composition on banners, with a note.
 and `app-store-header-strip` are the App Store product page header at half
 size, so the 2× render is 5244×2950 and 3840×1646. Keep phone and copy inside
 the middle 60% × 70% (iPhone and iPad crop the header differently; `text.x` and
-device `x` move them there), and drop the alpha channel before upload:
+device `x` move them there). `app-store-search-results` is the App Store
+search results asset, 3840×2560 at 2×. Drop the alpha channel before upload:
 `magick in.png -alpha off out.png`.
 
 Colors come only from `shared/theme-presets/porcelain.json`; fonts are the

@@ -63,6 +63,8 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -75,6 +77,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.badgeColors
 import dev.opencode.mobile.theme.openCodeColor
@@ -88,8 +91,6 @@ import kotlin.math.roundToInt
 
 private val NewSessionButtonShape = RoundedCornerShape(percent = 50)
 
-/** New session's hold action: one gesture for the project choice and Run in. */
-const val CHOOSE_PROJECT_OR_WORKTREE_LABEL = "Choose project or worktree"
 private val ScopeControlShape = RoundedCornerShape(20.dp)
 private const val DockControlFillAlpha = 0.05f
 
@@ -152,7 +153,7 @@ fun OpenCodeSessionListDock(
                 ) {
                     Icon(
                         imageVector = OpenCodeIcons.CreateNewFolder,
-                        contentDescription = "Add project",
+                        contentDescription = stringResource(R.string.session_list_dock_add_project),
                         tint = iconStrong,
                         modifier = Modifier.size(22.dp),
                     )
@@ -160,7 +161,13 @@ fun OpenCodeSessionListDock(
                 DockCta(
                     onClick = onNewSession,
                     onLongClick = onNewSessionLongPress,
-                    onLongClickLabel = if (onNewSessionLongPress != null) CHOOSE_PROJECT_OR_WORKTREE_LABEL else null,
+                    // New session's hold action: one gesture for the project choice and Run in.
+                    onLongClickLabel =
+                        if (onNewSessionLongPress != null) {
+                            stringResource(R.string.session_list_dock_choose_project_or_worktree)
+                        } else {
+                            null
+                        },
                     fill = controlFill,
                     shape = NewSessionButtonShape,
                     modifier =
@@ -169,7 +176,7 @@ fun OpenCodeSessionListDock(
                             .height(52.dp),
                 ) {
                     Text(
-                        text = "New session",
+                        text = stringResource(R.string.session_list_dock_new_session),
                         color = textStrong,
                         style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
                     )
@@ -197,6 +204,8 @@ fun SessionListScopeControl(
             ?: tabs.firstOrNull()
             ?: return
     val description = scopeControlDescription(visibleTab)
+    val previousProjectLabel = stringResource(R.string.session_list_dock_previous_project)
+    val nextProjectLabel = stringResource(R.string.session_list_dock_next_project)
     val settleOffset = remember { Animatable(0f) }
     val outgoingOffset = remember { Animatable(0f) }
     val incomingOffset = remember { Animatable(0f) }
@@ -443,14 +452,14 @@ fun SessionListScopeControl(
                     val actions = mutableListOf<CustomAccessibilityAction>()
                     if (canGoPrevious) {
                         actions +=
-                            CustomAccessibilityAction("Previous project") {
+                            CustomAccessibilityAction(previousProjectLabel) {
                                 startSwitch(SessionListScopePaging.Direction.Previous, from = 0f)
                                 true
                             }
                     }
                     if (canGoNext) {
                         actions +=
-                            CustomAccessibilityAction("Next project") {
+                            CustomAccessibilityAction(nextProjectLabel) {
                                 startSwitch(SessionListScopePaging.Direction.Next, from = 0f)
                                 true
                             }
@@ -736,9 +745,9 @@ fun SessionListProjectPickerRows(
                                         enabled = !isEditing,
                                         contentDescription =
                                             if (row.expanded) {
-                                                "Hide worktrees of ${tab.title}"
+                                                stringResource(R.string.home_hide_worktrees, tab.title)
                                             } else {
-                                                "Show worktrees of ${tab.title}"
+                                                stringResource(R.string.home_show_worktrees, tab.title)
                                             },
                                         onClick = { onToggleWorktrees(tab.id) },
                                         modifier = Modifier.testTag(SessionListProjectPickerTags.worktreesPill(tab.title)),
@@ -876,7 +885,7 @@ fun SessionListWorktreesPill(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            text = "$count worktrees",
+            text = pluralStringResource(R.plurals.home_worktree_count, count, count),
             color = contentColor,
             style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Medium),
             maxLines = 1,
@@ -901,21 +910,24 @@ private fun displayedScopeSubtitle(tab: SessionListFilterTab): String = if (tab.
 private fun scopeControlTitle(tab: SessionListFilterTab): String = tab.dockTitle ?: tab.pickerTitle
 
 /** Scope control subtitle: load progress while the scope's first load is unfinished, else the path. */
+@Composable
 private fun scopeControlSubtitle(tab: SessionListFilterTab): String =
     when (val load = tab.load) {
         is SessionListScopeLoad.Loading ->
-            if (load.isSlow) SessionListScopeLoad.SLOW_SUBTITLE else SessionListScopeLoad.LOADING_SUBTITLE
-        SessionListScopeLoad.Failed -> SessionListScopeLoad.FAILED_SUBTITLE
+            stringResource(if (load.isSlow) SessionListScopeLoad.SLOW_SUBTITLE else SessionListScopeLoad.LOADING_SUBTITLE)
+        SessionListScopeLoad.Failed -> stringResource(SessionListScopeLoad.FAILED_SUBTITLE)
         null -> tab.dockSubtitle?.let(::compactHomePath) ?: displayedScopeSubtitle(tab)
     }
 
+@Composable
 internal fun scopeControlDescription(tab: SessionListFilterTab): String {
     val subtitle = scopeControlSubtitle(tab)
+    val sessionCount = pluralStringResource(R.plurals.session_list_dock_session_count, tab.count, tab.count)
     val parts =
         buildList {
             add(scopeControlTitle(tab))
             if (subtitle.isNotEmpty()) add(subtitle)
-            if (tab.load == null) add("${tab.count} sessions")
+            if (tab.load == null) add(sessionCount)
         }
     return parts.joinToString(", ")
 }

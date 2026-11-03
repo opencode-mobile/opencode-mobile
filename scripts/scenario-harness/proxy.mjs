@@ -11,7 +11,7 @@ const HEALTH_PATHS = new Set(["/global/health", "/api/health", "/api/info"]);
 
 export function createProxy({ getUpstream, emit }) {
   const streams = new Set(); // { req, res, upstream, path, stalled, startedAt, id }
-  let faults = { latencyMs: 0, rejectAuthUntil: 0, rejectSseAuthUntil: 0, offlineUntil: 0, stall: false, heartbeatOnly: false };
+  let faults = { latencyMs: 0, rejectAuthUntil: 0, rejectSseAuthUntil: 0, offlineUntil: 0, stall: false, heartbeatOnly: false, coldVcs: 0 };
   // Event-stream connection attempts, to see how hard an app retries during a fault.
   let sseAttempts = 0;
   let seq = 0;
@@ -26,6 +26,7 @@ export function createProxy({ getUpstream, emit }) {
       offlineFor: Math.max(0, faults.offlineUntil - now),
       stall: faults.stall,
       heartbeatOnly: faults.heartbeatOnly,
+      coldVcs: faults.coldVcs,
       streams: [...streams].map((s) => ({ id: s.id, path: s.path, ageMs: now - s.startedAt, ua: s.ua })),
     };
   }
@@ -54,6 +55,16 @@ export function createProxy({ getUpstream, emit }) {
       res.writeHead(401, { "content-type": "application/json", "www-authenticate": 'Basic realm="opencode"' });
       res.end(JSON.stringify({ error: "Unauthorized (harness fault)" }));
       emit("app.request", { id, method: req.method, path: url.pathname + url.search, status: 401, ms: Date.now() - startedAt, ua, fault: true });
+      return;
+    }
+    // The answer a v2 server gives while it is still detecting a project's VCS (no provider, empty branch).
+    if (faults.coldVcs > 0 && req.method === "GET" && url.pathname === "/api/vcs") {
+      faults.coldVcs -= 1;
+      changed();
+      const directory = url.searchParams.get("location[directory]") ?? "";
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ location: { directory }, data: { branch: {} } }));
+      emit("app.request", { id, method: req.method, path: url.pathname + url.search, status: 200, ms: 0, ua, auth, fault: "cold vcs" });
       return;
     }
     const upstream = getUpstream();
@@ -159,10 +170,11 @@ export function createProxy({ getUpstream, emit }) {
       }
       if (next.stall !== undefined) faults.stall = Boolean(next.stall);
       if (next.heartbeatOnly !== undefined) faults.heartbeatOnly = Boolean(next.heartbeatOnly);
+      if (next.coldVcs !== undefined) faults.coldVcs = Math.max(0, Number(next.coldVcs) || 0);
       changed();
     },
     clearFaults() {
-      faults = { latencyMs: 0, rejectAuthUntil: 0, rejectSseAuthUntil: 0, offlineUntil: 0, stall: false, heartbeatOnly: false };
+      faults = { latencyMs: 0, rejectAuthUntil: 0, rejectSseAuthUntil: 0, offlineUntil: 0, stall: false, heartbeatOnly: false, coldVcs: 0 };
       changed();
     },
   };

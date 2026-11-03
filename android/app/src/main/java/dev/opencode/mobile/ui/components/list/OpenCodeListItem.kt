@@ -52,6 +52,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.Placeholder
@@ -67,6 +68,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodePillShape
 import dev.opencode.mobile.theme.OpenCodeRadius
@@ -257,7 +259,7 @@ fun OpenCodeListItem(
                         playContextPop()
                         onLongPress()
                     },
-                    onLongClickLabel = "Show actions",
+                    onLongClickLabel = stringResource(R.string.component_list_item_show_actions),
                 )
             onClick != null ->
                 Modifier.clickable(
@@ -276,7 +278,7 @@ fun OpenCodeListItem(
                         playContextPop()
                         onLongPress()
                     },
-                    onLongClickLabel = "Show actions",
+                    onLongClickLabel = stringResource(R.string.component_list_item_show_actions),
                 )
             else -> Modifier
         }
@@ -530,7 +532,7 @@ internal fun ListItemStartDecoration(
                     ) {
                         Icon(
                             imageVector = OpenCodeIcons.CallSplit,
-                            contentDescription = "Worktree",
+                            contentDescription = stringResource(R.string.component_worktree),
                             modifier = Modifier.size(10.dp),
                             tint = backgroundBase,
                         )
@@ -563,7 +565,7 @@ internal fun ListItemStartDecoration(
                         ) {
                             Icon(
                                 imageVector = OpenCodeIcons.CallSplit,
-                                contentDescription = "Worktree",
+                                contentDescription = stringResource(R.string.component_worktree),
                                 modifier = Modifier.size(10.dp),
                                 tint = openCodeColor("icon-strong-base"),
                             )

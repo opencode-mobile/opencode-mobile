@@ -180,10 +180,10 @@ struct OpenCodeReorderableList<Item: Identifiable, Row: View, Trailing: View>: V
                         Button(contextActionLabel) { onContextAction(item) }
                     }
                     if movable, let previous = neighborMovableIndex(from: index, step: -1) {
-                        Button("Move up") { onMove?(index, previous) }
+                        Button("component.reorderable_list.move_up") { onMove?(index, previous) }
                     }
                     if movable, let next = neighborMovableIndex(from: index, step: 1) {
-                        Button("Move down") { onMove?(index, next) }
+                        Button("component.reorderable_list.move_down") { onMove?(index, next) }
                     }
                 }
             if Trailing.self != EmptyView.self {
@@ -550,8 +550,8 @@ private struct ReorderablePreviewItem: Identifiable {
                 supportsContextAction: { !$0.pinned }
             ) { item in
                 OpenCodeListItem(
-                    title: item.title,
-                    subtitle: item.pinned ? "3 projects" : "~/Projects/\(item.title)",
+                    title: .verbatim(item.title),
+                    subtitle: .verbatim(item.pinned ? "3 projects" : "~/Projects/\(item.title)"),
                     startDecorator: item.pinned ? .iconCircle(.widgets) : .letter(item.title.first ?? "?", .violet)
                 )
             }

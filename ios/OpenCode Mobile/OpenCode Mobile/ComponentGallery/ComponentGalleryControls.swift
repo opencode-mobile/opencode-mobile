@@ -31,7 +31,7 @@ struct ComponentGalleryControls: View {
             HStack(spacing: 8) {
                 ForEach(ComponentGalleryThemeMode.allCases) { mode in
                     OpenCodeChoiceBadge(
-                        label: mode.rawValue,
+                        label: .verbatim(mode.rawValue),
                         selected: themeMode == mode,
                         action: { themeMode = mode }
                     )

@@ -3,6 +3,7 @@ package dev.opencode.mobile.ui.components
 import dev.opencode.mobile.domain.home.HomeSessionLadderKind
 import dev.opencode.mobile.domain.home.HomeSessionLadderSection
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.ui.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -38,7 +39,7 @@ class SessionListItemIndexTest {
         HomeSessionLadderSection(
             id = id,
             kind = kind,
-            title = id,
+            title = UiText.verbatim(id),
             items = ids.map(::session),
         )
 
@@ -51,6 +52,6 @@ class SessionListItemIndexTest {
             letterAccent = LetterAccent.Violet,
             subtitle = "/w",
             status = SessionListStatus.Idle,
-            caption = "",
+            caption = UiText.verbatim(""),
         )
 }

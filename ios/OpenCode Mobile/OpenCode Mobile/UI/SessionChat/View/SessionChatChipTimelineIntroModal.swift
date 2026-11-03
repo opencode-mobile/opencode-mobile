@@ -3,27 +3,27 @@ import SwiftUI
 /// One page of the Chip timeline intro carousel.
 struct SessionChatChipTimelineIntroPage: Identifiable, Hashable {
     let id: String
-    let title: String
-    let body: String
+    let title: OpenCodeText
+    let body: OpenCodeText
     let illustration: OpenCodeSkeletonIllustrationTopic
 
     static let pages: [SessionChatChipTimelineIntroPage] = [
         SessionChatChipTimelineIntroPage(
             id: "glance",
-            title: "See the work at a glance",
-            body: "Tool calls show as chips under the sentence that explains them.",
+            title: "session_chat_sheet.chip_timeline_intro.glance.title",
+            body: "session_chat_sheet.chip_timeline_intro.glance.body",
             illustration: .chipTimelineGlance
         ),
         SessionChatChipTimelineIntroPage(
             id: "long-runs",
-            title: "Long runs, short timeline",
-            body: "Twenty tool calls take a few chips instead of a screen of rows.",
+            title: "session_chat_sheet.chip_timeline_intro.long_runs.title",
+            body: "session_chat_sheet.chip_timeline_intro.long_runs.body",
             illustration: .chipTimelineLongRuns
         ),
         SessionChatChipTimelineIntroPage(
             id: "details",
-            title: "Details stay one tap away",
-            body: "Tap a chip for its diffs, command output, or files.",
+            title: "session_chat_sheet.chip_timeline_intro.details.title",
+            body: "session_chat_sheet.chip_timeline_intro.details.body",
             illustration: .chipTimelineDetails
         ),
     ]
@@ -60,13 +60,13 @@ struct SessionChatChipTimelineIntroModifier: ViewModifier {
                     .padding(.bottom, 22)
 
                     OpenCodeButton(
-                        variant: .fullWidthText(title: "Turn on Chip timeline"),
+                        variant: .fullWidthText(title: "session_chat_sheet.chip_timeline_intro.enable"),
                         action: onEnable
                     )
 
                     HStack(spacing: 24) {
-                        textAction("Later", action: onLater)
-                        textAction("Don't show again", action: onNever)
+                        textAction("session_chat_sheet.chip_timeline_intro.later", action: onLater)
+                        textAction("session_chat_sheet.chip_timeline_intro.never", action: onNever)
                     }
                     .padding(.top, 8)
                 }
@@ -91,10 +91,10 @@ struct SessionChatChipTimelineIntroModifier: ViewModifier {
                 .background(OpenCodeColors.surfaceRaisedBase)
                 .clipShape(RoundedRectangle(cornerRadius: 20))
                 .padding(.bottom, 6)
-            Text(page.title)
+            Text(openCode: page.title)
                 .font(OpenCodeTypography.title)
                 .foregroundStyle(OpenCodeColors.textStrong)
-            Text(page.body)
+            Text(openCode: page.body)
                 .font(OpenCodeTypography.bodySecondary)
                 .foregroundStyle(OpenCodeColors.textBase)
                 .fixedSize(horizontal: false, vertical: true)
@@ -104,7 +104,7 @@ struct SessionChatChipTimelineIntroModifier: ViewModifier {
     }
 
     /// Quiet secondary action, styled like onboarding's Skip.
-    private func textAction(_ title: String, action: @escaping () -> Void) -> some View {
+    private func textAction(_ title: LocalizedStringResource, action: @escaping () -> Void) -> some View {
         Button(title, action: action)
             .font(OpenCodeTypography.body)
             .foregroundStyle(OpenCodeColors.textWeak)

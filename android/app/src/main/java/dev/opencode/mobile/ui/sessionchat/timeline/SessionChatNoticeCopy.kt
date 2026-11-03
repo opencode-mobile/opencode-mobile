@@ -1,21 +1,24 @@
 package dev.opencode.mobile.ui.sessionchat
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.message.TimelineNotice
 import dev.opencode.mobile.domain.model.ModelSelectionOption
+import dev.opencode.mobile.ui.text.UiText
 
 /**
  * One notice row's copy: [label] in the weak tone, then [value] in the info tint.
  * [isMove] leads the row with the `↳` glyph.
  */
 data class SessionChatNoticeLine(
-    val label: String,
-    val value: String? = null,
+    val label: UiText,
+    /** Server content (a directory, an agent or model name), or app text built around it. */
+    val value: UiText? = null,
     val isMove: Boolean = false,
 ) {
     /** What assistive tech reads: the label and the full value. */
-    val accessibilityLabel: String
-        get() = listOfNotNull(label, value).joinToString(" ")
+    val accessibilityLabel: UiText
+        get() = value?.let { UiText.resource(R.string.timeline_notice_accessibility, label, it) } ?: label
 }
 
 /** Model display names by provider and model id, from the composer's model catalog. */
@@ -45,13 +48,13 @@ value class SessionChatNoticeModelNames(
 
 /** Notice copy, worded as official opencode (`ui.sessionTimeline.notice.*`). */
 object SessionChatNoticeCopy {
-    const val MOVED_TO = "Moved to"
-    const val AGENT_CHANGED = "Agent changed"
-    const val SWITCHED_TO = "Switched to"
-    const val VARIANT_SWITCHED = "Switched variant to"
-    const val VARIANT_DEFAULT = "Switched variant to Default"
-    const val INSTRUCTIONS_UPDATED = "Instructions updated"
-    const val RESTART = "Continuing after restart"
+    val MOVED_TO: UiText = UiText.resource(R.string.timeline_notice_moved_to)
+    val AGENT_CHANGED: UiText = UiText.resource(R.string.timeline_notice_agent_changed)
+    val SWITCHED_TO: UiText = UiText.resource(R.string.timeline_notice_switched_to)
+    val VARIANT_SWITCHED: UiText = UiText.resource(R.string.timeline_notice_variant_switched)
+    val VARIANT_DEFAULT: UiText = UiText.resource(R.string.timeline_notice_variant_default)
+    val INSTRUCTIONS_UPDATED: UiText = UiText.resource(R.string.timeline_notice_instructions_updated)
+    val RESTART: UiText = UiText.resource(R.string.timeline_notice_restart)
 
     private const val DEFAULT_VARIANT = "default"
 
@@ -60,13 +63,18 @@ object SessionChatNoticeCopy {
         modelNames: SessionChatNoticeModelNames = SessionChatNoticeModelNames(),
     ): SessionChatNoticeLine =
         when (notice) {
-            is TimelineNotice.Moved -> SessionChatNoticeLine(label = MOVED_TO, value = notice.directory, isMove = true)
+            is TimelineNotice.Moved -> SessionChatNoticeLine(label = MOVED_TO, value = UiText.verbatim(notice.directory), isMove = true)
             is TimelineNotice.AgentChanged -> {
                 val agent = SelectableAgent.displayNameFor(notice.agent)
                 val previous = notice.previous?.takeIf { it != notice.agent }?.let(SelectableAgent::displayNameFor)
                 SessionChatNoticeLine(
                     label = AGENT_CHANGED,
-                    value = if (previous != null) "$previous → $agent" else agent,
+                    value =
+                        if (previous != null) {
+                            UiText.resource(R.string.timeline_notice_agent_change, previous, agent)
+                        } else {
+                            UiText.verbatim(agent)
+                        },
                 )
             }
             is TimelineNotice.ModelChanged -> {
@@ -75,18 +83,22 @@ object SessionChatNoticeCopy {
                     !notice.isVariantOnly ->
                         SessionChatNoticeLine(
                             label = SWITCHED_TO,
-                            value = modelNames.name(notice.model.providerId, notice.model.modelId) ?: notice.model.modelId,
+                            value =
+                                UiText.verbatim(
+                                    modelNames.name(notice.model.providerId, notice.model.modelId) ?: notice.model.modelId,
+                                ),
                         )
                     variant == DEFAULT_VARIANT -> SessionChatNoticeLine(label = VARIANT_DEFAULT)
-                    else -> SessionChatNoticeLine(label = VARIANT_SWITCHED, value = variant)
+                    else -> SessionChatNoticeLine(label = VARIANT_SWITCHED, value = UiText.verbatim(variant))
                 }
             }
             is TimelineNotice.InstructionsUpdated ->
                 SessionChatNoticeLine(
                     label = INSTRUCTIONS_UPDATED,
-                    value = notice.sources.joinToString(", ").takeIf { it.isNotEmpty() },
+                    // Instruction file paths are server content.
+                    value = notice.sources.joinToString(", ").takeIf { it.isNotEmpty() }?.let(UiText::verbatim),
                 )
-            is TimelineNotice.SystemNote -> SessionChatNoticeLine(label = notice.description)
+            is TimelineNotice.SystemNote -> SessionChatNoticeLine(label = UiText.verbatim(notice.description))
             TimelineNotice.Restart -> SessionChatNoticeLine(label = RESTART)
         }
 }

@@ -1,7 +1,10 @@
 package dev.opencode.mobile.ui.keyboard
 
 import android.view.KeyEvent
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ui.components.OpenCodeFocusedTextInput
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -67,10 +70,18 @@ class KeyboardShortcutRulesTest {
 
     @Test
     fun titles_ofTheRequirementChords() {
-        assertEquals("Toggle Sidebar", KeyboardShortcutAction.ToggleSidebar.title)
-        assertEquals("Next Session", KeyboardShortcutAction.NextSession.title)
-        assertEquals("Previous Session", KeyboardShortcutAction.PreviousSession.title)
-        assertEquals("Focus Composer", KeyboardShortcutAction.FocusComposer.title)
+        assertEquals("Toggle Sidebar", KeyboardShortcutAction.ToggleSidebar.title.english())
+        assertEquals("Next Session", KeyboardShortcutAction.NextSession.title.english())
+        assertEquals("Previous Session", KeyboardShortcutAction.PreviousSession.title.english())
+        assertEquals("Focus Composer", KeyboardShortcutAction.FocusComposer.title.english())
+    }
+
+    @Test
+    fun title_isAStringResource() {
+        assertEquals(
+            UiText.resource(R.string.keyboard_shortcuts_toggle_sidebar),
+            KeyboardShortcutAction.ToggleSidebar.title,
+        )
     }
 
     @Test

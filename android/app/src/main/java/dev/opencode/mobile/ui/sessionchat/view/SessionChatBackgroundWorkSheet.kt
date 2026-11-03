@@ -14,10 +14,12 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.shell.AgentShell
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeFilterTab
@@ -39,8 +41,8 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatBackgroundWorkTab
 import dev.opencode.mobile.ui.sessionchat.SessionChatChildSessionElapsed
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagent
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus
-import dev.opencode.mobile.ui.sessionchat.region.SessionChatShellsCopy
 import kotlinx.coroutines.delay
+import dev.opencode.mobile.ui.text.resolve
 
 /**
  * Background work pill for Session Chat: "3 subagents" with a spinner, or the amber
@@ -96,8 +98,17 @@ fun SessionChatBackgroundWorkList(
         OpenCodeFilterTabs(
             tabs =
                 listOf(
-                    OpenCodeFilterTab(id = RUNNING_TAB_ID, title = RUNNING_TAB_TITLE, count = tabs.running.size + shells.size),
-                    OpenCodeFilterTab(id = DONE_TAB_ID, title = DONE_TAB_TITLE, count = tabs.done.size, unseen = doneUnseen),
+                    OpenCodeFilterTab(
+                        id = RUNNING_TAB_ID,
+                        title = stringResource(R.string.session_chat_sheet_background_work_tab_running),
+                        count = tabs.running.size + shells.size,
+                    ),
+                    OpenCodeFilterTab(
+                        id = DONE_TAB_ID,
+                        title = stringResource(R.string.session_chat_sheet_background_work_tab_done),
+                        count = tabs.done.size,
+                        unseen = doneUnseen,
+                    ),
                 ),
             selectedTabId = if (tab == SessionChatBackgroundWorkTab.Done) DONE_TAB_ID else RUNNING_TAB_ID,
             onTabSelected = { id ->
@@ -109,16 +120,22 @@ fun SessionChatBackgroundWorkList(
         when (tab) {
             SessionChatBackgroundWorkTab.Running -> {
                 if (tabs.running.isEmpty() && shells.isEmpty()) {
-                    EmptyTabText(RUNNING_EMPTY_TEXT)
+                    EmptyTabText(stringResource(R.string.session_chat_sheet_background_work_running_empty))
                 }
                 val sectioned = tabs.running.isNotEmpty() && shells.isNotEmpty()
                 if (sectioned) {
-                    OpenCodeSectionHeader(title = SUBAGENTS_SECTION_TITLE, inset = OpenCodeSectionHeaderInset.Flush)
+                    OpenCodeSectionHeader(
+                        title = stringResource(R.string.session_chat_sheet_background_work_subagents),
+                        inset = OpenCodeSectionHeaderInset.Flush,
+                    )
                 }
                 tabs.running.forEach { subagent -> SubagentRow(subagent, nowMs, onOpenSubagent) }
                 if (shells.isNotEmpty()) {
                     if (sectioned) {
-                        OpenCodeSectionHeader(title = SessionChatShellsCopy.SECTION_TITLE, inset = OpenCodeSectionHeaderInset.Flush)
+                        OpenCodeSectionHeader(
+                            title = stringResource(R.string.session_chat_sheet_background_work_shells),
+                            inset = OpenCodeSectionHeaderInset.Flush,
+                        )
                     }
                     shells.forEach { shell ->
                         OpenCodeShellRow(
@@ -131,7 +148,7 @@ fun SessionChatBackgroundWorkList(
                 }
             }
             SessionChatBackgroundWorkTab.Done -> {
-                if (tabs.done.isEmpty()) EmptyTabText(DONE_EMPTY_TEXT)
+                if (tabs.done.isEmpty()) EmptyTabText(stringResource(R.string.session_chat_sheet_background_work_done_empty))
                 tabs.done.forEach { subagent -> SubagentRow(subagent, nowMs, onOpenSubagent) }
             }
         }
@@ -149,8 +166,8 @@ private fun SubagentRow(
         title = text.title,
         state = subagent.status.taskRowState,
         tag = text.tag,
-        detail = text.detail,
-        detailCaption = text.detailCaption,
+        detail = text.detail?.resolve(),
+        detailCaption = text.detailCaption?.resolve(),
         time = text.time,
         onClick = if (subagent.childSessionId == null) null else ({ onOpenSubagent(subagent) }),
     )
@@ -193,7 +210,7 @@ internal fun SessionChatBackgroundWorkSheet(
 
     OpenCodeBottomSheet(
         visible = visible,
-        title = BACKGROUND_WORK_TITLE,
+        title = stringResource(R.string.session_chat_sheet_background_work_title),
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.SESSION_SUBAGENTS,
@@ -221,14 +238,8 @@ internal fun SessionChatBackgroundWorkSheet(
     }
 }
 
-internal const val BACKGROUND_WORK_TITLE = "Background work"
-private const val SUBAGENTS_SECTION_TITLE = "Subagents"
 private const val RUNNING_TAB_ID = "running"
 private const val DONE_TAB_ID = "done"
-internal const val RUNNING_TAB_TITLE = "Running"
-internal const val DONE_TAB_TITLE = "Done"
-internal const val RUNNING_EMPTY_TEXT = "Nothing running. Finished work is under Done."
-internal const val DONE_EMPTY_TEXT = "Nothing finished yet."
 
 internal val SessionChatSubagentStatus.taskRowState: OpenCodeTaskRowState
     get() =

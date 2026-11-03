@@ -38,6 +38,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -50,6 +52,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -329,7 +332,10 @@ private fun StepTrailing(
         elapsed != null -> Text(text = elapsed, style = mono, color = openCodeColor("text-weaker"), maxLines = 1)
         item.status == OpenCodeStepRailStatus.Failed ->
             Text(
-                text = if (item.interrupted) "stopped" else "failed",
+                text =
+                    stringResource(
+                        if (item.interrupted) R.string.component_activity_status_stopped else R.string.component_activity_status_failed,
+                    ),
                 style = MaterialTheme.typography.labelSmall,
                 color = if (item.interrupted) openCodeColor("text-weak") else openCodeColor("error"),
                 maxLines = 1,
@@ -358,6 +364,7 @@ private fun ChildSessionRow(
     val tint = openCodeColor("info")
     val shape = RoundedCornerShape(OpenCodeRadius.small)
     val secondLine = item.detail ?: item.description
+    val agentLabel = stepRailAccessibilityLabel(item.agent, item.status, interrupted = false, elapsed = elapsed)
     Box(
         modifier =
             modifier
@@ -365,10 +372,7 @@ private fun ChildSessionRow(
                 .heightIn(min = StepRailRowMinHeight)
                 .semantics(mergeDescendants = true) {
                     contentDescription =
-                        listOfNotNull(
-                            stepRailAccessibilityLabel(item.agent, item.status, interrupted = false, elapsed = elapsed),
-                            secondLine,
-                        ).joinToString(", ")
+                        listOfNotNull(agentLabel, secondLine).joinToString(", ")
                     if (item.tappable) role = Role.Button
                 },
         contentAlignment = Alignment.CenterStart,
@@ -434,9 +438,9 @@ private fun FoldRow(
     onTap: () -> Unit,
     modifier: Modifier,
 ) {
-    val label = if (item.count == 1) "1 earlier step" else "${item.count} earlier steps"
+    val label = pluralStringResource(R.plurals.component_step_rail_earlier_steps, item.count, item.count)
     StepRowContainer(
-        label = "$label, expands",
+        label = stringResource(R.string.component_step_rail_expands, label),
         onTap = onTap,
         modifier = modifier,
         dot = {
@@ -477,13 +481,13 @@ private fun ThinkingRow(
     modifier: Modifier,
 ) {
     StepRowContainer(
-        label = "Thinking",
+        label = stringResource(R.string.component_thinking),
         onTap = null,
         modifier = modifier,
         dot = { OpenCodePulsingDot(color = openCodeColor("warning"), size = StepRailDotSize, animated = pulses) },
     ) {
         Text(
-            text = "Thinking…",
+            text = stringResource(R.string.component_thinking_ellipsis),
             style = MaterialTheme.typography.bodyMedium.copy(fontStyle = FontStyle.Italic),
             color = openCodeColor("text-weak"),
             maxLines = 1,
@@ -550,6 +554,7 @@ private fun rememberStepRailElapsed(
     }
 }
 
+@Composable
 internal fun stepRailAccessibilityLabel(
     title: String,
     status: OpenCodeStepRailStatus,
@@ -557,13 +562,15 @@ internal fun stepRailAccessibilityLabel(
     elapsed: String?,
 ): String {
     val state =
-        when {
-            status == OpenCodeStepRailStatus.Failed && interrupted -> "stopped"
-            status == OpenCodeStepRailStatus.Failed -> "failed"
-            status == OpenCodeStepRailStatus.Completed -> "completed"
-            status == OpenCodeStepRailStatus.Pending -> "pending"
-            else -> "running"
-        }
+        stringResource(
+            when {
+                status == OpenCodeStepRailStatus.Failed && interrupted -> R.string.component_activity_status_stopped
+                status == OpenCodeStepRailStatus.Failed -> R.string.component_activity_status_failed
+                status == OpenCodeStepRailStatus.Completed -> R.string.component_activity_status_completed
+                status == OpenCodeStepRailStatus.Pending -> R.string.component_activity_status_pending
+                else -> R.string.component_activity_status_running
+            },
+        )
     return listOfNotNull(title, state, elapsed).joinToString(", ")
 }
 

@@ -1,11 +1,12 @@
 package dev.opencode.mobile.ui.worktree
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.worktree.CreateWorktreeRequest
 import dev.opencode.mobile.domain.worktree.CreatedWorktree
-import dev.opencode.mobile.domain.worktree.WorktreeCreateCopy
 import dev.opencode.mobile.domain.worktree.WorktreeCreateError
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -46,7 +47,8 @@ sealed class WorktreeBaseOptions {
 /** One row of the base list; [ref] null is the default (the source checkout's HEAD). */
 data class WorktreeBaseRow(
     val ref: String?,
-    val title: String,
+    /** The branch, verbatim; the default row is "<branch> (current)" or "Current checkout". */
+    val title: UiText,
     val checked: Boolean,
 ) {
     val testTag: String get() = WorktreeCreateTags.baseOption(ref)
@@ -80,13 +82,21 @@ object WorktreeName {
     /** `<adjective>-<noun>`. */
     fun random(random: Random): String = adjectives[random.nextInt(adjectives.size)] + "-" + nouns[random.nextInt(nouns.size)]
 
+    /** V1 branch: `opencode/<name>`, or `opencode/…` while the name is empty. A branch name, not app text. */
+    fun v1Branch(name: String): String = "opencode/" + name.trim().ifEmpty { "\u2026" }
+
+    /** The default base: the source checkout's branch marked current, else "Current checkout". */
+    fun defaultBase(sourceBranch: String?): UiText =
+        sourceBranch?.let { UiText.resource(R.string.worktree_current_branch, it) }
+            ?: UiText.resource(R.string.worktree_current_checkout)
+
     /** Why [name] (trimmed) cannot be used, or null. */
-    fun validate(name: String): String? {
+    fun validate(name: String): UiText? {
         val trimmed = name.trim()
         return when {
-            trimmed.isEmpty() -> WorktreeCreateCopy.NAME_EMPTY
-            !allowed.matches(trimmed) -> WorktreeCreateCopy.NAME_CHARS
-            trimmed.length > MAX_LENGTH -> WorktreeCreateCopy.NAME_LONG
+            trimmed.isEmpty() -> UiText.resource(R.string.worktree_name_empty)
+            !allowed.matches(trimmed) -> UiText.resource(R.string.worktree_name_chars)
+            trimmed.length > MAX_LENGTH -> UiText.plural(R.plurals.worktree_name_long, MAX_LENGTH)
             else -> null
         }
     }
@@ -111,60 +121,71 @@ data class WorktreeCreateFormState(
     /** V2 only: the sheet shows the base list instead of the form. */
     val basePickerVisible: Boolean = false,
     val submitting: Boolean = false,
-    /** [WorktreeCreateCopy.failed] after a failed create; the values stay. */
-    val errorMessage: String? = null,
+    /** "Couldn't create the worktree: <server message>" after a failed create; the values stay. */
+    val errorMessage: UiText? = null,
 ) {
-    private val validationError: String? get() = WorktreeName.validate(name)
+    private val validationError: UiText? get() = WorktreeName.validate(name)
 
-    val nameError: String? get() = if (nameErrorVisible) validationError else null
+    val nameError: UiText? get() = if (nameErrorVisible) validationError else null
 
     val canSubmit: Boolean get() = validationError == null && !submitting
 
-    val branchValue: String
-        get() = if (protocol == ServerProtocol.V1) WorktreeCreateCopy.v1Branch(name) else WorktreeCreateCopy.V2_NO_BRANCH
+    /** V1: the branch name the server will use, verbatim. */
+    val branchValue: UiText
+        get() =
+            if (protocol == ServerProtocol.V1) {
+                UiText.verbatim(WorktreeName.v1Branch(name))
+            } else {
+                UiText.resource(R.string.worktree_v2_no_branch)
+            }
 
-    val branchNote: String
-        get() = if (protocol == ServerProtocol.V1) WorktreeCreateCopy.V1_BRANCH_NOTE else WorktreeCreateCopy.V2_BRANCH_NOTE
+    val branchNote: UiText
+        get() =
+            UiText.resource(
+                if (protocol == ServerProtocol.V1) R.string.worktree_v1_branch_note else R.string.worktree_v2_branch_note,
+            )
 
     /** V2 picks a base; v1 always creates from the project's checkout. */
     val baseSelectable: Boolean get() = protocol == ServerProtocol.V2
 
-    val baseValue: String
+    val baseValue: UiText
         get() =
             if (protocol == ServerProtocol.V1) {
-                sourceBranch ?: WorktreeCreateCopy.CURRENT_CHECKOUT
+                sourceBranch?.let(UiText::verbatim) ?: UiText.resource(R.string.worktree_current_checkout)
             } else {
-                selectedBaseRef ?: WorktreeCreateCopy.defaultBase(sourceBranch)
+                selectedBaseRef?.let(UiText::verbatim) ?: WorktreeName.defaultBase(sourceBranch)
             }
 
-    val baseNote: String
-        get() = if (protocol == ServerProtocol.V1) WorktreeCreateCopy.V1_BASE_NOTE else WorktreeCreateCopy.BASE_PICK_HINT
+    val baseNote: UiText
+        get() = UiText.resource(if (protocol == ServerProtocol.V1) R.string.worktree_v1_base_note else R.string.worktree_base_pick_hint)
 
     /** The base list: the default first (checked while nothing else is picked), then the other branches. */
     val baseRows: List<WorktreeBaseRow>
         get() {
-            val default = WorktreeBaseRow(null, WorktreeCreateCopy.defaultBase(sourceBranch), checked = selectedBaseRef == null)
+            val default = WorktreeBaseRow(null, WorktreeName.defaultBase(sourceBranch), checked = selectedBaseRef == null)
             val refs = (baseOptions as? WorktreeBaseOptions.Loaded)?.refs.orEmpty()
             return listOf(default) +
-                refs.filter { it != sourceBranch }.map { ref -> WorktreeBaseRow(ref, ref, checked = selectedBaseRef == ref) }
+                refs.filter { it != sourceBranch }.map { ref -> WorktreeBaseRow(ref, UiText.verbatim(ref), checked = selectedBaseRef == ref) }
         }
 
-    /** BASE_LOADING / BASE_FAILED under the default row while the list is not there. */
-    val baseStatus: String?
+    /** "Loading branches…" / "Couldn't load branches" under the default row while the list is not there. */
+    val baseStatus: UiText?
         get() =
             when (baseOptions) {
-                WorktreeBaseOptions.Loading -> WorktreeCreateCopy.BASE_LOADING
-                WorktreeBaseOptions.Failed -> WorktreeCreateCopy.BASE_FAILED
+                WorktreeBaseOptions.Loading -> UiText.resource(R.string.worktree_base_loading)
+                WorktreeBaseOptions.Failed -> UiText.resource(R.string.worktree_base_failed)
                 is WorktreeBaseOptions.Loaded -> null
             }
 
-    val submitLabel: String
+    val submitLabel: UiText
         get() =
-            when {
-                submitting -> WorktreeCreateCopy.SUBMITTING
-                origin is WorktreeCreateOrigin.Move -> WorktreeCreateCopy.SUBMIT_MOVE
-                else -> WorktreeCreateCopy.SUBMIT_RUN_IN
-            }
+            UiText.resource(
+                when {
+                    submitting -> R.string.worktree_submitting
+                    origin is WorktreeCreateOrigin.Move -> R.string.worktree_submit_move
+                    else -> R.string.worktree_submit_run_in
+                },
+            )
 
     val request: CreateWorktreeRequest
         get() =
@@ -259,12 +280,16 @@ class WorktreeCreateForm(
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (error: Exception) {
-                val message = (error as? WorktreeCreateError)?.message ?: error.message?.takeIf { it.isNotBlank() } ?: "Unknown error"
+                // The server's own text stays verbatim.
+                val message =
+                    ((error as? WorktreeCreateError)?.message ?: error.message?.takeIf { it.isNotBlank() })
+                        ?.let(UiText::verbatim)
+                        ?: UiText.resource(R.string.worktree_unknown_error)
                 _state.update { state ->
                     if (state == null || state.origin != current.origin) {
                         state
                     } else {
-                        state.copy(submitting = false, errorMessage = WorktreeCreateCopy.failed(message))
+                        state.copy(submitting = false, errorMessage = UiText.resource(R.string.worktree_create_failed, message))
                     }
                 }
             }

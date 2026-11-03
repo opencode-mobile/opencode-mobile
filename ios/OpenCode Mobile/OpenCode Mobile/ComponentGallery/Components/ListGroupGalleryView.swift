@@ -5,7 +5,7 @@ struct ListGroupGalleryView: View {
 
     var body: some View {
         OpenCodeListGroup(files, id: \.self) { path in
-            OpenCodeListItem(title: path, accessory: .disclosure)
+            OpenCodeListItem(title: .verbatim(path), accessory: .disclosure)
         }
     }
 }

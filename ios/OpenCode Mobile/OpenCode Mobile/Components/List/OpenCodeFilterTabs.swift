@@ -2,12 +2,12 @@ import SwiftUI
 
 struct OpenCodeFilterTab: Identifiable, Hashable {
     let id: String
-    let title: String
+    let title: OpenCodeText
     let count: Int?
     /// Something new arrived since the tab was last viewed: a small accent dot after the label.
     let unseen: Bool
 
-    init(id: String, title: String, count: Int? = nil, unseen: Bool = false) {
+    init(id: String, title: OpenCodeText, count: Int? = nil, unseen: Bool = false) {
         self.id = id
         self.title = title
         self.count = count
@@ -67,7 +67,7 @@ struct OpenCodeFilterTabs: View {
             onTabSelected(tab.id)
         } label: {
             HStack(spacing: 6) {
-                Text(tab.title)
+                Text(openCode: tab.title)
                     .font(OpenCodeTypography.button)
                     .foregroundStyle(selected ? OpenCodeColors.textStrong : OpenCodeColors.textBase)
                     .lineLimit(1)
@@ -115,7 +115,7 @@ struct OpenCodeFilterTabs: View {
             onTabSelected(tab.id)
         } label: {
             HStack(spacing: 6) {
-                Text(tab.title)
+                Text(openCode: tab.title)
                     .font(OpenCodeTypography.button)
                     .foregroundStyle(selected ? OpenCodeColors.textStrong : OpenCodeColors.textBase)
                     .lineLimit(1)
@@ -160,7 +160,11 @@ struct OpenCodeFilterTabs: View {
 
 /// "Done, 3, new": the count and the unseen dot are read out with the title.
 func filterTabAccessibilityLabel(_ tab: OpenCodeFilterTab) -> String {
-    [tab.title, tab.count.map(String.init), tab.unseen ? "new" : nil]
+    [
+        tab.title.resolved,
+        tab.count.map(String.init),
+        tab.unseen ? String(localized: "component.filter_tabs.unseen", defaultValue: "new") : nil,
+    ]
         .compactMap { $0 }
         .joined(separator: ", ")
 }

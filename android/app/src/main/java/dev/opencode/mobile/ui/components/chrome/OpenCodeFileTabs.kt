@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -36,6 +37,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -110,6 +112,7 @@ private fun FileTabItem(
     onClose: () -> Unit,
 ) {
     val shape = OpenCodeSmallShape
+    val closeLabel = stringResource(R.string.component_file_tabs_close, tab.title)
     val bringIntoView = remember { BringIntoViewRequester() }
     LaunchedEffect(selected) { if (selected) bringIntoView.bringIntoView() }
     Row(
@@ -143,7 +146,7 @@ private fun FileTabItem(
                     .clip(shape)
                     .openCodeFocusRing(shape)
                     .clickable(role = Role.Button, onClick = onClose)
-                    .semantics { contentDescription = "Close ${tab.title}" },
+                    .semantics { contentDescription = closeLabel },
             contentAlignment = Alignment.Center,
         ) {
             Icon(

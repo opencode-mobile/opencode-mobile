@@ -99,12 +99,12 @@ struct ChangesView: View {
             } else {
                 VStack(spacing: 0) {
                     OpenCodeTopBar(
-                        title: "Changes",
+                        title: "changes.title",
                         leading: OpenCodeSplitPane.detailLeading(control, back: {})
                     )
                     OpenCodeEmptyState(
-                        title: "Select a file",
-                        message: "Choose a changed file to see the diff.",
+                        title: "changes.select_file.title",
+                        message: "changes.select_file.message",
                         icon: .list
                     )
                 }
@@ -122,11 +122,11 @@ struct ChangesView: View {
         VStack(spacing: 0) {
             OpenCodeTopBarOverflowHost(isPresented: $sourceMenuPresented, entries: sourceMenuEntries) {
                 OpenCodeTopBar(
-                    title: "Changes",
+                    title: "changes.title",
                     subtitle: viewModel.state.selectedSource.displayName,
                     leading: .back(action: exitChanges),
                     actions: [
-                        .icon(.moreVert, accessibilityLabel: "Choose change source") {
+                        .icon(.moreVert, accessibilityLabel: "changes.source_menu.label") {
                             logAction(ProductAnalytics.Action.changesOpenSourceMenu)
                             sourceMenuPresented = true
                         },
@@ -176,18 +176,28 @@ struct ChangesView: View {
     ) -> some View {
         switch viewModel.state.phase {
         case .loading:
-            OpenCodeStatusStack(title: "Loading changes", subtitle: "Fetching the diff…")
+            OpenCodeStatusStack(title: "changes.loading.title", subtitle: "changes.loading.message")
         case .noTurn:
-            refreshableMessage("No completed turn", detail: "Send a prompt and wait for it to complete, then try again.")
+            refreshableMessage("changes.no_turn.title", detail: "changes.no_turn.message")
         case .noChanges:
-            refreshableMessage(viewModel.state.selectedSource.emptyTitle, detail: viewModel.state.selectedSource.emptyDetail)
+            let source = viewModel.state.selectedSource
+            let hint = viewModel.state.otherSourceHint
+            refreshableMessage(
+                source.emptyTitle,
+                detail: hint.map { ChangesOtherSourceHint.emptyDetail(source.emptyDetail, hint: $0) } ?? source.emptyDetail,
+                action: hint.map { hint in
+                    OpenCodeEmptyStateAction(title: hint.actionTitle) {
+                        Task { await viewModel.selectSource(hint.source) }
+                    }
+                }
+            )
         case let .content(changeSet):
             changedFiles(changeSet, selectedPath: selectedPath, onOpenFile: onOpenFile)
         case let .error(error):
             OpenCodeEmptyState(
-                title: "Unable to load changes",
-                message: openCodeNonBlank(error, fallback: "The changes didn't load."),
-                primaryAction: OpenCodeEmptyStateAction(title: "Retry") {
+                title: "changes.error.title",
+                message: .verbatim(error, fallback: "changes.error.fallback"),
+                primaryAction: OpenCodeEmptyStateAction(title: "common.retry") {
                     logAction(ProductAnalytics.Action.changesRetry)
                     Task { await viewModel.retry() }
                 }
@@ -198,11 +208,21 @@ struct ChangesView: View {
     private var sourceMenuEntries: [OpenCodeOverflowMenuEntry] {
         viewModel.state.availableSources.map { source in
             let selected = source == viewModel.state.selectedSource
+            let accessibilityLabel: OpenCodeText
+            if selected {
+                let name = source.displayName.resolved
+                accessibilityLabel = OpenCodeText(LocalizedStringResource(
+                    "changes.source_menu.selected",
+                    defaultValue: "\(name), selected"
+                ))
+            } else {
+                accessibilityLabel = source.displayName
+            }
             return OpenCodeOverflowMenuEntry(
                 id: source.rawValue,
                 title: source.displayName,
                 icon: selected ? .check : nil,
-                accessibilityLabel: selected ? "\(source.displayName), selected" : source.displayName,
+                accessibilityLabel: accessibilityLabel,
                 action: {
                     splitSelection = nil
                     pushedPath = nil
@@ -233,15 +253,15 @@ struct ChangesView: View {
                             viewModel.updateFilter(value)
                         }
                     ),
-                    hint: "Filter",
-                    accessibilityLabel: "Filter changed files"
+                    hint: "changes.filter.hint",
+                    accessibilityLabel: "changes.filter.accessibility_label"
                 )
 
                 if changeSet.filteredFiles.isEmpty {
                     VStack(spacing: 12) {
-                        message("No matching files", detail: "Try another path or clear the filter.")
+                        message("changes.no_matches.title", detail: "changes.no_matches.message")
                         OpenCodeButton(
-                            variant: .compactText(title: "Clear filter"),
+                            variant: .compactText(title: "changes.no_matches.clear_filter"),
                             contrast: .low,
                             action: {
                                 logAction(ProductAnalytics.Action.changesClearFilter)
@@ -253,7 +273,7 @@ struct ChangesView: View {
                     ForEach(changeSet.fileGroups) { group in
                         VStack(alignment: .leading, spacing: 8) {
                             OpenCodeSectionHeader(
-                                title: group.directory,
+                                title: .verbatim(group.directory),
                                 variant: .plain,
                                 trailing: .count(group.files.count),
                                 inset: .flush
@@ -283,7 +303,7 @@ struct ChangesView: View {
 
     private func aggregateSummary(_ changeSet: ChangesContentState) -> some View {
         (
-            Text(changeSet.summary + "  ")
+            Text(verbatim: changeSet.summary + "  ")
                 .foregroundColor(OpenCodeColors.textBase)
                 + OpenCodeDiffStat.text(
                     additions: changeSet.additions,
@@ -297,8 +317,8 @@ struct ChangesView: View {
 
     private func refreshFailure(_ detail: String) -> some View {
         OpenCodeInlineNotice(
-            message: "Refresh failed: \(detail)",
-            action: OpenCodeInlineNoticeAction(title: "Retry") {
+            message: OpenCodeText(LocalizedStringResource("changes.refresh_failed", defaultValue: "Refresh failed: \(detail)")),
+            action: OpenCodeInlineNoticeAction(title: "common.retry") {
                 logAction(ProductAnalytics.Action.changesRetry)
                 Task { await viewModel.refresh() }
             }
@@ -312,7 +332,7 @@ struct ChangesView: View {
         selectedPath: String?,
         onOpenFile: @escaping (String) -> Void
     ) -> some View {
-        OpenCodeListItem(title: changedFileName(file.path), selected: file.path == selectedPath, accessory: .disclosure, action: {
+        OpenCodeListItem(title: .verbatim(changedFileName(file.path)), selected: file.path == selectedPath, accessory: .disclosure, action: {
             logAction(ProductAnalytics.Action.changesOpenFile)
             onOpenFile(file.path)
         },         trailing: {
@@ -328,13 +348,13 @@ struct ChangesView: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private func message(_ title: String, detail: String) -> some View {
-        OpenCodeEmptyState(title: title, message: detail)
+    private func message(_ title: OpenCodeText, detail: OpenCodeText, action: OpenCodeEmptyStateAction? = nil) -> some View {
+        OpenCodeEmptyState(title: title, message: detail, primaryAction: action)
     }
 
-    private func refreshableMessage(_ title: String, detail: String) -> some View {
+    private func refreshableMessage(_ title: OpenCodeText, detail: OpenCodeText, action: OpenCodeEmptyStateAction? = nil) -> some View {
         ScrollView {
-            message(title, detail: detail)
+            message(title, detail: detail, action: action)
                 .frame(minHeight: 360)
         }
         .refreshable {
@@ -375,7 +395,7 @@ private struct FileViewerView: View {
     var body: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
-                title: state.file.path,
+                title: .verbatim(state.file.path),
                 leading: OpenCodeSplitPane.detailLeading(detailControl, back: {
                     Self.logAction(ProductAnalytics.Action.fileViewerBack)
                     dismiss()
@@ -388,8 +408,15 @@ private struct FileViewerView: View {
                 viewerContent
             } else {
                 VStack(spacing: 8) {
-                    Text("Preview unavailable").font(OpenCodeTypography.heading)
-                    Text("A text preview is unavailable for this file.")
+                    Text(LocalizedStringResource(
+                        "changes.preview_unavailable.title",
+                        defaultValue: "Preview unavailable"
+                    ))
+                    .font(OpenCodeTypography.heading)
+                    Text(LocalizedStringResource(
+                        "changes.preview_unavailable.message",
+                        defaultValue: "A text preview is unavailable for this file."
+                    ))
                         .font(OpenCodeTypography.bodySecondary)
                         .foregroundStyle(OpenCodeColors.textBase)
                         .multilineTextAlignment(.center)

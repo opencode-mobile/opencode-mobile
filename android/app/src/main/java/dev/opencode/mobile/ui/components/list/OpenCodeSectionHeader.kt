@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -19,6 +20,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -77,12 +79,15 @@ fun OpenCodeSectionHeader(
             OpenCodeSectionHeaderInset.Standard -> SectionHeaderInsetStandard
             OpenCodeSectionHeaderInset.Flush -> 0.dp
         }
+    val countDescription =
+        (trailing as? OpenCodeSectionHeaderTrailing.Count)?.let {
+            "$title, ${pluralStringResource(R.plurals.component_section_header_item_count, it.value, it.value)}"
+        }
     val semanticsModifier =
         when (trailing) {
             is OpenCodeSectionHeaderTrailing.Count ->
                 Modifier.clearAndSetSemantics {
-                    contentDescription =
-                        "$title, ${trailing.value} ${if (trailing.value == 1) "item" else "items"}"
+                    contentDescription = countDescription.orEmpty()
                 }
             else -> Modifier
         }

@@ -31,6 +31,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -38,6 +39,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.OpenCodeTheme
@@ -70,7 +72,6 @@ private val SkeletonBarWidths =
     )
 
 /** Accessibility label the skeleton list announces. */
-const val SESSION_LIST_SKELETON_LABEL = "Loading sessions"
 
 /**
  * Placeholder session rows for a project whose sessions are still loading. Rows match the
@@ -88,12 +89,14 @@ fun OpenCodeSessionListSkeleton(
 ) {
     require(rowCount > 0) { "OpenCodeSessionListSkeleton requires at least one row" }
     val phase = rememberSkeletonShimmerPhase()
+    val label = stringResource(R.string.common_loading_sessions)
+    val description = caption?.let { stringResource(R.string.component_session_list_skeleton_slow_label, label, it) } ?: label
     Column(
         modifier =
             modifier
                 .fillMaxWidth()
                 .semantics(mergeDescendants = true) {
-                    contentDescription = if (caption != null) "$SESSION_LIST_SKELETON_LABEL. $caption" else SESSION_LIST_SKELETON_LABEL
+                    contentDescription = description
                 },
     ) {
         if (title != null) {
@@ -130,11 +133,12 @@ fun OpenCodeSessionListSkeletonRow(
     accent: LetterAccent? = null,
 ) {
     val phase = rememberSkeletonShimmerPhase()
+    val label = stringResource(R.string.component_session_list_skeleton_row)
     SkeletonRow(
         index = index,
         accent = accent,
         phase = phase,
-        modifier = modifier.semantics { contentDescription = SESSION_LIST_SKELETON_LABEL },
+        modifier = modifier.semantics { contentDescription = label },
     )
 }
 

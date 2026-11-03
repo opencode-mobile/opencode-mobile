@@ -168,6 +168,18 @@ private enum StepRailMetrics {
 }
 
 private struct StepRailRow: View {
+    private static func earlierSteps(_ count: Int) -> String {
+        String(localized: LocalizedStringResource(
+            "component.step_rail.earlier_steps",
+            defaultValue: "\(count) earlier steps"
+        ))
+    }
+
+    private static func expandsLabel(_ count: Int) -> LocalizedStringResource {
+        let steps = earlierSteps(count)
+        return LocalizedStringResource("component.step_rail.expands", defaultValue: "\(steps), expands")
+    }
+
     let item: OpenCodeStepRailItem
     let isFirst: Bool
     let isLast: Bool
@@ -265,7 +277,7 @@ private struct StepRailRow: View {
             )
         case .fold(let count, _):
             HStack(spacing: 4) {
-                Text(count == 1 ? "1 earlier step" : "\(count) earlier steps")
+                Text(Self.earlierSteps(count))
                     .font(OpenCodeTypography.bodySecondary)
                     .foregroundStyle(OpenCodeColors.textWeaker)
                     .lineLimit(1)
@@ -273,13 +285,13 @@ private struct StepRailRow: View {
                     .foregroundStyle(OpenCodeColors.textWeaker)
             }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(count == 1 ? "1 earlier step, expands" : "\(count) earlier steps, expands")
+            .accessibilityLabel(Text(Self.expandsLabel(count)))
         case .thinking:
-            Text("Thinking\u{2026}")
+            Text(OpenCodeActivityText.thinkingEllipsis)
                 .font(OpenCodeTypography.bodySecondary)
                 .italic()
                 .foregroundStyle(OpenCodeColors.textWeak)
-                .accessibilityLabel("Thinking")
+                .accessibilityLabel(Text(OpenCodeActivityText.thinking))
         }
     }
 }
@@ -445,12 +457,12 @@ private struct StepRailStepLine: View {
                     .fixedSize()
             }
             if status == .failed {
-                Text("failed")
+                Text("component.activity_status.failed")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.error)
                     .fixedSize()
             } else if status == .interrupted {
-                Text("stopped")
+                Text("component.activity_status.stopped")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeaker)
                     .fixedSize()
@@ -558,11 +570,11 @@ func stepRailAccessibilityLabel(
 ) -> String {
     let statusWord: String =
         switch status {
-        case .pending: "pending"
-        case .running: "running"
-        case .completed: "completed"
-        case .failed: "failed"
-        case .interrupted: "stopped"
+        case .pending: String(localized: "component.activity_status.pending", defaultValue: "pending")
+        case .running: String(localized: "component.activity_status.running", defaultValue: "running")
+        case .completed: String(localized: "component.activity_status.completed", defaultValue: "completed")
+        case .failed: String(localized: "component.activity_status.failed", defaultValue: "failed")
+        case .interrupted: String(localized: "component.activity_status.stopped", defaultValue: "stopped")
         }
     return [title, detail, statusWord, elapsed]
         .compactMap { $0 }

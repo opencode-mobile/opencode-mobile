@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.files
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.filesystem.ProjectEntry
 import dev.opencode.mobile.domain.filesystem.ProjectFileContent
 import dev.opencode.mobile.domain.filesystem.ProjectFileHighlightSession
@@ -9,6 +10,9 @@ import dev.opencode.mobile.domain.filesystem.ProjectFilesException
 import dev.opencode.mobile.domain.filesystem.ProjectFilesRepository
 import dev.opencode.mobile.markdown.CodeSpan
 import dev.opencode.mobile.markdown.CodeTokenRole
+import dev.opencode.mobile.ui.components.OpenCodeCodeLine
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -138,7 +142,7 @@ class FilesViewModelTest {
                     .filterIsInstance<FilesTreeRow.FolderError>()
                     .single()
             assertEquals("src", error.folderPath)
-            assertEquals("Server said no.", error.message)
+            assertEquals(UiText.verbatim("Server said no."), error.message)
 
             repository.failingFolders.clear()
             viewModel.retryFolder("src")
@@ -162,7 +166,7 @@ class FilesViewModelTest {
             viewModel.bind("/repo")
             advanceUntilIdle()
 
-            assertEquals(FilesFolderState.Failed("Server said no."), viewModel.uiState.value.root)
+            assertEquals(FilesFolderState.Failed(UiText.verbatim("Server said no.")), viewModel.uiState.value.root)
             assertTrue(
                 viewModel.uiState.value.treeRows
                     .isEmpty(),
@@ -276,7 +280,7 @@ class FilesViewModelTest {
                     ?.content as FilesViewerContent.Text
             assertEquals(listOf("fun main() {", "}"), text.lines.map { it.text })
             assertEquals(listOf(CodeSpan(0, 3, CodeTokenRole.Keyword)), text.lines.first().spans)
-            assertEquals("Kotlin · 2 lines", text.metaLabel)
+            assertEquals("Kotlin · 2 lines", text.metaLabel.english())
             assertFalse(text.isTruncated)
             assertNull(text.markdown)
         }
@@ -338,21 +342,58 @@ class FilesViewModelTest {
             val viewers = viewModel.uiState.value.viewers
             val log = viewers.getValue("build.log").content as FilesViewerContent.TooLarge
             assertEquals(FilesViewerContent.TooLarge(byteCount = null), log)
-            assertEquals("Too large to preview", log.title)
-            assertEquals("This file is bigger than the app previews.", log.message)
+            assertEquals("Too large to preview", log.title.english())
+            assertEquals("This file is bigger than the app previews.", log.message.english())
             val image = viewers.getValue("huge.png").content as FilesViewerContent.TooLarge
-            assertEquals("This file is bigger than the app previews.\n40 MB", image.message)
+            assertEquals("This file is bigger than the app previews.\n40 MB", image.message.english())
         }
 
     @Test
     fun formatFileSize_usesDecimalUnits() {
-        assertEquals("1 byte", formatFileSize(1))
-        assertEquals("999 bytes", formatFileSize(999))
-        assertEquals("1.5 KB", formatFileSize(1_500))
-        assertEquals("10 MB", formatFileSize(10_485_760))
-        assertEquals("1 MB", formatFileSize(999_600))
-        assertEquals("2.1 GB", formatFileSize(2_100_000_000))
+        assertEquals("1 byte", formatFileSize(1).english())
+        assertEquals("999 bytes", formatFileSize(999).english())
+        assertEquals("1.5 KB", formatFileSize(1_500).english())
+        assertEquals("10 MB", formatFileSize(10_485_760).english())
+        assertEquals("1 MB", formatFileSize(999_600).english())
+        assertEquals("2.1 GB", formatFileSize(2_100_000_000).english())
     }
+
+    @Test
+    fun metaLabel_keepsTheLanguageVerbatimAndPluralizesLines() {
+        val oneLine =
+            FilesViewerContent.Text(
+                lines = listOf(OpenCodeCodeLine("x")),
+                source = "x",
+                languageName = "Kotlin",
+                isTruncated = false,
+            )
+
+        assertEquals(
+            UiText.resource(
+                R.string.file_viewer_meta,
+                UiText.verbatim("Kotlin"),
+                UiText.plural(R.plurals.file_viewer_line_count, 1),
+            ),
+            oneLine.metaLabel,
+        )
+        assertEquals("Kotlin · 1 line", oneLine.metaLabel.english())
+    }
+
+    @Test
+    fun failureWithoutServerDetail_asksToCheckTheConnection() =
+        runTest(dispatcher) {
+            val repository = FakeFilesRepository(failingFiles = mutableSetOf("notes.txt"), failureDetail = null)
+            val viewModel = viewModel(repository)
+            viewModel.bind("/repo")
+            advanceUntilIdle()
+
+            viewModel.openFile("notes.txt")
+            advanceUntilIdle()
+
+            val failed = viewModel.uiState.value.activeViewer?.content as FilesViewerContent.Failed
+            assertEquals(UiText.resource(R.string.files_error_check_server_connection), failed.message)
+            assertEquals("Check the connection to the server and try again.", failed.message.english())
+        }
 
     @Test
     fun fileFailure_showsErrorAndRetryReloads() =
@@ -365,7 +406,7 @@ class FilesViewModelTest {
             viewModel.openFile("notes.txt")
             advanceUntilIdle()
             assertEquals(
-                FilesViewerContent.Failed("Server said no."),
+                FilesViewerContent.Failed(UiText.verbatim("Server said no.")),
                 viewModel.uiState.value.activeViewer
                     ?.content,
             )
@@ -457,6 +498,8 @@ class FilesViewModelTest {
 private class FakeFilesRepository(
     val failingFolders: MutableSet<String> = mutableSetOf(),
     val failingFiles: MutableSet<String> = mutableSetOf(),
+    /** Null fails file reads with a non-server error, which has no detail to show. */
+    val failureDetail: String? = "Server said no.",
 ) : ProjectFilesRepository {
     val listRequests = mutableListOf<String>()
     val findRequests = mutableListOf<String>()
@@ -500,7 +543,9 @@ private class FakeFilesRepository(
         relativePath: String,
     ): ProjectFileContent {
         readRequests += relativePath
-        if (relativePath in failingFiles) throw ProjectFilesException("Couldn't open file", "Server said no.")
+        if (relativePath in failingFiles) {
+            throw failureDetail?.let { ProjectFilesException("Couldn't open file", it) } ?: IllegalStateException("offline")
+        }
         return when (relativePath) {
             "src/main.kt" -> ProjectFileContent.Text("fun main() {\n}\n")
             "long.kt" -> ProjectFileContent.Text((1..5_000).joinToString("\n", postfix = "\n") { "fun f$it() {}" })

@@ -3,6 +3,8 @@ package dev.opencode.mobile.ui.keyboard
 import android.view.KeyEvent
 import dev.opencode.mobile.ui.components.OpenCodeFocusedTextInput
 import dev.opencode.mobile.ui.components.OpenCodeInputFocusRegistry
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -118,14 +120,15 @@ class KeyboardShortcutTier2Test {
 
     @Test
     fun agreedHelperTitles() {
-        assertEquals("New Session", KeyboardShortcutAction.NewSession.title)
-        assertEquals("Command Palette", KeyboardShortcutAction.CommandPalette.title)
-        assertEquals("Choose Model", KeyboardShortcutAction.ModelPicker.title)
-        assertEquals("Settings", KeyboardShortcutAction.Settings.title)
-        assertEquals("Allow Once", KeyboardShortcutAction.PromptPrimary.title)
-        assertEquals("Always Allow", KeyboardShortcutAction.PromptAlways.title)
-        assertEquals("Deny", KeyboardShortcutAction.PromptReject.title)
-        assertEquals("Show acme-invoices", KeyboardShortcutRules.projectShortcutTitle("acme-invoices"))
+        assertEquals("New Session", KeyboardShortcutAction.NewSession.title.english())
+        assertEquals("Command Palette", KeyboardShortcutAction.CommandPalette.title.english())
+        assertEquals("Choose Model", KeyboardShortcutAction.ModelPicker.title.english())
+        assertEquals("Settings", KeyboardShortcutAction.Settings.title.english())
+        assertEquals("Allow Once", KeyboardShortcutAction.PromptPrimary.title.english())
+        assertEquals("Always Allow", KeyboardShortcutAction.PromptAlways.title.english())
+        assertEquals("Deny", KeyboardShortcutAction.PromptReject.title.english())
+        assertEquals("Show acme-invoices", KeyboardShortcutRules.projectShortcutTitle("acme-invoices").english())
+        assertEquals("Project 3", KeyboardShortcutAction.Project3.title.english())
     }
 
     @Test
@@ -182,7 +185,7 @@ class KeyboardShortcutTier2Test {
     fun hostRunsPromptChordWithNothingFocusedAndNeverRepeatsIt() {
         val host = KeyboardShortcutHost()
         var allowed = 0
-        host.register(KeyboardShortcutAction.PromptPrimary, "Allow Once") { allowed += 1 }
+        host.register(KeyboardShortcutAction.PromptPrimary, UiText.verbatim("Allow Once")) { allowed += 1 }
 
         fun press(repeat: Int) =
             host.handleKey(
@@ -206,8 +209,8 @@ class KeyboardShortcutTier2Test {
         val host = KeyboardShortcutHost()
         var dismissed = 0
         var submitted = 0
-        host.register(KeyboardShortcutAction.PromptReject, "Dismiss") { dismissed += 1 }
-        host.register(KeyboardShortcutAction.PromptPrimary, "Submit") { submitted += 1 }
+        host.register(KeyboardShortcutAction.PromptReject, UiText.verbatim("Dismiss")) { dismissed += 1 }
+        host.register(KeyboardShortcutAction.PromptPrimary, UiText.verbatim("Submit")) { submitted += 1 }
         host.inputFocus.updateTextInput(Any(), OpenCodeFocusedTextInput.QuestionCustomAnswer, focused = true)
 
         fun press(keyCode: Int) =
@@ -230,11 +233,11 @@ class KeyboardShortcutTier2Test {
     @Test
     fun helperTitlesComeFromTheNewestHandler() {
         val host = KeyboardShortcutHost()
-        host.register(KeyboardShortcutAction.PromptPrimary, "Allow Once") {}
-        host.register(KeyboardShortcutAction.PromptReject, "Dismiss") {}
-        host.register(KeyboardShortcutAction.PromptPrimary, "Submit") {}
+        host.register(KeyboardShortcutAction.PromptPrimary, UiText.verbatim("Allow Once")) {}
+        host.register(KeyboardShortcutAction.PromptReject, UiText.verbatim("Dismiss")) {}
+        host.register(KeyboardShortcutAction.PromptPrimary, UiText.verbatim("Submit")) {}
         host.register(KeyboardShortcutAction.NewSession) {}
-        val titles = host.activeShortcutTitles()
+        val titles = host.activeShortcutTitles().mapValues { it.value.english() }
         assertEquals("Submit", titles[KeyboardShortcutAction.PromptPrimary])
         assertEquals("Dismiss", titles[KeyboardShortcutAction.PromptReject])
         assertEquals("New Session", titles[KeyboardShortcutAction.NewSession])

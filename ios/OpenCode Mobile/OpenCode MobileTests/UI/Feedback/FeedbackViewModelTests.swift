@@ -8,11 +8,11 @@ struct FeedbackViewModelTests {
     @Test func kindSwitch_changesPlaceholder() {
         let model = makeModel()
         #expect(model.uiState.kind == .bug)
-        #expect(model.uiState.placeholder == "What happened? What did you expect?")
+        #expect(model.uiState.placeholder.resolved == "What happened? What did you expect?")
 
         model.selectKind(.feedback)
 
-        #expect(model.uiState.placeholder == "What would make OpenCode better for you?")
+        #expect(model.uiState.placeholder.resolved == "What would make OpenCode better for you?")
         #expect(FeedbackKind.feedback.label == "Idea")
     }
 
@@ -132,7 +132,7 @@ struct FeedbackViewModelTests {
         await model.send()
 
         #expect(model.uiState.phase == .failed(.rateLimited(seconds: 40)))
-        #expect(model.uiState.errorBanner?.message == "You just sent a report. Try again in 40 s.")
+        #expect(model.uiState.errorBanner?.message.resolved == "You just sent a report. Try again in 40 s.")
         #expect(model.uiState.errorBanner?.action == nil)
         #expect(submitter.submissions.isEmpty)
 
@@ -216,17 +216,17 @@ struct FeedbackViewModelTests {
 
     @Test func dictation_morphsTheSheetIntoListening() {
         let model = makeModel()
-        #expect(model.uiState.sheetTitle == "Report a problem")
+        #expect(model.uiState.sheetTitle.resolved == "Report a problem")
         #expect(model.uiState.dictationTakesOverCompose == false)
 
         model.beginDictation(languageLabel: "English", onDevice: true)
 
-        #expect(model.uiState.sheetTitle == "Listening")
+        #expect(model.uiState.sheetTitle.resolved == "Listening")
         #expect(model.uiState.dictationTakesOverCompose == true)
 
         model.dictationCancel()
 
-        #expect(model.uiState.sheetTitle == "Report a problem")
+        #expect(model.uiState.sheetTitle.resolved == "Report a problem")
         #expect(model.uiState.dictationTakesOverCompose == false)
     }
 
@@ -236,7 +236,7 @@ struct FeedbackViewModelTests {
         model.beginDictationUnavailable(.permissionDenied, message: "Microphone access is off")
 
         #expect(model.uiState.dictationTakesOverCompose == true)
-        #expect(model.uiState.sheetTitle == "Report a problem")
+        #expect(model.uiState.sheetTitle.resolved == "Report a problem")
     }
 
     @Test func dictationModelDownload_updatesOnlyAModelCard() {
@@ -250,7 +250,7 @@ struct FeedbackViewModelTests {
         #expect(model.uiState.dictation?.phase == .modelDownloading)
         #expect(model.uiState.dictation?.downloadProgress == 0.3)
         #expect(model.uiState.dictation?.languageLabel == "English")
-        #expect(model.uiState.sheetTitle == "Report a problem")
+        #expect(model.uiState.sheetTitle.resolved == "Report a problem")
 
         model.beginDictation(languageLabel: "English", onDevice: true)
         model.dictationModelDownload(.modelDownloadFailed)
@@ -266,19 +266,26 @@ struct FeedbackViewModelTests {
         model.dictationInsert()
 
         #expect(model.uiState.dictation?.phase == .finishing)
-        #expect(model.uiState.sheetTitle == "Listening")
+        #expect(model.uiState.sheetTitle.resolved == "Listening")
         #expect(model.uiState.dictationTakesOverCompose == true)
         model.dictationCancel()
     }
 
     @Test func errorCopy_matchesTheContract() {
-        #expect(FeedbackSendError.offline.message == "You're offline. Your report is kept here — try again when you're connected.")
-        #expect(FeedbackSendError.unverified.message == "Couldn't verify this copy of the app. Reports can only be sent from an App Store, TestFlight or Play install.")
-        #expect(FeedbackSendError.failed.message == "Couldn't send the report.")
-        #expect(FeedbackErrorAction.tryAgain.title == "Try Again")
-        #expect(FeedbackErrorAction.shareInstead.title == "Share Instead")
-        #expect(FeedbackKind.bug.sentBody == "The team will look into it.")
-        #expect(FeedbackKind.feedback.sentBody == "Thanks for the idea.")
+        #expect(FeedbackSendError.offline.message.resolved == "You're offline. Your report is kept here — try again when you're connected.")
+        #expect(FeedbackSendError.unverified.message.resolved == "Couldn't verify this copy of the app. Reports can only be sent from an App Store, TestFlight or Play install.")
+        #expect(FeedbackSendError.failed.message.resolved == "Couldn't send the report.")
+        #expect(FeedbackErrorAction.tryAgain.title.resolved == "Try Again")
+        #expect(FeedbackErrorAction.shareInstead.title.resolved == "Share Instead")
+        #expect(FeedbackKind.bug.sentMessage.resolved == "The team will look into it.")
+        #expect(FeedbackKind.feedback.sentMessage.resolved == "Thanks for the idea.")
+        #expect(FeedbackKind.feedback.badgeLabel.resolved == "Idea")
+    }
+
+    @Test func copy_comesFromTheStringCatalog() {
+        #expect(FeedbackSendError.offline.message == "feedback.error.offline")
+        #expect(FeedbackSheetPage.hideParts.title == "feedback.title.hide_parts")
+        #expect(FeedbackSendError.rateLimited(seconds: 1).message.resolved == "You just sent a report. Try again in 1 s.")
     }
 
     // MARK: - Helpers

@@ -61,8 +61,8 @@ struct ComponentGalleryHomeView: View {
                                             ComponentGalleryDetailView(entry: entry, themeMode: $themeMode)
                                         } label: {
                                             OpenCodeListItem(
-                                                title: entry.title,
-                                                subtitle: entry.description,
+                                                title: .verbatim(entry.title),
+                                                subtitle: .verbatim(entry.description),
                                                 style: .card
                                             )
                                         }

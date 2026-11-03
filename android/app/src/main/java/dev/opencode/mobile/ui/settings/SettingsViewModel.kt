@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.OpenCodeReleaseObservability
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogBuffer
 import dev.opencode.mobile.domain.featureflags.FeatureFlags
@@ -27,6 +28,7 @@ import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.letterAccentForWorktree
 import dev.opencode.mobile.theme.letterCharacterForProject
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,8 +46,8 @@ class SettingsViewModel
         private val diagnosticLogBuffer: DiagnosticLogBuffer,
         private val sessionCache: SessionCache,
     ) : ViewModel() {
-        private val _sessionCacheSizeLabel = MutableStateFlow("Empty")
-        val sessionCacheSizeLabel: StateFlow<String> = _sessionCacheSizeLabel.asStateFlow()
+        private val _sessionCacheSizeLabel = MutableStateFlow(SessionCacheSizeFormatter.format(0L))
+        val sessionCacheSizeLabel: StateFlow<UiText> = _sessionCacheSizeLabel.asStateFlow()
         private val _serversSummary = MutableStateFlow(ServersSummary())
         val serversSummary: StateFlow<ServersSummary> = _serversSummary.asStateFlow()
 
@@ -159,11 +161,13 @@ data class ServersSummary(
     val letter: Char = 'S',
     val letterAccent: LetterAccent = LetterAccent.Blue,
 ) {
-    val subtitle: String
+    /** The active profile name is user content and stays verbatim. */
+    val subtitle: UiText
         get() =
             when {
-                count == 0 -> "No servers saved"
-                activeName != null -> "$count saved · $activeName active"
-                else -> "$count saved"
+                count == 0 -> UiText.resource(R.string.settings_servers_summary_none)
+                activeName != null ->
+                    UiText.resource(R.string.settings_servers_summary_saved_active, count, UiText.verbatim(activeName))
+                else -> UiText.plural(R.plurals.settings_servers_summary_saved, count)
             }
 }

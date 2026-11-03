@@ -1,5 +1,7 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -23,8 +25,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalResources
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ui.components.OpenCodeBottomFadeOverhang
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPill
 import dev.opencode.mobile.ui.components.OpenCodeFloatingPillLayout
@@ -37,6 +42,10 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatActivityPriority
 import dev.opencode.mobile.ui.sessionchat.SessionChatActivitySlot
 import dev.opencode.mobile.ui.sessionchat.SessionChatContextItem
 import dev.opencode.mobile.ui.sessionchat.SessionChatNavigationPill
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
+import dev.opencode.mobile.ui.text.UiText
+import dev.opencode.mobile.ui.text.UiTextLookup
+import dev.opencode.mobile.ui.text.resolve
 
 /** Where the bottom pill row sits and what it reserves in the timeline. */
 internal object SessionChatCornerSlotsLayout {
@@ -62,6 +71,9 @@ internal object SessionChatCornerSlotsLayout {
 }
 
 private const val PillRevealMs = 260
+
+/** Animation label for tooling; not shown to users. */
+private const val PILL_MORPH_ANIMATION_LABEL = "sessionChatPillMorph"
 
 /**
  * Enters and leaves a bottom-row pill by animating its width (grow from zero, shrink to zero)
@@ -102,7 +114,7 @@ internal fun <T> SessionChatPillMorph(
             (fadeIn(tween(PillRevealMs)) togetherWith fadeOut(tween(PillRevealMs / 2)))
                 .using(SizeTransform(clip = false) { _, _ -> tween(PillRevealMs, easing = FastOutSlowInEasing) })
         },
-        label = "sessionChatPillMorph",
+        label = PILL_MORPH_ANIMATION_LABEL,
     ) { form ->
         content(form)
     }
@@ -174,7 +186,7 @@ internal fun SessionChatActivitySlotView(
                         item = primary,
                         compact = form.compact,
                         badgeCount = slot.itemCount,
-                        accessibilityLabel = SessionChatActivityPillCopy.collapsedAccessibilityLabel(primary, slot.itemCount, stackOpen),
+                        accessibilityLabel = SessionChatActivityPillCopy.collapsedAccessibilityLabel(primary, slot.itemCount, stackOpen).resolve(),
                         onClick = { onStackOpenChange(!stackOpen) },
                         onClose = {},
                     )
@@ -195,7 +207,11 @@ internal fun SessionChatActivitySlotView(
                 OpenCodeFloatingPill(
                     layout = OpenCodeFloatingPillLayout.Label("+${more.coerceAtLeast(1)}"),
                     state = OpenCodeFloatingPillState.Ready,
-                    accessibilityLabel = if (stackOpen) "Hide $more more" else "Show $more more",
+                    accessibilityLabel =
+                        stringResource(
+                            if (stackOpen) R.string.session_chat_activity_hide_more else R.string.session_chat_activity_show_more,
+                            more,
+                        ),
                     onClick = { onStackOpenChange(!stackOpen) },
                 )
             }
@@ -210,10 +226,10 @@ private fun SessionChatActivityPill(
     onClick: () -> Unit,
     onClose: () -> Unit,
     badgeCount: Int = 0,
-    accessibilityLabel: String = SessionChatActivityPillCopy.accessibilityLabel(item),
+    accessibilityLabel: String = SessionChatActivityPillCopy.accessibilityLabel(item).resolve(),
 ) {
     OpenCodeFloatingPill(
-        layout = SessionChatActivityPillCopy.layout(item),
+        layout = SessionChatActivityPillCopy.layout(item, ResourcesUiTextLookup(LocalResources.current)),
         state = SessionChatActivityPillCopy.state(item),
         compact = compact,
         badgeCount = badgeCount,
@@ -224,24 +240,46 @@ private fun SessionChatActivityPill(
     )
 }
 
-/** How each activity item looks, reads and behaves on the shared floating pill. */
+/**
+ * How each activity item looks, reads and behaves on the shared floating pill. Text is [UiText];
+ * the view resolves it ([layout] takes the lookup because the pill layout holds strings).
+ */
 internal object SessionChatActivityPillCopy {
-    fun layout(item: SessionChatActivityItem): OpenCodeFloatingPillLayout =
+    fun layout(
+        item: SessionChatActivityItem,
+        text: UiTextLookup,
+    ): OpenCodeFloatingPillLayout =
         when (item) {
             SessionChatActivityItem.ReviewPermission ->
-                OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.ArrowUpward, "Review permission")
+                OpenCodeFloatingPillLayout.IconLabel(
+                    OpenCodeIcons.ArrowUpward,
+                    UiText.resource(R.string.session_chat_activity_review_permission).resolve(text),
+                )
             SessionChatActivityItem.AnswerQuestion ->
-                OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.ArrowUpward, "Answer question")
+                OpenCodeFloatingPillLayout.IconLabel(
+                    OpenCodeIcons.ArrowUpward,
+                    UiText.resource(R.string.session_chat_activity_answer_question).resolve(text),
+                )
             is SessionChatActivityItem.Subagents ->
-                OpenCodeFloatingPillLayout.Counter(item.pill.label, waiting = item.pill.needsInput)
-            is SessionChatActivityItem.RequestFailed -> OpenCodeFloatingPillLayout.Closable("Request failed")
+                OpenCodeFloatingPillLayout.Counter(item.pill.labelText.resolve(text), waiting = item.pill.needsInput)
+            is SessionChatActivityItem.RequestFailed ->
+                OpenCodeFloatingPillLayout.Closable(UiText.resource(R.string.session_chat_activity_request_failed).resolve(text))
             is SessionChatActivityItem.SideQuestionsFailed ->
-                OpenCodeFloatingPillLayout.Closable("/btw failed${countSuffix(item.count)} · Retry")
+                OpenCodeFloatingPillLayout.Closable(
+                    countedText(item.count, R.string.session_chat_activity_btw_failed, R.string.session_chat_activity_btw_failed_count)
+                        .resolve(text),
+                )
             is SessionChatActivityItem.SideQuestionsReady ->
-                OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.Check, "/btw answer ready${countSuffix(item.count)}")
+                OpenCodeFloatingPillLayout.IconLabel(
+                    OpenCodeIcons.Check,
+                    countedText(item.count, R.string.session_chat_activity_btw_ready, R.string.session_chat_activity_btw_ready_count)
+                        .resolve(text),
+                )
+            // The `/btw` command and the count; no words to translate.
             is SessionChatActivityItem.SideQuestionsRunning ->
-                OpenCodeFloatingPillLayout.Counter("/btw${countSuffix(item.count)}")
-            is SessionChatActivityItem.Queued -> OpenCodeFloatingPillLayout.Label("${item.count} queued")
+                OpenCodeFloatingPillLayout.Counter(if (item.count > 1) "/btw ×${item.count}" else "/btw")
+            is SessionChatActivityItem.Queued ->
+                OpenCodeFloatingPillLayout.Label(UiText.plural(R.plurals.session_chat_activity_queued, item.count).resolve(text))
             is SessionChatActivityItem.Finished -> OpenCodeFloatingPillLayout.Label(item.label)
         }
 
@@ -265,36 +303,92 @@ internal object SessionChatActivityPillCopy {
     fun isClosable(item: SessionChatActivityItem): Boolean =
         item is SessionChatActivityItem.RequestFailed || item is SessionChatActivityItem.SideQuestionsFailed
 
-    fun accessibilityLabel(item: SessionChatActivityItem): String =
-        when (item) {
-            SessionChatActivityItem.ReviewPermission -> "Review permission request"
-            SessionChatActivityItem.AnswerQuestion -> "Answer question"
-            is SessionChatActivityItem.Subagents ->
-                "${item.pill.accessibilityLabel}. ${if (item.pill.needsInput) "Open request" else "Open background work"}"
-            is SessionChatActivityItem.RequestFailed -> "Request failed. Show in chat"
-            is SessionChatActivityItem.SideQuestionsFailed ->
-                if (item.count > 1) "${item.count} side questions failed. Retry" else "Side question failed. Retry"
-            is SessionChatActivityItem.SideQuestionsReady ->
-                if (item.count > 1) "${item.count} side question answers ready. Open" else "Side question answer ready. Open"
-            is SessionChatActivityItem.SideQuestionsRunning ->
-                if (item.count > 1) "${item.count} side questions running" else "Side question running"
-            is SessionChatActivityItem.Queued ->
-                if (item.count == 1) "1 queued prompt. Open Up next" else "${item.count} queued prompts. Open Up next"
-            is SessionChatActivityItem.Finished -> "${item.label}, Done"
-        }
+    /** What VoiceOver/TalkBack reads: the item's state, then what a tap does. */
+    fun accessibilityLabel(item: SessionChatActivityItem): UiText {
+        val statusText = status(item)
+        val tapAction = action(item) ?: return statusText
+        return UiText.resource(R.string.session_chat_activity_status_action, statusText, UiText.resource(tapAction))
+    }
 
-    /** The round pill that stands for [count] items: its primary's state plus what a tap does. */
+    /** The round pill that stands for [count] items: its primary's state, then that a tap shows or hides them. */
     fun collapsedAccessibilityLabel(
         primary: SessionChatActivityItem,
         count: Int,
         stackOpen: Boolean,
-    ): String {
-        val lead = accessibilityLabel(primary).substringBefore(". ")
-        val more = if (count > 1) ", $count activities" else ""
-        return "$lead$more. ${if (stackOpen) "Hide" else "Show"} activity"
+    ): UiText {
+        val toggle =
+            if (stackOpen) {
+                UiText.plural(R.plurals.session_chat_activity_collapsed_hide_count, count)
+            } else {
+                UiText.plural(R.plurals.session_chat_activity_collapsed_show_count, count)
+            }
+        return UiText.resource(R.string.session_chat_activity_status_action, status(primary), toggle)
     }
 
-    private fun countSuffix(count: Int): String = if (count > 1) " ×$count" else ""
+    /** The item's state, as read aloud. */
+    private fun status(item: SessionChatActivityItem): UiText =
+        when (item) {
+            SessionChatActivityItem.ReviewPermission -> UiText.resource(R.string.session_chat_activity_review_permission_request)
+            SessionChatActivityItem.AnswerQuestion -> UiText.resource(R.string.session_chat_activity_answer_question)
+            is SessionChatActivityItem.Subagents -> item.pill.accessibilityText
+            is SessionChatActivityItem.RequestFailed -> UiText.resource(R.string.session_chat_activity_request_failed)
+            is SessionChatActivityItem.SideQuestionsFailed ->
+                countedPlural(
+                    item.count,
+                    R.string.session_chat_activity_side_question_failed,
+                    R.plurals.session_chat_activity_side_questions_failed,
+                )
+            is SessionChatActivityItem.SideQuestionsReady ->
+                countedPlural(
+                    item.count,
+                    R.string.session_chat_activity_side_question_ready,
+                    R.plurals.session_chat_activity_side_questions_ready,
+                )
+            is SessionChatActivityItem.SideQuestionsRunning ->
+                countedPlural(
+                    item.count,
+                    R.string.session_chat_activity_side_question_running,
+                    R.plurals.session_chat_activity_side_questions_running,
+                )
+            is SessionChatActivityItem.Queued -> UiText.plural(R.plurals.session_chat_activity_queued_prompts, item.count)
+            is SessionChatActivityItem.Finished ->
+                UiText.resource(R.string.session_chat_activity_finished, UiText.verbatim(item.label))
+        }
+
+    /** What a tap does, read after the state; null when the pill does nothing. */
+    @StringRes
+    private fun action(item: SessionChatActivityItem): Int? =
+        when (item) {
+            SessionChatActivityItem.ReviewPermission,
+            SessionChatActivityItem.AnswerQuestion,
+            is SessionChatActivityItem.SideQuestionsRunning,
+            is SessionChatActivityItem.Finished,
+            -> null
+            is SessionChatActivityItem.Subagents ->
+                if (item.pill.needsInput) {
+                    R.string.session_chat_activity_action_open_request
+                } else {
+                    R.string.session_chat_activity_action_open_background_work
+                }
+            is SessionChatActivityItem.RequestFailed -> R.string.session_chat_activity_action_show_in_chat
+            is SessionChatActivityItem.SideQuestionsFailed -> R.string.session_chat_activity_action_retry
+            is SessionChatActivityItem.SideQuestionsReady -> R.string.session_chat_activity_action_open
+            is SessionChatActivityItem.Queued -> R.string.session_chat_activity_action_open_up_next
+        }
+
+    /** [one] for a single item, [many] with the count otherwise. */
+    private fun countedText(
+        count: Int,
+        @StringRes one: Int,
+        @StringRes many: Int,
+    ): UiText = if (count > 1) UiText.resource(many, count) else UiText.resource(one)
+
+    /** [one] for a single item (its text has no count), the [many] plural otherwise. */
+    private fun countedPlural(
+        count: Int,
+        @StringRes one: Int,
+        @PluralsRes many: Int,
+    ): UiText = if (count > 1) UiText.plural(many, count) else UiText.resource(one)
 }
 
 /** Top-left context pills: todos progress and the branch pill. */
@@ -340,9 +434,9 @@ internal fun SessionChatNavigationSlotView(
     modifier: Modifier = Modifier,
 ) {
     OpenCodeFloatingPill(
-        layout = OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.ArrowDownward, SessionChatNavigationCopy.label(pill)),
+        layout = OpenCodeFloatingPillLayout.IconLabel(OpenCodeIcons.ArrowDownward, SessionChatNavigationCopy.label(pill).resolve()),
         state = OpenCodeFloatingPillState.Ready,
-        accessibilityLabel = SessionChatNavigationCopy.accessibilityLabel(pill),
+        accessibilityLabel = SessionChatNavigationCopy.accessibilityLabel(pill).resolve(),
         onClick = onClick,
         modifier = modifier,
     )
@@ -350,13 +444,18 @@ internal fun SessionChatNavigationSlotView(
 
 /** What the scroll-to-end pill says. */
 internal object SessionChatNavigationCopy {
-    fun label(pill: SessionChatNavigationPill): String = if (pill.newCount > 0) "${pill.newCount} new" else "Scroll to end"
+    fun label(pill: SessionChatNavigationPill): UiText =
+        if (pill.newCount > 0) {
+            UiText.plural(R.plurals.session_chat_navigation_new_count, pill.newCount)
+        } else {
+            UiText.resource(R.string.session_chat_navigation_scroll_to_end)
+        }
 
-    fun accessibilityLabel(pill: SessionChatNavigationPill): String =
-        when (pill.newCount) {
-            0 -> "Scroll to end"
-            1 -> "Scroll to end, 1 new message"
-            else -> "Scroll to end, ${pill.newCount} new messages"
+    fun accessibilityLabel(pill: SessionChatNavigationPill): UiText =
+        if (pill.newCount > 0) {
+            UiText.plural(R.plurals.session_chat_navigation_scroll_to_end_new_messages, pill.newCount)
+        } else {
+            UiText.resource(R.string.session_chat_navigation_scroll_to_end)
         }
 }
 

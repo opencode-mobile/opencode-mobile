@@ -105,7 +105,7 @@ struct OpenCodeFileTabs: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Close \(tab.title)")
+            .accessibilityLabel(Text(LocalizedStringResource("component.file_tabs.close", defaultValue: "Close \(tab.title)")))
             .openCodeKeyboardFocusable(.circle, activate: { onClose(tab.id) })
         }
         .background(selected ? OpenCodeColors.surfaceRaisedBase : Color.clear, in: shape)

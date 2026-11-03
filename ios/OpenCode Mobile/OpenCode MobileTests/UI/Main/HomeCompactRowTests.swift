@@ -134,12 +134,19 @@ struct HomeCompactRowTests {
     }
 
     @Test func activeRowsKeepTodaysLabelsAndTones() {
-        #expect(compactRow(.running).status == OpenCodeListItemStatus(text: "Running", tone: .interactive))
-        #expect(compactRow(.retrying(attempt: 2)).status == OpenCodeListItemStatus(text: "Retrying \u{00B7} 2", tone: .warning))
-        #expect(compactRow(.ready).status == OpenCodeListItemStatus(text: "Ready", tone: .success))
-        #expect(compactRow(.done).status == OpenCodeListItemStatus(text: "Done", tone: .success))
-        #expect(compactRow(.failed).status == OpenCodeListItemStatus(text: "Failed", tone: .error))
-        #expect(compactRow(.stopped).status == OpenCodeListItemStatus(text: "Stopped", tone: .warning))
+        #expect(compactRow(.running).status?.text.resolved == "Running")
+        #expect(compactRow(.running).status?.tone == .interactive)
+        // An interpolated label is a localised format with an argument; compare what is shown.
+        #expect(compactRow(.retrying(attempt: 2)).status?.text.resolved == "Retrying \u{00B7} 2")
+        #expect(compactRow(.retrying(attempt: 2)).status?.tone == .warning)
+        #expect(compactRow(.ready).status?.text.resolved == "Ready")
+        #expect(compactRow(.ready).status?.tone == .success)
+        #expect(compactRow(.done).status?.text.resolved == "Done")
+        #expect(compactRow(.done).status?.tone == .success)
+        #expect(compactRow(.failed).status?.text.resolved == "Failed")
+        #expect(compactRow(.failed).status?.tone == .error)
+        #expect(compactRow(.stopped).status?.text.resolved == "Stopped")
+        #expect(compactRow(.stopped).status?.tone == .warning)
     }
 
     @Test func onlyLiveRunningPulses() {

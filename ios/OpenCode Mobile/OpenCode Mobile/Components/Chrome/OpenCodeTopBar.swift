@@ -28,12 +28,12 @@ enum OpenCodeTopBarSubtitleLeading {
 enum OpenCodeTopBarLeading {
     case none
     case back(
-        accessibilityLabel: String = "Back",
+        accessibilityLabel: OpenCodeText = "top_bar.back",
         consumesInteractivePop: Bool = false,
         action: () -> Void
     )
-    case close(accessibilityLabel: String = "Close", action: () -> Void)
-    case customIcon(OpenCodeIcon, accessibilityLabel: String, action: () -> Void)
+    case close(accessibilityLabel: OpenCodeText = "component.close", action: () -> Void)
+    case customIcon(OpenCodeIcon, accessibilityLabel: OpenCodeText, action: () -> Void)
 
     var consumesInteractivePop: Bool {
         if case let .back(_, consumesInteractivePop, _) = self {
@@ -44,13 +44,13 @@ enum OpenCodeTopBarLeading {
 }
 
 enum OpenCodeTopBarAction {
-    case icon(OpenCodeIcon, accessibilityLabel: String, enabled: Bool = true, action: () -> Void)
-    case label(title: String, enabled: Bool = true, action: () -> Void)
+    case icon(OpenCodeIcon, accessibilityLabel: OpenCodeText, enabled: Bool = true, action: () -> Void)
+    case label(title: OpenCodeText, enabled: Bool = true, action: () -> Void)
 }
 
 struct OpenCodeTopBar: View {
-    let title: String?
-    let subtitle: String?
+    let title: OpenCodeText?
+    let subtitle: OpenCodeText?
     let subtitleLeading: OpenCodeTopBarSubtitleLeading?
     let subtitleAccessory: OpenCodeTopBarSubtitleAccessory?
     let leading: OpenCodeTopBarLeading
@@ -59,14 +59,15 @@ struct OpenCodeTopBar: View {
     let onTitleClick: (() -> Void)?
     let titleMenuExpanded: Bool
 
+    @Environment(\.layoutDirection) private var layoutDirection
     /// Set by the vertical bar layer while it draws the rail items (iPhone Duo).
     @State private var verticalBarActive = false
     /// Set while the bar sits where iPhone Duo uses a vertical bar, rail items or not.
     @State private var inVerticalBarContext = false
 
     init(
-        title: String? = nil,
-        subtitle: String? = nil,
+        title: OpenCodeText? = nil,
+        subtitle: OpenCodeText? = nil,
         subtitleLeading: OpenCodeTopBarSubtitleLeading? = nil,
         subtitleAccessory: OpenCodeTopBarSubtitleAccessory? = nil,
         leading: OpenCodeTopBarLeading = .none,
@@ -81,10 +82,8 @@ struct OpenCodeTopBar: View {
             "OpenCodeTopBar supports at most 1 labeled trailing action."
         )
 
-        let normalizedTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let normalizedSubtitle = subtitle?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedTitle = normalizedTitle?.isEmpty == true ? nil : normalizedTitle
-        let resolvedSubtitle = normalizedSubtitle?.isEmpty == true ? nil : normalizedSubtitle
+        let resolvedTitle = Self.normalized(title)
+        let resolvedSubtitle = Self.normalized(subtitle)
 
         self.title = resolvedTitle
         self.subtitle = resolvedSubtitle
@@ -96,6 +95,16 @@ struct OpenCodeTopBar: View {
         self.showDivider = showDivider
         self.onTitleClick = onTitleClick
         self.titleMenuExpanded = titleMenuExpanded
+    }
+
+    /// Trims verbatim content; drops empty text so the bar collapses the line.
+    private static func normalized(_ text: OpenCodeText?) -> OpenCodeText? {
+        guard let text else { return nil }
+        if case let .verbatim(string) = text.storage {
+            let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : .verbatim(trimmed)
+        }
+        return text.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : text
     }
 
     var body: some View {
@@ -189,7 +198,7 @@ struct OpenCodeTopBar: View {
 
     private func railItem(
         _ icon: OpenCodeIcon,
-        _ accessibilityLabel: String,
+        _ accessibilityLabel: OpenCodeText,
         enabled: Bool,
         anchorsOverflowMenu: Bool = false,
         action: @escaping () -> Void
@@ -250,6 +259,7 @@ struct OpenCodeTopBar: View {
                 icon: .arrowBack,
                 accessibilityLabel: accessibilityLabel,
                 enabled: true,
+                mirrorsInRightToLeft: true,
                 action: action
             )
         case let .close(accessibilityLabel, action):
@@ -312,10 +322,10 @@ struct OpenCodeTopBar: View {
                 if hasSubtitle, case .worktree? = subtitleLeading {
                     OpenCodeIconImage(icon: .callSplit, size: 12)
                         .foregroundStyle(OpenCodeColors.iconStrongBase)
-                        .accessibilityLabel("Worktree")
+                        .accessibilityLabel(Text("component.worktree"))
                 }
                 if let subtitle {
-                    Text(subtitle)
+                    Text(openCode: subtitle)
                         .font(OpenCodeTypography.caption)
                         .foregroundStyle(OpenCodeColors.textBase)
                         .lineLimit(1)
@@ -345,20 +355,28 @@ struct OpenCodeTopBar: View {
             .accessibilityHidden(true)
     }
 
-    private func titleBlockAccessibilityLabel(title: String) -> String {
+    private func titleBlockAccessibilityLabel(title openCodeTitle: OpenCodeText) -> String {
+        let title = openCodeTitle.resolved
         var parts: [String] = []
-        if let subtitle {
+        if let subtitle = subtitle?.resolved {
             if case let .letter(character, _)? = subtitleLeading {
-                parts.append("Project \(String(character).uppercased()) \(subtitle)")
+                let letter = String(character).uppercased()
+                parts.append(String(localized: LocalizedStringResource(
+                    "component.top_bar.project_subtitle",
+                    defaultValue: "Project \(letter) \(subtitle)"
+                )))
             } else if case .worktree? = subtitleLeading {
-                parts.append("Worktree \(subtitle)")
+                parts.append(String(localized: LocalizedStringResource(
+                    "component.top_bar.worktree_subtitle",
+                    defaultValue: "Worktree \(subtitle)"
+                )))
             } else {
                 parts.append(subtitle)
             }
         }
         switch subtitleAccessory {
         case let .statusDot(status):
-            parts.append("Live updates \(status.rawValue)")
+            parts.append(String(localized: status.accessibilityLabel))
         case nil:
             break
         }
@@ -367,11 +385,11 @@ struct OpenCodeTopBar: View {
     }
 
     @ViewBuilder
-    private func titleRow(_ title: String) -> some View {
+    private func titleRow(_ title: OpenCodeText) -> some View {
         if let onTitleClick {
             Button(action: onTitleClick) {
                 HStack(spacing: 4) {
-                    Text(title)
+                    Text(openCode: title)
                         .font(OpenCodeTypography.title)
                         .foregroundStyle(OpenCodeColors.textStrong)
                         .lineLimit(1)
@@ -390,8 +408,8 @@ struct OpenCodeTopBar: View {
         }
     }
 
-    private func titleLabel(_ title: String) -> some View {
-        Text(title)
+    private func titleLabel(_ title: OpenCodeText) -> some View {
+        Text(openCode: title)
             .font(OpenCodeTypography.title)
             .foregroundStyle(OpenCodeColors.textStrong)
             .lineLimit(1)
@@ -400,8 +418,8 @@ struct OpenCodeTopBar: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func subtitleLabel(_ subtitle: String) -> some View {
-        Text(subtitle)
+    private func subtitleLabel(_ subtitle: OpenCodeText) -> some View {
+        Text(openCode: subtitle)
             .font(OpenCodeTypography.caption)
             .foregroundStyle(OpenCodeColors.textBase)
             .lineLimit(1)
@@ -447,13 +465,16 @@ struct OpenCodeTopBar: View {
     @ViewBuilder
     private func topBarIconButton(
         icon: OpenCodeIcon,
-        accessibilityLabel: String,
+        accessibilityLabel: OpenCodeText,
         enabled: Bool,
+        mirrorsInRightToLeft: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
+        // Back points toward the leading edge, so it flips in right-to-left layouts.
         if #available(iOS 26, *) {
             Button(action: action) {
                 OpenCodeIconImage(icon: icon, size: 18)
+                    .scaleEffect(x: mirrorsIcon(mirrorsInRightToLeft) ? -1 : 1, y: 1)
                     .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textBase)
                     .frame(width: topBarIconButtonSize, height: topBarIconButtonSize)
                     .contentShape(Circle())
@@ -462,7 +483,7 @@ struct OpenCodeTopBar: View {
             .glassEffect(.regular.interactive(), in: .circle)
             .opacity(enabled ? 1 : 0.5)
             .disabled(!enabled)
-            .accessibilityLabel(accessibilityLabel)
+            .accessibilityLabel(openCode: accessibilityLabel)
             .openCodeKeyboardFocusable(.circle, enabled: enabled, activate: action)
         } else {
             OpenCodeButton(
@@ -471,7 +492,12 @@ struct OpenCodeTopBar: View {
                 contrast: .low,
                 action: action
             )
+            .scaleEffect(x: mirrorsIcon(mirrorsInRightToLeft) ? -1 : 1, y: 1)
         }
+    }
+
+    private func mirrorsIcon(_ mirrorsInRightToLeft: Bool) -> Bool {
+        mirrorsInRightToLeft && layoutDirection == .rightToLeft
     }
 }
 

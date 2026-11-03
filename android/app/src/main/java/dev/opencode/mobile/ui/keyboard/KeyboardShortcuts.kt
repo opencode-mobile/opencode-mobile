@@ -1,15 +1,22 @@
 package dev.opencode.mobile.ui.keyboard
 
 import android.view.KeyEvent
+import androidx.annotation.StringRes
+import dev.opencode.mobile.R
 import dev.opencode.mobile.ui.components.OpenCodeFocusedTextInput
+import dev.opencode.mobile.ui.text.UiText
 
 /** Groups of the Keyboard Shortcuts Helper (Meta+/), in the order they are listed. */
 enum class KeyboardShortcutGroupKind(
-    val label: String,
+    @param:StringRes private val labelRes: Int,
 ) {
-    Session("Session"),
-    Prompt("Prompt"),
-    Go("Go"),
+    Session(R.string.keyboard_shortcuts_group_session),
+    Prompt(R.string.keyboard_shortcuts_group_prompt),
+    Go(R.string.keyboard_shortcuts_group_go),
+    ;
+
+    val label: UiText
+        get() = UiText.resource(labelRes)
 }
 
 /**
@@ -18,7 +25,7 @@ enum class KeyboardShortcutGroupKind(
  * permission and "Submit" on a question).
  */
 enum class KeyboardShortcutAction(
-    val title: String,
+    @param:StringRes private val titleRes: Int,
     val keyCode: Int,
     val ctrl: Boolean,
     val group: KeyboardShortcutGroupKind,
@@ -28,16 +35,18 @@ enum class KeyboardShortcutAction(
     val repeats: Boolean = false,
     /** Another key that means the same chord (the numeric keypad Enter). */
     val alternateKeyCode: Int? = null,
+    /** Ctrl+1…Ctrl+9: the dock position the title names. */
+    private val projectNumber: Int? = null,
 ) {
     /** Ctrl+N: Home and Session Chat, in the current context's project. */
-    NewSession(title = "New Session", keyCode = KeyEvent.KEYCODE_N, ctrl = true, group = KeyboardShortcutGroupKind.Session),
+    NewSession(titleRes = R.string.keyboard_shortcuts_new_session, keyCode = KeyEvent.KEYCODE_N, ctrl = true, group = KeyboardShortcutGroupKind.Session),
 
     /** Ctrl+K: Session Chat, the slash-command list. */
-    CommandPalette(title = "Command Palette", keyCode = KeyEvent.KEYCODE_K, ctrl = true, group = KeyboardShortcutGroupKind.Session),
+    CommandPalette(titleRes = R.string.keyboard_shortcuts_command_palette, keyCode = KeyEvent.KEYCODE_K, ctrl = true, group = KeyboardShortcutGroupKind.Session),
 
     /** Ctrl+Shift+M: Session Chat, the model picker. */
     ModelPicker(
-        title = "Choose Model",
+        titleRes = R.string.keyboard_shortcuts_choose_model,
         keyCode = KeyEvent.KEYCODE_M,
         ctrl = true,
         shift = true,
@@ -45,11 +54,11 @@ enum class KeyboardShortcutAction(
     ),
 
     /** Ctrl+L: any visible Session Chat with a prompt composer. */
-    FocusComposer(title = "Focus Composer", keyCode = KeyEvent.KEYCODE_L, ctrl = true, group = KeyboardShortcutGroupKind.Session),
+    FocusComposer(titleRes = R.string.keyboard_shortcuts_focus_composer, keyCode = KeyEvent.KEYCODE_L, ctrl = true, group = KeyboardShortcutGroupKind.Session),
 
     /** Ctrl+Enter: Allow once on a permission; Next or Submit on a question. */
     PromptPrimary(
-        title = "Allow Once",
+        titleRes = R.string.keyboard_shortcuts_allow_once,
         keyCode = KeyEvent.KEYCODE_ENTER,
         ctrl = true,
         group = KeyboardShortcutGroupKind.Prompt,
@@ -58,7 +67,7 @@ enum class KeyboardShortcutAction(
 
     /** Ctrl+Alt+Enter: Always allow on a permission that offers it. */
     PromptAlways(
-        title = "Always Allow",
+        titleRes = R.string.keyboard_shortcuts_always_allow,
         keyCode = KeyEvent.KEYCODE_ENTER,
         ctrl = true,
         alt = true,
@@ -67,25 +76,25 @@ enum class KeyboardShortcutAction(
     ),
 
     /** Ctrl+Backspace: Deny a permission; Dismiss a question. */
-    PromptReject(title = "Deny", keyCode = KeyEvent.KEYCODE_DEL, ctrl = true, group = KeyboardShortcutGroupKind.Prompt),
+    PromptReject(titleRes = R.string.keyboard_shortcuts_deny, keyCode = KeyEvent.KEYCODE_DEL, ctrl = true, group = KeyboardShortcutGroupKind.Prompt),
 
     /** Ctrl+,: wherever Settings is reachable. */
-    Settings(title = "Settings", keyCode = KeyEvent.KEYCODE_COMMA, ctrl = true, group = KeyboardShortcutGroupKind.Go),
+    Settings(titleRes = R.string.keyboard_shortcuts_settings, keyCode = KeyEvent.KEYCODE_COMMA, ctrl = true, group = KeyboardShortcutGroupKind.Go),
 
     /** Ctrl+1…Ctrl+9: Home, the Nth project in the dock's project order. */
-    Project1(title = "Project 1", keyCode = KeyEvent.KEYCODE_1, ctrl = true, group = KeyboardShortcutGroupKind.Go),
-    Project2(title = "Project 2", keyCode = KeyEvent.KEYCODE_2, ctrl = true, group = KeyboardShortcutGroupKind.Go),
-    Project3(title = "Project 3", keyCode = KeyEvent.KEYCODE_3, ctrl = true, group = KeyboardShortcutGroupKind.Go),
-    Project4(title = "Project 4", keyCode = KeyEvent.KEYCODE_4, ctrl = true, group = KeyboardShortcutGroupKind.Go),
-    Project5(title = "Project 5", keyCode = KeyEvent.KEYCODE_5, ctrl = true, group = KeyboardShortcutGroupKind.Go),
-    Project6(title = "Project 6", keyCode = KeyEvent.KEYCODE_6, ctrl = true, group = KeyboardShortcutGroupKind.Go),
-    Project7(title = "Project 7", keyCode = KeyEvent.KEYCODE_7, ctrl = true, group = KeyboardShortcutGroupKind.Go),
-    Project8(title = "Project 8", keyCode = KeyEvent.KEYCODE_8, ctrl = true, group = KeyboardShortcutGroupKind.Go),
-    Project9(title = "Project 9", keyCode = KeyEvent.KEYCODE_9, ctrl = true, group = KeyboardShortcutGroupKind.Go),
+    Project1(R.string.keyboard_shortcuts_project, KeyEvent.KEYCODE_1, ctrl = true, group = KeyboardShortcutGroupKind.Go, projectNumber = 1),
+    Project2(R.string.keyboard_shortcuts_project, KeyEvent.KEYCODE_2, ctrl = true, group = KeyboardShortcutGroupKind.Go, projectNumber = 2),
+    Project3(R.string.keyboard_shortcuts_project, KeyEvent.KEYCODE_3, ctrl = true, group = KeyboardShortcutGroupKind.Go, projectNumber = 3),
+    Project4(R.string.keyboard_shortcuts_project, KeyEvent.KEYCODE_4, ctrl = true, group = KeyboardShortcutGroupKind.Go, projectNumber = 4),
+    Project5(R.string.keyboard_shortcuts_project, KeyEvent.KEYCODE_5, ctrl = true, group = KeyboardShortcutGroupKind.Go, projectNumber = 5),
+    Project6(R.string.keyboard_shortcuts_project, KeyEvent.KEYCODE_6, ctrl = true, group = KeyboardShortcutGroupKind.Go, projectNumber = 6),
+    Project7(R.string.keyboard_shortcuts_project, KeyEvent.KEYCODE_7, ctrl = true, group = KeyboardShortcutGroupKind.Go, projectNumber = 7),
+    Project8(R.string.keyboard_shortcuts_project, KeyEvent.KEYCODE_8, ctrl = true, group = KeyboardShortcutGroupKind.Go, projectNumber = 8),
+    Project9(R.string.keyboard_shortcuts_project, KeyEvent.KEYCODE_9, ctrl = true, group = KeyboardShortcutGroupKind.Go, projectNumber = 9),
 
     /** Ctrl+Tab: Home split layout. */
     NextSession(
-        title = "Next Session",
+        titleRes = R.string.keyboard_shortcuts_next_session,
         keyCode = KeyEvent.KEYCODE_TAB,
         ctrl = true,
         group = KeyboardShortcutGroupKind.Go,
@@ -94,7 +103,7 @@ enum class KeyboardShortcutAction(
 
     /** Ctrl+Shift+Tab: Home split layout. */
     PreviousSession(
-        title = "Previous Session",
+        titleRes = R.string.keyboard_shortcuts_previous_session,
         keyCode = KeyEvent.KEYCODE_TAB,
         ctrl = true,
         shift = true,
@@ -104,7 +113,7 @@ enum class KeyboardShortcutAction(
 
     /** Ctrl+Alt+S: Home and Settings while they show the split layout. */
     ToggleSidebar(
-        title = "Toggle Sidebar",
+        titleRes = R.string.keyboard_shortcuts_toggle_sidebar,
         keyCode = KeyEvent.KEYCODE_S,
         ctrl = true,
         alt = true,
@@ -117,6 +126,10 @@ enum class KeyboardShortcutAction(
         val projects: List<KeyboardShortcutAction> =
             listOf(Project1, Project2, Project3, Project4, Project5, Project6, Project7, Project8, Project9)
     }
+
+    /** Default Keyboard Shortcuts Helper title; a handler may name its chord more precisely. */
+    val title: UiText
+        get() = projectNumber?.let { UiText.resource(titleRes, it) } ?: UiText.resource(titleRes)
 
     /** `KeyEvent.META_*` mask for `KeyboardShortcutInfo`. */
     val metaState: Int
@@ -216,7 +229,7 @@ object KeyboardShortcutRules {
     fun homeHandlesNewSession(sessionChatBeside: Boolean): Boolean = !sessionChatBeside
 
     /** Helper title of Ctrl+[number] for the project [projectTitle]. */
-    fun projectShortcutTitle(projectTitle: String): String = "Show $projectTitle"
+    fun projectShortcutTitle(projectTitle: String): UiText = UiText.resource(R.string.keyboard_shortcuts_show_project, projectTitle)
 
     /** The filter id Ctrl+[number] selects: the Nth project in dock order, or null past the end. */
     fun projectForShortcut(

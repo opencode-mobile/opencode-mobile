@@ -9,24 +9,24 @@ enum OpenCodeStatusStackStyle {
 
 /// Centered mid-well indeterminate status: neutral ring + title + subtitle, or a ring alone.
 struct OpenCodeStatusStack: View {
-    var title: String
-    var subtitle: String
+    var title: OpenCodeText
+    var subtitle: OpenCodeText
     var style: OpenCodeStatusStackStyle
     var accessibilityIdentifier: String?
 
-    init(title: String, subtitle: String, accessibilityIdentifier: String? = nil) {
-        precondition(!title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        precondition(!subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    init(title: OpenCodeText, subtitle: OpenCodeText, accessibilityIdentifier: String? = nil) {
+        precondition(!title.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        precondition(!subtitle.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         self.title = title
         self.subtitle = subtitle
         self.style = .labeled
         self.accessibilityIdentifier = accessibilityIdentifier
     }
 
-    init(spinner accessibilityLabel: String = "Loading", accessibilityIdentifier: String? = nil) {
-        precondition(!accessibilityLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+    init(spinner accessibilityLabel: OpenCodeText = "Loading", accessibilityIdentifier: String? = nil) {
+        precondition(!accessibilityLabel.resolved.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         self.title = accessibilityLabel
-        self.subtitle = ""
+        self.subtitle = .empty
         self.style = .spinner
         self.accessibilityIdentifier = accessibilityIdentifier
     }
@@ -42,13 +42,13 @@ struct OpenCodeStatusStack: View {
                 .modifier(OptionalAccessibilityIdentifier(accessibilityIdentifier))
 
             if style == .labeled {
-                Text(title)
+                Text(openCode: title)
                     .font(OpenCodeTypography.body)
                     .foregroundStyle(OpenCodeColors.textBase)
                     .multilineTextAlignment(.center)
                     .accessibilityHidden(true)
 
-                Text(subtitle)
+                Text(openCode: subtitle)
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeaker)
                     .multilineTextAlignment(.center)
@@ -62,9 +62,9 @@ struct OpenCodeStatusStack: View {
     private var accessibilityLabel: String {
         switch style {
         case .labeled:
-            "\(title). \(subtitle)"
+            "\(title.resolved). \(subtitle.resolved)"
         case .spinner:
-            title
+            title.resolved
         }
     }
 }

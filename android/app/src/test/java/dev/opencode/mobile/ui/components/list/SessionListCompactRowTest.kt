@@ -1,6 +1,8 @@
 package dev.opencode.mobile.ui.components
 
 import dev.opencode.mobile.theme.LetterAccent
+import dev.opencode.mobile.ui.text.EnglishStrings
+import dev.opencode.mobile.ui.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -8,8 +10,8 @@ import org.junit.Test
 class SessionListCompactRowTest {
     @Test
     fun idle_hasNoStatus() {
-        assertNull(session(SessionListStatus.Idle).compactStatus())
-        assertNull(session(SessionListStatus.Idle, stale = true).compactStatus())
+        assertNull(session(SessionListStatus.Idle).compactStatus(EnglishStrings))
+        assertNull(session(SessionListStatus.Idle, stale = true).compactStatus(EnglishStrings))
     }
 
     @Test
@@ -24,7 +26,7 @@ class SessionListCompactRowTest {
                 SessionListStatus.Stopped to ("Stopped" to OpenCodeListItemStatusTone.Warning),
             )
         expected.forEach { (status, labelAndTone) ->
-            val compact = session(status).compactStatus()
+            val compact = session(status).compactStatus(EnglishStrings)
             assertEquals(status.name, labelAndTone.first, compact?.text)
             assertEquals(status.name, labelAndTone.second, compact?.tone)
         }
@@ -58,7 +60,7 @@ class SessionListCompactRowTest {
         letterAccent = LetterAccent.Red,
         subtitle = subtitle,
         status = status,
-        caption = "4m ago",
+        caption = UiText.verbatim("4m ago"),
         retryAttempt = 2,
         statusStale = stale,
         projectName = projectName,

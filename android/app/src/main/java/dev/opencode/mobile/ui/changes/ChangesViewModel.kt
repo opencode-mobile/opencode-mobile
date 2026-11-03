@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ServerCapabilities
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
@@ -14,14 +15,17 @@ import dev.opencode.mobile.domain.session.FileDiffStatus
 import dev.opencode.mobile.domain.session.SessionError
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.VcsDiffMode
+import dev.opencode.mobile.domain.session.VcsInfo
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
 import dev.opencode.mobile.ui.components.UnifiedDiffDocument
 import dev.opencode.mobile.ui.components.UnifiedDiffParser
 import dev.opencode.mobile.ui.sessionchat.LastTurnReviewChangesStore
 import dev.opencode.mobile.ui.sessionchat.ReviewChangesSummary
+import dev.opencode.mobile.ui.text.UiText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -30,13 +34,37 @@ import kotlinx.serialization.Serializable
 import javax.inject.Inject
 
 @Serializable
-enum class ChangeSource(
-    val displayName: String,
-    val emptyTitle: String,
-    val emptyDetail: String,
-) {
-    WorkingTree("Git changes", "No Git changes", "The working tree has no uncommitted changes."),
-    LastTurn("Last turn changes", "No changes", "The latest completed turn did not change any files."),
+enum class ChangeSource {
+    WorkingTree,
+    LastTurn,
+    ;
+
+    val displayName: UiText
+        get() =
+            UiText.resource(
+                when (this) {
+                    WorkingTree -> R.string.changes_source_working_tree_name
+                    LastTurn -> R.string.changes_source_last_turn_name
+                },
+            )
+
+    val emptyTitle: UiText
+        get() =
+            UiText.resource(
+                when (this) {
+                    WorkingTree -> R.string.changes_source_working_tree_empty_title
+                    LastTurn -> R.string.changes_source_last_turn_empty_title
+                },
+            )
+
+    val emptyDetail: UiText
+        get() =
+            UiText.resource(
+                when (this) {
+                    WorkingTree -> R.string.changes_source_working_tree_empty_message
+                    LastTurn -> R.string.changes_source_last_turn_empty_message
+                },
+            )
 }
 
 sealed interface ChangesPhase {
@@ -50,8 +78,9 @@ sealed interface ChangesPhase {
         val changeSet: ChangesContentState,
     ) : ChangesPhase
 
+    /** [message] is usually the server's error, verbatim; the screen shows a fallback when it is blank. */
     data class Error(
-        val message: String,
+        val message: UiText,
     ) : ChangesPhase
 }
 
@@ -60,8 +89,25 @@ data class ChangesUiState(
     val selectedSource: ChangeSource = ChangeSource.LastTurn,
     val availableSources: List<ChangeSource> = listOf(ChangeSource.LastTurn),
     val isRefreshing: Boolean = false,
-    val refreshError: String? = null,
+    val refreshError: UiText? = null,
+    /** Set while the selected source is empty but the other source has files. */
+    val otherSourceHint: ChangesOtherSourceHint? = null,
 )
+
+/** Points from an empty source to the other one, which has [fileCount] changed files. */
+data class ChangesOtherSourceHint(
+    val source: ChangeSource,
+    val fileCount: Int,
+) {
+    val message: UiText
+        get() =
+            when (source) {
+                ChangeSource.WorkingTree -> UiText.plural(R.plurals.changes_other_source_working_tree, fileCount)
+                ChangeSource.LastTurn -> UiText.plural(R.plurals.changes_other_source_last_turn, fileCount)
+            }
+
+    val actionTitle: UiText get() = UiText.resource(R.string.changes_other_source_show, source.displayName)
+}
 
 data class ChangesContentState(
     val files: List<FileDiff>,
@@ -78,25 +124,28 @@ data class ChangesContentState(
 
     val additions: Int get() = filteredFiles.sumOf(FileDiff::additions)
     val deletions: Int get() = filteredFiles.sumOf(FileDiff::deletions)
-    val summary: String get() = countLabel(filteredFiles.size, "changed file", "changed files")
+    val summary: UiText get() = UiText.plural(R.plurals.changes_summary_changed_files, filteredFiles.size)
 
-    val aggregateAccessibilityLabel: String
+    val aggregateAccessibilityLabel: UiText
         get() =
-            listOf(
+            UiText.resource(
+                R.string.changes_accessibility_summary,
                 summary,
-                countLabel(additions, "addition", "additions"),
-                countLabel(deletions, "deletion", "deletions"),
-            ).joinToString()
+                additionsLabel(additions),
+                deletionsLabel(deletions),
+            )
 
-    fun fileAccessibilityLabel(file: FileDiff): String {
+    fun fileAccessibilityLabel(file: FileDiff): UiText {
         val position = filteredFiles.indexOfFirst { it.path == file.path }.coerceAtLeast(0)
-        return listOf(
-            file.path,
+        return UiText.resource(
+            R.string.changes_accessibility_file,
+            UiText.verbatim(file.path),
             file.status.displayName(),
-            "file ${position + 1} of ${filteredFiles.size}",
-            countLabel(file.additions, "addition", "additions"),
-            countLabel(file.deletions, "deletion", "deletions"),
-        ).joinToString()
+            position + 1,
+            filteredFiles.size,
+            additionsLabel(file.additions),
+            deletionsLabel(file.deletions),
+        )
     }
 }
 
@@ -143,6 +192,7 @@ class ChangesViewModel(
     private val capabilitiesProvider: () -> ServerCapabilities,
     private val lastTurnReviewChangesStore: LastTurnReviewChangesStore = LastTurnReviewChangesStore(),
     private val foregroundEventStream: ForegroundEventStream? = null,
+    private val vcsSettleDelayMs: Long = VCS_SETTLE_DELAY_MS,
 ) : ViewModel() {
     @Inject
     constructor(
@@ -324,17 +374,19 @@ class ChangesViewModel(
                     val sortedFiles = files.sortedBy(FileDiff::path)
                     logLoad(selectedSource, target, sortedFiles.size, if (sortedFiles.isEmpty()) "empty" else "success", startedAt)
                     publishLastTurnSummary(target, selectedSource, sortedFiles, failed = false)
+                    val phase =
+                        when {
+                            selectedSource == ChangeSource.LastTurn && target.messageId == null -> ChangesPhase.NoTurn
+                            sortedFiles.isEmpty() -> ChangesPhase.NoChanges
+                            else -> ChangesPhase.Content(ChangesContentState(sortedFiles, filter))
+                        }
                     _uiState.value =
                         ChangesUiState(
-                            phase =
-                                when {
-                                    selectedSource == ChangeSource.LastTurn && target.messageId == null -> ChangesPhase.NoTurn
-                                    sortedFiles.isEmpty() -> ChangesPhase.NoChanges
-                                    else -> ChangesPhase.Content(ChangesContentState(sortedFiles, filter))
-                                },
+                            phase = phase,
                             selectedSource = selectedSource,
                             availableSources = availableSources,
                         )
+                    if (phase == ChangesPhase.NoChanges) publishOtherSourceHint(target, selectedSource)
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Throwable) {
@@ -382,7 +434,7 @@ class ChangesViewModel(
     private suspend fun resolveAvailableSources(worktree: String): List<ChangeSource> {
         val sources = mutableListOf<ChangeSource>()
         try {
-            if (repository.getVcsInfo(worktree).supportsGit) {
+            if (settledVcsInfo(worktree).supportsGit) {
                 sources += ChangeSource.WorkingTree
             }
         } catch (error: Throwable) {
@@ -392,6 +444,49 @@ class ChangesViewModel(
             sources += ChangeSource.LastTurn
         }
         return sources
+    }
+
+    /**
+     * A v2 server answers without a branch for a moment after it loads (or reloads) a project.
+     * Ask again a few times before treating the folder as having no Git, so Git changes stays
+     * available. A folder that is not a Git repository never settles and ends up without it.
+     */
+    private suspend fun settledVcsInfo(worktree: String): VcsInfo {
+        var info = repository.getVcsInfo(worktree)
+        repeat(VCS_SETTLE_RETRIES) {
+            if (info.isSettled || info.supportsGit) return info
+            delay(vcsSettleDelayMs)
+            info = repository.getVcsInfo(worktree)
+        }
+        return info
+    }
+
+    /**
+     * When the selected source is empty, counts the other source's files so the empty state can
+     * point there. Lookup failures leave the plain empty state.
+     */
+    private suspend fun publishOtherSourceHint(
+        target: Target,
+        emptySource: ChangeSource,
+    ) {
+        val other = availableSources.firstOrNull { it != emptySource } ?: return
+        val count =
+            try {
+                when (other) {
+                    ChangeSource.WorkingTree -> repository.getVcsStatus(target.worktree).size
+                    ChangeSource.LastTurn ->
+                        target.messageId?.let { repository.getSessionDiff(target.sessionId, it, target.worktree).size } ?: 0
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                DiagnosticLog.info(DiagnosticLogArea.Chat, "hint source=${other.logValue()} session=${target.sessionId} result=failure")
+                return
+            }
+        if (count <= 0) return
+        val current = _uiState.value
+        if (current.phase != ChangesPhase.NoChanges || current.selectedSource != emptySource) return
+        _uiState.value = current.copy(otherSourceHint = ChangesOtherSourceHint(other, count))
     }
 
     private fun preferredSource(requested: ChangeSource): ChangeSource =
@@ -467,6 +562,10 @@ class ChangesViewModel(
 
     private companion object {
         const val SESSION_IDLE_EVENT = "session.idle"
+
+        /** A cold project settles in well under a second; give it about 1.2 s. */
+        const val VCS_SETTLE_RETRIES = 4
+        const val VCS_SETTLE_DELAY_MS = 300L
     }
 }
 
@@ -486,17 +585,26 @@ private fun ChangeSource.logValue() = name.replace(Regex("([a-z])([A-Z])"), "$1-
 
 private fun Throwable.isUnsupportedVcs() = this is SessionError.Http && statusCode == 404
 
-private fun Throwable.userMessage(): String =
-    TurnDiffUnavailable.userFacing(this)
-        ?: when (this) {
-            is SessionError.Transport -> cause.message ?: "Request failed"
-            else -> message ?: "Request failed"
+/** The moved-folders text, the server's own message verbatim, or a fallback when it has none. */
+private fun Throwable.userMessage(): UiText {
+    if (TurnDiffUnavailable.userFacing(this) != null) return UiText.resource(R.string.changes_error_turn_moved_folders)
+    val serverMessage =
+        when (this) {
+            is SessionError.Transport -> cause.message
+            else -> message
         }
+    return serverMessage?.let(UiText::verbatim) ?: UiText.resource(R.string.changes_error_request_failed)
+}
 
-private fun FileDiffStatus.displayName() = name.replaceFirstChar(Char::uppercase)
+private fun FileDiffStatus.displayName(): UiText =
+    UiText.resource(
+        when (this) {
+            FileDiffStatus.Added -> R.string.changes_file_status_added
+            FileDiffStatus.Deleted -> R.string.changes_file_status_deleted
+            FileDiffStatus.Modified -> R.string.changes_file_status_modified
+        },
+    )
 
-private fun countLabel(
-    count: Int,
-    singular: String,
-    plural: String,
-) = "$count ${if (count == 1) singular else plural}"
+private fun additionsLabel(count: Int): UiText = UiText.plural(R.plurals.changes_count_additions, count)
+
+private fun deletionsLabel(count: Int): UiText = UiText.plural(R.plurals.changes_count_deletions, count)

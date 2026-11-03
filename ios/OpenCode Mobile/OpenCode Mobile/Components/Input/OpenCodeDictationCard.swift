@@ -14,50 +14,72 @@ enum OpenCodeDictationUnavailableReason: Equatable {
     case modelDownloadFailed
     case recognizerError(String)
 
+    /// The system that owns the speech model; a name, so never translated.
+    private static let speechSystemName = "iOS"
+
     /// Model copy names iOS, so a slow system download is not read as an app fault.
     func title(languageLabel: String) -> String {
-        let model = languageLabel.isEmpty ? "speech model" : "\(languageLabel) speech model"
+        let model = languageLabel.isEmpty
+            ? String(localized: "dictation.speech_model", defaultValue: "speech model")
+            : String(localized: LocalizedStringResource(
+                "dictation.language_speech_model",
+                defaultValue: "\(languageLabel) speech model"
+            ))
+        let system = Self.speechSystemName
         switch self {
         case .permissionDenied:
-            return "Microphone access is off"
+            return String(localized: "dictation.microphone_off", defaultValue: "Microphone access is off")
         case .modelNotInstalled:
-            return "iOS needs its \(model)"
+            return String(localized: LocalizedStringResource(
+                "dictation.model_not_installed_title",
+                defaultValue: "\(system) needs its \(model)"
+            ))
         case .modelDownloading:
-            return "iOS is downloading the \(model)"
+            return String(localized: LocalizedStringResource(
+                "dictation.model_downloading_title",
+                defaultValue: "\(system) is downloading the \(model)"
+            ))
         case .modelDownloadFailed:
-            return "iOS couldn't download the \(model)"
+            return String(localized: LocalizedStringResource(
+                "dictation.model_download_failed_title",
+                defaultValue: "\(system) couldn't download the \(model)"
+            ))
         case let .recognizerError(message):
             let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? "Dictation stopped" : trimmed
+            return trimmed.isEmpty ? String(localized: "dictation.stopped", defaultValue: "Dictation stopped") : trimmed
         }
     }
 
     var detail: String? {
+        let system = Self.speechSystemName
         switch self {
         case .permissionDenied, .recognizerError:
             return nil
         case .modelNotInstalled:
-            return "Dictation runs on this device, so your voice is never uploaded. "
-                + "iOS downloads the model once and keeps it for every app."
+            return String(localized: LocalizedStringResource(
+                "dictation.model_not_installed_detail",
+                defaultValue: "Dictation runs on this device, so your voice is never uploaded. \(system) downloads the model once and keeps it for every app."
+            ))
         case .modelDownloading:
-            return "This is a system download. It keeps going if you close this card."
+            return String(
+                localized: "dictation.model_downloading_detail",
+                defaultValue: "This is a system download. It keeps going if you close this card."
+            )
         case .modelDownloadFailed:
-            return "Check the connection and free storage on this device, then try again."
+            return String(
+                localized: "dictation.model_download_failed_detail",
+                defaultValue: "Check the connection and free storage on this device, then try again."
+            )
         }
     }
 
-    var actionTitle: String {
+    var actionTitle: OpenCodeText {
         switch self {
-        case .permissionDenied:
-            return "Open Settings"
-        case .modelNotInstalled:
-            return "Download"
-        case .modelDownloading:
-            return "Downloading…"
-        case .modelDownloadFailed:
-            return "Try Again"
-        case .recognizerError:
-            return "Retry"
+        case .permissionDenied: "dictation.action.open_settings"
+        case .modelNotInstalled: "dictation.action.download"
+        case .modelDownloading: "dictation.action.downloading"
+        case .modelDownloadFailed: "dictation.action.try_again"
+        case .recognizerError: "common.retry"
         }
     }
 
@@ -129,7 +151,8 @@ struct OpenCodeDictationCard: View {
 
     private func downloadProgress(_ progress: Double?) -> some View {
         let clamped = progress.map { min(1, max(0, $0.isFinite ? $0 : 0)) }
-        let label = clamped.map { "\(Int(($0 * 100).rounded()))%" } ?? "Starting…"
+        let label = clamped.map { "\(Int(($0 * 100).rounded()))%" }
+            ?? String(localized: "dictation.starting", defaultValue: "Starting…")
         return VStack(spacing: 6) {
             Group {
                 if let clamped {
@@ -140,7 +163,7 @@ struct OpenCodeDictationCard: View {
                 }
             }
             .tint(OpenCodeColors.interactive)
-            .accessibilityLabel("Downloading speech model")
+            .accessibilityLabel(Text("dictation.downloading_model"))
             .accessibilityValue(label)
             Text(label)
                 .font(OpenCodeTypography.bodySecondary)
@@ -164,7 +187,7 @@ struct OpenCodeDictationCard: View {
             ScrollView {
                 Group {
                     if committed.isEmpty, volatileText.isEmpty {
-                        Text("Listening…")
+                        Text("dictation.listening_placeholder")
                             .foregroundStyle(OpenCodeColors.textWeak)
                     } else {
                         (Text(committed).foregroundStyle(OpenCodeColors.textStrong)
@@ -228,20 +251,20 @@ struct OpenCodeDictationCardActions: View {
     var body: some View {
         VStack(spacing: 8) {
             OpenCodeButton(
-                variant: .fullWidthText(title: "Cancel"),
+                variant: .fullWidthText(title: "common.cancel"),
                 contrast: .low,
                 action: onCancel
             )
-            .accessibilityLabel("Cancel dictation")
+            .accessibilityLabel(Text("dictation.cancel_description"))
 
             switch variant {
             case .listening, .finishing:
                 OpenCodeButton(
-                    variant: .fullWidthText(title: "Insert"),
+                    variant: .fullWidthText(title: "dictation.insert"),
                     enabled: variant == .listening && hasTranscript,
                     action: onInsert
                 )
-                .accessibilityLabel("Insert transcript")
+                .accessibilityLabel(Text("dictation.insert_description"))
             case let .unavailable(reason):
                 OpenCodeButton(
                     variant: .fullWidthText(title: reason.actionTitle),

@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.sessionchat.view
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -7,9 +8,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.agent.SelectableAgent
 import dev.opencode.mobile.domain.model.ModelSelection
 import dev.opencode.mobile.domain.model.ModelSelectionCatalog
@@ -29,11 +32,11 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.sessionchat.SessionChatViewModel
 
 internal enum class ComposerPickerKind(
-    val sheetTitle: String,
+    @StringRes val sheetTitle: Int,
 ) {
-    Model("Model"),
-    Mode("Agent mode"),
-    Variant("Variant"),
+    Model(R.string.session_chat_sheet_picker_model),
+    Mode(R.string.session_chat_sheet_picker_agent_mode),
+    Variant(R.string.session_chat_sheet_picker_variant),
     ;
 
     val productScreenId: String
@@ -76,11 +79,12 @@ internal fun SessionChatPickerSheet(
             ModelSelectionCatalog(options = modelOptions, serverDefault = null)
         }
     val activeModelProvider = modelCatalog.providers.firstOrNull { it.id == activeModelProviderId }
+    // Provider labels come from the server and stay verbatim.
     val modelSheetTitle =
         if (activePicker == ComposerPickerKind.Model) {
-            activeModelProvider?.label ?: ComposerPickerKind.Model.sheetTitle
+            activeModelProvider?.label ?: stringResource(ComposerPickerKind.Model.sheetTitle)
         } else {
-            activePicker?.sheetTitle.orEmpty()
+            activePicker?.let { stringResource(it.sheetTitle) }.orEmpty()
         }
     val showsModelFilter =
         activePicker == ComposerPickerKind.Model &&
@@ -90,7 +94,7 @@ internal fun SessionChatPickerSheet(
         if (activePicker == ComposerPickerKind.Model && activeModelProvider != null) {
             OpenCodeBottomSheetHeaderAction(
                 imageVector = OpenCodeIcons.ArrowBack,
-                contentDescription = "Back to providers",
+                contentDescription = stringResource(R.string.session_chat_sheet_picker_back_to_providers),
                 onClick = {
                     ProductAnalytics.logUserAction(
                         screenId = ProductAnalytics.Screen.SESSION_MODEL_PICKER,
@@ -227,7 +231,7 @@ private fun ModelPickerSheetContent(
         val filteredModels = activeProvider.models.filter { it.matchesFilter(filterText) }
         if (filteredModels.isEmpty()) {
             OpenCodeBottomSheetEntry(
-                title = "No models match your filter",
+                title = stringResource(R.string.session_chat_sheet_picker_no_models_match),
                 enabled = false,
                 onClick = {},
             )
@@ -253,7 +257,7 @@ private fun ModelPickerFilterField(
     OpenCodeTextInput(
         value = value,
         onValueChange = onValueChange,
-        hint = "Filter models...",
+        hint = stringResource(R.string.session_chat_sheet_picker_filter_models_hint),
         kind = OpenCodeTextInputKind.Filter,
         modifier =
             modifier

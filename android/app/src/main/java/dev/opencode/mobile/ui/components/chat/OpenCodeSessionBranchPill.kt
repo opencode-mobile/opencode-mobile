@@ -29,6 +29,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -36,6 +37,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.CodeTextStyle
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -246,7 +248,7 @@ fun OpenCodeSessionBranchPopoverContent(
                 )
                 summary.visibleBaseBranch?.let { base ->
                     Text(
-                        text = "Based on $base",
+                        text = stringResource(R.string.component_branch_pill_based_on, base),
                         style = MaterialTheme.typography.bodySmall,
                         color = textWeak,
                         maxLines = 1,
@@ -303,9 +305,17 @@ fun OpenCodeSessionBranchPopoverContent(
         HorizontalDivider(color = divider)
         Column(modifier = Modifier.padding(vertical = 4.dp)) {
             if (summary.hasChanges) {
-                BranchPopoverAction("View all changes", OpenCodeIcons.Description, onViewAllChanges)
+                BranchPopoverAction(
+                    stringResource(R.string.component_branch_pill_view_all_changes),
+                    OpenCodeIcons.Description,
+                    onViewAllChanges,
+                )
             }
-            BranchPopoverAction("Copy branch name", OpenCodeIcons.ContentCopy, onCopyBranchName)
+            BranchPopoverAction(
+                stringResource(R.string.component_branch_pill_copy_branch_name),
+                OpenCodeIcons.ContentCopy,
+                onCopyBranchName,
+            )
         }
     }
 }

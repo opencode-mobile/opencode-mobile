@@ -283,20 +283,25 @@ final class HomeSessionActions {
         canArchive = true
     }
 
-    private func mutationErrorMessage(_ error: Error) -> String {
-        guard let sessionError = error as? SessionError else { return error.localizedDescription }
+    /// Server and system text stays verbatim; the app's own fallbacks are keyed.
+    private func mutationErrorMessage(_ error: Error) -> OpenCodeText {
+        guard let sessionError = error as? SessionError else { return .verbatim(error.localizedDescription) }
         switch sessionError {
         case let .http(_, message):
-            return message ?? "Request failed"
+            return OpenCodeText.verbatim(ifPresent: message) ?? "home.session_error.request_failed"
         case .transport:
-            return "Unable to reach the server"
+            return "connection.error.unreachable"
         case .decoding:
-            return "Unable to read server response"
+            return "home.session_error.unreadable_response"
         }
     }
 
-    private static let emptyTitleError = "Enter a session title"
-    private static let nothingToForkError = "Nothing to fork yet"
-    private static let archiveError = "Couldn't archive session."
-    private static let deleteError = "Couldn't delete session."
+    private static let emptyTitleError: OpenCodeText = "home.session_error.empty_title"
+    private static let nothingToForkError: OpenCodeText = "home.session_error.nothing_to_fork"
+    private static var archiveError: String {
+        String(localized: "home.session_error.archive_failed", defaultValue: "Couldn't archive session.")
+    }
+    private static var deleteError: String {
+        String(localized: "home.session_error.delete_failed", defaultValue: "Couldn't delete session.")
+    }
 }

@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.home
 
+import dev.opencode.mobile.ui.main.SessionListHomeChrome
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -25,14 +27,14 @@ class HomeProjectPickerStateTest {
         val state = HomeProjectPickerState().toggleExpanded("a")
 
         assertEquals(5, state.visibleWorktrees("a", worktrees).size)
-        assertEquals("Show all 7", state.showAllLabel("a", worktrees.size))
+        assertEquals("Show all 7", SessionListHomeChrome.showAllLabel(state, "a", worktrees.size)?.english())
         val all = state.toggleShowAll("a")
         assertEquals(7, all.visibleWorktrees("a", worktrees).size)
-        assertEquals("Show fewer", all.showAllLabel("a", worktrees.size))
+        assertEquals("Show fewer", SessionListHomeChrome.showAllLabel(all, "a", worktrees.size)?.english())
         assertEquals(5, all.toggleShowAll("a").visibleWorktrees("a", worktrees).size)
         // Five or fewer: every worktree, no Show all row.
         assertEquals(5, state.visibleWorktrees("a", (1..5).toList()).size)
-        assertNull(state.showAllLabel("a", 5))
+        assertNull(SessionListHomeChrome.showAllLabel(state, "a", 5))
     }
 
     @Test

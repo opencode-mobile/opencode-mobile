@@ -66,6 +66,7 @@ import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlocks
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatComposerState
 import dev.opencode.mobile.ui.sessionchat.SessionChatMessageItem
+import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineBlock
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineRegionState
 import dev.opencode.mobile.ui.sessionchat.SessionChatTimelineState
@@ -1148,7 +1149,8 @@ class SessionChatComposer(
         worktree: String,
         onOptimisticRows: suspend (List<SessionChatMessageItem>) -> Unit,
         onSendAccepted: suspend () -> Unit,
-        onSendFailed: (optimisticId: String, error: String) -> Unit,
+        /** [error] is app text for a failure the app caused, else the server or transport error as is. */
+        onSendFailed: (optimisticId: String, error: UiText) -> Unit,
         isSessionBusy: Boolean,
         supportsFollowUp: Boolean,
         commandKeepsClientMessageId: Boolean = false,
@@ -1278,7 +1280,7 @@ class SessionChatComposer(
                         submittedAttachmentRevisions = submittedAttachmentRevisions,
                     )
                     _state.update { it.copy(isSending = false, sendProgressPercent = null) }
-                    onSendFailed(display.id, PENDING_SEND_TIMEOUT_ERROR)
+                    onSendFailed(display.id, UiText.verbatim(PENDING_SEND_TIMEOUT_ERROR))
                     return@launch
                 }
                 val hasAttachments = attachments.isNotEmpty()
@@ -1404,7 +1406,10 @@ class SessionChatComposer(
                     submittedAttachmentRevisions = submittedAttachmentRevisions,
                 )
                 _state.update { it.copy(isSending = false, sendProgressPercent = null) }
-                onSendFailed(display.id, errorMessage(throwable))
+                onSendFailed(
+                    display.id,
+                    (throwable as? SessionChatRevertCommitFailure)?.text ?: UiText.verbatim(errorMessage(throwable)),
+                )
             }
         }
     }

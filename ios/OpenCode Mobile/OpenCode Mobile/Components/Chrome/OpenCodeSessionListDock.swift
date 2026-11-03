@@ -75,7 +75,7 @@ struct OpenCodeSessionListDock: View {
                 .contentShape(Circle())
         }
         .buttonStyle(OpenCodeSubtleControlPressStyle(shape: Circle()))
-        .accessibilityLabel("Add project")
+        .accessibilityLabel(openCode: "session_list.dock.add_project")
         .openCodeKeyboardFocusable(.circle, activate: onAddProject)
     }
 
@@ -384,23 +384,33 @@ struct SessionListScopeControl: View {
     }
 
     private var accessibilityLabel: String {
-        guard let tab = visibleTab else { return "Project filter" }
+        guard let tab = visibleTab else {
+            return String(localized: "session_list.dock.project_filter", defaultValue: "Project filter")
+        }
         if let load = tab.load {
             // Loading or failed replaces the session count, which is not known yet.
             return "\(tab.dockTitle), \(load.subtitle)"
         }
+        let count = tab.count
+        let sessions = String(localized: LocalizedStringResource(
+            "session_list.dock.session_count",
+            defaultValue: "\(count) sessions"
+        ))
         let subtitle = displayedSubtitle(tab)
         if subtitle.isEmpty {
-            return "\(tab.dockTitle), \(tab.count) sessions"
+            return "\(tab.dockTitle), \(sessions)"
         }
-        return "\(tab.dockTitle), \(subtitle), \(tab.count) sessions"
+        return "\(tab.dockTitle), \(subtitle), \(sessions)"
     }
 
     private var accessibilityHint: String {
         if canGoPrevious || canGoNext {
-            return "Opens the project filter. Swipe to switch projects."
+            return String(
+                localized: "session_list.dock.hint_swipe",
+                defaultValue: "Opens the project filter. Swipe to switch projects."
+            )
         }
-        return "Opens the project filter."
+        return String(localized: "session_list.dock.hint", defaultValue: "Opens the project filter.")
     }
 }
 
@@ -482,7 +492,7 @@ private struct NewSessionDockButton: View {
 
     @ViewBuilder
     private var content: some View {
-        let label = Text("New session")
+        let label = Text("session_list.dock.new_session")
             .font(OpenCodeTypography.button)
             .foregroundStyle(OpenCodeColors.textStrong)
             .frame(maxWidth: .infinity)
@@ -515,10 +525,10 @@ private struct NewSessionDockButton: View {
                 }
                 .accessibilityElement(children: .ignore)
                 .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("New session")
-                .accessibilityHint("Use Choose project or worktree to start somewhere else.")
+                .accessibilityLabel(Text("session_list.dock.new_session"))
+                .accessibilityHint(Text("session_list.dock.new_session_hint"))
                 .accessibilityAction(.default, onNewSession)
-                .accessibilityAction(named: "Choose project or worktree", onLongPress)
+                .accessibilityAction(named: Text("session_list.dock.choose_project_or_worktree"), onLongPress)
         } else {
             Button(action: onNewSession) {
                 label

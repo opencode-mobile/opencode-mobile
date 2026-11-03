@@ -416,10 +416,10 @@ import Testing
     }
 
     @Test func titles_nameWhatTheChordDoesNow() {
-        #expect(OpenCodePromptChordOutcome.allowOnce.title == "Allow Once")
-        #expect(OpenCodePromptChordOutcome.next.title == "Next Question")
-        #expect(OpenCodePromptChordOutcome.submit.title == "Submit Answers")
-        #expect(OpenCodePromptChordOutcome.dismiss.title == "Dismiss Question")
+        #expect(String(localized: OpenCodePromptChordOutcome.allowOnce.title) == "Allow Once")
+        #expect(String(localized: OpenCodePromptChordOutcome.next.title) == "Next Question")
+        #expect(String(localized: OpenCodePromptChordOutcome.submit.title) == "Submit Answers")
+        #expect(String(localized: OpenCodePromptChordOutcome.dismiss.title) == "Dismiss Question")
     }
 }
 

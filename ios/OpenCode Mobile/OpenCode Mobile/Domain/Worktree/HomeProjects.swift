@@ -89,40 +89,47 @@ nonisolated struct HomeProject: Identifiable, Equatable, Sendable {
     }
 }
 
+/// Home picker, dock and Run in text, resolved from the String Catalog (`home.*`, same keys
+/// on Android). Project names stay arguments.
 nonisolated enum HomeProjectCopy {
-    static let mainCheckout = "main checkout"
-    static let runInTitle = "Run in"
+    static var mainCheckout: String { String(localized: "home.main_checkout", defaultValue: "main checkout") }
+    static var runInTitle: String { String(localized: "home.run_in", defaultValue: "Run in") }
 
     static func worktreeCount(_ count: Int) -> String {
-        "\(count) worktrees"
+        String(localized: LocalizedStringResource("home.worktree_count", defaultValue: "\(count) worktrees"))
     }
 
     static func allWorktrees(_ count: Int) -> String {
-        "All \(count) worktrees"
+        String(localized: LocalizedStringResource("home.all_worktrees", defaultValue: "All \(count) worktrees"))
     }
 
     static func running(_ count: Int) -> String {
-        "\(count) running"
+        String(localized: LocalizedStringResource("home.running_count", defaultValue: "\(count) running"))
     }
 
-    static let otherProjectsTitle = "Other projects"
-    static let showFewer = "Show fewer"
-    static let reorderNote = "Drag to reorder. Worktrees stay with their project."
+    static var otherProjectsTitle: String { String(localized: "home.other_projects", defaultValue: "Other projects") }
+    static var showFewer: String { String(localized: "home.show_fewer", defaultValue: "Show fewer") }
+    static var reorderNote: String {
+        String(localized: "home.reorder_note", defaultValue: "Drag to reorder. Worktrees stay with their project.")
+    }
 
     static func showAll(_ count: Int) -> String {
-        "Show all \(count)"
+        String(localized: LocalizedStringResource("home.show_all", defaultValue: "Show all \(count)"))
     }
 
     static func showWorktrees(of projectName: String) -> String {
-        "Show worktrees of \(projectName)"
+        String(localized: LocalizedStringResource("home.show_worktrees", defaultValue: "Show worktrees of \(projectName)"))
     }
 
     static func hideWorktrees(of projectName: String) -> String {
-        "Hide worktrees of \(projectName)"
+        String(localized: LocalizedStringResource("home.hide_worktrees", defaultValue: "Hide worktrees of \(projectName)"))
     }
 
     static func joinedExisting(_ projectName: String) -> String {
-        "Same repo as \(projectName). Showing it as a worktree there."
+        String(localized: LocalizedStringResource(
+            "home.snackbar.joined_project",
+            defaultValue: "Same repo as \(projectName). Showing it as a worktree there."
+        ))
     }
 }
 

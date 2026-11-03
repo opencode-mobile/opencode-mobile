@@ -1,5 +1,7 @@
 package dev.opencode.mobile.domain.home
 
+import dev.opencode.mobile.R
+import dev.opencode.mobile.ui.text.UiText
 import java.time.DayOfWeek
 import java.time.Instant
 import java.time.LocalDate
@@ -19,15 +21,15 @@ enum class HomeSessionLadderKind {
 data class HomeSessionLadderSection<T>(
     val id: String,
     val kind: HomeSessionLadderKind,
-    val title: String,
-    val hint: String? = null,
+    /** Section header: a keyed label, or a formatted date. */
+    val title: UiText,
+    val hint: UiText? = null,
     val items: List<T>,
 )
 
 object HomeSessionLadder {
     val ALLOWED_WINDOW_HOURS: List<Int> = listOf(2, 4, 8, 12, 24)
     const val DEFAULT_WINDOW_HOURS: Int = 4
-    const val RECENT_HINT: String = "Needs a glance"
     private const val DAY_WINDOW_COUNT: Int = 7
 
     fun sanitizeWindowHours(hours: Int): Int {
@@ -74,8 +76,8 @@ object HomeSessionLadder {
                 HomeSessionLadderSection(
                     id = "recent",
                     kind = HomeSessionLadderKind.Recent,
-                    title = "Recent",
-                    hint = RECENT_HINT,
+                    title = UiText.resource(R.string.session_list_section_recent),
+                    hint = UiText.resource(R.string.session_list_section_recent_hint),
                     items = recent,
                 )
         }
@@ -100,9 +102,9 @@ object HomeSessionLadder {
             if (items.isEmpty()) continue
             val title =
                 when (offset) {
-                    0 -> "Today"
-                    1 -> "Yesterday"
-                    else -> day.format(dayFormatter)
+                    0 -> UiText.resource(R.string.session_list_section_today)
+                    1 -> UiText.resource(R.string.session_list_section_yesterday)
+                    else -> UiText.verbatim(day.format(dayFormatter))
                 }
             sections +=
                 HomeSessionLadderSection(
@@ -144,7 +146,11 @@ object HomeSessionLadder {
             .forEach { (weekStart, items) ->
                 val weekEnd = weekStart.plusDays(6)
                 val title =
-                    "Week of ${weekStart.format(weekFormatter)} – ${weekEnd.format(weekFormatter)}"
+                    UiText.resource(
+                        R.string.session_list_section_week_of,
+                        weekStart.format(weekFormatter),
+                        weekEnd.format(weekFormatter),
+                    )
                 sections +=
                     HomeSessionLadderSection(
                         id = "week-$weekStart",

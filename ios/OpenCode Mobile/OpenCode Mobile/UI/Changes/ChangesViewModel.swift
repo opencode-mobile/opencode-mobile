@@ -5,19 +5,33 @@ enum ChangeSource: String, CaseIterable, Sendable, Equatable, Hashable {
     case workingTree
     case lastTurn
 
-    private var metadata: (displayName: String, emptyTitle: String, emptyDetail: String, logValue: String) {
+    var displayName: OpenCodeText {
         switch self {
-        case .workingTree:
-            ("Git changes", "No Git changes", "The working tree has no uncommitted changes.", "git-changes")
-        case .lastTurn:
-            ("Last turn changes", "No changes", "The latest completed turn did not change any files.", "last-turn")
+        case .workingTree: "changes.source.working_tree.name"
+        case .lastTurn: "changes.source.last_turn.name"
         }
     }
 
-    var displayName: String { metadata.displayName }
-    var emptyTitle: String { metadata.emptyTitle }
-    var emptyDetail: String { metadata.emptyDetail }
-    var logValue: String { metadata.logValue }
+    var emptyTitle: OpenCodeText {
+        switch self {
+        case .workingTree: "changes.source.working_tree.empty_title"
+        case .lastTurn: "changes.source.last_turn.empty_title"
+        }
+    }
+
+    var emptyDetail: OpenCodeText {
+        switch self {
+        case .workingTree: "changes.source.working_tree.empty_message"
+        case .lastTurn: "changes.source.last_turn.empty_message"
+        }
+    }
+
+    var logValue: String {
+        switch self {
+        case .workingTree: "git-changes"
+        case .lastTurn: "last-turn"
+        }
+    }
 }
 
 enum ChangesPhase: Equatable {
@@ -34,6 +48,41 @@ struct ChangesState: Equatable {
     var availableSources: [ChangeSource] = [.lastTurn]
     var isRefreshing = false
     var refreshError: String?
+    /// Set while the selected source is empty but the other source has files.
+    var otherSourceHint: ChangesOtherSourceHint?
+}
+
+/// Points from an empty source to the other one, which has `fileCount` changed files.
+struct ChangesOtherSourceHint: Equatable {
+    let source: ChangeSource
+    let fileCount: Int
+
+    var message: OpenCodeText {
+        switch source {
+        case .workingTree:
+            OpenCodeText(LocalizedStringResource(
+                "changes.other_source.working_tree",
+                defaultValue: "Git changes has \(fileCount) changed files."
+            ))
+        case .lastTurn:
+            OpenCodeText(LocalizedStringResource(
+                "changes.other_source.last_turn",
+                defaultValue: "The last turn changed \(fileCount) files."
+            ))
+        }
+    }
+
+    var actionTitle: OpenCodeText {
+        OpenCodeText(LocalizedStringResource("changes.other_source.show", defaultValue: "Show \(source.displayName.resolved)"))
+    }
+
+    /// The empty source's detail followed by the hint, as one sentence pair translators can reorder.
+    static func emptyDetail(_ detail: OpenCodeText, hint: ChangesOtherSourceHint) -> OpenCodeText {
+        OpenCodeText(LocalizedStringResource(
+            "changes.empty_detail_with_hint",
+            defaultValue: "\(detail.resolved) \(hint.message.resolved)"
+        ))
+    }
 }
 
 struct ChangesContentState: Equatable {
@@ -51,20 +100,39 @@ struct ChangesContentState: Equatable {
     var deletions: Int { filteredFiles.reduce(0) { $0 + $1.deletions } }
 
     var summary: String {
-        "\(filteredFiles.count) \(plural(filteredFiles.count, singular: "changed file", plural: "changed files"))"
+        let count = filteredFiles.count
+        return String(localized: "changes.summary.changed_files", defaultValue: "\(count) changed files")
     }
 
     var aggregateAccessibilityLabel: String {
-        "\(summary), "
-            + "\(additions) \(plural(additions, singular: "addition", plural: "additions")), "
-            + "\(deletions) \(plural(deletions, singular: "deletion", plural: "deletions"))"
+        let filesLabel = summary
+        let addedLabel = Self.additionsLabel(additions)
+        let deletedLabel = Self.deletionsLabel(deletions)
+        return String(
+            localized: "changes.accessibility.summary",
+            defaultValue: "\(filesLabel), \(addedLabel), \(deletedLabel)"
+        )
     }
 
     func fileAccessibilityLabel(_ file: FileDiff) -> String {
-        let position = max(0, filteredFiles.firstIndex { $0.path == file.path } ?? 0)
-        return "\(file.path), \(file.status.displayName), file \(position + 1) of \(filteredFiles.count), "
-            + "\(file.additions) \(plural(file.additions, singular: "addition", plural: "additions")), "
-            + "\(file.deletions) \(plural(file.deletions, singular: "deletion", plural: "deletions"))"
+        let path = file.path
+        let status = file.status.displayName
+        let position = max(0, filteredFiles.firstIndex { $0.path == file.path } ?? 0) + 1
+        let total = filteredFiles.count
+        let addedLabel = Self.additionsLabel(file.additions)
+        let deletedLabel = Self.deletionsLabel(file.deletions)
+        return String(
+            localized: "changes.accessibility.file",
+            defaultValue: "\(path), \(status), file \(position) of \(total), \(addedLabel), \(deletedLabel)"
+        )
+    }
+
+    private static func additionsLabel(_ count: Int) -> String {
+        String(localized: "changes.count.additions", defaultValue: "\(count) additions")
+    }
+
+    private static func deletionsLabel(_ count: Int) -> String {
+        String(localized: "changes.count.deletions", defaultValue: "\(count) deletions")
     }
 }
 
@@ -113,6 +181,7 @@ final class ChangesViewModel {
     private let capabilitiesProvider: () -> ServerCapabilities
     private let lastTurnReviewChangesStore: LastTurnReviewChangesStore
     private let foregroundEventStream: (any ForegroundEventStream)?
+    private let vcsSettleDelay: Duration
     private var availableSources: [ChangeSource]
     private var capabilities: ServerCapabilities { capabilitiesProvider() }
     private var filter = ""
@@ -134,7 +203,8 @@ final class ChangesViewModel {
         capabilities: ServerCapabilities = .forProtocol(.v1),
         capabilitiesProvider: (() -> ServerCapabilities)? = nil,
         lastTurnReviewChangesStore: LastTurnReviewChangesStore? = nil,
-        foregroundEventStream: (any ForegroundEventStream)? = nil
+        foregroundEventStream: (any ForegroundEventStream)? = nil,
+        vcsSettleDelay: Duration = ChangesViewModel.defaultVcsSettleDelay
     ) {
         self.sessionID = sessionID
         self.worktree = worktree
@@ -144,6 +214,7 @@ final class ChangesViewModel {
         self.capabilitiesProvider = provider
         self.lastTurnReviewChangesStore = lastTurnReviewChangesStore ?? LastTurnReviewChangesStore()
         self.foregroundEventStream = foregroundEventStream
+        self.vcsSettleDelay = vcsSettleDelay
         let sources = Self.capabilitySources(provider())
         self.availableSources = sources
         state = ChangesState(
@@ -161,6 +232,7 @@ final class ChangesViewModel {
         capabilitiesProvider = { .forProtocol(.v1) }
         lastTurnReviewChangesStore = LastTurnReviewChangesStore()
         foregroundEventStream = nil
+        vcsSettleDelay = .zero
         let sources = Self.capabilitySources(.forProtocol(.v1))
         availableSources = sources
         state = ChangesState(selectedSource: initialSource, availableSources: sources)
@@ -250,8 +322,9 @@ final class ChangesViewModel {
             let loadedFiles: [FileDiff]
             do {
                 loadedFiles = try await loadFiles(source: selectedSource)
-            } catch let SessionError.http(statusCode, _) where statusCode == 404 && selectedSource == .workingTree {
-                guard capabilities.supportsSessionMessageDiff else { throw SessionError.http(statusCode: statusCode, message: "missing") }
+            } catch let SessionError.http(statusCode, message) where statusCode == 404 && selectedSource == .workingTree {
+                // No fallback source: show the server's own error, as Android does.
+                guard capabilities.supportsSessionMessageDiff else { throw SessionError.http(statusCode: statusCode, message: message) }
                 log(source: selectedSource, fileCount: 0, startedAt: startedAt, result: "unsupported-fallback")
                 availableSources = [.lastTurn]
                 selectedSource = .lastTurn
@@ -266,11 +339,13 @@ final class ChangesViewModel {
             guard !files.isEmpty else {
                 log(source: selectedSource, fileCount: 0, startedAt: startedAt, result: "empty")
                 publishLastTurnSummary(source: selectedSource, files: [], failed: false)
+                let phase: ChangesPhase = selectedSource == .lastTurn && messageID == nil ? .noTurn : .noChanges
                 state = ChangesState(
-                    phase: selectedSource == .lastTurn && messageID == nil ? .noTurn : .noChanges,
+                    phase: phase,
                     selectedSource: selectedSource,
                     availableSources: availableSources
                 )
+                if phase == .noChanges { await publishOtherSourceHint(emptySource: selectedSource, revision: revision) }
                 return
             }
             log(source: selectedSource, fileCount: files.count, startedAt: startedAt, result: "success")
@@ -298,11 +373,11 @@ final class ChangesViewModel {
                     phase: restoredPhase,
                     selectedSource: requestedSource,
                     availableSources: availableSources,
-                    refreshError: TurnDiffUnavailable.userFacing(error) ?? error.localizedDescription
+                    refreshError: changesErrorMessage(error)
                 )
             } else {
                 state = ChangesState(
-                    phase: .error(TurnDiffUnavailable.userFacing(error) ?? error.localizedDescription),
+                    phase: .error(changesErrorMessage(error)),
                     selectedSource: activeSource,
                     availableSources: availableSources
                 )
@@ -313,7 +388,7 @@ final class ChangesViewModel {
     private func resolveAvailableSources() async throws -> [ChangeSource] {
         var sources: [ChangeSource] = []
         do {
-            if try await repository.getVcsInfo(directory: worktree).supportsGit {
+            if try await settledVcsInfo().supportsGit {
                 sources.append(.workingTree)
             }
         } catch let SessionError.http(statusCode, _) where statusCode == 404 {
@@ -323,6 +398,44 @@ final class ChangesViewModel {
             sources.append(.lastTurn)
         }
         return sources
+    }
+
+    /// A cold project settles in well under a second; give it about 1.2 s.
+    nonisolated static let defaultVcsSettleDelay: Duration = .milliseconds(300)
+    private static let vcsSettleRetries = 4
+
+    /// A v2 server answers without a branch for a moment after it loads (or reloads) a project.
+    /// Ask again a few times before treating the folder as having no Git, so Git changes stays
+    /// available. A folder that is not a Git repository never settles and ends up without it.
+    private func settledVcsInfo() async throws -> VcsInfo {
+        var info = try await repository.getVcsInfo(directory: worktree)
+        for _ in 0..<Self.vcsSettleRetries {
+            if info.isSettled || info.supportsGit { return info }
+            try await Task.sleep(for: vcsSettleDelay)
+            info = try await repository.getVcsInfo(directory: worktree)
+        }
+        return info
+    }
+
+    /// When the selected source is empty, counts the other source's files so the empty state can
+    /// point there. Lookup failures leave the plain empty state.
+    private func publishOtherSourceHint(emptySource: ChangeSource, revision: Int) async {
+        guard let other = availableSources.first(where: { $0 != emptySource }) else { return }
+        let count: Int
+        do {
+            switch other {
+            case .workingTree:
+                count = try await repository.getVcsStatus(directory: worktree).count
+            case .lastTurn:
+                guard let messageID else { return }
+                count = try await repository.getSessionDiff(id: sessionID, messageID: messageID, directory: worktree).count
+            }
+        } catch {
+            OpenCodeLog.changes.info("hint source=\(other.logValue) session=\(self.sessionID) result=failure")
+            return
+        }
+        guard count > 0, revision == loadRevision, state.phase == .noChanges, state.selectedSource == emptySource else { return }
+        state.otherSourceHint = ChangesOtherSourceHint(source: other, fileCount: count)
     }
 
     private func preferredSource(from requested: ChangeSource) -> ChangeSource {
@@ -406,9 +519,22 @@ private struct PreviewChangesRepository: SessionRepository {
 #endif
 
 private extension FileDiffStatus {
-    var displayName: String { rawValue.capitalized }
+    var displayName: String {
+        switch self {
+        case .added: String(localized: "changes.file_status.added", defaultValue: "Added")
+        case .deleted: String(localized: "changes.file_status.deleted", defaultValue: "Deleted")
+        case .modified: String(localized: "changes.file_status.modified", defaultValue: "Modified")
+        }
+    }
 }
 
-private func plural(_ count: Int, singular: String, plural: String) -> String {
-    count == 1 ? singular : plural
+/// The moved-folders text, or the error's own description (usually the server's message) verbatim.
+private func changesErrorMessage(_ error: Error) -> String {
+    if TurnDiffUnavailable.userFacing(error) != nil {
+        return String(
+            localized: "changes.error.turn_moved_folders",
+            defaultValue: "This turn moved folders, so its changes can't be shown together."
+        )
+    }
+    return error.localizedDescription
 }

@@ -34,8 +34,8 @@ struct ToolInterruptionTests {
     }
 
     @Test func interruptedCopy() {
-        #expect(SessionChatTimelineBlocks.interruptedToolText("The user declined this tool call") == "Declined")
-        #expect(SessionChatTimelineBlocks.interruptedToolText("Tool execution interrupted") == "Stopped")
+        #expect(SessionChatTimelineBlocks.interruptedToolText("The user declined this tool call").resolved == "Declined")
+        #expect(SessionChatTimelineBlocks.interruptedToolText("Tool execution interrupted").resolved == "Stopped")
     }
 
     @Test func v1Info_stopReason() throws {

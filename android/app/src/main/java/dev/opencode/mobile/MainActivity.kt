@@ -35,6 +35,7 @@ import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHost
 import dev.opencode.mobile.ui.keyboard.LocalKeyboardShortcutHost
 import dev.opencode.mobile.ui.root.PrivacyCover
 import dev.opencode.mobile.ui.root.PrivacyCoverState
+import dev.opencode.mobile.ui.text.ResourcesUiTextLookup
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -225,7 +226,7 @@ class MainActivity : FragmentActivity() {
         deviceId: Int,
     ) {
         super.onProvideKeyboardShortcuts(data, menu, deviceId)
-        data?.addAll(keyboardShortcuts.shortcutGroups())
+        data?.addAll(keyboardShortcuts.shortcutGroups(ResourcesUiTextLookup(resources)))
     }
 
     private companion object {

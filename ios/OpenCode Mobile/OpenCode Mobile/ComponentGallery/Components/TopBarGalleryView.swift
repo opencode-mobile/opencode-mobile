@@ -111,7 +111,7 @@ struct TopBarGalleryView: View {
                     HStack(spacing: 8) {
                         ForEach(GalleryTopBarLeading.allCases) { option in
                             OpenCodeChoiceBadge(
-                                label: option.label,
+                                label: .verbatim(option.label),
                                 selected: leading == option,
                                 action: { leading = option }
                             )
@@ -123,7 +123,7 @@ struct TopBarGalleryView: View {
                     HStack(spacing: 8) {
                         ForEach(GalleryTopBarActions.allCases) { option in
                             OpenCodeChoiceBadge(
-                                label: option.label,
+                                label: .verbatim(option.label),
                                 selected: actions == option,
                                 action: { actions = option }
                             )
@@ -181,7 +181,7 @@ struct TopBarGalleryView: View {
                         HStack(spacing: 8) {
                             ForEach(OpenCodeSessionConnectionStatus.allCases, id: \.self) { status in
                                 OpenCodeChoiceBadge(
-                                    label: status.rawValue,
+                                    label: .verbatim(status.rawValue),
                                     selected: connectionStatus == status,
                                     action: { connectionStatus = status }
                                 )
@@ -207,8 +207,8 @@ struct TopBarGalleryView: View {
 
     private var topBar: some View {
         OpenCodeTopBar(
-            title: title,
-            subtitle: subtitle,
+            title: .verbatim(title),
+            subtitle: .verbatim(ifPresent: subtitle),
             subtitleLeading: subtitleLeading,
             subtitleAccessory: subtitleAccessory,
             leading: leadingVariant,

@@ -11,11 +11,14 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatActivityPillCopy
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatCornerSlotsLayout
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatNavigationCopy
+import dev.opencode.mobile.ui.text.EnglishStrings
+import dev.opencode.mobile.ui.text.english
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import dev.opencode.mobile.ui.text.UiText
 
 class SessionChatPillSlotsTest {
     private val now = 1_000_000L
@@ -71,13 +74,13 @@ class SessionChatPillSlotsTest {
     fun equalPrioritiesKeepTheCallersOrder() {
         val slot =
             SessionChatPillSlots.activity(
-                listOf(SessionChatActivityItem.SideQuestionsRunning(2), SessionChatActivityItem.Subagents(SessionChatBackgroundWorkPill("1 subagent", false, "1 subagent running"))),
+                listOf(SessionChatActivityItem.SideQuestionsRunning(2), SessionChatActivityItem.Subagents(verbatimPill("1 subagent", false, "1 subagent running"))),
                 keyboardVisible = false,
                 nowEpochMs = now,
             )
 
         assertEquals(SessionChatActivityItem.SideQuestionsRunning(2), slot.primary)
-        assertEquals(listOf(SessionChatActivityItem.Subagents(SessionChatBackgroundWorkPill("1 subagent", false, "1 subagent running"))), slot.overflow)
+        assertEquals(listOf(SessionChatActivityItem.Subagents(verbatimPill("1 subagent", false, "1 subagent running"))), slot.overflow)
     }
 
     @Test
@@ -246,9 +249,11 @@ class SessionChatPillSlotsTest {
 
     @Test
     fun navigationAlwaysHasALabel() {
-        assertEquals("Scroll to end", SessionChatNavigationCopy.label(SessionChatNavigationPill(0)))
-        assertEquals("4 new", SessionChatNavigationCopy.label(SessionChatNavigationPill(4)))
-        assertEquals("Scroll to end, 1 new message", SessionChatNavigationCopy.accessibilityLabel(SessionChatNavigationPill(1)))
+        assertEquals("Scroll to end", SessionChatNavigationCopy.label(SessionChatNavigationPill(0)).english())
+        assertEquals("4 new", SessionChatNavigationCopy.label(SessionChatNavigationPill(4)).english())
+        assertEquals("Scroll to end", SessionChatNavigationCopy.accessibilityLabel(SessionChatNavigationPill(0)).english())
+        assertEquals("Scroll to end, 1 new message", SessionChatNavigationCopy.accessibilityLabel(SessionChatNavigationPill(1)).english())
+        assertEquals("Scroll to end, 3 new messages", SessionChatNavigationCopy.accessibilityLabel(SessionChatNavigationPill(3)).english())
     }
 
     @Test
@@ -310,14 +315,14 @@ class SessionChatPillSlotsTest {
     private fun failure(
         blockId: String,
         neutral: Boolean = false,
-    ) = SessionChatTimelineBlock.FailureLine(blockID = blockId, text = "HTTP 500 · Server error", isNeutral = neutral)
+    ) = SessionChatTimelineBlock.FailureLine(blockID = blockId, text = UiText.verbatim("HTTP 500 · Server error"), isNeutral = neutral)
 
     // Background work (subagents)
 
     private val runningSubagents =
-        SessionChatBackgroundWorkPill("3 subagents", needsInput = false, accessibilityLabel = "3 subagents running")
+        verbatimPill("3 subagents", needsInput = false, accessibilityLabel = "3 subagents running")
     private val waitingSubagent =
-        SessionChatBackgroundWorkPill(
+        verbatimPill(
             "general needs input · 2 running",
             needsInput = true,
             accessibilityLabel = "general needs input, 2 subagents running",
@@ -357,22 +362,49 @@ class SessionChatPillSlotsTest {
         val running = SessionChatActivityItem.Subagents(runningSubagents)
         val waiting = SessionChatActivityItem.Subagents(waitingSubagent)
 
-        assertEquals(OpenCodeFloatingPillLayout.Counter("3 subagents", waiting = false), SessionChatActivityPillCopy.layout(running))
+        assertEquals(OpenCodeFloatingPillLayout.Counter("3 subagents", waiting = false), SessionChatActivityPillCopy.layout(running, EnglishStrings))
         assertEquals(OpenCodeFloatingPillState.Live, SessionChatActivityPillCopy.state(running))
         assertEquals(
             OpenCodeFloatingPillLayout.Counter("general needs input · 2 running", waiting = true),
-            SessionChatActivityPillCopy.layout(waiting),
+            SessionChatActivityPillCopy.layout(waiting, EnglishStrings),
         )
         assertEquals(OpenCodeFloatingPillState.NeedsAttention, SessionChatActivityPillCopy.state(waiting))
         assertEquals(
             OpenCodeFloatingPillLeading.PulsingDot,
-            floatingPillLeading(SessionChatActivityPillCopy.layout(waiting), SessionChatActivityPillCopy.state(waiting)),
+            floatingPillLeading(SessionChatActivityPillCopy.layout(waiting, EnglishStrings), SessionChatActivityPillCopy.state(waiting)),
         )
         assertTrue(SessionChatActivityPillCopy.isClickable(running))
         assertFalse(SessionChatActivityPillCopy.isClosable(running))
         assertEquals(
             "general needs input, 2 subagents running. Open request",
-            SessionChatActivityPillCopy.accessibilityLabel(waiting),
+            SessionChatActivityPillCopy.accessibilityLabel(waiting).english(),
+        )
+    }
+
+    @Test
+    fun activityPillTextComesFromTheStringFiles() {
+        val failedTwice = SessionChatActivityItem.SideQuestionsFailed(2)
+        val queuedOne = SessionChatActivityItem.Queued(1)
+
+        assertEquals(
+            OpenCodeFloatingPillLayout.Closable("/btw failed ×2 · Retry"),
+            SessionChatActivityPillCopy.layout(failedTwice, EnglishStrings),
+        )
+        assertEquals(
+            OpenCodeFloatingPillLayout.Closable("/btw failed · Retry"),
+            SessionChatActivityPillCopy.layout(SessionChatActivityItem.SideQuestionsFailed(1), EnglishStrings),
+        )
+        assertEquals("2 side questions failed. Retry", SessionChatActivityPillCopy.accessibilityLabel(failedTwice).english())
+        assertEquals("1 queued prompt. Open Up next", SessionChatActivityPillCopy.accessibilityLabel(queuedOne).english())
+        assertEquals(
+            "Request failed. Hide 3 activities",
+            SessionChatActivityPillCopy
+                .collapsedAccessibilityLabel(SessionChatActivityItem.RequestFailed("m1", "m1:failure"), count = 3, stackOpen = true)
+                .english(),
+        )
+        assertEquals(
+            "Review permission request. Show 1 activity",
+            SessionChatActivityPillCopy.collapsedAccessibilityLabel(SessionChatActivityItem.ReviewPermission, count = 1, stackOpen = false).english(),
         )
     }
 }

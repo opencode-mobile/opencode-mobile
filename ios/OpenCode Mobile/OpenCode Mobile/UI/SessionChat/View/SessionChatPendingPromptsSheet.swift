@@ -12,18 +12,27 @@ struct SessionChatPendingPromptsSheetModifier: ViewModifier {
         content
             .openCodeBottomSheet(
                 isPresented: sheetPresentedBinding,
-                title: "Up next",
+                title: "session_chat_sheet.pending_prompts.title",
                 pinnedTop: {
-                    OpenCodeSectionHeader(title: "\(prompts.count) waiting", variant: .plain)
+                    OpenCodeSectionHeader(title: waitingTitle, variant: .plain)
                 },
                 content: { sheetContent },
                 pinnedBottom: {
-                    OpenCodeButton(variant: .fullWidthText(title: "Clear all"), contrast: .low) {
+                    OpenCodeButton(variant: .fullWidthText(title: "session_chat_sheet.pending_prompts.clear_all"), contrast: .low) {
                         logAction(ProductAnalytics.Action.pendingPromptsClear)
                         onClearAll()
                     }
                 }
             )
+    }
+
+    /// "3 waiting".
+    private var waitingTitle: OpenCodeText {
+        let count = prompts.count
+        return OpenCodeText(LocalizedStringResource(
+            "session_chat_sheet.pending_prompts.waiting",
+            defaultValue: "\(count) waiting"
+        ))
     }
 
     private var sheetPresentedBinding: Binding<Bool> {
@@ -63,13 +72,13 @@ struct SessionChatPendingPromptsSheetModifier: ViewModifier {
                 }
 
             if prompt.isSettling {
-                Text("Sending…")
+                Text("session_chat_sheet.pending_prompts.sending")
                     .font(OpenCodeTypography.caption)
                     .foregroundStyle(OpenCodeColors.textWeak)
             } else {
                 swapButton(for: prompt)
                 OpenCodeButton(
-                    variant: .iconSquare(.delete, accessibilityLabel: "Delete"),
+                    variant: .iconSquare(.delete, accessibilityLabel: "session_chat_sheet.pending_prompts.delete"),
                     contrast: .low,
                     action: {
                         logAction(ProductAnalytics.Action.pendingPromptsDelete)
@@ -91,7 +100,7 @@ struct SessionChatPendingPromptsSheetModifier: ViewModifier {
                 .frame(width: 22, height: 22)
                 .background(OpenCodeColors.surfaceInteractiveWeak, in: RoundedRectangle(cornerRadius: 6))
         case .queue:
-            Text("\(queuedPosition(for: prompt))")
+            Text(verbatim: String(queuedPosition(for: prompt)))
                 .font(OpenCodeTypography.caption.weight(.semibold))
                 .foregroundStyle(OpenCodeColors.warning)
                 .frame(width: 22, height: 22)
@@ -104,7 +113,7 @@ struct SessionChatPendingPromptsSheetModifier: ViewModifier {
         switch prompt.delivery {
         case .queue:
             OpenCodeButton(
-                variant: .iconSquare(.arrowWarmUp, accessibilityLabel: "Steer now"),
+                variant: .iconSquare(.arrowWarmUp, accessibilityLabel: "session_chat_sheet.pending_prompts.steer_now"),
                 contrast: .low,
                 action: {
                     logAction(ProductAnalytics.Action.pendingPromptsSteer)
@@ -113,7 +122,7 @@ struct SessionChatPendingPromptsSheetModifier: ViewModifier {
             )
         case .steer:
             OpenCodeButton(
-                variant: .iconSquare(.arrowUpward, accessibilityLabel: "Move to queue"),
+                variant: .iconSquare(.arrowUpward, accessibilityLabel: "session_chat_sheet.pending_prompts.move_to_queue"),
                 contrast: .low,
                 action: {
                     logAction(ProductAnalytics.Action.pendingPromptsQueue)

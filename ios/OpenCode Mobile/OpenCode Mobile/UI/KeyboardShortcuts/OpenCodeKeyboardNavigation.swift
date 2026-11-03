@@ -355,14 +355,14 @@ nonisolated enum OpenCodePromptChordOutcome: Equatable, Sendable {
     case dismiss
 
     /// Title in the menu bar and the hold-⌘ overlay.
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
-        case .allowOnce: "Allow Once"
-        case .alwaysAllow: "Always Allow"
-        case .deny: "Deny"
-        case .next: "Next Question"
-        case .submit: "Submit Answers"
-        case .dismiss: "Dismiss Question"
+        case .allowOnce: LocalizedStringResource("keyboard_shortcuts.allow_once", defaultValue: "Allow Once")
+        case .alwaysAllow: LocalizedStringResource("keyboard_shortcuts.always_allow", defaultValue: "Always Allow")
+        case .deny: LocalizedStringResource("keyboard_shortcuts.deny", defaultValue: "Deny")
+        case .next: LocalizedStringResource("keyboard_shortcuts.next_question", defaultValue: "Next Question")
+        case .submit: LocalizedStringResource("keyboard_shortcuts.submit_answers", defaultValue: "Submit Answers")
+        case .dismiss: LocalizedStringResource("keyboard_shortcuts.dismiss_question", defaultValue: "Dismiss Question")
         }
     }
 }

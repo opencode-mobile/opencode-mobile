@@ -57,6 +57,11 @@ private struct SessionChatActivitySheetModifier: ViewModifier {
     /// The step whose detail was last shown, so back returns the list to it.
     @State private var returnStepID: String?
 
+    /// "Working 3" while the run is live.
+    private static func workingTitle(_ count: Int) -> String {
+        String(localized: "session_chat_sheet.activity.working", defaultValue: "Working \(count)")
+    }
+
     func body(content: Content) -> some View {
         let resolved = cardID.flatMap { SessionChatActivityCardPresentation.card(id: $0, in: rows) }
         let card = resolved.map { $0.card.withLive($0.card.id == liveCardID) }
@@ -70,7 +75,9 @@ private struct SessionChatActivitySheetModifier: ViewModifier {
         let count = card?.steps.count ?? 0
         let isLive = card?.isLive == true
         let inspector = detail?.target.inspectorPresentation
-        let title = inspector?.title ?? detail?.target.title ?? (isLive ? "Working \(count)" : OpenCodeActivityCard.stepsLabel(count))
+        let detailTitle: String? = (inspector?.title ?? detail?.target.title)?.resolved
+        let fallbackTitle: String = isLive ? Self.workingTitle(count) : OpenCodeActivityCard.stepsLabel(count)
+        let title: String = detailTitle ?? fallbackTitle
         let titleState: OpenCodeBottomSheetTitleState = detail == nil && isLive
             ? .running(startedAtMs: ToolStartTime.normalizeEpochMs(card?.startedAtMs))
             : .plain
@@ -79,11 +86,11 @@ private struct SessionChatActivitySheetModifier: ViewModifier {
                 get: { resolved != nil },
                 set: { presented in if !presented { onDismiss() } }
             ),
-            title: title,
+            title: .verbatim(title),
             titleState: titleState,
             leadingAction: detail == nil ? nil : OpenCodeBottomSheetHeaderAction(
                 icon: .arrowBack,
-                accessibilityLabel: "Back to steps",
+                accessibilityLabel: "session_chat_sheet.activity.back_to_steps",
                 action: onCloseStep
             ),
             scrollTargetID: detail == nil ? returnStepID : nil,
@@ -157,7 +164,7 @@ struct SessionChatActivitySheetContent: View {
                 }
             }
             if !tools.isEmpty {
-                OpenCodeActivitySectionLabel(text: "Steps")
+                OpenCodeActivitySectionLabel(text: String(localized: "session_chat_sheet.activity.steps", defaultValue: "Steps"))
                     .modifier(SheetSectionLabelPadding())
                 ForEach(tools) { step in
                     stepRow(step)
@@ -213,7 +220,7 @@ struct SessionChatActivitySheetContent: View {
                                 size: 6,
                                 pulsing: true
                             )
-                            Text(sub.title)
+                            Text(openCode: sub.title.openCode)
                                 .font(OpenCodeTypography.caption)
                                 .foregroundStyle(OpenCodeColors.textWeak)
                                 .lineLimit(1)
@@ -234,7 +241,7 @@ struct SessionChatActivitySheetContent: View {
     private func childTitle(_ step: SessionChatStep) -> Text {
         let name = Text(step.agentDisplayName).fontWeight(.semibold).foregroundColor(OpenCodeColors.info)
         guard let description = step.childSession?.description, !description.isEmpty else { return name }
-        return name + Text(" \(description)").foregroundColor(OpenCodeColors.textWeak)
+        return name + Text(verbatim: " \(description)").foregroundColor(OpenCodeColors.textWeak)
     }
 
     /// "4 tools so far" while running; the failure, "Stopped" or the tool
@@ -244,14 +251,14 @@ struct SessionChatActivitySheetContent: View {
         switch step.activityStatus {
         case .pending, .running:
             guard let tools, tools > 0 else { return nil }
-            return tools == 1 ? "1 tool so far" : "\(tools) tools so far"
+            return String(localized: "session_chat_sheet.activity.tools_so_far", defaultValue: "\(tools) tools so far")
         case .failed:
-            return step.detail
+            return step.detail?.resolved
         case .interrupted:
-            return "Stopped"
+            return String(localized: "session_chat_sheet.activity.stopped", defaultValue: "Stopped")
         case .completed:
             guard let tools, tools > 0 else { return nil }
-            return tools == 1 ? "1 tool" : "\(tools) tools"
+            return String(localized: "session_chat_sheet.activity.tools", defaultValue: "\(tools) tools")
         }
     }
 
@@ -266,12 +273,12 @@ struct SessionChatActivitySheetContent: View {
                     .frame(width: 16)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(step.listTitle)
+                    Text(openCode: step.listTitle.openCode)
                         .font(OpenCodeTypography.bodySecondary)
                         .foregroundStyle(OpenCodeColors.textStrong)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                    if let detail = step.detail, !detail.isEmpty {
+                    if let detail = step.detail?.resolved, !detail.isEmpty {
                         Text(detail)
                             .font(OpenCodeTypography.caption)
                             .foregroundStyle(step.activityStatus == .failed ? OpenCodeColors.error : OpenCodeColors.textWeak)

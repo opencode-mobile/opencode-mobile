@@ -269,13 +269,19 @@ private struct OpenCodeImageTile: View {
                 .clipShape(RoundedRectangle(cornerRadius: OpenCodeRadius.small))
                 .overlay(RoundedRectangle(cornerRadius: OpenCodeRadius.small).stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1))
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(accessibilityLabel), could not load")
+                .accessibilityLabel(Text(LocalizedStringResource(
+                    "component.image.could_not_load_label",
+                    defaultValue: "\(accessibilityLabel), could not load"
+                )))
         } else {
             framed(aspect: 4 / 3) { OpenCodeImageLoadingFill() }
                 .clipShape(RoundedRectangle(cornerRadius: OpenCodeRadius.small))
                 .overlay(RoundedRectangle(cornerRadius: OpenCodeRadius.small).stroke(OpenCodeColors.borderWeakerBase, lineWidth: 1))
                 .accessibilityElement(children: .ignore)
-                .accessibilityLabel("\(accessibilityLabel), loading")
+                .accessibilityLabel(Text(LocalizedStringResource(
+                    "component.image.loading_label",
+                    defaultValue: "\(accessibilityLabel), loading"
+                )))
         }
     }
 
@@ -328,7 +334,7 @@ private struct OpenCodeImageTile: View {
         VStack(spacing: 4) {
             OpenCodeIconImage(icon: .description, size: 20)
                 .foregroundStyle(OpenCodeColors.iconWeakBase)
-            Text("Could not load")
+            Text("component.image.could_not_load")
                 .font(OpenCodeTypography.caption)
                 .foregroundStyle(OpenCodeColors.textWeak)
             if let filename = item.filename {

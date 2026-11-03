@@ -11,11 +11,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.opencode.mobile.R
 import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
 import dev.opencode.mobile.theme.ThemeManager
 import dev.opencode.mobile.theme.ThemeResolver
@@ -51,7 +53,7 @@ fun TerminalScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     Column(modifier = modifier.fillMaxSize()) {
         OpenCodeTopBar(
-            title = "Terminal",
+            title = stringResource(R.string.terminal_title),
             subtitle = projectTitle,
             subtitleLeading =
                 OpenCodeTopBarSubtitleLeading.Letter(
@@ -65,8 +67,8 @@ fun TerminalScreen(
             when (uiState) {
                 TerminalUiState.Connecting ->
                     OpenCodeStatusStack(
-                        title = "Connecting",
-                        subtitle = "Starting shell…",
+                        title = stringResource(R.string.terminal_connecting_title),
+                        subtitle = stringResource(R.string.terminal_connecting_subtitle),
                         modifier = Modifier.fillMaxSize(),
                     )
                 is TerminalUiState.Live,
@@ -75,14 +77,14 @@ fun TerminalScreen(
                     TerminalLivePane(viewModel = viewModel)
                 TerminalUiState.ConnectFailed ->
                     TerminalErrorContent(
-                        title = "Connect failed",
-                        message = "Could not start a shell for this project.",
+                        title = stringResource(R.string.terminal_connect_failed_title),
+                        message = stringResource(R.string.terminal_connect_failed_message),
                         onRetry = viewModel::retry,
                     )
                 TerminalUiState.Exited ->
                     TerminalErrorContent(
-                        title = "Shell ended",
-                        message = "Shell ended",
+                        title = stringResource(R.string.terminal_exited),
+                        message = stringResource(R.string.terminal_exited),
                         onRetry = viewModel::retry,
                     )
             }
@@ -138,8 +140,8 @@ private fun TerminalErrorContent(
     ) {
         OpenCodeEmptyState(
             title = title,
-            message = message.ifBlank { "The terminal didn't open." },
-            primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = onRetry),
+            message = message,
+            primaryAction = OpenCodeEmptyStateAction(title = stringResource(R.string.terminal_retry), onClick = onRetry),
         )
     }
 }

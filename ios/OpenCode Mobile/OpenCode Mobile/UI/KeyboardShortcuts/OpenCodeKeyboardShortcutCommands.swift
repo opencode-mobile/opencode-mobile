@@ -12,7 +12,7 @@ import UIKit
 struct OpenCodeKeyboardShortcutAction: Equatable {
     let publisherID: UUID
     /// Replaces the shortcut's own title in the menu (a project name, "Next Question").
-    var title: String?
+    var title: LocalizedStringResource?
     let perform: () -> Void
 
     static func == (lhs: Self, rhs: Self) -> Bool {
@@ -163,16 +163,16 @@ struct OpenCodeKeyboardShortcutCommands: Commands {
             command(.previousSession, previousSession)
             command(.focusComposer, focusComposer)
         }
-        CommandMenu("Session") {
+        CommandMenu("keyboard_shortcuts.group.session") {
             command(.commandPalette, commandPalette)
             command(.modelPicker, modelPicker)
         }
-        CommandMenu("Prompt") {
+        CommandMenu("keyboard_shortcuts.group.prompt") {
             command(.promptPrimary, promptPrimary)
             command(.promptAlwaysAllow, promptAlwaysAllow)
             command(.promptReject, promptReject)
         }
-        CommandMenu("Go") {
+        CommandMenu("keyboard_shortcuts.group.go") {
             ForEach(1...9, id: \.self) { number in
                 projectCommand(number)
             }
@@ -195,7 +195,7 @@ struct OpenCodeKeyboardShortcutCommands: Commands {
         let shortcut = OpenCodeKeyboardShortcut.switchProject(number)
         let index = number - 1
         let available = projects.map { $0.titles.indices.contains(index) } ?? false
-        let title = available ? projects.map { "Show \($0.titles[index])" } ?? shortcut.title : shortcut.title
+        let title = available ? projects.map { OpenCodeKeyboardShortcut.showProjectTitle($0.titles[index]) } ?? shortcut.title : shortcut.title
         return Button(title) {
             guard let projects, projects.titles.indices.contains(index),
                   OpenCodeKeyboardShortcutGate.firesNow(shortcut)
@@ -213,7 +213,7 @@ extension View {
     /// The handler is withheld while another text field, sheet, or dialog is active.
     func openCodeKeyboardShortcut(
         _ shortcut: OpenCodeKeyboardShortcut,
-        title: String? = nil,
+        title: LocalizedStringResource? = nil,
         action: (() -> Void)?
     ) -> some View {
         modifier(OpenCodeKeyboardShortcutPublisher(shortcut: shortcut, title: title, action: action))
@@ -227,7 +227,7 @@ extension View {
 
 private struct OpenCodeKeyboardShortcutPublisher: ViewModifier {
     let shortcut: OpenCodeKeyboardShortcut
-    let title: String?
+    let title: LocalizedStringResource?
     let action: (() -> Void)?
     @State private var publisherID = UUID()
 

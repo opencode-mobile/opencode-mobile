@@ -16,9 +16,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.session.SessionRetryCard
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeButton
@@ -43,7 +45,6 @@ fun SessionRetryCountdown(
         }
     }
     val seconds = ((card.nextAtMs - nowMs) / 1_000L).coerceAtLeast(0L)
-    val attempt = card.attempt?.let { "attempt $it, " }.orEmpty()
     val label = card.actionLabel?.trim()?.takeIf { it.isNotEmpty() }
     val link = card.actionLink?.trim()?.takeIf { it.isNotEmpty() }
     Row(
@@ -74,7 +75,9 @@ fun SessionRetryCountdown(
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = "${attempt}retrying in ${seconds}s",
+                text =
+                    card.attempt?.let { stringResource(R.string.timeline_retry_attempt_retrying_in, it, seconds) }
+                        ?: stringResource(R.string.timeline_retry_retrying_in, seconds),
                 modifier = Modifier.padding(top = 2.dp),
                 style = MaterialTheme.typography.labelMedium,
                 color = openCodeColor("text-weak"),

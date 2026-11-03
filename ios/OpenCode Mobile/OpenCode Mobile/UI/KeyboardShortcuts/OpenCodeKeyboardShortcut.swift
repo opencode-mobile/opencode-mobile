@@ -36,21 +36,26 @@ nonisolated enum OpenCodeKeyboardShortcut: Hashable, CaseIterable, Sendable {
         ] + (1...9).map { .switchProject($0) } + [.promptPrimary, .promptAlwaysAllow, .promptReject]
     }
 
-    var title: String {
+    var title: LocalizedStringResource {
         switch self {
-        case .toggleSidebar: "Toggle Sidebar"
-        case .nextSession: "Next Session"
-        case .previousSession: "Previous Session"
-        case .focusComposer: "Focus Composer"
-        case .newSession: "New Session"
-        case .commandPalette: "Command Palette"
-        case .modelPicker: "Choose Model"
-        case .settings: "Settings"
-        case let .switchProject(number): "Project \(number)"
-        case .promptPrimary: "Allow Once"
-        case .promptAlwaysAllow: "Always Allow"
-        case .promptReject: "Deny"
+        case .toggleSidebar: LocalizedStringResource("keyboard_shortcuts.toggle_sidebar", defaultValue: "Toggle Sidebar")
+        case .nextSession: LocalizedStringResource("keyboard_shortcuts.next_session", defaultValue: "Next Session")
+        case .previousSession: LocalizedStringResource("keyboard_shortcuts.previous_session", defaultValue: "Previous Session")
+        case .focusComposer: LocalizedStringResource("keyboard_shortcuts.focus_composer", defaultValue: "Focus Composer")
+        case .newSession: LocalizedStringResource("keyboard_shortcuts.new_session", defaultValue: "New Session")
+        case .commandPalette: LocalizedStringResource("keyboard_shortcuts.command_palette", defaultValue: "Command Palette")
+        case .modelPicker: LocalizedStringResource("keyboard_shortcuts.choose_model", defaultValue: "Choose Model")
+        case .settings: LocalizedStringResource("keyboard_shortcuts.settings", defaultValue: "Settings")
+        case let .switchProject(number): LocalizedStringResource("keyboard_shortcuts.project", defaultValue: "Project \(number)")
+        case .promptPrimary: LocalizedStringResource("keyboard_shortcuts.allow_once", defaultValue: "Allow Once")
+        case .promptAlwaysAllow: LocalizedStringResource("keyboard_shortcuts.always_allow", defaultValue: "Always Allow")
+        case .promptReject: LocalizedStringResource("keyboard_shortcuts.deny", defaultValue: "Deny")
         }
+    }
+
+    /// Menu title of Switch Project for the project named `projectTitle`.
+    static func showProjectTitle(_ projectTitle: String) -> LocalizedStringResource {
+        LocalizedStringResource("keyboard_shortcuts.show_project", defaultValue: "Show \(projectTitle)")
     }
 
     var key: KeyEquivalent {

@@ -33,7 +33,7 @@ private struct OpenCodeModalCard<ModalContent: View>: View {
             .frame(maxWidth: modalMaxWidth)
             .overlay(alignment: .topTrailing) {
                 OpenCodeButton(
-                    variant: .iconCircle(.close, accessibilityLabel: "Close"),
+                    variant: .iconCircle(.close, accessibilityLabel: "component.close"),
                     contrast: .low,
                     action: onClose
                 )

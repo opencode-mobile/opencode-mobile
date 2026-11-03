@@ -35,11 +35,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.ProductAnalytics
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.project.ServerProjectSuggestions
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetWindowOverlay
@@ -67,6 +70,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.text.resolve
 
 /** Add project actions; each maps to one Screen Model action. */
 data class AddProjectSheetCallbacks(
@@ -97,7 +101,7 @@ internal fun AddProjectSheet(
     }
     OpenCodeBottomSheet(
         visible = visible && !sheet.isBrowsing,
-        title = "Add project",
+        title = stringResource(R.string.add_project_title),
         onDismissRequest = {
             ProductAnalytics.logUserAction(
                 screenId = ProductAnalytics.Screen.HOME_ADD_PROJECT,
@@ -125,8 +129,8 @@ private fun AddProjectSuggestions(
     val showsEmptySuggestions = !sheet.isValidating && !isListError && sheet.suggestionsResolved && !sheet.showSuggestions
     Column(modifier = Modifier.fillMaxWidth()) {
         OpenCodeListItem(
-            title = AddProjectSheetUi.BROWSE_FOLDERS,
-            subtitle = "Pick any folder on this server",
+            title = stringResource(R.string.add_project_browse_folders),
+            subtitle = stringResource(R.string.add_project_browse_folders_subtitle),
             enabled = !sheet.isValidating,
             startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
             accessory = OpenCodeListItemAccessory.Disclosure,
@@ -134,7 +138,7 @@ private fun AddProjectSuggestions(
         )
         sheet.fieldError?.let { message ->
             Text(
-                text = message,
+                text = message.resolve(),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.error,
                 modifier =
@@ -145,7 +149,7 @@ private fun AddProjectSuggestions(
             )
         }
         OpenCodeSectionHeader(
-            title = "On this server",
+            title = stringResource(R.string.add_project_on_this_server),
             modifier =
                 Modifier
                     .alpha(if (isListError) 0f else 1f)
@@ -169,6 +173,7 @@ private fun SuggestionFrame(
     isLoadingSuggestions: Boolean,
     showsEmptySuggestions: Boolean,
 ) {
+    val loadingProjects = stringResource(R.string.add_project_loading_projects)
     Box(
         modifier =
             Modifier
@@ -176,7 +181,7 @@ private fun SuggestionFrame(
                 .then(
                     if (isLoadingSuggestions) {
                         Modifier.semantics(mergeDescendants = true) {
-                            contentDescription = "Loading projects"
+                            contentDescription = loadingProjects
                         }
                     } else {
                         Modifier
@@ -199,7 +204,7 @@ private fun SuggestionFrame(
                         OpenCodeListItem(
                             title = suggestion.name,
                             subtitle = suggestion.path,
-                            caption = suggestion.activityLabel,
+                            caption = suggestion.activityLabel?.resolve(),
                             startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
                             onClick = { callbacks.onSelectSuggestion(suggestion.path) },
                         )
@@ -210,20 +215,20 @@ private fun SuggestionFrame(
         when {
             sheet.isValidating ->
                 OpenCodeStatusStack(
-                    title = "Checking folder",
+                    title = stringResource(R.string.add_project_checking_folder),
                     style = OpenCodeStatusStackStyle.Spinner,
                     modifier = Modifier.align(Alignment.Center).padding(24.dp),
                 )
             isListError ->
                 OpenCodeEmptyState(
-                    title = AddProjectSheetUi.LIST_ERROR_TITLE,
-                    message = sheet.listError ?: AddProjectSheetUi.LIST_ERROR_MESSAGE,
-                    primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = callbacks.onRetry),
+                    title = stringResource(R.string.add_project_list_error_title),
+                    message = (sheet.listError ?: AddProjectSheetUi.LIST_ERROR_MESSAGE).resolve(),
+                    primaryAction = OpenCodeEmptyStateAction(title = stringResource(R.string.common_retry), onClick = callbacks.onRetry),
                     modifier = Modifier.align(Alignment.TopCenter).padding(20.dp),
                 )
             showsEmptySuggestions ->
                 Text(
-                    text = AddProjectSheetUi.NO_OTHER_PROJECTS,
+                    text = stringResource(R.string.add_project_no_other_projects),
                     style = MaterialTheme.typography.labelMedium,
                     color = openCodeColor("text-weak"),
                     modifier =
@@ -236,13 +241,17 @@ private fun SuggestionFrame(
     }
 }
 
+private const val RULER_TITLE = "Project"
+private const val RULER_SUBTITLE = "/Users/placeholder"
+
 /** Hidden suggestion row. Every slot stays the height of a real row, loaded or not. */
 @Composable
 private fun AddProjectSuggestionRuler() {
+    // Invisible and hidden from accessibility; it only sizes the slot, so it is not app text.
     OpenCodeListItem(
-        title = "Project",
-        subtitle = "/Users/placeholder",
-        caption = "1d ago",
+        title = RULER_TITLE,
+        subtitle = RULER_SUBTITLE,
+        caption = pluralStringResource(R.plurals.relative_time_days_ago, 1, 1),
         enabled = false,
         startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
         modifier = Modifier.alpha(0f).clearAndSetSemantics {},
@@ -301,7 +310,8 @@ private fun AddProjectBrowser(
     sheet: AddProjectSheetUi,
     callbacks: AddProjectSheetCallbacks,
 ) {
-    BottomSheetWindowOverlay(paneTitle = AddProjectSheetUi.TITLE) {
+    val title = stringResource(R.string.add_project_title)
+    BottomSheetWindowOverlay(paneTitle = title) {
         BackHandler(onBack = callbacks.onCloseBrowser)
         val keyboardVisible = WindowInsets.isImeVisible
         Column(
@@ -314,7 +324,7 @@ private fun AddProjectBrowser(
                     .windowInsetsPadding(WindowInsets.navigationBars.only(WindowInsetsSides.Horizontal)),
         ) {
             OpenCodeTopBar(
-                title = AddProjectSheetUi.TITLE,
+                title = title,
                 leading = OpenCodeTopBarLeading.Back(onClick = callbacks.onCloseBrowser),
                 modifier = Modifier.padding(horizontal = BrowserTopBarExtraInset),
             )
@@ -326,14 +336,14 @@ private fun AddProjectBrowser(
             )
             // Rides the keyboard and fills under the navigation bar itself.
             OpenCodeActionBar(
-                actionTitle = sheet.addTitle,
+                actionTitle = sheet.addTitle.resolve(),
                 onAction = callbacks.onConfirm,
                 target =
                     sheet.barTarget?.let { target ->
                         OpenCodeActionBarTarget(
                             title = target.name,
                             subtitle = target.path,
-                            tag = AddProjectSheetUi.GIT_TAG.takeIf { target.isGitRepository },
+                            tag = stringResource(R.string.add_project_git_tag).takeIf { target.isGitRepository },
                         )
                     },
                 enabled = sheet.addEnabled,
@@ -360,16 +370,16 @@ private fun AddProjectPathChrome(
         OpenCodeTextInput(
             value = sheet.fieldText,
             onValueChange = callbacks.onFieldChange,
-            hint = "Folder path",
+            hint = stringResource(R.string.add_project_folder_path),
             kind = OpenCodeTextInputKind.Filter,
             enabled = !sheet.isValidating,
-            errorMessage = sheet.fieldError,
+            errorMessage = sheet.fieldError?.resolve(),
             submitAction = OpenCodeTextInputSubmitAction.Go,
             onSubmit = callbacks.onSubmitField,
             modifier = Modifier.weight(1f),
         )
         OpenCodeButton(
-            variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, "Up one folder"),
+            variant = OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, stringResource(R.string.add_project_up_one_folder)),
             onClick = callbacks.onUp,
             enabled = sheet.upTarget != null && !sheet.isValidating,
             contrast = OpenCodeButtonContrast.Low,
@@ -389,7 +399,7 @@ private fun AddProjectPathChrome(
         ) {
             sheet.roots.forEach { root ->
                 OpenCodeChoiceBadge(
-                    label = root.label,
+                    label = root.label.resolve(),
                     selected = root.selected,
                     enabled = !sheet.isValidating,
                     onClick = { callbacks.onSelectRoot(root.path) },
@@ -409,7 +419,7 @@ private fun AddProjectFolderList(
         sheet.isValidating -> {
             Box(modifier = modifier.fillMaxWidth()) {
                 OpenCodeStatusStack(
-                    title = "Checking folder",
+                    title = stringResource(R.string.add_project_checking_folder),
                     style = OpenCodeStatusStackStyle.Spinner,
                     modifier = Modifier.fillMaxWidth().padding(24.dp),
                 )
@@ -418,9 +428,9 @@ private fun AddProjectFolderList(
         sheet.listError != null -> {
             Box(modifier = modifier.fillMaxWidth()) {
                 OpenCodeEmptyState(
-                    title = AddProjectSheetUi.LIST_ERROR_TITLE,
-                    message = sheet.listError,
-                    primaryAction = OpenCodeEmptyStateAction(title = "Retry", onClick = callbacks.onRetry),
+                    title = stringResource(R.string.add_project_list_error_title),
+                    message = sheet.listError.resolve(),
+                    primaryAction = OpenCodeEmptyStateAction(title = stringResource(R.string.common_retry), onClick = callbacks.onRetry),
                     modifier = Modifier.padding(OpenCodeLayout.ScreenGutter),
                 )
             }
@@ -428,7 +438,7 @@ private fun AddProjectFolderList(
         sheet.isLoading -> {
             Box(modifier = modifier.fillMaxWidth()) {
                 OpenCodeStatusStack(
-                    title = "Loading folders",
+                    title = stringResource(R.string.add_project_loading_folders),
                     style = OpenCodeStatusStackStyle.Spinner,
                     modifier = Modifier.fillMaxWidth().padding(24.dp),
                 )
@@ -437,7 +447,7 @@ private fun AddProjectFolderList(
         sheet.emptyMessage != null -> {
             Box(modifier = modifier.fillMaxWidth()) {
                 Text(
-                    text = sheet.emptyMessage,
+                    text = sheet.emptyMessage.resolve(),
                     style = MaterialTheme.typography.bodyMedium,
                     color = openCodeColor("text-weak"),
                     modifier = Modifier.padding(horizontal = OpenCodeLayout.ScreenGutter, vertical = 24.dp),
@@ -452,7 +462,7 @@ private fun AddProjectFolderList(
                 sheet.truncationHint?.let { hint ->
                     item(key = "truncation-hint") {
                         Text(
-                            text = hint,
+                            text = hint.resolve(),
                             style = MaterialTheme.typography.bodySmall,
                             color = openCodeColor("text-weak"),
                             modifier = Modifier.padding(horizontal = OpenCodeLayout.ScreenGutter, vertical = 16.dp),
@@ -478,8 +488,8 @@ private fun AddProjectFolderRow(
     }
     OpenCodeListItem(
         title = folder.name,
-        subtitle = folder.subtitle,
-        titleTag = AddProjectSheetUi.GIT_TAG.takeIf { folder.isGitRepository },
+        subtitle = folder.subtitle?.resolve(),
+        titleTag = stringResource(R.string.add_project_git_tag).takeIf { folder.isGitRepository },
         startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, contentDescription = null),
         onClick = { callbacks.onOpenFolder(folder.path) },
         modifier = Modifier.padding(horizontal = BrowserRowExtraInset),

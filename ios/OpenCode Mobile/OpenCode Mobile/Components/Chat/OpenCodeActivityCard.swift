@@ -147,7 +147,7 @@ struct OpenCodeActivityCard: View {
             Button(action: onOpen) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        OpenCodeRunningShimmerText(text: "Working", font: OpenCodeTypography.bodySecondary.weight(.semibold))
+                        OpenCodeRunningShimmerText(text: OpenCodeActivityText.working, font: OpenCodeTypography.bodySecondary.weight(.semibold))
                         Spacer(minLength: 0)
                         if let startedAtMs {
                             OpenCodeLiveElapsedText(startedAtMs: startedAtMs)
@@ -168,7 +168,7 @@ struct OpenCodeActivityCard: View {
             .buttonStyle(.plain)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(headerAccessibilityLabel(startedAtMs: startedAtMs))
-            .accessibilityHint("Opens activity")
+            .accessibilityHint(Text("component.activity_card.opens_activity_hint"))
             .accessibilityAddTraits(.isButton)
             .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: ActivityCardMetrics.cornerRadius), activate: onOpen)
 
@@ -180,7 +180,7 @@ struct OpenCodeActivityCard: View {
     }
 
     private func headerAccessibilityLabel(startedAtMs: Int64?) -> String {
-        var parts = ["Working", summary]
+        var parts = [OpenCodeActivityText.working, summary]
         if let startedAtMs {
             parts.append(OpenCodeStepRailElapsed.format(
                 startedAtMs: startedAtMs,
@@ -245,7 +245,7 @@ struct OpenCodeActivityCard: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(footerAccessibilityLabel)
-        .accessibilityHint("Opens activity")
+        .accessibilityHint(Text("component.activity_card.opens_activity_hint"))
         .accessibilityAddTraits(.isButton)
         .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: ActivityCardMetrics.cornerRadius), activate: onOpen)
     }
@@ -273,7 +273,7 @@ struct OpenCodeActivityCard: View {
                     OpenCodeLiveElapsedText(startedAtMs: startedAtMs)
                 }
             } else {
-                Text(idleText ?? "Thinking\u{2026}")
+                Text(idleText ?? OpenCodeActivityText.thinkingEllipsis)
                     .font(OpenCodeTypography.bodySecondary)
                     .italic()
                     .foregroundStyle(OpenCodeColors.textWeaker)
@@ -285,10 +285,16 @@ struct OpenCodeActivityCard: View {
     }
 
     private var footerAccessibilityLabel: String {
-        guard let current else { return idleText ?? "Thinking" }
+        guard let current else { return idleText ?? OpenCodeActivityText.thinking }
         var parts = [current.title]
         guard current.running else { return current.title }
-        if current.extraRunning > 0 { parts.append("\(current.extraRunning) more running") }
+        if current.extraRunning > 0 {
+            let count = current.extraRunning
+            parts.append(String(localized: LocalizedStringResource(
+                "component.activity_card.more_running",
+                defaultValue: "\(count) more running"
+            )))
+        }
         if let startedAtMs = current.startedAtMs {
             parts.append(OpenCodeStepRailElapsed.format(
                 startedAtMs: startedAtMs,
@@ -320,25 +326,40 @@ struct OpenCodeActivityCard: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            [Self.stepsLabel(stepCount), summary, worstStatus == .failed ? "failed" : "completed"]
+            [
+                Self.stepsLabel(stepCount),
+                summary,
+                String(localized: worstStatus == .failed
+                    ? LocalizedStringResource("component.activity_status.failed", defaultValue: "failed")
+                    : LocalizedStringResource("component.activity_status.completed", defaultValue: "completed")),
+            ]
                 .filter { !$0.isEmpty }
                 .joined(separator: ", ")
         )
-        .accessibilityHint("Opens activity")
+        .accessibilityHint(Text("component.activity_card.opens_activity_hint"))
         .accessibilityAddTraits(.isButton)
         .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: ActivityCardMetrics.cornerRadius), activate: onOpen)
     }
 
     private func settledText(stepCount: Int) -> Text {
-        let head = Text("\(stepCount)").fontWeight(.semibold).foregroundColor(OpenCodeColors.textStrong)
-            + Text(stepCount == 1 ? " step" : " steps").foregroundColor(OpenCodeColors.textWeak)
+        // The count is bold inside the localised "N steps".
+        let label = Self.stepsLabel(stepCount)
+        let number = "\(stepCount)"
+        let head: Text
+        if let range = label.range(of: number) {
+            head = Text(verbatim: String(label[..<range.lowerBound])).foregroundColor(OpenCodeColors.textWeak)
+                + Text(verbatim: number).fontWeight(.semibold).foregroundColor(OpenCodeColors.textStrong)
+                + Text(verbatim: String(label[range.upperBound...])).foregroundColor(OpenCodeColors.textWeak)
+        } else {
+            head = Text(verbatim: label).foregroundColor(OpenCodeColors.textWeak)
+        }
         guard !summary.isEmpty else { return head }
         return head + Text(" \u{00B7} \(summary)").foregroundColor(OpenCodeColors.textWeak)
     }
 
     /// "1 step" / "3 steps": the settled line and the settled sheet header.
     static func stepsLabel(_ count: Int) -> String {
-        count == 1 ? "1 step" : "\(count) steps"
+        String(localized: LocalizedStringResource("component.activity_card.step_count", defaultValue: "\(count) steps"))
     }
 }
 
@@ -388,12 +409,19 @@ private struct ActivityCardAgentRow: View {
         .accessibilityLabel(
             [agent.agentName, agent.action].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
         )
-        .accessibilityHint("Opens the child session")
+        .accessibilityHint(Text("component.activity_card.opens_child_session_hint"))
         .accessibilityAddTraits(.isButton)
     }
 }
 
 // MARK: - Shared pieces (card and activity sheet)
+
+/// Activity text shared by the card, the step rail and the sheet.
+enum OpenCodeActivityText {
+    static var working: String { String(localized: "component.activity_card.working", defaultValue: "Working") }
+    static var thinking: String { String(localized: "component.thinking", defaultValue: "Thinking") }
+    static var thinkingEllipsis: String { String(localized: "component.thinking_ellipsis", defaultValue: "Thinking\u{2026}") }
+}
 
 /// "AGENT" / "2 AGENTS": uppercase, tracked, in the weak text tone.
 struct OpenCodeActivitySectionLabel: View {
@@ -405,7 +433,9 @@ struct OpenCodeActivitySectionLabel: View {
 
     /// The Agent section's label for `count` child sessions.
     init(count: Int) {
-        self.text = count == 1 ? "Agent" : "\(count) agents"
+        self.text = count == 1
+            ? String(localized: "component.activity_card.agent", defaultValue: "Agent")
+            : String(localized: LocalizedStringResource("component.activity_card.agent_count", defaultValue: "\(count) agents"))
     }
 
     var body: some View {

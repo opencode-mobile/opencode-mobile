@@ -1,9 +1,11 @@
 package dev.opencode.mobile.domain.filesystem
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.data.remote.FilesystemApi
 import dev.opencode.mobile.data.remote.V1FileContentResponse
 import dev.opencode.mobile.domain.connection.ServerProtocol
 import dev.opencode.mobile.network.ActiveConnectionManager
+import dev.opencode.mobile.ui.text.UiText
 import io.ktor.client.plugins.ResponseException
 import kotlinx.coroutines.CancellationException
 import javax.inject.Inject
@@ -146,10 +148,11 @@ class DefaultProjectFilesRepository
                 throw ProjectFilesException(failure, detail = describe(error), cause = error)
             }
 
-        private fun describe(error: Exception): String =
+        private fun describe(error: Exception): UiText =
             when (error) {
-                is ResponseException -> "The server responded with ${error.response.status.value}."
-                else -> "Check the connection to the server and try again."
+                // Not keyed yet: needs a files.* key (#886).
+                is ResponseException -> UiText.verbatim("The server responded with ${error.response.status.value}.")
+                else -> UiText.resource(R.string.files_error_check_server_connection)
             }
 
         private fun ProjectEntry.withParent(directory: String): ProjectEntry {

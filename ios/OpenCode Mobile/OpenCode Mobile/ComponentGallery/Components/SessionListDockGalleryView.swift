@@ -47,7 +47,7 @@ struct SessionListDockGalleryView: View {
                 HStack(spacing: 8) {
                     ForEach(SessionListDockGalleryLoad.allCases, id: \.self) { option in
                         OpenCodeChoiceBadge(
-                            label: option.label,
+                            label: .verbatim(option.label),
                             selected: load == option,
                             action: {
                                 load = option
@@ -104,7 +104,7 @@ struct SessionListDockGalleryView: View {
         ) {
             ForEach(filterTabs.filter { !$0.isAll }) { tab in
                 OpenCodeBottomSheetEntry(
-                    title: tab.title,
+                    title: .verbatim(tab.title),
                     startDecorator: .icon(.folder),
                     action: { showNewSessionPicker = false }
                 )
