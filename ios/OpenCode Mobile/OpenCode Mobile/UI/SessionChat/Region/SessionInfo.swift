@@ -15,6 +15,8 @@ final class SessionInfo {
     private var observationTask: Task<Void, Never>?
     private var eventFanoutTask: Task<Void, Never>?
     private var renameTask: Task<Void, Never>?
+    /// Bumped by every archive change, so a session read that started earlier cannot undo it.
+    private var archiveStateGeneration = 0
 
     init(
         worktree: String,
@@ -41,6 +43,7 @@ final class SessionInfo {
         state.canMutate = liveUpdates.chrome.canMutate
         state.composerEnabled = liveUpdates.chrome.composerEnabled
         state.rename = SessionRenameUiState()
+        state.archivedAtEpochMs = nil
         notifyChange()
     }
 
@@ -79,13 +82,13 @@ final class SessionInfo {
                 let hasTitleUpdate = eventAdapter.sessionTitleUpdate(from: event) != nil
                 // Another client deleted the open session: leave instead of showing a dead chat.
                 let boundDeleted = eventAdapter.sessionDeletedID(from: event) == boundSessionID
-                // Archived or restored anywhere: the banner follows the server's answer.
+                // Archived or restored anywhere: the event decides; a read right after it can lag.
                 let archiveStateChanged = event.sessionID == boundSessionID && Self.archiveStateEvents.contains(event.type)
                 guard boundError != nil || hasTitleUpdate || boundDeleted || archiveStateChanged else { continue }
                 await MainActor.run {
                     guard !Task.isCancelled, let sessionInfo = info else { return }
                     if archiveStateChanged {
-                        sessionInfo.loadArchiveState()
+                        sessionInfo.applyArchiveEvent(event.type)
                     }
                     if boundDeleted {
                         OpenCodeLog.sessionChat.info("session deleted elsewhere session=\(boundSessionID); leaving")
@@ -227,11 +230,33 @@ final class SessionInfo {
     func loadArchiveState() {
         let sessionID = state.sessionID
         guard !sessionID.isEmpty, !OptimisticSessionCreate.isPlaceholder(sessionID) else { return }
+        let generation = archiveStateGeneration
         Task {
             guard let session = try? await sessionRepository.getSession(id: sessionID, directory: worktree),
-                  state.sessionID == sessionID
+                  state.sessionID == sessionID,
+                  // An archive change since the read started wins over what the read saw.
+                  generation == archiveStateGeneration
             else { return }
             state.archivedAtEpochMs = session.archivedAtEpochMs
+            notifyChange()
+        }
+    }
+
+    /// `session.archived` / `session.unarchived` for the bound session.
+    func applyArchiveEvent(_ type: String) {
+        archiveStateGeneration += 1
+        if type == "session.unarchived" {
+            state.archivedAtEpochMs = nil
+            notifyChange()
+            return
+        }
+        let sessionID = state.sessionID
+        let generation = archiveStateGeneration
+        Task {
+            let read = try? await sessionRepository.getSession(id: sessionID, directory: worktree)
+            guard state.sessionID == sessionID, generation == archiveStateGeneration else { return }
+            // Now, while the read still lags behind the event.
+            state.archivedAtEpochMs = read?.archivedAtEpochMs ?? Int64(Date().timeIntervalSince1970 * 1000)
             notifyChange()
         }
     }
@@ -253,6 +278,7 @@ final class SessionInfo {
                 guard state.sessionID == sessionID else { return }
                 OpenCodeLog.sessionChat.info("unarchive success session=\(sessionID)")
                 state.isLifecycleActionInFlight = false
+                archiveStateGeneration += 1
                 state.archivedAtEpochMs = nil
                 notifyChange()
             } catch {

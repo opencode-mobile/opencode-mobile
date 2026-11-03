@@ -152,6 +152,43 @@ struct ArchivedSessionsViewModelTests {
         #expect(sessions.map(\.id) == ["a1"])
     }
 
+    @Test func aLaggingListDoesNotBringAnUnarchivedRowBack() async {
+        let repository = ArchivedSessionRepository(["/work/alpha": [archived("a1", "/work/alpha", now - day)]])
+        repository.unarchiveLags = true
+        let stream = FakeForegroundEventStream()
+        let viewModel = makeViewModel(repository, eventStream: stream)
+        let appear = Task { await viewModel.appear(scopeID: "all", projects: [alpha], worktreesEnabled: true) }
+        defer { appear.cancel() }
+        #expect(await waitUntil { rowIDs(viewModel) == ["a1"] })
+
+        await viewModel.unarchive(sessionID: "a1")
+        stream.emit(OpencodeEvent(type: "session.unarchived", sessionID: "a1"))
+        try? await Task.sleep(for: .milliseconds(Int(ArchivedSessionsViewModel.refreshDebounceMs) + 200))
+
+        #expect(rowIDs(viewModel).isEmpty)
+    }
+
+    @Test func aFailingProjectKeepsTheOthersListed() async {
+        let repository = ArchivedSessionRepository(["/work/alpha": [archived("a1", "/work/alpha", now - day)], "/work/beta": []])
+        repository.failingDirectories = ["/work/beta"]
+        let viewModel = makeViewModel(repository)
+
+        await viewModel.appear(scopeID: "all", projects: [alpha, beta], worktreesEnabled: true)
+
+        #expect(rowIDs(viewModel) == ["a1"])
+    }
+
+    @Test func undoKeepsARowWhoseDirectoryIsUnknown() async {
+        let repository = ArchivedSessionRepository(["/work/alpha": [archived("a1", "/elsewhere", now - day)]])
+        let viewModel = makeViewModel(repository)
+        await viewModel.appear(scopeID: "all", projects: [alpha], worktreesEnabled: true)
+        await viewModel.unarchive(sessionID: "a1")
+
+        let undo = Task { await viewModel.undoUnarchive(sessionID: "a1") }
+        #expect(await waitUntil { rowIDs(viewModel) == ["a1"] })
+        await undo.value
+    }
+
     @Test func homeMenuEntryCountsTheScopeAndHidesWithoutSupport() async {
         let repository = ArchivedSessionRepository([
             "/work/alpha": [archived("a1", "/work/alpha", now - day), archived("a2", "/work/alpha", now - day)],
@@ -237,6 +274,8 @@ private final class ArchivedSessionRepository: SessionRepository, @unchecked Sen
     var failingDirectories: Set<String> = []
     var listError: Error?
     var unarchiveError: Error?
+    /// The archived list keeps an unarchived session for a while, like a lagging server read.
+    var unarchiveLags = false
     private(set) var unarchivedIDs: [String] = []
     private(set) var archivedIDs: [String] = []
     private(set) var deletedIDs: [String] = []
@@ -257,7 +296,7 @@ private final class ArchivedSessionRepository: SessionRepository, @unchecked Sen
         guard var session = lists.values.flatMap({ $0 }).first(where: { $0.id == id }) else {
             throw SessionError.http(statusCode: 404, message: "not archived")
         }
-        lists = lists.mapValues { $0.filter { $0.id != id } }
+        if !unarchiveLags { lists = lists.mapValues { $0.filter { $0.id != id } } }
         session.archivedAtEpochMs = nil
         return session
     }

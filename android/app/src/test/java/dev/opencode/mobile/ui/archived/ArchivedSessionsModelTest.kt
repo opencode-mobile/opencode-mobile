@@ -214,6 +214,53 @@ class ArchivedSessionsModelTest {
         }
 
     @Test
+    fun aLaggingListDoesNotBringAnUnarchivedRowBack() =
+        runTest {
+            val repository = FakeArchivedRepository("/work/alpha" to listOf(archived("a1", "/work/alpha", now - day)))
+            repository.unarchiveLags = true
+            val events = MutableSharedFlow<OpencodeEvent>()
+            val model = model(repository, listOf(alpha), events)
+            model.bind("all")
+            advanceUntilIdle()
+
+            model.unarchive("a1")
+            advanceUntilIdle()
+            events.emit(OpencodeEvent(type = "session.unarchived", sessionId = "a1"))
+            advanceUntilIdle()
+
+            assertTrue(rows(model).isEmpty())
+        }
+
+    @Test
+    fun aFailingProjectKeepsTheOthersListed() =
+        runTest {
+            val repository =
+                FakeArchivedRepository("/work/alpha" to listOf(archived("a1", "/work/alpha", now - day)), "/work/beta" to emptyList())
+            repository.failingDirectories += "/work/beta"
+            val model = model(repository, listOf(alpha, beta))
+
+            model.bind("all")
+            advanceUntilIdle()
+
+            assertEquals(listOf("a1"), rows(model))
+        }
+
+    @Test
+    fun undoKeepsARowWhoseDirectoryIsUnknown() =
+        runTest {
+            val repository = FakeArchivedRepository("/work/alpha" to listOf(archived("a1", "/elsewhere", now - day)))
+            val model = model(repository, listOf(alpha))
+            model.bind("all")
+            advanceUntilIdle()
+            model.unarchive("a1")
+            advanceUntilIdle()
+
+            model.undoUnarchive("a1")
+
+            assertEquals(listOf("a1"), rows(model))
+        }
+
+    @Test
     fun homeMenuEntryCountsTheScopeAndHidesWithoutSupport() =
         runTest {
             val repository =
@@ -297,6 +344,9 @@ private class FakeArchivedRepository(
     val failingDirectories = mutableSetOf<String>()
     var listError: Throwable? = null
     var unarchiveError: Throwable? = null
+
+    /** The archived list keeps an unarchived session for a while, like a lagging server read. */
+    var unarchiveLags = false
     val unarchived = mutableListOf<String>()
     val archived = mutableListOf<String>()
     val deleted = mutableListOf<String>()
@@ -314,7 +364,7 @@ private class FakeArchivedRepository(
         unarchiveError?.let { throw it }
         unarchived += id
         val session = lists.values.flatten().first { it.id == id }
-        lists.replaceAll { _, list -> list.filterNot { it.id == id } }
+        if (!unarchiveLags) lists.replaceAll { _, list -> list.filterNot { it.id == id } }
         return session.copy(archivedAtEpochMs = null)
     }
 

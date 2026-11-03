@@ -65,10 +65,13 @@ final class ArchivedSessionsViewModel {
     private var archivedByProject: [String: [Session]] = [:]
     /// Sessions with an unarchive or delete in flight; a refresh must not bring their rows back.
     private var hiddenIDs = Set<String>()
-    /// Sessions shown again by Undo before the server has archived them.
-    private var restoredSessions: [String: Session] = [:]
-    /// Sessions the last unarchive snackbars can archive again.
-    private var undoable: [String: Session] = [:]
+    /// Sessions this screen unarchived or deleted, with the archive time they had. A list that
+    /// still carries that archive time lags behind the server; a newer one is a fresh archive.
+    private var settled: [String: Int64?] = [:]
+    /// Sessions shown again by Undo before the server has archived them, with their project.
+    private var restoredSessions: [String: (projectKey: String?, session: Session)] = [:]
+    /// Sessions the last unarchive snackbars can archive again, with their project.
+    private var undoable: [String: (projectKey: String?, session: Session)] = [:]
     private var loadGeneration = 0
     private var refreshTask: Task<Void, Never>?
 
@@ -93,9 +96,11 @@ final class ArchivedSessionsViewModel {
         self.projects = projects
         self.worktreesEnabled = worktreesEnabled
         publish()
+        // Subscribe before loading, so a change during the load still refreshes the list.
+        let events = eventStream?.events()
         await load()
-        guard let eventStream else { return }
-        for await event in eventStream.events() {
+        guard let events else { return }
+        for await event in events {
             if Task.isCancelled { break }
             if Self.refreshEventTypes.contains(event.type) { scheduleRefresh() }
         }
@@ -176,7 +181,7 @@ final class ArchivedSessionsViewModel {
             deleted = false
         }
         if deleted {
-            drop(session.id)
+            settle(session)
         } else {
             unhide(session.id)
             snackbar = ArchivedSessionsSnackbar(message: OpenCodeSnackbarMessage(text: Self.deleteError, variant: .error))
@@ -186,6 +191,7 @@ final class ArchivedSessionsViewModel {
     /// The row's Unarchive: the row leaves at once and a snackbar offers Undo.
     func unarchive(sessionID: String) async {
         guard let session = session(for: sessionID), !hiddenIDs.contains(sessionID) else { return }
+        let projectKey = projectKey(of: sessionID)
         let directory = directory(of: session)
         hide(sessionID)
         DiagnosticLog.info(.session, "archived unarchive start session=\(sessionID)")
@@ -197,8 +203,8 @@ final class ArchivedSessionsViewModel {
             snackbar = ArchivedSessionsSnackbar(message: OpenCodeSnackbarMessage(text: Self.unarchiveError, variant: .error))
             return
         }
-        drop(sessionID)
-        undoable[sessionID] = session
+        settle(session)
+        undoable[sessionID] = (projectKey, session)
         snackbar = ArchivedSessionsSnackbar(
             message: OpenCodeSnackbarMessage(
                 text: String(localized: LocalizedStringResource(
@@ -213,9 +219,11 @@ final class ArchivedSessionsViewModel {
 
     /// The snackbar's Undo: archives the session again and puts its row back.
     func undoUnarchive(sessionID: String) async {
-        guard var session = undoable.removeValue(forKey: sessionID) else { return }
+        guard let (projectKey, original) = undoable.removeValue(forKey: sessionID) else { return }
+        var session = original
         session.archivedAtEpochMs = now()
-        restoredSessions[sessionID] = session
+        settled[sessionID] = nil
+        restoredSessions[sessionID] = (projectKey, session)
         publish()
         DiagnosticLog.info(.session, "archived undo unarchive session=\(sessionID)")
         do {
@@ -238,32 +246,40 @@ final class ArchivedSessionsViewModel {
         let generation = loadGeneration
         let repository = sessionRepository
         let homeProjects = projects
-        do {
-            var result: [String: [Session]] = [:]
-            try await withThrowingTaskGroup(of: (String, [Session]).self) { group in
-                for project in homeProjects {
-                    group.addTask {
-                        (project.key, try await ArchivedSessionList.load(repository: repository, directories: project.memberPaths))
+        // A project that fails keeps its last list while another project answers.
+        var answered: [String: [Session]] = [:]
+        await withTaskGroup(of: (String, [Session]?).self) { group in
+            for project in homeProjects {
+                group.addTask {
+                    do {
+                        return (project.key, try await ArchivedSessionList.load(repository: repository, directories: project.memberPaths))
+                    } catch {
+                        DiagnosticLog.warning(.session, "archived load failed project=\(project.key)", error: error)
+                        return (project.key, nil)
                     }
                 }
-                for try await (key, sessions) in group {
-                    result[key] = sessions
-                }
             }
-            guard generation == loadGeneration else { return }
-            archivedByProject = result
-            loaded = true
-            // The server now has every row Undo put back.
-            let listedIDs = Set(result.values.flatMap { $0.map(\.id) })
-            restoredSessions = restoredSessions.filter { !listedIDs.contains($0.key) }
-            publish()
-        } catch {
-            guard generation == loadGeneration else { return }
-            DiagnosticLog.warning(.session, "archived load failed", error: error)
-            if !loaded {
-                content = .failed(Self.loadError)
+            for await (key, sessions) in group {
+                if let sessions { answered[key] = sessions }
             }
         }
+        guard generation == loadGeneration, !Task.isCancelled else { return }
+        if !homeProjects.isEmpty, answered.isEmpty {
+            if !loaded { content = .failed(Self.loadError) }
+            return
+        }
+        var result: [String: [Session]] = [:]
+        for project in homeProjects {
+            result[project.key] = answered[project.key] ?? archivedByProject[project.key] ?? []
+        }
+        archivedByProject = result
+        loaded = true
+        let listedIDs = Set(result.values.flatMap { $0.map(\.id) })
+        // A session the server no longer lists as archived is settled for good.
+        settled = settled.filter { listedIDs.contains($0.key) }
+        // The server now has every row Undo put back.
+        restoredSessions = restoredSessions.filter { !listedIDs.contains($0.key) }
+        publish()
     }
 
     private func scheduleRefresh() {
@@ -285,21 +301,32 @@ final class ArchivedSessionsViewModel {
         publish()
     }
 
-    /// The server no longer lists `sessionID` as archived.
-    private func drop(_ sessionID: String) {
-        hiddenIDs.remove(sessionID)
-        restoredSessions[sessionID] = nil
-        archivedByProject = archivedByProject.mapValues { $0.filter { $0.id != sessionID } }
+    /// The server unarchived or deleted `session`; a lagging list must not bring its row back.
+    private func settle(_ session: Session) {
+        settled[session.id] = .some(session.archivedAtEpochMs)
+        hiddenIDs.remove(session.id)
+        restoredSessions[session.id] = nil
+        archivedByProject = archivedByProject.mapValues { $0.filter { $0.id != session.id } }
         publish()
     }
 
+    private func isSettled(_ session: Session) -> Bool {
+        guard let archivedAt = settled[session.id] else { return false }
+        return archivedAt == session.archivedAtEpochMs
+    }
+
     private func session(for sessionID: String) -> Session? {
-        restoredSessions[sessionID] ?? archivedByProject.values.lazy.compactMap { $0.first { $0.id == sessionID } }.first
+        restoredSessions[sessionID]?.session ?? archivedByProject.values.lazy.compactMap { $0.first { $0.id == sessionID } }.first
+    }
+
+    private func projectKey(of sessionID: String) -> String? {
+        restoredSessions[sessionID]?.projectKey ?? archivedByProject.first { $0.value.contains { $0.id == sessionID } }?.key
     }
 
     private func directory(of session: Session) -> String? {
         if let directory = session.directory, !directory.isEmpty { return directory }
-        return projects.first { project in archivedByProject[project.key]?.contains { $0.id == session.id } == true }?.primaryPath
+        guard let key = projectKey(of: session.id) else { return nil }
+        return projects.first { $0.key == key }?.primaryPath
     }
 
     private func publish() {
@@ -307,11 +334,10 @@ final class ArchivedSessionsViewModel {
         scopeTitle = archivedScopeTitle(resolved, projects: projects)
         guard loaded else { return }
         let nowMs = now()
-        let restoredByProject = Dictionary(grouping: restoredSessions.values) { session in
-            projects.first { project in session.directory.map(project.hasMember) == true || session.directory.flatMap(project.worktree(at:)) != nil }?.key ?? ""
-        }
+        let restoredByProject = Dictionary(grouping: restoredSessions.values) { $0.projectKey ?? "" }
+            .mapValues { $0.map(\.session) }
         let sections = projects.map { project -> ProjectSectionItem in
-            let listed = archivedByProject[project.key] ?? []
+            let listed = (archivedByProject[project.key] ?? []).filter { !isSettled($0) }
             let restored = (restoredByProject[project.key] ?? []).filter { restored in !listed.contains { $0.id == restored.id } }
             let sessions = ArchivedSessionList.sorted(listed + restored).filter { !hiddenIDs.contains($0.id) }
             return ProjectSectionItem(
