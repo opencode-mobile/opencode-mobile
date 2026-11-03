@@ -76,8 +76,11 @@ final class StoreScreenshotUITests: XCTestCase {
         let out = try outputDirectory()
         let app = launchApp()
         waitForHome(in: app)
-        let settings = app.buttons["Settings"]
-        XCTAssertTrue(settings.waitForExistence(timeout: 10), "Settings control did not appear.")
+        let moreOptions = app.buttons["More options"]
+        XCTAssertTrue(moreOptions.waitForExistence(timeout: 10), "Home menu control did not appear.")
+        moreOptions.tap()
+        let settings = app.buttons["homeMenuSettings"]
+        XCTAssertTrue(settings.waitForExistence(timeout: 5), "Settings menu entry did not appear.")
         settings.tap()
         XCTAssertTrue(
             app.descendants(matching: .any)["settingsContent"].waitForExistence(timeout: 10),

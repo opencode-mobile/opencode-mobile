@@ -4,6 +4,7 @@ import SwiftUI
 struct ProjectListHomeView: View {
     @State private var viewModel: ProjectListHomeViewModel
     @State private var showSettings = false
+    @State private var homeMenuPresented = false
     /// Home's stack as typed routes, so a layout flip can find the open session.
     /// The `NavigationStack` itself binds a type-erased `NavigationPath`: a typed
     /// path traps in SwiftUI (`comparisonTypeMismatch`) when the split's nested
@@ -67,7 +68,7 @@ struct ProjectListHomeView: View {
             }
             // ⌘N, ⌘, and ⌘1–9 (#869). Closures read live Home state when they fire.
             .openCodeKeyboardShortcut(.newSession, action: acceptsNewSessionShortcut ? { newSessionFromKeyboard() } : nil)
-            .openCodeKeyboardShortcut(.settings, action: acceptsHomeShortcuts ? { openSettingsFromKeyboard() } : nil)
+            .openCodeKeyboardShortcut(.settings, action: acceptsHomeShortcuts ? { openSettings() } : nil)
             .openCodeProjectShortcuts(
                 titles: liveProjectTabs.map(\.dockTitle),
                 select: acceptsHomeShortcuts ? { index in selectProjectFromKeyboard(index) } : nil
@@ -650,15 +651,17 @@ struct ProjectListHomeView: View {
 
     private var homePane: some View {
         VStack(spacing: 0) {
-            OpenCodeTopBar(
-                title: viewModel.serversChrome.title,
-                subtitleAccessory: showsLiveUpdatesStatus
-                    ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
-                    : nil,
-                actions: homeTopBarActions,
-                onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
-                titleMenuExpanded: viewModel.serversChrome.sheetVisible
-            )
+            OpenCodeTopBarOverflowHost(isPresented: $homeMenuPresented, entries: homeMenuEntries) {
+                OpenCodeTopBar(
+                    title: viewModel.serversChrome.title,
+                    subtitleAccessory: showsLiveUpdatesStatus
+                        ? .statusDot(viewModel.liveUpdatesConnectionStatus.openCodeStatus)
+                        : nil,
+                    actions: homeTopBarActions,
+                    onTitleClick: viewModel.serversChrome.isSwitcher ? { viewModel.showServersSheet() } : nil,
+                    titleMenuExpanded: viewModel.serversChrome.sheetVisible
+                )
+            }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .id(viewModel.serversChrome.active?.id ?? "")
@@ -781,11 +784,13 @@ struct ProjectListHomeView: View {
         }
     }
 
-    private func openSettingsFromKeyboard() {
+    /// From the Home menu or ⌘,.
+    private func openSettings() {
         ProductAnalytics.logUserAction(
             screenId: ProductAnalytics.Screen.home,
             actionId: ProductAnalytics.Action.homeOpenSettings
         )
+        homeMenuPresented = false
         showSettings = true
     }
 
@@ -874,15 +879,20 @@ struct ProjectListHomeView: View {
             )
         }
         actions.append(
-            .icon(.settings, accessibilityLabel: "common.settings", action: {
+            .icon(.moreVert, accessibilityLabel: "home.more_options", action: {
                 ProductAnalytics.logUserAction(
                     screenId: ProductAnalytics.Screen.home,
-                    actionId: ProductAnalytics.Action.homeOpenSettings
+                    actionId: ProductAnalytics.Action.homeOpenMenu
                 )
-                showSettings = true
+                homeMenuPresented = true
             })
         )
         return actions
+    }
+
+    /// Feature entries go in `features`, top to bottom; `HomeMenu` adds Settings last.
+    private var homeMenuEntries: [OpenCodeOverflowMenuEntry] {
+        HomeMenu.entries(features: [], openSettings: openSettings)
     }
 
     private func handleTerminalTap() {

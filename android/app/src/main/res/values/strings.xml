@@ -150,6 +150,7 @@
     <string name="home_servers_sheet_using_now">Using now</string>
     <string name="home_servers_sheet_switch_to">Switch to</string>
     <string name="home_servers_sheet_manage">Manage in Settings</string>
+    <string name="home_more_options">More options</string>
     <string name="home_new_session">New session</string>
     <string name="home_no_projects">No projects</string>
     <string name="home_filter_sheet_title">Filter by project</string>
