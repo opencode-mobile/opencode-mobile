@@ -78,6 +78,7 @@ import dev.opencode.mobile.ui.components.openCodeDetailLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.components.OpenCodeUnifiedDiff
 import dev.opencode.mobile.ui.components.UnifiedDiffContextMode
+import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
 import kotlinx.serialization.Serializable
 
@@ -299,7 +300,8 @@ private fun ChangedFilesScreen(
                         stringResource(R.string.changes_no_turn_title),
                         stringResource(R.string.changes_no_turn_message),
                     )
-                ChangesPhase.NoChanges ->
+                ChangesPhase.NoChanges -> {
+                    val hint = state.otherSourceHint
                     RefreshableMessage(
                         state.isRefreshing,
                         {
@@ -307,8 +309,14 @@ private fun ChangedFilesScreen(
                             viewModel.refresh()
                         },
                         state.selectedSource.emptyTitle.resolve(),
-                        state.selectedSource.emptyDetail.resolve(),
+                        hint?.let {
+                            UiText.resource(R.string.changes_empty_detail_with_hint, state.selectedSource.emptyDetail, it.message)
+                        }?.resolve() ?: state.selectedSource.emptyDetail.resolve(),
+                        hint?.let {
+                            OpenCodeEmptyStateAction(title = it.actionTitle.resolve()) { viewModel.selectSource(it.source) }
+                        },
                     )
+                }
                 is ChangesPhase.Content ->
                     ChangedFilesContent(phase.changeSet, state, listResetToken, viewModel, onOpenFile, selectedPath)
                 is ChangesPhase.Error ->
@@ -562,10 +570,11 @@ private fun RefreshableMessage(
     onRefresh: () -> Unit,
     title: String,
     detail: String,
+    action: OpenCodeEmptyStateAction? = null,
 ) {
     PullToRefreshBox(isRefreshing = refreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
         Centered {
-            OpenCodeEmptyState(title = title, message = detail)
+            OpenCodeEmptyState(title = title, message = detail, primaryAction = action)
         }
     }
 }

@@ -13,7 +13,8 @@
 // Automation steps: { on: "<event type>" | [...], delayMs, do, ... } or { at: ms, do }.
 // Actions: createSession{title, as, model}, prompt{text, session, model},
 //   seedTurns{session, count, text}, wait{ms}, abort, replyPermission{reply},
-//   replyQuestion{answers}, rejectQuestion, release{gate}, touch{path}, rename{title},
+//   replyQuestion{answers}, rejectQuestion, release{gate}, touch{path, content},
+//   gitCommit{message}, rename{title},
 //   remove, compact, revert{userTurn}, revertCommit, revertClear, dropStreams,
 //   offline{ms}, rejectSseAuth{ms}, stall, unstall, heartbeatOnly{value}, clearFaults,
 //   listShells, readShellOutputs, stopShells (v2 /api/shell for the session; no-ops on v1).
@@ -21,6 +22,7 @@
 
 import { P1 } from "./scenarios-p1.mjs";
 import { P2 } from "./scenarios-p2.mjs";
+import { CHANGES } from "./scenarios-changes.mjs";
 import { shell, path, say, CLEAN_DIST, CURRENCY_QUESTION } from "./scenario-kit.mjs";
 
 // Twelve options with descriptions: taller than a phone screen.
@@ -361,7 +363,7 @@ const P0 = [
   },
 ];
 
-export const SCENARIOS = [...P0.map((scenario) => ({ priority: "P0", ...scenario })), ...P1, ...P2];
+export const SCENARIOS = [...P0.map((scenario) => ({ priority: "P0", ...scenario })), ...P1, ...P2, ...CHANGES];
 
 function todos(a, b, c, d) {
   return [

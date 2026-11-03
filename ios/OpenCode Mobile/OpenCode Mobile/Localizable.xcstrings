@@ -566,6 +566,18 @@
         }
       }
     },
+    "changes.empty_detail_with_hint" : {
+      "comment" : "The first argument says the selected source is empty, the second points to the other source.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ %2$@"
+          }
+        }
+      }
+    },
     "changes.error.fallback" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -738,6 +750,66 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No completed turn"
+          }
+        }
+      }
+    },
+    "changes.other_source.last_turn" : {
+      "comment" : "Shown under an empty source when the other source has changed files.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The last turn changed %lld file."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The last turn changed %lld files."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "changes.other_source.show" : {
+      "comment" : "Button that switches to the other source. The argument is the source name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show %@"
+          }
+        }
+      }
+    },
+    "changes.other_source.working_tree" : {
+      "comment" : "Shown under an empty source when the other source has changed files.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Git changes has %lld changed file."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Git changes has %lld changed files."
+                }
+              }
+            }
           }
         }
       }
@@ -9466,6 +9538,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recent"
+          }
+        }
+      }
+    },
+    "session_list.section.recent_hint" : {
+      "comment" : "Hint beside the Recent section of the session list.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs a glance"
           }
         }
       }

@@ -1123,6 +1123,19 @@
     <string name="changes_source_working_tree_empty_title">No Git changes</string>
     <string name="changes_source_working_tree_empty_message">The working tree has no uncommitted changes.</string>
     <string name="changes_source_last_turn_name">Last turn changes</string>
+    <!-- Shown under an empty source when the other source has changed files. -->
+    <plurals name="changes_other_source_working_tree">
+        <item quantity="one">Git changes has %1$d changed file.</item>
+        <item quantity="other">Git changes has %1$d changed files.</item>
+    </plurals>
+    <plurals name="changes_other_source_last_turn">
+        <item quantity="one">The last turn changed %1$d file.</item>
+        <item quantity="other">The last turn changed %1$d files.</item>
+    </plurals>
+    <!-- Button that switches to the other source. %1$s is the source name. -->
+    <string name="changes_other_source_show">Show %1$s</string>
+    <!-- %1$s says the selected source is empty, %2$s points to the other source. -->
+    <string name="changes_empty_detail_with_hint">%1$s %2$s</string>
     <string name="changes_source_last_turn_empty_title">No changes</string>
     <string name="changes_source_last_turn_empty_message">The latest completed turn did not change any files.</string>
     <string name="changes_loading_title">Loading changes</string>
@@ -1220,6 +1233,8 @@
     <string name="component_session_list_skeleton_row">Loading session</string>
     <string name="component_split_pane_resize_sidebar">Resize sidebar</string>
     <string name="session_list_section_recent">Recent</string>
+    <!-- Hint beside the Recent section of the session list. -->
+    <string name="session_list_section_recent_hint">Needs a glance</string>
     <string name="component_activity_status_completed">completed</string>
     <string name="share_diagnostics_chooser_title">Share diagnostic logs</string>
     <!-- %1$s is the system (Android or iOS), %2$s the speech model. -->

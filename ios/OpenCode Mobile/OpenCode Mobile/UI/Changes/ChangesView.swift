@@ -180,7 +180,17 @@ struct ChangesView: View {
         case .noTurn:
             refreshableMessage("changes.no_turn.title", detail: "changes.no_turn.message")
         case .noChanges:
-            refreshableMessage(viewModel.state.selectedSource.emptyTitle, detail: viewModel.state.selectedSource.emptyDetail)
+            let source = viewModel.state.selectedSource
+            let hint = viewModel.state.otherSourceHint
+            refreshableMessage(
+                source.emptyTitle,
+                detail: hint.map { ChangesOtherSourceHint.emptyDetail(source.emptyDetail, hint: $0) } ?? source.emptyDetail,
+                action: hint.map { hint in
+                    OpenCodeEmptyStateAction(title: hint.actionTitle) {
+                        Task { await viewModel.selectSource(hint.source) }
+                    }
+                }
+            )
         case let .content(changeSet):
             changedFiles(changeSet, selectedPath: selectedPath, onOpenFile: onOpenFile)
         case let .error(error):
@@ -338,13 +348,13 @@ struct ChangesView: View {
         .accessibilityAddTraits(.isButton)
     }
 
-    private func message(_ title: OpenCodeText, detail: OpenCodeText) -> some View {
-        OpenCodeEmptyState(title: title, message: detail)
+    private func message(_ title: OpenCodeText, detail: OpenCodeText, action: OpenCodeEmptyStateAction? = nil) -> some View {
+        OpenCodeEmptyState(title: title, message: detail, primaryAction: action)
     }
 
-    private func refreshableMessage(_ title: OpenCodeText, detail: OpenCodeText) -> some View {
+    private func refreshableMessage(_ title: OpenCodeText, detail: OpenCodeText, action: OpenCodeEmptyStateAction? = nil) -> some View {
         ScrollView {
-            message(title, detail: detail)
+            message(title, detail: detail, action: action)
                 .frame(minHeight: 360)
         }
         .refreshable {

@@ -31,7 +31,6 @@ struct HomeSessionLadderSection<Item>: Hashable where Item: Hashable {
 enum HomeSessionLadder {
     static let allowedWindowHours = [2, 4, 8, 12, 24]
     static let defaultWindowHours = 4
-    static let recentHint = "Needs a glance"
     private static let dayWindowCount = 7
 
     static func sanitizeWindowHours(_ hours: Int) -> Int {
@@ -89,7 +88,7 @@ enum HomeSessionLadder {
                     id: "recent",
                     kind: .recent,
                     title: String(localized: "session_list.section.recent", defaultValue: "Recent"),
-                    hint: recentHint,
+                    hint: String(localized: "session_list.section.recent_hint", defaultValue: "Needs a glance"),
                     items: recent
                 )
             )

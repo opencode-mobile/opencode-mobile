@@ -23,14 +23,13 @@ data class HomeSessionLadderSection<T>(
     val kind: HomeSessionLadderKind,
     /** Section header: a keyed label, or a formatted date. */
     val title: UiText,
-    val hint: String? = null,
+    val hint: UiText? = null,
     val items: List<T>,
 )
 
 object HomeSessionLadder {
     val ALLOWED_WINDOW_HOURS: List<Int> = listOf(2, 4, 8, 12, 24)
     const val DEFAULT_WINDOW_HOURS: Int = 4
-    const val RECENT_HINT: String = "Needs a glance"
     private const val DAY_WINDOW_COUNT: Int = 7
 
     fun sanitizeWindowHours(hours: Int): Int {
@@ -78,7 +77,7 @@ object HomeSessionLadder {
                     id = "recent",
                     kind = HomeSessionLadderKind.Recent,
                     title = UiText.resource(R.string.session_list_section_recent),
-                    hint = RECENT_HINT,
+                    hint = UiText.resource(R.string.session_list_section_recent_hint),
                     items = recent,
                 )
         }

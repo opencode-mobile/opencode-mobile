@@ -131,7 +131,7 @@ export function createServer({ stateDir, emit }) {
     };
   }
 
-  async function start({ protocol, port, password, modelURL, v1Bin, v2Repo, freshProject }) {
+  async function start({ protocol, port, password, modelURL, v1Bin, v2Repo, v2Bin, freshProject }) {
     await stop();
     const d = dirs(protocol);
     for (const dir of [d.data, d.config, d.state, d.home]) mkdirSync(dir, { recursive: true });
@@ -163,6 +163,9 @@ export function createServer({ stateDir, emit }) {
     let cwd = d.project;
     if (protocol === "v1") {
       command = v1Bin;
+      args = ["serve", "--port", String(port), "--hostname", "127.0.0.1"];
+    } else if (v2Bin) {
+      command = v2Bin;
       args = ["serve", "--port", String(port), "--hostname", "127.0.0.1"];
     } else {
       command = "bun";

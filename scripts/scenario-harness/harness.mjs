@@ -26,6 +26,7 @@ for the apps, and a web UI to arm scenarios and watch traffic.
   --protocol v1|v2      Server to start first (default v1)
   --v1-bin <path>       Classic opencode binary (default: opencode on PATH)
   --v2-repo <path>      opencode checkout with v2 dev (default ~/Projects/opencode)
+  --v2-bin <path>       Released v2 opencode binary to run instead of the checkout
   --ui-port <n>         Web UI (default 4500, 127.0.0.1)
   --app-port <n>        Port the apps connect to, via the fault proxy (default 4096, 0.0.0.0)
   --upstream-port <n>   Real opencode server (default 4097, 127.0.0.1)
@@ -61,6 +62,7 @@ function parseArgs(argv) {
     else if (flag === "--protocol") args.protocol = next();
     else if (flag === "--v1-bin") args.v1Bin = next();
     else if (flag === "--v2-repo") args.v2Repo = path.resolve(next());
+    else if (flag === "--v2-bin") args.v2Bin = next();
     else if (flag === "--ui-port") args.uiPort = Number(next());
     else if (flag === "--app-port") args.appPort = Number(next());
     else if (flag === "--upstream-port") args.upstreamPort = Number(next());
@@ -211,7 +213,14 @@ async function runStep(step, props = {}) {
       const project = server.state()?.project;
       const file = path.join(project, step.path);
       mkdirSync(path.dirname(file), { recursive: true });
-      writeFileSync(file, "");
+      writeFileSync(file, step.content ?? "");
+      return;
+    }
+    case "gitCommit": {
+      // Commits every project change as the user would outside opencode.
+      const project = server.state()?.project;
+      execFileSync("git", ["add", "-A"], { cwd: project });
+      execFileSync("git", ["-c", "user.name=Harness", "-c", "user.email=harness@example.invalid", "commit", "-q", "-m", step.message ?? "Harness commit"], { cwd: project });
       return;
     }
     case "rename":
@@ -269,10 +278,12 @@ function clearAutomation() {
 }
 
 // Puts the throwaway project back to its seeded commit (harness config is git-excluded, so it stays).
+// Resets to the root commit so commits made by gitCommit are dropped too.
 function resetProjectFiles() {
   const project = server.state()?.project;
   if (!project) return;
-  execFileSync("git", ["reset", "-q", "--hard"], { cwd: project });
+  const seed = execFileSync("git", ["rev-list", "--max-parents=0", "HEAD"], { cwd: project }).toString().trim().split("\n")[0];
+  execFileSync("git", ["reset", "-q", "--hard", seed], { cwd: project });
   execFileSync("git", ["clean", "-q", "-fd"], { cwd: project });
   emit("harness.project", { reset: project });
 }
@@ -330,6 +341,7 @@ async function startServer(protocol, fresh) {
     modelURL: `http://127.0.0.1:${args.modelPort}/v1`,
     v1Bin: args.v1Bin,
     v2Repo: args.v2Repo,
+    v2Bin: args.v2Bin,
     freshProject: fresh,
   });
   client.startObservers();
