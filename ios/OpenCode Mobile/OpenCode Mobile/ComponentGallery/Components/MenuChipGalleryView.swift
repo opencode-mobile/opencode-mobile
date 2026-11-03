@@ -4,6 +4,7 @@ struct MenuChipGalleryView: View {
     @State private var choice = "All projects"
     @State private var menuPresented = false
     @State private var enabled = true
+    @State private var includeArchived = false
 
     private let choices = ["All projects", "opencode-mobile", "acme-invoices"]
 
@@ -20,15 +21,29 @@ struct MenuChipGalleryView: View {
                 OpenCodeChoiceBadge(label: "Enabled", selected: enabled) { enabled.toggle() }
             }
 
-            OpenCodeAnchoredOverflowHost(isPresented: $menuPresented, entries: entries, placement: .below) {
+            HStack(spacing: 8) {
+                OpenCodeAnchoredOverflowHost(isPresented: $menuPresented, entries: entries, placement: .below) {
+                    OpenCodeMenuChip(
+                        title: .verbatim(choice),
+                        leading: leading(choice),
+                        selected: choice != choices[0],
+                        enabled: enabled,
+                        action: { menuPresented = true }
+                    )
+                }
                 OpenCodeMenuChip(
-                    title: .verbatim(choice),
-                    leading: leading(choice),
-                    selected: choice != choices[0],
+                    variant: .toggle,
+                    title: "Include archived · 3",
+                    leading: .icon(.archive),
+                    selected: includeArchived,
                     enabled: enabled,
-                    action: { menuPresented = true }
+                    action: { includeArchived.toggle() }
                 )
             }
+
+            Text("Toggle: no chevron, on is tinted.")
+                .font(OpenCodeTypography.bodySecondary)
+                .foregroundStyle(OpenCodeColors.textBase)
 
             Text("Variants")
                 .font(OpenCodeTypography.heading)
@@ -38,6 +53,8 @@ struct MenuChipGalleryView: View {
                 OpenCodeMenuChip(title: "opencode-mobile", leading: .letter("o", .red), selected: true, action: {})
                 OpenCodeMenuChip(title: "No leading", action: {})
                 OpenCodeMenuChip(title: "Disabled", leading: .icon(.widgets), enabled: false, action: {})
+                OpenCodeMenuChip(variant: .toggle, title: "Include archived · 3", leading: .icon(.archive), action: {})
+                OpenCodeMenuChip(variant: .toggle, title: "Include archived · 3", leading: .icon(.archive), selected: true, action: {})
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

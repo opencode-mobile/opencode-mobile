@@ -17,9 +17,19 @@ enum OpenCodeMenuChipLeading {
     case letter(Character, LetterAccent)
 }
 
+/// How a menu chip behaves.
+enum OpenCodeMenuChipVariant {
+    /// Shows the current choice of a menu and opens it; ends with a chevron.
+    case menu
+    /// Turns an option on and off; no chevron. `selected` is on.
+    case toggle
+}
+
 /// Capsule that shows the current choice of a menu and opens it: leading icon or letter badge,
 /// the choice, then a chevron. `selected` marks a non-default choice with the interactive tint.
+/// The `toggle` variant is an on/off chip for the same row: no chevron, and `selected` is on.
 struct OpenCodeMenuChip: View {
+    let variant: OpenCodeMenuChipVariant
     let title: OpenCodeText
     let leading: OpenCodeMenuChipLeading
     let selected: Bool
@@ -28,6 +38,7 @@ struct OpenCodeMenuChip: View {
     let action: () -> Void
 
     init(
+        variant: OpenCodeMenuChipVariant = .menu,
         title: OpenCodeText,
         leading: OpenCodeMenuChipLeading = .none,
         selected: Bool = false,
@@ -35,6 +46,7 @@ struct OpenCodeMenuChip: View {
         accessibilityLabel: OpenCodeText? = nil,
         action: @escaping () -> Void
     ) {
+        self.variant = variant
         self.title = title
         self.leading = leading
         self.selected = selected
@@ -50,8 +62,10 @@ struct OpenCodeMenuChip: View {
                 Text(openCode: title)
                     .font(menuChipFont)
                     .lineLimit(1)
-                OpenCodeIconImage(icon: .keyboardArrowDown, size: menuChipChevronSize)
-                    .accessibilityHidden(true)
+                if variant == .menu {
+                    OpenCodeIconImage(icon: .keyboardArrowDown, size: menuChipChevronSize)
+                        .accessibilityHidden(true)
+                }
             }
             .foregroundStyle(foreground)
             .padding(.horizontal, menuChipHorizontalPadding)
@@ -64,7 +78,7 @@ struct OpenCodeMenuChip: View {
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.5)
         .accessibilityLabel(openCode: accessibilityLabel ?? title)
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityAddTraits(accessibilityTraits)
         .openCodeKeyboardFocusable(.capsule, enabled: enabled, activate: action)
     }
 
@@ -83,6 +97,15 @@ struct OpenCodeMenuChip: View {
                 .frame(width: menuChipLetterSize, height: menuChipLetterSize)
                 .background(accent.badgeFill, in: Circle())
                 .accessibilityHidden(true)
+        }
+    }
+
+    /// A toggle reads as an on/off button; `selected` is on.
+    private var accessibilityTraits: AccessibilityTraits {
+        let state: AccessibilityTraits = selected ? .isSelected : []
+        switch variant {
+        case .menu: return state
+        case .toggle: return state.union([.isButton, .isToggle])
         }
     }
 
@@ -111,6 +134,8 @@ struct OpenCodeMenuChip: View {
         OpenCodeMenuChip(title: "All projects", leading: .icon(.widgets), action: {})
         OpenCodeMenuChip(title: "acme-invoices", leading: .letter("a", .teal), selected: true, action: {})
         OpenCodeMenuChip(title: "Disabled", enabled: false, action: {})
+        OpenCodeMenuChip(variant: .toggle, title: "Include archived · 3", leading: .icon(.archive), action: {})
+        OpenCodeMenuChip(variant: .toggle, title: "Include archived · 3", leading: .icon(.archive), selected: true, action: {})
     }
     .padding()
     .openCodeTheme()

@@ -544,7 +544,10 @@ final class ProjectListHomeViewModel {
         self.worktreeRepository = worktreeRepository
         self.worktreeInventoryCache = worktreeInventoryCache
         self.worktreeCreate = WorktreeCreateModel(repository: worktreeRepository)
-        self.sessionSearch = SessionSearchModel(repository: sessionRepository)
+        self.sessionSearch = SessionSearchModel(
+            repository: sessionRepository,
+            archivedSessionsSupported: { activeConnectionManager.capabilities.supportsArchivedSessions }
+        )
         self.serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
         self.foregroundEventStream = foregroundEventStream
         let projects = projectRepository

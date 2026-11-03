@@ -21,7 +21,7 @@ struct SessionSearchModelTests {
 
         model.updateQuery("logi")
         #expect(resultIDs(model) == ["a-login"])
-        guard case let .results(results) = model.content else {
+        guard case let .results(results, _) = model.content else {
             Issue.record("expected results")
             return
         }
@@ -76,7 +76,7 @@ struct SessionSearchModelTests {
         #expect(await waitUntil { !model.busy })
 
         #expect(resultIDs(model) == ["a-new", "a-login", "a-old"])
-        guard case let .results(results) = model.content else {
+        guard case let .results(results, _) = model.content else {
             Issue.record("expected results")
             return
         }
@@ -139,12 +139,12 @@ struct SessionSearchModelTests {
         model.updateQuery("login")
         await fireDebounce(sleeper)
         #expect(await waitUntil { !model.busy })
-        #expect(model.content == .noMatch(query: "login", scopeTitle: "beta", offerAllProjects: true))
+        #expect(model.content == .noMatch(query: "login", scopeTitle: "beta", offerAllProjects: true, offerArchived: false))
 
         model.updateQuery("nothing")
         await fireDebounce(sleeper)
         #expect(await waitUntil { !model.busy })
-        #expect(model.content == .noMatch(query: "nothing", scopeTitle: "beta", offerAllProjects: false))
+        #expect(model.content == .noMatch(query: "nothing", scopeTitle: "beta", offerAllProjects: false, offerArchived: false))
 
         model.updateQuery("login")
         model.searchAllProjects()
@@ -230,14 +230,182 @@ struct SessionSearchModelTests {
         #expect(model.scope == HomeScope.allID)
     }
 
+    // MARK: Include archived
+
+    private var archivedFixture: [String: [Session]] {
+        [
+            alpha: [
+                archivedSession("a-spike", title: "Login spike", directory: alpha, archived: 100),
+                archivedSession("a-spike-2", title: "Login spike two", directory: alpha, archived: 200),
+            ],
+            beta: [
+                archivedSession("b-notes", title: "Release notes", directory: beta, archived: 150),
+            ],
+        ]
+    }
+
+    @Test func includeArchived_unsupported_hasNoChipAndListsNothingArchived() async {
+        let (model, repository, sleeper) = makeModel(archivedSupported: false, archived: archivedFixture)
+        model.open(homeScopeId: HomeScope.allID)
+        await model.settleArchived()
+
+        #expect(model.archive == nil)
+        #expect(repository.archivedCalls.isEmpty)
+
+        model.includeArchived()
+        model.toggleIncludeArchived()
+        await search(model, "spike", sleeper)
+        #expect(model.archive == nil)
+        #expect(model.content == .noMatch(query: "spike", scopeTitle: "All projects", offerAllProjects: false, offerArchived: false))
+        #expect(repository.archivedCalls.isEmpty)
+    }
+
+    @Test func includeArchived_countsArchivedSessionsInScopeAfterOneListing() async {
+        let (model, repository, sleeper) = makeModel(archivedSupported: true, archived: archivedFixture)
+        model.open(homeScopeId: HomeScope.allID)
+
+        // Counting: the chip reads plain "Include archived".
+        #expect(model.archive == SessionSearchArchive(included: false, count: nil))
+        await model.settleArchived()
+        #expect(model.archive == SessionSearchArchive(included: false, count: 3))
+        #expect(Set(repository.archivedCalls) == [alpha, beta])
+
+        model.selectScope(HomeProjectGrouping.pathKey(beta))
+        #expect(model.archive?.count == 1)
+        model.selectScope(HomeProjectGrouping.pathKey(alpha))
+        #expect(model.archive?.count == 2)
+
+        // Typing matches the listing locally: no further archived requests.
+        await search(model, "spike", sleeper)
+        model.updateQuery("spik")
+        #expect(repository.archivedCalls.count == 2)
+    }
+
+    @Test func includeArchived_showsArchivedSectionAfterActiveAndStartsOffOnEveryOpen() async throws {
+        let (model, _, sleeper) = makeModel(archivedSupported: true, archived: archivedFixture)
+        model.open(homeScopeId: HomeScope.allID)
+        await model.settleArchived()
+
+        await search(model, "login", sleeper)
+        #expect(resultIDs(model) == ["a-login"])
+        #expect(archivedResultIDs(model).isEmpty)
+
+        model.toggleIncludeArchived()
+        #expect(model.archive?.included == true)
+        #expect(resultIDs(model) == ["a-login"])
+        // Most recently archived first.
+        #expect(archivedResultIDs(model) == ["a-spike-2", "a-spike"])
+        guard case let .results(_, archived) = model.content else {
+            Issue.record("expected results")
+            return
+        }
+        let row = try #require(archived.first)
+        #expect(row.row.status == .idle)
+        #expect(row.row.worktree == HomeProjectGrouping.pathKey(alpha))
+        #expect(row.row.directory == alpha)
+        let range = try #require(row.matchRange)
+        #expect(row.row.title[range] == "Login")
+
+        model.toggleIncludeArchived()
+        #expect(archivedResultIDs(model).isEmpty)
+
+        model.toggleIncludeArchived()
+        model.close()
+        model.open(homeScopeId: HomeScope.allID)
+        #expect(model.archive?.included == false)
+    }
+
+    @Test func includeArchived_sessionInBothListsShowsOnceAsActive() async {
+        var archived = archivedFixture
+        archived[alpha, default: []].append(archivedSession("a-login", title: "Login flow", directory: alpha, archived: 300))
+        let (model, _, sleeper) = makeModel(archivedSupported: true, archived: archived)
+        model.open(homeScopeId: HomeScope.allID)
+        await model.settleArchived()
+
+        model.toggleIncludeArchived()
+        await search(model, "login", sleeper)
+
+        #expect(resultIDs(model) == ["a-login"])
+        #expect(archivedResultIDs(model) == ["a-spike-2", "a-spike"])
+    }
+
+    @Test func includeArchived_noMatchOffersOnlyWhatWouldFindSomething() async {
+        var archived = archivedFixture
+        archived[beta, default: []].append(archivedSession("b-login", title: "Login archive", directory: beta, archived: 160))
+        let (model, _, sleeper) = makeModel(archivedSupported: true, archived: archived)
+        model.open(homeScopeId: HomeProjectGrouping.pathKey(beta))
+        await model.settleArchived()
+
+        // Only another project has an archived match: with the chip off, nothing to offer.
+        await search(model, "spike", sleeper)
+        #expect(model.content == .noMatch(query: "spike", scopeTitle: "beta", offerAllProjects: false, offerArchived: false))
+
+        // With the chip on, archived matches elsewhere count for "Search all projects".
+        model.toggleIncludeArchived()
+        #expect(model.content == .noMatch(query: "spike", scopeTitle: "beta", offerAllProjects: true, offerArchived: false))
+
+        // An archived match in scope, chip off: "Include archived".
+        model.close()
+        model.open(homeScopeId: HomeProjectGrouping.pathKey(alpha))
+        await model.settleArchived()
+        await search(model, "spike", sleeper)
+        #expect(model.content == .noMatch(query: "spike", scopeTitle: "alpha", offerAllProjects: false, offerArchived: true))
+
+        // Only an active match in another project: "Search all projects".
+        await search(model, "logs", sleeper)
+        #expect(model.content == .noMatch(query: "logs", scopeTitle: "alpha", offerAllProjects: true, offerArchived: false))
+
+        // Both: an archived match here and an active match in another project.
+        model.close()
+        model.open(homeScopeId: HomeProjectGrouping.pathKey(beta))
+        await model.settleArchived()
+        await search(model, "login", sleeper)
+        #expect(model.content == .noMatch(query: "login", scopeTitle: "beta", offerAllProjects: true, offerArchived: true))
+    }
+
+    @Test func includeArchived_fromTheEmptyStateTurnsTheChipOn() async {
+        let (model, _, sleeper) = makeModel(archivedSupported: true, archived: archivedFixture)
+        model.open(homeScopeId: HomeProjectGrouping.pathKey(alpha))
+        await model.settleArchived()
+        await search(model, "spike", sleeper)
+        #expect(model.content == .noMatch(query: "spike", scopeTitle: "alpha", offerAllProjects: false, offerArchived: true))
+
+        model.includeArchived()
+
+        #expect(model.archive == SessionSearchArchive(included: true, count: 2))
+        #expect(resultIDs(model).isEmpty)
+        #expect(archivedResultIDs(model) == ["a-spike-2", "a-spike"])
+    }
+
+    @Test func includeArchived_listingFailureShowsNoCountAndNoArchivedRows() async {
+        let (model, repository, sleeper) = makeModel(archivedSupported: true, archived: archivedFixture)
+        repository.archivedFails = true
+        model.open(homeScopeId: HomeProjectGrouping.pathKey(alpha))
+        await model.settleArchived()
+
+        #expect(model.archive == SessionSearchArchive(included: false, count: nil))
+        await search(model, "spike", sleeper)
+        #expect(model.content == .noMatch(query: "spike", scopeTitle: "alpha", offerAllProjects: false, offerArchived: false))
+
+        model.toggleIncludeArchived()
+        #expect(model.archive == SessionSearchArchive(included: true, count: nil))
+        #expect(model.content == .noMatch(query: "spike", scopeTitle: "alpha", offerAllProjects: false, offerArchived: false))
+    }
+
     // MARK: Helpers
 
-    private func makeModel() -> (SessionSearchModel, ScriptedSearchRepository, ManualSleeper) {
+    private func makeModel(
+        archivedSupported: Bool = false,
+        archived: [String: [Session]] = [:]
+    ) -> (SessionSearchModel, ScriptedSearchRepository, ManualSleeper) {
         let repository = ScriptedSearchRepository()
+        repository.archived = archived
         let sleeper = ManualSleeper()
-        let model = SessionSearchModel(repository: repository, sleep: { duration in
-            try await sleeper.sleep(duration)
-        })
+        let model = SessionSearchModel(
+            repository: repository,
+            archivedSessionsSupported: { archivedSupported },
+            sleep: { duration in try await sleeper.sleep(duration) }
+        )
         model.homeChanged(makeHome(paths: [alpha, beta]))
         return (model, repository, sleeper)
     }
@@ -292,8 +460,33 @@ struct SessionSearchModelTests {
     }
 
     private func resultIDs(_ model: SessionSearchModel) -> [String] {
-        guard case let .results(results) = model.content else { return [] }
+        guard case let .results(results, _) = model.content else { return [] }
         return results.map(\.id)
+    }
+
+    private func archivedResultIDs(_ model: SessionSearchModel) -> [String] {
+        guard case let .results(_, archived) = model.content else { return [] }
+        return archived.map(\.id)
+    }
+
+    private func archivedSession(_ id: String, title: String, directory: String, archived: Int64) -> Session {
+        Session(
+            id: id,
+            title: title,
+            slug: nil,
+            projectID: nil,
+            directory: directory,
+            parentID: nil,
+            updatedAtEpochMs: 1,
+            archivedAtEpochMs: archived
+        )
+    }
+
+    /// Searches for `query` and waits until the server search has answered.
+    private func search(_ model: SessionSearchModel, _ query: String, _ sleeper: ManualSleeper) async {
+        model.updateQuery(query)
+        await fireDebounce(sleeper)
+        _ = await waitUntil { !model.busy }
     }
 
     /// Fires the debounce once the search task is waiting on it.
@@ -325,6 +518,10 @@ private final class ScriptedSearchRepository: SessionRepository, @unchecked Send
 
     var calls: [Call] = []
     var results: [String: [Session]] = [:]
+    /// Archived sessions by directory, for `listArchivedSessions`.
+    var archived: [String: [Session]] = [:]
+    var archivedCalls: [String?] = []
+    var archivedFails = false
     var failingDirectories: Set<String> = []
     var holdsReplies = false
     private var held: [CheckedContinuation<Void, Never>?] = []
@@ -349,6 +546,12 @@ private final class ScriptedSearchRepository: SessionRepository, @unchecked Send
         }
         if fails { throw SessionError.transport("offline") }
         return SessionTitleSearch.searchResults(reply, query: query)
+    }
+
+    func listArchivedSessions(directory: String?) async throws -> [Session] {
+        archivedCalls.append(directory)
+        if archivedFails { throw SessionError.transport("offline") }
+        return archived[directory ?? ""] ?? []
     }
 
     func listSessions(directory: String?) async throws -> [Session] { [] }

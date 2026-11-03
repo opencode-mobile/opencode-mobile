@@ -59,7 +59,7 @@ struct SessionSearchView: View {
 
     private var scopeRow: some View {
         let scope = model.selectedScope
-        return HStack {
+        return HStack(spacing: 8) {
             OpenCodeAnchoredOverflowHost(
                 isPresented: $scopeMenuPresented,
                 entries: scopeEntries,
@@ -73,6 +73,16 @@ struct SessionSearchView: View {
                     action: { scopeMenuPresented = true }
                 )
                 .accessibilityIdentifier("sessionSearchScope")
+            }
+            if let archive = model.archive {
+                OpenCodeMenuChip(
+                    variant: .toggle,
+                    title: Self.includeArchivedTitle(archive.count),
+                    leading: .icon(.archive),
+                    selected: archive.included,
+                    action: { model.toggleIncludeArchived() }
+                )
+                .accessibilityIdentifier("sessionSearchIncludeArchived")
             }
             Spacer(minLength: 0)
         }
@@ -109,10 +119,10 @@ struct SessionSearchView: View {
             centeredNote(Self.hint(scopeTitle))
         case .searching:
             centeredNote("session_search.searching")
-        case let .results(results):
+        case let .results(results, archived):
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 0) {
-                    OpenCodeSectionHeader(title: Self.resultsTitle(results.count))
+                    OpenCodeSectionHeader(title: Self.resultsTitle(results.count + archived.count))
                     ForEach(results) { result in
                         SessionListRow(
                             session: result.row,
@@ -125,22 +135,43 @@ struct SessionSearchView: View {
                         )
                         .accessibilityIdentifier("sessionSearchResult")
                     }
+                    if !archived.isEmpty {
+                        OpenCodeSectionHeader(title: "session_search.archived_section")
+                        ForEach(archived) { result in
+                            SessionListRow(
+                                session: result.row,
+                                rowStyle: rowStyle,
+                                showsStatus: false,
+                                selected: selectedSessionId == result.row.id,
+                                titleHighlight: result.matchRange,
+                                action: { open(result.row) },
+                                trailing: {
+                                    OpenCodeTag("session_search.archived_tag", size: .small, tone: .neutral)
+                                }
+                            )
+                            .accessibilityIdentifier("sessionSearchArchivedResult")
+                        }
+                    }
                 }
                 .padding(.bottom, 24)
                 .openCodeReadableColumn()
             }
             .scrollDismissesKeyboard(.immediately)
-        case let .noMatch(query, scopeTitle, offerAllProjects):
+        case let .noMatch(query, scopeTitle, offerAllProjects, offerArchived):
+            let includeArchived = offerArchived
+                ? OpenCodeEmptyStateAction(title: "session_search.include_archived") { model.includeArchived() }
+                : nil
+            let searchAllProjects = offerAllProjects
+                ? OpenCodeEmptyStateAction(title: "session_search.search_all_projects") { model.searchAllProjects() }
+                : nil
             ScrollView {
                 OpenCodeEmptyState(
                     title: Self.noMatchTitle(query),
                     message: Self.noMatchMessage(scopeTitle),
                     fillsAvailableSpace: false,
-                    primaryAction: offerAllProjects
-                        ? OpenCodeEmptyStateAction(title: "session_search.search_all_projects") {
-                            model.searchAllProjects()
-                        }
-                        : nil
+                    // "Include archived" leads; "Search all projects" is primary when alone.
+                    primaryAction: includeArchived ?? searchAllProjects,
+                    secondaryAction: includeArchived == nil ? nil : searchAllProjects
                 )
                 .padding(.top, 64)
                 .openCodeReadableColumn()
@@ -192,6 +223,15 @@ struct SessionSearchView: View {
 
     static func resultsTitle(_ count: Int) -> OpenCodeText {
         OpenCodeText(LocalizedStringResource("session_search.results", defaultValue: "\(count) results"))
+    }
+
+    /// "Include archived · N"; plain "Include archived" while counting, on failure, or at 0.
+    static func includeArchivedTitle(_ count: Int?) -> OpenCodeText {
+        guard let count, count > 0 else { return "session_search.include_archived" }
+        return OpenCodeText(LocalizedStringResource(
+            "session_search.include_archived_count",
+            defaultValue: "Include archived · \(count)"
+        ))
     }
 
     static func noMatchTitle(_ query: String) -> OpenCodeText {

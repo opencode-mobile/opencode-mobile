@@ -31,21 +31,32 @@ struct SessionSearchResult: Identifiable, Equatable {
     var id: String { row.id }
 }
 
+/// The "Include archived" chip, on servers that list archived sessions.
+struct SessionSearchArchive: Equatable {
+    /// The chip is on: archived matches follow the active ones.
+    var included: Bool
+    /// Archived sessions in the current scope. Nil while they load, or when listing them failed.
+    var count: Int?
+}
+
 enum SessionSearchContent: Equatable {
     /// Nothing typed yet.
     case hint(scopeTitle: String)
     /// The server is still answering and nothing matched yet.
     case searching
-    /// Newest first.
-    case results([SessionSearchResult])
-    /// `offerAllProjects` when a project is searched and a session in another project matches.
-    case noMatch(query: String, scopeTitle: String, offerAllProjects: Bool)
+    /// Active matches, newest first, then archived matches (only while "Include archived" is on),
+    /// most recently archived first. A session in both shows once, as active.
+    case results([SessionSearchResult], archived: [SessionSearchResult])
+    /// `offerAllProjects` when a project is searched and a session in another project matches;
+    /// `offerArchived` when "Include archived" is off and an archived session in scope matches.
+    case noMatch(query: String, scopeTitle: String, offerAllProjects: Bool, offerArchived: Bool)
 }
 
 /// Screen Model for searching session titles from Home (#929). Home's own rows answer on every
 /// keystroke; the server is asked 250 ms after the last keystroke (at once on a scope change),
 /// and what it adds joins the list. Stale replies are dropped; a failed request keeps the local
-/// results.
+/// results. On servers that list archived sessions, every Home project's archived sessions are
+/// listed once on open and matched locally while "Include archived" is on.
 @MainActor
 @Observable
 final class SessionSearchModel {
@@ -63,18 +74,32 @@ final class SessionSearchModel {
     private var home = SessionSearchHome()
     /// Rows the server returned, by session id, for the latest answered search.
     private var serverRows: [String: SessionListSession] = [:]
+    /// The server lists archived sessions, as of the last open.
+    private var archiveSupported = false
+    private var archiveIncluded = false
+    /// Each Home project's archived sessions, by project key. Nil while loading or after a failure.
+    private var archivedSessions: [String: [Session]]?
+    /// `archivedSessions` through Home's row builder, most recently archived first.
+    private var archivedRows: [SessionListSession] = []
 
     @ObservationIgnored private let repository: any SessionRepository
     @ObservationIgnored private let sleep: @Sendable (Duration) async throws -> Void
+    @ObservationIgnored private let archivedSessionsSupported: @MainActor () -> Bool
     @ObservationIgnored private let adapter = SessionDomainAdapter()
     @ObservationIgnored private var searchTask: Task<Void, Never>?
     @ObservationIgnored private var generation = 0
+    @ObservationIgnored private var archiveTask: Task<Void, Never>?
+    @ObservationIgnored private var archiveGeneration = 0
 
+    /// `archivedSessionsSupported` is the server's `supportsArchivedSessions`; without it search
+    /// shows no "Include archived" and never lists archived sessions.
     init(
         repository: any SessionRepository,
+        archivedSessionsSupported: @escaping @MainActor () -> Bool = { false },
         sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
     ) {
         self.repository = repository
+        self.archivedSessionsSupported = archivedSessionsSupported
         self.sleep = sleep
     }
 
@@ -98,18 +123,37 @@ final class SessionSearchModel {
 
     var scopeTitle: String { selectedScope.title }
 
+    /// Nil when the server cannot list archived sessions: no chip, no archived results.
+    var archive: SessionSearchArchive? {
+        guard archiveSupported else { return nil }
+        return SessionSearchArchive(
+            included: archiveIncluded,
+            count: archivedSessions == nil ? nil : archivedRows.filter { inScope($0, scope) }.count
+        )
+    }
+
     var content: SessionSearchContent {
         let normalized = SessionTitleSearch.normalizedQuery(query)
         guard !normalized.isEmpty else { return .hint(scopeTitle: scopeTitle) }
-        let rows = matchingRows(query: normalized).filter { inScope($0, scope) }
-        if !rows.isEmpty {
-            return .results(rows.map { row in
-                SessionSearchResult(row: row, matchRange: SessionTitleSearch.matchRange(in: row.title, query: normalized))
-            })
+        let active = matchingRows(query: normalized)
+        let archived = matchingArchivedRows(query: normalized, excluding: Set(active.map(\.id)))
+        let rows = active.filter { inScope($0, scope) }
+        let archivedInScope = archived.filter { inScope($0, scope) }
+        let shownArchived = archiveIncluded ? archivedInScope : []
+        if !rows.isEmpty || !shownArchived.isEmpty {
+            return .results(
+                rows.map { result($0, query: normalized) },
+                archived: shownArchived.map { result($0, query: normalized) }
+            )
         }
         if busy { return .searching }
-        let offerAllProjects = scope != HomeScope.allID && !matchingRows(query: normalized).isEmpty
-        return .noMatch(query: normalized, scopeTitle: scopeTitle, offerAllProjects: offerAllProjects)
+        let matchesAnywhere = !active.isEmpty || (archiveIncluded && !archived.isEmpty)
+        return .noMatch(
+            query: normalized,
+            scopeTitle: scopeTitle,
+            offerAllProjects: scope != HomeScope.allID && matchesAnywhere,
+            offerArchived: !archiveIncluded && !archivedInScope.isEmpty
+        )
     }
 
     // MARK: Actions
@@ -122,6 +166,7 @@ final class SessionSearchModel {
         scope = Self.searchScope(homeScopeId: homeScopeId, home: home)
         isPresented = true
         focusRequest += 1
+        loadArchivedSessions()
     }
 
     /// ⌘F while search is already open: back to the field.
@@ -131,6 +176,7 @@ final class SessionSearchModel {
 
     func close() {
         cancelServerSearch()
+        cancelArchivedLoad()
         isPresented = false
     }
 
@@ -164,6 +210,23 @@ final class SessionSearchModel {
         selectScope(HomeScope.allID)
     }
 
+    /// The "Include archived" chip.
+    func toggleIncludeArchived() {
+        guard archiveSupported else { return }
+        archiveIncluded.toggle()
+    }
+
+    /// The no-match "Include archived" button: turns the chip on.
+    func includeArchived() {
+        guard archiveSupported else { return }
+        archiveIncluded = true
+    }
+
+    /// Waits for the archived listing in flight (tests).
+    func settleArchived() async {
+        await archiveTask?.value
+    }
+
     /// Esc: a query is cleared first; an empty search closes.
     func escape() {
         if query.isEmpty {
@@ -179,6 +242,7 @@ final class SessionSearchModel {
         if scope != HomeScope.allID, !snapshot.projects.contains(where: { $0.key == scope }) {
             scope = HomeScope.allID
         }
+        rebuildArchivedRows()
     }
 
     // MARK: Matching
@@ -198,6 +262,16 @@ final class SessionSearchModel {
             if left != right { return left > right }
             return lhs.id < rhs.id
         }
+    }
+
+    /// Archived rows matching `query`, leaving out sessions also listed as active.
+    private func matchingArchivedRows(query: String, excluding activeIDs: Set<String>) -> [SessionListSession] {
+        guard archiveSupported else { return [] }
+        return archivedRows.filter { !activeIDs.contains($0.id) && SessionTitleSearch.matches($0.title, query: query) }
+    }
+
+    private func result(_ row: SessionListSession, query: String) -> SessionSearchResult {
+        SessionSearchResult(row: row, matchRange: SessionTitleSearch.matchRange(in: row.title, query: query))
     }
 
     private func inScope(_ row: SessionListSession, _ scope: String) -> Bool {
@@ -301,6 +375,60 @@ final class SessionSearchModel {
             }
             return replies.sorted { $0.0 < $1.0 }.map { (path: $0.1, sessions: $0.2) }
         }
+    }
+
+    // MARK: Archived sessions
+
+    /// Lists every Home project's archived sessions once per open, when the server can. "Include
+    /// archived" starts off each time.
+    private func loadArchivedSessions() {
+        cancelArchivedLoad()
+        archiveIncluded = false
+        archivedSessions = nil
+        archivedRows = []
+        archiveSupported = archivedSessionsSupported()
+        guard archiveSupported, !home.projects.isEmpty else {
+            if archiveSupported { archivedSessions = [:] }
+            return
+        }
+        let request = archiveGeneration
+        let repository = repository
+        let projects = home.projects
+        archiveTask = Task { [weak self] in
+            let sessions: [String: [Session]]?
+            do {
+                sessions = try await ArchivedSessionRow.loadByProject(repository: repository, projects: projects)
+            } catch {
+                if !(error is CancellationError) {
+                    DiagnosticLog.warning(.session, "session search archived load failed", error: error)
+                }
+                sessions = nil
+            }
+            guard !Task.isCancelled, let self, self.archiveGeneration == request else { return }
+            self.archiveTask = nil
+            // A failure leaves no count and no archived rows.
+            self.archivedSessions = sessions
+            self.rebuildArchivedRows()
+        }
+    }
+
+    private func cancelArchivedLoad() {
+        archiveGeneration += 1
+        archiveTask?.cancel()
+        archiveTask = nil
+    }
+
+    private func rebuildArchivedRows() {
+        guard let archivedSessions else {
+            if !archivedRows.isEmpty { archivedRows = [] }
+            return
+        }
+        archivedRows = ArchivedSessionRow.rows(
+            sessionsByProject: archivedSessions,
+            projects: home.projects,
+            worktreesEnabled: home.worktreesEnabled,
+            adapter: adapter
+        ).map(\.row)
     }
 
     // MARK: Helpers

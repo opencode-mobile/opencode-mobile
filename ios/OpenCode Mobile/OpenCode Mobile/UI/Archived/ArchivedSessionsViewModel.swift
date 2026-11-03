@@ -12,6 +12,60 @@ struct ArchivedSessionRow: Identifiable, Equatable {
     var directory: String { row.directory }
 }
 
+extension ArchivedSessionRow {
+    /// Every Home project's archived sessions over its added paths, by project key. The Archived
+    /// sessions screen and search's "Include archived" both list them this way. Throws when a
+    /// project cannot be listed.
+    static func loadByProject(repository: any SessionRepository, projects: [HomeProject]) async throws -> [String: [Session]] {
+        var result: [String: [Session]] = [:]
+        try await withThrowingTaskGroup(of: (String, [Session]).self) { group in
+            for project in projects {
+                group.addTask {
+                    (project.key, try await ArchivedSessionList.load(repository: repository, directories: project.memberPaths))
+                }
+            }
+            for try await (key, sessions) in group {
+                result[key] = sessions
+            }
+        }
+        return result
+    }
+
+    /// Home's row builder over each project's archived sessions: no live status, and the caption
+    /// and order follow when the session was archived, most recent first.
+    static func rows(
+        sessionsByProject: [String: [Session]],
+        projects: [HomeProject],
+        worktreesEnabled: Bool,
+        adapter: SessionDomainAdapter
+    ) -> [ArchivedSessionRow] {
+        let sections = projects.map { project -> ProjectSectionItem in
+            ProjectSectionItem(
+                id: project.primaryPath,
+                worktree: project.primaryPath,
+                displayName: project.displayName,
+                pathSubtitle: project.primaryPath,
+                letter: letterCharacter(for: project.displayName),
+                letterAccent: letterAccent(for: project.primaryPath),
+                allSessions: (sessionsByProject[project.key] ?? []).map { session in
+                    let item = adapter.listItem(from: session, worktree: project.primaryPath)
+                    return SessionListItem(
+                        id: item.id,
+                        title: item.title,
+                        worktree: item.worktree,
+                        updatedAtEpochMs: session.archivedAtEpochMs,
+                        parentID: item.parentID,
+                        directory: item.directory
+                    )
+                },
+                loadError: nil
+            )
+        }
+        return sections.crossProjectSessionListSessions(projects: projects, worktreesEnabled: worktreesEnabled)
+            .map { ArchivedSessionRow(row: $0, archivedAtEpochMs: $0.updatedAtEpochMs ?? 0) }
+    }
+}
+
 struct ArchivedSessionSection: Identifiable, Equatable {
     let period: ArchivedSessionPeriod
     let rows: [ArchivedSessionRow]
@@ -235,17 +289,7 @@ final class ArchivedSessionsViewModel {
         let repository = sessionRepository
         let homeProjects = projects
         do {
-            var result: [String: [Session]] = [:]
-            try await withThrowingTaskGroup(of: (String, [Session]).self) { group in
-                for project in homeProjects {
-                    group.addTask {
-                        (project.key, try await ArchivedSessionList.load(repository: repository, directories: project.memberPaths))
-                    }
-                }
-                for try await (key, sessions) in group {
-                    result[key] = sessions
-                }
-            }
+            let result = try await ArchivedSessionRow.loadByProject(repository: repository, projects: homeProjects)
             guard generation == loadGeneration else { return }
             archivedByProject = result
             loaded = true
@@ -306,34 +350,20 @@ final class ArchivedSessionsViewModel {
         let restoredByProject = Dictionary(grouping: restoredSessions.values) { session in
             projects.first { project in session.directory.map(project.hasMember) == true || session.directory.flatMap(project.worktree(at:)) != nil }?.key ?? ""
         }
-        let sections = projects.map { project -> ProjectSectionItem in
-            let listed = archivedByProject[project.key] ?? []
-            let restored = (restoredByProject[project.key] ?? []).filter { restored in !listed.contains { $0.id == restored.id } }
-            let sessions = ArchivedSessionList.sorted(listed + restored).filter { !hiddenIDs.contains($0.id) }
-            return ProjectSectionItem(
-                id: project.primaryPath,
-                worktree: project.primaryPath,
-                displayName: project.displayName,
-                pathSubtitle: project.primaryPath,
-                letter: letterCharacter(for: project.displayName),
-                letterAccent: letterAccent(for: project.primaryPath),
-                // The row caption and order follow when the session was archived.
-                allSessions: sessions.map { session in
-                    let item = adapter.listItem(from: session, worktree: project.primaryPath)
-                    return SessionListItem(
-                        id: item.id,
-                        title: item.title,
-                        worktree: item.worktree,
-                        updatedAtEpochMs: session.archivedAtEpochMs,
-                        parentID: item.parentID,
-                        directory: item.directory
-                    )
-                },
-                loadError: nil
-            )
-        }
-        let allRows = sections.crossProjectSessionListSessions(projects: projects, worktreesEnabled: worktreesEnabled)
-            .map { ArchivedSessionRow(row: $0, archivedAtEpochMs: $0.updatedAtEpochMs ?? 0) }
+        let sessionsByProject = Dictionary(
+            projects.map { project -> (String, [Session]) in
+                let listed = archivedByProject[project.key] ?? []
+                let restored = (restoredByProject[project.key] ?? []).filter { restored in !listed.contains { $0.id == restored.id } }
+                return (project.key, ArchivedSessionList.sorted(listed + restored).filter { !hiddenIDs.contains($0.id) })
+            },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let allRows = ArchivedSessionRow.rows(
+            sessionsByProject: sessionsByProject,
+            projects: projects,
+            worktreesEnabled: worktreesEnabled,
+            adapter: adapter
+        )
         let visibleIDs = Set(allRows.map(\.row).visibleForFilter(resolved.id).map(\.id))
         let visible = allRows.filter { visibleIDs.contains($0.id) }
         content = .loaded(

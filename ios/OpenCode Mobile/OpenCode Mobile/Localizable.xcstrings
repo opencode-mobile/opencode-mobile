@@ -10102,6 +10102,30 @@
         }
       }
     },
+    "session_search.archived_section" : {
+      "comment" : "Section header above archived sessions in search results.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archived"
+          }
+        }
+      }
+    },
+    "session_search.archived_tag" : {
+      "comment" : "Tag on an archived session in search results.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archived"
+          }
+        }
+      }
+    },
     "session_search.clear" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10121,6 +10145,30 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Matches session titles in %@."
+          }
+        }
+      }
+    },
+    "session_search.include_archived" : {
+      "comment" : "Search chip and no-match button that adds archived sessions to the results.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include archived"
+          }
+        }
+      }
+    },
+    "session_search.include_archived_count" : {
+      "comment" : "Search chip that adds archived sessions to the results. %lld is how many archived sessions are in the search scope.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include archived · %lld"
           }
         }
       }
