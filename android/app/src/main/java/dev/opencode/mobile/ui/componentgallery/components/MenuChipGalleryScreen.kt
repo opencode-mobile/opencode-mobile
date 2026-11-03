@@ -18,6 +18,7 @@ import dev.opencode.mobile.ui.components.OpenCodeAnchoredOverflowHost
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.components.OpenCodeMenuChip
 import dev.opencode.mobile.ui.components.OpenCodeMenuChipLeading
+import dev.opencode.mobile.ui.components.OpenCodeMenuChipVariant
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -39,11 +40,12 @@ fun MenuChipGalleryScreen(modifier: Modifier = Modifier) {
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
     var expanded by rememberSaveable { mutableStateOf(false) }
     var enabled by rememberSaveable { mutableStateOf(true) }
+    var toggled by rememberSaveable { mutableStateOf(false) }
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(text = "Interactive", style = MaterialTheme.typography.titleMedium)
         Text(
-            text = "Shows the current choice; the default choice is plain, any other is tinted. Opens a selection-row menu.",
+            text = "Menu shows the current choice (tinted when not the default) and opens a menu. Toggle turns a filter on and off.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -71,6 +73,16 @@ fun MenuChipGalleryScreen(modifier: Modifier = Modifier) {
                 enabled = enabled,
             )
         }
+
+        Text(text = "Toggle", style = MaterialTheme.typography.titleMedium)
+        OpenCodeMenuChip(
+            title = "Include archived · 3",
+            onClick = { toggled = !toggled },
+            leading = OpenCodeMenuChipLeading.Icon(OpenCodeIcons.Archive),
+            selected = toggled,
+            enabled = enabled,
+            variant = OpenCodeMenuChipVariant.Toggle,
+        )
 
         Text(text = "States", style = MaterialTheme.typography.titleMedium)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

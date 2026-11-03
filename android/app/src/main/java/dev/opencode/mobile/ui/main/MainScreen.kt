@@ -271,6 +271,8 @@ fun MainScreen(
                         onEscape = searchViewModel::escape,
                         onSelectScope = searchViewModel::selectScope,
                         onSearchAllProjects = searchViewModel::searchAllProjects,
+                        onToggleIncludeArchived = searchViewModel::toggleIncludeArchived,
+                        onIncludeArchived = searchViewModel::includeArchived,
                     ),
                 onOpen = searchViewModel::open,
                 onHomeChanged = searchViewModel::homeChanged,

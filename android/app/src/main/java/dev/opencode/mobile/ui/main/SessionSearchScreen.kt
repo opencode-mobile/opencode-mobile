@@ -1,6 +1,7 @@
 package dev.opencode.mobile.ui.main
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,8 +46,11 @@ import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeMenuChip
 import dev.opencode.mobile.ui.components.OpenCodeMenuChipLeading
+import dev.opencode.mobile.ui.components.OpenCodeMenuChipVariant
 import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
+import dev.opencode.mobile.ui.components.OpenCodeTag
+import dev.opencode.mobile.ui.components.OpenCodeTagSize
 import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
 import dev.opencode.mobile.ui.components.SessionListRow
@@ -59,6 +64,7 @@ object SessionSearchTags {
     const val FIELD = "sessionSearchField"
     const val SCOPE = "sessionSearchScope"
     const val RESULTS = "sessionSearchResults"
+    const val INCLUDE_ARCHIVED = "sessionSearchIncludeArchived"
 }
 
 /** Callbacks of [SessionSearchScreen], one per Screen Model action. */
@@ -68,6 +74,8 @@ data class SessionSearchCallbacks(
     val onEscape: () -> Unit = {},
     val onSelectScope: (String) -> Unit = {},
     val onSearchAllProjects: () -> Unit = {},
+    val onToggleIncludeArchived: () -> Unit = {},
+    val onIncludeArchived: () -> Unit = {},
 )
 
 /**
@@ -127,28 +135,52 @@ internal fun SessionSearchScreen(
                         .testTag(SessionSearchTags.FIELD),
             )
         }
-        SessionSearchScopeChip(state = state, scopeTitle = scopeTitle, onSelectScope = callbacks.onSelectScope)
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            SessionSearchScopeChip(state = state, scopeTitle = scopeTitle, onSelectScope = callbacks.onSelectScope)
+            state.archive?.let { archive ->
+                OpenCodeMenuChip(
+                    title =
+                        archive.count?.takeIf { it > 0 }?.let { stringResource(R.string.session_search_include_archived_count, it) }
+                            ?: stringResource(R.string.session_search_include_archived),
+                    onClick = callbacks.onToggleIncludeArchived,
+                    leading = OpenCodeMenuChipLeading.Icon(OpenCodeIcons.Archive),
+                    selected = archive.included,
+                    variant = OpenCodeMenuChipVariant.Toggle,
+                    modifier = Modifier.testTag(SessionSearchTags.INCLUDE_ARCHIVED),
+                )
+            }
+        }
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (val content = state.content) {
                 SessionSearchContent.Hint ->
                     SessionSearchMessage(stringResource(R.string.session_search_hint, scopeTitle))
                 SessionSearchContent.Searching ->
                     SessionSearchMessage(stringResource(R.string.session_search_searching))
-                is SessionSearchContent.NoMatch ->
+                is SessionSearchContent.NoMatch -> {
+                    val offers =
+                        listOfNotNull(
+                            OpenCodeEmptyStateAction(
+                                title = stringResource(R.string.session_search_include_archived),
+                                onClick = callbacks.onIncludeArchived,
+                            ).takeIf { content.offerArchived },
+                            OpenCodeEmptyStateAction(
+                                title = stringResource(R.string.session_search_search_all_projects),
+                                onClick = callbacks.onSearchAllProjects,
+                            ).takeIf { content.offerAllProjects },
+                        )
                     OpenCodeEmptyState(
                         title = stringResource(R.string.session_search_no_match_title, state.query.trim()),
                         message = stringResource(R.string.session_search_no_match_message, scopeTitle),
-                        primaryAction =
-                            if (content.offerAllProjects) {
-                                OpenCodeEmptyStateAction(
-                                    title = stringResource(R.string.session_search_search_all_projects),
-                                    onClick = callbacks.onSearchAllProjects,
-                                )
-                            } else {
-                                null
-                            },
+                        // Each offer shows only when it would find something; Include archived first.
+                        primaryAction = offers.getOrNull(0),
+                        secondaryAction = offers.getOrNull(1),
                         modifier = Modifier.align(Alignment.TopCenter).padding(top = 48.dp),
                     )
+                }
                 is SessionSearchContent.Results ->
                     SessionSearchResults(
                         content = content,
@@ -183,7 +215,6 @@ private fun SessionSearchScopeChip(
         expanded = menuExpanded,
         onDismissRequest = { menuExpanded = false },
         entries = entries,
-        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp),
     ) {
         val scope = state.scope
         OpenCodeMenuChip(
@@ -211,7 +242,7 @@ private fun SessionSearchResults(
     LazyColumn(modifier = Modifier.fillMaxSize().testTag(SessionSearchTags.RESULTS)) {
         item(key = "header") {
             OpenCodeSectionHeader(
-                title = pluralStringResource(R.plurals.session_search_results, content.results.size, content.results.size),
+                title = pluralStringResource(R.plurals.session_search_results, content.count, content.count),
             )
         }
         items(content.results, key = { it.session.id }) { result ->
@@ -224,6 +255,26 @@ private fun SessionSearchResults(
                 rowStyle = rowStyle,
                 titleHighlight = result.match,
             )
+        }
+        if (content.archived.isNotEmpty()) {
+            item(key = "archived-header") {
+                OpenCodeSectionHeader(title = stringResource(R.string.session_search_archived_section))
+            }
+            items(content.archived, key = { "archived-${it.session.id}" }) { result ->
+                SessionListRow(
+                    session = result.session,
+                    showStatusDot = false,
+                    selected = result.session.id == selectedSessionId,
+                    onSessionSelected = onOpenSession,
+                    onSessionLongPress = null,
+                    rowStyle = rowStyle,
+                    titleHighlight = result.match,
+                    showsStatus = false,
+                    trailing = {
+                        OpenCodeTag(title = stringResource(R.string.session_search_archived_tag), size = OpenCodeTagSize.Small)
+                    },
+                )
+            }
         }
     }
 }

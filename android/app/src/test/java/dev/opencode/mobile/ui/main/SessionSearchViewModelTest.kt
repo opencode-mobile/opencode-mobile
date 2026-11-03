@@ -28,6 +28,18 @@ class SessionSearchViewModelTest {
     private val searches = mutableListOf<Pair<String, String>>()
     private var serverSessions: Map<String, List<Session>> = emptyMap()
     private var serverFails = false
+    private var archiveSupported = true
+    private var archivedFails = false
+    private val archivedListings = mutableListOf<List<String>>()
+    private var archivedSessions: Map<String, List<Session>> =
+        mapOf(
+            ACME_PATH to
+                listOf(
+                    Session(id = "acme-old-invoice", title = "Old invoice audit", archivedAtEpochMs = 40),
+                    Session(id = "acme-old-login", title = "Login spike", archivedAtEpochMs = 30),
+                ),
+            BILLING_PATH to listOf(Session(id = "billing-old-invoice", title = "Invoice retries v1", archivedAtEpochMs = 50)),
+        )
 
     @Before
     fun setUp() {
@@ -146,7 +158,7 @@ class SessionSearchViewModelTest {
 
             model.updateQuery("invoice")
             advanceUntilIdle()
-            assertEquals(SessionSearchContent.NoMatch(offerAllProjects = true), model.uiState.value.content)
+            assertEquals(SessionSearchContent.NoMatch(offerAllProjects = true, offerArchived = true), model.uiState.value.content)
 
             model.updateQuery("storm")
             advanceUntilIdle()
@@ -228,6 +240,97 @@ class SessionSearchViewModelTest {
             assertEquals(listOf("acme-new", "acme-invoice"), resultIds(model))
         }
 
+    @Test
+    fun includeArchived_isLeftOutWhenTheServerCannotListArchivedSessions() =
+        runTest(testDispatcher) {
+            archiveSupported = false
+            val model = model()
+
+            model.open(HomeScope.ALL_ID)
+            advanceUntilIdle()
+
+            assertEquals(null, model.uiState.value.archive)
+            assertTrue(archivedListings.isEmpty())
+        }
+
+    @Test
+    fun includeArchived_countsTheScopesArchivedSessionsAndStartsOff() =
+        runTest(testDispatcher) {
+            val model = model()
+
+            model.open(ACME)
+            advanceUntilIdle()
+
+            assertEquals(SessionSearchArchive(included = false, count = 2), model.uiState.value.archive)
+            assertEquals(setOf(listOf(ACME_PATH), listOf(BILLING_PATH)), archivedListings.toSet())
+            model.selectScope(HomeScope.ALL_ID)
+            assertEquals(SessionSearchArchive(included = false, count = 3), model.uiState.value.archive)
+        }
+
+    @Test
+    fun includeArchived_addsArchivedMatchesInTheirOwnSection() =
+        runTest(testDispatcher) {
+            val model = model()
+            model.open(HomeScope.ALL_ID)
+            model.updateQuery("invoice")
+            advanceUntilIdle()
+            assertTrue((model.uiState.value.content as SessionSearchContent.Results).archived.isEmpty())
+
+            model.toggleIncludeArchived()
+
+            val content = model.uiState.value.content as SessionSearchContent.Results
+            assertEquals(listOf("acme-invoice"), content.results.map { it.session.id })
+            assertEquals(listOf("billing-old-invoice", "acme-old-invoice"), content.archived.map { it.session.id })
+            assertEquals(4 until 11, content.archived.last().match)
+            assertEquals(3, content.count)
+        }
+
+    @Test
+    fun noMatch_offersIncludeArchivedOnlyWhenAnArchivedSessionInScopeMatches() =
+        runTest(testDispatcher) {
+            val model = model()
+            model.open(ACME)
+            model.updateQuery("spike")
+            advanceUntilIdle()
+
+            assertEquals(SessionSearchContent.NoMatch(offerAllProjects = false, offerArchived = true), model.uiState.value.content)
+
+            model.includeArchived()
+
+            assertEquals(SessionSearchArchive(included = true, count = 2), model.uiState.value.archive)
+            val archived = (model.uiState.value.content as SessionSearchContent.Results).archived
+            assertEquals(listOf("acme-old-login"), archived.map { it.session.id })
+        }
+
+    @Test
+    fun noMatch_countsArchivedMatchesElsewhereOnlyWhileIncluded() =
+        runTest(testDispatcher) {
+            val model = model()
+            model.open(ACME)
+            model.updateQuery("retries")
+            advanceUntilIdle()
+            assertEquals(SessionSearchContent.NoMatch(offerAllProjects = false, offerArchived = false), model.uiState.value.content)
+
+            model.toggleIncludeArchived()
+
+            assertEquals(SessionSearchContent.NoMatch(offerAllProjects = true, offerArchived = false), model.uiState.value.content)
+        }
+
+    @Test
+    fun archivedListingFailure_leavesTheChipWithoutACount() =
+        runTest(testDispatcher) {
+            archivedFails = true
+            val model = model()
+            model.open(HomeScope.ALL_ID)
+            model.updateQuery("invoice")
+            advanceUntilIdle()
+
+            model.toggleIncludeArchived()
+
+            assertEquals(SessionSearchArchive(included = true, count = null), model.uiState.value.archive)
+            assertTrue((model.uiState.value.content as SessionSearchContent.Results).archived.isEmpty())
+        }
+
     private fun resultIds(model: SessionSearchViewModel): List<String> =
         (model.uiState.value.content as SessionSearchContent.Results).results.map { it.session.id }
 
@@ -239,6 +342,13 @@ class SessionSearchViewModelTest {
                 serverSessions[directory].orEmpty()
             },
             sessionDomainAdapter = SessionDomainAdapter(),
+            listArchived = { directories ->
+                archivedListings += directories
+                if (archivedFails) error("offline")
+                directories.flatMap { archivedSessions[it].orEmpty() }
+            },
+            archiveSupported = { archiveSupported },
+            nowEpochMs = { 1_000 },
         ).also { it.homeChanged(home()) }
 
     private val acmeSessions =

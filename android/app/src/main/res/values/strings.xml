@@ -1143,6 +1143,11 @@
     <string name="session_search_no_match_title">No sessions match “%1$s”</string>
     <string name="session_search_no_match_message">in %1$s</string>
     <string name="session_search_search_all_projects">Search all projects</string>
+    <string name="session_search_include_archived">Include archived</string>
+    <!-- %1$d is how many sessions are archived in the search scope. -->
+    <string name="session_search_include_archived_count">Include archived · %1$d</string>
+    <string name="session_search_archived_section">Archived</string>
+    <string name="session_search_archived_tag">Archived</string>
     <string name="session_search_scope_selected">%1$s, selected</string>
     <string name="keyboard_shortcuts_group_session">Session</string>
     <string name="keyboard_shortcuts_group_prompt">Prompt</string>

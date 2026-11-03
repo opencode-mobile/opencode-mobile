@@ -22,6 +22,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -52,6 +54,15 @@ private val MenuChipLetterTextStyle =
 private const val MENU_CHIP_SELECTED_FILL_ALPHA = 0.14f
 private const val MENU_CHIP_SELECTED_BORDER_ALPHA = 0.32f
 
+/** How an [OpenCodeMenuChip] acts. */
+enum class OpenCodeMenuChipVariant {
+    /** Shows the current choice and opens a menu of the others; a chevron trails the title. */
+    Menu,
+
+    /** Turns a filter on or off, such as "Include archived"; `selected` is on. */
+    Toggle,
+}
+
 /** What leads an [OpenCodeMenuChip]'s title. */
 sealed interface OpenCodeMenuChipLeading {
     data class Icon(
@@ -66,8 +77,10 @@ sealed interface OpenCodeMenuChipLeading {
 }
 
 /**
- * A capsule that shows the current choice of a filter and opens a menu of the others, such as a
- * search scope. [selected] marks a choice other than the default (the interactive tint).
+ * A capsule in a row of filters, such as search's scope and "Include archived". [variant] Menu
+ * shows the current choice and opens a menu of the others, with [selected] marking a choice other
+ * than the default; Toggle turns its filter on and off, with [selected] as on. Both draw
+ * [selected] with the interactive tint.
  */
 @Composable
 fun OpenCodeMenuChip(
@@ -76,6 +89,7 @@ fun OpenCodeMenuChip(
     modifier: Modifier = Modifier,
     leading: OpenCodeMenuChipLeading? = null,
     selected: Boolean = false,
+    variant: OpenCodeMenuChipVariant = OpenCodeMenuChipVariant.Menu,
     enabled: Boolean = true,
     /** Read before the title, such as "Search scope"; the title alone otherwise. */
     accessibilityLabel: String? = null,
@@ -95,9 +109,17 @@ fun OpenCodeMenuChip(
                 .defaultMinSize(minHeight = MenuChipMinHeight)
                 .openCodeFocusRing(MenuChipShape, enabled)
                 .semantics(mergeDescendants = true) {
-                    role = Role.DropdownList
                     contentDescription = accessibilityLabel ?: title
-                    stateDescription = title
+                    when (variant) {
+                        OpenCodeMenuChipVariant.Menu -> {
+                            role = Role.DropdownList
+                            stateDescription = title
+                        }
+                        OpenCodeMenuChipVariant.Toggle -> {
+                            role = Role.Switch
+                            toggleableState = ToggleableState(selected)
+                        }
+                    }
                 },
         shape = MenuChipShape,
         color = if (selected) interactive.copy(alpha = MENU_CHIP_SELECTED_FILL_ALPHA) else openCodeColor("surface-raised-base"),
@@ -109,7 +131,11 @@ fun OpenCodeMenuChip(
             ),
     ) {
         Row(
-            modifier = Modifier.padding(start = MenuChipPaddingStart, end = MenuChipPaddingEnd),
+            modifier =
+                Modifier.padding(
+                    start = MenuChipPaddingStart,
+                    end = if (variant == OpenCodeMenuChipVariant.Menu) MenuChipPaddingEnd else MenuChipPaddingStart + 2.dp,
+                ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(MenuChipSpacing),
         ) {
@@ -135,7 +161,9 @@ fun OpenCodeMenuChip(
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.weight(1f, fill = false),
             )
-            Icon(imageVector = OpenCodeIcons.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(MenuChipIconSize))
+            if (variant == OpenCodeMenuChipVariant.Menu) {
+                Icon(imageVector = OpenCodeIcons.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(MenuChipIconSize))
+            }
         }
     }
 }
