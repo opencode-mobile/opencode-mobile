@@ -83,6 +83,8 @@ data class ArchivedSessionsUiState(
     val actionTarget: ArchivedSessionRow? = null,
     val sheetVisible: Boolean = false,
     val deleteConfirmVisible: Boolean = false,
+    /** The session the delete confirmation names; kept apart so closing the sheet cannot clear it. */
+    val deleteTarget: ArchivedSessionRow? = null,
     val snackbar: ArchivedSessionsSnackbar? = null,
 )
 
@@ -150,7 +152,7 @@ class ArchivedSessionsModel(
     }
 
     fun dismissActions() {
-        _state.update { it.copy(sheetVisible = false, actionTarget = if (it.deleteConfirmVisible) it.actionTarget else null) }
+        _state.update { it.copy(sheetVisible = false, actionTarget = null) }
     }
 
     /** The sheet's Open: the caller navigates to the returned row's session. */
@@ -167,17 +169,17 @@ class ArchivedSessionsModel(
     }
 
     fun chooseDelete() {
-        if (_state.value.actionTarget == null) return
-        _state.update { it.copy(sheetVisible = false, deleteConfirmVisible = true) }
+        val target = _state.value.actionTarget ?: return
+        _state.update { it.copy(sheetVisible = false, actionTarget = null, deleteConfirmVisible = true, deleteTarget = target) }
     }
 
     fun dismissDeleteConfirm() {
-        _state.update { it.copy(deleteConfirmVisible = false, actionTarget = null) }
+        _state.update { it.copy(deleteConfirmVisible = false, deleteTarget = null) }
     }
 
     fun confirmDelete() {
-        val target = _state.value.actionTarget ?: return
-        _state.update { it.copy(deleteConfirmVisible = false, actionTarget = null) }
+        val target = _state.value.deleteTarget ?: return
+        _state.update { it.copy(deleteConfirmVisible = false, deleteTarget = null) }
         val session = sessionFor(target.id) ?: return
         hide(session.id)
         logI("delete start session=${session.id}")

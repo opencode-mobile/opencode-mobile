@@ -103,7 +103,9 @@ struct ArchivedSessionsViewModelTests {
 
         viewModel.openActions(first)
         viewModel.chooseDelete()
+        viewModel.dismissActions()
         #expect(viewModel.deleteConfirmVisible)
+        #expect(viewModel.deleteTarget?.id == "a1")
         #expect(repository.deletedIDs.isEmpty)
         await viewModel.confirmDelete()
 
@@ -170,6 +172,12 @@ struct ArchivedSessionsViewModelTests {
         supported = false
         menu.refresh(scopeID: "all", projects: [alpha, beta], worktreesEnabled: true)
         #expect(menu.entry == nil)
+
+        // Capabilities that arrive after the menu opened bring the entry back without reopening it.
+        supported = true
+        menu.recheck()
+        await menu.settle()
+        #expect(menu.entry?.count == 3)
     }
 
     private func makeViewModel(

@@ -48,6 +48,8 @@ final class ArchivedSessionsViewModel {
     private(set) var actionTarget: ArchivedSessionRow?
     private(set) var sheetVisible = false
     private(set) var deleteConfirmVisible = false
+    /// The session the delete confirmation names; kept apart so closing the sheet cannot clear it.
+    private(set) var deleteTarget: ArchivedSessionRow?
     private(set) var snackbar: ArchivedSessionsSnackbar?
 
     private let sessionRepository: any SessionRepository
@@ -123,7 +125,7 @@ final class ArchivedSessionsViewModel {
 
     func dismissActions() {
         sheetVisible = false
-        if !deleteConfirmVisible { actionTarget = nil }
+        actionTarget = nil
     }
 
     /// The sheet's Open: the caller navigates to the returned row's session.
@@ -142,25 +144,27 @@ final class ArchivedSessionsViewModel {
     }
 
     func chooseDelete() {
-        guard actionTarget != nil else { return }
+        guard let target = actionTarget else { return }
         ProductAnalytics.logScreenView(
             screenId: ProductAnalytics.Screen.archivedDeleteSessionConfirm,
             presentation: ProductAnalytics.Presentation.dialog,
             trigger: ProductAnalytics.Trigger.present
         )
         sheetVisible = false
+        actionTarget = nil
+        deleteTarget = target
         deleteConfirmVisible = true
     }
 
     func dismissDeleteConfirm() {
         deleteConfirmVisible = false
-        actionTarget = nil
+        deleteTarget = nil
     }
 
     func confirmDelete() async {
-        guard let target = actionTarget else { return }
+        guard let target = deleteTarget else { return }
         deleteConfirmVisible = false
-        actionTarget = nil
+        deleteTarget = nil
         guard let session = session(for: target.id) else { return }
         hide(session.id)
         DiagnosticLog.info(.session, "archived delete start session=\(session.id)")

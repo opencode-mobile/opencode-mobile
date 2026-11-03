@@ -156,7 +156,9 @@ class ArchivedSessionsModelTest {
 
             model.openActions(first)
             model.chooseDelete()
+            model.dismissActions()
             assertTrue(model.state.value.deleteConfirmVisible)
+            assertEquals("a1", model.state.value.deleteTarget?.id)
             assertTrue(repository.deleted.isEmpty())
             model.confirmDelete()
             advanceUntilIdle()
@@ -240,6 +242,12 @@ class ArchivedSessionsModelTest {
             supported = false
             menu.refresh("all", worktreesEnabled = true)
             assertNull(menu.state.value)
+
+            // Capabilities that arrive after the menu opened bring the entry back without reopening it.
+            supported = true
+            menu.recheck()
+            advanceUntilIdle()
+            assertEquals(3, menu.state.value?.count)
         }
 
     private fun rows(model: ArchivedSessionsModel): List<String> =

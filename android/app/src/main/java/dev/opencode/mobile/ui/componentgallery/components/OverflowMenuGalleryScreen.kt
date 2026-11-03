@@ -66,11 +66,22 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
                 ),
             )
             if (itemCount >= 3) {
+                // Home menu shape: an enabled entry with a subtitle, then Settings after a divider.
+                add(
+                    OpenCodeOverflowMenuEntry(
+                        title = "Archived sessions",
+                        icon = OpenCodeIcons.Archive,
+                        enabled = entriesEnabled,
+                        subtitle = "2 in acme-invoices",
+                        onClick = { menuExpanded = false },
+                    ),
+                )
                 add(
                     OpenCodeOverflowMenuEntry(
                         title = "Settings",
                         icon = OpenCodeIcons.Settings,
                         enabled = entriesEnabled,
+                        dividerAbove = true,
                         onClick = { menuExpanded = false },
                     ),
                 )

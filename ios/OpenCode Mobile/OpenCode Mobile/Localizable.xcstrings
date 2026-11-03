@@ -510,6 +510,18 @@
         }
       }
     },
+    "archived_sessions.delete_dialog.message" : {
+      "comment" : "%@ is the session title.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” is deleted from the server. This can’t be undone."
+          }
+        }
+      }
+    },
     "archived_sessions.empty.message" : {
       "comment" : "%@ is the Home scope, such as All projects or a project name.",
       "extractionState" : "manual",
