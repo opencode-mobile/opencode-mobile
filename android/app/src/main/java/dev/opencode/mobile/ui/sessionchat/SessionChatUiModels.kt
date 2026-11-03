@@ -293,6 +293,10 @@ data class SessionChatUiState(
     val sessionBranchPill: SessionBranchPillUiState? = null,
     val supportsSessionMessageDiff: Boolean = true,
     val supportsSessionArchive: Boolean = true,
+    /** When the open session was archived; Session Chat shows the archived banner while set. */
+    val archivedAtEpochMs: Long? = null,
+    /** The archived banner offers Unarchive (servers that can restore archived sessions). */
+    val supportsArchivedSessions: Boolean = false,
     val rename: SessionRenameUiState = SessionRenameUiState(),
     val slashSuggestionsVisible: Boolean = false,
     val slashSuggestions: List<SessionChatSlashSuggestion> = emptyList(),
@@ -697,6 +701,10 @@ data class SessionInfoRegionState(
     val lifecycleErrorMessage: String? = null,
     val shouldLeaveSession: Boolean = false,
     val errorMessage: String? = null,
+    /** When the open session was archived; null while it is not (or not loaded yet). */
+    val archivedAtEpochMs: Long? = null,
+    /** The last Unarchive from the archived banner failed. */
+    val unarchiveFailed: Boolean = false,
 )
 
 fun SessionInfoRegionState.withStatus(

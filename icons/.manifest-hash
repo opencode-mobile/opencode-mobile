@@ -26,6 +26,7 @@ lucide/panel-left/sidebar:lucide_sidebar
 lucide/square-terminal/terminal:lucide_terminal
 lucide/component/architecture:lucide_architecture
 lucide/archive/archive:lucide_archive
+lucide/archive-restore/unarchive:lucide_unarchive
 lucide/cloud/cloud:lucide_cloud
 lucide/square/stop:lucide_stop
 lucide/circle-stop/stop_circle:lucide_stop_circle

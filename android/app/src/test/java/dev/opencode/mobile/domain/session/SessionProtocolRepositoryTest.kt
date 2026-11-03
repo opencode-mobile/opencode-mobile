@@ -977,6 +977,90 @@ class SessionProtocolRepositoryTest {
         }
 
     @Test
+    fun v2ListArchivedSessions_listsTheProjectWithArchivedTrue() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    if (request.url.encodedPath.endsWith("/api/location")) {
+                        respondJson("""{"directory":"/repo","project":{"id":"proj","directory":"/repo","canonical":"/repo"}}""")
+                    } else {
+                        respondJson(
+                            """{"data":[{"id":"ses_old","title":"Old","projectID":"proj","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2,"archived":5},"location":{"directory":"/repo"}}],"cursor":{"previous":null,"next":null}}""",
+                        )
+                    }
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val sessions = repository.listArchivedSessions("/repo")
+
+            assertEquals(5L, sessions.single().archivedAtEpochMs)
+            val listed = requests.first { it.url.encodedPath.endsWith("/api/session") }
+            assertEquals("proj", listed.url.parameters["project"])
+            assertEquals("true", listed.url.parameters["archived"])
+        }
+
+    @Test
+    fun v2UnarchiveSession_patchesArchivedFalseAndClearsLaggingReload() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val responses =
+                ArrayDeque(
+                    listOf(
+                        HttpStatusCode.NoContent to "",
+                        HttpStatusCode.OK to
+                            """{"data":{"id":"ses_1","title":"Done","projectID":"p","cost":0,"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},"time":{"created":1,"updated":2,"archived":7},"location":{"directory":"/repo"}}}""",
+                    ),
+                )
+            val client =
+                testClient { request ->
+                    requests += request
+                    val (status, body) = responses.removeFirst()
+                    respond(body, status, headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val session = repository.unarchiveSession("ses_1", "/repo")
+
+            assertNull(session.archivedAtEpochMs)
+            assertEquals(HttpMethod.Patch, requests[0].method)
+            assertTrue(requests[0].url.encodedPath.endsWith("/api/session/ses_1"))
+            assertEquals("""{"archived":false}""", requests[0].requestBodyText())
+        }
+
+    @Test
+    fun v1ArchivedSessions_areUnavailableWithoutARequest() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    respondJson("[]")
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            assertTrue(runCatching { repository.listArchivedSessions("/repo") }.isFailure)
+            assertTrue(runCatching { repository.unarchiveSession("ses_1", "/repo") }.isFailure)
+            assertTrue(requests.isEmpty())
+        }
+
+    @Test
     fun v2ArchiveSession_marksArchivedWhenReloadLagsBehind() =
         runTest {
             val responses =

@@ -648,53 +648,25 @@ struct SessionList<EmptyContent: View>: View {
     }
 
     private func compactSessionRow(_ session: SessionListSession) -> some View {
-        let row = session.compactRow
-        return OpenCodeListItem(
-            variant: .compact,
-            title: .verbatim(session.title),
-            emphasized: row.emphasized,
-            path: row.path,
-            status: row.status,
-            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
+        SessionListRow(
+            session: session,
+            rowStyle: .compact,
+            showStatusDot: true,
             selected: selectedSessionId == session.id,
-            startDecorator: .compactLetter(
-                session.letter,
-                session.letterAccent,
-                statusDot: row.status?.tone,
-                pulsing: row.pulsing
-            ),
             action: { onSessionSelected(session) },
             onLongPress: onSessionLongPress.map { handler in { handler(session) } }
         )
     }
 
     private func classicSessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
-        let lines = session.locationLines
-        return OpenCodeListItem(
-            title: .verbatim(session.title),
-            subtitle: .verbatim(ifPresent: lines == nil
-                ? compactHomePath(
-                    session.subtitle,
-                    hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
-                )
-                : nil),
-            subtitleSegments: lines?.subtitle,
-            detailSegments: lines?.detail,
-            status: listItemStatus(session.status, isStale: session.statusIsStale),
-            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
+        SessionListRow(
+            session: session,
+            rowStyle: .classic,
+            showStatusDot: showStatusDot,
             selected: selectedSessionId == session.id,
-            startDecorator: .letter(
-                session.letter,
-                session.letterAccent,
-                statusDot: showStatusDot ? listItemStatus(session.status, isStale: session.statusIsStale).tone : nil
-            ),
             action: { onSessionSelected(session) },
             onLongPress: onSessionLongPress.map { handler in { handler(session) } }
         )
-    }
-
-    private func listItemStatus(_ status: SessionListStatus, isStale: Bool) -> OpenCodeListItemStatus {
-        status.listItemStatus(isStale: isStale)
     }
 
     private func scheduleListCrossfade(to newId: String) {
@@ -1117,6 +1089,97 @@ extension SessionListSession {
 }
 
 /// What a compact Home row shows beyond the title and time (#803).
+/// Home's session row in either row style. Other session lists (Archived sessions) reuse it;
+/// `showsStatus` false drops the status, and `trailing` adds a control after the row's text.
+struct SessionListRow<Trailing: View>: View {
+    let session: SessionListSession
+    let rowStyle: HomeSessionRowStyle
+    var showStatusDot: Bool = false
+    var showsStatus: Bool = true
+    var selected: Bool = false
+    let action: () -> Void
+    var onLongPress: (() -> Void)?
+    @ViewBuilder var trailing: () -> Trailing
+    @State private var homeDisplayPreferences = HomeDisplayPreferences.shared
+
+    init(
+        session: SessionListSession,
+        rowStyle: HomeSessionRowStyle,
+        showStatusDot: Bool = false,
+        showsStatus: Bool = true,
+        selected: Bool = false,
+        action: @escaping () -> Void,
+        onLongPress: (() -> Void)? = nil,
+        @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }
+    ) {
+        self.session = session
+        self.rowStyle = rowStyle
+        self.showStatusDot = showStatusDot
+        self.showsStatus = showsStatus
+        self.selected = selected
+        self.action = action
+        self.onLongPress = onLongPress
+        self.trailing = trailing
+    }
+
+    var body: some View {
+        switch rowStyle {
+        case .compact: compactRow
+        case .classic: classicRow
+        }
+    }
+
+    private var compactRow: some View {
+        let row = session.compactRow
+        let status = showsStatus ? row.status : nil
+        return OpenCodeListItem(
+            variant: .compact,
+            title: .verbatim(session.title),
+            emphasized: row.emphasized,
+            path: row.path,
+            status: status,
+            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
+            selected: selected,
+            startDecorator: .compactLetter(
+                session.letter,
+                session.letterAccent,
+                statusDot: status?.tone,
+                pulsing: showsStatus && row.pulsing
+            ),
+            action: action,
+            onLongPress: onLongPress,
+            trailing: trailing
+        )
+    }
+
+    private var classicRow: some View {
+        let lines = session.locationLines
+        let status = session.status.listItemStatus(isStale: session.statusIsStale)
+        return OpenCodeListItem(
+            title: .verbatim(session.title),
+            subtitle: .verbatim(ifPresent: lines == nil
+                ? compactHomePath(
+                    session.subtitle,
+                    hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
+                )
+                : nil),
+            subtitleSegments: lines?.subtitle,
+            detailSegments: lines?.detail,
+            status: showsStatus ? status : nil,
+            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
+            selected: selected,
+            startDecorator: .letter(
+                session.letter,
+                session.letterAccent,
+                statusDot: showStatusDot && showsStatus ? status.tone : nil
+            ),
+            action: action,
+            onLongPress: onLongPress,
+            trailing: trailing
+        )
+    }
+}
+
 struct SessionListCompactRow: Equatable {
     let path: OpenCodeListItemPath
     /// Nil while Idle: no status and no dot.

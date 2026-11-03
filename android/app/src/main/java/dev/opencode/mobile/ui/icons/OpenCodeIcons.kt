@@ -39,6 +39,7 @@ private var _sidebar: ImageVector? = null
 private var _terminal: ImageVector? = null
 private var _architecture: ImageVector? = null
 private var _archive: ImageVector? = null
+private var _unarchive: ImageVector? = null
 private var _cloud: ImageVector? = null
 private var _stop: ImageVector? = null
 private var _stop_circle: ImageVector? = null
@@ -1156,6 +1157,65 @@ private var _drag_handle: ImageVector? = null
     )
       }.build()
       return _archive!!
+    }
+
+  val Unarchive: ImageVector
+    get() {
+      if (_unarchive != null) return _unarchive!!
+      _unarchive = ImageVector.Builder(
+        name = "Unarchive",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+      ).apply {
+    addPath(
+      pathData = PathParser().parsePathString("M 3 3 h 18 a 1 1 0 0 1 1 1 v 3 a 1 1 0 0 1 -1 1 h -18 a 1 1 0 0 1 -1 -1 v -3 a 1 1 0 0 1 1 -1 z").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M4 8v11a2 2 0 0 0 2 2h2").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M20 8v11a2 2 0 0 1-2 2h-2").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("m9 15 3-3 3 3").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+    addPath(
+      pathData = PathParser().parsePathString("M12 12v9").toNodes(),
+      fill = null,
+      stroke = SolidColor(Color.Black),
+      strokeLineWidth = 1.5f,
+      strokeLineCap = StrokeCap.Round,
+      strokeLineJoin = StrokeJoin.Round,
+      pathFillType = PathFillType.NonZero,
+    )
+      }.build()
+      return _unarchive!!
     }
 
   val Cloud: ImageVector

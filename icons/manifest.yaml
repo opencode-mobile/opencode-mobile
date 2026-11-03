@@ -78,6 +78,9 @@ icons:
   - name: archive
     lucide: archive
     notes: Session Chat overflow Archive action
+  - name: unarchive
+    lucide: archive-restore
+    notes: Archived sessions Unarchive (row button, actions sheet, Session Chat banner)
   - name: cloud
     lucide: cloud
     notes: Server Connection entry in Settings

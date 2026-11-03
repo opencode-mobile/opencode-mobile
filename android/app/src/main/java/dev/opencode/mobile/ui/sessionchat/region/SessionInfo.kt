@@ -248,6 +248,28 @@ class SessionInfo(
         }
     }
 
+    /** Restores the open archived session; the banner leaves on success. */
+    fun unarchiveSession() {
+        val sessionId = boundSessionId ?: return
+        val worktree = boundWorktree ?: return
+        if (OptimisticSessionCreate.isPlaceholder(sessionId)) return
+        if (_state.value.isLifecycleActionInFlight || _state.value.archivedAtEpochMs == null) return
+        scope.launch {
+            _state.update { it.copy(isLifecycleActionInFlight = true, unarchiveFailed = false) }
+            logI("unarchive start session=$sessionId")
+            runCatching { sessionRepository.unarchiveSession(id = sessionId, directory = worktree) }
+                .onSuccess {
+                    if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
+                    logI("unarchive success session=$sessionId")
+                    _state.update { it.copy(isLifecycleActionInFlight = false, archivedAtEpochMs = null) }
+                }.onFailure { error ->
+                    if (!isCurrentBinding(sessionId, worktree)) return@onFailure
+                    logI("unarchive failure session=$sessionId error=${error.message}")
+                    _state.update { it.copy(isLifecycleActionInFlight = false, unarchiveFailed = true) }
+                }
+        }
+    }
+
     fun deleteSession() {
         val sessionId = boundSessionId ?: return
         val worktree = boundWorktree ?: return
@@ -389,6 +411,10 @@ class SessionInfo(
                                 _state.update { it.copy(errorMessage = sessionErrorMessage(event.rawProperties)) }
                             }
                             applySessionUpdatedTitle(event, sessionId)
+                            // Archived or restored anywhere: the banner follows the server's answer.
+                            if (event.sessionId == sessionId && event.type in ARCHIVE_STATE_EVENTS) {
+                                launch { loadParent(sessionId, worktree) }
+                            }
                             // Another client deleted the open session: leave instead of showing a dead chat.
                             if (eventDomainAdapter.sessionDeletedId(event) == sessionId) {
                                 logI("session deleted elsewhere session=$sessionId; leaving")
@@ -400,22 +426,25 @@ class SessionInfo(
             }
     }
 
-    /** Child lockout follows the session itself, so a child opened from a deep link or Home still locks. */
+    /**
+     * Child lockout follows the session itself, so a child opened from a deep link or Home still
+     * locks. The same read says whether the session is archived (the archived banner).
+     */
     private suspend fun loadParent(
         sessionId: String,
         worktree: String,
     ) {
-        val parentId =
+        val session =
             try {
-                sessionRepository.getSession(sessionId, worktree).parentId
+                sessionRepository.getSession(sessionId, worktree)
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Throwable) {
                 logD("session parent unavailable session=$sessionId error=${error.message}")
                 return
-            } ?: return
+            }
         if (!isCurrentBinding(sessionId, worktree)) return
-        _state.update { it.copy(parentId = parentId) }
+        _state.update { it.copy(parentId = session.parentId ?: it.parentId, archivedAtEpochMs = session.archivedAtEpochMs) }
     }
 
     private fun applySessionUpdatedTitle(
@@ -489,7 +518,7 @@ class SessionInfo(
     }
 
     fun clearTransientErrors() {
-        _state.update { it.copy(errorMessage = null, lifecycleErrorMessage = null) }
+        _state.update { it.copy(errorMessage = null, lifecycleErrorMessage = null, unarchiveFailed = false) }
     }
 
     companion object {
@@ -497,5 +526,6 @@ class SessionInfo(
         private const val EMPTY_TITLE_ERROR = "Enter a session title"
         const val ARCHIVE_ERROR = "Couldn't archive session."
         const val DELETE_ERROR = "Couldn't delete session."
+        private val ARCHIVE_STATE_EVENTS = setOf("session.archived", "session.unarchived")
     }
 }

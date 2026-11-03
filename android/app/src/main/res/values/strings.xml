@@ -217,6 +217,25 @@
     <string name="home_session_error_request_failed">Request failed</string>
     <string name="home_session_error_unreadable_response">Unable to read server response</string>
     <string name="home_session_error_generic">Something went wrong</string>
+    <string name="archived_sessions_title">Archived sessions</string>
+    <string name="archived_sessions_section_this_week">This week</string>
+    <string name="archived_sessions_section_earlier">Earlier</string>
+    <string name="archived_sessions_unarchive">Unarchive</string>
+    <string name="archived_sessions_delete">Delete…</string>
+    <!-- %1$s is when the session was archived, such as 2d ago. -->
+    <string name="archived_sessions_archived_at">Archived %1$s</string>
+    <!-- %1$s is the session title. -->
+    <string name="archived_sessions_unarchived">Unarchived “%1$s”</string>
+    <string name="archived_sessions_undo">Undo</string>
+    <string name="archived_sessions_empty_title">No archived sessions</string>
+    <!-- %1$s is the Home scope, such as All projects or a project name. -->
+    <string name="archived_sessions_empty_message">Sessions you archive in %1$s show up here.</string>
+    <string name="archived_sessions_show_all_projects">Show all projects</string>
+    <string name="archived_sessions_footer">Tap a session for more. Unarchive puts it back on Home.</string>
+    <string name="archived_sessions_load_failed">Couldn\'t load archived sessions.</string>
+    <string name="archived_sessions_unarchive_failed">Couldn\'t unarchive session.</string>
+    <!-- %1$s is when the open session was archived, such as 2d ago. -->
+    <string name="session_chat_archived_banner">Archived %1$s</string>
     <string name="add_project_title">Add project</string>
     <string name="add_project_browse_folders">Browse folders</string>
     <string name="add_project_browse_folders_subtitle">Pick any folder on this server</string>

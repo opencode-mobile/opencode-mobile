@@ -487,6 +487,163 @@
         }
       }
     },
+    "archived_sessions.archived_at" : {
+      "comment" : "%@ is when the session was archived, such as 2d ago.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archived %@"
+          }
+        }
+      }
+    },
+    "archived_sessions.delete" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete…"
+          }
+        }
+      }
+    },
+    "archived_sessions.empty.message" : {
+      "comment" : "%@ is the Home scope, such as All projects or a project name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sessions you archive in %@ show up here."
+          }
+        }
+      }
+    },
+    "archived_sessions.empty.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No archived sessions"
+          }
+        }
+      }
+    },
+    "archived_sessions.footer" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap a session for more. Unarchive puts it back on Home."
+          }
+        }
+      }
+    },
+    "archived_sessions.load_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't load archived sessions."
+          }
+        }
+      }
+    },
+    "archived_sessions.section.earlier" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Earlier"
+          }
+        }
+      }
+    },
+    "archived_sessions.section.this_week" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This week"
+          }
+        }
+      }
+    },
+    "archived_sessions.show_all_projects" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show all projects"
+          }
+        }
+      }
+    },
+    "archived_sessions.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archived sessions"
+          }
+        }
+      }
+    },
+    "archived_sessions.unarchive" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unarchive"
+          }
+        }
+      }
+    },
+    "archived_sessions.unarchive_failed" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn't unarchive session."
+          }
+        }
+      }
+    },
+    "archived_sessions.unarchived" : {
+      "comment" : "%@ is the session title.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unarchived “%@”"
+          }
+        }
+      }
+    },
+    "archived_sessions.undo" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Undo"
+          }
+        }
+      }
+    },
     "bottom_sheet.close" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -7093,6 +7250,18 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@. %2$@"
+          }
+        }
+      }
+    },
+    "session_chat.archived_banner" : {
+      "comment" : "%@ is when the open session was archived, such as 2d ago.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archived %@"
           }
         }
       }

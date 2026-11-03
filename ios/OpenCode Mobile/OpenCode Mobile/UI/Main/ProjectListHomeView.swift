@@ -113,6 +113,10 @@ struct ProjectListHomeView: View {
                         projectTitle: terminal.projectTitle,
                         ptyId: terminal.ptyId
                     )
+                case let .archivedSessions(scopeID):
+                    ArchivedSessionsView(scopeID: scopeID) { session in
+                        openSession(session)
+                    }
                 }
             }
             .task {
@@ -858,7 +862,7 @@ struct ProjectListHomeView: View {
         OpenCodeText(LocalizedStringResource("home.fork_result.message", defaultValue: "\u{201C}\(title)\u{201D} is ready."))
     }
 
-    private static func deleteSessionMessage(_ title: String) -> OpenCodeText {
+    static func deleteSessionMessage(_ title: String) -> OpenCodeText {
         OpenCodeText(LocalizedStringResource("home.delete.message", defaultValue: "Delete session \u{201C}\(title)\u{201D}?"))
     }
 
