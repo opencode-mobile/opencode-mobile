@@ -63,8 +63,9 @@ sealed interface WorktreeRemoveDialogUi {
     val name: String
 
     /**
-     * Remove, or Remove anyway when [changeCount] or [changesUnknown] say uncommitted work is lost.
-     * [changesUnknown]: the server refused without force and gave no count.
+     * Remove, or Remove anyway when uncommitted work may be lost: [changeCount] changes,
+     * [changesUnknown] (the server refused without force and gave no count), or
+     * [changesUnchecked] (the change count could not be read, so the screen cannot say).
      */
     data class Confirm(
         val directory: String,
@@ -72,9 +73,15 @@ sealed interface WorktreeRemoveDialogUi {
         val changeCount: Int?,
         val changesUnknown: Boolean,
         val sessionCount: Int,
+        val changesUnchecked: Boolean = false,
     ) : WorktreeRemoveDialogUi {
+        /** Known to lose changes, so a v2 remove forces. */
         val losesChanges: Boolean
             get() = changesUnknown || (changeCount ?: 0) > 0
+
+        /** Remove anyway rather than Remove. */
+        val warnsAboutChanges: Boolean
+            get() = losesChanges || changesUnchecked
     }
 
     /** A session runs in the worktree: stop it first. */
@@ -160,6 +167,11 @@ class WorktreesViewModel
         init {
             viewModelScope.launch {
                 feed.snapshot.collect { next ->
+                    if (next.projects.isEmpty()) {
+                        // Another server or a disconnect: its counts do not apply.
+                        changeCounts.clear()
+                        changesRequested.clear()
+                    }
                     snapshot = next
                     loadChangeCounts()
                     publish()
@@ -219,6 +231,8 @@ class WorktreesViewModel
                         changeCount = changeCounts[worktree.directory],
                         changesUnknown = false,
                         sessionCount = sessions.size,
+                        // Still loading or failed. v1 removes with force, so say it rather than act clean.
+                        changesUnchecked = changeCounts[worktree.directory] == null,
                     )
                 }
             _state.update { it.copy(dialog = dialog) }
@@ -285,13 +299,15 @@ class WorktreesViewModel
                     }
                     is WorktreeRemoveError.ForceRequired -> {
                         // The count was unknown or stale: say changes will be lost, then force.
+                        val knownChanges = changeCounts[worktree.directory]?.takeIf { count -> count > 0 }
+                        changeCounts[worktree.directory] = null
                         _state.update {
                             it.copy(
                                 dialog =
                                     WorktreeRemoveDialogUi.Confirm(
                                         directory = worktree.directory,
                                         name = name,
-                                        changeCount = changeCounts[worktree.directory]?.takeIf { count -> count > 0 },
+                                        changeCount = knownChanges,
                                         changesUnknown = true,
                                         sessionCount = snapshot.sessionsIn(worktree.directory).size,
                                     ),

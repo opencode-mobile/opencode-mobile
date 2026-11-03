@@ -38,15 +38,30 @@ struct WorktreeActionsItem: Equatable {
 }
 
 enum WorktreeRemoveDialog: Equatable {
-    /// Remove, or Remove anyway when `changeCount` or `changesUnknown` say uncommitted work is lost.
-    /// `changesUnknown`: the server refused without force and gave no count.
-    case confirm(directory: String, name: String, changeCount: Int?, changesUnknown: Bool, sessionCount: Int)
+    /// Remove, or Remove anyway when uncommitted work may be lost: `changeCount` changes,
+    /// `changesUnknown` (the server refused without force and gave no count), or `changesUnchecked`
+    /// (the change count could not be read, so the screen cannot say).
+    case confirm(
+        directory: String,
+        name: String,
+        changeCount: Int?,
+        changesUnknown: Bool,
+        sessionCount: Int,
+        changesUnchecked: Bool = false
+    )
     /// A session runs in the worktree: stop it first.
     case blocked(name: String, session: SessionListItem)
 
+    /// Known to lose changes, so a v2 remove forces.
     var losesChanges: Bool {
-        guard case let .confirm(_, _, changeCount, changesUnknown, _) = self else { return false }
+        guard case let .confirm(_, _, changeCount, changesUnknown, _, _) = self else { return false }
         return changesUnknown || (changeCount ?? 0) > 0
+    }
+
+    /// Remove anyway rather than Remove.
+    var warnsAboutChanges: Bool {
+        guard case let .confirm(_, _, _, _, _, changesUnchecked) = self else { return false }
+        return losesChanges || changesUnchecked
     }
 }
 
@@ -99,6 +114,11 @@ final class WorktreesViewModel {
     /// Reads Home's latest projects and sessions and loads change counts not asked for yet. The
     /// view calls it on appear and whenever the feed changes.
     func sync() {
+        if feed.snapshot.projects.isEmpty {
+            // Another server or a disconnect: its counts do not apply.
+            changeCounts.removeAll()
+            changesRequested.removeAll()
+        }
         snapshot = feed.snapshot
         loadChangeCounts()
         publish()
@@ -151,7 +171,9 @@ final class WorktreesViewModel {
             name: worktree.title,
             changeCount: changeCounts[worktree.directory] ?? nil,
             changesUnknown: false,
-            sessionCount: sessions.count
+            sessionCount: sessions.count,
+            // Still loading or failed. v1 removes with force, so say it rather than act clean.
+            changesUnchecked: (changeCounts[worktree.directory] ?? nil) == nil
         )
     }
 
@@ -160,7 +182,7 @@ final class WorktreesViewModel {
     }
 
     func confirmRemove() async {
-        guard let dialog, case let .confirm(directory, _, _, _, _) = dialog else { return }
+        guard let dialog, case let .confirm(directory, _, _, _, _, _) = dialog else { return }
         self.dialog = nil
         await remove(directory: directory, force: dialog.losesChanges)
     }
@@ -212,6 +234,7 @@ final class WorktreesViewModel {
         case .forceRequired?:
             // The count was unknown or stale: say changes will be lost, then force.
             let count = changeCounts[worktree.directory] ?? nil
+            changeCounts[worktree.directory] = .some(nil)
             dialog = .confirm(
                 directory: worktree.directory,
                 name: worktree.title,

@@ -13752,6 +13752,17 @@
         }
       }
     },
+    "worktrees.remove.changes_unchecked" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t check for uncommitted changes. Any there will be lost."
+          }
+        }
+      }
+    },
     "worktrees.remove.changes_unknown" : {
       "extractionState" : "manual",
       "localizations" : {

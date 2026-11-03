@@ -139,6 +139,43 @@ class WorktreesViewModelTest {
         }
 
     @Test
+    fun anUnreadableChangeCountWarnsInsteadOfActingClean() =
+        runTest(dispatcher) {
+            // No status for /wt/typo: the request fails, as on a server that cannot tell.
+            val repository = FakeRemoveRepository()
+            val model = model(feed(), repository)
+            advanceUntilIdle()
+
+            model.requestRemove("/wt/typo")
+            val confirm = model.state.value.dialog as WorktreeRemoveDialogUi.Confirm
+            assertTrue(confirm.changesUnchecked)
+            assertTrue(confirm.warnsAboutChanges)
+            assertFalse(confirm.losesChanges)
+            model.confirmRemove()
+            advanceUntilIdle()
+
+            // v2 does not force on a guess; a dirty checkout comes back as ForceRequired.
+            assertFalse(repository.requests.single().force)
+        }
+
+    @Test
+    fun anotherServerDropsTheCachedChangeCounts() =
+        runTest(dispatcher) {
+            val feed = feed()
+            val status = FakeStatusRepository(mapOf("/wt/search" to 1, "/wt/typo" to 0))
+            WorktreesViewModel(feed, FakeRemoveRepository(), status)
+            advanceUntilIdle()
+            assertEquals(2, status.calls)
+
+            feed.clear()
+            advanceUntilIdle()
+            feed.publish(feed().snapshot.value)
+            advanceUntilIdle()
+
+            assertEquals(4, status.calls)
+        }
+
+    @Test
     fun aFailureKeepsTheRowAndOffersRetry() =
         runTest(dispatcher) {
             val repository = FakeRemoveRepository(errors = mutableListOf(WorktreeRemoveError.Failed("Invalid worktree directory")))
@@ -291,7 +328,10 @@ class WorktreesViewModelTest {
     private class FakeStatusRepository(
         private val changes: Map<String, Int>,
     ) : SessionRepository by unsupportedSessionRepository() {
+        var calls = 0
+
         override suspend fun getVcsStatus(directory: String?): List<VcsFileStatus> {
+            calls += 1
             val count = changes[directory] ?: error("no status for $directory")
             return List(count) { VcsFileStatus("file$it.kt", FileDiffStatus.Modified, 1, 0) }
         }

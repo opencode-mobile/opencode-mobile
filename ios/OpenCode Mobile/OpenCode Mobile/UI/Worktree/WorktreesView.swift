@@ -100,7 +100,7 @@ struct WorktreesView: View {
             title: .verbatim(WorktreesCopy.removeTitle(viewModel.dialog)),
             subtitle: .verbatim(WorktreesCopy.removeMessage(viewModel.dialog)),
             primaryOption: OpenCodeDialogOption(
-                title: viewModel.dialog?.losesChanges == true ? "worktrees.remove.confirm_anyway" : "common.remove",
+                title: viewModel.dialog?.warnsAboutChanges == true ? "worktrees.remove.confirm_anyway" : "common.remove",
                 destructive: true
             ) {
                 Task { await viewModel.confirmRemove() }
@@ -245,17 +245,19 @@ enum WorktreesCopy {
     }
 
     static func removeTitle(_ dialog: WorktreeRemoveDialog?) -> String {
-        guard case let .confirm(_, name, _, _, _)? = dialog else { return "" }
+        guard case let .confirm(_, name, _, _, _, _)? = dialog else { return "" }
         return String(localized: LocalizedStringResource("worktrees.remove.title", defaultValue: "Remove worktree “\(name)”?"))
     }
 
     static func removeMessage(_ dialog: WorktreeRemoveDialog?) -> String {
-        guard case let .confirm(directory, _, _, _, _)? = dialog else { return "" }
+        guard case let .confirm(directory, _, _, _, _, _)? = dialog else { return "" }
         return String(localized: LocalizedStringResource("worktrees.remove.message", defaultValue: "Deletes \(directory) on the server."))
     }
 
     static func removeNotes(_ dialog: WorktreeRemoveDialog?) -> [OpenCodeDialogNote] {
-        guard case let .confirm(_, _, changeCount, changesUnknown, sessionCount)? = dialog else { return [] }
+        guard case let .confirm(_, _, changeCount, changesUnknown, sessionCount, changesUnchecked)? = dialog else {
+            return []
+        }
         var notes: [OpenCodeDialogNote] = []
         if let changes = changeCount, changes > 0 {
             notes.append(OpenCodeDialogNote(
@@ -267,6 +269,8 @@ enum WorktreesCopy {
             ))
         } else if changesUnknown {
             notes.append(OpenCodeDialogNote(text: "worktrees.remove.changes_unknown", tone: .warning))
+        } else if changesUnchecked {
+            notes.append(OpenCodeDialogNote(text: "worktrees.remove.changes_unchecked", tone: .warning))
         }
         if sessionCount > 0 {
             notes.append(OpenCodeDialogNote(text: OpenCodeText(LocalizedStringResource(

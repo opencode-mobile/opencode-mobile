@@ -27,7 +27,9 @@ final class HomeWorktreeSessionFold {
         let primary = current.filter { !previous.contains($0.id) }
         let nextIDs = Set(nextExtras.map(\.id))
         let kept = (extras[addedPath] ?? []).filter { session in
-            guard !nextIDs.contains(session.id), let directory = session.directory else { return false }
+            guard !nextIDs.contains(session.id) else { return false }
+            // An extra lists under its worktree directory when the server gave no session directory.
+            let directory = session.directory?.isEmpty == false ? session.directory! : session.worktree
             return retainedDirectories.contains(ServerPathPolicy.canonical(directory))
         }
         let nextExtras = nextExtras + kept

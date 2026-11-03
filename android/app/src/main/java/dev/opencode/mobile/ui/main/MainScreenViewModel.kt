@@ -1631,7 +1631,12 @@ class MainScreenViewModel
                     _pendingScopeRequest.value =
                         HomeScopeRequest(HomeScope.worktreeId(request.projectKey, request.directory), evenFromAll = true)
                 is HomeWorktreeRequest.NewSession -> createSession(request.directory)
-                is HomeWorktreeRequest.Removed -> refreshProjectWorktrees(request.directory)
+                is HomeWorktreeRequest.Removed -> {
+                    // Before the reload, so the v1 extra-session sync already keeps its sessions.
+                    val removed = homeWorktreesFeed.removed.value
+                    updateHomeIndex { it.copy(removedWorktrees = removed) }
+                    refreshProjectWorktrees(request.directory)
+                }
             }
         }
 

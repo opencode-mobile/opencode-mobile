@@ -1534,6 +1534,7 @@
         <item quantity="other">%1$d uncommitted changes will be lost.</item>
     </plurals>
     <string name="worktrees_remove_changes_unknown">Uncommitted changes will be lost.</string>
+    <string name="worktrees_remove_changes_unchecked">Couldn’t check for uncommitted changes. Any there will be lost.</string>
     <plurals name="worktrees_remove_sessions">
         <item quantity="one">%1$d session uses this worktree. It stays on Home but can’t run here again.</item>
         <item quantity="other">%1$d sessions use this worktree. They stay on Home but can’t run here again.</item>

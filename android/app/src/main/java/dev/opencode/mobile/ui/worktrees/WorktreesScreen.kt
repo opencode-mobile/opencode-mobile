@@ -320,6 +320,8 @@ private fun WorktreeRemoveDialog(
                             )
                         dialog.changesUnknown ->
                             add(OpenCodeDialogNote(stringResource(R.string.worktrees_remove_changes_unknown), OpenCodeDialogNoteTone.Warning))
+                        dialog.changesUnchecked ->
+                            add(OpenCodeDialogNote(stringResource(R.string.worktrees_remove_changes_unchecked), OpenCodeDialogNoteTone.Warning))
                     }
                     if (dialog.sessionCount > 0) {
                         add(
@@ -336,7 +338,7 @@ private fun WorktreeRemoveDialog(
                 notes = notes,
                 primaryOption =
                     OpenCodeDialogOption(
-                        title = stringResource(if (dialog.losesChanges) R.string.worktrees_remove_confirm_anyway else R.string.common_remove),
+                        title = stringResource(if (dialog.warnsAboutChanges) R.string.worktrees_remove_confirm_anyway else R.string.common_remove),
                         destructive = true,
                         onClick = viewModel::confirmRemove,
                     ),

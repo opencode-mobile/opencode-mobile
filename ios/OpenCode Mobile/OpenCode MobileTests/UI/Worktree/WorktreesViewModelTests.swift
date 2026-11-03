@@ -79,7 +79,7 @@ struct WorktreesViewModelTests {
 
         model.requestRemove(directory: "/wt/typo")
         await model.confirmRemove()
-        guard case let .confirm(_, _, _, changesUnknown, _)? = model.dialog else {
+        guard case let .confirm(_, _, _, changesUnknown, _, _)? = model.dialog else {
             Issue.record("expected the confirmation again")
             return
         }
@@ -87,6 +87,27 @@ struct WorktreesViewModelTests {
         await model.confirmRemove()
 
         #expect(repository.requests.map(\.force) == [false, true])
+    }
+
+    @Test func anUnreadableChangeCountWarnsInsteadOfActingClean() async {
+        // No count for /wt/typo, as on a server that cannot tell.
+        let repository = RemoveRepository()
+        let model = makeModel(makeFeed(), repository: repository)
+        await settle()
+
+        model.requestRemove(directory: "/wt/typo")
+        guard case let .confirm(_, _, _, _, _, changesUnchecked)? = model.dialog else {
+            Issue.record("expected the confirmation")
+            return
+        }
+        #expect(changesUnchecked)
+        #expect(model.dialog?.warnsAboutChanges == true)
+        #expect(model.dialog?.losesChanges == false)
+        #expect(WorktreesCopy.removeNotes(model.dialog).count == 1)
+        await model.confirmRemove()
+
+        // v2 does not force on a guess; a dirty checkout comes back as forceRequired.
+        #expect(repository.requests.map(\.force) == [false])
     }
 
     @Test func aFailureKeepsTheRowAndOffersRetry() async {
@@ -168,6 +189,19 @@ struct WorktreesViewModelTests {
         let segments = removed?.listItemSegments(tone: .tertiary) ?? []
         #expect(segments.map(\.text) == ["gone", " · worktree removed"])
         #expect(segments.first?.tone == .removed)
+    }
+
+    @Test func removedWorktreeExtrasStayEvenWithoutASessionDirectory() {
+        let fold = HomeWorktreeSessionFold()
+        let extra = SessionListItem(id: "gone", title: "Gone", worktree: "/wt/gone", updatedAtEpochMs: 2)
+        let main = SessionListItem(id: "main", title: "Main", worktree: "/repo", updatedAtEpochMs: 1)
+        _ = fold.apply(addedPath: "/repo", current: [main], nextExtras: [extra])
+
+        fold.retainedDirectories = ["/wt/gone"]
+        // v1 no longer lists the removed worktree.
+        let merged = fold.apply(addedPath: "/repo", current: [main], nextExtras: [])
+
+        #expect(merged.map(\.id) == ["gone", "main"])
     }
 
     // MARK: Helpers
