@@ -57,6 +57,38 @@ import Testing
     }
 }
 
+@Suite struct OpenCodeTabStopRegistryTests {
+    @Test func appearedControl_isLive() {
+        var registry = OpenCodeTabStopRegistry()
+        registry.appeared("afterPrompt")
+        #expect(registry.contains("afterPrompt"))
+        #expect(!registry.contains("deny"))
+    }
+
+    @Test func lastControlWithAKeyGoing_reportsIt() {
+        var registry = OpenCodeTabStopRegistry()
+        registry.appeared("afterPrompt")
+        let lastGone = registry.disappeared("afterPrompt")
+        #expect(lastGone)
+        #expect(!registry.contains("afterPrompt"))
+    }
+
+    @Test func replacementAppearingFirst_keepsTheKeyLive() {
+        var registry = OpenCodeTabStopRegistry()
+        registry.appeared("afterPrompt")
+        registry.appeared("afterPrompt")
+        let lastGone = registry.disappeared("afterPrompt")
+        #expect(!lastGone)
+        #expect(registry.contains("afterPrompt"))
+    }
+
+    @Test func unknownKeyGoing_isIgnored() {
+        var registry = OpenCodeTabStopRegistry()
+        let lastGone = registry.disappeared("opener")
+        #expect(!lastGone)
+    }
+}
+
 @Suite struct OpenCodeReturnKeyPolicyTests {
     @Test func return_submitsWhenSendIsEnabled() {
         #expect(OpenCodeReturnKeyPolicy.action(shift: false, otherModifiers: false, composing: false, submitEnabled: true) == .submit)

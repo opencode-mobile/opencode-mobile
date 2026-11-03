@@ -126,20 +126,24 @@ class KeyboardNavigationRulesTest {
     }
 
     @Test
-    fun focusParksWhenANewRequestArrivesWhileTheComposerHasFocus() {
+    fun focusParksWhenANewRequestArrivesWhereverFocusWas() {
         fun parks(
             previous: String?,
             current: String?,
-            hasFocus: Boolean = true,
-        ) = KeyboardNavigationRules.parksFocusOnPromptChange(previous, current, hasFocus)
-        // Composer to prompt, and one queued request to the next.
+            otherField: Boolean = false,
+            surface: Boolean = false,
+        ) = KeyboardNavigationRules.parksFocusOnPromptChange(previous, current, otherField, surface)
+        // Composer to prompt, and one queued request to the next, with focus in the composer,
+        // on a timeline control, in the session list, or nowhere.
         assertTrue(parks(previous = null, current = "permission:a"))
         assertTrue(parks(previous = "permission:a", current = "permission:b"))
         assertTrue(parks(previous = "permission:a", current = "question:q"))
-        // Same request (a question's next step), back to the composer, or nothing focused.
+        // Same request (a question's next step), or back to the composer.
         assertFalse(parks(previous = "question:q", current = "question:q"))
         assertFalse(parks(previous = "permission:a", current = null))
-        assertFalse(parks(previous = "permission:a", current = "permission:b", hasFocus = false))
+        // Typing in another field, or a sheet or dialog in front, keeps its focus.
+        assertFalse(parks(previous = null, current = "permission:a", otherField = true))
+        assertFalse(parks(previous = null, current = "permission:a", surface = true))
     }
 
     @Test

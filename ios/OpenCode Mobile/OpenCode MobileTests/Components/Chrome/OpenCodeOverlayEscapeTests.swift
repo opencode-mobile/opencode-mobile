@@ -19,6 +19,13 @@ final class OpenCodeOverlayEscapeTests: XCTestCase {
         XCTAssertTrue(command.wantsPriorityOverSystemBehavior)
     }
 
+    func testRootEscapeCommandIsPlainEscapeWithPriorityOverTheSystem() {
+        let command = OpenCodeEscapeKeyCommand.command
+        XCTAssertEqual(command.input, UIKeyCommand.inputEscape)
+        XCTAssertEqual(command.modifierFlags, [])
+        XCTAssertTrue(command.wantsPriorityOverSystemBehavior)
+    }
+
     func testEscapeDismissesOnlyTheNewestOverlay() {
         var dismissed: [String] = []
         OpenCodeOverlayEscape.register(first, layer: 1) { dismissed.append("first") }

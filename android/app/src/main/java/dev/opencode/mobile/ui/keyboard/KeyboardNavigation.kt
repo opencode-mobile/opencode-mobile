@@ -167,13 +167,17 @@ object KeyboardNavigationRules {
     /**
      * Whether focus must be parked when the composer content changes to the prompt [currentPromptId]
      * (a permission or question request id; null for the prompt input). A new or different
-     * request starts with nothing focused, so keys meant for the previous one cannot answer it.
+     * request starts with nothing focused wherever focus was (composer, timeline, session list),
+     * so keys meant for something else cannot answer it and the first Tab enters it. Focus stays
+     * while the user types in another text field or a sheet or dialog is open.
      */
     fun parksFocusOnPromptChange(
         previousPromptId: String?,
         currentPromptId: String?,
-        composerHasFocus: Boolean,
-    ): Boolean = composerHasFocus && currentPromptId != null && currentPromptId != previousPromptId
+        otherFieldFocused: Boolean,
+        surfaceOpen: Boolean,
+    ): Boolean =
+        !otherFieldFocused && !surfaceOpen && currentPromptId != null && currentPromptId != previousPromptId
 
     /** Keys in the custom answer field of a question prompt; see [CustomAnswerKeyAction]. */
     fun customAnswerKey(

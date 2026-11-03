@@ -137,16 +137,33 @@ nonisolated enum OpenCodeKeyboardShortcutPolicy {
     }
 }
 
-/// Holding a chord's keys makes the system repeat it; only the first press fires.
-/// Every attempt (fired or not) restarts the window, so a held key never fires
-/// again, while a new press after letting go does.
-nonisolated enum OpenCodeShortcutRepeatGuard {
-    static let window: TimeInterval = 0.6
+/// Holding a key makes UIKit repeat its command (menu chords, Esc), and UIKit has
+/// no way to turn that off; only the first press fires. An attempted key stays held
+/// until a key goes up, so a new press right after letting go fires (a second ⌘⏎
+/// on a queued permission, Esc twice to interrupt). If no key-up is seen, a pause
+/// of `window` since the last attempt also counts as letting go: held keys repeat
+/// faster than that, so a held key still never fires again.
+nonisolated struct OpenCodeKeyRepeatGuard<Key: Hashable> {
+    static var window: TimeInterval { 0.6 }
 
-    static func fires(lastAttemptAt: Date?, now: Date) -> Bool {
-        guard let lastAttemptAt else { return true }
-        let elapsed = now.timeIntervalSince(lastAttemptAt)
-        return elapsed < 0 || elapsed >= window
+    private var held: Set<Key> = []
+    private var lastAttempts: [Key: Date] = [:]
+
+    /// Records an attempt of `key`; true when it is a new press.
+    mutating func attempt(_ key: Key, now: Date) -> Bool {
+        let paused = lastAttempts[key].map { last in
+            let elapsed = now.timeIntervalSince(last)
+            return elapsed < 0 || elapsed >= Self.window
+        } ?? true
+        let fires = !held.contains(key) || paused
+        held.insert(key)
+        lastAttempts[key] = now
+        return fires
+    }
+
+    /// A hardware key went up.
+    mutating func keyReleased() {
+        held.removeAll()
     }
 }
 

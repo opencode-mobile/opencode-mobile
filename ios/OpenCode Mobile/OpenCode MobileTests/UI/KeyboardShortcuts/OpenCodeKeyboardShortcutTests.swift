@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Testing
 @testable import OpenCode_Mobile
 
@@ -229,19 +230,62 @@ import Testing
     }
 }
 
-@Suite struct OpenCodeShortcutRepeatGuardTests {
+@Suite struct OpenCodeKeyRepeatGuardTests {
     private let start = Date(timeIntervalSince1970: 100)
 
     @Test func firstPress_fires() {
-        #expect(OpenCodeShortcutRepeatGuard.fires(lastAttemptAt: nil, now: start))
+        var guardState = OpenCodeKeyRepeatGuard<OpenCodeKeyboardShortcut>()
+        let firstPress = guardState.attempt(.promptPrimary, now: start)
+        #expect(firstPress)
     }
 
     @Test func heldKeyRepeats_doNotFire() {
-        #expect(!OpenCodeShortcutRepeatGuard.fires(lastAttemptAt: start, now: start.addingTimeInterval(0.08)))
-        #expect(!OpenCodeShortcutRepeatGuard.fires(lastAttemptAt: start, now: start.addingTimeInterval(0.5)))
+        var guardState = OpenCodeKeyRepeatGuard<OpenCodeKeyboardShortcut>()
+        _ = guardState.attempt(.promptPrimary, now: start)
+        let firstRepeat = guardState.attempt(.promptPrimary, now: start.addingTimeInterval(0.5))
+        #expect(!firstRepeat)
+        // Each repeat restarts the pause, so a long hold never fires again.
+        let secondRepeat = guardState.attempt(.promptPrimary, now: start.addingTimeInterval(0.58))
+        #expect(!secondRepeat)
+        let laterRepeat = guardState.attempt(.promptPrimary, now: start.addingTimeInterval(1.1))
+        #expect(!laterRepeat)
     }
 
-    @Test func aNewPressAfterLettingGo_fires() {
-        #expect(OpenCodeShortcutRepeatGuard.fires(lastAttemptAt: start, now: start.addingTimeInterval(0.6)))
+    @Test func aNewPressRightAfterLettingGo_fires() {
+        var guardState = OpenCodeKeyRepeatGuard<OpenCodeKeyboardShortcut>()
+        let firstPress = guardState.attempt(.promptPrimary, now: start)
+        #expect(firstPress)
+        guardState.keyReleased()
+        // ⌘⏎ on a permission, then again at once on the queued one.
+        let pressAfterRelease = guardState.attempt(.promptPrimary, now: start.addingTimeInterval(0.15))
+        #expect(pressAfterRelease)
+    }
+
+    @Test func withoutAKeyUp_aPauseCountsAsLettingGo() {
+        var guardState = OpenCodeKeyRepeatGuard<OpenCodeKeyboardShortcut>()
+        _ = guardState.attempt(.promptPrimary, now: start)
+        let pressAfterPause = guardState.attempt(.promptPrimary, now: start.addingTimeInterval(0.6))
+        #expect(pressAfterPause)
+    }
+
+    @Test func heldEscape_armsOnceAndNeverInterrupts() {
+        var guardState = OpenCodeKeyRepeatGuard<UIKeyboardHIDUsage>()
+        let firstEscape = guardState.attempt(.keyboardEscape, now: start)
+        #expect(firstEscape)
+        let firstRepeat = guardState.attempt(.keyboardEscape, now: start.addingTimeInterval(0.45))
+        #expect(!firstRepeat)
+        let laterRepeat = guardState.attempt(.keyboardEscape, now: start.addingTimeInterval(0.53))
+        #expect(!laterRepeat)
+        guardState.keyReleased()
+        // Esc again on purpose, inside the interrupt window.
+        let secondEscape = guardState.attempt(.keyboardEscape, now: start.addingTimeInterval(0.8))
+        #expect(secondEscape)
+    }
+
+    @Test func otherChords_areNotHeldByThisOne() {
+        var guardState = OpenCodeKeyRepeatGuard<OpenCodeKeyboardShortcut>()
+        _ = guardState.attempt(.promptPrimary, now: start)
+        let otherChord = guardState.attempt(.promptReject, now: start.addingTimeInterval(0.1))
+        #expect(otherChord)
     }
 }

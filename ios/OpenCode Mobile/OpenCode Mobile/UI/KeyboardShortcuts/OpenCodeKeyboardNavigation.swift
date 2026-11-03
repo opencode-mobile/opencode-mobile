@@ -69,6 +69,34 @@ nonisolated enum OpenCodeTabRestriction {
     }
 }
 
+/// Enabled focusable controls on screen, counted by key: several views can share a
+/// key, and a replacement can appear before the view it replaces is gone. A Tab
+/// target handed over to a control must be one of them, or no control would be a
+/// Tab stop.
+nonisolated struct OpenCodeTabStopRegistry {
+    private var counts: [AnyHashable: Int] = [:]
+
+    func contains(_ key: AnyHashable) -> Bool {
+        counts[key] != nil
+    }
+
+    mutating func appeared(_ key: AnyHashable) {
+        counts[key, default: 0] += 1
+    }
+
+    /// True when the last control with `key` went away.
+    @discardableResult
+    mutating func disappeared(_ key: AnyHashable) -> Bool {
+        guard let count = counts[key] else { return false }
+        if count > 1 {
+            counts[key] = count - 1
+            return false
+        }
+        counts[key] = nil
+        return true
+    }
+}
+
 /// Tab in a multi-line field leaves the field instead of typing a tab character.
 nonisolated enum OpenCodeTabKeyPolicy {
     /// Tab and Shift+Tab leave; while an input method is composing, or with ⌘, ⌥ or

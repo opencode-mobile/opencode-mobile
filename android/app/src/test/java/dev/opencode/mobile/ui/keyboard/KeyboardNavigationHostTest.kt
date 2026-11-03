@@ -212,6 +212,32 @@ class KeyboardNavigationHostTest {
     }
 
     @Test
+    fun holdingTheTabThatEnteredAPromptDoesNotWalkPastItsEntry() {
+        host.inputFocus.updatePromptEntry(Any()) {
+            calls += "enter"
+            host.windowFocusHeld = true
+            true
+        }
+        assertTrue(key(KeyEvent.KEYCODE_TAB, isDown = true))
+        // Auto-repeat while held: focus is held now, but the repeats stay with the entry press.
+        assertTrue(key(KeyEvent.KEYCODE_TAB, isDown = true, repeatCount = 1))
+        assertTrue(key(KeyEvent.KEYCODE_TAB, isDown = true, repeatCount = 2))
+        assertTrue(key(KeyEvent.KEYCODE_TAB, isDown = false))
+        assertEquals(listOf("enter"), calls)
+        // The next Tab is a new press and follows the normal order.
+        tap(KeyEvent.KEYCODE_TAB)
+        assertEquals(listOf("enter", "views:down", "views:up"), calls)
+    }
+
+    @Test
+    fun heldArrowRepeatsGoToViewsWhenTheyDidNotEnterAPrompt() {
+        host.windowFocusHeld = true
+        key(KeyEvent.KEYCODE_DPAD_DOWN, isDown = true)
+        key(KeyEvent.KEYCODE_DPAD_DOWN, isDown = true, repeatCount = 1)
+        assertEquals(listOf("views:down", "views:down"), calls)
+    }
+
+    @Test
     fun tabFollowsNormalOrderOnceFocusIsHeld() {
         host.inputFocus.updatePromptEntry(Any()) {
             calls += "enter"

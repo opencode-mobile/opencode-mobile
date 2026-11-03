@@ -907,7 +907,7 @@ private struct SessionChatMessageActionsGestureModifier: ViewModifier {
             content
                 .environment(\.markdownCodeBlockTapAction) { code in onOpenMessageActions(.codeBlock(code)) }
                 .onLongPressGesture { onOpenMessageActions(.text) }
-                .openCodeSecondaryClick { onOpenMessageActions(.text) }
+                .openCodeMessageSecondaryClick(onOpenMessageActions)
                 .accessibilityLabel(accessibilityLabel)
                 .accessibilityHint("Long press to show message actions")
         } else {

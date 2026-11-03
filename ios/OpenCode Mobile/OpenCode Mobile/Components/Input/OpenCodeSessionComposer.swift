@@ -487,6 +487,9 @@ struct OpenCodeSessionComposer: View {
                 requestID: requestID
             ) else { return }
             navigationKeysAtArrival = OpenCodeKeyboardFocusState.shared.navigationKeyCount
+            // A Tab target handed over before the prompt came (Tab out of the
+            // composer, a closed sheet's opener) would win over the prompt's entry.
+            OpenCodeKeyboardFocusState.shared.clearNextTabTarget()
             clearFocusForArrivingPrompt()
         }
         .onChange(of: customAnswerSelected) { _, selected in

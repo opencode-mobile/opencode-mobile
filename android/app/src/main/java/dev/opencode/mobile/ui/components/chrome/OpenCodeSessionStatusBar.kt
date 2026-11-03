@@ -48,7 +48,8 @@ fun OpenCodeSessionStatusBar(
             modifier =
                 Modifier
                     .size(SessionStatusTouchSize)
-                    .semantics { contentDescription = contextUsageDescription(contextUsageFraction) },
+                    .semantics { contentDescription = contextUsageDescription(contextUsageFraction) }
+                    .openCodeControl(),
             shape = CircleShape,
             color = Color.Transparent,
             contentColor = MaterialTheme.colorScheme.primary,

@@ -219,7 +219,7 @@ private fun SegmentedFilterTabs(
                         .semantics {
                             this.selected = selected
                             contentDescription = accessibilityLabel
-                        },
+                        }.openCodeControl(),
                 shape = FilterTabsTabShape,
                 color = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
                 border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,

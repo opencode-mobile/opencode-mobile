@@ -13,6 +13,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.input.pointer.AwaitPointerEventScope
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isPrimaryPressed
@@ -66,6 +67,18 @@ internal object OpenCodePointerRules {
         secondaryPressed: Boolean,
     ): Boolean = secondaryPressed && !primaryPressed
 }
+
+/**
+ * In a custom gesture handler, after the first down: the gesture is a secondary click (see
+ * [OpenCodePointerRules.controlSwallowsPress]), so it must not act as a tap, drag or long-press.
+ * For handlers that read downs whether or not they are consumed, which
+ * [openCodeSwallowSecondaryPress] cannot stop.
+ */
+internal fun AwaitPointerEventScope.isSecondaryPress(): Boolean =
+    OpenCodePointerRules.controlSwallowsPress(
+        primaryPressed = currentEvent.buttons.isPrimaryPressed,
+        secondaryPressed = currentEvent.buttons.isSecondaryPressed,
+    )
 
 /**
  * Consumes a secondary-button gesture (see [OpenCodePointerRules.controlSwallowsPress]) on the

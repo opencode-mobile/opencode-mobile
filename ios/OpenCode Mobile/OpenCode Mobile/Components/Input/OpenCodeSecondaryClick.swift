@@ -30,6 +30,12 @@ extension View {
     /// the component's long-press. Touches and primary clicks pass straight through,
     /// so taps, long-presses, and swipes are unchanged.
     func openCodeSecondaryClick(_ action: (() -> Void)?) -> some View {
+        openCodeSecondaryClick(at: action.map { action in { _ in action() } })
+    }
+
+    /// Same as `openCodeSecondaryClick(_:)`, with the click location in this view's
+    /// coordinates, for a view whose parts offer different actions.
+    func openCodeSecondaryClick(at action: ((CGPoint) -> Void)?) -> some View {
         overlay {
             if let action {
                 OpenCodeSecondaryClickArea(content: .action(action))
@@ -57,7 +63,7 @@ extension View {
 
 private struct OpenCodeSecondaryClickArea: UIViewRepresentable {
     enum Content {
-        case action(() -> Void)
+        case action((CGPoint) -> Void)
         case menu([OpenCodeSecondaryClickMenuItem])
         case ignore
 
@@ -125,7 +131,7 @@ private struct OpenCodeSecondaryClickArea: UIViewRepresentable {
         }
 
         @objc private func clicked() {
-            if case let .action(action) = content { action() }
+            if case let .action(action) = content { action(click.location(in: self)) }
         }
 
         /// The control's own tap (SwiftUI's recognizer on the hosting view) waits for

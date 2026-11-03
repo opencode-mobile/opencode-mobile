@@ -38,6 +38,7 @@ final class OpenCodeKeyboardFocusState {
     @ObservationIgnored private var focusedControls: Set<AnyHashable> = []
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     @ObservationIgnored private var promptEntries: [(owner: UUID, key: AnyHashable)] = []
+    @ObservationIgnored private var tabStops = OpenCodeTabStopRegistry()
 
     private init() {
         let center = NotificationCenter.default
@@ -59,7 +60,13 @@ final class OpenCodeKeyboardFocusState {
     /// Key presses reach UIKit as usual; this only watches them.
     private func observeKeyPresses() {
         GCKeyboard.coalesced?.keyboardInput?.keyChangedHandler = { _, _, keyCode, pressed in
-            guard pressed else { return }
+            guard pressed else {
+                DispatchQueue.main.async {
+                    OpenCodeKeyboardShortcutGate.noteKeyReleased()
+                    OpenCodeEscapeRouter.shared.noteKeyReleased()
+                }
+                return
+            }
             DispatchQueue.main.async {
                 OpenCodeKeyboardFocusState.shared.noteKeyPress(
                     navigation: [.tab, .upArrow, .downArrow, .leftArrow, .rightArrow].contains(keyCode)
@@ -120,9 +127,33 @@ final class OpenCodeKeyboardFocusState {
 
     /// Leaving a text field toward a control: iPadOS SwiftUI cannot move focus in
     /// code out of a UIKit text field, so the field stops editing and the next Tab
-    /// lands on `key`.
+    /// lands on `key`. A control that is no longer on screen is dropped: as the only
+    /// Tab stop it would leave Tab nowhere to go (a sheet's opener a prompt replaced).
     func setNextTabTarget<Key: Hashable>(_ key: Key) {
-        nextTabTarget = AnyHashable(key)
+        let key = AnyHashable(key)
+        nextTabTarget = tabStops.contains(key) ? key : nil
+    }
+
+    /// A new prompt arrived: the first Tab enters it, not a control handed focus
+    /// before it came.
+    func clearNextTabTarget() {
+        if nextTabTarget != nil { nextTabTarget = nil }
+    }
+
+    /// An enabled focusable control appeared under `key`.
+    func tabStopAppeared(_ key: AnyHashable) {
+        tabStops.appeared(key)
+    }
+
+    /// An enabled focusable control under `key` went away or was disabled. Once no
+    /// control with that key is left, it stops being the next Tab target. Checked on
+    /// the next turn, after a replacement view with the same key has appeared.
+    func tabStopDisappeared(_ key: AnyHashable) {
+        guard tabStops.disappeared(key) else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !tabStops.contains(key), nextTabTarget == key else { return }
+            nextTabTarget = nil
+        }
     }
 
     /// The only Tab stop right now, if any, while nothing has keyboard focus: a
@@ -151,6 +182,7 @@ final class OpenCodeEscapeRouter {
     @ObservationIgnored var now: () -> Date = Date.init
     @ObservationIgnored private var interrupts: [(owner: UUID, interrupt: () -> Void)] = []
     @ObservationIgnored private var expiryTask: Task<Void, Never>?
+    @ObservationIgnored private var repeatGuard = OpenCodeKeyRepeatGuard<UIKeyboardHIDUsage>()
 
     /// Session Chat publishes its interrupt while its session is busy and Stop is
     /// enabled, and nil otherwise; nil disarms a pending interrupt.
@@ -164,6 +196,9 @@ final class OpenCodeEscapeRouter {
     }
 
     func handleEscape() {
+        // UIKit repeats the Esc command while the key is held: one hold must not arm
+        // and then interrupt.
+        guard repeatGuard.attempt(.keyboardEscape, now: now()) else { return }
         let responder = UIResponder.openCodeCurrentFirstResponder()
         let isAnchor = responder is OpenCodeKeyboardAnchor.AnchorView
         let textInput = responder is UITextInput
@@ -195,6 +230,11 @@ final class OpenCodeEscapeRouter {
         } else {
             disarm()
         }
+    }
+
+    /// A hardware key went up, so the next Esc is a new press.
+    func noteKeyReleased() {
+        repeatGuard.keyReleased()
     }
 
     private func arm(at date: Date?) {
@@ -230,13 +270,7 @@ enum OpenCodeOverlayEscape {
     private static var layerSyncScheduled = false
 
     static func makeCommand() -> UIKeyCommand {
-        let command = UIKeyCommand(
-            input: UIKeyCommand.inputEscape,
-            modifierFlags: [],
-            action: #selector(UIResponder.openCodeDismissNewestOverlay(_:))
-        )
-        command.wantsPriorityOverSystemBehavior = true
-        return command
+        OpenCodeEscapeKeyCommand.make(action: #selector(UIResponder.openCodeDismissNewestOverlay(_:)))
     }
 
     /// Registers (or refreshes) a presented overlay; a new one becomes the newest.
@@ -411,15 +445,7 @@ enum OpenCodeKeyboardAnchor {
             OpenCodeEscapeRouter.shared.handleEscape()
         }
 
-        private static let escapeCommand: UIKeyCommand = {
-            let command = UIKeyCommand(
-                input: UIKeyCommand.inputEscape,
-                modifierFlags: [],
-                action: #selector(openCodeAnchorEscape(_:))
-            )
-            command.wantsPriorityOverSystemBehavior = true
-            return command
-        }()
+        private static let escapeCommand = OpenCodeEscapeKeyCommand.make(action: #selector(openCodeAnchorEscape(_:)))
 
     }
 }
@@ -428,15 +454,15 @@ enum OpenCodeKeyboardAnchor {
 /// the window's root view controller, which is on the responder chain of
 /// everything in the main window.
 enum OpenCodeEscapeKeyCommand {
-    static let command: UIKeyCommand = {
-        let command = UIKeyCommand(
-            input: UIKeyCommand.inputEscape,
-            modifierFlags: [],
-            action: #selector(UIViewController.openCodePerformEscape(_:))
-        )
+    static let command = make(action: #selector(UIViewController.openCodePerformEscape(_:)))
+
+    /// Plain Esc, ahead of the system's own handling. Every one goes through
+    /// `OpenCodeEscapeRouter`, which ignores the repeats of a held Esc.
+    static func make(action: Selector) -> UIKeyCommand {
+        let command = UIKeyCommand(input: UIKeyCommand.inputEscape, modifierFlags: [], action: action)
         command.wantsPriorityOverSystemBehavior = true
         return command
-    }()
+    }
 
     static func install(on viewController: UIViewController) {
         if !(viewController.keyCommands?.contains(command) ?? false) {

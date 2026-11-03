@@ -63,7 +63,8 @@ fun OpenCodeActionPill(
         modifier =
             modifier
                 .defaultMinSize(minHeight = ActionPillMinHeight)
-                .semantics { contentDescription = accessibilityLabel },
+                .semantics { contentDescription = accessibilityLabel }
+                .openCodeControl(enabled),
         shape = ActionPillShape,
         color = OpenCodeFloatingPillStyle.fill(enabled),
         contentColor = contentColor,

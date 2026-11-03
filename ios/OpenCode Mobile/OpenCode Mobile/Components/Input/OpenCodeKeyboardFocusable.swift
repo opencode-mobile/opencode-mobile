@@ -196,6 +196,8 @@ private struct OpenCodeKeyboardFocusableModifier: ViewModifier {
     @Environment(\.openCodeOverlayLayer) private var overlayLayer
     @FocusState private var isFocused: Bool
     @State private var autoKey = UUID()
+    /// The key this control is counted under in the app's live Tab stops.
+    @State private var registeredTabStop: AnyHashable?
 
     private var key: AnyHashable { explicitKey ?? AnyHashable(autoKey) }
 
@@ -253,10 +255,12 @@ private struct OpenCodeKeyboardFocusableModifier: ViewModifier {
             }
             .onAppear {
                 if enabled { group?.register(key) }
+                syncTabStop(onScreen: true)
                 focusIfRequested()
             }
             .onDisappear {
                 group?.unregister(key)
+                syncTabStop(onScreen: false)
                 requester?.setFocused(key, focused: false)
                 OpenCodeKeyboardFocusState.shared.controlFocusChanged(key, focused: false)
             }
@@ -266,13 +270,24 @@ private struct OpenCodeKeyboardFocusableModifier: ViewModifier {
                 } else {
                     group?.unregister(key)
                 }
+                syncTabStop(onScreen: true)
             }
+            .onChange(of: key) { _, _ in syncTabStop(onScreen: true) }
             .onChange(of: isFocused) { _, focused in
                 if focused { group?.didFocus(key) }
                 requester?.setFocused(key, focused: focused)
                 OpenCodeKeyboardFocusState.shared.controlFocusChanged(key, focused: focused)
             }
             .onChange(of: group?.pendingFocusKey) { _, _ in focusIfRequested() }
+    }
+
+    private func syncTabStop(onScreen: Bool) {
+        let next = onScreen && enabled ? key : nil
+        guard next != registeredTabStop else { return }
+        let focusState = OpenCodeKeyboardFocusState.shared
+        if let registeredTabStop { focusState.tabStopDisappeared(registeredTabStop) }
+        if let next { focusState.tabStopAppeared(next) }
+        registeredTabStop = next
     }
 
     private func performActivate() -> KeyPress.Result {

@@ -361,7 +361,8 @@ fun SessionListScopeControl(
                 .pointerInput(shownTabId, isSwitching) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
-                        if (isSwitching) {
+                        // A right-click never opens the scope picker or pages.
+                        if (isSwitching || isSecondaryPress()) {
                             return@awaitEachGesture
                         }
                         settleJob[0]?.cancel()

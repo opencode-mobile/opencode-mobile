@@ -631,18 +631,22 @@ private fun Modifier.opensMessageActionsOnTextTap(
     val onTextTapState = rememberUpdatedState(onTextTap)
     val userScrollInProgress = rememberUpdatedState(LocalOpenCodeUserScrollInProgress.current)
     if (onTextTap == null) return this
-    // A secondary click opens the same message actions; it consumes its gesture, so the tap
-    // detector below skips it.
+    // A secondary click opens the same message actions, with the code block it landed on; it
+    // consumes its gesture, so the tap detector below skips it.
     return openCodeSecondaryClick {
-        onTextTapState.value?.invoke(OpenCodeMessageTapTarget.Text)
+        val code = tapGate?.codeBlock
+        onTextTapState.value?.invoke(
+            if (code != null) OpenCodeMessageTapTarget.CodeBlock(code) else OpenCodeMessageTapTarget.Text,
+        )
     }.pointerInput(Unit) {
         val classifier = MessageTextTapClassifier()
         awaitEachGesture {
             val down = awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
-            if (down.isConsumed) return@awaitEachGesture
-            // The parent sees Initial first, so this clears before a code block sets it.
+            // The parent sees Initial first, so this clears before a code block sets it. Also
+            // for a secondary click (already consumed), which reads the block on release.
             tapGate?.codeBlock = null
             tapGate?.codeBlockRipple = null
+            if (down.isConsumed) return@awaitEachGesture
             val startedDuringScroll = userScrollInProgress.value()
             val slop = viewConfiguration.touchSlop
             val slopSquared = slop * slop

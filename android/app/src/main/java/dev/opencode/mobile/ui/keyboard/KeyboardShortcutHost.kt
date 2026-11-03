@@ -186,6 +186,9 @@ class KeyboardShortcutHost(
             }
             return dispatchToViews()
         }
+        // Holding the Tab or arrow that entered a prompt must not walk on past its entry control
+        // (Deny to Always); its repeats are swallowed until the key goes up, like Esc.
+        if (repeatCount > 0 && consumedNavigationKeyCode == keyCode) return true
         val entry = inputFocus.promptEntry
         val enters =
             KeyboardNavigationRules.entersPrompt(

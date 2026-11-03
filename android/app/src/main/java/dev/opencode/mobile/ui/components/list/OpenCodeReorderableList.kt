@@ -412,9 +412,17 @@ fun <T> OpenCodeReorderableList(
                                             }
                                     }
                                     if (actions.isNotEmpty()) customActions = actions
-                                }.openCodeSecondaryClick(enabled = canReveal) { position ->
-                                    contextMenuAt = IntOffset(position.x.roundToInt(), position.y.roundToInt())
-                                }.pointerInput(itemKey, movable, canReveal) {
+                                }.then(
+                                    if (canReveal) {
+                                        Modifier.openCodeSecondaryClick { position ->
+                                            contextMenuAt = IntOffset(position.x.roundToInt(), position.y.roundToInt())
+                                        }
+                                    } else {
+                                        // No actions (a pinned row): a right-click still never
+                                        // selects or lifts it.
+                                        Modifier.openCodeSwallowSecondaryPress()
+                                    },
+                                ).pointerInput(itemKey, movable, canReveal) {
                                     // One detector owns press, tap, swipe and lift, so the
                                     // three arbitrate on the first decisive movement rather
                                     // than racing a clock. Horizontal past slop is a swipe;

@@ -104,7 +104,7 @@ fun OpenCodeTaskRow(
                 .semantics(mergeDescendants = true) {
                     contentDescription = accessibilityLabel
                     if (onClick != null) role = Role.Button
-                }.then(if (onClick != null) Modifier.clip(shape).clickable(onClick = onClick) else Modifier),
+                }.then(if (onClick != null) Modifier.clip(shape).openCodeControl().clickable(onClick = onClick) else Modifier),
         shape = shape,
         color = MaterialTheme.colorScheme.surface,
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),

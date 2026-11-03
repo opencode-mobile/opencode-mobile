@@ -289,13 +289,17 @@ enum OpenCodeKeyboardShortcutGate {
         return keyWindow?.rootViewController?.presentedViewController == nil
     }
 
-    private static var lastAttempts: [OpenCodeKeyboardShortcut: Date] = [:]
+    private static var repeatGuard = OpenCodeKeyRepeatGuard<OpenCodeKeyboardShortcut>()
 
-    /// `allowsNow`, plus: a held chord fires once (see `OpenCodeShortcutRepeatGuard`).
+    /// `allowsNow`, plus: a held chord fires once (see `OpenCodeKeyRepeatGuard`).
     static func firesNow(_ shortcut: OpenCodeKeyboardShortcut, now: Date = Date()) -> Bool {
-        let repeatFree = OpenCodeShortcutRepeatGuard.fires(lastAttemptAt: lastAttempts[shortcut], now: now)
-        lastAttempts[shortcut] = now
+        let repeatFree = repeatGuard.attempt(shortcut, now: now)
         return repeatFree && allowsNow(shortcut)
+    }
+
+    /// A hardware key went up, so the next attempt of a chord is a new press.
+    static func noteKeyReleased() {
+        repeatGuard.keyReleased()
     }
 }
 

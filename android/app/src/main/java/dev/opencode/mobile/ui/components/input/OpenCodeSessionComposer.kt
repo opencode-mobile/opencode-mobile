@@ -445,17 +445,23 @@ fun OpenCodeSessionComposer(
     val announceBlocking =
         state is OpenCodeSessionComposerState.Permission || state is OpenCodeSessionComposerState.Question
     // A new permission or question request must start with nothing focused, so keys meant for
-    // the composer or the previous request cannot answer it. Park focus rather than letting
-    // Android pick a control (it would fall to the top bar).
+    // the composer, the timeline, the session list or the previous request cannot answer it.
+    // Park focus rather than letting Android pick a control (it would fall to the top bar).
     val focusManager = LocalFocusManager.current
     val inputFocusRegistry = LocalOpenCodeInputFocusRegistry.current
     val promptId = state.promptRequestId
-    var composerHasFocus by remember { mutableStateOf(false) }
     val shownPromptId = remember { arrayOfNulls<String>(1) }
     LaunchedEffect(promptId) {
         val previous = shownPromptId[0]
         shownPromptId[0] = promptId
-        if (KeyboardNavigationRules.parksFocusOnPromptChange(previous, promptId, composerHasFocus)) {
+        val parks =
+            KeyboardNavigationRules.parksFocusOnPromptChange(
+                previousPromptId = previous,
+                currentPromptId = promptId,
+                otherFieldFocused = inputFocusRegistry?.focusedTextInput == OpenCodeFocusedTextInput.Field,
+                surfaceOpen = inputFocusRegistry?.hasModalSurface == true,
+            )
+        if (parks) {
             inputFocusRegistry?.parkFocus?.invoke() ?: focusManager.clearFocus(force = true)
         }
     }
@@ -467,8 +473,7 @@ fun OpenCodeSessionComposer(
             modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp)
-                .padding(bottom = 4.dp)
-                .onFocusChanged { composerHasFocus = it.hasFocus },
+                .padding(bottom = 4.dp),
     ) {
         OpenCodeFloatingChrome(
             modifier = Modifier.fillMaxWidth(),
