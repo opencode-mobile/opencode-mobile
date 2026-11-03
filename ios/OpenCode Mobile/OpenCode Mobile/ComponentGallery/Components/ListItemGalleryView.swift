@@ -261,6 +261,35 @@ struct ListItemGalleryView: View {
                 startDecorator: startDecorator
             )
 
+            Text("Title highlight")
+                .font(OpenCodeTypography.button)
+                .foregroundStyle(OpenCodeColors.textStrong)
+
+            VStack(spacing: 0) {
+                let standardTitle = "Search sessions on Home"
+                OpenCodeListItem(
+                    title: .verbatim(standardTitle),
+                    titleHighlight: standardTitle.range(of: "search", options: .caseInsensitive),
+                    subtitleSegments: [.init(text: "opencode-mobile", tone: .secondary, icon: .folder)],
+                    status: OpenCodeListItemStatus(text: "Idle", tone: .info),
+                    caption: "2h ago",
+                    enabled: enabled,
+                    startDecorator: .letter(Character("O"), .red),
+                    action: {}
+                )
+                let compactTitle = "Server search for session titles"
+                OpenCodeListItem(
+                    variant: .compact,
+                    title: .verbatim(compactTitle),
+                    titleHighlight: compactTitle.range(of: "search", options: .caseInsensitive),
+                    path: OpenCodeListItemPath(primary: "opencode-mobile", secondary: "929-search"),
+                    caption: "now",
+                    enabled: enabled,
+                    startDecorator: .compactLetter(Character("O"), .red),
+                    action: {}
+                )
+            }
+
             Text("Plain selection")
                 .font(OpenCodeTypography.button)
                 .foregroundStyle(OpenCodeColors.textStrong)

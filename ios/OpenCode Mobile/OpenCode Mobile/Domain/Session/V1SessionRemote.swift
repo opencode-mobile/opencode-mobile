@@ -21,6 +21,17 @@ struct V1SessionRemote: SessionRemote, Sendable {
         try await api.listSessions(directory: directory).map { adapter.session(from: $0) }
     }
 
+    /// `GET /session?search=&roots=true`. Servers before the search parameters list every
+    /// session, so the reply is filtered again here.
+    func searchSessions(query: String, directory: String?) async throws -> [Session] {
+        let sessions = try await api.listSessions(
+            directory: directory,
+            search: SessionTitleSearch.normalizedQuery(query),
+            rootsOnly: true
+        ).map { adapter.session(from: $0) }
+        return SessionTitleSearch.searchResults(sessions, query: query)
+    }
+
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
         adapter.session(from: try await api.createSession(parentID: parentID, title: title, directory: directory))
     }

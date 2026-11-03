@@ -7,6 +7,9 @@ enum OpenCodeTextInputKind: CaseIterable {
     case password
     /// Filter field: no sentence capitalization or autocorrect.
     case filter
+    /// Search field: a leading search icon, no capitalization or autocorrect, and a trailing
+    /// clear button while it has text (a spinner instead while `busy`).
+    case search
 }
 
 enum OpenCodeTextInputSubmitAction {
@@ -46,6 +49,8 @@ struct OpenCodeTextInput: View {
     /// Multi-line fields only: Tab (`backward` false) or Shift+Tab left the field.
     /// Without it, Tab just stops editing; it never types a tab character.
     var onTabOut: ((_ backward: Bool) -> Void)?
+    /// Search fields only: a request for the text runs; a spinner replaces the clear button.
+    var busy = false
 
     @FocusState private var focused: Bool
     /// Focus of the multi-line field, which is UIKit-backed and outside `@FocusState`.
@@ -67,12 +72,14 @@ struct OpenCodeTextInput: View {
         onHardwareReturn: (() -> Void)? = nil,
         onEscape: (() -> Void)? = nil,
         onTabOut: ((_ backward: Bool) -> Void)? = nil,
-        inputRole: OpenCodeTextInputFocus = .otherTextField
+        inputRole: OpenCodeTextInputFocus = .otherTextField,
+        busy: Bool = false
     ) {
         let maxLines = maxLines ?? minLines
         precondition(minLines >= 1 && minLines <= maxLines, "OpenCodeTextInput needs 1 <= minLines <= maxLines")
         precondition(maxLines == 1 || kind == .text, "Only text inputs can be multi-line")
         precondition(maxLength == nil || maxLines > 1, "maxLength needs a multi-line input")
+        precondition(!busy || kind == .search, "Only search inputs show a busy state")
         precondition(
             Self.resolveAccessibilityLabel(hint: hint.resolved, accessibilityLabel: accessibilityLabel?.resolved) != nil,
             "OpenCodeTextInput requires a non-blank hint or accessibilityLabel"
@@ -93,29 +100,45 @@ struct OpenCodeTextInput: View {
         self.onEscape = onEscape
         self.onTabOut = onTabOut
         self.inputRole = inputRole
+        self.busy = busy
     }
 
     private var multiline: Bool { maxLines > 1 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            field
-                .font(OpenCodeTypography.body)
-                .foregroundStyle(OpenCodeColors.textStrong)
-                .textInputAutocapitalization(kind == .text ? .sentences : .never)
-                .autocorrectionDisabled(kind != .text)
-                .focused($focused)
-                .modifier(SubmitBehavior(enabled: !multiline, submitAction: submitAction, onSubmit: onSubmit))
-                .padding(.horizontal, 12)
-                .padding(.vertical, multiline ? 12 : 0)
-                .frame(minHeight: 48, alignment: multiline ? .topLeading : .leading)
-                .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(borderColor, lineWidth: isEditing || errorMessage != nil ? 2 : 1)
+            HStack(spacing: 8) {
+                if kind == .search {
+                    OpenCodeIconImage(icon: .search, size: 18)
+                        .foregroundStyle(OpenCodeColors.iconBase)
+                        .accessibilityHidden(true)
                 }
-                .disabled(!enabled)
-                .opacity(enabled ? 1 : 0.6)
+                field
+                    .font(OpenCodeTypography.body)
+                    .foregroundStyle(OpenCodeColors.textStrong)
+                    .textInputAutocapitalization(kind == .text ? .sentences : .never)
+                    .autocorrectionDisabled(kind != .text)
+                    .focused($focused)
+                    .modifier(SubmitBehavior(
+                        enabled: !multiline,
+                        submitAction: submitAction,
+                        isSearch: kind == .search,
+                        onSubmit: onSubmit
+                    ))
+                if kind == .search {
+                    searchTrailing
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, multiline ? 12 : 0)
+            .frame(minHeight: 48, alignment: multiline ? .topLeading : .leading)
+            .background(OpenCodeColors.surfaceRaisedBase, in: RoundedRectangle(cornerRadius: 8))
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(borderColor, lineWidth: isEditing || errorMessage != nil ? 2 : 1)
+            }
+            .disabled(!enabled)
+            .opacity(enabled ? 1 : 0.6)
 
             if let errorMessage {
                 Text(openCode: errorMessage)
@@ -147,6 +170,32 @@ struct OpenCodeTextInput: View {
     }
 
     private var isEditing: Bool { multiline ? multilineFocused : focused }
+
+    /// Spinner while busy, else the clear button once there is text.
+    @ViewBuilder
+    private var searchTrailing: some View {
+        if busy {
+            ProgressView()
+                .controlSize(.small)
+                .tint(OpenCodeColors.iconBase)
+                .frame(width: 24, height: 24)
+                .accessibilityLabel(Text("session_search.searching"))
+        } else if !text.isEmpty {
+            Button {
+                text = ""
+            } label: {
+                OpenCodeIconImage(icon: .close, size: 12)
+                    .foregroundStyle(OpenCodeColors.backgroundBase)
+                    .frame(width: 18, height: 18)
+                    .background(OpenCodeColors.textWeaker, in: Circle())
+                    .frame(width: 24, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(!enabled)
+            .accessibilityLabel(Text("session_search.clear"))
+        }
+    }
 
     private var field: some View {
         Group {
@@ -209,7 +258,7 @@ struct OpenCodeTextInput: View {
         switch kind {
         case .url: .URL
         case .username: .username
-        case .text, .password, .filter: nil
+        case .text, .password, .filter, .search: nil
         }
     }
 
@@ -224,10 +273,12 @@ struct OpenCodeTextInput: View {
 private struct SubmitBehavior: ViewModifier {
     let enabled: Bool
     let submitAction: OpenCodeTextInputSubmitAction
+    let isSearch: Bool
     let onSubmit: (() -> Void)?
 
     private var submitLabel: SubmitLabel {
-        switch submitAction {
+        if isSearch { return .search }
+        return switch submitAction {
         case .next: .next
         case .done: .done
         case .go: .go

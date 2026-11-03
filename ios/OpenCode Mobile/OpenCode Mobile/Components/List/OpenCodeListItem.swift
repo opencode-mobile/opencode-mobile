@@ -123,6 +123,8 @@ enum OpenCodeListItemAccessory {
 struct OpenCodeListItem<Trailing: View>: View {
     let variant: OpenCodeListItemVariant
     let title: OpenCodeText
+    /// Part of the title to highlight, such as a search match. Indexes the resolved title.
+    let titleHighlight: Range<String.Index>?
     /// Compact rows: semibold title, such as an unread finish. Standard titles are always semibold.
     let emphasized: Bool
     let subtitle: OpenCodeText?
@@ -150,6 +152,7 @@ struct OpenCodeListItem<Trailing: View>: View {
     init(
         variant: OpenCodeListItemVariant = .standard,
         title: OpenCodeText,
+        titleHighlight: Range<String.Index>? = nil,
         emphasized: Bool = false,
         subtitle: OpenCodeText? = nil,
         subtitleSegments: [OpenCodeListItemSubtitleSegment]? = nil,
@@ -170,6 +173,7 @@ struct OpenCodeListItem<Trailing: View>: View {
         precondition(subtitle == nil || subtitleSegments == nil, "List Item accepts either a plain subtitle or semantic segments")
         self.variant = variant
         self.title = title
+        self.titleHighlight = titleHighlight
         self.emphasized = emphasized
         self.subtitle = subtitle
         self.subtitleSegments = subtitleSegments
@@ -295,6 +299,27 @@ struct OpenCodeListItem<Trailing: View>: View {
         }
     }
 
+    /// The title, with `titleHighlight` on an interactive tint in the strong text colour.
+    private var titleText: Text {
+        guard let titleHighlight,
+              let highlighted = Self.highlightedTitle(title.resolved, range: titleHighlight, enabled: enabled)
+        else { return Text(openCode: title) }
+        return Text(highlighted)
+    }
+
+    /// Nil when `range` is empty or does not fall on the title's characters.
+    static func highlightedTitle(_ title: String, range: Range<String.Index>, enabled: Bool = true) -> AttributedString? {
+        guard !range.isEmpty, range.lowerBound >= title.startIndex, range.upperBound <= title.endIndex else { return nil }
+        var attributed = AttributedString(title)
+        guard let lower = AttributedString.Index(range.lowerBound, within: attributed),
+              let upper = AttributedString.Index(range.upperBound, within: attributed),
+              lower < upper
+        else { return nil }
+        attributed[lower ..< upper].backgroundColor = OpenCodeColors.interactive.opacity(enabled ? 0.22 : 0.10)
+        attributed[lower ..< upper].foregroundColor = enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker
+        return attributed
+    }
+
     private var hasMeta: Bool {
         status != nil || (caption?.isEmpty == false)
     }
@@ -332,7 +357,7 @@ struct OpenCodeListItem<Trailing: View>: View {
 
             VStack(alignment: .leading, spacing: listItemCompactLineSpacing) {
                 HStack(spacing: 8) {
-                    Text(openCode: title)
+                    titleText
                         .font(emphasized ? listItemCompactEmphasizedTitleFont : listItemCompactTitleFont)
                         .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
                         .lineLimit(1)
@@ -385,7 +410,7 @@ struct OpenCodeListItem<Trailing: View>: View {
 
             VStack(alignment: .leading, spacing: listItemTitleSubtitleSpacing) {
                 HStack(spacing: 6) {
-                    Text(openCode: title)
+                    titleText
                         .font(OpenCodeTypography.body.weight(.semibold))
                         .foregroundStyle(enabled ? OpenCodeColors.textStrong : OpenCodeColors.textWeaker)
                         .lineLimit(1)

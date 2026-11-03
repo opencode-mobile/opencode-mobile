@@ -629,12 +629,15 @@ struct SessionList<EmptyContent: View>: View {
 
     @ViewBuilder
     private func sessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
-        Group {
-            switch effectiveRowStyle {
-            case .compact: compactSessionRow(session)
-            case .classic: classicSessionRow(session, showStatusDot: showStatusDot)
-            }
-        }
+        SessionListRow(
+            session: session,
+            style: effectiveRowStyle,
+            showStatusDot: showStatusDot,
+            selected: selectedSessionId == session.id,
+            hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix,
+            onSelect: { onSessionSelected(session) },
+            onLongPress: onSessionLongPress.map { handler in { handler(session) } }
+        )
         .background {
             if selectedSessionId == session.id {
                 GeometryReader { geometry in
@@ -645,56 +648,6 @@ struct SessionList<EmptyContent: View>: View {
                 }
             }
         }
-    }
-
-    private func compactSessionRow(_ session: SessionListSession) -> some View {
-        let row = session.compactRow
-        return OpenCodeListItem(
-            variant: .compact,
-            title: .verbatim(session.title),
-            emphasized: row.emphasized,
-            path: row.path,
-            status: row.status,
-            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
-            selected: selectedSessionId == session.id,
-            startDecorator: .compactLetter(
-                session.letter,
-                session.letterAccent,
-                statusDot: row.status?.tone,
-                pulsing: row.pulsing
-            ),
-            action: { onSessionSelected(session) },
-            onLongPress: onSessionLongPress.map { handler in { handler(session) } }
-        )
-    }
-
-    private func classicSessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
-        let lines = session.locationLines
-        return OpenCodeListItem(
-            title: .verbatim(session.title),
-            subtitle: .verbatim(ifPresent: lines == nil
-                ? compactHomePath(
-                    session.subtitle,
-                    hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix
-                )
-                : nil),
-            subtitleSegments: lines?.subtitle,
-            detailSegments: lines?.detail,
-            status: listItemStatus(session.status, isStale: session.statusIsStale),
-            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
-            selected: selectedSessionId == session.id,
-            startDecorator: .letter(
-                session.letter,
-                session.letterAccent,
-                statusDot: showStatusDot ? listItemStatus(session.status, isStale: session.statusIsStale).tone : nil
-            ),
-            action: { onSessionSelected(session) },
-            onLongPress: onSessionLongPress.map { handler in { handler(session) } }
-        )
-    }
-
-    private func listItemStatus(_ status: SessionListStatus, isStale: Bool) -> OpenCodeListItemStatus {
-        status.listItemStatus(isStale: isStale)
     }
 
     private func scheduleListCrossfade(to newId: String) {
@@ -735,6 +688,72 @@ struct SessionList<EmptyContent: View>: View {
             feedLayers = [SessionListFeedLayer(id: newId, isOutgoing: false)]
             outgoingOpacity = 0
         }
+    }
+}
+
+/// One Home session row in the Session rows style (Compact or Standard), shared by the
+/// session list and session search. `titleHighlight` marks a search match in the title.
+struct SessionListRow: View {
+    let session: SessionListSession
+    let style: HomeSessionRowStyle
+    var showStatusDot = true
+    var selected = false
+    var titleHighlight: Range<String.Index>?
+    var hideUserDirectoryPrefix = false
+    let onSelect: () -> Void
+    var onLongPress: (() -> Void)?
+
+    var body: some View {
+        switch style {
+        case .compact: compactRow
+        case .classic: classicRow
+        }
+    }
+
+    private var compactRow: some View {
+        let row = session.compactRow
+        return OpenCodeListItem(
+            variant: .compact,
+            title: .verbatim(session.title),
+            titleHighlight: titleHighlight,
+            emphasized: row.emphasized,
+            path: row.path,
+            status: row.status,
+            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
+            selected: selected,
+            startDecorator: .compactLetter(
+                session.letter,
+                session.letterAccent,
+                statusDot: row.status?.tone,
+                pulsing: row.pulsing
+            ),
+            action: onSelect,
+            onLongPress: onLongPress
+        )
+    }
+
+    private var classicRow: some View {
+        let lines = session.locationLines
+        let status = session.status.listItemStatus(isStale: session.statusIsStale)
+        return OpenCodeListItem(
+            title: .verbatim(session.title),
+            titleHighlight: titleHighlight,
+            subtitle: .verbatim(ifPresent: lines == nil
+                ? compactHomePath(session.subtitle, hideUserDirectoryPrefix: hideUserDirectoryPrefix)
+                : nil),
+            subtitleSegments: lines?.subtitle,
+            detailSegments: lines?.detail,
+            status: status,
+            caption: .localized(ifPresent: session.caption.isEmpty ? nil : session.caption),
+            selected: selected,
+            startDecorator: .letter(
+                session.letter,
+                session.letterAccent,
+                statusDot: showStatusDot ? status.tone : nil
+            ),
+            action: onSelect,
+            onLongPress: onLongPress
+        )
     }
 }
 

@@ -1107,6 +1107,89 @@ struct SessionProtocolRepositoryTests {
         #expect(queryValue(try #require(ProtocolRoutingURLProtocol.requests[0].url), "location[directory]") == "/repo")
     }
 
+    @Test func v1SearchSessionsSendsSearchAndRootsThenFiltersLocally() async throws {
+        // An older server ignores the parameters and lists everything.
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"""
+            [
+              {"id":"ses_match","title":"Fix Search bar","directory":"/repo","time":{"created":1,"updated":5}},
+              {"id":"ses_other","title":"Refactor","directory":"/repo","time":{"created":1,"updated":4}},
+              {"id":"ses_child","title":"search subtask","parentID":"ses_match","directory":"/repo","time":{"created":1,"updated":3}},
+              {"id":"ses_archived","title":"Old search","directory":"/repo","time":{"created":1,"updated":2,"archived":9}}
+            ]
+            """#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v1)
+
+        let sessions = try await repository.searchSessions(query: "  search ", directory: "/repo")
+
+        #expect(sessions.map(\.id) == ["ses_match"])
+        let url = try #require(ProtocolRoutingURLProtocol.requests.first?.url)
+        #expect(url.path.hasSuffix("/session"))
+        #expect(queryValue(url, "directory") == "/repo")
+        #expect(queryValue(url, "search") == "search")
+        #expect(queryValue(url, "roots") == "true")
+    }
+
+    @Test func v2SearchSessionsUsesListScopeWithSearchRootsAndUnarchived() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"{"directory":"/repo","project":{"id":"proj","directory":"/repo","canonical":"/repo"}}"#),
+            .json(#"""
+            {
+              "data": [
+                {
+                  "id": "ses_match",
+                  "title": "Search on Home",
+                  "projectID": "proj",
+                  "cost": 0,
+                  "tokens": {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}},
+                  "time": {"created": 1, "updated": 9},
+                  "location": {"directory": "/worktrees/search"}
+                },
+                {
+                  "id": "ses_other",
+                  "title": "Unrelated",
+                  "projectID": "proj",
+                  "cost": 0,
+                  "tokens": {"input": 0, "output": 0, "reasoning": 0, "cache": {"read": 0, "write": 0}},
+                  "time": {"created": 1, "updated": 8},
+                  "location": {"directory": "/repo"}
+                }
+              ],
+              "cursor": {"previous": null, "next": null}
+            }
+            """#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let sessions = try await repository.searchSessions(query: "search", directory: "/repo")
+
+        #expect(sessions.map(\.id) == ["ses_match"])
+        #expect(sessions.first?.directory == "/worktrees/search")
+        let listed = try #require(ProtocolRoutingURLProtocol.requests.first { $0.url?.path.hasSuffix("/api/session") == true }?.url)
+        #expect(queryValue(listed, "project") == "proj")
+        #expect(queryValue(listed, "directory") == nil)
+        #expect(queryValue(listed, "search") == "search")
+        #expect(queryValue(listed, "parentID") == "null")
+        #expect(queryValue(listed, "archived") == "false")
+    }
+
+    @Test func v2SearchSessionsOutsideAProjectSearchesTheDirectory() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"{"directory":"/home/example"}"#),
+            .json(#"{"data": [], "cursor": {"previous": null, "next": null}}"#)
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let sessions = try await repository.searchSessions(query: "notes", directory: "/home/example")
+
+        #expect(sessions.isEmpty)
+        let listed = try #require(ProtocolRoutingURLProtocol.requests.first { $0.url?.path.hasSuffix("/api/session") == true }?.url)
+        #expect(queryValue(listed, "project") == nil)
+        #expect(queryValue(listed, "search") == "notes")
+        #expect(queryValue(listed, "parentID") == "null")
+    }
+
     // MARK: - Helpers
 
     private func makeManager(serverProtocol: ServerProtocol?, probing: (any ConnectionProbing)? = nil) -> ActiveConnectionManager {

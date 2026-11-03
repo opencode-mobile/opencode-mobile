@@ -32,6 +32,8 @@ struct ProjectListHomeView: View {
     @State private var displayedSessions: [SessionListSession] = []
     /// Bumped when a keyboard shortcut selects a row so the list scrolls it into view.
     @State private var revealSelectedSessionToken = 0
+    /// The split's sidebar control, so ⌘F can reopen a collapsed sidebar to show search.
+    @State private var splitSidebar = HomeSplitSidebarHandle()
     @Environment(\.scenePhase) private var scenePhase
     var splitGate = OpenCodeSplitLayoutGate()
     @Binding private var presentConnectionSetupOnAppear: Bool
@@ -68,6 +70,7 @@ struct ProjectListHomeView: View {
             // ⌘N, ⌘, and ⌘1–9 (#869). Closures read live Home state when they fire.
             .openCodeKeyboardShortcut(.newSession, action: acceptsNewSessionShortcut ? { newSessionFromKeyboard() } : nil)
             .openCodeKeyboardShortcut(.settings, action: acceptsHomeShortcuts ? { openSettingsFromKeyboard() } : nil)
+            .openCodeKeyboardShortcut(.searchSessions, action: acceptsSearchShortcut ? { openSearchFromKeyboard() } : nil)
             .openCodeProjectShortcuts(
                 titles: liveProjectTabs.map(\.dockTitle),
                 select: acceptsHomeShortcuts ? { index in selectProjectFromKeyboard(index) } : nil
@@ -146,6 +149,10 @@ struct ProjectListHomeView: View {
                 // drop every session the trailing pane could be showing.
                 selectedSession = nil
                 lastLoadedSessionIDs = nil
+                sessionSearch.close()
+            }
+            .onChange(of: searchHomeWhilePresented) { _, snapshot in
+                if let snapshot { sessionSearch.homeChanged(snapshot) }
             }
             .onChange(of: loadedSessionIDs) { _, current in
                 guard let current else { return }
@@ -649,6 +656,33 @@ struct ProjectListHomeView: View {
     }
 
     private var homePane: some View {
+        ZStack {
+            homeListPane
+                .accessibilityHidden(sessionSearch.isPresented)
+            if sessionSearch.isPresented {
+                SessionSearchView(
+                    model: sessionSearch,
+                    rowStyle: homeDisplayPreferences.sessionRowStyle,
+                    hideUserDirectoryPrefix: homeDisplayPreferences.hideUserDirectoryPrefix,
+                    selectedSessionId: isSplitLayout ? selectedSession?.id : nil,
+                    onOpen: { session in openListSession(session) },
+                    onLongPress: { session in
+                        viewModel.onSessionLongPress(
+                            sessionId: session.id,
+                            title: session.title,
+                            worktree: session.directory
+                        )
+                    }
+                )
+                // Esc clears the query, then closes, while search is the visible screen.
+                .openCodeScreenEscape(isHomeVisible && connectionSetupPresentation == nil ? { sessionSearch.escape() } : nil)
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: sessionSearch.isPresented)
+    }
+
+    private var homeListPane: some View {
         VStack(spacing: 0) {
             OpenCodeTopBar(
                 title: viewModel.serversChrome.title,
@@ -678,6 +712,10 @@ struct ProjectListHomeView: View {
                 .transition(.opacity)
         }
         .openCodeKeyboardShortcut(.toggleSidebar, action: homeShortcutsActive ? control.toggle : nil)
+        .onChange(of: control.isCollapsed, initial: true) { _, _ in
+            splitSidebar.control = control
+        }
+        .onDisappear { splitSidebar.control = nil }
         .openCodeKeyboardShortcut(
             .nextSession,
             action: homeShortcutsActive && !displayedSessions.isEmpty ? { selectAdjacentSession(.next) } : nil
@@ -779,6 +817,48 @@ struct ProjectListHomeView: View {
         case let .create(directory):
             Task { await viewModel.createSession(in: directory) }
         }
+    }
+
+    private var sessionSearch: SessionSearchModel {
+        viewModel.sessionSearch
+    }
+
+    /// Search needs Home's sessions: a loaded Home, visible, like Settings.
+    private var acceptsSearchShortcut: Bool {
+        guard acceptsHomeShortcuts else { return false }
+        if case .loaded = viewModel.state { return true }
+        return false
+    }
+
+    /// What search reads from Home, kept current only while it is open.
+    private var searchHomeWhilePresented: SessionSearchHome? {
+        sessionSearch.isPresented ? searchHome : nil
+    }
+
+    private var searchHome: SessionSearchHome {
+        let filter = liveHomeFilter
+        return SessionSearchHome(
+            rows: homeSections.crossProjectSessionListSessions(
+                projects: filter.projects,
+                worktreesEnabled: filter.worktreesEnabled
+            ),
+            projects: filter.projects,
+            sections: homeSections,
+            worktreesEnabled: filter.worktreesEnabled
+        )
+    }
+
+    /// ⌘F: opens search on Home's scope, or puts the caret back in its field.
+    private func openSearchFromKeyboard() {
+        if let control = splitSidebar.control, isSplitLayout, control.isCollapsed {
+            control.toggle()
+        }
+        if sessionSearch.isPresented {
+            sessionSearch.focusField()
+            return
+        }
+        sessionSearch.homeChanged(searchHome)
+        sessionSearch.open(homeScopeId: liveHomeFilter.selectedId)
     }
 
     private func openSettingsFromKeyboard() {
@@ -1595,6 +1675,12 @@ nonisolated private final class PreviewForegroundEventStream: ForegroundEventStr
     func events() -> AsyncStream<OpencodeEvent> { AsyncStream { _ in } }
     func start() {}
     func stop() async {}
+}
+
+/// Holds the split's sidebar control for handlers that run outside the trailing pane.
+/// Written from `onChange`, never read during a render.
+private final class HomeSplitSidebarHandle {
+    var control: OpenCodeSplitPaneDetailControl?
 }
 
 private struct SplitSessionSelection {

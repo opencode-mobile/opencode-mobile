@@ -26,6 +26,20 @@ struct V2SessionRemote: SessionRemote, Sendable {
         ).map { adapter.session(from: $0) }
     }
 
+    /// Same project or directory as `listSessions`, narrowed on the server to unarchived root
+    /// sessions whose title matches, then filtered again here.
+    func searchSessions(query: String, directory: String?) async throws -> [Session] {
+        let projectID = await listableProjectID(directory: directory)
+        let sessions = try await api.listSessionsV2(
+            directory: projectID == nil ? directory : nil,
+            parentID: SessionsAPIClient.v2RootSessionsParentID,
+            projectID: projectID,
+            archived: false,
+            search: SessionTitleSearch.normalizedQuery(query)
+        ).map { adapter.session(from: $0) }
+        return SessionTitleSearch.searchResults(sessions, query: query)
+    }
+
     private func listableProjectID(directory: String?) async -> String? {
         guard let directory else { return nil }
         guard let location = try? await api.locationForSessionList(directory: directory) else { return nil }

@@ -105,12 +105,21 @@ struct OpenCodeTopBarOverflowHost<TopBar: View>: View {
     }
 }
 
+/// Which side of its anchor an anchored overflow menu opens on.
+enum OpenCodeAnchoredOverflowPlacement {
+    /// Above the anchor, or below it when there is no room above (a + button low on screen).
+    case above
+    /// Below the anchor, such as a chip under a search field.
+    case below
+}
+
 /// The overflow menu opened from a control inside the content, such as a +
 /// button: the panel sits above `anchor`, leading-aligned, or below it when
-/// there is no room above.
+/// there is no room above. `.below` opens it under the anchor instead.
 struct OpenCodeAnchoredOverflowHost<Anchor: View>: View {
     @Binding var isPresented: Bool
     let entries: [OpenCodeOverflowMenuEntry]
+    var placement: OpenCodeAnchoredOverflowPlacement = .above
     @ViewBuilder let anchor: () -> Anchor
 
     @State private var anchorFrame: CGRect = .zero
@@ -132,7 +141,7 @@ struct OpenCodeAnchoredOverflowHost<Anchor: View>: View {
                 OpenCodeOverflowMenuWindowOverlay(
                     isPresented: isPresented,
                     anchorFrame: anchorFrame,
-                    placement: .aboveLeading,
+                    placement: placement == .above ? .aboveLeading : .belowLeading,
                     entries: entries,
                     onDismiss: { isPresented = false }
                 )
@@ -146,6 +155,8 @@ private enum OverflowMenuPlacement {
     case belowTrailing
     /// Over a control, leading-aligned; flips below when there is no room.
     case aboveLeading
+    /// Under a control, leading-aligned.
+    case belowLeading
     /// Beside an item in the iPhone Duo vertical bar, top-aligned with it.
     case besideRailItem
 }
@@ -301,6 +312,11 @@ private struct OpenCodeOverflowMenuOverlayContent: View {
             let above = anchorFrame.minY - overflowMenuAnchorTopOffset - panelSize.height
             let top = above >= 0 ? above : anchorFrame.maxY + overflowMenuAnchorTopOffset
             return CGPoint(x: anchorFrame.minX + (panelSize.width / 2), y: top + (panelSize.height / 2))
+        case .belowLeading:
+            return CGPoint(
+                x: anchorFrame.minX + (panelSize.width / 2),
+                y: anchorFrame.maxY + overflowMenuAnchorTopOffset + (panelSize.height / 2)
+            )
         case .besideRailItem:
             return CGPoint(
                 x: anchorFrame.minX - overflowMenuRailItemSpacing - (panelSize.width / 2),

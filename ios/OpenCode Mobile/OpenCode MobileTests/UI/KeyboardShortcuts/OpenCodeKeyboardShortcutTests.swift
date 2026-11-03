@@ -25,6 +25,7 @@ import Testing
             "Command Palette",
             "Choose Model",
             "Settings",
+            "Search Sessions",
             "Project 1", "Project 2", "Project 3", "Project 4", "Project 5",
             "Project 6", "Project 7", "Project 8", "Project 9",
             "Allow Once",
@@ -43,6 +44,7 @@ import Testing
             "keyboard_shortcuts.command_palette",
             "keyboard_shortcuts.choose_model",
             "keyboard_shortcuts.settings",
+            "keyboard_shortcuts.search_sessions",
         ] + Array(repeating: "keyboard_shortcuts.project", count: 9) + [
             "keyboard_shortcuts.allow_once",
             "keyboard_shortcuts.always_allow",
@@ -72,6 +74,8 @@ import Testing
         #expect(OpenCodeKeyboardShortcut.modelPicker.modifiers == [.command, .shift])
         #expect(OpenCodeKeyboardShortcut.settings.key == ",")
         #expect(OpenCodeKeyboardShortcut.settings.modifiers == .command)
+        #expect(OpenCodeKeyboardShortcut.searchSessions.key == "f")
+        #expect(OpenCodeKeyboardShortcut.searchSessions.modifiers == .command)
         for number in 1...9 {
             #expect(OpenCodeKeyboardShortcut.switchProject(number).key.character == Character(String(number)))
             #expect(OpenCodeKeyboardShortcut.switchProject(number).modifiers == .command)
@@ -210,7 +214,7 @@ import Testing
 
 @Suite struct OpenCodeShortcutGatingTests {
     private let general: [OpenCodeKeyboardShortcut] = [
-        .newSession, .commandPalette, .modelPicker, .settings, .switchProject(1), .focusComposer,
+        .newSession, .commandPalette, .modelPicker, .settings, .searchSessions, .switchProject(1), .focusComposer,
     ]
 
     private func allows(_ shortcut: OpenCodeKeyboardShortcut, _ focus: OpenCodeTextInputFocus, overlay: Bool = false) -> Bool {
