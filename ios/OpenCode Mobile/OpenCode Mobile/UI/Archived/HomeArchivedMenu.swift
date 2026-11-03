@@ -19,6 +19,8 @@ final class HomeArchivedMenu {
     @ObservationIgnored private let sessionRepository: any SessionRepository
     @ObservationIgnored private let supported: @MainActor () -> Bool
     @ObservationIgnored private var task: Task<Void, Never>?
+    /// The last scope Home asked about, so `recheck()` can count it again.
+    @ObservationIgnored private var lastRequest: (scopeID: String, projects: [HomeProject], worktreesEnabled: Bool)?
 
     init(sessionRepository: any SessionRepository, supported: @escaping @MainActor () -> Bool) {
         self.sessionRepository = sessionRepository
@@ -27,6 +29,7 @@ final class HomeArchivedMenu {
 
     /// Recounts for Home scope `scopeID`; Home calls it as the menu opens.
     func refresh(scopeID: String, projects: [HomeProject], worktreesEnabled: Bool) {
+        lastRequest = (scopeID, projects, worktreesEnabled)
         task?.cancel()
         guard supported() else {
             entry = nil
@@ -42,6 +45,13 @@ final class HomeArchivedMenu {
             guard !Task.isCancelled, let self else { return }
             entry = HomeArchivedMenuEntry(scopeID: scopeID, scopeTitle: title, count: count)
         }
+    }
+
+    /// Recounts the last scope after the server's capabilities may have changed (a probe that
+    /// finished after the menu first opened), so the entry appears without reopening the menu.
+    func recheck() {
+        guard let lastRequest, supported() != (entry != nil) else { return }
+        refresh(scopeID: lastRequest.scopeID, projects: lastRequest.projects, worktreesEnabled: lastRequest.worktreesEnabled)
     }
 
     /// Waits for the count in flight (tests).

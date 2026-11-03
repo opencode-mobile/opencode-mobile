@@ -83,6 +83,8 @@ data class ArchivedSessionsUiState(
     val actionTarget: ArchivedSessionRow? = null,
     val sheetVisible: Boolean = false,
     val deleteConfirmVisible: Boolean = false,
+    /** The session the delete confirmation names; kept apart so closing the sheet cannot clear it. */
+    val deleteTarget: ArchivedSessionRow? = null,
     val snackbar: ArchivedSessionsSnackbar? = null,
 )
 
@@ -112,10 +114,17 @@ class ArchivedSessionsModel(
     /** Sessions with an unarchive or delete in flight; a refresh must not bring their rows back. */
     private val hiddenIds = mutableSetOf<String>()
 
-    /** Sessions shown again by Undo before the server has archived them. */
-    private val restoredRows = mutableMapOf<String, Session>()
-    /** Sessions the last unarchive snackbars can archive again. */
-    private val undoable = mutableMapOf<String, Session>()
+    /**
+     * Sessions this screen unarchived or deleted, with the archive time they had. A list that
+     * still carries that archive time lags behind the server; a newer one is a fresh archive.
+     */
+    private val settled = mutableMapOf<String, Long?>()
+
+    /** Sessions shown again by Undo before the server has archived them, with their project. */
+    private val restoredRows = mutableMapOf<String, ProjectSession>()
+
+    /** Sessions the last unarchive snackbars can archive again, with their project. */
+    private val undoable = mutableMapOf<String, ProjectSession>()
     private var loaded = false
     private var loadJob: Job? = null
     private var refreshJob: Job? = null
@@ -150,7 +159,7 @@ class ArchivedSessionsModel(
     }
 
     fun dismissActions() {
-        _state.update { it.copy(sheetVisible = false, actionTarget = if (it.deleteConfirmVisible) it.actionTarget else null) }
+        _state.update { it.copy(sheetVisible = false, actionTarget = null) }
     }
 
     /** The sheet's Open: the caller navigates to the returned row's session. */
@@ -167,17 +176,17 @@ class ArchivedSessionsModel(
     }
 
     fun chooseDelete() {
-        if (_state.value.actionTarget == null) return
-        _state.update { it.copy(sheetVisible = false, deleteConfirmVisible = true) }
+        val target = _state.value.actionTarget ?: return
+        _state.update { it.copy(sheetVisible = false, actionTarget = null, deleteConfirmVisible = true, deleteTarget = target) }
     }
 
     fun dismissDeleteConfirm() {
-        _state.update { it.copy(deleteConfirmVisible = false, actionTarget = null) }
+        _state.update { it.copy(deleteConfirmVisible = false, deleteTarget = null) }
     }
 
     fun confirmDelete() {
-        val target = _state.value.actionTarget ?: return
-        _state.update { it.copy(deleteConfirmVisible = false, actionTarget = null) }
+        val target = _state.value.deleteTarget ?: return
+        _state.update { it.copy(deleteConfirmVisible = false, deleteTarget = null) }
         val session = sessionFor(target.id) ?: return
         hide(session.id)
         logI("delete start session=${session.id}")
@@ -193,7 +202,7 @@ class ArchivedSessionsModel(
                 }
             if (deleted) {
                 logI("delete success session=${session.id}")
-                drop(session.id)
+                settle(session)
             } else {
                 unhide(session.id)
                 showSnackbar(ArchivedSessionsSnackbar(DELETE_ERROR, OpenCodeSnackbarVariant.Error))
@@ -205,6 +214,7 @@ class ArchivedSessionsModel(
     fun unarchive(sessionId: String) {
         val session = sessionFor(sessionId) ?: return
         if (sessionId in hiddenIds) return
+        val projectKey = projectKeyOf(sessionId)
         val directory = directoryOf(session)
         hide(sessionId)
         logI("unarchive start session=$sessionId")
@@ -220,21 +230,22 @@ class ArchivedSessionsModel(
                 return@launch
             }
             logI("unarchive success session=$sessionId")
-            drop(sessionId)
+            settle(session)
             showSnackbar(
                 ArchivedSessionsSnackbar(
                     text = UiText.resource(R.string.archived_sessions_unarchived, session.title),
                     undoSessionId = sessionId,
                 ),
             )
-            undoable[sessionId] = session
+            undoable[sessionId] = ProjectSession(projectKey, session)
         }
     }
 
     /** The snackbar's Undo: archives the session again and puts its row back. */
     fun undoUnarchive(sessionId: String) {
-        val session = undoable.remove(sessionId) ?: return
-        restoredRows[sessionId] = session.copy(archivedAtEpochMs = nowEpochMs())
+        val (projectKey, session) = undoable.remove(sessionId) ?: return
+        settled.remove(sessionId)
+        restoredRows[sessionId] = ProjectSession(projectKey, session.copy(archivedAtEpochMs = nowEpochMs()))
         publish()
         logI("undo unarchive session=$sessionId")
         scope.launch {
@@ -261,25 +272,37 @@ class ArchivedSessionsModel(
         loadJob =
             scope.launch {
                 val homeProjects = projects.value
+                // A project that fails keeps its last list while another project answers.
+                val results =
+                    coroutineScope {
+                        homeProjects
+                            .map { project ->
+                                async {
+                                    try {
+                                        project.key to ArchivedSessionList.load(sessionRepository, project.memberPaths)
+                                    } catch (error: CancellationException) {
+                                        throw error
+                                    } catch (error: Throwable) {
+                                        logW("load failed project=${project.key} message=${error.message}")
+                                        null
+                                    }
+                                }
+                            }.awaitAll()
+                    }
+                if (homeProjects.isNotEmpty() && results.all { it == null }) {
+                    if (_state.value.content !is ArchivedSessionsContent.Loaded) {
+                        _state.update { it.copy(content = ArchivedSessionsContent.Failed(LOAD_ERROR)) }
+                    }
+                    return@launch
+                }
                 val result =
-                    try {
-                        coroutineScope {
-                            homeProjects
-                                .map { project ->
-                                    async { project.key to ArchivedSessionList.load(sessionRepository, project.memberPaths) }
-                                }.awaitAll()
-                                .toMap()
-                        }
-                    } catch (error: CancellationException) {
-                        throw error
-                    } catch (error: Throwable) {
-                        logW("load failed message=${error.message}")
-                        if (_state.value.content !is ArchivedSessionsContent.Loaded) {
-                            _state.update { it.copy(content = ArchivedSessionsContent.Failed(LOAD_ERROR)) }
-                        }
-                        return@launch
+                    homeProjects.associate { project ->
+                        project.key to (results.firstOrNull { it?.first == project.key }?.second ?: archivedByProject[project.key].orEmpty())
                     }
                 archivedByProject = result
+                // A session the server no longer lists as archived is settled for good.
+                val listedIds = result.values.flatten().mapTo(mutableSetOf()) { it.id }
+                settled.keys.retainAll(listedIds)
                 this@ArchivedSessionsModel.loaded = true
                 // The server now has every row Undo put back.
                 restoredRows.keys.removeAll { id -> result.values.any { list -> list.any { it.id == id } } }
@@ -306,24 +329,32 @@ class ArchivedSessionsModel(
         publish()
     }
 
-    /** The server no longer lists [sessionId] as archived. */
-    private fun drop(sessionId: String) {
-        hiddenIds -= sessionId
-        restoredRows.remove(sessionId)
-        archivedByProject = archivedByProject.mapValues { (_, list) -> list.filterNot { it.id == sessionId } }
+    /** The server unarchived or deleted [session]; a lagging list must not bring its row back. */
+    private fun settle(session: Session) {
+        settled[session.id] = session.archivedAtEpochMs
+        hiddenIds -= session.id
+        restoredRows.remove(session.id)
+        archivedByProject = archivedByProject.mapValues { (_, list) -> list.filterNot { it.id == session.id } }
         publish()
     }
+
+    private fun isSettled(session: Session): Boolean = session.id in settled && settled[session.id] == session.archivedAtEpochMs
+
+    private fun projectKeyOf(sessionId: String): String? =
+        restoredRows[sessionId]?.projectKey
+            ?: archivedByProject.entries.firstOrNull { (_, list) -> list.any { it.id == sessionId } }?.key
 
     private fun showSnackbar(snackbar: ArchivedSessionsSnackbar) {
         _state.update { it.copy(snackbar = snackbar) }
     }
 
     private fun sessionFor(sessionId: String): Session? =
-        restoredRows[sessionId] ?: archivedByProject.values.firstNotNullOfOrNull { list -> list.firstOrNull { it.id == sessionId } }
+        restoredRows[sessionId]?.session
+            ?: archivedByProject.values.firstNotNullOfOrNull { list -> list.firstOrNull { it.id == sessionId } }
 
     private fun directoryOf(session: Session): String =
         session.directory?.takeIf { it.isNotBlank() }
-            ?: projects.value.firstOrNull { project -> archivedByProject[project.key].orEmpty().any { it.id == session.id } }?.primaryPath
+            ?: projectKeyOf(session.id)?.let { key -> projects.value.firstOrNull { it.key == key } }?.primaryPath
             ?: ""
 
     private fun publish() {
@@ -332,13 +363,10 @@ class ArchivedSessionsModel(
         val resolved = HomeScope.resolve(scopeId, homeProjects, worktrees) ?: HomeScope.All
         val resolvedId = HomeScope.id(resolved)
         val now = nowEpochMs()
-        val restoredByProject =
-            restoredRows.values.groupBy { session ->
-                homeProjects.firstOrNull { project -> session.directory?.let(project::contains) == true }?.key
-            }
+        val restoredByProject = restoredRows.values.groupBy({ it.projectKey }, { it.session })
         val sessionsByProject =
             homeProjects.associate { project ->
-                val listed = archivedByProject[project.key].orEmpty()
+                val listed = archivedByProject[project.key].orEmpty().filterNot(::isSettled)
                 val restored = restoredByProject[project.key].orEmpty().filter { r -> listed.none { it.id == r.id } }
                 project.key to ArchivedSessionList.sorted(listed + restored).filterNot { it.id in hiddenIds }
             }
@@ -420,3 +448,9 @@ internal fun archivedScopeTitle(
             UiText.verbatim(listOfNotNull(project?.displayName, worktree?.folderName).joinToString(" · "))
         }
     }
+
+/** A session with the Home project whose list carried it. */
+private data class ProjectSession(
+    val projectKey: String?,
+    val session: Session,
+)

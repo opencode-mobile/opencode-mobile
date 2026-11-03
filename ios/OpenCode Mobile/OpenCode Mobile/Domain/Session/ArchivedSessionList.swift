@@ -32,6 +32,8 @@ nonisolated enum ArchivedSessionList {
             for await result in group { collected.append(result) }
             return collected.sorted { $0.0 < $1.0 }.map(\.1)
         }
+        // A cancelled load reports cancellation, not the failures it caused.
+        try Task.checkCancellation()
         if !results.isEmpty, results.allSatisfy({ if case .failure = $0 { true } else { false } }),
            case let .failure(error) = results[0] {
             throw error

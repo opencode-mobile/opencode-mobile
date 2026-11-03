@@ -145,6 +145,12 @@ class MainScreenViewModel
             scopeId: String,
             worktreesEnabled: Boolean,
         ) = archivedMenuRegion.refresh(scopeId, worktreesEnabled)
+
+        /** Probes the server; its answer can turn on capabilities the menu entry was waiting for. */
+        private suspend fun probeServer() {
+            projectRepository.probeServer()
+            archivedMenuRegion.recheck()
+        }
         private val _revealNewestToken = MutableStateFlow(0)
         val revealNewestToken: StateFlow<Int> = _revealNewestToken.asStateFlow()
         private val _pendingScopeRequest = MutableStateFlow<HomeScopeRequest?>(null)
@@ -1062,7 +1068,7 @@ class MainScreenViewModel
                     MainScreenUiState.Loaded(sections = sections, projectLoads = projectFirstLoads.visible, home = homeIndex)
                 applyPendingFirstServerSnapshots()
                 if (!skipProbe) {
-                    runCatching { projectRepository.probeServer() }
+                    runCatching { probeServer() }
                         .onFailure {
                             // Keep cached home; connection chrome reflects reachability.
                         }
@@ -1078,7 +1084,7 @@ class MainScreenViewModel
                 _uiState.value = MainScreenUiState.Empty()
                 if (!skipProbe) {
                     val probedBaseUrl = serverBaseUrl
-                    runCatching { projectRepository.probeServer() }
+                    runCatching { probeServer() }
                         .onFailure { error ->
                             if (!probeFailureIsFinal(probedBaseUrl)) return@onFailure
                             _uiState.value =
@@ -1098,7 +1104,7 @@ class MainScreenViewModel
                     _uiState.value = MainScreenUiState.Probing
                 }
                 try {
-                    projectRepository.probeServer()
+                    probeServer()
                 } catch (error: ServerProbeError) {
                     if (preserveContent) return
                     stopLiveObservations()

@@ -453,6 +453,32 @@ private struct OpenCodeOverflowMenuPanel: View {
     .preferredColorScheme(.dark)
 }
 
+/// Grouped entries with subtitles: the panel keeps its content width with a divider.
+#Preview("Grouped") {
+    OpenCodeTopBarOverflowHost(
+        isPresented: .constant(true),
+        entries: [
+            OpenCodeOverflowMenuEntry(title: "Search sessions", icon: .search, action: {}),
+            OpenCodeOverflowMenuEntry(
+                title: "Archived sessions",
+                subtitle: "4 in All projects",
+                icon: .archive,
+                action: {}
+            ),
+            OpenCodeOverflowMenuEntry(
+                title: "Worktrees",
+                subtitle: "3 across 2 projects",
+                icon: .callSplit,
+                action: {}
+            ),
+            OpenCodeOverflowMenuEntry(title: "Settings", icon: .settings, dividerAbove: true, action: {}),
+        ]
+    ) {
+        OpenCodeTopBar(title: "Sessions", showDivider: true)
+    }
+    .openCodeTheme()
+}
+
 private struct OverflowEntryIdentifier: ViewModifier {
     let identifier: String?
 
