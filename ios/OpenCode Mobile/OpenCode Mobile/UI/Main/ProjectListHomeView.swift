@@ -922,7 +922,24 @@ struct ProjectListHomeView: View {
 
     /// Feature entries go in `features`, top to bottom; `HomeMenu` adds Settings last.
     private var homeMenuEntries: [OpenCodeOverflowMenuEntry] {
-        HomeMenu.entries(features: [], openSettings: openSettings)
+        HomeMenu.entries(features: [
+            OpenCodeOverflowMenuEntry(
+                id: "homeMenuWorktrees",
+                title: "worktrees.title",
+                subtitle: .verbatim(WorktreesCopy.menuSubtitle(viewModel.homeWorktreesFeed.snapshot)),
+                icon: .callSplit,
+                accessibilityIdentifier: "homeMenuWorktrees",
+                action: openWorktrees
+            ),
+        ], openSettings: openSettings)
+    }
+
+    private func openWorktrees() {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeOpenWorktrees
+        )
+        homeRoutes.append(.worktrees)
     }
 
     private func handleTerminalTap() {

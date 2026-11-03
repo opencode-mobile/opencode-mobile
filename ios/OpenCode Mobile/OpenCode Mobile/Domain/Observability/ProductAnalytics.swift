@@ -130,6 +130,7 @@ enum ProductAnalytics {
 
         static let homeOpenSettings = "home_open_settings"
         static let homeOpenMenu = "home_open_menu"
+        static let homeOpenWorktrees = "home_open_worktrees"
         static let homeOpenTerminal = "home_open_terminal"
         static let homePullToRefresh = "home_pull_to_refresh"
         static let homeOpenSession = "home_open_session"

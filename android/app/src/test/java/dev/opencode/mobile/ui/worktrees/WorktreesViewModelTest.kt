@@ -180,6 +180,15 @@ class WorktreesViewModelTest {
         }
 
     @Test
+    fun menuCountsWorktreesAndTheProjectsThatHaveThem() {
+        val snapshot = feed().snapshot.value
+
+        assertEquals(2, snapshot.worktreeCount)
+        assertEquals(1, snapshot.projectsWithWorktrees)
+        assertEquals(0, HomeWorktreesSnapshot().worktreeCount)
+    }
+
+    @Test
     fun theMainCheckoutCannotBeRemoved() =
         runTest(dispatcher) {
             val model = model(feed())

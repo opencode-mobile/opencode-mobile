@@ -130,6 +130,11 @@ struct WorktreesViewModelTests {
         #expect(model.closeToken == 2)
     }
 
+    @Test func menuSubtitleCountsWorktreesAcrossProjects() {
+        #expect(WorktreesCopy.menuSubtitle(makeFeed().snapshot) == "2 across 1 project")
+        #expect(WorktreesCopy.menuSubtitle(HomeWorktreesSnapshot()) == "None")
+    }
+
     @Test func theMainCheckoutCannotBeRemoved() {
         let model = makeModel(makeFeed())
 

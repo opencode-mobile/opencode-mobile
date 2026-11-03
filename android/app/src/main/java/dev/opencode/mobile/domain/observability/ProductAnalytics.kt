@@ -126,6 +126,7 @@ object ProductAnalytics {
         // Home
         const val HOME_OPEN_SETTINGS = "home_open_settings"
         const val HOME_OPEN_MENU = "home_open_menu"
+        const val HOME_OPEN_WORKTREES = "home_open_worktrees"
         const val HOME_OPEN_TERMINAL = "home_open_terminal"
         const val HOME_PULL_TO_REFRESH = "home_pull_to_refresh"
         const val HOME_OPEN_SESSION = "home_open_session"

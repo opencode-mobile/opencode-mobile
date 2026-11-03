@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -69,6 +70,7 @@ import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
@@ -108,6 +110,7 @@ import dev.opencode.mobile.ui.worktree.WorktreeCreateFormState
 import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
 import dev.opencode.mobile.ui.worktree.WorktreeCreateTags
 import dev.opencode.mobile.ui.worktree.worktreeCreateBackAction
+import dev.opencode.mobile.ui.worktrees.WorktreesTags
 
 /** Long-press session actions on home: sheet, rename/fork dialogs, delete confirm. */
 data class HomeSessionActionsCallbacks(
@@ -133,6 +136,7 @@ data class HomeSessionActionsCallbacks(
 fun MainScreen(
     onSettingsClick: () -> Unit,
     onTerminalClick: () -> Unit = {},
+    onWorktreesClick: () -> Unit = {},
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnectionClick: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit,
     onConnectClick: () -> Unit,
@@ -197,6 +201,7 @@ fun MainScreen(
             ),
         onSettingsClick = onSettingsClick,
         onTerminalClick = onTerminalClick,
+        onWorktreesClick = onWorktreesClick,
         onSessionClick = onSessionClick,
         onRetryProbe = viewModel::retryProbe,
         onEditConnection = { viewModel.requestEditConnection(onEditConnectionClick) },
@@ -263,6 +268,7 @@ internal fun MainScreen(
     removalSnackbar: OpenCodeSnackbarMessage?,
     onSettingsClick: () -> Unit,
     onTerminalClick: () -> Unit = {},
+    onWorktreesClick: () -> Unit = {},
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnection: () -> Unit,
     onConnectClick: () -> Unit,
@@ -326,10 +332,26 @@ internal fun MainScreen(
 
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     var homeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    val loadedWorktrees = remember(uiState) { (uiState as? MainScreenUiState.Loaded)?.worktreesSnapshot() }
     // Feature entries go in `features`, top to bottom; HomeMenu adds Settings last.
     val homeMenuEntries =
         HomeMenu.entries(
-            features = emptyList(),
+            features =
+                listOf(
+                    OpenCodeOverflowMenuEntry(
+                        title = stringResource(R.string.worktrees_title),
+                        icon = OpenCodeIcons.CallSplit,
+                        subtitle = loadedWorktrees?.let { worktreesMenuSubtitle(it) },
+                        onClick = {
+                            ProductAnalytics.logUserAction(
+                                screenId = ProductAnalytics.Screen.HOME,
+                                actionId = ProductAnalytics.Action.HOME_OPEN_WORKTREES,
+                            )
+                            onWorktreesClick()
+                        },
+                        testTag = WorktreesTags.MENU_ENTRY,
+                    ),
+                ),
             settingsTitle = stringResource(R.string.common_settings),
             onSettingsClick = {
                 ProductAnalytics.logUserAction(
@@ -1212,6 +1234,19 @@ internal fun homeScopeId(
 /** Rows for every Home project, one per session id. */
 internal fun MainScreenUiState.Loaded.homeSessions(worktreesEnabled: Boolean = true): List<SessionListSession> =
     homeSessionListSessions(projects, sections, home.extraSessions, worktreesEnabled, home.removedWorktrees)
+
+/** ⋯ menu subtitle of Worktrees: "N across M projects", or None. */
+@Composable
+private fun worktreesMenuSubtitle(snapshot: HomeWorktreesSnapshot): String {
+    val count = snapshot.worktreeCount
+    if (count == 0) return stringResource(R.string.worktrees_menu_none)
+    val projects = snapshot.projectsWithWorktrees
+    return stringResource(
+        R.string.worktrees_menu_subtitle,
+        count,
+        pluralStringResource(R.plurals.home_project_count, projects, projects),
+    )
+}
 
 /** Home's projects and sessions for the Worktrees screen. */
 internal fun MainScreenUiState.Loaded.worktreesSnapshot(): HomeWorktreesSnapshot =

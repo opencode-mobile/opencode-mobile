@@ -60,6 +60,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 object WorktreesTags {
     const val LIST = "worktreesList"
+    const val MENU_ENTRY = "homeMenuWorktrees"
 
     fun row(directory: String) = "worktreeRow:$directory"
 
