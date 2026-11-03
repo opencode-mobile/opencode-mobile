@@ -19,6 +19,7 @@ import dev.opencode.mobile.domain.shell.AgentShellStatus
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeChoiceBadge
 import dev.opencode.mobile.ui.sessionchat.SessionChatBackgroundWork
+import dev.opencode.mobile.ui.sessionchat.SessionChatBackgroundWorkTab
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagent
 import dev.opencode.mobile.ui.sessionchat.SessionChatSubagentStatus
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatBackgroundWorkList
@@ -31,6 +32,8 @@ fun BackgroundWorkPillGalleryScreen(modifier: Modifier = Modifier) {
     var showSubagents by rememberSaveable { mutableStateOf(true) }
     var showShells by rememberSaveable { mutableStateOf(true) }
     var log by remember { mutableStateOf("Tap the pill or a row") }
+    var tab by rememberSaveable { mutableStateOf(SessionChatBackgroundWorkTab.Running) }
+    var doneSeen by rememberSaveable { mutableStateOf(false) }
     // Fixed so the running timers tick instead of restarting on every recomposition.
     val openedAtMs = remember { System.currentTimeMillis() }
     val subagents =
@@ -65,6 +68,12 @@ fun BackgroundWorkPillGalleryScreen(modifier: Modifier = Modifier) {
                 shells = shells,
                 onOpenSubagent = { log = "Opened ${it.agentName} · ${it.title.orEmpty()}" },
                 onOpenShell = { log = "Opened shell · ${it.command}" },
+                tab = tab,
+                onTabSelected = {
+                    tab = it
+                    if (it == SessionChatBackgroundWorkTab.Done) doneSeen = true
+                },
+                doneUnseen = showSubagents && !doneSeen,
             )
         }
         Text(
@@ -86,6 +95,9 @@ private fun gallerySubagents(
         status: SessionChatSubagentStatus,
         startedAgoMs: Long,
         finishedAgoMs: Long? = null,
+        currentStep: String? = null,
+        toolCount: Int? = null,
+        result: String? = null,
     ) = SessionChatSubagent(
         id = id,
         childSessionId = "ses-$id",
@@ -94,6 +106,10 @@ private fun gallerySubagents(
         status = status,
         startedAtMs = nowMs - startedAgoMs,
         finishedAtMs = finishedAgoMs?.let { nowMs - it },
+        agentTag = SessionChatBackgroundWork.agentTag(agent),
+        currentStep = currentStep,
+        toolCount = toolCount,
+        result = result,
     )
     val general =
         row(
@@ -102,17 +118,45 @@ private fun gallerySubagents(
             "Run the test suite",
             if (needsInput) SessionChatSubagentStatus.WaitingForInput else SessionChatSubagentStatus.Running,
             startedAgoMs = 95_000,
+            currentStep = "Running npm test",
+            toolCount = 4,
         )
     val running =
         listOf(
-            row("prt-2", "explore", "Find the session store", SessionChatSubagentStatus.Running, startedAgoMs = 42_000),
-            row("prt-3", "explore", "Map the settings screens", SessionChatSubagentStatus.Running, startedAgoMs = 18_000),
+            row(
+                "prt-2",
+                "explore",
+                "Find the session store",
+                SessionChatSubagentStatus.Running,
+                startedAgoMs = 42_000,
+                currentStep = "Searching SessionStore",
+                toolCount = 7,
+            ),
+            row("prt-3", "general", "Map the settings screens", SessionChatSubagentStatus.Running, startedAgoMs = 18_000),
         )
     val finished =
         listOf(
-            row("prt-4", "review", "Review the diff", SessionChatSubagentStatus.Done, 300_000, finishedAgoMs = 220_000),
-            row("prt-5", "general", "Migrate the fixtures", SessionChatSubagentStatus.Failed, 400_000, finishedAgoMs = 380_000),
-            row("prt-6", "explore", "Profile the parser", SessionChatSubagentStatus.Stopped, 500_000, finishedAgoMs = 470_000),
+            row(
+                "prt-4",
+                "review",
+                "Review the diff",
+                SessionChatSubagentStatus.Done,
+                300_000,
+                finishedAgoMs = 220_000,
+                toolCount = 12,
+                result = "No blocking issues; two nits in the parser",
+            ),
+            row(
+                "prt-5",
+                "general",
+                "Migrate the fixtures",
+                SessionChatSubagentStatus.Failed,
+                400_000,
+                finishedAgoMs = 380_000,
+                result = "Rate limited",
+            ),
+            row("prt-6", "explore", "Profile the parser", SessionChatSubagentStatus.Stopped, 500_000, finishedAgoMs = 470_000, result = "Stopped"),
+            row("prt-7", "general", "Summarise the README", SessionChatSubagentStatus.Done, 600_000, result = "Three sections, no setup steps"),
         )
     return if (needsInput) listOf(general) + running + finished else running + general + finished
 }

@@ -38,6 +38,11 @@ final class SessionChatViewModel {
     private var lastWorkingLamp: String?
     private var workingChrome = WorkingTurnIndicator.Chrome.unmounted
     private var workingHold: WorkingTurnIndicator.Hold?
+    /// Done rows of the background work panel the user has seen (#966); nil until the first
+    /// rows of the open session, which count as seen.
+    private var seenDoneSubagentIDs: Set<String>?
+    /// The background work panel shows its Done tab, so finishes are seen as they land.
+    private var backgroundWorkDoneVisible = false
     /// When subagents seen working finished live, keyed by tool part id, for rows with no server time.
     private var subagentFinishTimes: [String: Int64] = [:]
     /// When the connection last became live; nil while it is not. Rows published before it
@@ -1418,6 +1423,14 @@ final class SessionChatViewModel {
         return true
     }
 
+    /// The background work panel shows (or stops showing) its Done tab (#966). While it
+    /// shows, every finished row counts as seen and the tab's dot clears.
+    func setBackgroundWorkDoneVisible(_ visible: Bool) {
+        guard backgroundWorkDoneVisible != visible else { return }
+        backgroundWorkDoneVisible = visible
+        if visible { publishUiState() }
+    }
+
     /// Opens the output sheet of a running shell from the background work panel.
     func openShellOutput(id: String) {
         ProductAnalytics.logUserAction(
@@ -2057,6 +2070,12 @@ final class SessionChatViewModel {
         )
         schedulePendingPromptsWake(pendingResolution.wakeAfterMs)
         let subagents = resolveSubagents(inboxState: inboxState, infoState: infoState)
+        let seenDone = SessionChatBackgroundWork.seenDoneIDs(
+            previous: seenDoneSubagentIDs,
+            subagents: subagents,
+            viewingDone: backgroundWorkDoneVisible
+        )
+        seenDoneSubagentIDs = seenDone
         let loadedMessages = timeline.loadedMessages()
         if loadedMessages != shellTranscript {
             shellTranscript = loadedMessages
@@ -2106,6 +2125,7 @@ final class SessionChatViewModel {
             sessionTodoTotalCount: inboxState.sessionTodos.count,
             subagents: subagents,
             backgroundWorkPill: SessionChatBackgroundWork.pill(for: subagents, shells: runningShells),
+            backgroundWorkDoneUnseen: SessionChatBackgroundWork.hasUnseenDone(subagents, seenDoneIDs: seenDone),
             shells: runningShells,
             shellOutput: shellsState.output,
             connectionStatus: infoState.connectionStatus,

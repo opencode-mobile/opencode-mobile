@@ -20,6 +20,7 @@ import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionTodo
 import dev.opencode.mobile.domain.session.SessionTodoStatus
 import dev.opencode.mobile.domain.session.VcsFileStatus
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -330,6 +331,7 @@ object PlaygroundContent {
         status: ToolStatus,
         startMs: Long,
         output: String? = null,
+        childTools: List<JsonObject> = emptyList(),
     ) = tool(
         id = id,
         name = "task",
@@ -342,9 +344,33 @@ object PlaygroundContent {
                 put("subagent_type", agent)
             },
         output = output,
-        metadata = buildJsonObject { put("sessionId", childSessionId) },
+        metadata =
+            buildJsonObject {
+                put("sessionId", childSessionId)
+                // Classic v1 lists the child's tool calls here (#966).
+                if (childTools.isNotEmpty()) put("summary", JsonArray(childTools))
+            },
         title = description,
     )
+
+    /** One child tool call in a task's `metadata.summary`, as classic v1 reports it. */
+    fun childToolCall(
+        id: String,
+        tool: String,
+        input: JsonObject,
+        running: Boolean = false,
+    ): JsonObject =
+        buildJsonObject {
+            put("id", id)
+            put("tool", tool)
+            put(
+                "state",
+                buildJsonObject {
+                    put("status", if (running) "running" else "completed")
+                    put("input", input)
+                },
+            )
+        }
 
     fun image(
         id: String,

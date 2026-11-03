@@ -116,6 +116,47 @@ export const P1 = [
     checkVariant: "quick",
   },
   {
+    id: "subagent-running-and-done",
+    priority: "P1",
+    title: "Three subagents: one done, one failed, one still running",
+    category: "subagent",
+    prompt: "Map the invoice flow, check the tax rules and profile formatMoney with subagents.",
+    expect: "Open the background work panel. Running 1: \"Profile formatMoney\" with a live timer. Done 2, newest first: \"Check the tax rules\" with ! and the unknown-agent error in red, and \"Map invoice flow\" with ✓, an explore tag, the first result line, its run time and when it finished. About 40s after the run starts the profile subagent finishes: Running empties (\"Nothing running…\") and Done gets a dot until you open it.",
+    modelCalls: [
+      {
+        steps: [
+          say("I'll split this across three subagents."),
+          {
+            op: "tool",
+            name: subagentTool,
+            child: "map",
+            input: {
+              v1: { description: "Map invoice flow", prompt: "Trace how an invoice goes from parse to render.", subagent_type: "explore" },
+              v2: { description: "Map invoice flow", prompt: "Trace how an invoice goes from parse to render.", agent: "explore" },
+            },
+          },
+          {
+            // No such agent: the call fails on both servers, giving a failed row.
+            op: "tool",
+            name: subagentTool,
+            input: {
+              v1: { description: "Check the tax rules", prompt: "Check how tax is rounded per line.", subagent_type: "auditor" },
+              v2: { description: "Check the tax rules", prompt: "Check how tax is rounded per line.", agent: "auditor" },
+            },
+          },
+          { op: "tool", name: subagentTool, child: "profile", input: subagent("Profile formatMoney", "Time 1e6 formatMoney calls.") },
+        ],
+      },
+      { child: "map", steps: [{ op: "tool", name: "grep", input: { pattern: "parseInvoice|renderInvoice", include: "*.ts" } }] },
+      { child: "map", steps: [{ op: "wait", ms: 2500 }, say("parse → validate → totalCents → render.\n\nEach step lives in its own module under `src/`.", 12)] },
+      { child: "profile", steps: [{ op: "wait", gate: "profile-finish" }, say("formatMoney: 2.1M ops/sec.", 12)] },
+      { steps: [say("The flow is mapped and formatMoney is fast; the tax check failed, so I'll retry it.", 12)] },
+    ],
+    automation: [{ on: "harness.run.started", delayMs: 40000, do: "release", gate: "profile-finish" }],
+    variants: { quick: [{ on: "harness.run.started", delayMs: 6000, do: "release", gate: "profile-finish" }] },
+    checkVariant: "quick",
+  },
+  {
     id: "permission-in-child-session",
     priority: "P1",
     title: "Permission raised inside a subagent",

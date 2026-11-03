@@ -1583,7 +1583,7 @@ nonisolated enum SessionChatTimelineBlocks {
                     description: description,
                     childSessionId: card.childSessionId,
                     toolsSoFar: toolsSoFar,
-                    result: status == .completed ? childResult(tool) : nil
+                    result: status == .completed ? SessionChatSubagentResult.firstLine(tool.output) : nil
                 ),
                 card: card
             )
@@ -1638,27 +1638,6 @@ nonisolated enum SessionChatTimelineBlocks {
         case .completed: .completed
         case .error: .failed
         }
-    }
-
-    /// First result line of a finished child session, without the `task_id`
-    /// header, the result tags or wrapper tags such as `<subagent sessionID="…">`.
-    private static func childResult(_ tool: ToolPart) -> String? {
-        guard let output = tool.output, !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return nil
-        }
-        var body = Substring(output)
-        if let open = body.range(of: "<task_result>") { body = body[open.upperBound...] }
-        if let close = body.range(of: "</task_result>") { body = body[..<close.lowerBound] }
-        return body
-            .split(whereSeparator: \.isNewline)
-            .lazy
-            .map { line -> String in
-                var trimmed = line.trimmingCharacters(in: .whitespaces)
-                while let first = trimmed.first, "#*- ".contains(first) { trimmed.removeFirst() }
-                while trimmed.last == "*" { trimmed.removeLast() }
-                return trimmed
-            }
-            .first { !$0.isEmpty && !$0.hasPrefix("task_id:") && !$0.hasPrefix("<") }
     }
 
     /// Tools a child session reported in its task metadata (`summary`), if any.

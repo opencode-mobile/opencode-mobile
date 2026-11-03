@@ -814,17 +814,6 @@ object SessionChatTimelineBlocks {
             .filter(::isVisibleTool)
             .mapNotNull(::toStep)
 
-    /** First result line of a finished subagent, without the `task_id` header or result tags. */
-    private fun childResult(tool: MessagePart.Tool): String? {
-        val output = tool.output?.takeIf { it.isNotBlank() } ?: return null
-        val body = output.substringAfter("<task_result>", output).substringBefore("</task_result>")
-        return body
-            .lineSequence()
-            .map { it.trim().trimStart('#', '*', '-', ' ').trimEnd('*') }
-            // Skip the task_id header and wrapper tags such as `<subagent sessionID="…">`.
-            .firstOrNull { it.isNotEmpty() && !it.startsWith("task_id:") && !it.startsWith("<") }
-    }
-
     private fun thoughtStep(
         partId: String,
         part: MessagePart.Reasoning,
@@ -880,7 +869,7 @@ object SessionChatTimelineBlocks {
                         description = description,
                         childSessionId = childSessionId(tool),
                         toolsSoFar = toolsSoFar,
-                        result = childResult(tool).takeIf { status == SessionChatStepStatus.Completed },
+                        result = SessionChatSubagentResult.firstLine(tool.output).takeIf { status == SessionChatStepStatus.Completed },
                     ),
                 card = card,
             )
