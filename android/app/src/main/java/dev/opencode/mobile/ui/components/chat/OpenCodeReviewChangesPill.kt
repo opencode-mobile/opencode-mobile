@@ -134,7 +134,8 @@ fun OpenCodeReviewChangesPill(
         enabled = enabled,
         modifier =
             modifier
-                .semantics { contentDescription = summary.accessibilityLabel },
+                .semantics { contentDescription = summary.accessibilityLabel }
+                .openCodeControl(enabled),
         shape = ReviewChangesPillShape,
         color = OpenCodeFloatingPillStyle.fill(enabled),
         contentColor = contentColor,

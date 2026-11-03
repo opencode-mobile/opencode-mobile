@@ -82,7 +82,7 @@ private fun HunkNavigationButton(
     val pressed by interactionSource.collectIsPressedAsState()
     IconButton(
         onClick = onClick,
-        modifier = Modifier.size(44.dp),
+        modifier = Modifier.size(44.dp).openCodeControl(enabled),
         enabled = enabled,
         interactionSource = interactionSource,
         colors =

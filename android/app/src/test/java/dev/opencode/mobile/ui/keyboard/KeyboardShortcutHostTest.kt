@@ -131,12 +131,12 @@ class KeyboardShortcutHostTest {
         val toggle = host.register(KeyboardShortcutAction.ToggleSidebar) {}
         host.register(KeyboardShortcutAction.ToggleSidebar) {}
         assertEquals(
-            listOf(KeyboardShortcutAction.ToggleSidebar, KeyboardShortcutAction.FocusComposer),
+            listOf(KeyboardShortcutAction.FocusComposer, KeyboardShortcutAction.ToggleSidebar),
             host.activeActions(),
         )
         host.unregister(toggle)
         assertEquals(
-            listOf(KeyboardShortcutAction.ToggleSidebar, KeyboardShortcutAction.FocusComposer),
+            listOf(KeyboardShortcutAction.FocusComposer, KeyboardShortcutAction.ToggleSidebar),
             host.activeActions(),
         )
     }

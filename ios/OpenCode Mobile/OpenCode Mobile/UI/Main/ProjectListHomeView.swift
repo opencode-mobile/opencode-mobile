@@ -65,6 +65,13 @@ struct ProjectListHomeView: View {
                     homePane
                 }
             }
+            // ⌘N, ⌘, and ⌘1–9 (#869). Closures read live Home state when they fire.
+            .openCodeKeyboardShortcut(.newSession, action: acceptsNewSessionShortcut ? { newSessionFromKeyboard() } : nil)
+            .openCodeKeyboardShortcut(.settings, action: acceptsHomeShortcuts ? { openSettingsFromKeyboard() } : nil)
+            .openCodeProjectShortcuts(
+                titles: liveProjectTabs.map(\.dockTitle),
+                select: acceptsHomeShortcuts ? { index in selectProjectFromKeyboard(index) } : nil
+            )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(OpenCodeColors.backgroundBase)
             // Custom OpenCodeTopBar owns chrome; keep the system bar out of this stack
@@ -710,6 +717,86 @@ struct ProjectListHomeView: View {
                 }
             }
         }
+    }
+
+    /// Settings and Switch Project apply while Home itself (or its split) is the
+    /// visible screen.
+    private var acceptsHomeShortcuts: Bool {
+        isHomeVisible && connectionSetupPresentation == nil
+    }
+
+    /// New Session also applies over a chat pushed from Home (same project).
+    private var acceptsNewSessionShortcut: Bool {
+        scenePhase == .active && !showSettings && connectionSetupPresentation == nil &&
+            HomeKeyboardShortcutContext.acceptsNewSession(topRouteIsSession: homeRoutes.last.map { $0.session != nil })
+    }
+
+    /// Home's filter state as it is now, for shortcuts that fire later than the render.
+    private var liveHomeFilter: (projects: [HomeProject], tabs: [SessionListFilterTab], selectedId: String, worktreesEnabled: Bool) {
+        let worktreesEnabled = homeDisplayPreferences.showsWorktrees
+        let projects = homeSections.isEmpty ? [] : viewModel.homeProjects
+        let sessions = homeSections.crossProjectSessionListSessions(projects: projects, worktreesEnabled: worktreesEnabled)
+        let tabs = homeFilterTabs(projects: projects, sessions: sessions)
+        let selectedId = SessionListHomeChrome.resolvedFilterId(
+            selectedId: selectedSessionFilterId,
+            tabs: tabs,
+            projects: projects,
+            worktreesEnabled: worktreesEnabled
+        )
+        return (projects, tabs, selectedId, worktreesEnabled)
+    }
+
+    private var liveProjectTabs: [SessionListFilterTab] {
+        HomeKeyboardShortcutContext.projectTabs(liveHomeFilter.tabs)
+    }
+
+    /// ⌘N: a new session in the open chat's project, else the dock's selection,
+    /// exactly as the New session button.
+    private func newSessionFromKeyboard() {
+        // A subagent chat pushed over the open chat would hide the new session.
+        NotificationCenter.default.post(name: .openCodeNewSessionFromKeyboard, object: nil)
+        let openChat = HomeKeyboardShortcutContext.openChat(
+            topRoute: homeRoutes.last?.session,
+            splitSelection: isSplitLayout ? selectedSession : nil
+        )
+        if let directory = HomeKeyboardShortcutContext.newSessionDirectory(
+            openChatDirectory: openChat?.directory,
+            openChatWorktree: openChat?.worktree
+        ) {
+            Task { await viewModel.createSession(in: directory) }
+            return
+        }
+        let filter = liveHomeFilter
+        switch SessionListHomeChrome.newSessionAction(
+            projects: filter.projects,
+            selectedFilterId: filter.selectedId,
+            worktreesEnabled: filter.worktreesEnabled
+        ) {
+        case .none:
+            break
+        case .presentPicker:
+            presentNewSessionProjectPicker()
+        case let .create(directory):
+            Task { await viewModel.createSession(in: directory) }
+        }
+    }
+
+    private func openSettingsFromKeyboard() {
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeOpenSettings
+        )
+        showSettings = true
+    }
+
+    private func selectProjectFromKeyboard(_ index: Int) {
+        let tabs = liveProjectTabs
+        guard tabs.indices.contains(index) else { return }
+        ProductAnalytics.logUserAction(
+            screenId: ProductAnalytics.Screen.home,
+            actionId: ProductAnalytics.Action.homeSelectSessionFilter
+        )
+        selectedSessionFilterId = tabs[index].id
     }
 
     /// Split-view shortcuts apply while the split is the visible screen: nothing
@@ -1513,4 +1600,39 @@ nonisolated private final class PreviewForegroundEventStream: ForegroundEventStr
 private struct SplitSessionSelection {
     let session: SessionListItem
     let viewModel: SessionChatViewModel
+}
+
+extension Notification.Name {
+    /// ⌘N is opening a new session: chats close the subagent session pushed over them.
+    static let openCodeNewSessionFromKeyboard = Notification.Name("OpenCodeNewSessionFromKeyboard")
+}
+
+/// Rules for Home's keyboard shortcuts.
+nonisolated enum HomeKeyboardShortcutContext {
+    /// ⌘1–9 address the dock's projects in order: no All, no worktree scopes.
+    static func projectTabs(_ tabs: [SessionListFilterTab]) -> [SessionListFilterTab] {
+        tabs.filter { !$0.isAll && !$0.isWorktree }
+    }
+
+    /// New Session fires on Home itself or over a chat pushed from it, not over
+    /// another pushed screen (terminal). `topRouteIsSession` is nil with nothing pushed.
+    static func acceptsNewSession(topRouteIsSession: Bool?) -> Bool {
+        topRouteIsSession ?? true
+    }
+
+    /// The chat ⌘N takes its project from: the chat pushed on Home, else the split's
+    /// selection. A child (subagent) session opens inside its parent's chat, so the
+    /// parent decides; a child opened as its own route decides itself. Either way
+    /// the new session is a top-level session in that directory.
+    static func openChat(topRoute: SessionListItem?, splitSelection: SessionListItem?) -> SessionListItem? {
+        topRoute ?? splitSelection
+    }
+
+    /// The open chat's directory, so the new session joins its project (and
+    /// worktree). Nil with no chat open: the dock's selection decides.
+    static func newSessionDirectory(openChatDirectory: String?, openChatWorktree: String?) -> String? {
+        if let openChatDirectory, !openChatDirectory.isEmpty { return openChatDirectory }
+        if let openChatWorktree, !openChatWorktree.isEmpty { return openChatWorktree }
+        return nil
+    }
 }

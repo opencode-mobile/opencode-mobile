@@ -42,6 +42,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalUriHandler
@@ -559,7 +560,9 @@ val LocalOpenCodeUserScrollInProgress = staticCompositionLocalOf<() -> Boolean> 
 /**
  * Decides, one finished touch at a time, whether a touch on message text is a
  * tap that opens message actions. Long-press belongs to text selection, and
- * the first tap after a selection only dismisses it.
+ * the first tap after a selection only dismisses it. A mouse click is never a
+ * tap: like on a desktop it places, clears or (double-click) extends a
+ * selection, and a right-click opens message actions instead.
  */
 internal class MessageTextTapClassifier {
     private var selectionActive = false
@@ -569,11 +572,13 @@ internal class MessageTextTapClassifier {
         moved: Boolean,
         linkHandled: Boolean,
         startedDuringScroll: Boolean,
+        mouse: Boolean = false,
     ): Boolean {
         if (linkHandled) {
             selectionActive = false
             return false
         }
+        if (mouse) return false
         if (moved) return false
         if (!released) {
             selectionActive = true
@@ -626,13 +631,22 @@ private fun Modifier.opensMessageActionsOnTextTap(
     val onTextTapState = rememberUpdatedState(onTextTap)
     val userScrollInProgress = rememberUpdatedState(LocalOpenCodeUserScrollInProgress.current)
     if (onTextTap == null) return this
-    return pointerInput(Unit) {
+    // A secondary click opens the same message actions, with the code block it landed on; it
+    // consumes its gesture, so the tap detector below skips it.
+    return openCodeSecondaryClick {
+        val code = tapGate?.codeBlock
+        onTextTapState.value?.invoke(
+            if (code != null) OpenCodeMessageTapTarget.CodeBlock(code) else OpenCodeMessageTapTarget.Text,
+        )
+    }.pointerInput(Unit) {
         val classifier = MessageTextTapClassifier()
         awaitEachGesture {
             val down = awaitFirstDown(pass = PointerEventPass.Initial, requireUnconsumed = false)
-            // The parent sees Initial first, so this clears before a code block sets it.
+            // The parent sees Initial first, so this clears before a code block sets it. Also
+            // for a secondary click (already consumed), which reads the block on release.
             tapGate?.codeBlock = null
             tapGate?.codeBlockRipple = null
+            if (down.isConsumed) return@awaitEachGesture
             val startedDuringScroll = userScrollInProgress.value()
             val slop = viewConfiguration.touchSlop
             val slopSquared = slop * slop
@@ -665,6 +679,7 @@ private fun Modifier.opensMessageActionsOnTextTap(
                     moved = moved,
                     linkHandled = linkHandled,
                     startedDuringScroll = startedDuringScroll,
+                    mouse = down.type == PointerType.Mouse,
                 )
             if (!isTap) return@awaitEachGesture
             val code = tapGate?.codeBlock

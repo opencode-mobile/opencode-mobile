@@ -112,6 +112,7 @@ fun OpenCodeActionTile(
                 .clip(ActionTileShape)
                 .background(fill)
                 .defaultMinSize(minHeight = ActionTileMinHeight)
+                .openCodeFocusRing(ActionTileShape, enabled)
                 .clickable(
                     interactionSource = interactionSource,
                     indication = ripple(bounded = true),

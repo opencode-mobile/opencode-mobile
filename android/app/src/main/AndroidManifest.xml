@@ -11,6 +11,10 @@
     <uses-feature
         android:name="android.hardware.microphone"
         android:required="false" />
+    <!-- Chromebooks without a touchscreen: the app works with a keyboard and pointer. -->
+    <uses-feature
+        android:name="android.hardware.touchscreen"
+        android:required="false" />
 
     <queries>
         <intent>

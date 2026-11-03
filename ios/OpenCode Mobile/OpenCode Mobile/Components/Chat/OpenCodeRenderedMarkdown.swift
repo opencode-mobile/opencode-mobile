@@ -33,6 +33,35 @@ extension EnvironmentValues {
     }
 }
 
+/// Bounds of the code and diff blocks in a message that offers actions, so a
+/// secondary click on the message can tell which block it landed on.
+private struct MarkdownCodeBlockBoundsKey: PreferenceKey {
+    static let defaultValue: [(code: String, bounds: Anchor<CGRect>)] = []
+
+    static func reduce(
+        value: inout [(code: String, bounds: Anchor<CGRect>)],
+        nextValue: () -> [(code: String, bounds: Anchor<CGRect>)]
+    ) {
+        value.append(contentsOf: nextValue())
+    }
+}
+
+extension View {
+    /// A secondary click on a rendered message opens its actions with what the
+    /// pointer is over: a code or diff block offers its own copy, like a tap on it.
+    func openCodeMessageSecondaryClick(_ action: @escaping (OpenCodeMessageTapTarget) -> Void) -> some View {
+        overlayPreferenceValue(MarkdownCodeBlockBoundsKey.self) { blocks in
+            GeometryReader { proxy in
+                let frames = blocks.map { (code: $0.code, frame: proxy[$0.bounds]) }
+                Color.clear.openCodeSecondaryClick(at: { point in
+                    let block = frames.last { $0.frame.contains(point) }
+                    action(block.map { .codeBlock($0.code) } ?? .text)
+                })
+            }
+        }
+    }
+}
+
 struct OpenCodeRenderedMarkdown: View {
     let document: NativeMarkdownDocument
     let variant: OpenCodeRenderedMarkdownVariant
@@ -681,6 +710,7 @@ private struct MarkdownCodeBlockTapTarget: ViewModifier {
                         .allowsHitTesting(false)
                 }
                 .contentShape(RoundedRectangle(cornerRadius: 6))
+                .anchorPreference(key: MarkdownCodeBlockBoundsKey.self, value: .bounds) { [(code, $0)] }
                 .onTapGesture { open(tapAction) }
                 .onLongPressGesture { open(tapAction) }
                 .accessibilityAction(named: "Code block actions") { open(tapAction) }

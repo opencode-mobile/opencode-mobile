@@ -907,11 +907,13 @@ private struct SessionChatMessageActionsGestureModifier: ViewModifier {
             content
                 .environment(\.markdownCodeBlockTapAction) { code in onOpenMessageActions(.codeBlock(code)) }
                 .onLongPressGesture { onOpenMessageActions(.text) }
+                .openCodeMessageSecondaryClick(onOpenMessageActions)
                 .accessibilityLabel(Text(accessibilityLabel))
                 .accessibilityHint(Text("timeline.message.actions_hint_long_press"))
         } else {
             content
                 .onTapGesture { onOpenMessageActions(.text) }
+                .openCodeSecondaryClick { onOpenMessageActions(.text) }
                 .accessibilityLabel(Text(accessibilityLabel))
                 .accessibilityHint(Text("timeline.message.actions_hint"))
         }

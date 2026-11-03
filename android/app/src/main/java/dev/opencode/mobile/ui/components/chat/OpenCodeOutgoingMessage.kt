@@ -156,6 +156,8 @@ fun OpenCodeOutgoingMessage(
                                         // Dims the whole bubble (fill, plain text and markdown); the outline stays full.
                                         .alpha(if (isPending) PENDING_STEER_ALPHA else 1f)
                                         .clip(OutgoingMessageShape)
+                                        .openCodeFocusRing(OutgoingMessageShape)
+                                        .openCodeSecondaryClick(enabled = onLongClick != null) { onLongClick?.invoke() }
                                         .then(
                                             outgoingMessageInteractionModifier(
                                                 onClick = onClick,

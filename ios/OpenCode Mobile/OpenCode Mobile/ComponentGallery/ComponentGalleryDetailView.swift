@@ -196,6 +196,8 @@ struct ComponentGalleryDetailView: View {
             DiffStatGalleryView()
         case .inlineNotice:
             InlineNoticeGalleryView()
+        case .keyboardHint:
+            KeyboardHintGalleryView()
         case .codeSnippet:
             CodeSnippetGalleryView()
         case .sessionList:

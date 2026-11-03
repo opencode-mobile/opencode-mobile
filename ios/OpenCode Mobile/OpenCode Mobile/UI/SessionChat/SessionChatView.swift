@@ -73,6 +73,7 @@ struct SessionChatView: View {
     @State private var keyboardGlideAnimation: Animation?
     /// Bumped by the Focus Composer keyboard shortcut.
     @State private var composerFocusRequest = 0
+    @State private var keyboardInterruptOwner = UUID()
     /// False while another screen is pushed over this chat.
     @State private var isOnScreen = false
     /// This screen's lease on a view model it may share with the other Home layout.
@@ -889,6 +890,10 @@ struct SessionChatView: View {
             .onChange(of: toolGroupTarget != nil) { _, open in
                 if open { refuseRoute("Tool groups") { toolGroupTarget = nil } }
             }
+            .onReceive(NotificationCenter.default.publisher(for: .openCodeNewSessionFromKeyboard)) { _ in
+                // ⌘N from a subagent chat: show the new session instead of the child.
+                childSessionTarget = nil
+            }
             .onChange(of: childSessionTarget != nil) { _, open in
                 if open { refuseRoute("Opening a subagent") { childSessionTarget = nil } }
             }
@@ -1034,6 +1039,54 @@ struct SessionChatView: View {
                 .focusComposer,
                 action: acceptsComposerFocusShortcut ? { composerFocusRequest += 1 } : nil
             )
+            .openCodeKeyboardShortcut(
+                .commandPalette,
+                action: acceptsComposerFocusShortcut ? { handleComposerAction(.openCommands) } : nil
+            )
+            .openCodeKeyboardShortcut(
+                .modelPicker,
+                action: acceptsComposerFocusShortcut ? { handleComposerAction(.selectModel) } : nil
+            )
+            .modifier(promptChordPublisher(.promptPrimary))
+            .modifier(promptChordPublisher(.promptAlwaysAllow))
+            .modifier(promptChordPublisher(.promptReject))
+            // Esc twice interrupts the running turn, like the TUI; same path as Stop.
+            .onChange(of: isOnScreen && keyboardInterruptAvailable, initial: true) { _, available in
+                OpenCodeEscapeRouter.shared.setInterrupt(
+                    keyboardInterruptOwner,
+                    interrupt: available ? { Task { await viewModel.abortSession() } } : nil
+                )
+            }
+            .onDisappear {
+                OpenCodeEscapeRouter.shared.setInterrupt(keyboardInterruptOwner, interrupt: nil)
+            }
+    }
+
+    /// ⌘⏎, ⌥⌘⏎, ⌘⌫ on the visible permission or question prompt, listed under the
+    /// title of what they do now. They read the prompt when they fire and press
+    /// the same button path, so a disabled button or a reply in flight does nothing.
+    private func promptChordPublisher(_ shortcut: OpenCodeKeyboardShortcut) -> SessionChatPromptChordPublisher {
+        let applies = isOnScreen && (composerKind == .permission || composerKind == .question) &&
+            !showPhotosPicker && !showFilesPicker
+        let outcome = applies ? OpenCodePromptChordRule.outcome(shortcut, state: composerState.promptChordState) : nil
+        return SessionChatPromptChordPublisher(
+            shortcut: shortcut,
+            title: outcome?.title,
+            action: outcome == nil ? nil : {
+                let state = composerState
+                guard let outcome = OpenCodePromptChordRule.outcome(shortcut, state: state.promptChordState),
+                      let action = state.action(for: outcome)
+                else { return }
+                handleComposerAction(action)
+            }
+        )
+    }
+
+    /// The session is busy and Stop is enabled, so Esc can interrupt it.
+    private var keyboardInterruptAvailable: Bool {
+        viewModel.uiState.sessionStatusLabel != nil &&
+            !viewModel.uiState.isAborting &&
+            viewModel.uiState.canMutate
     }
 
     private func sessionChatDialogs(_ content: some View) -> some View {
@@ -1632,7 +1685,8 @@ struct SessionChatView: View {
         isOnScreen && composerKind == .prompt && !showPhotosPicker && !showFilesPicker
     }
 
-    private var composer: some View {
+    /// The composer as it shows now. Prompt chords read it when they fire.
+    private var composerState: OpenCodeSessionComposerState {
         let composer = viewModel.uiState.composer
         let isSending = viewModel.uiState.isSending
         let kind = composerKind
@@ -1731,6 +1785,29 @@ struct SessionChatView: View {
             // A side question answers with the session's own model, so it needs no model pick.
             let sideQuestionSendEnabled =
                 !composer.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            let sessionReady =
+                !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
+                viewModel.uiState.timeline != .creating &&
+                viewModel.uiState.composerEnabled &&
+                viewModel.uiState.pendingSend == nil
+            let sendEnabled = (sideQuestionMode ? sideQuestionSendEnabled : promptSendEnabled) && sessionReady
+            // Return does not send over an open @ or / suggestion list. The draft text is
+            // checked live when Return arrives; the model's copy can lag queued keys.
+            let suggestionsOpen = viewModel.uiState.atSuggestionsVisible || viewModel.uiState.slashSuggestionsVisible
+            let returnKeyRule: OpenCodeReturnKeyRule = if composer.isShellMode && !sideQuestionMode {
+                .fixed(sendEnabled && !suggestionsOpen)
+            } else {
+                OpenCodeReturnKeyRule(
+                    readyIgnoringText: sessionReady && !suggestionsOpen && (sideQuestionMode || (
+                        !composer.hasPendingUploads &&
+                            composer.selectedModel != nil &&
+                            composer.isModelSelectionReady &&
+                            !isSending &&
+                            !blockedSideQuestion
+                    )),
+                    hasOtherContent: !sideQuestionMode && !composer.attachments.isEmpty
+                )
+            }
             state = .prompt(
                 .init(
                     text: composer.text,
@@ -1744,12 +1821,8 @@ struct SessionChatView: View {
                     selectedModeLabel: composer.selectedModeLabel,
                     selectedVariantLabel: composer.selectedVariantLabel,
                     showVariant: composer.canSelectVariant,
-                    sendEnabled:
-                        (sideQuestionMode ? sideQuestionSendEnabled : promptSendEnabled) &&
-                        !OptimisticSessionCreate.isPlaceholder(viewModel.uiState.sessionID) &&
-                        viewModel.uiState.timeline != .creating &&
-                        viewModel.uiState.composerEnabled &&
-                        viewModel.uiState.pendingSend == nil,
+                    sendEnabled: sendEnabled,
+                    returnKeyRule: returnKeyRule,
                     attachEnabled: promptAttachEnabled,
                     showStop: viewModel.uiState.sessionStatusLabel != nil,
                     stopEnabled: !viewModel.uiState.isAborting &&
@@ -1757,11 +1830,19 @@ struct SessionChatView: View {
                     followUpDelivery: composer.supportsFollowUpDelivery && !sideQuestionMode ? composer.followUpDelivery : nil,
                     showDictationButton: dictationSupport.showsMic,
                     shellMode: composer.isShellMode && !sideQuestionMode,
-                    sideQuestionMode: sideQuestionMode
+                    sideQuestionMode: sideQuestionMode,
+                    history: OpenCodePromptHistory.entries(viewModel.uiState.messages.map { row in
+                        OpenCodePromptHistory.Message(isUser: row.role == .user, text: row.text, isPending: row.isPending)
+                    })
                 )
             )
         }
+        return state
+    }
 
+    private var composer: some View {
+        let kind = composerKind
+        let state = composerState
         let liveRetry = viewModel.uiState.retryCard
         let liveBody = SessionChatTimelineBlocks.newestLiveRetryProviderBody(
             in: viewModel.uiState.messages
@@ -1793,108 +1874,113 @@ struct SessionChatView: View {
             focusRequestToken: composerFocusRequest,
             dictation: kind == .prompt ? viewModel.uiState.dictation.map(composerDictation) : nil,
             attachmentDragActive: attachmentDropSummary != nil,
-            onAction: { action in
-                switch action {
-                case let .textChanged(text, selectionStart, _):
-                    viewModel.updateComposerText(text, cursor: selectionStart)
-                case .selectModel:
-                    guard !composer.modelOptions.isEmpty else {
-                        Task { await viewModel.retryModelCatalog() }
-                        return
-                    }
-                    logChatAction(ProductAnalytics.Action.composerOpenModelPicker)
-                    activeModelProviderID = composer.selectedModel?.option.providerID
-                    activePicker = .model
-                case .selectMode:
-                    logChatAction(ProductAnalytics.Action.composerOpenModePicker)
-                    activePicker = .mode
-                case .selectVariant:
-                    logChatAction(ProductAnalytics.Action.composerOpenVariantPicker)
-                    activePicker = .variant
-                case .attach:
-                    logChatAction(ProductAnalytics.Action.composerAttach)
-                    let sources = composerAttachmentSources
-                    if sources.showsSourceSheet {
-                        ProductAnalytics.logScreenView(
-                            screenId: ProductAnalytics.Screen.sessionAttachmentSource,
-                            presentation: ProductAnalytics.Presentation.sheet,
-                            trigger: ProductAnalytics.Trigger.present
-                        )
-                        showAttachmentSources = true
-                    } else if sources.photos {
-                        showPhotosPicker = true
-                    } else if sources.files {
-                        showFilesPicker = true
-                    }
-                case let .removeAttachment(id):
-                    viewModel.removeAttachment(id: id)
-                case let .pasteAttachments(providers):
-                    attachItemProviders(providers, source: .paste)
-                case .cancelRevert:
-                    viewModel.cancelRevert()
-                case .exitShellMode:
-                    viewModel.exitShellMode()
-                case .exitSideQuestionMode:
-                    viewModel.exitSideQuestionMode()
-                case .openCommands:
-                    viewModel.openCommands()
-                case .send:
-                    Task { await viewModel.sendPrompt() }
-                case .toggleFollowUp:
-                    viewModel.toggleFollowUp()
-                case .stop:
-                    Task { await viewModel.abortSession() }
-                case let .allowPermissionOnce(requestID, sessionID):
-                    Task { await viewModel.allowPermissionOnce(requestID: requestID, sessionID: sessionID) }
-                case let .denyPermission(requestID, sessionID):
-                    Task { await viewModel.denyPermission(requestID: requestID, sessionID: sessionID) }
-                case let .alwaysAllowPermission(requestID, sessionID):
-                    Task { await viewModel.alwaysAllowPermission(requestID: requestID, sessionID: sessionID) }
-                case let .hidePermission(requestID):
-                    viewModel.hidePermissionDock(requestID: requestID)
-                case let .hideQuestion(requestID):
-                    viewModel.hideQuestionDock(requestID: requestID)
-                case let .pageRequest(delta):
-                    if composerKind == .permission {
-                        viewModel.pagePermission(by: delta)
-                    } else {
-                        viewModel.pageQuestion(by: delta)
-                    }
-                case let .openRequestSession(sessionID):
-                    openRequestSession(sessionID: sessionID)
-                case let .toggleQuestionOption(requestID, sessionID, label):
-                    viewModel.toggleQuestionOption(requestID: requestID, sessionID: sessionID, label: label)
-                case let .toggleQuestionCustom(requestID, sessionID):
-                    viewModel.toggleQuestionCustom(requestID: requestID, sessionID: sessionID)
-                case let .questionCustomTextChanged(requestID, sessionID, text):
-                    viewModel.updateQuestionCustomText(requestID: requestID, sessionID: sessionID, text: text)
-                case let .questionBack(requestID, sessionID):
-                    viewModel.questionBack(requestID: requestID, sessionID: sessionID)
-                case let .questionNext(requestID, sessionID):
-                    viewModel.questionNext(requestID: requestID, sessionID: sessionID)
-                case let .submitQuestion(requestID, sessionID):
-                    Task { await viewModel.submitQuestion(requestID: requestID, sessionID: sessionID) }
-                case let .dismissQuestion(requestID, sessionID):
-                    Task { await viewModel.dismissQuestion(requestID: requestID, sessionID: sessionID) }
-                case .backToMainSession:
-                    logChatAction(ProductAnalytics.Action.chatBack)
-                    leaveSession()
-                case .beginDictation:
-                    Task { await beginComposerDictation() }
-                case .dictationCancel:
-                    viewModel.dictationCancel()
-                case .dictationInsert:
-                    viewModel.dictationInsert()
-                case .dictationOpenSettings:
-                    UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
-                case .dictationDownload:
-                    Task { await downloadDictationModel() }
-                case .dictationRetry:
-                    Task { await beginComposerDictation() }
-                }
-            },
+            interruptHintVisible: OpenCodeEscapeRouter.shared.interruptArmedAt != nil && keyboardInterruptAvailable,
+            onAction: { action in handleComposerAction(action) },
             status: status
         )
+    }
+
+    /// Composer buttons and keyboard chords both answer through here.
+    private func handleComposerAction(_ action: OpenCodeSessionComposerAction) {
+        let composer = viewModel.uiState.composer
+        switch action {
+        case let .textChanged(text, selectionStart, _):
+            viewModel.updateComposerText(text, cursor: selectionStart)
+        case .selectModel:
+            guard !composer.modelOptions.isEmpty else {
+                Task { await viewModel.retryModelCatalog() }
+                return
+            }
+            logChatAction(ProductAnalytics.Action.composerOpenModelPicker)
+            activeModelProviderID = composer.selectedModel?.option.providerID
+            activePicker = .model
+        case .selectMode:
+            logChatAction(ProductAnalytics.Action.composerOpenModePicker)
+            activePicker = .mode
+        case .selectVariant:
+            logChatAction(ProductAnalytics.Action.composerOpenVariantPicker)
+            activePicker = .variant
+        case .attach:
+            logChatAction(ProductAnalytics.Action.composerAttach)
+            let sources = composerAttachmentSources
+            if sources.showsSourceSheet {
+                ProductAnalytics.logScreenView(
+                    screenId: ProductAnalytics.Screen.sessionAttachmentSource,
+                    presentation: ProductAnalytics.Presentation.sheet,
+                    trigger: ProductAnalytics.Trigger.present
+                )
+                showAttachmentSources = true
+            } else if sources.photos {
+                showPhotosPicker = true
+            } else if sources.files {
+                showFilesPicker = true
+            }
+        case let .removeAttachment(id):
+            viewModel.removeAttachment(id: id)
+        case let .pasteAttachments(providers):
+            attachItemProviders(providers, source: .paste)
+        case .cancelRevert:
+            viewModel.cancelRevert()
+        case .exitShellMode:
+            viewModel.exitShellMode()
+        case .exitSideQuestionMode:
+            viewModel.exitSideQuestionMode()
+        case .openCommands:
+            viewModel.openCommands()
+        case .send:
+            Task { await viewModel.sendPrompt() }
+        case .toggleFollowUp:
+            viewModel.toggleFollowUp()
+        case .stop:
+            Task { await viewModel.abortSession() }
+        case let .allowPermissionOnce(requestID, sessionID):
+            Task { await viewModel.allowPermissionOnce(requestID: requestID, sessionID: sessionID) }
+        case let .denyPermission(requestID, sessionID):
+            Task { await viewModel.denyPermission(requestID: requestID, sessionID: sessionID) }
+        case let .alwaysAllowPermission(requestID, sessionID):
+            Task { await viewModel.alwaysAllowPermission(requestID: requestID, sessionID: sessionID) }
+        case let .hidePermission(requestID):
+            viewModel.hidePermissionDock(requestID: requestID)
+        case let .hideQuestion(requestID):
+            viewModel.hideQuestionDock(requestID: requestID)
+        case let .pageRequest(delta):
+            if composerKind == .permission {
+                viewModel.pagePermission(by: delta)
+            } else {
+                viewModel.pageQuestion(by: delta)
+            }
+        case let .openRequestSession(sessionID):
+            openRequestSession(sessionID: sessionID)
+        case let .toggleQuestionOption(requestID, sessionID, label):
+            viewModel.toggleQuestionOption(requestID: requestID, sessionID: sessionID, label: label)
+        case let .toggleQuestionCustom(requestID, sessionID):
+            viewModel.toggleQuestionCustom(requestID: requestID, sessionID: sessionID)
+        case let .questionCustomTextChanged(requestID, sessionID, text):
+            viewModel.updateQuestionCustomText(requestID: requestID, sessionID: sessionID, text: text)
+        case let .questionBack(requestID, sessionID):
+            viewModel.questionBack(requestID: requestID, sessionID: sessionID)
+        case let .questionNext(requestID, sessionID):
+            viewModel.questionNext(requestID: requestID, sessionID: sessionID)
+        case let .submitQuestion(requestID, sessionID):
+            Task { await viewModel.submitQuestion(requestID: requestID, sessionID: sessionID) }
+        case let .dismissQuestion(requestID, sessionID):
+            Task { await viewModel.dismissQuestion(requestID: requestID, sessionID: sessionID) }
+        case .backToMainSession:
+            logChatAction(ProductAnalytics.Action.chatBack)
+            leaveSession()
+        case .beginDictation:
+            Task { await beginComposerDictation() }
+        case .dictationCancel:
+            viewModel.dictationCancel()
+        case .dictationInsert:
+            viewModel.dictationInsert()
+        case .dictationOpenSettings:
+            UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!)
+        case .dictationDownload:
+            Task { await downloadDictationModel() }
+        case .dictationRetry:
+            Task { await beginComposerDictation() }
+        }
     }
 
     private func composerAttribution(
@@ -2310,4 +2396,14 @@ private extension ClientSlashAction {
         )
     }
     .openCodeTheme()
+}
+
+private struct SessionChatPromptChordPublisher: ViewModifier {
+    let shortcut: OpenCodeKeyboardShortcut
+    let title: LocalizedStringResource?
+    let action: (() -> Void)?
+
+    func body(content: Content) -> some View {
+        content.openCodeKeyboardShortcut(shortcut, title: title, action: action)
+    }
 }

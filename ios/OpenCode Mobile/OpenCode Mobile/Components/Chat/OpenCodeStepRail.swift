@@ -214,6 +214,7 @@ private struct StepRailRow: View {
             if let action {
                 Button(action: action) { rowContent }
                     .buttonStyle(StepRailPressStyle(highlightInset: gutterWidth - StepRailMetrics.pressBleed))
+                    .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: OpenCodeRadius.small), activate: action)
             } else {
                 rowContent
             }

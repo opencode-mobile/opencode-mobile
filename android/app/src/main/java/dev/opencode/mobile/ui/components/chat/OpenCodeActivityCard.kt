@@ -286,6 +286,7 @@ private fun AgentRow(
                 // itself stays aligned with the header text.
                 .bleedHorizontally(ActivityAgentRowBleed)
                 .clip(RoundedCornerShape(OpenCodeRadius.small))
+                .openCodeFocusRing(RoundedCornerShape(OpenCodeRadius.small))
                 .clickable(onClick = onTap)
                 .semantics(mergeDescendants = true) {
                     contentDescription = listOfNotNull(agent.agentName, agent.action, elapsed).joinToString(", ")
@@ -346,6 +347,7 @@ private fun FooterBand(
                 .padding(top = 6.dp)
                 .fillMaxWidth()
                 .background(openCodeColor("surface-raised-base"))
+                .openCodeFocusRing()
                 .clickable(onClick = onTap)
                 .semantics(mergeDescendants = true) {
                     contentDescription = opensActivity
@@ -464,6 +466,7 @@ private fun SettledLine(
     Row(
         modifier =
             modifier
+                .openCodeFocusRing(RoundedCornerShape(OpenCodeRadius.small))
                 .clickable(onClick = onTap)
                 .semantics(mergeDescendants = true) {
                     contentDescription = description

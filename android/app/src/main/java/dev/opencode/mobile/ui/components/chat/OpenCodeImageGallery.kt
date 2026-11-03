@@ -293,7 +293,9 @@ private fun TileFrame(
                 .border(1.dp, openCodeColor("border-weaker-base"), OpenCodeSmallShape)
                 .then(
                     if (onClick != null) {
-                        Modifier.clickable(onClickLabel = viewFullScreen, role = Role.Button, onClick = onClick)
+                        Modifier
+                            .openCodeFocusRing(OpenCodeSmallShape)
+                            .clickable(onClickLabel = viewFullScreen, role = Role.Button, onClick = onClick)
                     } else {
                         Modifier
                     },

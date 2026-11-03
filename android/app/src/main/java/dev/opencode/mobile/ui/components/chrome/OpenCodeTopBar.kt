@@ -258,6 +258,7 @@ private fun TopBarTitleRow(
         modifier =
             modifier
                 .clip(OpenCodeSmallShape)
+                .openCodeFocusRing(OpenCodeSmallShape)
                 .clickable(role = Role.Button, onClick = onTitleClick)
                 .padding(end = 4.dp),
         verticalAlignment = Alignment.CenterVertically,

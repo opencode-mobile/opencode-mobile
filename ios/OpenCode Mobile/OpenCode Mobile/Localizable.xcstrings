@@ -5847,6 +5847,72 @@
         }
       }
     },
+    "keyboard_shortcuts.allow_once" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow Once"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.always_allow" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Always Allow"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.choose_model" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Model"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.command_palette" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Command Palette"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.deny" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deny"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.dismiss_question" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dismiss Question"
+          }
+        }
+      }
+    },
     "keyboard_shortcuts.focus_composer" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -5858,13 +5924,57 @@
         }
       }
     },
-    "keyboard_shortcuts.group.sessions" : {
+    "keyboard_shortcuts.group.go" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Sessions"
+            "value" : "Go"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.group.prompt" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prompt"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.group.session" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Session"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.new_session" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Session"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.next_question" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next Question"
           }
         }
       }
@@ -5887,6 +5997,52 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Previous Session"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.project" : {
+      "comment" : "%1$d is the project's position in the dock, 1 to 9.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Project %lld"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.show_project" : {
+      "comment" : "%1$s is the project name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show %@"
+          }
+        }
+      }
+    },
+    "keyboard_shortcuts.submit_answers" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Submit Answers"
           }
         }
       }

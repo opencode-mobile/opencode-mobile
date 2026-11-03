@@ -70,6 +70,7 @@ enum ComponentGalleryEntryID: String, Hashable {
     case statusStack
     case diffStat
     case inlineNotice
+    case keyboardHint
     case codeSnippet
     case sessionList
     case sessionListDock
@@ -228,6 +229,12 @@ let componentGalleryEntries = [
         id: .inlineNotice,
         title: "Inline Notice",
         description: "Tonal inline message with an optional trailing action.",
+        category: .controls
+    ),
+    ComponentGalleryEntry(
+        id: .keyboardHint,
+        title: "Keyboard Hint",
+        description: "Caption about a hardware-keyboard key, neutral or warning.",
         category: .controls
     ),
     ComponentGalleryEntry(

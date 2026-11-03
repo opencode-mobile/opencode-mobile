@@ -71,7 +71,7 @@ import dev.opencode.mobile.ui.componentgallery.components.ActionTileGalleryScree
 import dev.opencode.mobile.ui.componentgallery.components.ActivityCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AssistantMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.AttachmentGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.ImageGalleryGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.BackgroundWorkPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomFadeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.BottomSheetGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ButtonGalleryScreen
@@ -84,23 +84,25 @@ import dev.opencode.mobile.ui.componentgallery.components.CodeSnippetGalleryScre
 import dev.opencode.mobile.ui.componentgallery.components.ComposerSuggestionOverlayGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DialogGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DictationCardGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.DropOverlayGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.DiffStatGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.DropOverlayGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.EmptyStateGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FileIconGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FileTabsGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FilterTabsGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.BackgroundWorkPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.FloatingPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.HunkNavigationPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.IconsGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.ImageGalleryGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.InlineNoticeGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.KeyValueRowGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.KeyboardHintGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListGroupGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ListItemGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageListGalleryDetailScreen
 import dev.opencode.mobile.ui.componentgallery.components.MessageNoteGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ModalGalleryScreen
+import dev.opencode.mobile.ui.componentgallery.components.OptionCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OutgoingMessageGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.OverflowMenuGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.PageIndicatorGalleryScreen
@@ -109,7 +111,6 @@ import dev.opencode.mobile.ui.componentgallery.components.RenderedMarkdownGaller
 import dev.opencode.mobile.ui.componentgallery.components.ReorderableListGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ReviewChangesPillGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SectionHeaderGalleryScreen
-import dev.opencode.mobile.ui.componentgallery.components.OptionCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SelectableCardGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.ServerAddressInputGalleryScreen
 import dev.opencode.mobile.ui.componentgallery.components.SessionBranchPillGalleryScreen
@@ -337,6 +338,24 @@ fun MainNavigation() {
     OpenCodeTheme(darkTheme = darkTheme) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Box(modifier = Modifier.fillMaxSize()) {
+                // Ctrl+,: Settings from Home and the session screens; not from Settings itself.
+                val settingsShortcutApplies =
+                    rootState == AppRootState.Home &&
+                        when (backStack.lastOrNull()) {
+                            is ProjectListHome,
+                            is SessionChat,
+                            is SessionContext,
+                            is Changes,
+                            is FileBrowser,
+                            is SessionToolGroup,
+                            is Terminal,
+                            is TerminalsCatalog,
+                            -> true
+                            else -> false
+                        }
+                KeyboardShortcutHandler(KeyboardShortcutAction.Settings, enabled = settingsShortcutApplies) {
+                    backStack.add(SettingsHome)
+                }
                 when (rootState) {
                     AppRootState.Loading -> {
                         ProductRouteScreenViewEffect(screenId = ProductAnalytics.Screen.APP_LOADING)
@@ -775,6 +794,8 @@ fun MainNavigation() {
                                                         ComponentGalleryEntryId.DiffStat -> DiffStatGalleryScreen()
                                                         ComponentGalleryEntryId.InlineNotice ->
                                                             InlineNoticeGalleryScreen()
+                                                        ComponentGalleryEntryId.KeyboardHint ->
+                                                            KeyboardHintGalleryScreen()
                                                         ComponentGalleryEntryId.CodeSnippet ->
                                                             CodeSnippetGalleryScreen()
                                                         ComponentGalleryEntryId.SessionList ->

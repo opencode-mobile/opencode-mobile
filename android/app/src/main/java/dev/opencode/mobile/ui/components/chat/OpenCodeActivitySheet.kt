@@ -34,6 +34,7 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.R
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -242,7 +243,7 @@ private fun AgentRow(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .then(if (agent.tappable) Modifier.clickable(onClick = onTap) else Modifier)
+                    .then(if (agent.tappable) Modifier.openCodeFocusRing(OpenCodeSmallShape).clickable(onClick = onTap) else Modifier)
                     .semantics(mergeDescendants = true) {
                         contentDescription =
                             listOfNotNull(agent.agentName, agent.description, spokenStatus, agent.caption, elapsed)
@@ -323,7 +324,7 @@ private fun StepRow(
         modifier =
             modifier
                 .fillMaxWidth()
-                .then(if (step.tappable) Modifier.clickable(onClick = onTap) else Modifier)
+                .then(if (step.tappable) Modifier.openCodeFocusRing(OpenCodeSmallShape).clickable(onClick = onTap) else Modifier)
                 .semantics(mergeDescendants = true) {
                     contentDescription = listOfNotNull(step.title, step.detail, spokenStatus, elapsed).joinToString(", ")
                     if (step.tappable) role = Role.Button

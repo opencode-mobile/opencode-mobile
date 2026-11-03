@@ -34,6 +34,18 @@ struct OpenCodeTextInput: View {
     /// Multi-line fields only: refuses typed and pasted text past this many
     /// characters; an `N/max` count shows near the limit.
     var maxLength: Int?
+    /// Multi-line fields only: hardware-keyboard Return runs this instead of adding
+    /// a line (Shift+Return still adds one).
+    var onHardwareReturn: (() -> Void)?
+    /// Multi-line fields only: Esc while editing runs this instead of the app's
+    /// default (stop editing).
+    var onEscape: (() -> Void)?
+    /// Multi-line fields only: what the field is to keyboard-shortcut gating.
+    /// Everything but a question's custom answer is `.otherTextField`.
+    var inputRole: OpenCodeTextInputFocus = .otherTextField
+    /// Multi-line fields only: Tab (`backward` false) or Shift+Tab left the field.
+    /// Without it, Tab just stops editing; it never types a tab character.
+    var onTabOut: ((_ backward: Bool) -> Void)?
 
     @FocusState private var focused: Bool
     /// Focus of the multi-line field, which is UIKit-backed and outside `@FocusState`.
@@ -51,7 +63,11 @@ struct OpenCodeTextInput: View {
         onSubmit: (() -> Void)? = nil,
         minLines: Int = 1,
         maxLines: Int? = nil,
-        maxLength: Int? = nil
+        maxLength: Int? = nil,
+        onHardwareReturn: (() -> Void)? = nil,
+        onEscape: (() -> Void)? = nil,
+        onTabOut: ((_ backward: Bool) -> Void)? = nil,
+        inputRole: OpenCodeTextInputFocus = .otherTextField
     ) {
         let maxLines = maxLines ?? minLines
         precondition(minLines >= 1 && minLines <= maxLines, "OpenCodeTextInput needs 1 <= minLines <= maxLines")
@@ -73,6 +89,10 @@ struct OpenCodeTextInput: View {
         self.minLines = minLines
         self.maxLines = maxLines
         self.maxLength = maxLength
+        self.onHardwareReturn = onHardwareReturn
+        self.onEscape = onEscape
+        self.onTabOut = onTabOut
+        self.inputRole = inputRole
     }
 
     private var multiline: Bool { maxLines > 1 }
@@ -141,7 +161,11 @@ struct OpenCodeTextInput: View {
                     minLines: minLines,
                     maxLines: maxLines,
                     maxLength: maxLength,
-                    enabled: enabled
+                    enabled: enabled,
+                    onHardwareReturn: onHardwareReturn,
+                    onEscape: onEscape,
+                    onTabOut: onTabOut,
+                    inputRole: inputRole
                 )
             } else {
                 TextField(hint.resolved, text: $text)
@@ -238,6 +262,10 @@ private struct OpenCodeMultilineTextView: UIViewRepresentable {
     let maxLines: Int
     let maxLength: Int?
     let enabled: Bool
+    let onHardwareReturn: (() -> Void)?
+    let onEscape: (() -> Void)?
+    let onTabOut: ((_ backward: Bool) -> Void)?
+    let inputRole: OpenCodeTextInputFocus
 
     private static let font = UIFont.systemFont(ofSize: 16, weight: .regular)
 
@@ -263,6 +291,10 @@ private struct OpenCodeMultilineTextView: UIViewRepresentable {
         view.placeholderLabel.text = placeholder
         view.placeholderLabel.textColor = UIColor(OpenCodeColors.textWeaker)
         view.isEditable = enabled
+        view.returnKey = onHardwareReturn.map { OpenCodeHardwareReturnKey(submit: $0) }
+        view.onEscape = onEscape
+        view.onTabOut = onTabOut
+        view.textInputRole = inputRole
         if view.text != text {
             view.text = text
             view.placeholderLabel.isHidden = !text.isEmpty
@@ -304,6 +336,9 @@ private struct OpenCodeMultilineTextView: UIViewRepresentable {
         }
 
         func textView(_ textView: UITextView, shouldChangeTextIn range: NSRange, replacementText: String) -> Bool {
+            if (textView as? PlaceholderTextView)?.consumeHardwareReturn(replacementText: replacementText) == true {
+                return false
+            }
             guard let maxLength = parent.maxLength,
                   let current = textView.text,
                   let swiftRange = Range(range, in: current)

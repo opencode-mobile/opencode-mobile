@@ -79,6 +79,14 @@ struct OpenCodeMentionTextView: View {
     /// False while an image or file is dragged over the screen, so the field's own text drop does
     /// not take the drop and the screen's drop target gets it (#870).
     var acceptsTextDrops = true
+    /// Hardware-keyboard Return: when set, Return runs this and Shift+Return adds a line
+    /// (see `OpenCodeReturnKeyPolicy`). The soft keyboard's Return still adds a line.
+    var returnKey: OpenCodeHardwareReturnKey?
+    /// ↑ / ↓ with no modifier: return true when it recalled a prompt (the key is
+    /// then not used to move the caret).
+    var onHistoryKey: ((_ direction: OpenCodePromptHistoryDirection, _ text: String, _ caret: OpenCodePromptCaret) -> Bool)?
+    /// Tab or Shift+Tab (`backward`) left the field. Tab never types a tab character.
+    var onTabOut: ((_ backward: Bool) -> Void)?
     let onChange: (_ text: String, _ selectionStart: Int, _ selectionEnd: Int) -> Void
 
     var body: some View {
@@ -95,6 +103,9 @@ struct OpenCodeMentionTextView: View {
             onDeleteBackwardWhenEmpty: onDeleteBackwardWhenEmpty,
             onPasteAttachments: onPasteAttachments,
             acceptsTextDrops: acceptsTextDrops,
+            returnKey: returnKey,
+            onHistoryKey: onHistoryKey,
+            onTabOut: onTabOut,
             onChange: onChange
         )
     }
@@ -113,6 +124,9 @@ private struct Representable: UIViewRepresentable {
     let onDeleteBackwardWhenEmpty: (() -> Void)?
     let onPasteAttachments: (([NSItemProvider]) -> Void)?
     let acceptsTextDrops: Bool
+    let returnKey: OpenCodeHardwareReturnKey?
+    let onHistoryKey: ((OpenCodePromptHistoryDirection, String, OpenCodePromptCaret) -> Bool)?
+    let onTabOut: ((_ backward: Bool) -> Void)?
     let onChange: (String, Int, Int) -> Void
 
     func makeUIView(context: Context) -> PlaceholderTextView {
@@ -142,6 +156,10 @@ private struct Representable: UIViewRepresentable {
         uiView.onDeleteBackwardWhenEmpty = onDeleteBackwardWhenEmpty
         uiView.onPasteAttachments = onPasteAttachments
         uiView.acceptsTextDrops = acceptsTextDrops
+        uiView.returnKey = returnKey
+        uiView.onTabOut = onTabOut
+        uiView.onHistoryKey = onHistoryKey
+        uiView.textInputRole = .composer
         applyInputTraits(to: uiView)
         if context.coordinator.lastFocusRequestToken != focusRequestToken {
             context.coordinator.lastFocusRequestToken = focusRequestToken
@@ -258,7 +276,10 @@ private struct Representable: UIViewRepresentable {
         /// Typed text starts plain. Without this it inherits the color of the character before the
         /// caret, so typing right after a highlighted range (a mention, or the `!` of a shell
         /// command) would paint the new text too until the next full re-render.
-        func textView(_ textView: UITextView, shouldChangeTextIn _: NSRange, replacementText _: String) -> Bool {
+        func textView(_ textView: UITextView, shouldChangeTextIn _: NSRange, replacementText: String) -> Bool {
+            if (textView as? PlaceholderTextView)?.consumeHardwareReturn(replacementText: replacementText) == true {
+                return false
+            }
             if textView.markedTextRange == nil {
                 textView.typingAttributes = [.foregroundColor: textColor, .font: OpenCodeMentionTextViewLayout.font]
             }
@@ -302,10 +323,77 @@ private struct Representable: UIViewRepresentable {
     }
 }
 
-final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput {
+/// Hardware-keyboard Return for a multi-line field: Return submits, Shift+Return adds a line.
+struct OpenCodeHardwareReturnKey {
+    /// Decides from the live text whether Return submits; when it does not, Return
+    /// does nothing (and adds no line), like a disabled Send.
+    var rule: OpenCodeReturnKeyRule
+    var submit: () -> Void
+
+    init(rule: OpenCodeReturnKeyRule, submit: @escaping () -> Void) {
+        self.rule = rule
+        self.submit = submit
+    }
+
+    /// Return always submits (a field with no other send conditions).
+    init(submit: @escaping () -> Void) {
+        self.init(rule: .fixed(true), submit: submit)
+    }
+}
+
+final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput, OpenCodeEscapeHandlingTextInput {
     let placeholderLabel = UILabel()
     var onDeleteBackwardWhenEmpty: (() -> Void)?
     var onPasteAttachments: (([NSItemProvider]) -> Void)?
+    var returnKey: OpenCodeHardwareReturnKey?
+    /// Tab or Shift+Tab (`backward`) left the field; nil just stops editing.
+    var onTabOut: ((_ backward: Bool) -> Void)?
+    var onHistoryKey: ((OpenCodePromptHistoryDirection, String, OpenCodePromptCaret) -> Bool)?
+
+    /// The question prompt's answer field (it has its own Esc) rather than the prompt.
+    /// What this field is to shortcut gating, set by its owner: the composer
+    /// prompt, a question's custom answer, or (default) any other field.
+    var textInputRole: OpenCodeTextInputFocus = .otherTextField
+
+    /// Esc while editing; nil leaves the field the default way (see `OpenCodeEscapeRouter`).
+    /// A field with its own Esc hands keyboard focus on explicitly, so Tab does not
+    /// move into it while it is not being edited.
+    var onEscape: (() -> Void)?
+
+    /// Set for a moment once Esc or Return handed focus on: the field's focus binding
+    /// would otherwise give it first responder straight back. A touch clears it.
+    private var refusesFocusUntil: Date?
+    private var refusesFocus: Bool { refusesFocusUntil.map { Date() < $0 } ?? false }
+
+    override var canBecomeFocused: Bool {
+        onEscape == nil || isFirstResponder ? super.canBecomeFocused : false
+    }
+
+    override var canBecomeFirstResponder: Bool {
+        refusesFocus ? false : super.canBecomeFirstResponder
+    }
+
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        refusesFocusUntil = nil
+        super.touchesBegan(touches, with: event)
+    }
+
+    /// Esc while editing: a field with its own Esc stops editing and runs it.
+    func handleEscape() -> Bool {
+        guard let onEscape else { return false }
+        refuseFocusBriefly()
+        onEscape()
+        return true
+    }
+    /// Tab presses this view handled itself, so their release is not passed on either.
+    private var swallowedPresses: Set<UIKeyboardHIDUsage> = []
+    /// When a hardware Return (no Shift or other modifier) went to the text system.
+    /// Its "\n" arrives after any keys typed before it, and can arrive after keys
+    /// pressed after it, so the send is decided there, from the full text
+    /// (`consumeHardwareReturn`). A Return that never produces a line (an input
+    /// method used it) expires.
+    private var pendingHardwareReturnAt: Date?
     var acceptsTextDrops = true {
         didSet {
             guard acceptsTextDrops != oldValue else { return }
@@ -336,6 +424,117 @@ final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput {
     override func layoutSubviews() {
         super.layoutSubviews()
         retryPendingCaretScrollIfNeeded()
+    }
+
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        if presses.count == 1, let key = presses.first?.key, key.keyCode == .keyboardTab,
+           OpenCodeTabKeyPolicy.leavesField(
+               otherModifiers: !key.modifierFlags.isDisjoint(with: [.command, .alternate, .control]),
+               composing: markedTextRange != nil
+           ) {
+            swallowedPresses.insert(key.keyCode)
+            leaveOnTab(backward: key.modifierFlags.contains(.shift))
+            return
+        }
+        if presses.count == 1, let key = presses.first?.key, let onHistoryKey,
+           key.keyCode == .keyboardUpArrow || key.keyCode == .keyboardDownArrow,
+           key.modifierFlags.isDisjoint(with: [.shift, .command, .alternate, .control]),
+           markedTextRange == nil,
+           onHistoryKey(key.keyCode == .keyboardUpArrow ? .older : .newer, text ?? "", promptCaret) {
+            swallowedPresses.insert(key.keyCode)
+            return
+        }
+        if presses.count == 1, let key = presses.first?.key,
+           key.keyCode == .keyboardReturnOrEnter || key.keyCode == .keypadEnter,
+           returnKey != nil,
+           !key.modifierFlags.contains(.shift),
+           key.modifierFlags.isDisjoint(with: [.command, .alternate, .control]),
+           markedTextRange == nil {
+            pendingHardwareReturnAt = Date()
+        }
+        super.pressesBegan(presses, with: event)
+    }
+
+    /// The caret's line for prompt recall: lines as laid out (wrapped lines count).
+    private var promptCaret: OpenCodePromptCaret {
+        let atStart = selectedRange.location == 0 && selectedRange.length == 0
+        guard let caret = selectedTextRange?.start else {
+            return OpenCodePromptCaret(atStart: atStart, onFirstLine: true, onLastLine: true)
+        }
+        let caretY = caretRect(for: caret).midY
+        let firstY = caretRect(for: beginningOfDocument).midY
+        let lastY = caretRect(for: endOfDocument).midY
+        let tolerance = (font?.lineHeight ?? 16) / 2
+        return OpenCodePromptCaret(
+            atStart: atStart,
+            onFirstLine: abs(caretY - firstY) < tolerance,
+            onLastLine: abs(caretY - lastY) < tolerance
+        )
+    }
+
+    /// Tab right after Return: the Return's line may still be on its way, and
+    /// leaving the field now would drop the send. Leave once it has arrived.
+    private func leaveOnTab(backward: Bool, attempt: Int = 0) {
+        if hasPendingHardwareReturn, attempt < 10 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self] in
+                self?.leaveOnTab(backward: backward, attempt: attempt + 1)
+            }
+            return
+        }
+        refuseFocusBriefly()
+        if let onTabOut {
+            onTabOut(backward)
+        } else {
+            OpenCodeKeyboardAnchor.takeFocus()
+        }
+    }
+
+    private var hasPendingHardwareReturn: Bool {
+        OpenCodeReturnKeyPolicy.pendingReturnApplies(pressedAt: pendingHardwareReturnAt, now: Date())
+    }
+
+    /// Call first from `textView(_:shouldChangeTextIn:replacementText:)`. True when
+    /// the edit is a hardware Return this view handled (send or ignore): the
+    /// delegate then refuses the edit, so no line is added.
+    func consumeHardwareReturn(replacementText: String) -> Bool {
+        guard replacementText == "\n", hasPendingHardwareReturn, let returnKey else { return false }
+        pendingHardwareReturnAt = nil
+        let liveText = text ?? ""
+        let action = OpenCodeReturnKeyPolicy.action(
+            shift: false,
+            otherModifiers: false,
+            composing: markedTextRange != nil,
+            submitEnabled: returnKey.rule.submitEnabled(text: liveText)
+        )
+        switch action {
+        case .passThrough:
+            return false
+        case .ignore:
+            return true
+        case .submit:
+            // Report the full text first, so the send uses what is on screen.
+            delegate?.textViewDidChange?(self)
+            // A field that hands focus on (custom answer) leaves editing; the prompt keeps it.
+            if onEscape != nil { refuseFocusBriefly() }
+            returnKey.submit()
+            return true
+        }
+    }
+
+    override func pressesEnded(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        let passed = presses.filter { press in
+            guard let code = press.key?.keyCode else { return true }
+            return swallowedPresses.remove(code) == nil
+        }
+        if !passed.isEmpty { super.pressesEnded(passed, with: event) }
+    }
+
+    override func pressesCancelled(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        let passed = presses.filter { press in
+            guard let code = press.key?.keyCode else { return true }
+            return swallowedPresses.remove(code) == nil
+        }
+        if !passed.isEmpty { super.pressesCancelled(passed, with: event) }
     }
 
     override func deleteBackward() {
@@ -396,6 +595,10 @@ final class PlaceholderTextView: UITextView, OpenCodeComposerTextInput {
 
     /// Becomes first responder once the view is in a window. Deferred a turn so it
     /// never runs inside a SwiftUI update.
+    private func refuseFocusBriefly() {
+        refusesFocusUntil = Date().addingTimeInterval(0.5)
+    }
+
     func requestFocus() {
         guard window != nil else {
             pendingFocus = true

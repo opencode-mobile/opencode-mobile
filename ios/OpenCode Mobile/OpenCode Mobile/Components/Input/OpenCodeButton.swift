@@ -47,6 +47,14 @@ struct OpenCodeButton: View {
     }
 
     var body: some View {
+        content
+            .openCodeKeyboardFocusable(variant.focusRing, enabled: enabled, activate: action)
+            // Right-click opens what a long-press opens.
+            .openCodeSecondaryClick(enabled ? longPress : nil)
+    }
+
+    @ViewBuilder
+    private var content: some View {
         if case let .link(title) = variant {
             Button(action: action) {
                 Text(openCode: title)
@@ -335,6 +343,14 @@ private struct OpenCodeButtonStyle: ButtonStyle {
 }
 
 private extension OpenCodeButtonVariant {
+    var focusRing: OpenCodeFocusRingShape {
+        switch self {
+        case .iconCircle, .iconCircleText: .circle
+        case .link: .roundedRectangle(cornerRadius: OpenCodeRadius.small)
+        case .fullWidthText, .compactText, .iconSquare: .roundedRectangle(cornerRadius: OpenCodeRadius.small)
+        }
+    }
+
     var isFullWidth: Bool {
         if case .fullWidthText = self { return true }
         return false

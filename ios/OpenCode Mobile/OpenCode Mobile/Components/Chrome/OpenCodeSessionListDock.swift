@@ -76,6 +76,7 @@ struct OpenCodeSessionListDock: View {
         }
         .buttonStyle(OpenCodeSubtleControlPressStyle(shape: Circle()))
         .accessibilityLabel(openCode: "session_list.dock.add_project")
+        .openCodeKeyboardFocusable(.circle, activate: onAddProject)
     }
 
     private var newSessionButton: some View {
@@ -126,6 +127,7 @@ struct SessionListScopeControl: View {
         .accessibilityAddTraits(.isButton)
         .accessibilityAdjustableAction(adjustProject)
         .accessibilityAction(named: "Open project filter", onOpen)
+        .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: Self.controlCornerRadius), activate: onOpen)
         .onAppear {
             if shownTabId == nil {
                 shownTabId = selectedId
@@ -226,8 +228,10 @@ struct SessionListScopeControl: View {
         .padding(.trailing, 26)
     }
 
+    private static let controlCornerRadius: CGFloat = 20
+
     private var controlShape: RoundedRectangle {
-        RoundedRectangle(cornerRadius: 20, style: .continuous)
+        RoundedRectangle(cornerRadius: Self.controlCornerRadius, style: .continuous)
     }
 
     /// `tabs` plus the selected worktree scope, which is not one of them.
@@ -480,6 +484,14 @@ private struct NewSessionDockButton: View {
     @State private var isHolding = false
 
     var body: some View {
+        content
+            .openCodeKeyboardFocusable(.capsule, activate: onNewSession)
+            // Right-click opens what a long-press opens (choose project or worktree).
+            .openCodeSecondaryClick(onLongPress)
+    }
+
+    @ViewBuilder
+    private var content: some View {
         let label = Text("session_list.dock.new_session")
             .font(OpenCodeTypography.button)
             .foregroundStyle(OpenCodeColors.textStrong)

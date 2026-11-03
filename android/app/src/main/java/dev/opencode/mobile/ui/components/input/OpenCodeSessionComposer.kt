@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.components
 
+import androidx.compose.ui.text.TextLayoutResult
 import android.content.res.Configuration
 import androidx.annotation.StringRes
 import androidx.compose.animation.AnimatedContent
@@ -15,6 +16,7 @@ import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -54,8 +56,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,9 +69,16 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onInterceptKeyBeforeSoftKeyboard
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.pointerInput
@@ -75,6 +86,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -105,8 +117,16 @@ import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodePageIndicator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.keyboard.ComposerReturnAction
+import dev.opencode.mobile.ui.keyboard.CustomAnswerKeyAction
+import dev.opencode.mobile.ui.keyboard.KeyboardNavigationRules
+import dev.opencode.mobile.ui.keyboard.KeyboardPromptKind
+import dev.opencode.mobile.ui.keyboard.KeyboardShortcutAction
+import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
+import dev.opencode.mobile.ui.keyboard.PromptRecallDirection
 import dev.opencode.mobile.ui.text.UiText
 import dev.opencode.mobile.ui.text.resolve
+import kotlinx.coroutines.launch
 import java.util.Locale
 import kotlin.math.abs
 
@@ -141,6 +161,10 @@ sealed interface OpenCodeSessionComposerState {
          * deleting on an empty field sends [OpenCodeSessionComposerAction.ExitSideQuestionMode].
          */
         val sideQuestionMode: Boolean = false,
+        /** An `@` or `/` suggestion list shows above the composer; a hardware Return does not send. */
+        val suggestionsOpen: Boolean = false,
+        /** This session's sent prompts, oldest first, for ↑ / ↓ recall with a hardware keyboard. */
+        val promptHistory: List<String> = emptyList(),
     ) : OpenCodeSessionComposerState
 
     /** The descendant subagent session asking a permission or question; Open shows that session. */
@@ -406,6 +430,8 @@ fun OpenCodeSessionComposer(
     focus: OpenCodeSessionComposerFocus? = null,
     status: (@Composable () -> Unit)? = null,
     dictation: ComposerDictationCardModel? = null,
+    /** The first Esc armed the interrupt: shows "Esc again to interrupt" above the content. */
+    interruptArmed: Boolean = false,
 ) {
     val composerFocus = focus ?: rememberOpenCodeSessionComposerFocus()
     val showsPrompt = state is OpenCodeSessionComposerState.Prompt
@@ -424,6 +450,27 @@ fun OpenCodeSessionComposer(
         }
     val announceBlocking =
         state is OpenCodeSessionComposerState.Permission || state is OpenCodeSessionComposerState.Question
+    // A new permission or question request must start with nothing focused, so keys meant for
+    // the composer, the timeline, the session list or the previous request cannot answer it.
+    // Park focus rather than letting Android pick a control (it would fall to the top bar).
+    val focusManager = LocalFocusManager.current
+    val inputFocusRegistry = LocalOpenCodeInputFocusRegistry.current
+    val promptId = state.promptRequestId
+    val shownPromptId = remember { arrayOfNulls<String>(1) }
+    LaunchedEffect(promptId) {
+        val previous = shownPromptId[0]
+        shownPromptId[0] = promptId
+        val parks =
+            KeyboardNavigationRules.parksFocusOnPromptChange(
+                previousPromptId = previous,
+                currentPromptId = promptId,
+                otherFieldFocused = inputFocusRegistry?.focusedTextInput == OpenCodeFocusedTextInput.Field,
+                surfaceOpen = inputFocusRegistry?.hasModalSurface == true,
+            )
+        if (parks) {
+            inputFocusRegistry?.parkFocus?.invoke() ?: focusManager.clearFocus(force = true)
+        }
+    }
     val shellShape = RoundedCornerShape(OpenCodeFloatingChromeCornerRadius)
     val currentOnAction by rememberUpdatedState(onAction)
     val onSwipePage = remember { { delta: Int -> currentOnAction(OpenCodeSessionComposerAction.PageRequest(delta)) } }
@@ -446,81 +493,90 @@ fun OpenCodeSessionComposer(
                     status()
                     HorizontalDivider(color = openCodeColor("border-weak-base"))
                 }
-            Column(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 12.dp)
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 12.dp)
                             .requestPageSwipe(enabled = state.pagesRequests, onPage = onSwipePage)
-                        .then(
-                            if (announceBlocking) {
-                                Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-                            } else {
-                                Modifier
-                            },
-                        ),
-            ) {
-                AnimatedContent(
-                    targetState = state,
-                    modifier = Modifier.fillMaxWidth(),
-                    // The shell is pinned to the bottom of the screen, so the content is too: both
-                    // states stay still while the shell resizes around them and crossfade, which
-                    // reads as one surface morphing instead of the old content sliding down.
-                    contentAlignment = Alignment.BottomStart,
-                    transitionSpec = {
-                        (
-                            fadeIn(
-                                animationSpec = tween(durationMillis = 180, delayMillis = 60),
-                            ) togetherWith
-                                fadeOut(
-                                    animationSpec = tween(durationMillis = 120),
-                                )
-                        ).using(
-                            SizeTransform(clip = true) { _, _ ->
-                                tween(durationMillis = 280, easing = FastOutSlowInEasing)
-                            },
-                        )
-                    },
-                    contentKey = { it::class },
-                    label = "composer-content",
-                ) { state ->
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        when (state) {
-                            is OpenCodeSessionComposerState.Prompt ->
-                                if (dictation != null) {
-                                    DictationTakeover(
-                                        card = dictation,
-                                        onAction = onAction,
-                                    )
+                            .then(
+                                if (announceBlocking) {
+                                    Modifier.semantics { liveRegion = LiveRegionMode.Polite }
                                 } else {
-                                    PromptEntryContent(
+                                    Modifier
+                                },
+                            ),
+                ) {
+                    if (interruptArmed) {
+                        OpenCodeKeyboardHint(
+                            text = KeyboardNavigationRules.INTERRUPT_ARMED_HINT,
+                            tone = OpenCodeKeyboardHintTone.Warning,
+                            modifier = Modifier.padding(bottom = 8.dp).testTag("sessionComposerInterruptHint"),
+                        )
+                    }
+                    AnimatedContent(
+                        targetState = state,
+                        modifier = Modifier.fillMaxWidth(),
+                        // The shell is pinned to the bottom of the screen, so the content is too: both
+                        // states stay still while the shell resizes around them and crossfade, which
+                        // reads as one surface morphing instead of the old content sliding down.
+                        contentAlignment = Alignment.BottomStart,
+                        transitionSpec = {
+                            (
+                                fadeIn(
+                                    animationSpec = tween(durationMillis = 180, delayMillis = 60),
+                                ) togetherWith
+                                    fadeOut(
+                                        animationSpec = tween(durationMillis = 120),
+                                    )
+                            ).using(
+                                SizeTransform(clip = true) { _, _ ->
+                                    tween(durationMillis = 280, easing = FastOutSlowInEasing)
+                                },
+                            )
+                        },
+                        // Each permission or question request gets fresh content, so focus and
+                        // keyboard state never carry over to the next queued request.
+                        contentKey = { it.promptRequestId ?: it::class },
+                        label = "composer-content",
+                    ) { state ->
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            when (state) {
+                                is OpenCodeSessionComposerState.Prompt ->
+                                    if (dictation != null) {
+                                        DictationTakeover(
+                                            card = dictation,
+                                            onAction = onAction,
+                                        )
+                                    } else {
+                                        PromptEntryContent(
+                                            state = state,
+                                            onAction = onAction,
+                                            focus = composerFocus,
+                                        )
+                                    }
+
+                                is OpenCodeSessionComposerState.Permission ->
+                                    PermissionApprovalContent(
                                         state = state,
                                         onAction = onAction,
-                                        focus = composerFocus,
                                     )
-                                }
 
-                            is OpenCodeSessionComposerState.Permission ->
-                                PermissionApprovalContent(
-                                    state = state,
-                                    onAction = onAction,
-                                )
+                                is OpenCodeSessionComposerState.Question ->
+                                    QuestionRequestContent(
+                                        state = state,
+                                        onAction = onAction,
+                                    )
 
-                            is OpenCodeSessionComposerState.Question ->
-                                QuestionRequestContent(
-                                    state = state,
-                                    onAction = onAction,
-                                )
-
-                            is OpenCodeSessionComposerState.ChildLockout ->
-                                ChildLockoutContent(
-                                    state = state,
-                                    onAction = onAction,
-                                )
+                                is OpenCodeSessionComposerState.ChildLockout ->
+                                    ChildLockoutContent(
+                                        state = state,
+                                        onAction = onAction,
+                                    )
+                            }
                         }
                     }
                 }
-            }
             }
         }
     }
@@ -570,6 +626,11 @@ private fun PromptEntryContent(
 ) {
     val focusManager = LocalFocusManager.current
     val reportFocus = rememberOpenCodeTextInputFocusReport(OpenCodeFocusedTextInput.SessionComposer)
+    val hardwareKeyboard = rememberOpenCodeHardwareKeyboardConnected()
+    val returnSendScope = rememberCoroutineScope()
+    val recall = remember { ComposerPromptRecall() }
+    var promptTextLayout by remember { mutableStateOf<TextLayoutResult?>(null) }
+    val latestSendEnabled by rememberUpdatedState(state.sendEnabled)
     DisposableEffect(focus) {
         focus.attachPromptInput()
         onDispose { focus.detachPromptInput() }
@@ -666,6 +727,7 @@ private fun PromptEntryContent(
                 )
             },
             textStyle = MaterialTheme.typography.bodyLarge.copy(color = bodyColor),
+            onTextLayout = { promptTextLayout = it },
             cursorBrush = SolidColor(bodyColor),
             visualTransformation = mentionTransformation,
             // A shell command must reach the server as typed: no autocorrect or auto-capitalization.
@@ -690,7 +752,57 @@ private fun PromptEntryContent(
                         pasteLabel = stringResource(android.R.string.paste),
                         onPaste = onPasteContent,
                     )
-                    .onPreviewKeyEvent { event ->
+                    // Before the IME: a soft keyboard that handles hardware keys (Gboard) would otherwise turn
+                    // Return into a new line. Return sends, like the Send button; Shift+Return adds a line.
+                    .onInterceptKeyBeforeSoftKeyboard { event ->
+                        if (focusManager.moveFocusOnHardwareTab(event, hardwareKeyboard)) return@onInterceptKeyBeforeSoftKeyboard true
+                        if (recall.handleKey(event, state, textFieldValue, promptTextLayout, hardwareKeyboard, onAction)) {
+                            return@onInterceptKeyBeforeSoftKeyboard true
+                        }
+                        val returnAction =
+                            KeyboardNavigationRules.composerReturn(
+                                isReturn = event.key == Key.Enter || event.key == Key.NumPadEnter,
+                                fromHardwareKeyboard =
+                                    KeyboardNavigationRules.fromHardwareKeyboard(hardwareKeyboard, event.nativeKeyEvent.flags),
+                                shift = event.isShiftPressed,
+                                ctrl = event.isCtrlPressed,
+                                alt = event.isAltPressed,
+                                meta = event.isMetaPressed,
+                                composing = textFieldValue.composition != null,
+                                sendEnabled =
+                                    KeyboardNavigationRules.liveSendEnabled(
+                                        stateSendEnabled = state.sendEnabled,
+                                        stateText = state.text,
+                                        liveText = textFieldValue.text,
+                                    ),
+                                suggestionsOpen = state.suggestionsOpen,
+                            )
+                        when (returnAction) {
+                            ComposerReturnAction.Send -> {
+                                if (event.type == KeyEventType.KeyDown && event.nativeKeyEvent.repeatCount == 0) {
+                                    // Return is read before the IME: hand the field's text to the screen
+                                    // first, then send on the next frame once Send reflects it.
+                                    val live = textFieldValue
+                                    if (live.text != state.text) {
+                                        onAction(
+                                            OpenCodeSessionComposerAction.TextChanged(
+                                                text = live.text,
+                                                selectionStart = live.selection.start,
+                                                selectionEnd = live.selection.end,
+                                            ),
+                                        )
+                                    }
+                                    returnSendScope.launch {
+                                        withFrameNanos { }
+                                        if (latestSendEnabled) onAction(OpenCodeSessionComposerAction.Send)
+                                    }
+                                }
+                                true
+                            }
+                            ComposerReturnAction.Ignore -> true
+                            ComposerReturnAction.PassThrough -> false
+                        }
+                    }.onPreviewKeyEvent { event ->
                         if (state.attachEnabled && attachmentPaste.handleKey(event, onPasteContent)) return@onPreviewKeyEvent true
                         // Delete on an empty field changes no text; in side-question mode it leaves the mode.
                         val leavesMode =
@@ -1074,6 +1186,7 @@ private fun ChildLockoutContent(
                 .height(52.dp)
                 .clip(ctaShape)
                 .background(textStrong.copy(alpha = 0.05f))
+                .openCodeFocusRing(ctaShape)
                 .clickable { onAction(OpenCodeSessionComposerAction.BackToMainSession) },
         contentAlignment = Alignment.Center,
     ) {
@@ -1110,92 +1223,123 @@ private fun PermissionApprovalContent(
     onAction: (OpenCodeSessionComposerAction) -> Unit,
 ) {
     val actionsEnabled = state.actionsEnabled && !state.submitting
-    state.attribution?.let { RequestAttributionRow(it, onAction) }
-    Column(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                stringResource(R.string.component_composer_permission_requested),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
-            )
-            RequestPager(
-                position = state.queuePosition,
-                count = state.queueCount,
-                enabled = !state.submitting,
-                kind = RequestPagerKind.Permission,
-                onAction = onAction,
-            )
-            OpenCodeButton(
-                variant =
-                    OpenCodeButtonVariant.IconCircle(
-                        OpenCodeIcons.KeyboardArrowDown,
-                        stringResource(R.string.component_composer_hide_permission),
-                    ),
-                contrast = OpenCodeButtonContrast.Low,
-                onClick = { onAction(OpenCodeSessionComposerAction.HidePermission(state.requestId)) },
-            )
-        }
-        Text(state.permission.replace('_', ' '), style = MaterialTheme.typography.bodyMedium)
-        SelectionContainer {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (state.files.isNotEmpty()) {
-                    state.files.forEach { file -> PermissionFileLine(file) }
-                } else {
-                    state.patterns.forEach { Text(it, style = PermissionCodeStyle) }
+    val showsAlways = state.alwaysPatterns.isNotEmpty()
+    // Reading order: Deny, Always (when offered), Allow once.
+    val actionTargetsEnabled = listOfNotNull(actionsEnabled, actionsEnabled.takeIf { showsAlways }, actionsEnabled)
+    val keyboard = rememberPromptKeyboardFocus(KeyboardPromptKind.Permission, actionTargetsEnabled)
+    // Chords answer through the same actions, and the same enabled rules, as the buttons.
+    KeyboardShortcutHandler(KeyboardShortcutAction.PromptPrimary, enabled = actionsEnabled, title = UiText.resource(R.string.keyboard_shortcuts_allow_once)) {
+        onAction(OpenCodeSessionComposerAction.AllowPermissionOnce(state.requestId, state.sessionId))
+    }
+    KeyboardShortcutHandler(KeyboardShortcutAction.PromptAlways, enabled = actionsEnabled && showsAlways, title = UiText.resource(R.string.keyboard_shortcuts_always_allow)) {
+        onAction(OpenCodeSessionComposerAction.AlwaysAllowPermission(state.requestId, state.sessionId))
+    }
+    KeyboardShortcutHandler(KeyboardShortcutAction.PromptReject, enabled = actionsEnabled, title = UiText.resource(R.string.keyboard_shortcuts_deny)) {
+        onAction(OpenCodeSessionComposerAction.DenyPermission(state.requestId, state.sessionId))
+    }
+    PromptKeyboardColumn(keyboard) {
+        state.attribution?.let { RequestAttributionRow(it, onAction) }
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(R.string.component_composer_permission_requested),
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
+                )
+                RequestPager(
+                    position = state.queuePosition,
+                    count = state.queueCount,
+                    enabled = !state.submitting,
+                    kind = RequestPagerKind.Permission,
+                    onAction = onAction,
+                )
+                OpenCodeButton(
+                    variant =
+                        OpenCodeButtonVariant.IconCircle(
+                            OpenCodeIcons.KeyboardArrowDown,
+                            stringResource(R.string.component_composer_hide_permission),
+                        ),
+                    contrast = OpenCodeButtonContrast.Low,
+                    onClick = { onAction(OpenCodeSessionComposerAction.HidePermission(state.requestId)) },
+                )
+            }
+            Text(state.permission.replace('_', ' '), style = MaterialTheme.typography.bodyMedium)
+            SelectionContainer {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (state.files.isNotEmpty()) {
+                        state.files.forEach { file -> PermissionFileLine(file) }
+                    } else {
+                        state.patterns.forEach { Text(it, style = PermissionCodeStyle) }
+                    }
                 }
             }
+            if (state.alwaysPatterns.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.component_composer_always_allows, state.alwaysPatterns.joinToString(", ")),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = openCodeColor("text-weak"),
+                )
+            }
+            state.errorMessage?.let {
+                Text(it, color = openCodeColor("error"), style = MaterialTheme.typography.bodySmall)
+            }
         }
-        if (state.alwaysPatterns.isNotEmpty()) {
-            Text(
-                text = stringResource(R.string.component_composer_always_allows, state.alwaysPatterns.joinToString(", ")),
-                style = MaterialTheme.typography.bodySmall,
-                color = openCodeColor("text-weak"),
-            )
-        }
-        state.errorMessage?.let {
-            Text(it, color = openCodeColor("error"), style = MaterialTheme.typography.bodySmall)
-        }
-    }
-    Row(
-        Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        OpenCodeButton(
-            OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_deny)),
-            onClick = {
-                onAction(OpenCodeSessionComposerAction.DenyPermission(state.requestId, state.sessionId))
-            },
-            enabled = actionsEnabled,
-            contrast = OpenCodeButtonContrast.Low,
-        )
-        Spacer(Modifier.weight(1f))
-        if (state.submitting) {
-            CircularProgressIndicator(modifier = Modifier.padding(horizontal = 8.dp), strokeWidth = 2.dp)
-        }
-        if (state.alwaysPatterns.isNotEmpty()) {
+        PromptKeyboardHint(keyboard)
+        Row(
+            Modifier.fillMaxWidth().focusGroup(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
             OpenCodeButton(
-                OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_always)),
+                OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_deny)),
                 onClick = {
-                    onAction(OpenCodeSessionComposerAction.AlwaysAllowPermission(state.requestId, state.sessionId))
+                    onAction(OpenCodeSessionComposerAction.DenyPermission(state.requestId, state.sessionId))
                 },
                 enabled = actionsEnabled,
                 contrast = OpenCodeButtonContrast.Low,
+                modifier = Modifier.focusRequester(keyboard.target(0)),
+            )
+            Spacer(Modifier.weight(1f))
+            if (state.submitting) {
+                CircularProgressIndicator(modifier = Modifier.padding(horizontal = 8.dp), strokeWidth = 2.dp)
+            }
+            if (showsAlways) {
+                OpenCodeButton(
+                    OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_always)),
+                    onClick = {
+                        onAction(OpenCodeSessionComposerAction.AlwaysAllowPermission(state.requestId, state.sessionId))
+                    },
+                    enabled = actionsEnabled,
+                    contrast = OpenCodeButtonContrast.Low,
+                    modifier = Modifier.focusRequester(keyboard.target(1)),
+                )
+            }
+            OpenCodeButton(
+                OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_allow_once)),
+                onClick = {
+                    onAction(OpenCodeSessionComposerAction.AllowPermissionOnce(state.requestId, state.sessionId))
+                },
+                enabled = actionsEnabled,
+                modifier = Modifier.focusRequester(keyboard.target(if (showsAlways) 2 else 1)),
             )
         }
-        OpenCodeButton(
-            OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_allow_once)),
-            onClick = {
-                onAction(OpenCodeSessionComposerAction.AllowPermissionOnce(state.requestId, state.sessionId))
-            },
-            enabled = actionsEnabled,
-        )
+        RequestPageDots(position = state.queuePosition, count = state.queueCount)
     }
-    RequestPageDots(position = state.queuePosition, count = state.queueCount)
 }
+
+/** The permission or question request this content answers; null for the prompt input and lockout. */
+private val OpenCodeSessionComposerState.promptRequestId: String?
+    get() =
+        when (this) {
+            is OpenCodeSessionComposerState.Permission -> "permission:$requestId"
+            is OpenCodeSessionComposerState.Question -> "question:$requestId"
+            is OpenCodeSessionComposerState.Prompt,
+            is OpenCodeSessionComposerState.ChildLockout,
+            -> null
+        }
 
 private val OpenCodeSessionComposerState.pagesRequests: Boolean
     get() =
@@ -1350,180 +1494,256 @@ private fun ColumnScope.QuestionRequestContent(
             minSelections = state.minSelections,
             maxSelections = state.maxSelections,
         ).resolve()
-    state.attribution?.let { RequestAttributionRow(it, onAction) }
-    Column(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                // The action row measures first; the body takes what is left, up to half the window.
-                .weight(1f, fill = false)
-                .heightIn(max = questionBodyMaxHeight())
-                // Each question and request opens at its top, not where the previous one was left.
-                .verticalScroll(remember(state.requestId, state.questionIndex) { ScrollState(0) })
-                .padding(horizontal = 4.dp, vertical = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+    // Every option row shares one enabled state; the first row (or "Type your own answer") leads.
+    val keyboard = rememberPromptKeyboardFocus(KeyboardPromptKind.Question, listOf(!state.submitting))
+    val customRow = remember { FocusRequester() }
+    val advance = remember { FocusRequester() }
+    // Ctrl+Enter: Next or Submit when that button is enabled; Ctrl+Backspace: Dismiss.
+    val advanceEnabled = !state.submitting && if (showNext) state.nextEnabled else state.submitEnabled
+    KeyboardShortcutHandler(
+        KeyboardShortcutAction.PromptPrimary,
+        enabled = advanceEnabled,
+        title =
+            UiText.resource(
+                if (showNext) R.string.keyboard_shortcuts_next_question else R.string.keyboard_shortcuts_submit_answers,
+            ),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text(
-                text = state.header.ifBlank { stringResource(R.string.component_composer_question) },
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.weight(1f),
-            )
-            if (state.questionCount > 1) {
-                // With a request pager beside it, name this counter so the two read apart.
-                Text(
-                    stringResource(
-                        if (state.requestCount > 1) {
-                            R.string.component_composer_question_step
-                        } else {
-                            R.string.component_composer_question_position
-                        },
-                        state.questionIndex + 1,
-                        state.questionCount,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            RequestPager(
-                position = state.requestPosition,
-                count = state.requestCount,
-                enabled = !state.submitting,
-                kind = RequestPagerKind.Question,
-                onAction = onAction,
-            )
-            OpenCodeButton(
-                variant =
-                    OpenCodeButtonVariant.IconCircle(
-                        OpenCodeIcons.KeyboardArrowDown,
-                        stringResource(R.string.component_composer_hide_question),
-                    ),
-                contrast = OpenCodeButtonContrast.Low,
-                onClick = { onAction(OpenCodeSessionComposerAction.HideQuestion(state.requestId)) },
-            )
-        }
-        Text(state.question, style = MaterialTheme.typography.bodyMedium)
-        Text(
-            selectionHint,
-            style = MaterialTheme.typography.bodySmall,
-            color = openCodeColor("text-base"),
+        onAction(
+            if (showNext) {
+                OpenCodeSessionComposerAction.QuestionNext(state.requestId, state.sessionId)
+            } else {
+                OpenCodeSessionComposerAction.SubmitQuestion(state.requestId, state.sessionId)
+            },
         )
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            state.options.forEach { option ->
-                val optionSelected = option.label in state.selectedLabels
-                OpenCodeListItem(
-                    title = option.label,
-                    subtitle = option.description.takeIf { it.isNotBlank() },
-                    selected = optionSelected,
-                    enabled = !state.submitting,
-                    style = OpenCodeListItemStyle.Card,
-                    startDecorator = questionSelectionDecorator(selected = optionSelected),
-                    onClick = {
-                        onAction(
-                            OpenCodeSessionComposerAction.ToggleQuestionOption(
-                                requestId = state.requestId,
-                                sessionId = state.sessionId,
-                                label = option.label,
-                            ),
-                        )
-                    },
+    }
+    KeyboardShortcutHandler(KeyboardShortcutAction.PromptReject, enabled = !state.submitting, title = UiText.resource(R.string.keyboard_shortcuts_dismiss_question)) {
+        onAction(OpenCodeSessionComposerAction.DismissQuestion(state.requestId, state.sessionId))
+    }
+    val inputFocusRegistry = LocalOpenCodeInputFocusRegistry.current
+    val reportCustomAnswerFocus = rememberOpenCodeTextInputFocusReport(OpenCodeFocusedTextInput.QuestionCustomAnswer)
+    // Bare 1–9 pick an option once focus is inside the prompt, as tapping it would.
+    val pickByDigit =
+        Modifier.onKeyEvent { event ->
+            if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+            val native = event.nativeKeyEvent
+            val index =
+                KeyboardNavigationRules.questionDigitPick(
+                    keyCode = native.keyCode,
+                    ctrl = native.isCtrlPressed,
+                    alt = native.isAltPressed,
+                    shift = native.isShiftPressed,
+                    meta = native.isMetaPressed,
+                    focusInsidePrompt = keyboard.focusInside,
+                    textFieldFocused = inputFocusRegistry?.focusedTextInput != null,
+                    optionCount = state.options.size,
+                ) ?: return@onKeyEvent false
+            if (native.repeatCount == 0 && !state.submitting) {
+                onAction(
+                    OpenCodeSessionComposerAction.ToggleQuestionOption(
+                        requestId = state.requestId,
+                        sessionId = state.sessionId,
+                        label = state.options[index].label,
+                    ),
                 )
             }
-            if (state.customAllowed) {
-                OpenCodeListItem(
-                    title = stringResource(R.string.component_composer_custom_answer_title),
-                    subtitle =
-                        if (!state.customSelected) {
-                            state.customText.takeIf { it.isNotBlank() }
-                        } else {
-                            null
-                        },
-                    selected = state.customSelected,
-                    enabled = !state.submitting,
-                    style = OpenCodeListItemStyle.Card,
-                    startDecorator = questionSelectionDecorator(selected = state.customSelected),
-                    onClick = {
-                        onAction(
-                            OpenCodeSessionComposerAction.ToggleQuestionCustom(
-                                requestId = state.requestId,
-                                sessionId = state.sessionId,
-                            ),
-                        )
-                    },
+            true
+        }
+    // The prompt takes what is left after the composer chrome; inside it the body scrolls.
+    PromptKeyboardColumn(keyboard, modifier = Modifier.weight(1f, fill = false).then(pickByDigit)) {
+        state.attribution?.let { RequestAttributionRow(it, onAction) }
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    // The action row measures first; the body takes what is left, up to half the window.
+                    .weight(1f, fill = false)
+                    .heightIn(max = questionBodyMaxHeight())
+                    // Each question and request opens at its top, not where the previous one was left.
+                    .verticalScroll(remember(state.requestId, state.questionIndex) { ScrollState(0) })
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = state.header.ifBlank { stringResource(R.string.component_composer_question) },
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.weight(1f),
                 )
-                if (state.customSelected) {
-                    OpenCodeTextInput(
-                        value = state.customText,
-                        onValueChange = { text ->
+                if (state.questionCount > 1) {
+                    // With a request pager beside it, name this counter so the two read apart.
+                    Text(
+                        stringResource(
+                            if (state.requestCount > 1) {
+                                R.string.component_composer_question_step
+                            } else {
+                                R.string.component_composer_question_position
+                            },
+                            state.questionIndex + 1,
+                            state.questionCount,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                RequestPager(
+                    position = state.requestPosition,
+                    count = state.requestCount,
+                    enabled = !state.submitting,
+                    kind = RequestPagerKind.Question,
+                    onAction = onAction,
+                )
+                OpenCodeButton(
+                    variant =
+                        OpenCodeButtonVariant.IconCircle(
+                            OpenCodeIcons.KeyboardArrowDown,
+                            stringResource(R.string.component_composer_hide_question),
+                        ),
+                    contrast = OpenCodeButtonContrast.Low,
+                    onClick = { onAction(OpenCodeSessionComposerAction.HideQuestion(state.requestId)) },
+                )
+            }
+            Text(state.question, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                selectionHint,
+                style = MaterialTheme.typography.bodySmall,
+                color = openCodeColor("text-base"),
+            )
+            Column(modifier = Modifier.focusGroup(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.options.forEachIndexed { index, option ->
+                    val optionSelected = option.label in state.selectedLabels
+                    OpenCodeListItem(
+                        modifier = if (index == 0) Modifier.focusRequester(keyboard.target(0)) else Modifier,
+                        title = option.label,
+                        subtitle = option.description.takeIf { it.isNotBlank() },
+                        selected = optionSelected,
+                        enabled = !state.submitting,
+                        style = OpenCodeListItemStyle.Card,
+                        startDecorator = questionSelectionDecorator(selected = optionSelected),
+                        onClick = {
                             onAction(
-                                OpenCodeSessionComposerAction.QuestionCustomTextChanged(
+                                OpenCodeSessionComposerAction.ToggleQuestionOption(
                                     requestId = state.requestId,
                                     sessionId = state.sessionId,
-                                    text = text,
+                                    label = option.label,
                                 ),
                             )
                         },
-                        hint = stringResource(R.string.component_composer_custom_answer_hint),
+                    )
+                }
+                if (state.customAllowed) {
+                    OpenCodeListItem(
+                        modifier =
+                            Modifier
+                                .focusRequester(customRow)
+                                .then(if (state.options.isEmpty()) Modifier.focusRequester(keyboard.target(0)) else Modifier),
+                        title = stringResource(R.string.component_composer_custom_answer_title),
+                        subtitle =
+                            if (!state.customSelected) {
+                                state.customText.takeIf { it.isNotBlank() }
+                            } else {
+                                null
+                            },
+                        selected = state.customSelected,
                         enabled = !state.submitting,
-                        minLines = QuestionCustomMinLines,
-                        maxLines = QuestionCustomMaxLines,
+                        style = OpenCodeListItemStyle.Card,
+                        startDecorator = questionSelectionDecorator(selected = state.customSelected),
+                        onClick = {
+                            onAction(
+                                OpenCodeSessionComposerAction.ToggleQuestionCustom(
+                                    requestId = state.requestId,
+                                    sessionId = state.sessionId,
+                                ),
+                            )
+                        },
+                    )
+                    if (state.customSelected) {
+                        OpenCodeTextInput(
+                            value = state.customText,
+                            onValueChange = { text ->
+                                onAction(
+                                    OpenCodeSessionComposerAction.QuestionCustomTextChanged(
+                                        requestId = state.requestId,
+                                        sessionId = state.sessionId,
+                                        text = text,
+                                    ),
+                                )
+                            },
+                            hint = stringResource(R.string.component_composer_custom_answer_hint),
+                            enabled = !state.submitting,
+                            modifier =
+                                Modifier
+                                    .onFocusChanged { reportCustomAnswerFocus(it.hasFocus) }
+                                    .onInterceptKeyBeforeSoftKeyboard { event ->
+                                        customAnswerKey(
+                                            event = event,
+                                            hardwareKeyboard = keyboard.hardwareKeyboard,
+                                            onSave = { advance.tryRequestFocus() },
+                                            onLeave = { customRow.tryRequestFocus() },
+                                        )
+                                    },
+                            minLines = QuestionCustomMinLines,
+                            maxLines = QuestionCustomMaxLines,
+                        )
+                    }
+                }
+            }
+            state.errorMessage?.let {
+                Text(it, color = openCodeColor("error"), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        PromptKeyboardHint(keyboard)
+        Row(
+            modifier = Modifier.fillMaxWidth().focusGroup(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            OpenCodeButton(
+                variant = OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_dismiss)),
+                onClick = {
+                    onAction(OpenCodeSessionComposerAction.DismissQuestion(state.requestId, state.sessionId))
+                },
+                enabled = !state.submitting,
+                contrast = OpenCodeButtonContrast.Low,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (state.submitting) {
+                    CircularProgressIndicator(modifier = Modifier.padding(horizontal = 4.dp), strokeWidth = 2.dp)
+                }
+                if (showBack) {
+                    OpenCodeButton(
+                        OpenCodeButtonVariant.CompactText(stringResource(R.string.top_bar_back)),
+                        onClick = {
+                            onAction(OpenCodeSessionComposerAction.QuestionBack(state.requestId, state.sessionId))
+                        },
+                        enabled = state.backEnabled && !state.submitting,
+                        contrast = OpenCodeButtonContrast.Low,
+                    )
+                }
+                if (showNext) {
+                    OpenCodeButton(
+                        OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_next)),
+                        onClick = {
+                            onAction(OpenCodeSessionComposerAction.QuestionNext(state.requestId, state.sessionId))
+                        },
+                        enabled = state.nextEnabled && !state.submitting,
+                        modifier = Modifier.focusRequester(advance),
+                    )
+                } else {
+                    OpenCodeButton(
+                        OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_submit)),
+                        onClick = {
+                            onAction(OpenCodeSessionComposerAction.SubmitQuestion(state.requestId, state.sessionId))
+                        },
+                        enabled = state.submitEnabled && !state.submitting,
+                        modifier = Modifier.focusRequester(advance),
                     )
                 }
             }
         }
-        state.errorMessage?.let {
-            Text(it, color = openCodeColor("error"), style = MaterialTheme.typography.bodySmall)
-        }
+        RequestPageDots(position = state.requestPosition, count = state.requestCount)
     }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        OpenCodeButton(
-            variant = OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_dismiss)),
-            onClick = {
-                onAction(OpenCodeSessionComposerAction.DismissQuestion(state.requestId, state.sessionId))
-            },
-            enabled = !state.submitting,
-            contrast = OpenCodeButtonContrast.Low,
-        )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (state.submitting) {
-                CircularProgressIndicator(modifier = Modifier.padding(horizontal = 4.dp), strokeWidth = 2.dp)
-            }
-            if (showBack) {
-                OpenCodeButton(
-                    OpenCodeButtonVariant.CompactText(stringResource(R.string.top_bar_back)),
-                    onClick = {
-                        onAction(OpenCodeSessionComposerAction.QuestionBack(state.requestId, state.sessionId))
-                    },
-                    enabled = state.backEnabled && !state.submitting,
-                    contrast = OpenCodeButtonContrast.Low,
-                )
-            }
-            if (showNext) {
-                OpenCodeButton(
-                    OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_next)),
-                    onClick = {
-                        onAction(OpenCodeSessionComposerAction.QuestionNext(state.requestId, state.sessionId))
-                    },
-                    enabled = state.nextEnabled && !state.submitting,
-                )
-            } else {
-                OpenCodeButton(
-                    OpenCodeButtonVariant.CompactText(stringResource(R.string.component_composer_submit)),
-                    onClick = {
-                        onAction(OpenCodeSessionComposerAction.SubmitQuestion(state.requestId, state.sessionId))
-                    },
-                    enabled = state.submitEnabled && !state.submitting,
-                )
-            }
-        }
-    }
-    RequestPageDots(position = state.requestPosition, count = state.requestCount)
 }
 
 /**
@@ -1541,6 +1761,170 @@ private fun questionBodyMaxHeight(): Dp {
 }
 
 private const val QuestionBodyMaxHeightFraction = 0.5f
+
+/** ↑ / ↓ prompt history of one composer (see [KeyboardNavigationRules.promptRecall]). */
+private class ComposerPromptRecall {
+    private var index: Int? = null
+    private var shownText: String? = null
+
+    fun handleKey(
+        event: androidx.compose.ui.input.key.KeyEvent,
+        state: OpenCodeSessionComposerState.Prompt,
+        field: TextFieldValue,
+        layout: TextLayoutResult?,
+        hardwareKeyboard: Boolean,
+        onAction: (OpenCodeSessionComposerAction) -> Unit,
+    ): Boolean {
+        val direction =
+            when (event.key) {
+                Key.DirectionUp -> PromptRecallDirection.Older
+                Key.DirectionDown -> PromptRecallDirection.Newer
+                else -> return false
+            }
+        val native = event.nativeKeyEvent
+        if (native.isCtrlPressed || native.isAltPressed || native.isShiftPressed || native.isMetaPressed) return false
+        if (!KeyboardNavigationRules.fromHardwareKeyboard(hardwareKeyboard, native.flags) || field.composition != null) return false
+        val step =
+            KeyboardNavigationRules.promptRecall(
+                history = state.promptHistory,
+                browsingIndex = index,
+                unedited = shownText == state.text,
+                text = state.text,
+                hasAttachments = state.attachments.isNotEmpty(),
+                caretAtStart = field.selection.collapsed && field.selection.start == 0,
+                caretOnFirstLine = field.caretOnFirstLine(layout),
+                caretOnLastLine = field.caretOnLastLine(layout),
+                direction = direction,
+            ) ?: return false
+        if (event.type == KeyEventType.KeyDown) {
+            index = step.index
+            shownText = step.text.takeIf { step.index != null }
+            onAction(OpenCodeSessionComposerAction.TextChanged(text = step.text, selectionStart = step.text.length))
+        }
+        return true
+    }
+}
+
+/** The caret's line is the first visual line (soft wraps count), or the first line without a layout yet. */
+private fun TextFieldValue.caretOnFirstLine(layout: TextLayoutResult?): Boolean {
+    val caret = selection.start.coerceIn(0, text.length)
+    return if (layout != null && layout.layoutInput.text.length == text.length) {
+        layout.getLineForOffset(caret) == 0
+    } else {
+        '\n' !in text.substring(0, caret)
+    }
+}
+
+/** The caret's line is the last visual line (soft wraps count), or the last line without a layout yet. */
+private fun TextFieldValue.caretOnLastLine(layout: TextLayoutResult?): Boolean {
+    val caret = selection.end.coerceIn(0, text.length)
+    return if (layout != null && layout.layoutInput.text.length == text.length) {
+        layout.getLineForOffset(caret) == layout.lineCount - 1
+    } else {
+        '\n' !in text.substring(caret)
+    }
+}
+
+/** Keyboard focus state of one permission or question prompt. */
+@Stable
+private class PromptKeyboardFocus(
+    val kind: KeyboardPromptKind,
+    val hardwareKeyboard: Boolean,
+) {
+    private val targets = mutableListOf<FocusRequester>()
+
+    /**
+     * Focus handle of the prompt's control at [index] in reading order; the first Tab or arrow
+     * focuses the first enabled one (see [KeyboardNavigationRules.promptInitialTarget]).
+     */
+    fun target(index: Int): FocusRequester {
+        while (targets.size <= index) targets += FocusRequester()
+        return targets[index]
+    }
+
+    var focusInside by mutableStateOf(false)
+}
+
+@Composable
+private fun rememberPromptKeyboardFocus(
+    kind: KeyboardPromptKind,
+    actionsEnabled: List<Boolean>,
+): PromptKeyboardFocus {
+    val hardwareKeyboard = rememberOpenCodeHardwareKeyboardConnected()
+    val focus = remember(kind, hardwareKeyboard) { PromptKeyboardFocus(kind, hardwareKeyboard) }
+    val inputModeManager = LocalInputModeManager.current
+    val currentActionsEnabled by rememberUpdatedState(actionsEnabled)
+    // Nothing is focused when a prompt appears; only the first Tab or arrow moves in, landing on
+    // the first enabled control, and not at all when none is enabled.
+    OpenCodePromptKeyboardEntryEffect {
+        val index = KeyboardNavigationRules.promptInitialTarget(currentActionsEnabled)
+        if (index == null) {
+            false
+        } else {
+            inputModeManager.requestInputMode(InputMode.Keyboard)
+            focus.target(index).tryRequestFocus()
+        }
+    }
+    return focus
+}
+
+/** Groups a prompt's content so focus inside it is known; keeps the composer's 10 dp rhythm. */
+@Composable
+private fun PromptKeyboardColumn(
+    focus: PromptKeyboardFocus,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .onFocusChanged { focus.focusInside = it.hasFocus },
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        content()
+    }
+}
+
+/** "Press Tab to answer with the keyboard", while a hardware keyboard is connected and focus is outside the prompt. */
+@Composable
+private fun PromptKeyboardHint(focus: PromptKeyboardFocus) {
+    if (!KeyboardNavigationRules.promptHintVisible(focus.hardwareKeyboard, focus.focusInside)) return
+    OpenCodeKeyboardHint(
+        text = KeyboardNavigationRules.PROMPT_KEYBOARD_HINT,
+        modifier = Modifier.testTag("sessionComposerPromptKeyboardHint"),
+    )
+}
+
+/** Return saves a custom answer and moves on to Next / Submit; Esc goes back to its option row. */
+private fun customAnswerKey(
+    event: androidx.compose.ui.input.key.KeyEvent,
+    hardwareKeyboard: Boolean,
+    onSave: () -> Unit,
+    onLeave: () -> Unit,
+): Boolean {
+    val action =
+        KeyboardNavigationRules.customAnswerKey(
+            isReturn = event.key == Key.Enter || event.key == Key.NumPadEnter,
+            isEscape = event.key == Key.Escape,
+            fromHardwareKeyboard = KeyboardNavigationRules.fromHardwareKeyboard(hardwareKeyboard, event.nativeKeyEvent.flags),
+            shift = event.isShiftPressed,
+            ctrl = event.isCtrlPressed,
+            alt = event.isAltPressed,
+            meta = event.isMetaPressed,
+        )
+    if (action == CustomAnswerKeyAction.PassThrough) return false
+    if (event.type == KeyEventType.KeyDown) {
+        when (action) {
+            CustomAnswerKeyAction.Save -> onSave()
+            CustomAnswerKeyAction.Leave -> onLeave()
+            CustomAnswerKeyAction.PassThrough -> Unit
+        }
+    }
+    return true
+}
+
+private fun FocusRequester.tryRequestFocus(): Boolean = runCatching { requestFocus() }.getOrDefault(false)
 
 @Composable
 private fun questionSelectionDecorator(selected: Boolean): StartDecorator =

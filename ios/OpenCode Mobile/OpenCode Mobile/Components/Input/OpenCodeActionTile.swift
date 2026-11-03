@@ -70,6 +70,7 @@ struct OpenCodeActionTile: View {
         .buttonStyle(OpenCodeActionTilePressStyle(enabled: enabled))
         .disabled(!enabled)
         .accessibilityLabel(openCode: accessibilityLabel)
+        .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: Self.cornerRadius), enabled: enabled, activate: action)
     }
 
     private var iconColor: Color {

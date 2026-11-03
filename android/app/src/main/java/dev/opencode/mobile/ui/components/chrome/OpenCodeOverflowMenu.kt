@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.LayoutDirection
@@ -43,6 +44,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import dev.opencode.mobile.theme.OpenCodeRadius
+import dev.opencode.mobile.theme.OpenCodeSmallShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -160,6 +162,36 @@ fun OpenCodeAnchoredOverflowHost(
     }
 }
 
+/**
+ * The overflow menu at a pointer position, for a secondary click: the panel's top-start corner
+ * sits at [position] in the parent's coordinates. Shows while [position] is not null.
+ */
+@Composable
+fun OpenCodeContextMenu(
+    position: IntOffset?,
+    entries: List<OpenCodeOverflowMenuEntry>,
+    onDismissRequest: () -> Unit,
+) {
+    if (position == null) return
+    Popup(
+        alignment = Alignment.TopStart,
+        offset = position,
+        onDismissRequest = onDismissRequest,
+        properties =
+            PopupProperties(
+                focusable = true,
+                dismissOnBackPress = true,
+                dismissOnClickOutside = true,
+                usePlatformDefaultWidth = false,
+            ),
+    ) {
+        OpenCodeOverflowMenuPanel(
+            entries = entries,
+            onDismissRequest = onDismissRequest,
+        )
+    }
+}
+
 private class AnchoredOverflowMenuPositionProvider(
     private val gapPx: Int,
 ) : PopupPositionProvider {
@@ -260,6 +292,8 @@ private fun OverflowMenuEntryRow(
             Modifier
                 .widthIn(min = OverflowMenuMinWidth)
                 .defaultMinSize(minHeight = OverflowMenuEntryMinHeight)
+                .openCodeFocusRing(OpenCodeSmallShape, entry.enabled)
+                .openCodeHoverLayer(interactionSource, OpenCodeSmallShape)
                 .clickable(
                     enabled = entry.enabled,
                     interactionSource = interactionSource,

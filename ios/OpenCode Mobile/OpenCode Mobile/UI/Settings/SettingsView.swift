@@ -693,6 +693,7 @@ struct SettingsView: View {
                     }
                 }
             }
+            .openCodeFocusGroup(.vertical)
             .openCodeReadableColumn()
             .accessibilityIdentifier("settingsContent")
         }

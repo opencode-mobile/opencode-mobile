@@ -72,6 +72,7 @@ import dev.opencode.mobile.domain.message.AttachmentDropRouting
 import dev.opencode.mobile.domain.message.AttachmentDropSummary
 import dev.opencode.mobile.domain.message.AttachmentIngestionService
 import dev.opencode.mobile.domain.message.FailureAction
+import dev.opencode.mobile.domain.message.MessageRole
 import dev.opencode.mobile.domain.preferences.DeveloperToolsPreferences
 import dev.opencode.mobile.domain.session.OptimisticSessionCreate
 import dev.opencode.mobile.domain.session.SessionTodoList
@@ -128,8 +129,10 @@ import dev.opencode.mobile.ui.components.rememberOpenCodeSessionComposerFocus
 import dev.opencode.mobile.ui.feedback.FeedbackSheet
 import dev.opencode.mobile.ui.feedback.rememberFeedbackSheetState
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.mobile.ui.keyboard.KeyboardInterruptHandler
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutAction
 import dev.opencode.mobile.ui.keyboard.KeyboardShortcutHandler
+import dev.opencode.mobile.ui.keyboard.rememberKeyboardInterruptArmed
 import dev.opencode.mobile.ui.sessionchat.dictation.ComposerDictationSession
 import dev.opencode.mobile.ui.sessionchat.dictation.DictationModelDownloader
 import dev.opencode.mobile.ui.sessionchat.dictation.DictationSupport
@@ -197,6 +200,8 @@ fun SessionChatScreen(
     optimisticNavigationInstanceId: String? = null,
     parentId: String? = null,
     onNavigateBack: () -> Unit = {},
+    /** Ctrl+N: open a new session in [worktree] the way Home's New session does; null turns Ctrl+N off. */
+    onNewSessionRequested: ((worktree: String) -> Unit)? = null,
     onSessionContextClick: () -> Unit = {},
     onReviewChangesClick: (ChangesNavigationTarget) -> Unit = {},
     onChildSessionClick: (ChildSessionNavigationTarget) -> Unit = {},
@@ -228,6 +233,7 @@ fun SessionChatScreen(
             optimisticNavigationInstanceId = optimisticNavigationInstanceId,
             parentId = parentId,
             onNavigateBack = onNavigateBack,
+            onNewSessionRequested = onNewSessionRequested,
             onSessionContextClick = onSessionContextClick,
             onReviewChangesClick = onReviewChangesClick,
             onChildSessionClick = onChildSessionClick,
@@ -253,6 +259,7 @@ private fun SessionChatScreenBody(
     optimisticNavigationInstanceId: String?,
     parentId: String?,
     onNavigateBack: () -> Unit,
+    onNewSessionRequested: ((worktree: String) -> Unit)?,
     onSessionContextClick: () -> Unit,
     onReviewChangesClick: (ChangesNavigationTarget) -> Unit,
     onChildSessionClick: (ChildSessionNavigationTarget) -> Unit,
@@ -1223,6 +1230,13 @@ private fun SessionChatScreenBody(
                                 hasPermission = uiState.permissionRequest != null && !uiState.permissionDockHidden,
                                 hasQuestion = uiState.questionRequest != null && !uiState.questionDockHidden,
                             )
+                        // This session's sent prompts, oldest first, for ↑ / ↓ recall in the composer.
+                        val promptHistory =
+                            remember(uiState.messages) {
+                                uiState.messages
+                                    .filter { it.role == MessageRole.User && !it.isPending && it.text.isNotBlank() }
+                                    .map { it.text }
+                            }
                         val composerState =
                             when (composerKind) {
                                 SessionChatComposerKind.Permission -> {
@@ -1362,6 +1376,8 @@ private fun SessionChatScreenBody(
                                         showDictationButton = dictationSupport.showsMic,
                                         shellMode = uiState.composer.isShellMode && !sideQuestionMode,
                                         sideQuestionMode = sideQuestionMode,
+                                        suggestionsOpen = uiState.atSuggestionsVisible || uiState.slashSuggestionsVisible,
+                                        promptHistory = promptHistory,
                                     )
                             }
                         // Drops attach only where the Attach button would: a prompt composer that takes attachments.
@@ -1376,6 +1392,40 @@ private fun SessionChatScreenBody(
                         ) {
                             composerFocus.requestFocus()
                         }
+                        // Esc twice interrupts a busy turn, through the same abort as Stop.
+                        KeyboardInterruptHandler(
+                            enabled = uiState.sessionStatusLabel != null && !uiState.isAborting && uiState.canMutate,
+                        ) {
+                            viewModel.abort()
+                        }
+                        val interruptArmed = rememberKeyboardInterruptArmed()
+                        val openModelPicker: () -> Unit = {
+                            if (uiState.composer.modelOptions.isEmpty()) {
+                                viewModel.retryModelCatalog()
+                            } else {
+                                logChatAction(ProductAnalytics.Action.COMPOSER_OPEN_MODEL_PICKER)
+                                activeModelProviderId =
+                                    uiState.composer.selectedModel
+                                        ?.option
+                                        ?.providerId
+                                activePicker = ComposerPickerKind.Model
+                            }
+                        }
+                        val promptComposerShown = composerKind == SessionChatComposerKind.Prompt && uiState.dictation == null
+                        // Ctrl+N: a new session in this chat's project (a subagent's too), opened like
+                        // Home's New session. Home stands down while this chat shows beside it.
+                        KeyboardShortcutHandler(
+                            KeyboardShortcutAction.NewSession,
+                            enabled = onNewSessionRequested != null && uiState.canMutate && currentWorktree.isNotEmpty(),
+                        ) {
+                            onNewSessionRequested?.invoke(currentWorktree)
+                        }
+                        KeyboardShortcutHandler(KeyboardShortcutAction.CommandPalette, enabled = promptComposerShown) {
+                            viewModel.openCommands()
+                        }
+                        KeyboardShortcutHandler(KeyboardShortcutAction.ModelPicker, enabled = promptComposerShown) {
+                            openModelPicker()
+                        }
                         val dictationCard =
                             uiState.dictation?.toCardModel(
                                 elapsedLabel =
@@ -1389,22 +1439,12 @@ private fun SessionChatScreenBody(
                             modifier = Modifier.sessionChatPanelPulse(uiState.inboxPanelPulse),
                             focus = composerFocus,
                             dictation = dictationCard,
+                            interruptArmed = interruptArmed,
                             onAction = { action ->
                                 when (action) {
                                     is OpenCodeSessionComposerAction.TextChanged ->
                                         viewModel.updateComposerText(action.text, action.selectionStart)
-                                    OpenCodeSessionComposerAction.SelectModel -> {
-                                        if (uiState.composer.modelOptions.isEmpty()) {
-                                            viewModel.retryModelCatalog()
-                                            return@OpenCodeSessionComposer
-                                        }
-                                        logChatAction(ProductAnalytics.Action.COMPOSER_OPEN_MODEL_PICKER)
-                                        activeModelProviderId =
-                                            uiState.composer.selectedModel
-                                                ?.option
-                                                ?.providerId
-                                        activePicker = ComposerPickerKind.Model
-                                    }
+                                    OpenCodeSessionComposerAction.SelectModel -> openModelPicker()
                                     OpenCodeSessionComposerAction.SelectMode -> {
                                         logChatAction(ProductAnalytics.Action.COMPOSER_OPEN_MODE_PICKER)
                                         activePicker = ComposerPickerKind.Mode

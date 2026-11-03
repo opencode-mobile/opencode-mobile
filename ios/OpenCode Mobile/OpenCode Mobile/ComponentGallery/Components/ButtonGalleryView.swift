@@ -25,6 +25,7 @@ struct ButtonGalleryView: View {
     @State private var selectedSize: OpenCodeButtonSize = .medium
     @State private var contrast: OpenCodeButtonContrast = .high
     @State private var enabled = true
+    @State private var focusRing = false
 
     private var variant: OpenCodeButtonVariant {
         switch selectedVariant {
@@ -64,6 +65,12 @@ struct ButtonGalleryView: View {
                     selected: enabled,
                     action: { enabled.toggle() }
                 )
+                // The ring a hardware-keyboard focus draws (Tab onto the button to see it live).
+                OpenCodeChoiceBadge(
+                    label: "Keyboard focus",
+                    selected: focusRing,
+                    action: { focusRing.toggle() }
+                )
             }
 
             HStack(spacing: 8) {
@@ -98,6 +105,7 @@ struct ButtonGalleryView: View {
             }
 
             OpenCodeButton(variant: variant, size: selectedSize, enabled: enabled, contrast: contrast, action: {})
+                .openCodeFocusRingPreview(focusRing)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

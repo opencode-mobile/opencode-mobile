@@ -27,6 +27,7 @@ struct OpenCodeActionPill: View {
         .openCodeFloatingPillChrome(enabled: enabled)
         .disabled(!enabled)
         .accessibilityLabel(accessibilityLabel)
+        .openCodeKeyboardFocusable(.capsule, enabled: enabled, activate: action)
     }
 
     private var labelContent: some View {

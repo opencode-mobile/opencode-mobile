@@ -18,6 +18,7 @@ import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarVariant
 import dev.opencode.mobile.ui.components.OpenCodeSplitPaneDetailControl
 import dev.opencode.mobile.ui.files.FilesScreen
+import dev.opencode.mobile.ui.main.newSessionOpenTarget
 import dev.opencode.mobile.ui.sessionchat.SessionChatScreen
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailSheet
 import dev.opencode.mobile.ui.sessionchat.view.SessionChatToolDetailTarget
@@ -34,6 +35,8 @@ internal class ChatFlowNavigator(
     val push: (NavKey) -> Unit,
     val navigateBack: () -> Unit,
     val replaceSession: (SessionChat) -> Unit,
+    /** Opens another session the way Home opens one: pushed when stacked, selected in the pane. */
+    val openSession: (SessionChat) -> Unit,
 )
 
 internal fun MutableList<NavKey>.rootChatFlowNavigator(): ChatFlowNavigator =
@@ -44,6 +47,7 @@ internal fun MutableList<NavKey>.rootChatFlowNavigator(): ChatFlowNavigator =
             popRouteUnlessRoot()
             add(session)
         },
+        openSession = { session -> add(session) },
     )
 
 internal fun MutableList<NavKey>.paneChatFlowNavigator(): ChatFlowNavigator =
@@ -51,6 +55,7 @@ internal fun MutableList<NavKey>.paneChatFlowNavigator(): ChatFlowNavigator =
         push = { route -> add(route) },
         navigateBack = { navigateBackInPane() },
         replaceSession = { session -> replacePaneSession(session) },
+        openSession = { session -> selectPaneSession(session) },
     )
 
 /**
@@ -94,6 +99,17 @@ internal fun EntryProviderScope<NavKey>.chatFlowEntries(
                 parentId = key.parentId,
                 detailControl = detailControl,
                 onNavigateBack = navigator.navigateBack,
+                onNewSessionRequested = { worktree ->
+                    val target = newSessionOpenTarget(worktree)
+                    navigator.openSession(
+                        SessionChat(
+                            sessionId = target.sessionId,
+                            sessionTitle = target.title,
+                            worktree = target.worktree,
+                            optimisticNavigationInstanceId = target.optimisticNavigationInstanceId,
+                        ),
+                    )
+                },
                 onSessionContextClick = {
                     navigator.push(SessionContext(key.sessionId, key.worktree))
                 },

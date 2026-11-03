@@ -36,6 +36,11 @@ struct OpenCodeReasoningRow: View {
         .accessibilityAddTraits(action == nil ? [] : .isButton)
         .accessibilityLabel(label)
         .accessibilityHint(action == nil ? "" : "Shows the full thought")
+        .openCodeKeyboardFocusable(
+            .insetRoundedRectangle(cornerRadius: OpenCodeRadius.small),
+            enabled: action != nil && state != .collapsed,
+            activate: action
+        )
     }
 
     private var label: String {

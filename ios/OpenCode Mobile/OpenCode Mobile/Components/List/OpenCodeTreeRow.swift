@@ -128,6 +128,7 @@ struct OpenCodeTreeRow: View {
         .accessibilityLabel(accessibilityLabel)
         .accessibilityValue(accessibilityValue)
         .accessibilityAddTraits(state == .selected ? [.isButton, .isSelected] : .isButton)
+        .openCodeKeyboardFocusable(.insetRoundedRectangle(cornerRadius: OpenCodeTreeRowMetrics.cornerRadius), activate: action)
     }
 
     @ViewBuilder

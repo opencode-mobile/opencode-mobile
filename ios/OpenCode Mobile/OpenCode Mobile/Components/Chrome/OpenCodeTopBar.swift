@@ -402,6 +402,7 @@ struct OpenCodeTopBar: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
+            .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: OpenCodeRadius.small), activate: onTitleClick)
         } else {
             titleLabel(title)
         }
@@ -483,6 +484,7 @@ struct OpenCodeTopBar: View {
             .opacity(enabled ? 1 : 0.5)
             .disabled(!enabled)
             .accessibilityLabel(openCode: accessibilityLabel)
+            .openCodeKeyboardFocusable(.circle, enabled: enabled, activate: action)
         } else {
             OpenCodeButton(
                 variant: .iconCircle(icon, accessibilityLabel: accessibilityLabel),

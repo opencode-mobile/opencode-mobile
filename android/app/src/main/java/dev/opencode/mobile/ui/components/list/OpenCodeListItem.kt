@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -191,6 +192,7 @@ fun OpenCodeListItem(
     }
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+    val isFocused by interactionSource.collectIsFocusedAsState()
     val haptic = LocalHapticFeedback.current
     val popScale = remember { Animatable(1f) }
     var popTick by remember { mutableIntStateOf(0) }
@@ -295,7 +297,11 @@ fun OpenCodeListItem(
                         } else {
                             Modifier
                         },
-                    ).then(interactionModifier),
+                    ).openCodeFocusRing(focused = isFocused && !isPlain, shape = containerShape)
+                    .then(if (interactionModifier === Modifier) Modifier else Modifier.openCodeControl(enabled))
+                    // A secondary click opens the same actions as a long-press.
+                    .openCodeSecondaryClick(enabled = enabled && onLongPress != null) { onLongPress?.invoke() }
+                    .then(interactionModifier),
         ) {
             if (isPlain) {
                 Box(
@@ -307,7 +313,8 @@ fun OpenCodeListItem(
                                 vertical = ListItemSelectionVerticalInset,
                             ).clip(ListItemSelectionShape)
                             .background(plainHighlightColor, ListItemSelectionShape)
-                            .indication(interactionSource, ripple(bounded = true)),
+                            .indication(interactionSource, ripple(bounded = true))
+                            .openCodeFocusRing(focused = isFocused, shape = ListItemSelectionShape),
                 )
             }
             if (variant == OpenCodeListItemVariant.Compact) {

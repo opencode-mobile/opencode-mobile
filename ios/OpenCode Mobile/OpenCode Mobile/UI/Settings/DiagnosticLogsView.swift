@@ -174,6 +174,7 @@ struct DiagnosticLogsView: View {
                 .padding(.top, 16)
                 .padding(.bottom, 24)
             }
+            .openCodeFocusGroup(.vertical)
 
             VStack(spacing: 8) {
                 OpenCodeButton(

@@ -257,6 +257,7 @@ private struct OpenCodeImageTile: View {
                     .accessibilityElement(children: .ignore)
                     .accessibilityLabel(accessibilityLabel)
                     .accessibilityAddTraits(.isButton)
+                    .openCodeKeyboardFocusable(.roundedRectangle(cornerRadius: OpenCodeRadius.small), activate: action)
             } else {
                 picture
                     .accessibilityElement(children: .ignore)

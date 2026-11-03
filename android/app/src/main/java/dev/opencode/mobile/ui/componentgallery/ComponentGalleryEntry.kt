@@ -75,6 +75,7 @@ enum class ComponentGalleryEntryId {
     StatusStack,
     DiffStat,
     InlineNotice,
+    KeyboardHint,
     CodeSnippet,
     SessionList,
     SessionListSkeleton,
@@ -229,6 +230,12 @@ val ComponentGalleryEntries =
             id = ComponentGalleryEntryId.InlineNotice,
             title = "Inline Notice",
             description = "Tonal inline message with an optional trailing action.",
+            category = ComponentGalleryCategory.Controls,
+        ),
+        ComponentGalleryEntry(
+            id = ComponentGalleryEntryId.KeyboardHint,
+            title = "Keyboard Hint",
+            description = "One line of hardware-keyboard guidance, neutral or warning.",
             category = ComponentGalleryCategory.Controls,
         ),
         ComponentGalleryEntry(
