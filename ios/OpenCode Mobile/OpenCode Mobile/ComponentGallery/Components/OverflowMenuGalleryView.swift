@@ -6,6 +6,7 @@ struct OverflowMenuGalleryView: View {
     @State private var entriesEnabled = true
     @State private var selectionRowsEnabled = false
     @State private var showDestructive = false
+    @State private var showDivider = false
     @State private var itemCount = 2
 
     private var entries: [OpenCodeOverflowMenuEntry] {
@@ -21,6 +22,7 @@ struct OverflowMenuGalleryView: View {
                 title: "Copy session ID",
                 icon: selectionRowsEnabled ? nil : .contentCopy,
                 enabled: entriesEnabled,
+                dividerAbove: showDivider,
                 action: {}
             ),
         ]
@@ -84,6 +86,11 @@ struct OverflowMenuGalleryView: View {
                         label: "Destructive",
                         selected: showDestructive,
                         action: { showDestructive.toggle() }
+                    )
+                    OpenCodeChoiceBadge(
+                        label: "Divider",
+                        selected: showDivider,
+                        action: { showDivider.toggle() }
                     )
                 }
 

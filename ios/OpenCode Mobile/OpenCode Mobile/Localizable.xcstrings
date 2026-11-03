@@ -5538,6 +5538,17 @@
         }
       }
     },
+    "home.more_options" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More options"
+          }
+        }
+      }
+    },
     "home.new_session" : {
       "extractionState" : "manual",
       "localizations" : {

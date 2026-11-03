@@ -273,7 +273,8 @@ final class OpenCode_MobileUITests: XCTestCase {
             return
         }
 
-        app.buttons["Settings"].tap()
+        app.buttons["More options"].tap()
+        app.buttons["homeMenuSettings"].tap()
         app.staticTexts["Server Connection"].tap()
     }
 
