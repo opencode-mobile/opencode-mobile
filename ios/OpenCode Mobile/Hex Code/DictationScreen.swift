@@ -53,6 +53,7 @@ struct DictationScreen: View {
             await engine.prepare()
             #if DEBUG
             await transcribeLaunchSample()
+            await runLabClips()
             #endif
         }
     }
@@ -189,6 +190,46 @@ struct DictationScreen: View {
         }
         phase = .idle
         try? report.joined(separator: "\n").write(to: URL.documentsDirectory.appending(path: "HexCodeSampleResult.txt"), atomically: true, encoding: .utf8)
+    }
+
+    /// `-HexCodeLab <folder>` runs every clip of a lab clip set (a folder in Documents with `clips.json` and WAVs, as on
+    /// Android) through the engine after one warm-up run, and writes Documents/lab/<folder>.jsonl in the Android lab's
+    /// result format, so both platforms are scored by the same script.
+    private func runLabClips() async {
+        guard engine.modelState == .ready, let set = UserDefaults.standard.string(forKey: "HexCodeLab") else { return }
+        struct Clip: Decodable { let id, file, reference: String; let seconds: Double }
+        struct Clips: Decodable { let clips: [Clip] }
+        let folder = URL.documentsDirectory.appending(path: set)
+        do {
+            let clips = try JSONDecoder().decode(Clips.self, from: Data(contentsOf: folder.appending(path: "clips.json"))).clips
+            guard let first = clips.first else { return }
+            phase = .transcribing
+            let runId = Int(Date().timeIntervalSince1970 * 1000)
+            var started = Date()
+            _ = try await engine.transcribe(fileAt: folder.appending(path: first.file))
+            let firstMs = Date().timeIntervalSince(started) * 1000
+            var lines: [String] = []
+            for (i, clip) in clips.enumerated() {
+                errorText = "Lab clip \(i + 1) of \(clips.count)"
+                started = Date()
+                let text = (try? await engine.transcribe(fileAt: folder.appending(path: clip.file))) ?? ""
+                let result: [String: Any] = [
+                    "runId": runId, "device": "Apple iPhone 16e", "modelId": "parakeet-v2-coreml", "modelTitle": "Parakeet V2 · CoreML",
+                    "engine": "fluidaudio", "options": "neural engine", "clipId": set == "technical" ? clip.id : "\(set)/\(clip.id)",
+                    "audioSeconds": clip.seconds, "waitMs": Date().timeIntervalSince(started) * 1000, "loadMs": 0, "firstMs": firstMs,
+                    "reference": clip.reference, "text": text, "referenceWords": 0, "wordErrors": 0, "memoryMb": 0,
+                    "thermal": ProcessInfo.processInfo.thermalState.rawValue,
+                ]
+                lines.append(String(decoding: try JSONSerialization.data(withJSONObject: result), as: UTF8.self))
+            }
+            let out = URL.documentsDirectory.appending(path: "lab")
+            try FileManager.default.createDirectory(at: out, withIntermediateDirectories: true)
+            try (lines.joined(separator: "\n") + "\n").write(to: out.appending(path: "\(set).jsonl"), atomically: true, encoding: .utf8)
+            errorText = "Lab run finished · \(clips.count) clips"
+        } catch {
+            errorText = "Lab run failed · \(error.localizedDescription)"
+        }
+        phase = .idle
     }
     #endif
 
