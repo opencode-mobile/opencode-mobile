@@ -25,4 +25,9 @@ sealed class WorktreeRemoveError(
     class Failed(
         message: String,
     ) : WorktreeRemoveError(message)
+
+    /** The request got no answer (offline, connection dropped); [message] is transport detail. */
+    class Unreachable(
+        message: String,
+    ) : WorktreeRemoveError(message)
 }

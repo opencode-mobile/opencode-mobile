@@ -254,12 +254,23 @@ object HomeSessionLocation {
             if (includeProjectName) add(Part(project.displayName))
             worktree.branch?.let { add(Part(it, isBranch = true)) }
             if (!worktree.isMain || worktree.branch == null) {
-                add(Part(worktree.folderName, isRemoved = directory in removedDirectories && project.worktree(directory) == null))
+                add(Part(worktree.folderName, isRemoved = isRemovedWorktree(project, directory, removedDirectories)))
             }
         }
     }
 
     fun text(parts: List<Part>): String = parts.joinToString(SEPARATOR) { it.text }
+
+    /** [directory] is a worktree removed from this app (either spelling) that [project] no longer lists. */
+    fun isRemovedWorktree(
+        project: HomeProject,
+        directory: String,
+        removedDirectories: Set<String>,
+    ): Boolean {
+        if (removedDirectories.isEmpty() || project.worktree(directory) != null) return false
+        val key = worktreePathKey(directory)
+        return removedDirectories.any { worktreePathKey(it) == key }
+    }
 
     const val SEPARATOR = " · "
 }

@@ -372,7 +372,9 @@ private fun WorktreesSnackbar(
                 )
             is WorktreesSnackbarUi.Failed ->
                 OpenCodeSnackbarMessage(
-                    text = resources.getString(R.string.worktrees_remove_failed, snackbar.name, snackbar.message),
+                    text =
+                        snackbar.message?.let { resources.getString(R.string.worktrees_remove_failed, snackbar.name, it) }
+                            ?: resources.getString(R.string.worktrees_remove_failed_connection, snackbar.name),
                     variant = OpenCodeSnackbarVariant.Error,
                     actionLabel = resources.getString(R.string.common_retry),
                     id = snackbar.id,

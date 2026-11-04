@@ -374,9 +374,16 @@ nonisolated struct HomeRowLocation: Hashable, Sendable {
         if let branch { parts.append(.branch(branch)) }
         if !isMain || branch == nil {
             let folder = worktree?.folderName ?? ServerPathPolicy.name(directory)
-            parts.append(worktree == nil && removedDirectories.contains(directory) ? .removed(folder) : .text(folder))
+            parts.append(worktree == nil && Self.isRemoved(directory, in: removedDirectories) ? .removed(folder) : .text(folder))
         }
         return HomeRowLocation(parts: parts)
+    }
+
+    /// `directory` is a worktree removed from this app, under either spelling of the folder.
+    static func isRemoved(_ directory: String, in removedDirectories: Set<String>) -> Bool {
+        guard !removedDirectories.isEmpty else { return false }
+        let key = worktreePathKey(directory)
+        return removedDirectories.contains { worktreePathKey($0) == key }
     }
 }
 

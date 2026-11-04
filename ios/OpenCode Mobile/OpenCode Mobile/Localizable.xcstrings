@@ -13853,6 +13853,17 @@
         }
       }
     },
+    "worktrees.remove_failed_connection" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Couldn’t remove “%1$@”. Check the connection and try again."
+          }
+        }
+      }
+    },
     "worktrees.removed" : {
       "extractionState" : "manual",
       "localizations" : {

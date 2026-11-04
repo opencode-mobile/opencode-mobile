@@ -3,13 +3,14 @@ package dev.opencode.mobile.ui.worktrees
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
+import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeWorktree
-import dev.opencode.mobile.domain.home.HomeWorktreeCopy
 import dev.opencode.mobile.domain.home.HomeWorktreeRequest
 import dev.opencode.mobile.domain.home.HomeWorktreesFeed
 import dev.opencode.mobile.domain.home.HomeWorktreesSnapshot
+import dev.opencode.mobile.domain.home.worktreePathKey
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.worktree.RemoveWorktreeRequest
 import dev.opencode.mobile.domain.worktree.WorktreeRemoveError
@@ -101,11 +102,11 @@ sealed interface WorktreesSnackbarUi {
         override val id: Long = System.nanoTime(),
     ) : WorktreesSnackbarUi
 
-    /** [message] is the server's own words. */
+    /** [message] is the server's own words; null when the server could not be reached. */
     data class Failed(
         val name: String,
         val directory: String,
-        val message: String,
+        val message: String?,
         override val id: Long = System.nanoTime(),
     ) : WorktreesSnackbarUi
 }
@@ -187,7 +188,7 @@ class WorktreesViewModel
                         WorktreeActionsUi(
                             projectKey = project.key,
                             directory = worktree.directory,
-                            name = HomeWorktreeCopy.worktreeTitle(worktree),
+                            name = worktree.folderName,
                             projectName = project.displayName,
                             sessionCount = snapshot.sessionsIn(worktree.directory).size,
                             canShowOnHome = homeShowsWorktrees,
@@ -219,7 +220,7 @@ class WorktreesViewModel
             val (_, worktree) = find(directory) ?: return
             dismissActions()
             val sessions = snapshot.sessionsIn(worktree.directory)
-            val name = HomeWorktreeCopy.worktreeTitle(worktree)
+            val name = worktree.folderName
             val running = sessions.firstOrNull { it.isRunning }
             val dialog =
                 if (running != null) {
@@ -270,7 +271,7 @@ class WorktreesViewModel
         ) {
             val (project, worktree) = find(directory) ?: return
             if (!removing.add(worktree.directory)) return
-            val name = HomeWorktreeCopy.worktreeTitle(worktree)
+            val name = worktree.folderName
             publish()
             viewModelScope.launch {
                 val outcome =
@@ -314,10 +315,13 @@ class WorktreesViewModel
                             )
                         }
                     }
-                    else ->
+                    else -> {
+                        DiagnosticLog.warning(DiagnosticLogArea.Session, "worktree remove failed: ${outcome.message}")
+                        val message = outcome.message.takeUnless { outcome is WorktreeRemoveError.Unreachable }
                         _state.update {
-                            it.copy(snackbar = WorktreesSnackbarUi.Failed(name, worktree.directory, outcome.message))
+                            it.copy(snackbar = WorktreesSnackbarUi.Failed(name, worktree.directory, message))
                         }
+                    }
                 }
                 publish()
             }
@@ -346,9 +350,9 @@ class WorktreesViewModel
         }
 
         private fun find(directory: String): Pair<HomeProject, HomeWorktree>? {
-            val canonical = ServerPathPolicy.canonical(directory.trim())
+            val key = worktreePathKey(directory)
             for (project in snapshot.projects) {
-                val worktree = snapshot.removableWorktrees(project).firstOrNull { it.directory == canonical } ?: continue
+                val worktree = snapshot.removableWorktrees(project).firstOrNull { worktreePathKey(it.directory) == key } ?: continue
                 return project to worktree
             }
             return null
@@ -373,7 +377,7 @@ class WorktreesViewModel
                                     WorktreeRowUi(
                                         projectKey = project.key,
                                         directory = worktree.directory,
-                                        name = HomeWorktreeCopy.worktreeTitle(worktree),
+                                        name = worktree.folderName,
                                         sessionCount = sessions.size,
                                         isRunning = sessions.any { it.isRunning },
                                         changeCount = changeCounts[worktree.directory],

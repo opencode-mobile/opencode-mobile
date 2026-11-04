@@ -15,6 +15,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CrossProjectSessionListSessionsTest {
@@ -305,6 +306,25 @@ class CrossProjectSessionListSessionsTest {
         // Compact rows strike the worktree through and tell screen readers why.
         assertEquals("worktree removed", sessions.first().compactPath(removedNote = "worktree removed").worktreeRemovedNote)
         assertNull(sessions.last().compactPath(removedNote = "worktree removed").worktreeRemovedNote)
+    }
+
+    @Test
+    fun removedWorktreeMarks_matchEitherSpellingOfTheFolder() {
+        val projects =
+            HomeProjectGrouping.group(
+                addedPaths = listOf("/private/tmp/repo"),
+                resolved = mapOf("/private/tmp/repo" to ResolvedHomePath("proj", "/private/tmp/repo", isRepository = true)),
+                inventories = mapOf("/private/tmp/repo" to setOf("/private/tmp/repo")),
+            )
+        val sessions =
+            homeSessionListSessions(
+                projects,
+                listOf(section(worktree = "/private/tmp/repo", session(id = "gone", title = "Gone", updatedAtEpochMs = 2L, directory = "/private/tmp/wt/gone"))),
+                removedWorktrees = mapOf("/tmp/wt/gone" to "proj"),
+            )
+
+        assertEquals(listOf(SessionListLocationPart("gone", isRemoved = true)), sessions.single().location)
+        assertTrue(sessions.single().compactWorktreeRemoved)
     }
 
     @Test

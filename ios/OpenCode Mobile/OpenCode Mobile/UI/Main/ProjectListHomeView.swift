@@ -576,7 +576,8 @@ struct ProjectListHomeView: View {
                     isRunning: isRunning
                 )
             },
-            removableDirectories: viewModel.removableWorktreeDirectories
+            removableDirectories: viewModel.removableWorktreeDirectories,
+            worktreesLoaded: viewModel.hasListedWorktrees
         )
     }
 
@@ -940,7 +941,7 @@ struct ProjectListHomeView: View {
         OpenCodeOverflowMenuEntry(
             id: "homeMenuWorktrees",
             title: "worktrees.title",
-            subtitle: .verbatim(WorktreesCopy.menuSubtitle(viewModel.homeWorktreesFeed.snapshot)),
+            subtitle: .verbatim(ifPresent: WorktreesCopy.menuSubtitle(viewModel.homeWorktreesFeed.snapshot)),
             icon: .callSplit,
             accessibilityIdentifier: "homeMenuWorktrees",
             action: openWorktrees
@@ -1536,7 +1537,7 @@ extension Array where Element == ProjectSectionItem {
                 },
                 worktreeRemoved: project.map { project in
                     let canonical = ServerPathPolicy.canonical(directory)
-                    return removedDirectories.contains(canonical) && project.worktree(at: canonical) == nil
+                    return project.worktree(at: canonical) == nil && HomeRowLocation.isRemoved(canonical, in: removedDirectories)
                 } ?? false
             )
         }

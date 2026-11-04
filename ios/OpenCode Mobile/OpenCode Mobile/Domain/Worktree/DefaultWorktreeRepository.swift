@@ -139,8 +139,12 @@ struct DefaultWorktreeRepository: WorktreeRepository {
                 as? WorktreeCreateError)?.message ?? WorktreeCreateCopy.requestFailed(statusCode)
             if WorktreeErrorBody.forceRequired(body) { throw WorktreeRemoveError.forceRequired(message: message) }
             throw WorktreeRemoveError.failed(message: message)
+        } catch let error as WorktreeRemoveError {
+            throw error
         } catch {
-            throw WorktreeRemoveError.failed(message: error.localizedDescription)
+            // No HTTP answer: the transport failed. Its text can name the server, so it is for
+            // logs, not for the snackbar.
+            throw WorktreeRemoveError.unreachable(message: error.localizedDescription)
         }
     }
 

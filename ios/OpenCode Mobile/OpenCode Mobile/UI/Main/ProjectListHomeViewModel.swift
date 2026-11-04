@@ -1132,6 +1132,9 @@ final class ProjectListHomeViewModel {
         return true
     }
 
+    /// Home has listed some project's worktrees.
+    var hasListedWorktrees: Bool { !worktreeDirectories.isEmpty }
+
     /// What the server listed as worktrees, minus every project's main checkout.
     var removableWorktreeDirectories: Set<String> {
         let mains = Set(homeProjects.flatMap { $0.worktrees.filter(\.isMain).map(\.directory) })

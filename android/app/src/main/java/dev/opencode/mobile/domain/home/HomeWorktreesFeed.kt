@@ -11,6 +11,20 @@ import kotlinx.coroutines.flow.update
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/**
+ * The same folder however the server spells it: macOS links `/tmp`, `/var` and `/etc` into
+ * `/private`, and a server can report either form for one worktree.
+ */
+internal fun worktreePathKey(directory: String): String {
+    val canonical = ServerPathPolicy.canonical(directory.trim())
+    for (link in SYMLINKED_ROOTS) {
+        if (canonical == "/private$link" || canonical.startsWith("/private$link/")) return canonical.removePrefix("/private")
+    }
+    return canonical
+}
+
+private val SYMLINKED_ROOTS = listOf("/tmp", "/var", "/etc")
+
 /** A Home session as the Worktrees screen sees it. */
 data class HomeWorktreeSession(
     val id: String,
@@ -31,14 +45,29 @@ data class HomeWorktreesSnapshot(
      * are not worktrees the server knows.
      */
     val removableDirectories: Set<String> = emptySet(),
+    /** Home has listed worktrees at least once; until then the counts mean nothing. */
+    val worktreesLoaded: Boolean = true,
 ) {
-    /** A project's worktrees the server can remove. */
-    fun removableWorktrees(project: HomeProject): List<HomeWorktree> =
-        project.worktrees.filter { !it.isMain && it.directory in removableDirectories }
+    private val removableKeys: Set<String> by lazy { removableDirectories.mapTo(HashSet(), ::worktreePathKey) }
 
+    /**
+     * A project's worktrees the server can remove, one per folder: the server's spelling wins when
+     * Home knows the folder under two paths. Never the main checkout, under either spelling.
+     */
+    fun removableWorktrees(project: HomeProject): List<HomeWorktree> {
+        val mains = project.worktrees.filter { it.isMain }.mapTo(HashSet()) { worktreePathKey(it.directory) }
+        return project.worktrees
+            .filter { !it.isMain }
+            .groupBy { worktreePathKey(it.directory) }
+            .filterKeys { it in removableKeys && it !in mains }
+            .values
+            .map { same -> same.firstOrNull { it.directory in removableDirectories } ?: same.first() }
+    }
+
+    /** Sessions in [directory], under either spelling of the folder. */
     fun sessionsIn(directory: String): List<HomeWorktreeSession> {
-        val canonical = ServerPathPolicy.canonical(directory.trim())
-        return sessions.filter { it.directory == canonical }
+        val key = worktreePathKey(directory)
+        return sessions.filter { worktreePathKey(it.directory) == key }
     }
 
     /** Removable worktrees, across every project. */

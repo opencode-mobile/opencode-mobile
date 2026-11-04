@@ -54,7 +54,7 @@ class WorktreesViewModelTest {
             assertEquals(2, state.projectCount)
             val acme = state.groups.first()
             assertEquals("/repo", acme.mainCheckout)
-            assertEquals(listOf("feature/search", "typo"), acme.worktrees.map { it.name })
+            assertEquals(listOf("search", "typo"), acme.worktrees.map { it.name })
             val search = acme.worktrees.first()
             assertEquals(2, search.sessionCount)
             assertTrue(search.isRunning)
@@ -71,7 +71,7 @@ class WorktreesViewModelTest {
             advanceUntilIdle()
             model.requestRemove("/wt/search")
             val dialog = model.state.value.dialog as WorktreeRemoveDialogUi.Blocked
-            assertEquals("feature/search", dialog.name)
+            assertEquals("search", dialog.name)
             model.showRunningSession()
             advanceUntilIdle()
 
@@ -97,7 +97,7 @@ class WorktreesViewModelTest {
 
             assertEquals(listOf(RemoveWorktreeRequest("acme", "/repo", "/wt/search", force = true)), repository.requests)
             assertEquals(listOf("typo"), model.state.value.groups.first().worktrees.map { it.name })
-            assertEquals("feature/search", (model.state.value.snackbar as WorktreesSnackbarUi.Removed).name)
+            assertEquals("search", (model.state.value.snackbar as WorktreesSnackbarUi.Removed).name)
             assertEquals(mapOf("/wt/search" to "acme"), feed.removed.value)
         }
 
@@ -260,6 +260,68 @@ class WorktreesViewModelTest {
             assertNull(model.state.value.dialog)
             assertEquals(1, feed.snapshot.value.worktreeCount)
         }
+
+    @Test
+    fun oneFolderUnderTwoSpellingsIsOneRow() =
+        runTest(dispatcher) {
+            // v1 lists /tmp/…; Home also knows the folder (and the main checkout) as /private/tmp/….
+            val feed = HomeWorktreesFeed()
+            feed.publish(
+                HomeWorktreesSnapshot(
+                    projects =
+                        listOf(
+                            HomeProject(
+                                key = "acme",
+                                projectId = "acme",
+                                displayName = "Acme",
+                                memberPaths = listOf("/tmp/repo"),
+                                isRepository = true,
+                                worktrees =
+                                    listOf(
+                                        HomeWorktree("/private/tmp/repo", branch = "main", isMain = true),
+                                        HomeWorktree("/private/tmp/wt/v1-cleanup", branch = "opencode/v1-cleanup"),
+                                        HomeWorktree("/tmp/repo", branch = "main"),
+                                        HomeWorktree("/tmp/wt/v1-cleanup", branch = "opencode/v1-cleanup"),
+                                    ),
+                            ),
+                        ),
+                    sessions = listOf(session("s1", "/private/tmp/wt/v1-cleanup")),
+                    removableDirectories = setOf("/tmp/wt/v1-cleanup", "/tmp/repo"),
+                ),
+            )
+            val model = model(feed, changes = mapOf("/tmp/wt/v1-cleanup" to 0))
+            advanceUntilIdle()
+
+            val rows = model.state.value.groups.single().worktrees
+            assertEquals(listOf("/tmp/wt/v1-cleanup"), rows.map { it.directory })
+            assertEquals("v1-cleanup", rows.single().name)
+            assertEquals(1, rows.single().sessionCount)
+            assertEquals(1, feed.snapshot.value.worktreeCount)
+            model.requestRemove("/private/tmp/wt/v1-cleanup")
+            assertEquals("/tmp/wt/v1-cleanup", (model.state.value.dialog as WorktreeRemoveDialogUi.Confirm).directory)
+        }
+
+    @Test
+    fun anUnreachableServerGetsAPlainMessage() =
+        runTest(dispatcher) {
+            val repository =
+                FakeRemoveRepository(errors = mutableListOf(WorktreeRemoveError.Unreachable("unexpected end of stream on http://10.0.2.2:4096/")))
+            val model = model(feed(), repository, changes = mapOf("/wt/typo" to 0))
+            advanceUntilIdle()
+
+            model.requestRemove("/wt/typo")
+            model.confirmRemove()
+            advanceUntilIdle()
+
+            val failed = model.state.value.snackbar as WorktreesSnackbarUi.Failed
+            assertNull(failed.message)
+        }
+
+    @Test
+    fun theMenuSaysNothingBeforeHomeListedWorktrees() {
+        assertFalse(HomeWorktreesSnapshot(worktreesLoaded = false).worktreesLoaded)
+        assertEquals(0, HomeWorktreesSnapshot(worktreesLoaded = false).worktreeCount)
+    }
 
     @Test
     fun theMainCheckoutCannotBeRemoved() =

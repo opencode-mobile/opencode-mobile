@@ -17,10 +17,12 @@ nonisolated enum WorktreeRemoveError: Error, Equatable, Sendable {
     /// The server has no worktree remove route, or the project has no v2 id.
     case unsupported
     case failed(message: String)
+    /// The request got no answer (offline, connection dropped); `message` is transport detail.
+    case unreachable(message: String)
 
     var message: String {
         switch self {
-        case let .forceRequired(message), let .failed(message): message
+        case let .forceRequired(message), let .failed(message), let .unreachable(message): message
         case .unsupported: WorktreeCreateCopy.unsupportedError
         }
     }

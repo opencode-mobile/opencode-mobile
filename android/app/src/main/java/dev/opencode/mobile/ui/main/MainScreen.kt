@@ -349,6 +349,7 @@ internal fun MainScreen(
                 HomeWorktreesSnapshot(
                     projects = state.projects,
                     removableDirectories = state.home.removableWorktreeDirectories(state.projects),
+                    worktreesLoaded = state.home.inventories.isNotEmpty(),
                 )
             }
         }
@@ -1273,9 +1274,10 @@ internal fun homeScopeId(
 internal fun MainScreenUiState.Loaded.homeSessions(worktreesEnabled: Boolean = true): List<SessionListSession> =
     homeSessionListSessions(projects, sections, home.extraSessions, worktreesEnabled, home.removedWorktrees)
 
-/** ⋯ menu subtitle of Worktrees: "N across M projects", or None. */
+/** ⋯ menu subtitle of Worktrees: "N across M projects", None, or nothing before Home listed them. */
 @Composable
-private fun worktreesMenuSubtitle(snapshot: HomeWorktreesSnapshot): String {
+private fun worktreesMenuSubtitle(snapshot: HomeWorktreesSnapshot): String? {
+    if (!snapshot.worktreesLoaded) return null
     val count = snapshot.worktreeCount
     if (count == 0) return stringResource(R.string.worktrees_menu_none)
     val projects = snapshot.projectsWithWorktrees
@@ -1379,7 +1381,7 @@ private data class HomeRowSource(
                     ?.map { SessionListLocationPart(it.text, isBranch = it.isBranch, isRemoved = it.isRemoved) },
             projectName = project.displayName,
             compactWorktree = HomeCompactRowPath.worktreeLabel(project, directory, worktreesEnabled),
-            compactWorktreeRemoved = ServerPathPolicy.canonical(directory.trim()).let { it in removedDirectories && project.worktree(it) == null },
+            compactWorktreeRemoved = HomeSessionLocation.isRemovedWorktree(project, directory, removedDirectories),
         )
     }
 }

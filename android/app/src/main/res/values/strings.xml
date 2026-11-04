@@ -1548,6 +1548,7 @@
     <string name="worktrees_blocked_show_session">Show session</string>
     <string name="worktrees_removed">Removed worktree “%1$s”</string>
     <string name="worktrees_remove_failed">Couldn’t remove “%1$s”. %2$s</string>
+    <string name="worktrees_remove_failed_connection">Couldn’t remove “%1$s”. Check the connection and try again.</string>
     <string name="worktrees_menu_subtitle">%1$d across %2$s</string>
     <string name="worktrees_menu_none">None</string>
     <string name="session_list_worktree_removed">worktree removed</string>

@@ -209,7 +209,7 @@ struct WorktreesView: View {
             OpenCodeSnackbarMessage(text: WorktreesCopy.removed(name), id: id)
         case let .failed(name, _, message, id):
             OpenCodeSnackbarMessage(
-                text: WorktreesCopy.removeFailed(name, message: message),
+                text: message.map { WorktreesCopy.removeFailed(name, message: $0) } ?? WorktreesCopy.removeFailedConnection(name),
                 variant: .error,
                 actionLabel: String(localized: "common.retry", defaultValue: "Retry"),
                 id: id
@@ -294,8 +294,16 @@ enum WorktreesCopy {
         String(localized: LocalizedStringResource("worktrees.remove_failed", defaultValue: "Couldn’t remove “\(name)”. \(message)"))
     }
 
-    /// ⋯ menu subtitle: "N across M projects", or None.
-    static func menuSubtitle(_ snapshot: HomeWorktreesSnapshot) -> String {
+    static func removeFailedConnection(_ name: String) -> String {
+        String(localized: LocalizedStringResource(
+            "worktrees.remove_failed_connection",
+            defaultValue: "Couldn’t remove “\(name)”. Check the connection and try again."
+        ))
+    }
+
+    /// ⋯ menu subtitle: "N across M projects", None, or nothing before Home listed worktrees.
+    static func menuSubtitle(_ snapshot: HomeWorktreesSnapshot) -> String? {
+        guard snapshot.worktreesLoaded else { return nil }
         let count = snapshot.worktreeCount
         guard count > 0 else { return String(localized: "worktrees.menu_none", defaultValue: "None") }
         let projects = snapshot.projectsWithWorktrees

@@ -343,6 +343,19 @@ class DefaultWorktreeRepositoryTest {
         }
 
     @Test
+    fun aTransportFailureIsUnreachable() =
+        runTest {
+            val remote = FakeWorktreeRemote(removeError = java.io.IOException("unexpected end of stream on http://10.0.2.2:4096/"))
+            val repository = repository(remote, ServerProtocol.V2)
+
+            try {
+                repository.remove(RemoveWorktreeRequest("proj", "/repo", "/wt/a", force = false))
+                fail("expected Unreachable")
+            } catch (_: WorktreeRemoveError.Unreachable) {
+            }
+        }
+
+    @Test
     fun v1RemoveAsksInTheMainCheckout() =
         runTest {
             val remote = FakeWorktreeRemote()

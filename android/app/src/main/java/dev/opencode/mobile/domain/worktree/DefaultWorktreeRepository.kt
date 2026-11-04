@@ -188,7 +188,9 @@ class DefaultWorktreeRepository(
             if (WorktreeErrorBody.forceRequired(error.body)) throw WorktreeRemoveError.ForceRequired(message)
             throw WorktreeRemoveError.Failed(message)
         } catch (error: Exception) {
-            throw WorktreeRemoveError.Failed(error.message?.trim()?.takeIf { it.isNotEmpty() } ?: "Unknown error")
+            // No HTTP answer: the transport failed. Its text names the server address, so it is
+            // for logs, not for the snackbar.
+            throw WorktreeRemoveError.Unreachable(error.message?.trim()?.takeIf { it.isNotEmpty() } ?: "Unknown error")
         }
     }
 

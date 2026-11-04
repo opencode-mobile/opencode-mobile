@@ -14,7 +14,7 @@ struct WorktreesViewModelTests {
         #expect(model.projectCount == 2)
         let acme = model.groups[0]
         #expect(acme.mainCheckout == "/repo")
-        #expect(acme.worktrees.map(\.name) == ["feature/search", "typo"])
+        #expect(acme.worktrees.map(\.name) == ["search", "typo"])
         #expect(acme.worktrees[0].sessionCount == 2)
         #expect(acme.worktrees[0].isRunning)
         #expect(acme.worktrees[0].changeCount == 3)
@@ -31,7 +31,7 @@ struct WorktreesViewModelTests {
             Issue.record("expected the blocked dialog")
             return
         }
-        #expect(name == "feature/search")
+        #expect(name == "search")
         model.showRunningSession()
 
         #expect(model.dialog == nil)
@@ -47,7 +47,7 @@ struct WorktreesViewModelTests {
         await settle()
 
         model.requestRemove(directory: "/wt/search")
-        #expect(model.dialog == .confirm(directory: "/wt/search", name: "feature/search", changeCount: 2, changesUnknown: false, sessionCount: 1))
+        #expect(model.dialog == .confirm(directory: "/wt/search", name: "search", changeCount: 2, changesUnknown: false, sessionCount: 1))
         #expect(model.dialog?.losesChanges == true)
         await model.confirmRemove()
 
@@ -57,7 +57,7 @@ struct WorktreesViewModelTests {
             Issue.record("expected the removed snackbar")
             return
         }
-        #expect(name == "feature/search")
+        #expect(name == "search")
         #expect(feed.removed == ["/wt/search": "acme"])
     }
 
@@ -183,6 +183,54 @@ struct WorktreesViewModelTests {
         model.requestRemove(directory: "/tmp/repo")
         #expect(model.dialog == nil)
         #expect(feed.snapshot.worktreeCount == 1)
+    }
+
+    @Test func oneFolderUnderTwoSpellingsIsOneRow() {
+        // v1 lists /tmp/…; Home also knows the folder (and the main checkout) as /private/tmp/….
+        let feed = HomeWorktreesFeed()
+        feed.publish(HomeWorktreesSnapshot(
+            projects: [
+                HomeProject(
+                    key: "acme",
+                    projectID: "acme",
+                    displayName: "Acme",
+                    memberPaths: ["/tmp/repo"],
+                    isRepository: true,
+                    worktrees: [
+                        HomeWorktree(directory: "/private/tmp/repo", branch: "main", isMain: true),
+                        HomeWorktree(directory: "/private/tmp/wt/v1-cleanup", branch: "opencode/v1-cleanup", isMain: false),
+                        HomeWorktree(directory: "/tmp/repo", branch: "main", isMain: false),
+                        HomeWorktree(directory: "/tmp/wt/v1-cleanup", branch: "opencode/v1-cleanup", isMain: false),
+                    ]
+                ),
+            ],
+            sessions: [session("s1", "/private/tmp/wt/v1-cleanup")],
+            removableDirectories: ["/tmp/wt/v1-cleanup", "/tmp/repo"]
+        ))
+        let model = makeModel(feed)
+
+        let rows = model.groups.first?.worktrees ?? []
+        #expect(rows.map(\.directory) == ["/tmp/wt/v1-cleanup"])
+        #expect(rows.first?.name == "v1-cleanup")
+        #expect(rows.first?.sessionCount == 1)
+        #expect(feed.snapshot.worktreeCount == 1)
+        #expect(HomeRowLocation.isRemoved("/private/tmp/wt/v1-cleanup", in: ["/tmp/wt/v1-cleanup"]))
+    }
+
+    @Test func anUnreachableServerGetsAPlainMessage() async {
+        let repository = RemoveRepository(errors: [.unreachable(message: "The network connection was lost.")])
+        let model = makeModel(makeFeed(), repository: repository, changes: ["/wt/typo": 0])
+        await settle()
+
+        model.requestRemove(directory: "/wt/typo")
+        await model.confirmRemove()
+
+        guard case let .failed(_, _, message, _)? = model.snackbar else {
+            Issue.record("expected the failure snackbar")
+            return
+        }
+        #expect(message == nil)
+        #expect(WorktreesCopy.menuSubtitle(HomeWorktreesSnapshot(worktreesLoaded: false)) == nil)
     }
 
     @Test func theMainCheckoutCannotBeRemoved() {

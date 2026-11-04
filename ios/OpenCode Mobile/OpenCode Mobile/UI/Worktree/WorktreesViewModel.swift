@@ -68,7 +68,8 @@ enum WorktreeRemoveDialog: Equatable {
 enum WorktreesSnackbar: Equatable {
     case removed(name: String, id: UInt64 = .random(in: 1 ... .max))
     /// `message` is the server's own words.
-    case failed(name: String, directory: String, message: String, id: UInt64 = .random(in: 1 ... .max))
+    /// `message` is the server's own words; nil when the server could not be reached.
+    case failed(name: String, directory: String, message: String?, id: UInt64 = .random(in: 1 ... .max))
 }
 
 /// Worktrees screen: every worktree of Home's projects, its sessions and uncommitted changes, and
@@ -129,7 +130,7 @@ final class WorktreesViewModel {
         actions = WorktreeActionsItem(
             projectKey: project.key,
             directory: worktree.directory,
-            name: worktree.title,
+            name: worktree.folderName,
             projectName: project.displayName,
             sessionCount: snapshot.sessions(in: worktree.directory).count,
             canShowOnHome: homeShowsWorktrees
@@ -161,14 +162,14 @@ final class WorktreesViewModel {
         let sessions = snapshot.sessions(in: worktree.directory)
         if let running = sessions.first(where: \.isRunning) {
             dialog = .blocked(
-                name: worktree.title,
+                name: worktree.folderName,
                 session: SessionListItem(id: running.id, title: running.title, worktree: running.directory)
             )
             return
         }
         dialog = .confirm(
             directory: worktree.directory,
-            name: worktree.title,
+            name: worktree.folderName,
             changeCount: changeCounts[worktree.directory] ?? nil,
             changesUnknown: false,
             sessionCount: sessions.count,
@@ -230,20 +231,22 @@ final class WorktreesViewModel {
         case nil:
             removed.insert(worktree.directory)
             feed.send(.removed(projectKey: project.key, directory: worktree.directory))
-            snackbar = .removed(name: worktree.title)
+            snackbar = .removed(name: worktree.folderName)
         case .forceRequired?:
             // The count was unknown or stale: say changes will be lost, then force.
             let count = changeCounts[worktree.directory] ?? nil
             changeCounts[worktree.directory] = .some(nil)
             dialog = .confirm(
                 directory: worktree.directory,
-                name: worktree.title,
+                name: worktree.folderName,
                 changeCount: count.flatMap { $0 > 0 ? $0 : nil },
                 changesUnknown: true,
                 sessionCount: snapshot.sessions(in: worktree.directory).count
             )
         case let error?:
-            snackbar = .failed(name: worktree.title, directory: worktree.directory, message: error.message)
+            DiagnosticLog.warning(.session, "worktree remove failed: \(error.message)")
+            let message: String? = if case .unreachable = error { nil } else { error.message }
+            snackbar = .failed(name: worktree.folderName, directory: worktree.directory, message: message)
         }
         publish()
     }
@@ -264,9 +267,9 @@ final class WorktreesViewModel {
     }
 
     private func find(_ directory: String) -> (HomeProject, HomeWorktree)? {
-        let canonical = ServerPathPolicy.canonical(directory.trimmingCharacters(in: .whitespacesAndNewlines))
+        let key = worktreePathKey(directory)
         for project in snapshot.projects {
-            if let worktree = snapshot.removableWorktrees(project).first(where: { $0.directory == canonical }) {
+            if let worktree = snapshot.removableWorktrees(project).first(where: { worktreePathKey($0.directory) == key }) {
                 return (project, worktree)
             }
         }
@@ -289,7 +292,7 @@ final class WorktreesViewModel {
                         return WorktreeRowItem(
                             projectKey: project.key,
                             directory: worktree.directory,
-                            name: worktree.title,
+                            name: worktree.folderName,
                             sessionCount: sessions.count,
                             isRunning: sessions.contains(where: \.isRunning),
                             changeCount: changeCounts[worktree.directory] ?? nil,
