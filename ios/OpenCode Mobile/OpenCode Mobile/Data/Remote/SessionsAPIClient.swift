@@ -31,6 +31,13 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await get(path: "session", directory: directory)
     }
 
+    /// `search` matches titles; `rootsOnly` drops child sessions. Older servers ignore both.
+    func listSessions(directory: String?, search: String, rootsOnly: Bool) async throws -> [SessionDTO] {
+        var query = ["search": search]
+        if rootsOnly { query["roots"] = "true" }
+        return try await get(path: "session", directory: directory, query: query)
+    }
+
     func listPendingPermissions(directory: String? = nil) async throws -> [PermissionRequestDTO] {
         try await get(path: "permission", directory: directory)
     }
@@ -268,12 +275,16 @@ nonisolated struct SessionsAPIClient: Sendable {
         try await get(path: "api/location", locationDirectory: directory)
     }
 
+    /// `parentID` value that lists root sessions only.
+    static let v2RootSessionsParentID = "null"
+
     /// `projectID` lists every worktree of that project. Passing `directory` as well would hide those sessions.
     func listSessionsV2(
         directory: String? = nil,
         parentID: String? = nil,
         projectID: String? = nil,
-        archived: Bool? = nil
+        archived: Bool? = nil,
+        search: String? = nil
     ) async throws -> [V2SessionDTO] {
         var sessions: [V2SessionDTO] = []
         var cursor: String?
@@ -288,6 +299,9 @@ nonisolated struct SessionsAPIClient: Sendable {
             }
             if let archived {
                 query["archived"] = archived ? "true" : "false"
+            }
+            if let search {
+                query["search"] = search
             }
             if let cursor {
                 query["cursor"] = cursor

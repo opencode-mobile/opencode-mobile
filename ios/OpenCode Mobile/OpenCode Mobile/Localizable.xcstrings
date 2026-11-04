@@ -6205,6 +6205,17 @@
         }
       }
     },
+    "keyboard_shortcuts.search_sessions" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search Sessions"
+          }
+        }
+      }
+    },
     "keyboard_shortcuts.settings" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -10110,6 +10121,182 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "worktree removed"
+          }
+        }
+      }
+    },
+    "session_search.archived_section" : {
+      "comment" : "Section header above archived sessions in search results.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archived"
+          }
+        }
+      }
+    },
+    "session_search.archived_tag" : {
+      "comment" : "Tag on an archived session in search results.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archived"
+          }
+        }
+      }
+    },
+    "session_search.clear" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear search"
+          }
+        }
+      }
+    },
+    "session_search.hint" : {
+      "comment" : "%@ is the search scope: All projects or a project name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Matches session titles in %@."
+          }
+        }
+      }
+    },
+    "session_search.include_archived" : {
+      "comment" : "Search chip and no-match button that adds archived sessions to the results.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include archived"
+          }
+        }
+      }
+    },
+    "session_search.include_archived_count" : {
+      "comment" : "Search chip that adds archived sessions to the results. %lld is how many archived sessions are in the search scope.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include archived · %lld"
+          }
+        }
+      }
+    },
+    "session_search.no_match_message" : {
+      "comment" : "%@ is the search scope: All projects or a project name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "in %@"
+          }
+        }
+      }
+    },
+    "session_search.no_match_title" : {
+      "comment" : "%@ is the search text.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No sessions match “%@”"
+          }
+        }
+      }
+    },
+    "session_search.placeholder" : {
+      "comment" : "%@ is the search scope: All projects or a project name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search in %@"
+          }
+        }
+      }
+    },
+    "session_search.results" : {
+      "comment" : "Header above session search results.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld result"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld results"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "session_search.scope_selected" : {
+      "comment" : "Spoken label of the current scope in the scope menu. %@ is the scope name.",
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@, selected"
+          }
+        }
+      }
+    },
+    "session_search.search_all_projects" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search all projects"
+          }
+        }
+      }
+    },
+    "session_search.searching" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Searching…"
+          }
+        }
+      }
+    },
+    "session_search.title" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search sessions"
           }
         }
       }

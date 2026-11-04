@@ -36,6 +36,10 @@ struct ProtocolSelectedSessionRemote: SessionRemote, Sendable {
         try await selected().listSessions(directory: directory)
     }
 
+    func searchSessions(query: String, directory: String?) async throws -> [Session] {
+        try await selected().searchSessions(query: query, directory: directory)
+    }
+
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {
         try await selected().createSession(parentID: parentID, title: title, directory: directory)
     }

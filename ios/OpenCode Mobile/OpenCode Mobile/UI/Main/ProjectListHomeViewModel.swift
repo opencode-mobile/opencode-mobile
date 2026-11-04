@@ -463,6 +463,8 @@ final class ProjectListHomeViewModel {
     let homeWorktreesFeed: HomeWorktreesFeed
     /// New worktree form of the Run in sheet.
     let worktreeCreate: WorktreeCreateModel
+    /// Session search over Home's pane (#929).
+    let sessionSearch: SessionSearchModel
     /// False once a v1 server answered 404 for its worktree routes.
     private(set) var serverCanCreateWorktrees = true
     private let foregroundEventStream: (any ForegroundEventStream)?
@@ -546,6 +548,10 @@ final class ProjectListHomeViewModel {
         self.worktreeInventoryCache = worktreeInventoryCache
         self.homeWorktreesFeed = homeWorktreesFeed ?? HomeWorktreesFeed()
         self.worktreeCreate = WorktreeCreateModel(repository: worktreeRepository)
+        self.sessionSearch = SessionSearchModel(
+            repository: sessionRepository,
+            archivedSessionsSupported: { activeConnectionManager.capabilities.supportsArchivedSessions }
+        )
         self.serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
         self.foregroundEventStream = foregroundEventStream
         let projects = projectRepository

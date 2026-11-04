@@ -181,6 +181,7 @@ final class OpenCodeEscapeRouter {
 
     @ObservationIgnored var now: () -> Date = Date.init
     @ObservationIgnored private var interrupts: [(owner: UUID, interrupt: () -> Void)] = []
+    @ObservationIgnored private var screenEscapes: [(owner: UUID, handle: () -> Void)] = []
     @ObservationIgnored private var expiryTask: Task<Void, Never>?
     @ObservationIgnored private var repeatGuard = OpenCodeKeyRepeatGuard<UIKeyboardHIDUsage>()
 
@@ -195,6 +196,15 @@ final class OpenCodeEscapeRouter {
         }
     }
 
+    /// A screen that handles Esc itself (Home search) publishes its handler while it is
+    /// the visible screen, and nil otherwise. The newest one wins.
+    func setScreenEscape(_ owner: UUID, handle: (() -> Void)?) {
+        screenEscapes.removeAll { $0.owner == owner }
+        if let handle {
+            screenEscapes.append((owner, handle))
+        }
+    }
+
     func handleEscape() {
         // UIKit repeats the Esc command while the key is held: one hold must not arm
         // and then interrupt.
@@ -204,6 +214,7 @@ final class OpenCodeEscapeRouter {
         let textInput = responder is UITextInput
         let context = OpenCodeEscapeContext(
             overlayPresented: OpenCodeOverlayEscape.hasOverlay,
+            screenClaimsEscape: screenEscapes.last != nil,
             textInputFocused: textInput,
             controlFocused: OpenCodeKeyboardFocusState.shared.hasFocusedControl || (responder != nil && !isAnchor && !textInput),
             interruptAvailable: interrupts.last != nil
@@ -212,6 +223,8 @@ final class OpenCodeEscapeRouter {
         switch resolution.action {
         case .closeOverlay:
             OpenCodeOverlayEscape.dismissNewest()
+        case .screenEscape:
+            screenEscapes.last?.handle()
         case .leaveTextInput:
             if (responder as? OpenCodeEscapeHandlingTextInput)?.handleEscape() != true {
                 OpenCodeKeyboardAnchor.takeFocus()
@@ -251,6 +264,30 @@ final class OpenCodeEscapeRouter {
         expiryTask?.cancel()
         expiryTask = nil
         if interruptArmedAt != nil { interruptArmedAt = nil }
+    }
+}
+
+extension View {
+    /// Claims Esc for this screen while `handle` is non-nil: after any overlay, Esc runs
+    /// `handle` instead of leaving the focused field or interrupting a turn.
+    func openCodeScreenEscape(_ handle: (() -> Void)?) -> some View {
+        modifier(OpenCodeScreenEscapePublisher(handle: handle))
+    }
+}
+
+private struct OpenCodeScreenEscapePublisher: ViewModifier {
+    let handle: (() -> Void)?
+    @State private var owner = UUID()
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { publish(handle) }
+            .onChange(of: handle != nil) { _, _ in publish(handle) }
+            .onDisappear { OpenCodeEscapeRouter.shared.setScreenEscape(owner, handle: nil) }
+    }
+
+    private func publish(_ handle: (() -> Void)?) {
+        OpenCodeEscapeRouter.shared.setScreenEscape(owner, handle: handle)
     }
 }
 

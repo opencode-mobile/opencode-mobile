@@ -276,6 +276,25 @@ fun ListItemGalleryScreen(modifier: Modifier = Modifier) {
             startDecorator = startDecorator,
         )
 
+        Text(text = "Title highlight", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
+        OpenCodeListItem(
+            title = "Invoice export retries",
+            titleHighlight = 0 until 7,
+            subtitle = "~/Projects/acme-invoices",
+            caption = "2h ago",
+            startDecorator = StartDecorator.Letter('A', LetterAccent.Teal),
+            onClick = {},
+        )
+        OpenCodeListItem(
+            title = "Invoice export retries",
+            titleHighlight = 15 until 22,
+            variant = OpenCodeListItemVariant.Compact,
+            path = OpenCodeListItemPath(project = "acme-invoices"),
+            caption = "2h ago",
+            startDecorator = StartDecorator.Tile('A', LetterAccent.Teal),
+            onClick = {},
+        )
+
         Text(text = "Detail line", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurface)
         Column {
             OpenCodeListItem(

@@ -81,6 +81,14 @@ enum class KeyboardShortcutAction(
     /** Ctrl+,: wherever Settings is reachable. */
     Settings(titleRes = R.string.keyboard_shortcuts_settings, keyCode = KeyEvent.KEYCODE_COMMA, ctrl = true, group = KeyboardShortcutGroupKind.Go),
 
+    /** Ctrl+F: Home, Search sessions (#929). */
+    SearchSessions(
+        titleRes = R.string.keyboard_shortcuts_search_sessions,
+        keyCode = KeyEvent.KEYCODE_F,
+        ctrl = true,
+        group = KeyboardShortcutGroupKind.Go,
+    ),
+
     /** Ctrl+1…Ctrl+9: Home, the Nth project in the dock's project order. */
     Project1(R.string.keyboard_shortcuts_project, KeyEvent.KEYCODE_1, ctrl = true, group = KeyboardShortcutGroupKind.Go, projectNumber = 1),
     Project2(R.string.keyboard_shortcuts_project, KeyEvent.KEYCODE_2, ctrl = true, group = KeyboardShortcutGroupKind.Go, projectNumber = 2),

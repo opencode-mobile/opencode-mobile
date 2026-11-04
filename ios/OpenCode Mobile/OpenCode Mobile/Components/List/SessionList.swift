@@ -633,12 +633,14 @@ struct SessionList<EmptyContent: View>: View {
 
     @ViewBuilder
     private func sessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
-        Group {
-            switch effectiveRowStyle {
-            case .compact: compactSessionRow(session)
-            case .classic: classicSessionRow(session, showStatusDot: showStatusDot)
-            }
-        }
+        SessionListRow(
+            session: session,
+            rowStyle: effectiveRowStyle,
+            showStatusDot: showStatusDot,
+            selected: selectedSessionId == session.id,
+            action: { onSessionSelected(session) },
+            onLongPress: onSessionLongPress.map { handler in { handler(session) } }
+        )
         .background {
             if selectedSessionId == session.id {
                 GeometryReader { geometry in
@@ -649,28 +651,6 @@ struct SessionList<EmptyContent: View>: View {
                 }
             }
         }
-    }
-
-    private func compactSessionRow(_ session: SessionListSession) -> some View {
-        SessionListRow(
-            session: session,
-            rowStyle: .compact,
-            showStatusDot: true,
-            selected: selectedSessionId == session.id,
-            action: { onSessionSelected(session) },
-            onLongPress: onSessionLongPress.map { handler in { handler(session) } }
-        )
-    }
-
-    private func classicSessionRow(_ session: SessionListSession, showStatusDot: Bool) -> some View {
-        SessionListRow(
-            session: session,
-            rowStyle: .classic,
-            showStatusDot: showStatusDot,
-            selected: selectedSessionId == session.id,
-            action: { onSessionSelected(session) },
-            onLongPress: onSessionLongPress.map { handler in { handler(session) } }
-        )
     }
 
     private func scheduleListCrossfade(to newId: String) {
@@ -1092,15 +1072,16 @@ extension SessionListSession {
     }
 }
 
-/// What a compact Home row shows beyond the title and time (#803).
-/// Home's session row in either row style. Other session lists (Archived sessions) reuse it;
-/// `showsStatus` false drops the status, and `trailing` adds a control after the row's text.
+/// Home's session row in either row style. Other session lists (Archived sessions, search) reuse
+/// it; `showsStatus` false drops the status, `trailing` adds a control after the row's text, and
+/// `titleHighlight` marks the part of the title a search matched (#929).
 struct SessionListRow<Trailing: View>: View {
     let session: SessionListSession
     let rowStyle: HomeSessionRowStyle
     var showStatusDot: Bool = false
     var showsStatus: Bool = true
     var selected: Bool = false
+    var titleHighlight: Range<String.Index>?
     let action: () -> Void
     var onLongPress: (() -> Void)?
     @ViewBuilder var trailing: () -> Trailing
@@ -1112,6 +1093,7 @@ struct SessionListRow<Trailing: View>: View {
         showStatusDot: Bool = false,
         showsStatus: Bool = true,
         selected: Bool = false,
+        titleHighlight: Range<String.Index>? = nil,
         action: @escaping () -> Void,
         onLongPress: (() -> Void)? = nil,
         @ViewBuilder trailing: @escaping () -> Trailing = { EmptyView() }
@@ -1121,6 +1103,7 @@ struct SessionListRow<Trailing: View>: View {
         self.showStatusDot = showStatusDot
         self.showsStatus = showsStatus
         self.selected = selected
+        self.titleHighlight = titleHighlight
         self.action = action
         self.onLongPress = onLongPress
         self.trailing = trailing
@@ -1139,6 +1122,7 @@ struct SessionListRow<Trailing: View>: View {
         return OpenCodeListItem(
             variant: .compact,
             title: .verbatim(session.title),
+            titleHighlight: titleHighlight,
             emphasized: row.emphasized,
             path: row.path,
             status: status,
@@ -1161,6 +1145,7 @@ struct SessionListRow<Trailing: View>: View {
         let status = session.status.listItemStatus(isStale: session.statusIsStale)
         return OpenCodeListItem(
             title: .verbatim(session.title),
+            titleHighlight: titleHighlight,
             subtitle: .verbatim(ifPresent: lines == nil
                 ? compactHomePath(
                     session.subtitle,
@@ -1184,6 +1169,7 @@ struct SessionListRow<Trailing: View>: View {
     }
 }
 
+/// What a compact Home row shows beyond the title and time (#803).
 struct SessionListCompactRow: Equatable {
     let path: OpenCodeListItemPath
     /// Nil while Idle: no status and no dot.

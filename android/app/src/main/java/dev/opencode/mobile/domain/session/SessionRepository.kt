@@ -7,6 +7,15 @@ interface SessionRepository {
 
     suspend fun listSessions(directory: String? = null): List<Session>
 
+    /**
+     * Active root sessions in [directory]'s list whose title contains [query] (#929). Servers
+     * search on their side; without that this filters the full list.
+     */
+    suspend fun searchSessions(
+        query: String,
+        directory: String? = null,
+    ): List<Session> = SessionTitleSearch.filter(listSessions(directory), query)
+
     suspend fun createSession(
         parentId: String? = null,
         title: String? = null,

@@ -86,11 +86,18 @@ class SessionsApi private constructor(
                 applyDirectory(directory)
             }.body()
 
-    suspend fun listSessions(directory: String? = null): List<SessionDto> =
+    /** [search] filters by title and [rootsOnly] drops child sessions (opencode 1.x; older servers ignore both). */
+    suspend fun listSessions(
+        directory: String? = null,
+        search: String? = null,
+        rootsOnly: Boolean = false,
+    ): List<SessionDto> =
         httpClient
             .get()
             .get("session") {
                 applyDirectory(directory)
+                search?.let { parameter("search", it) }
+                if (rootsOnly) parameter("roots", "true")
             }.body()
 
     suspend fun createSession(
@@ -449,6 +456,10 @@ class SessionsApi private constructor(
         parentId: String? = null,
         projectId: String? = null,
         archived: Boolean? = null,
+        /** Only sessions without a parent (`parentID=null`); ignored when [parentId] is set. */
+        rootsOnly: Boolean = false,
+        /** Title filter. */
+        search: String? = null,
     ): List<V2SessionDto> {
         val sessions = mutableListOf<V2SessionDto>()
         var cursor: String? = null
@@ -463,8 +474,12 @@ class SessionsApi private constructor(
                         } else {
                             applyDirectory(directory)
                         }
-                        parentId?.let { parameter("parentID", it) }
+                        when {
+                            parentId != null -> parameter("parentID", parentId)
+                            rootsOnly -> parameter("parentID", "null")
+                        }
                         archived?.let { parameter("archived", it.toString()) }
+                        search?.let { parameter("search", it) }
                         cursor?.let { parameter("cursor", it) }
                     }.body<ApiListEnvelope<V2SessionDto>>()
             sessions += envelope.data

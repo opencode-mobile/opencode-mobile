@@ -37,6 +37,13 @@ class DefaultSessionRepository
             runCatching { remote.listSessions(directory) }
                 .getOrElse { throw adapter.mapError(it) }
 
+        override suspend fun searchSessions(
+            query: String,
+            directory: String?,
+        ): List<Session> =
+            runCatching { remote.searchSessions(query, directory) }
+                .getOrElse { throw adapter.mapError(it) }
+
         override suspend fun createSession(
             parentId: String?,
             title: String?,

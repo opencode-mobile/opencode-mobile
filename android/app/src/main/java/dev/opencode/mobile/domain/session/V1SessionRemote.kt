@@ -23,6 +23,15 @@ internal class V1SessionRemote(
 
     override suspend fun listSessions(directory: String?): List<Session> = api.listSessions(directory).map(adapter::toSession)
 
+    override suspend fun searchSessions(
+        query: String,
+        directory: String?,
+    ): List<Session> =
+        SessionTitleSearch.filter(
+            api.listSessions(directory, search = SessionTitleSearch.normalizedQuery(query), rootsOnly = true).map(adapter::toSession),
+            query,
+        )
+
     override suspend fun createSession(
         parentId: String?,
         title: String?,

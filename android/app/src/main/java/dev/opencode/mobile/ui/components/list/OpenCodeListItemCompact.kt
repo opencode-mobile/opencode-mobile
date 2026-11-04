@@ -163,6 +163,7 @@ internal object OpenCodeListItemPathSplit {
 internal fun CompactListItemContent(
     title: String,
     titleEmphasized: Boolean,
+    titleHighlight: IntRange?,
     path: OpenCodeListItemPath?,
     subtitle: String?,
     status: OpenCodeListItemStatus?,
@@ -194,7 +195,7 @@ internal fun CompactListItemContent(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Text(
-                    text = title,
+                    text = listItemTitleText(title, titleHighlight),
                     color = if (enabled) textStrong else textWeaker,
                     style =
                         MaterialTheme.typography.titleMedium.copy(

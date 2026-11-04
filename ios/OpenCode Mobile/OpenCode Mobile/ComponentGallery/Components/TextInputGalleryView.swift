@@ -7,6 +7,7 @@ struct TextInputGalleryView: View {
     @State private var showsError = false
     @State private var isEmpty = true
     @State private var multiline = false
+    @State private var busy = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -32,6 +33,9 @@ struct TextInputGalleryView: View {
                     multiline.toggle()
                     if multiline { kind = .text }
                 }
+                if kind == .search {
+                    OpenCodeChoiceBadge(label: "Busy", selected: busy) { busy.toggle() }
+                }
             }
             OpenCodeTextInput(
                 text: $text,
@@ -40,7 +44,8 @@ struct TextInputGalleryView: View {
                 enabled: enabled,
                 errorMessage: .verbatim(ifPresent: showsError ? errorMessage : nil),
                 minLines: multiline ? 4 : 1,
-                maxLines: multiline ? 8 : 1
+                maxLines: multiline ? 8 : 1,
+                busy: kind == .search && busy
             )
         }
     }
@@ -52,6 +57,7 @@ struct TextInputGalleryView: View {
         case .username: "Username"
         case .password: "Password"
         case .filter: "Filter"
+        case .search: "Search"
         }
     }
 
@@ -62,6 +68,7 @@ struct TextInputGalleryView: View {
         case .username: "Username"
         case .password: "Password"
         case .filter: "Filter models"
+        case .search: "Search in All projects"
         }
     }
 
@@ -74,6 +81,7 @@ struct TextInputGalleryView: View {
         case .username: "opencode"
         case .password: "correct horse battery staple"
         case .filter: "claude"
+        case .search: "search"
         }
     }
 }
