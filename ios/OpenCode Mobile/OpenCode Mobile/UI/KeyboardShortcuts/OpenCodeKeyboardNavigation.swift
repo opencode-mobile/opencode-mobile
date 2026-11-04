@@ -194,6 +194,8 @@ nonisolated enum OpenCodeReturnKeyPolicy {
 nonisolated enum OpenCodeEscapeAction: Equatable, Sendable {
     /// Close the topmost sheet, dialog, menu, or popover.
     case closeOverlay
+    /// Hand Esc to the screen that claims it (Home search: clear the query, then close).
+    case screenEscape
     /// Stop editing the focused text field.
     case leaveTextInput
     /// Take keyboard focus off the focused control.
@@ -207,6 +209,8 @@ nonisolated enum OpenCodeEscapeAction: Equatable, Sendable {
 
 nonisolated struct OpenCodeEscapeContext: Equatable, Sendable {
     var overlayPresented = false
+    /// A screen on top claims Esc for itself, focused field or not.
+    var screenClaimsEscape = false
     var textInputFocused = false
     var controlFocused = false
     /// Session Chat is on screen, its session is busy, and Stop is enabled.
@@ -219,10 +223,10 @@ nonisolated struct OpenCodeEscapeResolution: Equatable, Sendable {
     let armedAt: Date?
 }
 
-/// Esc priority: close the topmost overlay, else leave the focused text field or
-/// control, else interrupt the running turn in Session Chat. Like the opencode
-/// TUI, interrupting takes two presses: the first arms it, a second within
-/// `interruptWindow` interrupts. Any Esc consumed by an earlier step disarms.
+/// Esc priority: close the topmost overlay, else let a screen that claims Esc handle
+/// it, else leave the focused text field or control, else interrupt the running turn
+/// in Session Chat. Like the opencode TUI, interrupting takes two presses: the
+/// first arms it, a second within `interruptWindow` interrupts. Any Esc consumed by an earlier step disarms.
 nonisolated enum OpenCodeEscapeResolver {
     static let interruptWindow: TimeInterval = 5
 
@@ -232,6 +236,7 @@ nonisolated enum OpenCodeEscapeResolver {
         now: Date
     ) -> OpenCodeEscapeResolution {
         if context.overlayPresented { return .init(action: .closeOverlay, armedAt: nil) }
+        if context.screenClaimsEscape { return .init(action: .screenEscape, armedAt: nil) }
         if context.textInputFocused { return .init(action: .leaveTextInput, armedAt: nil) }
         if context.controlFocused { return .init(action: .clearFocus, armedAt: nil) }
         guard context.interruptAvailable else { return .init(action: .none, armedAt: nil) }

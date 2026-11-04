@@ -41,6 +41,8 @@ struct WorktreeMarkUpdate: Sendable {
     let inventory: WorktreeInventory
     /// Worktree directories the server listed for the project (v1 sandboxes, v2 worktree list).
     var directories: [String] = []
+    /// v1: the non-added directories whose sessions `extras` lists.
+    var extraDirectories: [String] = []
     let extras: [SessionListItem]
 }
 
@@ -165,6 +167,7 @@ final class HomeWorktreeMarks {
                     resolution: resolution(for: addedPath),
                     inventory: last.inventory,
                     directories: last.directories,
+                    extraDirectories: directories,
                     extras: extras
                 )
             )
@@ -235,6 +238,7 @@ final class HomeWorktreeMarks {
             resolution: resolution,
             inventory: inventory,
             directories: directories,
+            extraDirectories: extraDirectories[addedPath] ?? [],
             extras: extras
         )
     }

@@ -1133,6 +1133,24 @@
     <string name="feedback_dictation_microphone_off">Microphone access is off</string>
     <string name="feedback_dictation_listening">Listening · %1$s</string>
     <string name="feedback_dictation_listening_on_device">Listening · %1$s · on-device</string>
+    <string name="session_search_title">Search sessions</string>
+    <string name="session_search_clear">Clear search</string>
+    <string name="session_search_placeholder">Search in %1$s</string>
+    <string name="session_search_hint">Matches session titles in %1$s.</string>
+    <string name="session_search_searching">Searching…</string>
+    <plurals name="session_search_results">
+        <item quantity="one">%1$d result</item>
+        <item quantity="other">%1$d results</item>
+    </plurals>
+    <string name="session_search_no_match_title">No sessions match “%1$s”</string>
+    <string name="session_search_no_match_message">in %1$s</string>
+    <string name="session_search_search_all_projects">Search all projects</string>
+    <string name="session_search_include_archived">Include archived</string>
+    <!-- %1$d is how many sessions are archived in the search scope. -->
+    <string name="session_search_include_archived_count">Include archived · %1$d</string>
+    <string name="session_search_archived_section">Archived</string>
+    <string name="session_search_archived_tag">Archived</string>
+    <string name="session_search_scope_selected">%1$s, selected</string>
     <string name="keyboard_shortcuts_group_session">Session</string>
     <string name="keyboard_shortcuts_group_prompt">Prompt</string>
     <string name="keyboard_shortcuts_group_go">Go</string>
@@ -1152,6 +1170,7 @@
     <string name="keyboard_shortcuts_next_session">Next Session</string>
     <string name="keyboard_shortcuts_previous_session">Previous Session</string>
     <string name="keyboard_shortcuts_focus_composer">Focus Composer</string>
+    <string name="keyboard_shortcuts_search_sessions">Search Sessions</string>
     <!-- Changes -->
     <string name="changes_title">Changes</string>
     <string name="changes_source_menu_label">Choose change source</string>

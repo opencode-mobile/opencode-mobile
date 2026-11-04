@@ -461,6 +461,8 @@ final class ProjectListHomeViewModel {
     private let worktreeInventoryCache: WorktreeInventoryCache
     /// New worktree form of the Run in sheet.
     let worktreeCreate: WorktreeCreateModel
+    /// Session search over Home's pane (#929).
+    let sessionSearch: SessionSearchModel
     /// False once a v1 server answered 404 for its worktree routes.
     private(set) var serverCanCreateWorktrees = true
     private let foregroundEventStream: (any ForegroundEventStream)?
@@ -488,6 +490,8 @@ final class ProjectListHomeViewModel {
     private var projectResolutions: [String: HomeProjectResolution] = [:]
     /// Worktree directories the server listed, per added path.
     private var worktreeDirectories: [String: [String]] = [:]
+    /// v1: non-added worktree directories whose sessions each added path's section folds in.
+    private(set) var homeExtraDirectories: [String: [String]] = [:]
     /// Current branch by canonical worktree directory.
     private var worktreeBranches: [String: String] = [:]
     /// Name and VCS from the server's project list, by project id.
@@ -542,6 +546,10 @@ final class ProjectListHomeViewModel {
         self.worktreeRepository = worktreeRepository
         self.worktreeInventoryCache = worktreeInventoryCache
         self.worktreeCreate = WorktreeCreateModel(repository: worktreeRepository)
+        self.sessionSearch = SessionSearchModel(
+            repository: sessionRepository,
+            archivedSessionsSupported: { activeConnectionManager.capabilities.supportsArchivedSessions }
+        )
         self.serverCanCreateWorktrees = worktreeRepository.canCreateWorktrees
         self.foregroundEventStream = foregroundEventStream
         let projects = projectRepository
@@ -696,6 +704,7 @@ final class ProjectListHomeViewModel {
     private func clearHomeProjectInputs() {
         projectResolutions.removeAll()
         worktreeDirectories.removeAll()
+        homeExtraDirectories.removeAll()
         worktreeBranches.removeAll()
         serverProjectInfo.removeAll()
         branchLookups.clear()
@@ -1265,6 +1274,7 @@ final class ProjectListHomeViewModel {
             clearProjectLoad(path)
             projectResolutions[path] = nil
             worktreeDirectories[path] = nil
+            homeExtraDirectories[path] = nil
         }
         pendingProjectRemoval = nil
         await runHomeLoad(skipProbe: true)
@@ -2064,6 +2074,9 @@ final class ProjectListHomeViewModel {
         if let resolution = update.resolution, projectResolutions[update.addedPath] != resolution {
             projectResolutions[update.addedPath] = resolution
             sessionCache.rememberProjectResolution(worktree: update.addedPath, resolution: resolution)
+        }
+        if homeExtraDirectories[update.addedPath] ?? [] != update.extraDirectories {
+            homeExtraDirectories[update.addedPath] = update.extraDirectories.isEmpty ? nil : update.extraDirectories
         }
         // A failed reload keeps the worktrees Home already knows.
         if update.inventory != .failed, worktreeDirectories[update.addedPath] != update.directories {

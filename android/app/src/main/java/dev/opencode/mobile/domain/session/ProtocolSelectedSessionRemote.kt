@@ -16,6 +16,11 @@ internal class ProtocolSelectedSessionRemote(
 
     override suspend fun listSessions(directory: String?): List<Session> = selected().listSessions(directory)
 
+    override suspend fun searchSessions(
+        query: String,
+        directory: String?,
+    ): List<Session> = selected().searchSessions(query, directory)
+
     override suspend fun createSession(
         parentId: String?,
         title: String?,

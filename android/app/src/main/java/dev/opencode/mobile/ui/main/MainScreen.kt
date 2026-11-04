@@ -5,13 +5,16 @@ import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -67,6 +70,7 @@ import dev.opencode.mobile.ui.components.OpenCodeEmptyState
 import dev.opencode.mobile.ui.components.OpenCodeEmptyStateAction
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemStyle
+import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
 import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
@@ -74,7 +78,6 @@ import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
 import dev.opencode.mobile.ui.components.OpenCodeStatusStack
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
-import dev.opencode.mobile.ui.components.OpenCodeOverflowMenuEntry
 import dev.opencode.mobile.ui.components.OpenCodeTopBarOverflowHost
 import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
 import dev.opencode.mobile.ui.components.SessionList
@@ -142,8 +145,10 @@ fun MainScreen(
     selectedSessionId: String? = null,
     sessionKeyboardNavigationEnabled: Boolean = false,
     viewModel: MainScreenViewModel = hiltViewModel(),
+    searchViewModel: SessionSearchViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val searchState by searchViewModel.uiState.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val liveUpdatesConnectionStatus by viewModel.liveUpdatesConnectionStatus.collectAsStateWithLifecycle()
     val removalSnackbar by viewModel.removalSnackbar.collectAsStateWithLifecycle()
@@ -256,6 +261,22 @@ fun MainScreen(
         modifier = modifier,
         selectedSessionId = selectedSessionId,
         sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
+        search =
+            HomeSessionSearch(
+                state = searchState,
+                callbacks =
+                    SessionSearchCallbacks(
+                        onClose = searchViewModel::close,
+                        onQueryChange = searchViewModel::updateQuery,
+                        onEscape = searchViewModel::escape,
+                        onSelectScope = searchViewModel::selectScope,
+                        onSearchAllProjects = searchViewModel::searchAllProjects,
+                        onToggleIncludeArchived = searchViewModel::toggleIncludeArchived,
+                        onIncludeArchived = searchViewModel::includeArchived,
+                    ),
+                onOpen = searchViewModel::open,
+                onHomeChanged = searchViewModel::homeChanged,
+            ),
     )
 }
 
@@ -302,6 +323,7 @@ internal fun MainScreen(
     worktreeServerCanCreate: Boolean = true,
     onOpenRunInNewWorktree: (String) -> Unit = {},
     worktreeCreateCallbacks: WorktreeCreateFormCallbacks = WorktreeCreateFormCallbacks(),
+    search: HomeSessionSearch = HomeSessionSearch(),
     /** Home menu's Archived sessions entry; null leaves it out (no archive support). */
     archivedMenu: HomeArchivedMenuEntry? = null,
     onHomeMenuOpen: (scopeId: String, worktreesEnabled: Boolean) -> Unit = { _, _ -> },
@@ -349,19 +371,6 @@ internal fun MainScreen(
                 },
             )
         }
-    // Feature entries go in `features`, top to bottom; HomeMenu adds Settings last.
-    val homeMenuEntries =
-        HomeMenu.entries(
-            features = listOfNotNull(archivedMenuEntry),
-            settingsTitle = stringResource(R.string.common_settings),
-            onSettingsClick = {
-                ProductAnalytics.logUserAction(
-                    screenId = ProductAnalytics.Screen.HOME,
-                    actionId = ProductAnalytics.Action.HOME_OPEN_SETTINGS,
-                )
-                onSettingsClick()
-            },
-        )
     val worktreesEnabled = HomeDisplayPreferences.showsWorktrees
     val loaded = uiState as? MainScreenUiState.Loaded
     val homeSessions = remember(loaded, worktreesEnabled) { loaded?.homeSessions(worktreesEnabled).orEmpty() }
@@ -371,6 +380,46 @@ internal fun MainScreen(
         }
     val showTerminalAction =
         SessionListHomeChrome.terminalAction(chromeProjects) is SessionListHomeChrome.TerminalAction.OpenCatalog
+    LaunchedEffect(loaded, worktreesEnabled) {
+        loaded?.let { search.onHomeChanged(SessionSearchHome.from(it, worktreesEnabled)) }
+    }
+    // Another server: what search found belongs to the old one, so search closes.
+    val searchServerId = serversChrome.active?.id
+    var searchedServerId by rememberSaveable { mutableStateOf(searchServerId) }
+    LaunchedEffect(searchServerId) {
+        if (searchServerId != searchedServerId) {
+            searchedServerId = searchServerId
+            search.callbacks.onClose()
+        }
+    }
+    val openSearch: () -> Unit = {
+        search.onOpen(homeScopeId(selectedFilterId, loaded?.projects.orEmpty(), worktreesEnabled))
+    }
+    // Ctrl+F: Search sessions, wherever Home shows its projects.
+    KeyboardShortcutHandler(KeyboardShortcutAction.SearchSessions, enabled = loaded != null, onShortcut = openSearch)
+    // Feature entries go in `features`, top to bottom; HomeMenu adds Settings last.
+    val homeMenuEntries =
+        HomeMenu.entries(
+            features =
+                listOfNotNull(
+                    // Search needs Home's sessions, so it waits for a loaded Home.
+                    OpenCodeOverflowMenuEntry(
+                        title = stringResource(R.string.session_search_title),
+                        icon = OpenCodeIcons.Search,
+                        onClick = openSearch,
+                        testTag = SessionSearchTags.MENU_ENTRY,
+                    ).takeIf { loaded != null },
+                    archivedMenuEntry,
+                ),
+            settingsTitle = stringResource(R.string.common_settings),
+            onSettingsClick = {
+                ProductAnalytics.logUserAction(
+                    screenId = ProductAnalytics.Screen.HOME,
+                    actionId = ProductAnalytics.Action.HOME_OPEN_SETTINGS,
+                )
+                onSettingsClick()
+            },
+        )
     val startNewSession: (SessionListHomeChrome.NewSessionAction) -> Unit = { action ->
         when (action) {
             SessionListHomeChrome.NewSessionAction.None -> Unit
@@ -566,6 +615,27 @@ internal fun MainScreen(
                 }
                 }
             }
+        }
+
+        if (search.state.open && loaded != null) {
+            SessionSearchScreen(
+                state = search.state,
+                callbacks = search.callbacks,
+                onOpenSession = { session ->
+                    ProductAnalytics.logUserAction(
+                        screenId = ProductAnalytics.Screen.HOME,
+                        actionId = ProductAnalytics.Action.HOME_OPEN_SESSION,
+                    )
+                    onSessionClick(SessionOpenTarget(sessionId = session.id, title = session.title, worktree = session.directory))
+                },
+                selectedSessionId = selectedSessionId,
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                        .imePadding()
+                        .navigationBarsPadding(),
+            )
         }
 
         OpenCodeSnackbarHost(
@@ -1435,3 +1505,12 @@ fun MainScreenPreview() {
         )
     }
 }
+
+/** Search sessions (#929) as Home hosts it: the search Screen Model's state and actions. */
+data class HomeSessionSearch(
+    val state: SessionSearchUiState = SessionSearchUiState(),
+    val callbacks: SessionSearchCallbacks = SessionSearchCallbacks(),
+    /** Opens search in Home's scope id. */
+    val onOpen: (String) -> Unit = {},
+    val onHomeChanged: (SessionSearchHome) -> Unit = {},
+)

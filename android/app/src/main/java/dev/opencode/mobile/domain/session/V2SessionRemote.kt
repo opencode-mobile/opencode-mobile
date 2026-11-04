@@ -25,16 +25,7 @@ internal class V2SessionRemote(
         directory: String?,
         archived: Boolean,
     ): List<Session> {
-        val projectId =
-            directory?.let { path ->
-                try {
-                    listableProjectId(api.locationForSessionList(path))
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (_: Throwable) {
-                    null
-                }
-            }
+        val projectId = projectIdForList(directory)
         return api
             .listSessionsV2(
                 directory = if (projectId == null) directory else null,
@@ -42,6 +33,33 @@ internal class V2SessionRemote(
                 archived = archived,
             ).map(adapter::toSession)
     }
+
+    override suspend fun searchSessions(
+        query: String,
+        directory: String?,
+    ): List<Session> {
+        val projectId = projectIdForList(directory)
+        val sessions =
+            api.listSessionsV2(
+                directory = if (projectId == null) directory else null,
+                projectId = projectId,
+                archived = false,
+                rootsOnly = true,
+                search = SessionTitleSearch.normalizedQuery(query),
+            )
+        return SessionTitleSearch.filter(sessions.map(adapter::toSession), query)
+    }
+
+    private suspend fun projectIdForList(directory: String?): String? =
+        directory?.let { path ->
+            try {
+                listableProjectId(api.locationForSessionList(path))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                null
+            }
+        }
 
     override suspend fun createSession(
         parentId: String?,

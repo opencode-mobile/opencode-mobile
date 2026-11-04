@@ -142,6 +142,20 @@ import Testing
         #expect(OpenCodeEscapeResolver.resolve(context, armedAt: nil, now: start).action == .closeOverlay)
     }
 
+    @Test func screenThatClaimsEsc_handlesItAfterOverlaysAndBeforeTheField() {
+        let claimed = OpenCodeEscapeContext(
+            screenClaimsEscape: true,
+            textInputFocused: true,
+            controlFocused: true,
+            interruptAvailable: true
+        )
+        #expect(OpenCodeEscapeResolver.resolve(claimed, armedAt: start, now: start).action == .screenEscape)
+        #expect(OpenCodeEscapeResolver.resolve(claimed, armedAt: start, now: start).armedAt == nil)
+        var overlay = claimed
+        overlay.overlayPresented = true
+        #expect(OpenCodeEscapeResolver.resolve(overlay, armedAt: nil, now: start).action == .closeOverlay)
+    }
+
     @Test func textInput_isLeftBeforeFocusIsCleared() {
         let context = OpenCodeEscapeContext(textInputFocused: true, controlFocused: true, interruptAvailable: true)
         #expect(OpenCodeEscapeResolver.resolve(context, armedAt: nil, now: start).action == .leaveTextInput)

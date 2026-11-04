@@ -25,6 +25,7 @@ fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
     var showsError by rememberSaveable { mutableStateOf(false) }
     var isEmpty by rememberSaveable { mutableStateOf(true) }
     var multiline by rememberSaveable { mutableStateOf(false) }
+    var busy by rememberSaveable { mutableStateOf(false) }
     val kind = OpenCodeTextInputKind.valueOf(kindName)
 
     Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -63,6 +64,9 @@ fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
                     if (multiline) kindName = OpenCodeTextInputKind.Text.name
                 },
             )
+            if (kind == OpenCodeTextInputKind.Search) {
+                OpenCodeChoiceBadge(label = "Busy", selected = busy, onClick = { busy = !busy })
+            }
         }
         OpenCodeTextInput(
             value = value,
@@ -73,6 +77,7 @@ fun TextInputGalleryScreen(modifier: Modifier = Modifier) {
             errorMessage = if (showsError) "Enter a valid ${kind.fieldHint.lowercase()}" else null,
             minLines = if (multiline) 4 else 1,
             maxLines = if (multiline) 8 else 1,
+            busy = busy && kind == OpenCodeTextInputKind.Search,
         )
     }
 }
@@ -85,6 +90,7 @@ private val OpenCodeTextInputKind.fieldHint: String
             OpenCodeTextInputKind.Username -> "Username"
             OpenCodeTextInputKind.Password -> "Password"
             OpenCodeTextInputKind.Filter -> "Filter models"
+            OpenCodeTextInputKind.Search -> "Search in All projects"
         }
 
 private val OpenCodeTextInputKind.sampleValue: String
@@ -95,4 +101,5 @@ private val OpenCodeTextInputKind.sampleValue: String
             OpenCodeTextInputKind.Username -> "opencode"
             OpenCodeTextInputKind.Password -> "correct horse battery staple"
             OpenCodeTextInputKind.Filter -> "claude"
+            OpenCodeTextInputKind.Search -> "invoice"
         }

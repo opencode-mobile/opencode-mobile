@@ -39,6 +39,7 @@ private struct NewSessionShortcutKey: FocusedValueKey { typealias Value = OpenCo
 private struct CommandPaletteShortcutKey: FocusedValueKey { typealias Value = OpenCodeKeyboardShortcutAction }
 private struct ModelPickerShortcutKey: FocusedValueKey { typealias Value = OpenCodeKeyboardShortcutAction }
 private struct SettingsShortcutKey: FocusedValueKey { typealias Value = OpenCodeKeyboardShortcutAction }
+private struct SearchSessionsShortcutKey: FocusedValueKey { typealias Value = OpenCodeKeyboardShortcutAction }
 private struct PromptPrimaryShortcutKey: FocusedValueKey { typealias Value = OpenCodeKeyboardShortcutAction }
 private struct PromptAlwaysAllowShortcutKey: FocusedValueKey { typealias Value = OpenCodeKeyboardShortcutAction }
 private struct PromptRejectShortcutKey: FocusedValueKey { typealias Value = OpenCodeKeyboardShortcutAction }
@@ -85,6 +86,11 @@ extension FocusedValues {
         set { self[SettingsShortcutKey.self] = newValue }
     }
 
+    var openCodeSearchSessions: OpenCodeKeyboardShortcutAction? {
+        get { self[SearchSessionsShortcutKey.self] }
+        set { self[SearchSessionsShortcutKey.self] = newValue }
+    }
+
     var openCodePromptPrimary: OpenCodeKeyboardShortcutAction? {
         get { self[PromptPrimaryShortcutKey.self] }
         set { self[PromptPrimaryShortcutKey.self] = newValue }
@@ -118,6 +124,7 @@ extension OpenCodeKeyboardShortcut {
         case .commandPalette: \.openCodeCommandPalette
         case .modelPicker: \.openCodeModelPicker
         case .settings: \.openCodeSettings
+        case .searchSessions: \.openCodeSearchSessions
         case .promptPrimary: \.openCodePromptPrimary
         case .promptAlwaysAllow: \.openCodePromptAlwaysAllow
         case .promptReject: \.openCodePromptReject
@@ -139,6 +146,7 @@ struct OpenCodeKeyboardShortcutCommands: Commands {
     @FocusedValue(\.openCodeCommandPalette) private var commandPalette
     @FocusedValue(\.openCodeModelPicker) private var modelPicker
     @FocusedValue(\.openCodeSettings) private var settings
+    @FocusedValue(\.openCodeSearchSessions) private var searchSessions
     @FocusedValue(\.openCodePromptPrimary) private var promptPrimary
     @FocusedValue(\.openCodePromptAlwaysAllow) private var promptAlwaysAllow
     @FocusedValue(\.openCodePromptReject) private var promptReject
@@ -173,6 +181,7 @@ struct OpenCodeKeyboardShortcutCommands: Commands {
             command(.promptReject, promptReject)
         }
         CommandMenu("keyboard_shortcuts.group.go") {
+            command(.searchSessions, searchSessions)
             ForEach(1...9, id: \.self) { number in
                 projectCommand(number)
             }

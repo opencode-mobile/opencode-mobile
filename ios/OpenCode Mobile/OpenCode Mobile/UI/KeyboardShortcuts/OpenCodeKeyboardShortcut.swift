@@ -20,6 +20,8 @@ nonisolated enum OpenCodeKeyboardShortcut: Hashable, CaseIterable, Sendable {
     case modelPicker
     /// Open Settings from Home.
     case settings
+    /// Open session search over Home and put the caret in its field.
+    case searchSessions
     /// Show the Nth project of the Home dock's project order (1...9).
     case switchProject(Int)
     /// Allow Once on a permission prompt; Next or Submit on a question prompt.
@@ -32,7 +34,7 @@ nonisolated enum OpenCodeKeyboardShortcut: Hashable, CaseIterable, Sendable {
     static var allCases: [Self] {
         [
             .toggleSidebar, .nextSession, .previousSession, .focusComposer,
-            .newSession, .commandPalette, .modelPicker, .settings,
+            .newSession, .commandPalette, .modelPicker, .settings, .searchSessions,
         ] + (1...9).map { .switchProject($0) } + [.promptPrimary, .promptAlwaysAllow, .promptReject]
     }
 
@@ -46,6 +48,7 @@ nonisolated enum OpenCodeKeyboardShortcut: Hashable, CaseIterable, Sendable {
         case .commandPalette: LocalizedStringResource("keyboard_shortcuts.command_palette", defaultValue: "Command Palette")
         case .modelPicker: LocalizedStringResource("keyboard_shortcuts.choose_model", defaultValue: "Choose Model")
         case .settings: LocalizedStringResource("keyboard_shortcuts.settings", defaultValue: "Settings")
+        case .searchSessions: LocalizedStringResource("keyboard_shortcuts.search_sessions", defaultValue: "Search Sessions")
         case let .switchProject(number): LocalizedStringResource("keyboard_shortcuts.project", defaultValue: "Project \(number)")
         case .promptPrimary: LocalizedStringResource("keyboard_shortcuts.allow_once", defaultValue: "Allow Once")
         case .promptAlwaysAllow: LocalizedStringResource("keyboard_shortcuts.always_allow", defaultValue: "Always Allow")
@@ -67,6 +70,7 @@ nonisolated enum OpenCodeKeyboardShortcut: Hashable, CaseIterable, Sendable {
         case .commandPalette: "k"
         case .modelPicker: "m"
         case .settings: ","
+        case .searchSessions: "f"
         case let .switchProject(number): KeyEquivalent(Character(String(number)))
         case .promptPrimary, .promptAlwaysAllow: .return
         case .promptReject: .delete
@@ -78,7 +82,8 @@ nonisolated enum OpenCodeKeyboardShortcut: Hashable, CaseIterable, Sendable {
         case .toggleSidebar: [.control, .command]
         case .nextSession: .control
         case .previousSession: [.control, .shift]
-        case .focusComposer, .newSession, .commandPalette, .settings, .switchProject, .promptPrimary, .promptReject:
+        case .focusComposer, .newSession, .commandPalette, .settings, .searchSessions, .switchProject, .promptPrimary,
+             .promptReject:
             .command
         case .modelPicker: [.command, .shift]
         case .promptAlwaysAllow: [.option, .command]

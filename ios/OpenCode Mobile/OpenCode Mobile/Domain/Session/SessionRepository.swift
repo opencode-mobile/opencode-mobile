@@ -4,6 +4,8 @@ protocol SessionRepository: Sendable {
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest]
     func listPendingQuestions(directory: String?) async throws -> [QuestionRequest]
     func listSessions(directory: String?) async throws -> [Session]
+    /// Root, unarchived sessions of `directory` whose title contains `query` (case-insensitive).
+    func searchSessions(query: String, directory: String?) async throws -> [Session]
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session
     func getAllSessionStatuses(directory: String?) async throws -> [SessionStatus]
     func getSession(id: String, directory: String?) async throws -> Session
@@ -66,6 +68,11 @@ nonisolated enum CompactionStart: Sendable, Equatable {
 }
 
 extension SessionRepository {
+    /// Lists and filters locally. The protocol remotes ask the server to search first.
+    func searchSessions(query: String, directory: String?) async throws -> [Session] {
+        SessionTitleSearch.searchResults(try await listSessions(directory: directory), query: query)
+    }
+
     func compactSession(id: String, providerID: String, modelID: String) async throws -> CompactionStart {
         _ = try await summarizeSession(id: id, providerID: providerID, modelID: modelID)
         return .finished
@@ -176,6 +183,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func listSessions(directory: String?) async throws -> [Session] {
         try await run { try await remote.listSessions(directory: directory) }
+    }
+
+    func searchSessions(query: String, directory: String?) async throws -> [Session] {
+        try await run { try await remote.searchSessions(query: query, directory: directory) }
     }
 
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session {

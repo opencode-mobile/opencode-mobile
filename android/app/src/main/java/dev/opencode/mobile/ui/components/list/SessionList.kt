@@ -695,7 +695,8 @@ private fun SessionListFeedRows(
 
 /**
  * Home's session row in either [rowStyle]. Other session lists (Archived sessions) reuse it;
- * [showsStatus] false drops the status, and [trailing] adds a control after the row's text.
+ * [showsStatus] false drops the status, [trailing] adds a control after the row's text, and
+ * [titleHighlight] marks the part of the title a search matched (#929).
  */
 @Composable
 internal fun SessionListRow(
@@ -705,6 +706,7 @@ internal fun SessionListRow(
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
     rowStyle: HomeSessionRowStyle,
+    titleHighlight: IntRange? = null,
     showsStatus: Boolean = true,
     trailing: (@Composable () -> Unit)? = null,
 ) {
@@ -721,6 +723,7 @@ internal fun SessionListRow(
             selected = selected,
             onSessionSelected = onSessionSelected,
             onSessionLongPress = onSessionLongPress,
+            titleHighlight = titleHighlight,
             showsStatus = showsStatus,
             trailing = trailing,
         )
@@ -729,6 +732,7 @@ internal fun SessionListRow(
     val lines = session.locationLines()
     OpenCodeListItem(
         title = session.title,
+        titleHighlight = titleHighlight,
         subtitle = if (lines == null) compactHomePath(session.subtitle) else null,
         subtitleSegments = lines?.subtitle,
         detailSegments = lines?.detail,
@@ -755,12 +759,14 @@ private fun SessionListCompactRow(
     selected: Boolean,
     onSessionSelected: (SessionListSession) -> Unit,
     onSessionLongPress: ((SessionListSession) -> Unit)?,
+    titleHighlight: IntRange? = null,
     showsStatus: Boolean = true,
     trailing: (@Composable () -> Unit)? = null,
 ) {
     val active = session.compactStatus(text = ResourcesUiTextLookup(LocalResources.current), status = status).takeIf { showsStatus }
     OpenCodeListItem(
         title = session.title,
+        titleHighlight = titleHighlight,
         variant = OpenCodeListItemVariant.Compact,
         path = session.compactPath(),
         titleEmphasized = session.status.isUnreadFinish,

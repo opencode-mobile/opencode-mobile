@@ -1473,6 +1473,92 @@ class SessionProtocolRepositoryTest {
         return manager
     }
 
+    @Test
+    fun v1SearchSessions_sendsSearchAndRootsAndFiltersTheReply() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    // An older v1 server ignores `search`, so the reply can hold every session.
+                    respondJson(
+                        """
+                        [
+                          {"id":"ses_match","title":"Invoice export","projectID":"proj","directory":"/repo","time":{"created":1,"updated":2}},
+                          {"id":"ses_other","title":"Refactor auth","projectID":"proj","directory":"/repo","time":{"created":1,"updated":3}},
+                          {"id":"ses_child","title":"invoice child","parentID":"ses_match","projectID":"proj","directory":"/repo","time":{"created":1,"updated":4}},
+                          {"id":"ses_archived","title":"Old invoice","projectID":"proj","directory":"/repo","time":{"created":1,"updated":5,"archived":6}}
+                        ]
+                        """.trimIndent(),
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(SessionsApi(client, json), SessionDomainAdapter(), activeConnectionManager = manager(ServerProtocol.V1))
+
+            val sessions = repository.searchSessions("  INVOICE ", "/repo")
+
+            assertEquals(listOf("ses_match"), sessions.map { it.id })
+            val url = requests.single().url
+            assertTrue(url.encodedPath.endsWith("/session"))
+            assertEquals("/repo", url.parameters["directory"])
+            assertEquals("INVOICE", url.parameters["search"])
+            assertEquals("true", url.parameters["roots"])
+        }
+
+    @Test
+    fun v2SearchSessions_sendsSearchForTheProjectRootsOnlyUnarchived() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    when {
+                        request.url.encodedPath.endsWith("/api/location") ->
+                            respondJson("""{"directory":"/repo","project":{"id":"proj","directory":"/repo","canonical":"/repo"}}""")
+                        else ->
+                            respondJson(
+                                """
+                                {
+                                  "data":[
+                                    {
+                                      "id":"ses_match",
+                                      "title":"Invoice export",
+                                      "projectID":"proj",
+                                      "cost":0,
+                                      "tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},
+                                      "time":{"created":1,"updated":2},
+                                      "location":{"directory":"/worktrees/invoices"}
+                                    },
+                                    {
+                                      "id":"ses_other",
+                                      "title":"Refactor auth",
+                                      "projectID":"proj",
+                                      "cost":0,
+                                      "tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},
+                                      "time":{"created":1,"updated":3},
+                                      "location":{"directory":"/repo"}
+                                    }
+                                  ],
+                                  "cursor":{"previous":null,"next":null}
+                                }
+                                """.trimIndent(),
+                            )
+                    }
+                }
+            val repository =
+                DefaultSessionRepository(SessionsApi(client, json), SessionDomainAdapter(), activeConnectionManager = manager(ServerProtocol.V2))
+
+            val sessions = repository.searchSessions("invoice", "/repo")
+
+            assertEquals(listOf("ses_match"), sessions.map { it.id })
+            val list = requests.single { it.url.encodedPath.endsWith("/api/session") }.url
+            assertEquals("proj", list.parameters["project"])
+            assertNull(list.parameters["directory"])
+            assertEquals("invoice", list.parameters["search"])
+            assertEquals("null", list.parameters["parentID"])
+            assertEquals("false", list.parameters["archived"])
+        }
+
     private fun testClient(handler: MockRequestHandler): HttpClient =
         HttpClient(MockEngine(handler)) {
             expectSuccess = false
