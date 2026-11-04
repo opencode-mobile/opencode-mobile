@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -214,6 +215,22 @@ class ArchivedSessionsModelTest {
         }
 
     @Test
+    fun unarchiveLeavesTheServerReadStateAlone() =
+        runTest {
+            // Home's Done pill is server unread state; only opening the session in Session Chat acknowledges it.
+            val repository = FakeArchivedRepository("/work/alpha" to listOf(archived("a1", "/work/alpha", now - day)))
+            val model = model(repository, listOf(alpha))
+            model.bind("all")
+            advanceUntilIdle()
+
+            model.unarchive("a1")
+            advanceUntilIdle()
+
+            assertEquals(listOf("a1"), repository.unarchived)
+            assertTrue(repository.viewed.isEmpty())
+        }
+
+    @Test
     fun aLaggingListDoesNotBringAnUnarchivedRowBack() =
         runTest {
             val repository = FakeArchivedRepository("/work/alpha" to listOf(archived("a1", "/work/alpha", now - day)))
@@ -225,6 +242,30 @@ class ArchivedSessionsModelTest {
 
             model.unarchive("a1")
             advanceUntilIdle()
+            events.emit(OpencodeEvent(type = "session.unarchived", sessionId = "a1"))
+            advanceUntilIdle()
+
+            assertTrue(rows(model).isEmpty())
+        }
+
+    @Test
+    fun unarchivingAnUndoneRowAgainStaysGoneWhileTheListLags() =
+        runTest {
+            val repository = FakeArchivedRepository("/work/alpha" to listOf(archived("a1", "/work/alpha", now - day)))
+            repository.unarchiveLags = true
+            val events = MutableSharedFlow<OpencodeEvent>()
+            val model = model(repository, listOf(alpha), events)
+            model.bind("all")
+            advanceUntilIdle()
+            model.unarchive("a1")
+            advanceUntilIdle()
+
+            // Undo, then unarchive again before the list refreshes: the app never saw the
+            // server's new archive time for the restored row.
+            model.undoUnarchive("a1")
+            runCurrent()
+            model.unarchive("a1")
+            runCurrent()
             events.emit(OpencodeEvent(type = "session.unarchived", sessionId = "a1"))
             advanceUntilIdle()
 
@@ -391,6 +432,15 @@ private class FakeArchivedRepository(
         id: String,
         directory: String?,
     ) = error("unused")
+
+    val viewed = mutableListOf<String>()
+
+    override suspend fun markSessionViewed(
+        sessionId: String,
+        idleAtEpochMs: Long,
+    ) {
+        viewed += sessionId
+    }
 
     override suspend fun listSessions(directory: String?) = emptyList<Session>()
 

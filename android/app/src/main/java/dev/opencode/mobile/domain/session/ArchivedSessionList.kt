@@ -52,8 +52,9 @@ object ArchivedSessionList {
     fun sorted(sessions: List<Session>): List<Session> =
         sessions
             .filter { it.isArchived && it.parentId == null }
-            .distinctBy { it.id }
             .sortedWith(compareByDescending<Session> { it.archivedAtEpochMs ?: 0L }.thenBy { it.id })
+            // After sorting, so a session listed twice keeps its newest copy.
+            .distinctBy { it.id }
 
     fun period(
         archivedAtEpochMs: Long,

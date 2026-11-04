@@ -4,6 +4,7 @@ import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2LocationInfoDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
+import kotlinx.coroutines.CancellationException
 
 internal class V2SessionRemote(
     private val api: SessionsApi,
@@ -51,7 +52,13 @@ internal class V2SessionRemote(
 
     private suspend fun projectIdForList(directory: String?): String? =
         directory?.let { path ->
-            runCatching { listableProjectId(api.locationForSessionList(path)) }.getOrNull()
+            try {
+                listableProjectId(api.locationForSessionList(path))
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Throwable) {
+                null
+            }
         }
 
     override suspend fun createSession(

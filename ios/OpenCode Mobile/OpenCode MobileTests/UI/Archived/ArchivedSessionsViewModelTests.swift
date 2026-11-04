@@ -152,6 +152,18 @@ struct ArchivedSessionsViewModelTests {
         #expect(sessions.map(\.id) == ["a1"])
     }
 
+    @Test func unarchiveLeavesTheServerReadStateAlone() async {
+        // Home's Done pill is server unread state; only opening the session in Session Chat acknowledges it.
+        let repository = ArchivedSessionRepository(["/work/alpha": [archived("a1", "/work/alpha", now - day)]])
+        let viewModel = makeViewModel(repository)
+        await viewModel.appear(scopeID: "all", projects: [alpha], worktreesEnabled: true)
+
+        await viewModel.unarchive(sessionID: "a1")
+
+        #expect(repository.unarchivedIDs == ["a1"])
+        #expect(repository.viewedIDs.isEmpty)
+    }
+
     @Test func aLaggingListDoesNotBringAnUnarchivedRowBack() async {
         let repository = ArchivedSessionRepository(["/work/alpha": [archived("a1", "/work/alpha", now - day)]])
         repository.unarchiveLags = true
@@ -164,6 +176,22 @@ struct ArchivedSessionsViewModelTests {
         await viewModel.unarchive(sessionID: "a1")
         stream.emit(OpencodeEvent(type: "session.unarchived", sessionID: "a1"))
         try? await Task.sleep(for: .milliseconds(Int(ArchivedSessionsViewModel.refreshDebounceMs) + 200))
+
+        #expect(rowIDs(viewModel).isEmpty)
+    }
+
+    @Test func unarchivingAnUndoneRowAgainStaysGoneWhileTheListLags() async {
+        let repository = ArchivedSessionRepository(["/work/alpha": [archived("a1", "/work/alpha", now - day)]])
+        repository.unarchiveLags = true
+        let viewModel = makeViewModel(repository)
+        await viewModel.appear(scopeID: "all", projects: [alpha], worktreesEnabled: true)
+        await viewModel.unarchive(sessionID: "a1")
+
+        // Undo, then unarchive again before the list refreshes: the app never saw the
+        // server's new archive time for the restored row.
+        await viewModel.undoUnarchive(sessionID: "a1")
+        await viewModel.unarchive(sessionID: "a1")
+        await viewModel.retry()
 
         #expect(rowIDs(viewModel).isEmpty)
     }
@@ -212,7 +240,7 @@ struct ArchivedSessionsViewModelTests {
 
         // Capabilities that arrive after the menu opened bring the entry back without reopening it.
         supported = true
-        menu.recheck()
+        menu.recheck(projects: [alpha, beta])
         await menu.settle()
         #expect(menu.entry?.count == 3)
     }
@@ -312,6 +340,12 @@ private final class ArchivedSessionRepository: SessionRepository, @unchecked Sen
         deletedIDs.append(id)
         lists = lists.mapValues { $0.filter { $0.id != id } }
         return true
+    }
+
+    private(set) var viewedIDs: [String] = []
+
+    func markSessionViewed(sessionId: String, idleAtEpochMs _: Int64) async throws {
+        viewedIDs.append(sessionId)
     }
 
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] { [] }

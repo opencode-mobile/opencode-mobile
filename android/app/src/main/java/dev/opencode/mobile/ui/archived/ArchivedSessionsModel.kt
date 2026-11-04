@@ -117,6 +117,7 @@ class ArchivedSessionsModel(
     /**
      * Sessions this screen unarchived or deleted, with the archive time they had. A list that
      * still carries that archive time lags behind the server; a newer one is a fresh archive.
+     * Null: a row Undo put back, whose server archive time the app never saw, matches any time.
      */
     private val settled = mutableMapOf<String, Long?>()
 
@@ -331,14 +332,15 @@ class ArchivedSessionsModel(
 
     /** The server unarchived or deleted [session]; a lagging list must not bring its row back. */
     private fun settle(session: Session) {
-        settled[session.id] = session.archivedAtEpochMs
+        settled[session.id] = session.archivedAtEpochMs.takeUnless { session.id in restoredRows }
         hiddenIds -= session.id
         restoredRows.remove(session.id)
         archivedByProject = archivedByProject.mapValues { (_, list) -> list.filterNot { it.id == session.id } }
         publish()
     }
 
-    private fun isSettled(session: Session): Boolean = session.id in settled && settled[session.id] == session.archivedAtEpochMs
+    private fun isSettled(session: Session): Boolean =
+        session.id in settled && settled[session.id].let { it == null || it == session.archivedAtEpochMs }
 
     private fun projectKeyOf(sessionId: String): String? =
         restoredRows[sessionId]?.projectKey
