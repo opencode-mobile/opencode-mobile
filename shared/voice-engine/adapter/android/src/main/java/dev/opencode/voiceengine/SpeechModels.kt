@@ -139,6 +139,20 @@ class ModelStore(
         dir(model).deleteRecursively()
     }
 
+    /**
+     * Deletes model folders that no listed model uses, such as the GGUF models of the removed transcribe.cpp engine.
+     * Returns the ids it removed.
+     */
+    fun removeUnlisted(models: List<SpeechModel>): List<String> {
+        val keep = models.map { it.id }.toSet()
+        return root
+            .listFiles()
+            .orEmpty()
+            .filter { it.isDirectory && it.name !in keep }
+            .onEach { it.deleteRecursively() }
+            .map { it.name }
+    }
+
     /** Downloads the files that are missing. [progress] gets bytes done and bytes in all. */
     fun download(
         model: SpeechModel,
