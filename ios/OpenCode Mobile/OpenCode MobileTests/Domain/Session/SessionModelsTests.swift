@@ -79,8 +79,9 @@ struct SessionModelsTests {
         ]
         let snapshot = busySnapshot(["child": .running, "other-child": .running])
 
-        #expect(snapshot.homeActivitySessionID(rootID: "root", sessions: sessions) == "child")
-        #expect(snapshot.homeActivitySessionID(rootID: "other", sessions: sessions) == "other-child")
+        let rollup = snapshot.homeActivityRollup { ancestry(sessions).root(of: $0) }
+        #expect(rollup.sourceByRoot == ["root": "child", "other": "other-child"])
+        #expect(rollup.unresolved.isEmpty)
         #expect(snapshot.statusLabel(for: "child") == "Working")
     }
 
@@ -92,7 +93,7 @@ struct SessionModelsTests {
         ]
         let snapshot = busySnapshot(["grandchild": .running])
 
-        #expect(snapshot.homeActivitySessionID(rootID: "root", sessions: sessions) == "grandchild")
+        #expect(snapshot.homeActivityRollup { ancestry(sessions).root(of: $0) }.sourceByRoot == ["root": "grandchild"])
     }
 
     @Test func homeActivity_keepsOwnLabelWhenRootIsBusiest() {
@@ -102,7 +103,7 @@ struct SessionModelsTests {
             "child": .retrying(attempt: 1, nextAtMs: nil, message: nil, errorType: nil, actionLabel: nil, actionLink: nil),
         ])
 
-        #expect(snapshot.homeActivitySessionID(rootID: "root", sessions: sessions) == "root")
+        #expect(snapshot.homeActivityRollup { ancestry(sessions).root(of: $0) }.sourceByRoot == ["root": "root"])
     }
 
     @Test func homeActivity_runningChildOutranksRetryingRoot() {
@@ -112,7 +113,7 @@ struct SessionModelsTests {
             "child": .running,
         ])
 
-        #expect(snapshot.homeActivitySessionID(rootID: "root", sessions: sessions) == "child")
+        #expect(snapshot.homeActivityRollup { ancestry(sessions).root(of: $0) }.sourceByRoot == ["root": "child"])
     }
 
     @Test func homeActivity_ignoresArchivedChildAndUnseededStatus() {
@@ -124,9 +125,38 @@ struct SessionModelsTests {
             seeded: false
         )
 
-        #expect(unseeded.homeActivitySessionID(rootID: "root", sessions: sessions) == nil)
-        #expect(busySnapshot(["child": .running]).homeActivitySessionID(rootID: "root", sessions: sessions) == nil)
+        #expect(unseeded.homeActivityRollup { ancestry(sessions).root(of: $0) } == HomeActivityRollup())
+        let busy = busySnapshot(["child": .running]).homeActivityRollup { ancestry(sessions).root(of: $0) }
+        #expect(busy.sourceByRoot.isEmpty)
     }
+
+    @Test func homeActivity_unknownParentIsUnresolved() {
+        let snapshot = busySnapshot(["root": .running, "orphan": .running])
+
+        let rollup = snapshot.homeActivityRollup { ancestry([session("root")]).root(of: $0, loadedRoots: ["root"]) }
+
+        #expect(rollup.sourceByRoot == ["root": "root"])
+        #expect(rollup.unresolved == ["orphan"])
+    }
+
+    @Test func ancestryMap_walksAtMostMaxDepthAndSurvivesCycles() {
+        let chain = (0 ... SessionAncestry.maxDepth + 1).map { index in
+            session("s\(index)", parentID: index == 0 ? nil : "s\(index - 1)")
+        }
+        let map = ancestry(chain)
+        #expect(map.root(of: "s\(SessionAncestry.maxDepth)") == "s0")
+        #expect(map.root(of: "s\(SessionAncestry.maxDepth + 1)") == nil)
+
+        let cycle = ancestry([session("a", parentID: "b"), session("b", parentID: "a")])
+        #expect(cycle.root(of: "a") != nil)
+        #expect(cycle.firstUnknown(from: "a") == nil)
+    }
+}
+
+private func ancestry(_ sessions: [Session]) -> SessionAncestryMap {
+    var map = SessionAncestryMap()
+    sessions.forEach { map.record($0) }
+    return map
 }
 
 private func session(_ id: String, parentID: String? = nil) -> Session {

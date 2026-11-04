@@ -15,7 +15,6 @@ struct WorktreesViewModelTests {
         let acme = model.groups[0]
         #expect(acme.mainCheckout == "/repo")
         #expect(acme.worktrees.map(\.name) == ["search", "typo"])
-        #expect(acme.worktrees[0].sessionCount == 2)
         #expect(acme.worktrees[0].isRunning)
         #expect(acme.worktrees[0].changeCount == 3)
         #expect(acme.worktrees[1].changeCount == 0)
@@ -47,8 +46,13 @@ struct WorktreesViewModelTests {
         await settle()
 
         model.requestRemove(directory: "/wt/search")
-        #expect(model.dialog == .confirm(directory: "/wt/search", name: "search", changeCount: 2, changesUnknown: false, sessionCount: 1))
+        #expect(model.dialog == .confirm(directory: "/wt/search", name: "search", changeCount: 2, changesUnknown: false, hasSessions: true))
         #expect(model.dialog?.losesChanges == true)
+        // Home lists a window of sessions, so the note names no count.
+        #expect(WorktreesCopy.removeNotes(model.dialog).map(\.text.resolved) == [
+            "2 uncommitted changes will be lost.",
+            "Sessions that use this worktree stay on Home but can\u{2019}t run here again.",
+        ])
         await model.confirmRemove()
 
         #expect(repository.requests == [RemoveWorktreeRequest(projectID: "acme", projectDirectory: "/repo", directory: "/wt/search", force: true)])
@@ -212,8 +216,14 @@ struct WorktreesViewModelTests {
         let rows = model.groups.first?.worktrees ?? []
         #expect(rows.map(\.directory) == ["/tmp/wt/v1-cleanup"])
         #expect(rows.first?.name == "v1-cleanup")
-        #expect(rows.first?.sessionCount == 1)
         #expect(feed.snapshot.worktreeCount == 1)
+        // The session under the /private/tmp alias still counts as in this worktree.
+        model.requestRemove(directory: "/tmp/wt/v1-cleanup")
+        guard case let .confirm(_, _, _, _, hasSessions, _)? = model.dialog else {
+            Issue.record("expected the confirmation")
+            return
+        }
+        #expect(hasSessions)
         #expect(HomeRowLocation.isRemoved("/private/tmp/wt/v1-cleanup", in: ["/tmp/wt/v1-cleanup"]))
     }
 

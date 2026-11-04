@@ -51,30 +51,49 @@ struct SessionListFilterTests {
     }
 
     @Test func worktreeFilterClear_emptyWorktreeOffersTheProjectWhenItHasSessions() {
-        let clear = worktree().worktreeFilterClear(broaderTabs: broader(projectCount: 4, allCount: 6), visibleIsEmpty: true)
+        let clear = worktree().worktreeFilterClear(
+            broaderTabs: broader(),
+            visibleIsEmpty: true,
+            scopeHasSessions: has(project: true, all: true)
+        )
 
         #expect(clear == WorktreeFilterClear(filterId: "proj", message: SessionListWorktreeEmptyCopy.otherWorktrees))
     }
 
     @Test func worktreeFilterClear_emptyWorktreeOffersAllWhenOnlyOtherProjectsHaveSessions() {
-        let clear = worktree().worktreeFilterClear(broaderTabs: broader(projectCount: 0, allCount: 3), visibleIsEmpty: true)
+        let clear = worktree().worktreeFilterClear(
+            broaderTabs: broader(),
+            visibleIsEmpty: true,
+            scopeHasSessions: has(project: false, all: true)
+        )
 
         #expect(clear == WorktreeFilterClear(filterId: SessionListFilterTab.allId, message: SessionListWorktreeEmptyCopy.otherProjects))
     }
 
     @Test func worktreeFilterClear_emptyWorktreeStillClearsWhenNothingElseHasSessions() {
-        let clear = worktree().worktreeFilterClear(broaderTabs: broader(projectCount: 0, allCount: 0), visibleIsEmpty: true)
+        let clear = worktree().worktreeFilterClear(
+            broaderTabs: broader(),
+            visibleIsEmpty: true,
+            scopeHasSessions: has(project: false, all: false)
+        )
 
         #expect(clear == WorktreeFilterClear(filterId: "proj", message: SessionListWorktreeEmptyCopy.everyWorktree))
     }
 
     @Test func worktreeFilterClear_skipsWhileTheProjectIsLoadingOrTheWorktreeHasRows() {
-        let loading = broader(projectCount: 0, allCount: 0, projectLoad: .loading(isSlow: false))
-        #expect(worktree().worktreeFilterClear(broaderTabs: loading, visibleIsEmpty: true) == nil)
-        #expect(worktree().worktreeFilterClear(broaderTabs: broader(projectCount: 2, allCount: 2), visibleIsEmpty: false) == nil)
+        let none = has(project: false, all: false)
+        let loading = broader(projectLoad: .loading(isSlow: false))
+        #expect(worktree().worktreeFilterClear(broaderTabs: loading, visibleIsEmpty: true, scopeHasSessions: none) == nil)
         #expect(
-            SessionListFilterTab.project(worktree: "proj", title: "repo", count: 0)
-                .worktreeFilterClear(broaderTabs: broader(projectCount: 0, allCount: 2), visibleIsEmpty: true) == nil
+            worktree().worktreeFilterClear(
+                broaderTabs: broader(),
+                visibleIsEmpty: false,
+                scopeHasSessions: has(project: true, all: true)
+            ) == nil
+        )
+        #expect(
+            SessionListFilterTab.project(worktree: "proj", title: "repo")
+                .worktreeFilterClear(broaderTabs: broader(), visibleIsEmpty: true, scopeHasSessions: has(project: false, all: true)) == nil
         )
     }
 
@@ -82,16 +101,19 @@ struct SessionListFilterTests {
         SessionListFilterTab(
             id: "worktree:proj\u{1F}/repo-wt",
             title: "feature/x",
-            count: 0,
             isWorktree: true,
             parentId: "proj"
         )
     }
 
-    private func broader(projectCount: Int, allCount: Int, projectLoad: SessionListScopeLoad? = nil) -> [SessionListFilterTab] {
+    private func broader(projectLoad: SessionListScopeLoad? = nil) -> [SessionListFilterTab] {
         [
-            .all(projectCount: 2, sessionCount: allCount),
-            SessionListFilterTab(id: "proj", title: "repo", count: projectCount, load: projectLoad),
+            .all(projectCount: 2),
+            SessionListFilterTab(id: "proj", title: "repo", load: projectLoad),
         ]
+    }
+
+    private func has(project: Bool, all: Bool) -> (String) -> Bool {
+        { id in id == SessionListFilterTab.allId ? all : id == "proj" ? project : false }
     }
 }

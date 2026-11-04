@@ -1559,6 +1559,86 @@ class SessionProtocolRepositoryTest {
             assertEquals("false", list.parameters["archived"])
         }
 
+    @Test
+    fun v2RootSessionsWindow_isOneNewestFirstRootsOnlyPage() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    if (request.url.encodedPath.endsWith("/api/location")) {
+                        respondJson("""{"directory":"/repo","project":{"id":"p","directory":"/repo","canonical":"/repo"}}""")
+                    } else {
+                        // The server sends a next cursor even on its last page; the window ignores it.
+                        respondJson(
+                            """{"data":[${v2Session("ses_a")},${v2Session("ses_b")}],"cursor":{"previous":null,"next":"page-2"}}""",
+                        )
+                    }
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V2),
+                )
+
+            val full = repository.listRootSessionsWindow("/repo", limit = 2)
+            val short = repository.listRootSessionsWindow("/repo", limit = 3)
+
+            val listed = requests.filter { it.url.encodedPath.endsWith("/api/session") }
+            assertEquals(2, listed.size)
+            val params = listed.first().url.parameters
+            assertEquals("p", params["project"])
+            assertNull(params["directory"])
+            assertEquals("null", params["parentID"])
+            assertEquals("false", params["archived"])
+            assertEquals("desc", params["order"])
+            assertEquals("2", params["limit"])
+            assertNull(params["cursor"])
+            assertEquals("3", listed.last().url.parameters["limit"])
+            assertEquals(listOf("ses_a", "ses_b"), full.sessions.map { it.id })
+            assertTrue(full.hasMore)
+            assertEquals("p", full.projectId)
+            assertFalse(short.hasMore)
+        }
+
+    @Test
+    fun v1RootSessionsWindow_asksForRootsAndLimitAndCountsRowsBeforeFiltering() =
+        runTest {
+            val requests = mutableListOf<HttpRequestData>()
+            val client =
+                testClient { request ->
+                    requests += request
+                    // An older server ignores roots/limit and returns a child too.
+                    respondJson(
+                        """[{"id":"ses_root","title":"Root","projectID":"proj","directory":"/repo","time":{"created":1,"updated":2}},""" +
+                            """{"id":"ses_child","title":"Child","parentID":"ses_root","projectID":"proj","directory":"/repo","time":{"created":1,"updated":3}}]""",
+                    )
+                }
+            val repository =
+                DefaultSessionRepository(
+                    SessionsApi(client, json),
+                    SessionDomainAdapter(),
+                    activeConnectionManager = manager(ServerProtocol.V1),
+                )
+
+            val window = repository.listRootSessionsWindow("/repo", limit = 2)
+
+            val params = requests.single().url.parameters
+            assertEquals("/repo", params["directory"])
+            assertEquals("true", params["roots"])
+            assertEquals("2", params["limit"])
+            assertEquals(listOf("ses_root", "ses_child"), window.sessions.map { it.id })
+            assertEquals("ses_root", window.sessions.last().parentId)
+            assertTrue(window.hasMore)
+            assertNull(window.projectId)
+        }
+
+    private fun v2Session(id: String): String =
+        """{"id":"$id","title":"$id","projectID":"p","cost":0,""" +
+            """"tokens":{"input":0,"output":0,"reasoning":0,"cache":{"read":0,"write":0}},""" +
+            """"time":{"created":1,"updated":2},"location":{"directory":"/repo"}}"""
+
     private fun testClient(handler: MockRequestHandler): HttpClient =
         HttpClient(MockEngine(handler)) {
             expectSuccess = false

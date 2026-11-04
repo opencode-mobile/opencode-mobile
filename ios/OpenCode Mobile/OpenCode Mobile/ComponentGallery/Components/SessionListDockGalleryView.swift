@@ -17,7 +17,7 @@ struct SessionListDockGalleryView: View {
         let loadingID = tabs.last?.id
         return tabs.map { tab in
             guard tab.id == loadingID else { return tab }
-            return .project(worktree: tab.id, title: tab.title, count: 0, load: scopeLoad)
+            return .project(worktree: tab.id, title: tab.title, load: scopeLoad)
         }
     }
 
@@ -140,14 +140,14 @@ enum SessionListDockGalleryLoad: CaseIterable {
 }
 
 private let sessionListDockGalleryFilterTabs: [SessionListFilterTab] = [
-    .all(projectCount: 3, sessionCount: 4),
-    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 2),
-    .project(worktree: "/Users/demo/playground", title: "playground", count: 1),
-    .project(worktree: "/Users/demo/api-client", title: "api-client", count: 1),
+    .all(projectCount: 3),
+    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile"),
+    .project(worktree: "/Users/demo/playground", title: "playground"),
+    .project(worktree: "/Users/demo/api-client", title: "api-client"),
 ]
 
 private let sessionListDockGalleryOneProjectFilterTabs: [SessionListFilterTab] = [
-    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile", count: 2),
+    .project(worktree: "/Users/demo/opencode-mobile", title: "opencode-mobile"),
 ]
 
 #if DEBUG

@@ -38,6 +38,12 @@ nonisolated struct SessionsAPIClient: Sendable {
         return try await get(path: "session", directory: directory, query: query)
     }
 
+    /// `GET /session?roots=true&limit=`: the newest `limit` root sessions. Older servers ignore
+    /// `roots` or `limit` and list more, children included.
+    func listRootSessions(directory: String?, limit: Int) async throws -> [SessionDTO] {
+        try await get(path: "session", directory: directory, query: ["roots": "true", "limit": String(limit)])
+    }
+
     func listPendingPermissions(directory: String? = nil) async throws -> [PermissionRequestDTO] {
         try await get(path: "permission", directory: directory)
     }
@@ -318,6 +324,33 @@ nonisolated struct SessionsAPIClient: Sendable {
             pages += 1
         } while cursor != nil && pages < Self.maxV2SessionListPages
         return sessions
+    }
+
+    /// One page of `GET /api/session`, newest first. Never follows the cursor: the server sends a
+    /// `next` cursor even on the last page.
+    func listSessionsPageV2(
+        directory: String? = nil,
+        parentID: String? = nil,
+        projectID: String? = nil,
+        archived: Bool? = nil,
+        limit: Int
+    ) async throws -> [V2SessionDTO] {
+        var query = ["order": "desc", "limit": String(limit)]
+        if let parentID {
+            query["parentID"] = parentID
+        }
+        if let projectID {
+            query["project"] = projectID
+        }
+        if let archived {
+            query["archived"] = archived ? "true" : "false"
+        }
+        let envelope: APIListEnvelope<V2SessionDTO> = try await get(
+            path: "api/session",
+            directory: projectID == nil ? directory : nil,
+            query: query
+        )
+        return envelope.data
     }
 
     /// A `parentID` creates a linked child at the parent's location, so no location is sent with it.

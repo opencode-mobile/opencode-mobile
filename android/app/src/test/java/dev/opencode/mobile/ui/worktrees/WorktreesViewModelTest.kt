@@ -1,5 +1,6 @@
 package dev.opencode.mobile.ui.worktrees
 
+import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeWorktree
 import dev.opencode.mobile.domain.home.HomeWorktreeRequest
@@ -13,6 +14,7 @@ import dev.opencode.mobile.domain.worktree.RemoveWorktreeRequest
 import dev.opencode.mobile.domain.worktree.WorktreeLoad
 import dev.opencode.mobile.domain.worktree.WorktreeRemoveError
 import dev.opencode.mobile.domain.worktree.WorktreeRepository
+import dev.opencode.mobile.ui.text.EnglishStrings
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -56,7 +58,6 @@ class WorktreesViewModelTest {
             assertEquals("/repo", acme.mainCheckout)
             assertEquals(listOf("search", "typo"), acme.worktrees.map { it.name })
             val search = acme.worktrees.first()
-            assertEquals(2, search.sessionCount)
             assertTrue(search.isRunning)
             assertEquals(3, search.changeCount)
             assertEquals(0, acme.worktrees[1].changeCount)
@@ -80,6 +81,23 @@ class WorktreesViewModelTest {
         }
 
     @Test
+    fun removeConfirmation_saysSessionsStayWithoutCountingThem() =
+        runTest(dispatcher) {
+            val feed = feed(sessions = listOf(session("s1", "/wt/search"), session("s2", "/wt/search")))
+            val model = model(feed, changes = mapOf("/wt/search" to 0, "/wt/typo" to 0))
+            advanceUntilIdle()
+
+            model.requestRemove("/wt/search")
+            assertTrue((model.state.value.dialog as WorktreeRemoveDialogUi.Confirm).hasSessions)
+            model.dismissDialog()
+            model.requestRemove("/wt/typo")
+            assertFalse((model.state.value.dialog as WorktreeRemoveDialogUi.Confirm).hasSessions)
+            // Home lists a window of sessions (#981), so the copy names no number.
+            val note = EnglishStrings.string(R.string.worktrees_remove_sessions, emptyArray())
+            assertFalse(note.any { it.isDigit() } || note.contains("%"))
+        }
+
+    @Test
     fun uncommittedChangesForceTheRemoveAndTheRowLeaves() =
         runTest(dispatcher) {
             val feed = feed(sessions = listOf(session("s2", "/wt/search")))
@@ -90,7 +108,7 @@ class WorktreesViewModelTest {
             model.requestRemove("/wt/search")
             val confirm = model.state.value.dialog as WorktreeRemoveDialogUi.Confirm
             assertEquals(2, confirm.changeCount)
-            assertEquals(1, confirm.sessionCount)
+            assertTrue(confirm.hasSessions)
             assertTrue(confirm.losesChanges)
             model.confirmRemove()
             advanceUntilIdle()
@@ -295,7 +313,6 @@ class WorktreesViewModelTest {
             val rows = model.state.value.groups.single().worktrees
             assertEquals(listOf("/tmp/wt/v1-cleanup"), rows.map { it.directory })
             assertEquals("v1-cleanup", rows.single().name)
-            assertEquals(1, rows.single().sessionCount)
             assertEquals(1, feed.snapshot.value.worktreeCount)
             model.requestRemove("/private/tmp/wt/v1-cleanup")
             assertEquals("/tmp/wt/v1-cleanup", (model.state.value.dialog as WorktreeRemoveDialogUi.Confirm).directory)

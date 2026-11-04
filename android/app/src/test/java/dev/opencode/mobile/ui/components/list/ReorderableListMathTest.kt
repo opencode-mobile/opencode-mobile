@@ -70,10 +70,10 @@ class ReorderableListMathTest {
     fun projectPickerRows_reportWorktreesWithoutAllRow() {
         val tabs =
             listOf(
-                SessionListFilterTab(id = SessionListFilterTab.ALL_ID, title = "All", count = 3),
-                SessionListFilterTab(id = "/a", title = "a", count = 1),
-                SessionListFilterTab(id = "/b", title = "b", count = 1),
-                SessionListFilterTab(id = "/c", title = "c", count = 1),
+                SessionListFilterTab(id = SessionListFilterTab.ALL_ID, title = "All"),
+                SessionListFilterTab(id = "/a", title = "a"),
+                SessionListFilterTab(id = "/b", title = "b"),
+                SessionListFilterTab(id = "/c", title = "c"),
             )
         assertEquals(listOf("/c", "/a", "/b"), reorderedProjectPickerWorktrees(tabs, from = 3, to = 1))
     }

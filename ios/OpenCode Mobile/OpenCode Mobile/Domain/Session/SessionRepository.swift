@@ -4,6 +4,9 @@ protocol SessionRepository: Sendable {
     func listPendingPermissions(directory: String?) async throws -> [PermissionRequest]
     func listPendingQuestions(directory: String?) async throws -> [QuestionRequest]
     func listSessions(directory: String?) async throws -> [Session]
+    /// Home's list: the newest `limit` root, unarchived sessions of `directory` (its project on v2)
+    /// in one request. Other screens keep `listSessions`.
+    func listRootSessionsWindow(directory: String, limit: Int) async throws -> SessionWindow
     /// Root, unarchived sessions of `directory` whose title contains `query` (case-insensitive).
     func searchSessions(query: String, directory: String?) async throws -> [Session]
     func createSession(parentID: String?, title: String?, directory: String?) async throws -> Session
@@ -68,6 +71,11 @@ nonisolated enum CompactionStart: Sendable, Equatable {
 }
 
 extension SessionRepository {
+    /// Lists everything and keeps the newest roots. The protocol remotes ask the server for one page.
+    func listRootSessionsWindow(directory: String, limit: Int) async throws -> SessionWindow {
+        SessionWindow.prefix(of: try await listSessions(directory: directory), limit: limit)
+    }
+
     /// Lists and filters locally. The protocol remotes ask the server to search first.
     func searchSessions(query: String, directory: String?) async throws -> [Session] {
         SessionTitleSearch.searchResults(try await listSessions(directory: directory), query: query)
@@ -183,6 +191,10 @@ struct DefaultSessionRepository: SessionRepository, Sendable {
 
     func listSessions(directory: String?) async throws -> [Session] {
         try await run { try await remote.listSessions(directory: directory) }
+    }
+
+    func listRootSessionsWindow(directory: String, limit: Int) async throws -> SessionWindow {
+        try await run { try await remote.listRootSessionsWindow(directory: directory, limit: limit) }
     }
 
     func searchSessions(query: String, directory: String?) async throws -> [Session] {

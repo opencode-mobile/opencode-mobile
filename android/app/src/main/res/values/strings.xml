@@ -1431,10 +1431,6 @@
     <!-- %1$s and %2$s are the first and last day of the week, such as Mar 3. -->
     <string name="session_list_section_week_of">Week of %1$s – %2$s</string>
     <!-- Spoken after the project name in the dock. -->
-    <plurals name="session_list_dock_session_count">
-        <item quantity="one">%1$d sessions</item>
-        <item quantity="other">%1$d sessions</item>
-    </plurals>
     <!-- %1$s is the system (Android or iOS), %2$s the speech model. -->
     <string name="dictation_model_download_failed_title">%1$s couldn\'t download the %2$s</string>
     <string name="component_activity_status_pending">pending</string>
@@ -1535,16 +1531,10 @@
         <item quantity="one">%1$d changed</item>
         <item quantity="other">%1$d changed</item>
     </plurals>
-    <plurals name="worktrees_session_count">
-        <item quantity="one">%1$d session</item>
-        <item quantity="other">%1$d sessions</item>
-    </plurals>
-    <string name="worktrees_no_sessions">no sessions</string>
     <string name="worktrees_none_in_project">No worktrees. New session → Choose project or worktree creates one.</string>
     <string name="worktrees_footer">Removing a worktree deletes its folder on the server. Its sessions stay, but can’t run in it again.</string>
     <string name="worktrees_more">More actions for %1$s</string>
     <string name="worktrees_removing">Removing…</string>
-    <string name="worktrees_actions_subtitle">%1$s · %2$s</string>
     <string name="worktrees_actions_show_on_home">Show sessions on Home</string>
     <string name="worktrees_actions_new_session">New session here</string>
     <string name="worktrees_actions_remove">Remove worktree…</string>
@@ -1556,10 +1546,7 @@
     </plurals>
     <string name="worktrees_remove_changes_unknown">Uncommitted changes will be lost.</string>
     <string name="worktrees_remove_changes_unchecked">Couldn’t check for uncommitted changes. Any there will be lost.</string>
-    <plurals name="worktrees_remove_sessions">
-        <item quantity="one">%1$d session uses this worktree. It stays on Home but can’t run here again.</item>
-        <item quantity="other">%1$d sessions use this worktree. They stay on Home but can’t run here again.</item>
-    </plurals>
+    <string name="worktrees_remove_sessions">Sessions that use this worktree stay on Home but can’t run here again.</string>
     <string name="worktrees_remove_confirm_anyway">Remove anyway</string>
     <string name="worktrees_blocked_title">Can’t remove “%1$s” yet</string>
     <string name="worktrees_blocked_message">A session is running in this worktree. Stop it, then remove the worktree.</string>

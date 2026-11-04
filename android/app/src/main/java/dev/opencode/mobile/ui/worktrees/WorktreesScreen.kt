@@ -173,17 +173,11 @@ private fun WorktreeRow(
     onOpenActions: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val sessions =
-        if (row.sessionCount > 0) {
-            pluralStringResource(R.plurals.worktrees_session_count, row.sessionCount, row.sessionCount)
-        } else {
-            stringResource(R.string.worktrees_no_sessions)
-        }
+    // No session count: Home lists a window of sessions, so it could only count those (#981).
     val changed =
         row.changeCount?.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.worktrees_changed, it, it) }
     OpenCodeListItem(
         title = row.name,
-        subtitle = sessions,
         detailSegments = listOf(OpenCodeListItemSubtitleSegment(row.directory, OpenCodeListItemSubtitleTone.Tertiary)),
         titleTag = changed.takeIf { !row.isRemoving },
         status =
@@ -248,12 +242,7 @@ private fun WorktreeActionsSheet(
         pinnedTop = {
             if (target != null) {
                 Text(
-                    text =
-                        stringResource(
-                            R.string.worktrees_actions_subtitle,
-                            target.projectName,
-                            pluralStringResource(R.plurals.worktrees_session_count, target.sessionCount, target.sessionCount),
-                        ),
+                    text = target.projectName,
                     style = MaterialTheme.typography.bodySmall,
                     color = openCodeColor("text-weak"),
                     modifier = Modifier.openCodeBottomSheetContentInset(),
@@ -324,12 +313,8 @@ private fun WorktreeRemoveDialog(
                         dialog.changesUnchecked ->
                             add(OpenCodeDialogNote(stringResource(R.string.worktrees_remove_changes_unchecked), OpenCodeDialogNoteTone.Warning))
                     }
-                    if (dialog.sessionCount > 0) {
-                        add(
-                            OpenCodeDialogNote(
-                                pluralStringResource(R.plurals.worktrees_remove_sessions, dialog.sessionCount, dialog.sessionCount),
-                            ),
-                        )
+                    if (dialog.hasSessions) {
+                        add(OpenCodeDialogNote(stringResource(R.string.worktrees_remove_sessions)))
                     }
                 }
             OpenCodeDialog(

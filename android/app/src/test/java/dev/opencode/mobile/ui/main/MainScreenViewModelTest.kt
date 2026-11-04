@@ -20,6 +20,7 @@ import dev.opencode.mobile.domain.filesystem.DirectoryNotFoundException
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.filesystem.ServerPaths
 import dev.opencode.mobile.domain.live.DefaultSessionLiveStore
+import dev.opencode.mobile.domain.live.SessionAncestry
 import dev.opencode.mobile.domain.live.DefaultSessionReadyStore
 import dev.opencode.mobile.domain.live.DefaultSessionStatusLiveStore
 import dev.opencode.mobile.domain.live.InMemorySessionReadyPersistence
@@ -54,6 +55,7 @@ import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.session.SessionStatus
 import dev.opencode.mobile.domain.session.SessionSummary
+import dev.opencode.mobile.domain.session.SessionWindow
 import dev.opencode.mobile.domain.session.VcsInfo
 import dev.opencode.mobile.domain.sessioncache.DefaultSessionCache
 import dev.opencode.mobile.domain.sessioncache.InMemorySessionCacheStore
@@ -70,6 +72,7 @@ import dev.opencode.mobile.domain.worktree.WorktreeRepository
 import dev.opencode.mobile.network.ActiveConnectionManager
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.OpencodeSseHttpClient
+import dev.opencode.mobile.ui.components.SessionListFilterTab
 import dev.opencode.mobile.ui.components.SessionListScrollPin
 import dev.opencode.mobile.ui.components.SessionListStatus
 import dev.opencode.mobile.ui.text.UiText
@@ -277,25 +280,47 @@ class MainScreenViewModelTest {
         }
 
     @Test
-    fun uiState_includesAllSessionsInAllSessions() =
+    fun uiState_listsTheFirstPageThenLoadsMoreNearTheEnd() =
         runTest(testDispatcher) {
             val sessions =
-                (1..7).map { index ->
+                (1..120).map { index ->
                     Session(id = "$index", title = "Session $index", updatedAtEpochMs = index.toLong())
                 }
+            val repository = FakeSessionRepository(mutableMapOf("/repo" to sessions))
             val viewModel =
                 createViewModel(
                     connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
-                    sessionsByWorktree = mapOf("/repo" to sessions),
+                    sessionRepository = repository,
                 )
             advanceUntilIdle()
-            val loaded = viewModel.uiState.value as MainScreenUiState.Loaded
-            assertEquals(
-                7,
-                loaded.sections
+
+            fun rows() =
+                (viewModel.uiState.value as MainScreenUiState.Loaded)
+                    .sections
                     .single()
-                    .allSessions.size,
-            )
+                    .allSessions
+
+            assertEquals(50, rows().size)
+            assertEquals("120", rows().first().id)
+            assertTrue(repository.windowLimits.all { (_, limit) -> limit == 50 })
+
+            viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
+            assertEquals(SessionListFilterTab.ALL_ID, viewModel.loadingMoreScopeId.value)
+            advanceUntilIdle()
+
+            assertEquals(100, rows().size)
+            assertNull(viewModel.loadingMoreScopeId.value)
+            assertEquals("/repo" to 100, repository.windowLimits.last())
+            val requests = repository.windowLimits.size
+
+            // Last page: the window comes back short, so further calls do nothing.
+            viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
+            advanceUntilIdle()
+            assertEquals(120, rows().size)
+            viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
+            advanceUntilIdle()
+            assertNull(viewModel.loadingMoreScopeId.value)
+            assertEquals(requests + 1, repository.windowLimits.size)
         }
 
     @Test
@@ -2425,6 +2450,49 @@ class MainScreenViewModelTest {
         }
 
     @Test
+    fun home_busyRootOutsideTheWindowShowsUntilItsFamilyIsIdle() =
+        runTest(testDispatcher) {
+            val roots =
+                (1..60).map { index ->
+                    Session(id = "root-$index", title = "Root $index", directory = "/repo", updatedAtEpochMs = 100L + index)
+                }
+            // An old root (outside the first page) whose sub-agent runs; v2 does not bump its time.
+            val oldRoot = Session(id = "old", title = "Old issue", directory = "/repo", updatedAtEpochMs = 1L)
+            val agent = Session(id = "agent", title = "Subagent", parentId = "old", directory = "/repo", updatedAtEpochMs = 0L)
+            val running =
+                SessionActivitySnapshot(
+                    entries =
+                        mapOf(
+                            "agent" to
+                                SessionActivityEntry(
+                                    activity = SessionActivity.Running,
+                                    source = SessionActivitySource.Server,
+                                    observedAtMs = 1L,
+                                ),
+                        ),
+                    seeded = true,
+                )
+            val activity = MutableStateFlow(running)
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionsByWorktree = mapOf("/repo" to roots + oldRoot + agent),
+                    statusLiveStoreOverride = FakeHomeStatusLiveStore(activity),
+                )
+            advanceUntilIdle()
+
+            val byId = homeSummaries(viewModel)
+            assertEquals(51, byId.size)
+            assertEquals("Working", byId.getValue("old").statusLabel)
+            assertNull(byId["agent"])
+
+            activity.value = SessionActivitySnapshot(seeded = true)
+            advanceUntilIdle()
+            assertNull(homeSummaries(viewModel)["old"])
+            assertEquals(50, homeSummaries(viewModel).size)
+        }
+
+    @Test
     fun v2Home_unreadOutcomeWaitsForSeededStatus() =
         runTest(testDispatcher) {
             // Running again, but an older run's `time.idle` is still unviewed.
@@ -3014,6 +3082,7 @@ class MainScreenViewModelTest {
                     SilentWorldSignals,
                     coordinatorSync,
                 )
+        val sessionAncestry = SessionAncestry(sessionRepository, liveStoreScope.coroutineScope, ioDispatcher = testDispatcher)
         val sessionLiveStore =
             DefaultSessionLiveStore(
                 sessionRepository,
@@ -3021,6 +3090,7 @@ class MainScreenViewModelTest {
                 liveStoreScope,
                 NoOpSessionCache,
                 coordinatorSync,
+                sessionAncestry = sessionAncestry,
             )
         val sessionReadyStore =
             readyStoreOverride ?: DefaultSessionReadyStore(
@@ -3043,10 +3113,11 @@ class MainScreenViewModelTest {
             activeConnectionManager = activeConnectionManager,
             connectionSessionCoordinator = coordinator,
             sessionCache = sessionCache,
+            sessionAncestry = sessionAncestry,
             worktreeRepository = worktreeRepository,
             projectFirstLoadTiming = projectFirstLoadTiming,
             worktreeInventoryCache = worktreeInventoryCache,
-        )
+        ).apply { homeRowsDispatcher = testDispatcher }
     }
 }
 
@@ -3118,6 +3189,19 @@ private class FakeSessionRepository(
     var listSessionsCallCount = 0
     val listedDirectories = mutableListOf<String?>()
     var nextListGate: CompletableDeferred<Unit>? = null
+
+    /** Directory and limit of each Home window request. */
+    val windowLimits = mutableListOf<Pair<String?, Int>>()
+
+    /** Pages like a server: newest first, [limit] rows, more when the page is full. */
+    override suspend fun listRootSessionsWindow(
+        directory: String?,
+        limit: Int,
+    ): SessionWindow {
+        windowLimits += directory to limit
+        val page = listSessions(directory).sortedByDescending { it.updatedAtEpochMs ?: 0L }.take(limit)
+        return SessionWindow(sessions = page, hasMore = page.size == limit)
+    }
 
     /** Per-directory list hooks: a gate holds that directory's list call, an error fails it. */
     val listGates = mutableMapOf<String, CompletableDeferred<Unit>>()

@@ -27,7 +27,7 @@ struct ProjectListHomeView: View {
     /// Trailing-pane chat in the regular-width split view. Unused on compact.
     @State private var splitSelection: SplitSessionSelection?
     /// Session ids from the last fully loaded Home list; detects a selected session disappearing.
-    @State private var lastLoadedSessionIDs: Set<String>?
+    @State private var lastLoadedSessions: HomeLoadedSessions?
     /// Sessions as rendered in the list under the current filter, top to bottom.
     /// Drives Next/Previous Session.
     @State private var displayedSessions: [SessionListSession] = []
@@ -159,25 +159,25 @@ struct ProjectListHomeView: View {
                 // Clear All Data (active profile becomes nil) and profile switches
                 // drop every session the trailing pane could be showing.
                 selectedSession = nil
-                lastLoadedSessionIDs = nil
+                lastLoadedSessions = nil
                 sessionSearch.close()
             }
             .onChange(of: searchHomeWhilePresented) { _, snapshot in
                 if let snapshot { sessionSearch.homeChanged(snapshot) }
             }
-            .onChange(of: loadedSessionIDs) { _, current in
+            .onChange(of: loadedSessions) { _, current in
                 guard let current else { return }
                 if let selectedSession,
                    HomeSplitSelection.wasRemoved(
                        selectedID: selectedSession.id,
-                       previousIDs: lastLoadedSessionIDs,
-                       currentIDs: current
+                       previous: lastLoadedSessions,
+                       current: current
                    )
                 {
                     // Deleted (here or on another device) while open in the trailing pane.
                     self.selectedSession = nil
                 }
-                lastLoadedSessionIDs = current
+                lastLoadedSessions = current
             }
             .onChange(of: homeWorktreesSnapshot, initial: true) { _, snapshot in
                 viewModel.homeWorktreesFeed.publish(snapshot)
@@ -588,14 +588,13 @@ struct ProjectListHomeView: View {
         )
     }
 
-    private func homeFilterTabs(projects: [HomeProject], sessions: [SessionListSession]) -> [SessionListFilterTab] {
+    private func homeFilterTabs(projects: [HomeProject]) -> [SessionListFilterTab] {
         var loads: [String: SessionListScopeLoad] = [:]
         for project in projects {
             loads[project.key] = SessionListHomeChrome.projectLoad(project, loadStates: viewModel.projectLoadStates)
         }
         return SessionListHomeChrome.filterTabs(
             projects: projects,
-            sessions: sessions,
             loads: loads,
             worktreesEnabled: homeDisplayPreferences.showsWorktrees
         )
@@ -618,15 +617,15 @@ struct ProjectListHomeView: View {
         splitGate.usesSplitLayout
     }
 
-    /// Every session id in a fully loaded Home list; nil while loading, disconnected,
+    /// Every session in a fully loaded Home list; nil while loading, disconnected,
     /// or when a project failed to load, so partial lists never clear the selection.
-    private var loadedSessionIDs: Set<String>? {
+    private var loadedSessions: HomeLoadedSessions? {
         switch viewModel.state {
         case .empty:
-            return []
+            return HomeLoadedSessions()
         case let .loaded(sections, _, _, _):
             guard sections.allSatisfy({ $0.loadError == nil }) else { return nil }
-            return Set(sections.flatMap { $0.allSessions.map(\.id) })
+            return HomeLoadedSessions(sections: sections)
         default:
             return nil
         }
@@ -811,8 +810,7 @@ struct ProjectListHomeView: View {
     private var liveHomeFilter: (projects: [HomeProject], tabs: [SessionListFilterTab], selectedId: String, worktreesEnabled: Bool) {
         let worktreesEnabled = homeDisplayPreferences.showsWorktrees
         let projects = homeSections.isEmpty ? [] : viewModel.homeProjects
-        let sessions = homeSections.crossProjectSessionListSessions(projects: projects, worktreesEnabled: worktreesEnabled)
-        let tabs = homeFilterTabs(projects: projects, sessions: sessions)
+        let tabs = homeFilterTabs(projects: projects)
         let selectedId = SessionListHomeChrome.resolvedFilterId(
             selectedId: selectedSessionFilterId,
             tabs: tabs,
@@ -1208,11 +1206,9 @@ struct ProjectListHomeView: View {
 
     private var projectPickerRows: [HomeProjectPickerRow] {
         let projects = viewModel.homeProjects
-        let sessions = homeSessions
         return HomeProjectPickerRow.rows(
-            tabs: homeFilterTabs(projects: projects, sessions: sessions),
+            tabs: homeFilterTabs(projects: projects),
             projects: projects,
-            sessions: sessions,
             state: projectPickerState,
             worktreesEnabled: homeDisplayPreferences.showsWorktrees
         )
@@ -1371,7 +1367,7 @@ struct ProjectListHomeView: View {
             worktreesEnabled: worktreesEnabled,
             removedDirectories: viewModel.removedWorktreeDirectories
         )
-        let filterTabs = homeFilterTabs(projects: projects, sessions: sessions)
+        let filterTabs = homeFilterTabs(projects: projects)
         let selectedFilterId = SessionListHomeChrome.resolvedFilterId(
             selectedId: selectedSessionFilterId,
             tabs: filterTabs,
@@ -1391,7 +1387,6 @@ struct ProjectListHomeView: View {
                 selectedId: selectedFilterId,
                 tabs: filterTabs,
                 projects: projects,
-                sessions: sessions,
                 worktreesEnabled: worktreesEnabled
             ),
             selectedSessionId: isSplitLayout ? selectedSession?.id : nil,
@@ -1458,6 +1453,8 @@ struct ProjectListHomeView: View {
                     displayedSessions = rendered
                 }
             },
+            onNearEnd: { viewModel.loadMoreSessions(scopeId: selectedFilterId) },
+            showsLoadingFooter: viewModel.showsLoadMoreFooter(scopeId: selectedFilterId),
             showsEmptyContent: sections.isEmpty,
             emptyContent: { NoProjectsEmptyState() }
         )
@@ -1469,7 +1466,7 @@ struct ProjectListHomeView: View {
     }
 }
 
-struct SessionListItem: Identifiable, Hashable {
+nonisolated struct SessionListItem: Identifiable, Hashable {
     let id: String
     let title: String
     let worktree: String
@@ -1538,20 +1535,60 @@ extension SessionListItem {
     }
 }
 
+/// The sessions a loaded Home list shows, and how far back each section's window reaches.
+struct HomeLoadedSessions: Equatable {
+    struct Listed: Equatable {
+        /// Added path of the section that lists the session.
+        let worktree: String
+        let updatedAtEpochMs: Int64?
+    }
+
+    struct Window: Equatable {
+        var hasMore = false
+        var oldestUpdatedAtEpochMs: Int64?
+    }
+
+    var sessions: [String: Listed] = [:]
+    /// By added path.
+    var windows: [String: Window] = [:]
+
+    init(sessions: [String: Listed] = [:], windows: [String: Window] = [:]) {
+        self.sessions = sessions
+        self.windows = windows
+    }
+
+    init(sections: [ProjectSectionItem]) {
+        for section in sections {
+            windows[section.worktree] = Window(
+                hasMore: section.hasMoreSessions,
+                oldestUpdatedAtEpochMs: section.oldestWindowUpdatedAtEpochMs
+            )
+            for session in section.allSessions where sessions[session.id] == nil {
+                sessions[session.id] = Listed(worktree: section.worktree, updatedAtEpochMs: session.updatedAtEpochMs)
+            }
+        }
+    }
+}
+
 /// Rules for keeping the Home split-view selection in sync with the session list.
 enum HomeSplitSelection {
     /// Whether the selected session was in the previous loaded list and is gone
     /// from the current one. Sessions not listed yet (a fresh fork, an optimistic
     /// create placeholder that has not been reconciled) are never treated as removed.
+    /// A session that only fell out of a window with more behind it (older than the window's
+    /// oldest row) is not removed either.
     static func wasRemoved(
         selectedID: String,
-        previousIDs: Set<String>?,
-        currentIDs: Set<String>
+        previous: HomeLoadedSessions?,
+        current: HomeLoadedSessions
     ) -> Bool {
         guard !OptimisticSessionCreate.isPlaceholder(selectedID),
-              let previousIDs
+              let listed = previous?.sessions[selectedID],
+              current.sessions[selectedID] == nil
         else { return false }
-        return previousIDs.contains(selectedID) && !currentIDs.contains(selectedID)
+        guard let window = current.windows[listed.worktree], window.hasMore else { return true }
+        guard let oldest = window.oldestUpdatedAtEpochMs else { return false }
+        return (listed.updatedAtEpochMs ?? 0) >= oldest
     }
 }
 

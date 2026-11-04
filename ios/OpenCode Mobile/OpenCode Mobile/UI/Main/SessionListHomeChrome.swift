@@ -36,17 +36,13 @@ enum SessionListHomeChrome {
     }
 
     /// All (with two or more projects), then each project. Worktrees are reached from the
-    /// picker (`worktreeTabs`), never listed here. Counts come from the deduplicated Home rows.
+    /// picker (`worktreeTabs`), never listed here. No session counts: Home loads a window of
+    /// each project's newest sessions, not all of them.
     static func filterTabs(
         projects: [HomeProject],
-        sessions: [SessionListSession],
         loads: [String: SessionListScopeLoad] = [:],
         worktreesEnabled: Bool = true
     ) -> [SessionListFilterTab] {
-        var projectCounts: [String: Int] = [:]
-        for session in sessions {
-            projectCounts[session.worktree, default: 0] += 1
-        }
         var tabs: [SessionListFilterTab] = []
         if projects.count >= 2 {
             let loading = projects.compactMap { project -> Bool? in
@@ -58,7 +54,6 @@ enum SessionListHomeChrome {
                 SessionListFilterTab(
                     id: SessionListFilterTab.allId,
                     title: String(localized: "home.all", defaultValue: "All"),
-                    count: sessions.count,
                     subtitle: String(localized: LocalizedStringResource(
                         "home.project_count",
                         defaultValue: "\(projectCount) projects"
@@ -72,7 +67,6 @@ enum SessionListHomeChrome {
             tabs.append(
                 .homeProject(
                     project,
-                    count: projectCounts[project.key] ?? 0,
                     load: loads[project.key],
                     worktreesEnabled: worktreesEnabled
                 )
@@ -83,17 +77,10 @@ enum SessionListHomeChrome {
 
     /// The worktree scopes of a multi-worktree project, main checkout first. Empty for a project
     /// with one worktree.
-    static func worktreeTabs(for project: HomeProject, sessions: [SessionListSession]) -> [SessionListFilterTab] {
+    static func worktreeTabs(for project: HomeProject) -> [SessionListFilterTab] {
         guard project.hasManyWorktrees else { return [] }
-        var counts: [String: Int] = [:]
-        for session in sessions {
-            if let scopeID = session.worktreeScopeID {
-                counts[scopeID, default: 0] += 1
-            }
-        }
         return project.worktrees.map { worktree in
-            let id = HomeScope.worktree(projectKey: project.key, directory: worktree.directory).id
-            return .homeWorktree(worktree, of: project, count: counts[id] ?? 0)
+            .homeWorktree(worktree, of: project)
         }
     }
 
@@ -102,14 +89,13 @@ enum SessionListHomeChrome {
         selectedId: String,
         tabs: [SessionListFilterTab],
         projects: [HomeProject],
-        sessions: [SessionListSession],
         worktreesEnabled: Bool = true
     ) -> SessionListFilterTab? {
         guard worktreesEnabled, !tabs.contains(where: { $0.id == selectedId }),
               case let .worktree(projectKey, _) = HomeScope.resolve(id: selectedId, projects: projects),
               let project = projects.first(where: { $0.key == projectKey })
         else { return nil }
-        return worktreeTabs(for: project, sessions: sessions).first { $0.id == selectedId }
+        return worktreeTabs(for: project).first { $0.id == selectedId }
     }
 
     /// Keeps the selection when it still exists (a worktree scope too, while worktrees are on),

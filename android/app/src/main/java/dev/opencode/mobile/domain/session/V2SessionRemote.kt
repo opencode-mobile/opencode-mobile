@@ -34,6 +34,20 @@ internal class V2SessionRemote(
             ).map(adapter::toSession)
     }
 
+    override suspend fun listRootSessionsWindow(
+        directory: String?,
+        limit: Int,
+    ): SessionWindow {
+        val projectId = projectIdForList(directory)
+        val rows =
+            api.listRootSessionPageV2(
+                directory = if (projectId == null) directory else null,
+                projectId = projectId,
+                limit = limit,
+            )
+        return SessionWindow(sessions = rows.map(adapter::toSession), hasMore = rows.size == limit, projectId = projectId)
+    }
+
     override suspend fun searchSessions(
         query: String,
         directory: String?,
