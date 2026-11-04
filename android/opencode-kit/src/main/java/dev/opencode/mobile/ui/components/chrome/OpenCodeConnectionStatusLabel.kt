@@ -68,6 +68,20 @@ fun OpenCodeConnectionStatusLabel(
     }
 }
 
+/** The status dot alone, for places that name the status some other way (a top bar's subtitle). */
+@Composable
+internal fun OpenCodeConnectionStatusDot(
+    status: OpenCodeSessionConnectionStatus,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier =
+            modifier
+                .size(ConnectionStatusDotSize)
+                .background(status.dotColor(), CircleShape),
+    )
+}
+
 @Composable
 internal fun OpenCodeSessionConnectionStatus.dotColor(): Color =
     when (this) {

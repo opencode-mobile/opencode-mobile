@@ -20,6 +20,9 @@ import dev.opencode.mobile.theme.openCodeColor
 
 enum class OpenCodeInlineNoticeTone {
     Neutral,
+
+    /** Something to fix before going on that isn't a failure of the app, such as a model whose provider isn't set up. */
+    Warning,
     Error,
 }
 
@@ -87,6 +90,7 @@ fun OpenCodeInlineNotice(
 private fun OpenCodeInlineNoticeTone.foreground(): Color =
     when (this) {
         OpenCodeInlineNoticeTone.Neutral -> openCodeColor("text-base")
+        OpenCodeInlineNoticeTone.Warning -> openCodeColor("warning")
         OpenCodeInlineNoticeTone.Error -> openCodeColor("error")
     }
 
@@ -94,6 +98,7 @@ private fun OpenCodeInlineNoticeTone.foreground(): Color =
 private fun OpenCodeInlineNoticeTone.bannerFill(): Color =
     when (this) {
         OpenCodeInlineNoticeTone.Neutral -> openCodeColor("surface-raised-base")
+        OpenCodeInlineNoticeTone.Warning -> openCodeColor("warning").copy(alpha = 0.1f)
         OpenCodeInlineNoticeTone.Error -> openCodeColor("error").copy(alpha = 0.1f)
     }
 

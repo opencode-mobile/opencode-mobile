@@ -45,6 +45,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
     var showStatusDot by rememberSaveable { mutableStateOf(false) }
     var showProjectMeta by rememberSaveable { mutableStateOf(false) }
     var showWorktreeCheckout by rememberSaveable { mutableStateOf(false) }
+    var showServerDot by rememberSaveable { mutableStateOf(false) }
     var statusName by rememberSaveable { mutableStateOf(OpenCodeSessionConnectionStatus.Live.name) }
     var actionsEnabled by rememberSaveable { mutableStateOf(true) }
     var titleSwitcher by rememberSaveable { mutableStateOf(false) }
@@ -71,6 +72,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
     val subtitle =
         when {
             showWorktreeCheckout -> "crisp-cactus"
+            showServerDot -> "Rapid Bison"
             showProjectMeta -> "opencode-mobile"
             showTwoLine -> "Importing icons explanation"
             else -> null
@@ -87,6 +89,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
     val subtitleLeading =
         when {
             showWorktreeCheckout -> OpenCodeTopBarSubtitleLeading.Worktree
+            showServerDot -> OpenCodeTopBarSubtitleLeading.StatusDot(connectionStatus)
             showProjectMeta -> OpenCodeTopBarSubtitleLeading.Letter('O', dev.opencode.mobile.theme.LetterAccent.Blue)
             else -> null
         }
@@ -161,6 +164,7 @@ fun TopBarGalleryScreen(modifier: Modifier = Modifier) {
                     selected = showWorktreeCheckout,
                     onClick = { showWorktreeCheckout = !showWorktreeCheckout },
                 )
+                OpenCodeChoiceBadge(label = "Server dot", selected = showServerDot, onClick = { showServerDot = !showServerDot })
                 OpenCodeChoiceBadge(label = "Divider", selected = showDivider, onClick = { showDivider = !showDivider })
                 OpenCodeChoiceBadge(
                     label = "Actions enabled",

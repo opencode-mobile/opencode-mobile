@@ -81,6 +81,14 @@ sealed interface OpenCodeTopBarSubtitleLeading {
 
     /** Worktree checkout. The icon is CallSplit; the subtitle is the checkout name. */
     data object Worktree : OpenCodeTopBarSubtitleLeading
+
+    /**
+     * A bare status dot before the subtitle, with no label (a paired computer's name). The status is still read out
+     * by accessibility services. [OpenCodeTopBarSubtitleAccessory.StatusDot] is the labelled one after the subtitle.
+     */
+    data class StatusDot(
+        val status: OpenCodeSessionConnectionStatus,
+    ) : OpenCodeTopBarSubtitleLeading
 }
 
 sealed interface OpenCodeTopBarLeading {
@@ -288,6 +296,7 @@ private fun TopBarSubtitleLine(
         }
     val letter = subtitleLeading as? OpenCodeTopBarSubtitleLeading.Letter
     val worktree = subtitleLeading is OpenCodeTopBarSubtitleLeading.Worktree
+    val leadingDot = (subtitleLeading as? OpenCodeTopBarSubtitleLeading.StatusDot)?.status
 
     if (!hasSubtitle && status != null) {
         OpenCodeConnectionStatusLabel(status = status)
@@ -301,6 +310,9 @@ private fun TopBarSubtitleLine(
     ) {
         if (letter != null && hasSubtitle) {
             TopBarLetterBadge(character = letter.character, accent = letter.accent)
+        }
+        if (leadingDot != null && hasSubtitle) {
+            OpenCodeConnectionStatusDot(status = leadingDot)
         }
         if (worktree && hasSubtitle) {
             Icon(
@@ -402,6 +414,7 @@ private fun titleBlockAccessibilityLabel(
                     stringResource(R.string.component_top_bar_worktree_subtitle, subtitle)
                 else -> subtitle
             }
+        (subtitleLeading as? OpenCodeTopBarSubtitleLeading.StatusDot)?.let { parts += it.status.accessibilityLabel() }
     }
     when (subtitleAccessory) {
         is OpenCodeTopBarSubtitleAccessory.StatusDot ->

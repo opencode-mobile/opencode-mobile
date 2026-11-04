@@ -20,6 +20,10 @@ fun InlineNoticeGalleryScreen(modifier: Modifier = Modifier) {
             tone = OpenCodeInlineNoticeTone.Error,
         )
         OpenCodeInlineNotice(
+            message = "Google isn't set up in OpenCode. Add its API key there.",
+            tone = OpenCodeInlineNoticeTone.Warning,
+        )
+        OpenCodeInlineNotice(
             message = "Sessions stay in Recent while Running or Ready.",
             variant = OpenCodeInlineNoticeVariant.Banner,
         )
