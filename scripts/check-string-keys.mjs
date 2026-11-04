@@ -24,9 +24,17 @@
 //     (Android %s %d %1$s …; iOS %@ %lld %d %1$@ …; %% is not a placeholder)
 //   - every iOS structured key has an English value, so the UI never shows the raw key
 //
-// Usage: node scripts/check-string-keys.mjs
+// Hex Code (reported, not failing, while its keys settle):
+//   Android  android/hexcode/src/main/res/values/strings.xml
+//   iOS      ios/OpenCode Mobile/Hex Code/**/*.swift   (LocalizedStringResource("key", defaultValue: …) and
+//            String(localized: "key", defaultValue: …); Hex Code keeps its text in code)
+//            ios/OpenCode Mobile/Hex Code/Localizable.xcstrings
+//   Kit keys from the OpenCode Mobile catalog are left to that pair, unless Hex Code Android uses them too.
+//   `--strict-hexcode` makes a Hex Code mismatch fail too.
+//
+// Usage: node scripts/check-string-keys.mjs [--strict-hexcode]
 
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -36,6 +44,14 @@ const ANDROID_STRINGS = [
   join(REPO_ROOT, "android/opencode-kit/src/main/res/values/strings.xml"),
 ];
 const IOS_CATALOG = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Localizable.xcstrings");
+const HEX_ANDROID_STRINGS = [join(REPO_ROOT, "android/hexcode/src/main/res/values/strings.xml")];
+const HEX_IOS_SOURCES = join(REPO_ROOT, "ios/OpenCode Mobile/Hex Code");
+const HEX_IOS_CATALOG = join(HEX_IOS_SOURCES, "Localizable.xcstrings");
+
+/** Hex Code's Android-only resources. */
+const HEX_ANDROID_ONLY = new Set([
+  "app_name", // launcher label; iOS uses CFBundleDisplayName
+]);
 
 const STRUCTURED_KEY = /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
 
@@ -64,8 +80,9 @@ function decodeXml(text) {
     .replaceAll("&amp;", "&");
 }
 
-function readAndroid() {
-  const xml = ANDROID_STRINGS.map((file) => readFileSync(file, "utf8"))
+function readAndroid(files = ANDROID_STRINGS) {
+  const xml = files
+    .map((file) => readFileSync(file, "utf8"))
     .join("\n")
     .replace(/<!--[\s\S]*?-->/g, "");
   const entries = new Map();
@@ -79,8 +96,8 @@ function readAndroid() {
   return entries;
 }
 
-function readIos() {
-  const catalog = JSON.parse(readFileSync(IOS_CATALOG, "utf8"));
+function readIos(path = IOS_CATALOG) {
+  const catalog = JSON.parse(readFileSync(path, "utf8"));
   const sourceLanguage = catalog.sourceLanguage ?? "en";
   const entries = new Map();
   for (const [key, entry] of Object.entries(catalog.strings ?? {})) {
@@ -155,4 +172,73 @@ function main() {
   console.log(`String keys match: ${shared} shared, ${android.size} Android, ${ios.size} iOS structured.`);
 }
 
+/** Swift sources under [dir]. */
+function swiftFiles(dir) {
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) return swiftFiles(path);
+    return name.endsWith(".swift") ? [path] : [];
+  });
+}
+
+/** Keys Hex Code iOS writes in code, with their default English text; `\(…)` interpolations count as placeholders. */
+function readHexIosSources() {
+  const entries = new Map();
+  const pattern =
+    /(?:LocalizedStringResource\(|String\(\s*localized:)\s*"([a-z][a-z0-9_.]*)"\s*,\s*defaultValue:\s*"((?:[^"\\]|\\\([^)]*\)|\\.)*)"/g;
+  for (const file of swiftFiles(HEX_IOS_SOURCES)) {
+    for (const m of readFileSync(file, "utf8").matchAll(pattern)) {
+      if (!STRUCTURED_KEY.test(m[1])) continue;
+      const interpolations = (m[2].match(/\\\(/g) ?? []).length;
+      entries.set(m[1], { plural: false, values: [m[2]], interpolations });
+    }
+  }
+  return entries;
+}
+
+/** Hex Code's pair: Android hexcode resources against the keys Hex Code iOS uses. Reports; fails only when strict. */
+function checkHexCode(strict) {
+  if (!existsSync(HEX_ANDROID_STRINGS[0])) return;
+  const android = readAndroid(HEX_ANDROID_STRINGS);
+  const ios = readHexIosSources();
+  if (existsSync(HEX_IOS_CATALOG)) {
+    for (const [key, entry] of readIos(HEX_IOS_CATALOG)) if (!ios.has(key)) ios.set(key, entry);
+  }
+  // The shared kit's keys belong to the OpenCode Mobile pair, unless Hex Code Android uses the same one.
+  const shared = readIos();
+  for (const key of shared.keys()) {
+    if (!android.has(key.replaceAll(".", "_"))) ios.delete(key);
+  }
+
+  const problems = [];
+  for (const name of android.keys()) {
+    if (HEX_ANDROID_ONLY.has(name)) continue;
+    const key = [...ios.keys()].find((k) => k.replaceAll(".", "_") === name);
+    if (!key) problems.push(`Android "${name}" has no Hex Code iOS key`);
+  }
+  for (const [key, entry] of ios) {
+    const name = key.replaceAll(".", "_");
+    const other = android.get(name);
+    if (!other) {
+      problems.push(`iOS "${key}" has no Android resource "${name}"`);
+      continue;
+    }
+    const iosCount = entry.interpolations ?? Math.max(0, ...entry.values.map((v) => placeholderCount(v, IOS_PLACEHOLDER)));
+    const androidCount = Math.max(0, ...other.values.map((v) => placeholderCount(v, ANDROID_PLACEHOLDER)));
+    if (iosCount !== androidCount) {
+      problems.push(`"${key}" has ${iosCount} placeholder(s) on iOS and ${androidCount} on Android`);
+    }
+  }
+  if (problems.length === 0) {
+    console.log(`Hex Code string keys match: ${android.size} Android, ${ios.size} iOS.`);
+    return;
+  }
+  const report = strict ? console.error : console.warn;
+  report(`Hex Code string key differences (${problems.length}):`);
+  for (const p of problems.sort()) report(`  - ${p}`);
+  if (strict) process.exit(1);
+}
+
 main();
+checkHexCode(process.argv.includes("--strict-hexcode"));

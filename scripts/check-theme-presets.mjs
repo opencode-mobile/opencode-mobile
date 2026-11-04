@@ -41,6 +41,23 @@ function checkRaisedContrast(id, theme) {
   }
 }
 
+/** App ids a manifest entry may name in `apps`. Without `apps`, a preset is offered in every app. */
+const APP_IDS = new Set(["opencode-mobile", "hexcode"]);
+
+function checkApps(entry) {
+  if (entry.apps === undefined) return;
+  if (!Array.isArray(entry.apps) || entry.apps.length === 0) {
+    console.error(`Theme preset "${entry.id}": "apps" must be a non-empty list of app ids`);
+    process.exit(1);
+  }
+  for (const app of entry.apps) {
+    if (!APP_IDS.has(app)) {
+      console.error(`Theme preset "${entry.id}": unknown app "${app}" in "apps" (known: ${[...APP_IDS].join(", ")})`);
+      process.exit(1);
+    }
+  }
+}
+
 function extraFiles(dir, allowed) {
   return readdirSync(dir)
     .filter((name) => name.endsWith(".json") && !allowed.has(name))
@@ -76,6 +93,7 @@ function main() {
       console.error("Manifest entry is missing id");
       process.exit(1);
     }
+    checkApps(entry);
     const sharedFile = join(SHARED_DIR, `${id}.json`);
     const iosFile = join(IOS_DIR, `${id}.json`);
     const androidFile = join(ANDROID_DIR, `${id}.json`);
