@@ -152,6 +152,18 @@ struct ArchivedSessionsViewModelTests {
         #expect(sessions.map(\.id) == ["a1"])
     }
 
+    @Test func unarchiveLeavesTheServerReadStateAlone() async {
+        // Home's Done pill is server unread state; only opening the session in Session Chat acknowledges it.
+        let repository = ArchivedSessionRepository(["/work/alpha": [archived("a1", "/work/alpha", now - day)]])
+        let viewModel = makeViewModel(repository)
+        await viewModel.appear(scopeID: "all", projects: [alpha], worktreesEnabled: true)
+
+        await viewModel.unarchive(sessionID: "a1")
+
+        #expect(repository.unarchivedIDs == ["a1"])
+        #expect(repository.viewedIDs.isEmpty)
+    }
+
     @Test func aLaggingListDoesNotBringAnUnarchivedRowBack() async {
         let repository = ArchivedSessionRepository(["/work/alpha": [archived("a1", "/work/alpha", now - day)]])
         repository.unarchiveLags = true
@@ -312,6 +324,12 @@ private final class ArchivedSessionRepository: SessionRepository, @unchecked Sen
         deletedIDs.append(id)
         lists = lists.mapValues { $0.filter { $0.id != id } }
         return true
+    }
+
+    private(set) var viewedIDs: [String] = []
+
+    func markSessionViewed(sessionId: String, idleAtEpochMs _: Int64) async throws {
+        viewedIDs.append(sessionId)
     }
 
     func getSessionDiff(id: String, messageID: String?, directory: String?) async throws -> [FileDiff] { [] }

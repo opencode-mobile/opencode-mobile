@@ -214,6 +214,22 @@ class ArchivedSessionsModelTest {
         }
 
     @Test
+    fun unarchiveLeavesTheServerReadStateAlone() =
+        runTest {
+            // Home's Done pill is server unread state; only opening the session in Session Chat acknowledges it.
+            val repository = FakeArchivedRepository("/work/alpha" to listOf(archived("a1", "/work/alpha", now - day)))
+            val model = model(repository, listOf(alpha))
+            model.bind("all")
+            advanceUntilIdle()
+
+            model.unarchive("a1")
+            advanceUntilIdle()
+
+            assertEquals(listOf("a1"), repository.unarchived)
+            assertTrue(repository.viewed.isEmpty())
+        }
+
+    @Test
     fun aLaggingListDoesNotBringAnUnarchivedRowBack() =
         runTest {
             val repository = FakeArchivedRepository("/work/alpha" to listOf(archived("a1", "/work/alpha", now - day)))
@@ -391,6 +407,15 @@ private class FakeArchivedRepository(
         id: String,
         directory: String?,
     ) = error("unused")
+
+    val viewed = mutableListOf<String>()
+
+    override suspend fun markSessionViewed(
+        sessionId: String,
+        idleAtEpochMs: Long,
+    ) {
+        viewed += sessionId
+    }
 
     override suspend fun listSessions(directory: String?) = emptyList<Session>()
 
