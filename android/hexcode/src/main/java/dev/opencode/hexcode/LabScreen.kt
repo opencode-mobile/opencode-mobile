@@ -221,7 +221,8 @@ fun LabScreen(
                     }
                 }
                 items(summaries, key = { it.modelId + it.options }) { s ->
-                    val model = engine.models.first { it.id == s.modelId }
+                    // results can name models that are no longer in the list; they still show, without a size
+                    val model = engine.models.firstOrNull { it.id == s.modelId }
                     ResultRow(s, model, expanded == s.modelId + s.options) {
                         expanded = if (expanded == s.modelId + s.options) null else s.modelId + s.options
                     }
@@ -229,9 +230,9 @@ fun LabScreen(
                 item {
                     Text(
                         "Wait: time from the end of speech to the text, per 10 s of speech. Errors: words wrong against the " +
-                            "reference text. vs Hex: words that differ from ${engine.models.first {
-                                it.id == SpeechModels.HEX_DEFAULT
-                            }.title}.",
+                            "reference text. vs default: words that differ from ${engine.models.first {
+                                it.id == SpeechModels.DICTATION_DEFAULT
+                            }.title} with its default settings.",
                         color = Faint,
                         fontSize = 12.sp,
                     )
@@ -268,14 +269,14 @@ private fun ResultsHeader() {
         Cell("Model", Modifier.weight(1f), Faint)
         Cell("Wait", Modifier.width(56.dp), Faint, end = true)
         Cell("Errors", Modifier.width(56.dp), Faint, end = true)
-        Cell("vs Hex", Modifier.width(56.dp), Faint, end = true)
+        Cell("vs default", Modifier.width(56.dp), Faint, end = true)
     }
 }
 
 @Composable
 private fun ResultRow(
     s: LabSummary,
-    model: SpeechModel,
+    model: SpeechModel?,
     open: Boolean,
     onClick: () -> Unit,
 ) {
@@ -289,14 +290,14 @@ private fun ResultRow(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(s.modelTitle, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                Text("${s.engine} · ${s.options} · ${megabytes(model.bytes)}", color = Faint, fontSize = 11.5.sp)
+                Text("${s.engine} · ${s.options} · ${model?.let { megabytes(it.bytes) } ?: "–"}", color = Faint, fontSize = 11.5.sp)
             }
             Cell("%.2f s".format(s.waitPer10s), Modifier.width(56.dp), Color.White, end = true)
             Cell("%.1f%%".format(s.wer), Modifier.width(56.dp), Color.White, end = true)
             Cell(
-                s.vsHex?.let { "%.1f%%".format(it) } ?: "–",
+                s.vsDefault?.let { "%.1f%%".format(it) } ?: "–",
                 Modifier.width(56.dp),
-                if ((s.vsHex ?: 99.0) <
+                if ((s.vsDefault ?: 99.0) <
                     3
                 ) {
                     Green

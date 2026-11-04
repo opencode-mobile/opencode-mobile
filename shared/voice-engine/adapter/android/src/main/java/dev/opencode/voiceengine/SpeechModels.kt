@@ -16,9 +16,9 @@ data class ModelFile(
 )
 
 /**
- * A speech model the app can run, from `assets/lab/models.json`. [engine] says what runs it: "transcribe.cpp"
- * (Hex's engine), "sherpa-onnx" (ONNX Runtime), or "android" (the phone's own recognizer, nothing to download).
- * The word error rates are the published ones (transcribe.cpp's catalog), in percent, for comparison only.
+ * A speech model the app can run, from `assets/lab/models.json`. [engine] says what runs it: "sherpa-onnx" (ONNX
+ * Runtime), "litert" (Google's LiteRT) or "android" (the phone's own recognizer, nothing to download).
+ * The word error rates are published ones (LibriSpeech test-clean and FLEURS English), in percent, for comparison only.
  */
 data class SpeechModel(
     val id: String,
@@ -46,13 +46,9 @@ data class TestClip(
 )
 
 object SpeechModels {
-    /** The model Hex uses on the desktop and the iPhone, on Hex's engine; results are compared against it. */
-    const val HEX_DEFAULT = "parakeet-v2-q8"
-
     /**
-     * What dictation uses until someone picks another model in the lab: the same Parakeet V2 as Hex, run by ONNX
-     * Runtime with XNNPACK. Measured on a Pixel 9 and a Galaxy A15, it waits half as long as Hex's engine and gives
-     * the same text for 96-99% of words (see shared/voice-engine/README.md).
+     * What dictation uses until someone picks another model in the lab: Parakeet V2, the model the iPhone runs, on
+     * ONNX Runtime with XNNPACK. Lab results are compared against it (see shared/voice-engine/README.md).
      */
     const val DICTATION_DEFAULT = "parakeet-v2-onnx-int8"
 

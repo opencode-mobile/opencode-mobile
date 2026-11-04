@@ -91,8 +91,8 @@ data class LabSummary(
     val longestSeconds: Double,
     /** Word error rate against the reference text, percent. */
     val wer: Double,
-    /** How far the text is from Hex's default model on the same clips, percent of words; null without its run. */
-    val vsHex: Double?,
+    /** How far the text is from dictation's default model on the same clips, percent of words; null without its run. */
+    val vsDefault: Double?,
     val loadMs: Double,
     val firstMs: Double,
     val memoryMb: Int,
@@ -151,14 +151,19 @@ class SpeechLab(
     fun summaries(set: String = TECHNICAL): List<LabSummary> {
         val all = results().filter { it.device == device && !it.clipId.startsWith("voice:") && setName(it.clipId) == set }
         val latest = all.groupBy { it.modelId to it.options }.mapValues { (_, rs) -> rs.filter { it.runId == rs.maxOf { r -> r.runId } } }
-        val hex = latest.entries.firstOrNull { it.key.first == SpeechModels.HEX_DEFAULT && it.key.second == "fast cores" }?.value
+        val default = EngineOptions()
+        val reference =
+            latest.entries
+                .firstOrNull {
+                    it.key.first == SpeechModels.DICTATION_DEFAULT && it.key.second == "fast cores · ${default.provider}"
+                }?.value
         return latest.values
             .map { rs ->
                 val first = rs.first()
                 val audio = rs.sumOf { it.audioSeconds }
                 val longest = rs.maxBy { it.audioSeconds }
-                val vsHex =
-                    hex?.let { base ->
+                val vsDefault =
+                    reference?.let { base ->
                         val pairs = rs.mapNotNull { r -> base.firstOrNull { it.clipId == r.clipId }?.let { r to it } }
                         if (pairs.isEmpty()) {
                             null
@@ -178,7 +183,7 @@ class SpeechLab(
                     longestWait = longest.waitMs / 1000,
                     longestSeconds = longest.audioSeconds,
                     wer = 100.0 * rs.sumOf { it.wordErrors } / maxOf(1, rs.sumOf { it.referenceWords }),
-                    vsHex = vsHex,
+                    vsDefault = vsDefault,
                     loadMs = first.loadMs,
                     firstMs = first.firstMs,
                     memoryMb = rs.maxOf { it.memoryMb },

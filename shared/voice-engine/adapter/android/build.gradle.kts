@@ -6,9 +6,9 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
-// Hex Code's on-device speech engines on Android: sherpa-onnx (the default), Google's LiteRT, Android's own
-// recognizer, and transcribe.cpp as the lab's reference (built from src/main/cpp/). The models they run are
-// listed in src/main/assets/lab/models.json.
+// Hex Code's on-device speech engines on Android: sherpa-onnx (the default), Google's LiteRT and Android's own
+// recognizer, with a small native library (src/main/cpp/) that pins their threads to the fast cores. The models
+// they run are listed in src/main/assets/lab/models.json.
 
 // sherpa-onnx (Apache-2.0, ONNX Runtime inside), the second engine the speech model lab compares. Its Android
 // release is fetched once, checked against this checksum and unpacked into the build folder, so its native
@@ -48,7 +48,6 @@ android {
     defaultConfig {
         minSdk = 26
         ndk { abiFilters += "arm64-v8a" }
-        externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
     }
 
     sourceSets["main"].jniLibs.srcDir(File(sherpaDir, "jni"))

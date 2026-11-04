@@ -65,8 +65,8 @@ class VoiceEngine(
     private var engine: SpeechEngine? = null
     private val lock = Mutex()
 
-    // Phones mix fast and slow cores, and ggml splits each step evenly across its threads, so one thread on a
-    // little core holds everything up. Runs use one thread per fast core and stay on those cores.
+    // Phones mix fast and slow cores, and the engines split each step evenly across their threads, so one thread on
+    // a little core holds everything up. Runs use one thread per fast core and stay on those cores.
     internal val cores = Cores.read()
     private var recorder: AudioRecord? = null
     private var reader: Thread? = null
@@ -315,24 +315,11 @@ private class FloatBuffer {
     @Synchronized fun toArray(): FloatArray = data.copyOf(size)
 }
 
-internal object Native {
+internal object CpuAffinity {
     init {
-        System.loadLibrary("hexvoice")
+        System.loadLibrary("cpuaffinity")
     }
 
-    external fun open(
-        path: String,
-        threads: Int,
-    ): Long
-
-    external fun transcribe(
-        session: Long,
-        pcm: FloatArray,
-        cpuMask: Long,
-    ): String
-
-    external fun close(session: Long)
-
     /** Moves the calling thread to the CPUs in [mask] and returns its previous mask (0 if that failed). */
-    external fun setAffinity(mask: Long): Long
+    external fun set(mask: Long): Long
 }

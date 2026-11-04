@@ -10,22 +10,25 @@ device. Both platforms run NVIDIA's Parakeet TDT 0.6B v2, each on the fastest ru
 | iOS | Parakeet TDT 0.6B v2 | FluidAudio 0.15.5 (CoreML, Apple Neural Engine) | `adapter/ios/` (Swift package `VoiceEngineKit`) |
 | Android | Parakeet TDT 0.6B v2, int8 ONNX export | sherpa-onnx (ONNX Runtime) with the XNNPACK provider, on the fast cores only | `SpeechModels.DICTATION_DEFAULT` and `EngineOptions` in `adapter/android/` |
 
-The quality reference is Parakeet V2 on transcribe.cpp, the setup the [Hex](https://github.com/anomalyco/hex)
-dictation app uses on the desktop; "Hex" in the lab means that reference. Android doesn't run transcribe.cpp for
-dictation, because the same model runs about twice as fast on ONNX Runtime with XNNPACK and gives nearly the same
-text. Measured with the speech model lab, per 10 s of speech:
+The Android choice was measured against Parakeet V2 on transcribe.cpp, the setup the
+[Hex](https://github.com/anomalyco/hex) dictation app uses on the desktop. The same model runs about twice as fast
+on ONNX Runtime with XNNPACK and gives the same text for 96–99% of words, so transcribe.cpp was dropped from the
+app after this comparison. Measured with the speech model lab, per 10 s of speech:
 
 | Phone | Runtime | Wait, technical clips | Wait, real speech | Word errors, technical | Word errors, real speech |
 |---|---|---:|---:|---:|---:|
 | iPhone 16e | FluidAudio (CoreML) | 0.16 s | 0.14 s | 3.1% | 12.1% |
 | Pixel 9 (Tensor G4) | sherpa-onnx + XNNPACK | 0.67 s | 0.97 s | 3.5% | 12.9% |
-| Pixel 9 | transcribe.cpp (reference) | 1.33 s | 1.57 s | 2.7% | 12.1% |
+| Pixel 9 | transcribe.cpp (removed) | 1.33 s | 1.57 s | 2.7% | 12.1% |
 | Galaxy A15 (Helio G99) | sherpa-onnx + XNNPACK | 1.57 s | 1.53 s | 3.5% | 12.9% |
-| Galaxy A15 | transcribe.cpp (reference) | 3.68 s | 3.32 s | 2.7% | 12.1% |
+| Galaxy A15 | transcribe.cpp (removed) | 3.68 s | 3.32 s | 2.7% | 12.1% |
 
 The two test sets are described under [Clip sets](#clip-sets).
 
 **Measured and not adopted:**
+- **transcribe.cpp** with nine models: the Parakeet models (V2, Unified and Ultra) ran about twice as slow as the
+  same weights on ONNX Runtime or LiteRT, and the smaller models (Granite, Canary, Moonshine, Parakeet 110M) made
+  too many mistakes.
 - **NNAPI:** no faster than XNNPACK.
 - **All cores:** slower than the fast cores only.
 - **Q4 versions:** slower than Q8.
@@ -41,9 +44,9 @@ Run the lab and compare against the tables above when one of these happens:
 - a phone class is added;
 - Hex Code adds languages.
 
-**The bar:** an Android option has to keep the reference's words (transcribe.cpp) for at least 95% of words on
-real speech, with no more word errors than the reference plus 1 point. Among the options that pass, the shortest
-wait on both phones wins.
+**The bar:** an Android option has to keep the current default's words for at least 95% of words on real speech,
+with no more word errors than the default plus 1 point. Among the options that pass, the shortest wait on both
+phones wins.
 
 ## Layout
 
@@ -53,10 +56,10 @@ wait on both phones wins.
   - **Recorder:** `TakeRecorder.swift` (16 kHz WAV takes).
   - The transcriber and recorder are adapted from Hex's iOS app (MIT; see `THIRD_PARTY_NOTICES.md`).
 - `adapter/android/`: the Gradle module `:voice-engine`.
-  - **Engines:** `Engines.kt` (transcribe.cpp, sherpa-onnx, Android's recognizer) and `LiteRtEngine.kt`.
+  - **Engines:** `Engines.kt` (sherpa-onnx and Android's recognizer) and `LiteRtEngine.kt`.
   - **Models:** `SpeechModels.kt` (the model list, downloads and storage).
   - **Lab:** `SpeechLab.kt` (the speech model lab and its word error rate).
-  - **Native code:** `src/main/cpp/` (transcribe.cpp at a pinned revision, and CPU pinning).
+  - **Native code:** `src/main/cpp/`, a small JNI library that pins engine threads to the fast cores.
 - `lab/`: scripts that make test clips and model lists, run lab runs and score results.
 
 ## The speech model lab (Android)
@@ -94,7 +97,7 @@ adb -s <serial> shell "chmod -R a+rX /data/local/tmp/<id> && run-as dev.opencode
 runs out of memory only loses its own run:
 
 ```bash
-shared/voice-engine/lab/run-android.sh <serial> "parakeet-v2-q8,parakeet-v2-onnx-int8|xnnpack|" "parakeet-v2-onnx-int8|xnnpack|edacc"
+shared/voice-engine/lab/run-android.sh <serial> "parakeet-v2-onnx-int8,parakeet-ultra-litert-cpu|xnnpack|" "parakeet-v2-onnx-int8|xnnpack|edacc"
 ```
 
 ```bash
@@ -149,7 +152,7 @@ It prints one table per phone and clip set from the latest run of each model and
 - **Longest clip:** the wait on the longest clip.
 - **Word errors:** words wrong against the reference. Case, punctuation, camelCase, digits against words and
   "uh"/"um" don't count.
-- **Differs from Hex:** words that differ from the reference, Parakeet V2 Q8 on transcribe.cpp.
+- **Differs from default:** words that differ from Android's default, Parakeet V2 on sherpa-onnx with XNNPACK.
 - **Load time** and **memory**.
 
 The app uses the same word rules (`Wer` in `SpeechLab.kt`).

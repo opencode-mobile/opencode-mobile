@@ -68,27 +68,10 @@ internal fun openEngine(
     val threads = if (options.allCores) cores.count else cores.fastCount
     val mask = if (options.allCores) 0L else cores.fastMask
     return when (model.engine) {
-        "transcribe.cpp" -> TranscribeCppEngine(store.file(model, model.files.single().name).path, threads, mask)
         "sherpa-onnx" -> SherpaOnnxEngine(store, model, threads, options.provider, mask)
         "litert" -> LiteRtEngine(store, model, threads, gpu = model.kind == "tdt_gpu", context.cacheDir, mask)
         "android" -> AndroidSystemEngine(context)
         else -> error("Unknown engine ${model.engine}")
-    }
-}
-
-/** Hex's engine: transcribe.cpp on ggml, CPU only. */
-private class TranscribeCppEngine(
-    path: String,
-    threads: Int,
-    private val mask: Long,
-) : SpeechEngine {
-    private var session = Native.open(path, threads)
-
-    override suspend fun transcribe(pcm: FloatArray): String = withContext(Dispatchers.Default) { Native.transcribe(session, pcm, mask) }
-
-    override fun close() {
-        if (session != 0L) Native.close(session)
-        session = 0L
     }
 }
 
@@ -150,11 +133,11 @@ internal inline fun <T> onCores(
     block: () -> T,
 ): T {
     if (mask == 0L) return block()
-    val previous = Native.setAffinity(mask)
+    val previous = CpuAffinity.set(mask)
     try {
         return block()
     } finally {
-        if (previous != 0L) Native.setAffinity(previous)
+        if (previous != 0L) CpuAffinity.set(previous)
     }
 }
 
