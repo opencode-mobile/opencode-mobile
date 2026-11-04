@@ -45,6 +45,8 @@ fun SettingsScreen(
     server: ServerLabel?,
     modelName: String?,
     projectPath: String?,
+    notice: String?,
+    onNoticeShown: () -> Unit,
     onProject: () -> Unit,
     onModel: () -> Unit,
     onAppearance: () -> Unit,
@@ -52,53 +54,53 @@ fun SettingsScreen(
 ) {
     BackHandler(onBack = onBack)
     var notYet by remember { mutableStateOf<OpenCodeSnackbarMessage?>(null) }
-    val notYetText = stringResource(R.string.settings_not_yet)
+    val notYetText = stringResource(R.string.settings_soon)
     val placeholder = { notYet = OpenCodeSnackbarMessage(notYetText) }
     Box(Modifier.fillMaxSize().systemBarsPadding()) {
         Column(Modifier.fillMaxSize()) {
             PageTop(
                 stringResource(R.string.settings_title),
                 server?.let { label ->
-                    label.version?.let { stringResource(R.string.settings_server_status, label.host, it) } ?: label.host
+                    label.version?.let { stringResource(R.string.settings_server_status, label.name, it) } ?: label.name
                 },
                 onBack,
             )
             Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-                OpenCodeSectionHeader(stringResource(R.string.settings_section_session))
+                OpenCodeSectionHeader(stringResource(R.string.settings_session))
                 Row(OpenCodeIcons.Folder, stringResource(R.string.settings_project), prefs.project?.name, projectPath, onProject)
                 Row(
                     OpenCodeIcons.Restart,
                     stringResource(R.string.settings_new_session),
                     null,
-                    stringResource(R.string.settings_new_session_subtitle),
+                    stringResource(R.string.settings_new_session_sub),
                     placeholder,
                 )
-                OpenCodeSectionHeader(stringResource(R.string.settings_section_agent))
+                OpenCodeSectionHeader(stringResource(R.string.settings_agent))
                 Row(OpenCodeIcons.Agent, stringResource(R.string.settings_model), modelName, null, onModel)
                 Row(OpenCodeIcons.Architecture, stringResource(R.string.settings_reasoning), reasoningValue(prefs), null, onModel)
-                OpenCodeSectionHeader(stringResource(R.string.settings_section_dictation))
+                OpenCodeSectionHeader(stringResource(R.string.settings_dictation))
                 Row(
                     OpenCodeIcons.Mic,
                     stringResource(R.string.settings_speech_model),
                     stringResource(R.string.settings_speech_model_value),
-                    stringResource(R.string.settings_speech_model_subtitle),
+                    stringResource(R.string.settings_speech_model_sub),
                     placeholder,
                 )
                 Row(
                     OpenCodeIcons.Description,
                     stringResource(R.string.settings_language),
-                    stringResource(R.string.settings_language_value),
+                    stringResource(R.string.settings_language_english),
                     null,
                     placeholder,
                 )
                 Row(
                     OpenCodeIcons.Edit,
                     stringResource(R.string.settings_text_style),
-                    stringResource(R.string.settings_text_style_value),
+                    stringResource(R.string.settings_text_style_plain),
                     null,
                     placeholder,
                 )
-                OpenCodeSectionHeader(stringResource(R.string.settings_section_app))
+                OpenCodeSectionHeader(stringResource(R.string.settings_app))
                 Row(
                     OpenCodeIcons.Widgets,
                     stringResource(R.string.settings_appearance),
@@ -109,15 +111,18 @@ fun SettingsScreen(
                 Row(
                     OpenCodeIcons.Cloud,
                     stringResource(R.string.settings_server),
-                    server?.host,
-                    stringResource(R.string.settings_server_subtitle),
+                    server?.name,
+                    server?.let { serverDetails(it) },
                     placeholder,
                 )
             }
         }
         OpenCodeSnackbarHost(
-            message = notYet,
-            onDismissed = { notYet = null },
+            message = notYet ?: notice?.let { OpenCodeSnackbarMessage(it) },
+            onDismissed = {
+                notYet = null
+                onNoticeShown()
+            },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
@@ -147,10 +152,22 @@ private fun Row(
     )
 }
 
+/** "ivans-macbook-pro · OpenCode 2.2.5": the computer's own hostname and its OpenCode version, as far as known. */
+@Composable
+private fun serverDetails(server: ServerLabel): String? {
+    val hostname = server.hostname
+    val version = server.version
+    return when {
+        hostname != null && version != null -> stringResource(R.string.settings_server_details, hostname, version)
+        version != null -> stringResource(R.string.settings_server_version, version)
+        else -> hostname
+    }
+}
+
 @Composable
 private fun reasoningValue(prefs: HexPrefs): String =
     prefs.model?.variant?.let(TitleCaseIdentifier::displayName)
-        ?: stringResource(if (prefs.model != null) R.string.first_run_model_level_default else R.string.settings_reasoning_none)
+        ?: stringResource(if (prefs.model != null) R.string.settings_reasoning_default else R.string.settings_reasoning_none)
 
 @Composable
 private fun appearanceName(appearance: Appearance): String =

@@ -39,7 +39,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -87,7 +86,12 @@ fun HomeScreen(
     var micAllowed by remember {
         mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
     }
-    val askMic = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { micAllowed = it }
+    var micOff by remember { mutableStateOf(false) }
+    val askMic =
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+            micAllowed = it
+            micOff = !it
+        }
     val ready = speech == VoiceEngine.ModelState.Ready
     Box(
         Modifier
@@ -102,26 +106,27 @@ fun HomeScreen(
                 // The draft hangs from a fixed line about a third down and grows downward, so nothing above it moves.
                 Column(Modifier.padding(horizontal = HexEdge)) {
                     Spacer(Modifier.height(hang))
-                    if (!state.draft.isEmpty) DraftView(state, vm)
+                    if (state.draft.isEmpty) EmptyHome() else DraftView(state, vm)
                 }
             }
             val label =
                 when {
                     speech is VoiceEngine.ModelState.Preparing ->
-                        stringResource(R.string.home_talk_getting_ready, (speech.fraction * 100).roundToInt())
-                    speech is VoiceEngine.ModelState.Failed -> stringResource(R.string.home_talk_speech_failed)
-                    !ready -> stringResource(R.string.home_talk_loading)
-                    state.draft.selected != null -> stringResource(R.string.home_talk_rerecord)
-                    !state.draft.isEmpty -> stringResource(R.string.home_talk_keep_talking)
-                    else -> stringResource(R.string.home_talk_hold)
+                        stringResource(R.string.talk_preparing, (speech.fraction * 100).roundToInt())
+                    speech is VoiceEngine.ModelState.Failed -> stringResource(R.string.talk_failed)
+                    !ready -> stringResource(R.string.talk_waiting)
+                    state.draft.selected != null -> stringResource(R.string.talk_rerecord)
+                    !state.draft.isEmpty -> stringResource(R.string.talk_more)
+                    else -> stringResource(R.string.talk_hold)
                 }
             TalkButton(
                 mode = state.talk,
                 label = label,
                 accessibilityLabel =
                     when (state.talk) {
-                        TalkMode.Locked -> stringResource(R.string.home_talk_pause)
-                        else -> label
+                        TalkMode.Locked -> stringResource(R.string.talk_a11y_locked)
+                        TalkMode.Holding -> stringResource(R.string.talk_a11y_recording)
+                        TalkMode.Idle -> label
                     },
                 enabled = ready,
                 level = { vm.level },
@@ -131,21 +136,41 @@ fun HomeScreen(
                 modifier = Modifier.padding(start = HexEdge, end = HexEdge, top = 8.dp, bottom = 10.dp),
             )
         }
+        val micOffText = stringResource(R.string.home_mic_off)
         val deleted = stringResource(R.string.home_chunk_deleted)
         val dropped = stringResource(R.string.home_take_dropped)
-        val undo = stringResource(R.string.home_undo)
+        val undo = stringResource(R.string.common_undo)
         OpenCodeSnackbarHost(
             message =
                 when (state.notice) {
                     HomeNotice.ChunkDeleted -> OpenCodeSnackbarMessage(deleted, actionLabel = undo)
                     HomeNotice.TakeDropped -> OpenCodeSnackbarMessage(dropped)
-                    null -> null
+                    null -> if (micOff) OpenCodeSnackbarMessage(micOffText) else null
                 },
-            onDismissed = vm::noticeShown,
+            onDismissed = {
+                vm.noticeShown()
+                micOff = false
+            },
             onAction = { vm.undoDelete() },
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp),
         )
     }
+}
+
+/** Before the first take: what to do, in two lines. */
+@Composable
+private fun EmptyHome() {
+    Text(
+        stringResource(R.string.home_empty_title),
+        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+        color = openCodeColor("text-strong"),
+    )
+    Text(
+        stringResource(R.string.home_empty_body),
+        style = MaterialTheme.typography.bodyLarge,
+        color = openCodeColor("text-base"),
+        modifier = Modifier.padding(top = 8.dp),
+    )
 }
 
 /** The agent's state on the left (Idle until the session is connected), settings on the right. */
@@ -226,22 +251,29 @@ private fun DraftLabel(state: HomeUiState) {
             when (kind) {
                 0 -> {
                     Box(Modifier.size(6.dp).clip(CircleShape).background(openCodeColor("error")))
+                    val elapsed = clock(now - state.takeStartedAt)
                     Text(
-                        stringResource(
-                            if (draft.rerecording != null) R.string.home_rerecording else R.string.home_recording,
-                            (draft.rerecording ?: 0) + 1,
-                        ) + " " + clock(now - state.takeStartedAt),
+                        draft.rerecording?.let { stringResource(R.string.draft_rerecording, it + 1, elapsed) }
+                            ?: stringResource(R.string.draft_recording, elapsed),
                         style = style,
                         color = weak,
                     )
                 }
                 1 -> {
                     HexSpinner(size = 12.dp)
-                    Text(stringResource(R.string.home_transcribing), style = style, color = weak)
+                    Text(stringResource(R.string.draft_transcribing), style = style, color = weak)
                 }
                 else ->
                     Text(
-                        pluralStringResource(R.plurals.home_draft_summary, draft.chunks.size, draft.chunks.size, clock(draft.durationMs)),
+                        listOf(
+                            stringResource(R.string.draft_title),
+                            if (draft.chunks.size == 1) {
+                                stringResource(R.string.draft_one_chunk)
+                            } else {
+                                stringResource(R.string.draft_chunks, draft.chunks.size)
+                            },
+                            clock(draft.durationMs),
+                        ).joinToString(" · "),
                         style = style,
                         color = weak,
                     )
@@ -259,9 +291,9 @@ private fun DraftText(
     val strong = openCodeColor("text-strong")
     val weak = openCodeColor("text-weak")
     val selectedFill = openCodeColor("surface-raised-base")
-    val listening = stringResource(R.string.home_listening)
-    val transcribing = stringResource(R.string.home_transcribing_chunk)
-    val firstTakeHint = stringResource(R.string.home_first_take_hint)
+    val listening = stringResource(R.string.draft_listening)
+    val transcribing = stringResource(R.string.draft_transcribing_chunk)
+    val firstTakeHint = stringResource(R.string.draft_first_take_hint)
     val text =
         buildAnnotatedString {
             draft.shown.forEachIndexed { index, chunk ->
@@ -321,7 +353,7 @@ private fun ChunkList(
     Column {
         if (start > 0) {
             Text(
-                pluralStringResource(R.plurals.home_chunks_earlier, start, start, clock(shown.take(start).sumOf { it.durationMs })),
+                stringResource(R.string.draft_earlier, start, clock(shown.take(start).sumOf { it.durationMs })),
                 style = MaterialTheme.typography.labelMedium,
                 color = weak,
                 modifier =
@@ -350,8 +382,8 @@ private fun ChunkList(
                 Text("${index + 1}", style = mono, color = weak, modifier = Modifier.width(16.dp).padding(top = 2.dp))
                 Text(
                     when (chunk.state) {
-                        ChunkState.Listening -> stringResource(R.string.home_listening)
-                        ChunkState.Transcribing -> stringResource(R.string.home_transcribing_chunk)
+                        ChunkState.Listening -> stringResource(R.string.draft_listening)
+                        ChunkState.Transcribing -> stringResource(R.string.draft_transcribing_chunk)
                         is ChunkState.Text -> chunk.state.text
                     },
                     style = MaterialTheme.typography.bodyMedium,
@@ -383,29 +415,29 @@ private fun DraftActions(
         val selected = draft.selected
         if (selected != null) {
             Text(
-                stringResource(R.string.home_chunk_number, selected + 1),
+                stringResource(R.string.draft_chunk_label, selected + 1),
                 style = MaterialTheme.typography.labelMedium,
                 color = openCodeColor("text-weak"),
             )
             Spacer(Modifier.weight(1f))
             OpenCodeButton(
-                OpenCodeButtonVariant.CompactText(stringResource(R.string.home_chunk_delete)),
+                OpenCodeButtonVariant.CompactText(stringResource(R.string.draft_delete)),
                 onClick = vm::deleteChunk,
                 contrast = OpenCodeButtonContrast.Destructive,
             )
             OpenCodeButton(
-                OpenCodeButtonVariant.CompactText(stringResource(R.string.home_chunk_rerecord)),
+                OpenCodeButtonVariant.CompactText(stringResource(R.string.draft_rerecord)),
                 onClick = vm::rerecord,
                 contrast = OpenCodeButtonContrast.Low,
             )
             OpenCodeButton(
-                OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, stringResource(R.string.home_chunk_deselect)),
+                OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, stringResource(R.string.draft_deselect)),
                 onClick = vm::deselectChunk,
                 contrast = OpenCodeButtonContrast.Low,
             )
         } else {
             OpenCodeButton(
-                OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, stringResource(R.string.home_clear)),
+                OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, stringResource(R.string.draft_clear)),
                 onClick = vm::clearDraft,
                 enabled = draft.isSettled,
                 contrast = OpenCodeButtonContrast.Low,

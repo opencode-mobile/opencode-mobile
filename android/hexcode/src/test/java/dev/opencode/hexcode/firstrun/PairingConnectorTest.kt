@@ -58,23 +58,26 @@ class PairingConnectorTest {
         server: FakeServer,
         redeem: Redeem = Redeem(),
         missing: List<String> = emptyList(),
-    ) = PairingConnector(server, redeem, { missing })
+        hostname: String? = null,
+    ) = PairingConnector(server, redeem, { missing }, { hostname })
 
     @Test
     fun pairsOnTheTailscaleAddressAndSavesV2() =
         runTest {
             val server = FakeServer(answering = setOf(lan, tailnet))
             val redeem = Redeem()
-            val hosts = mutableListOf<String>()
-            val result = connector(server, redeem).connect(code) { hosts += (it as ConnectProgress.Connecting).host }
+            var progress = 0
+            val result = connector(server, redeem, hostname = "Example-MacBook.local").connect(code) { progress += 1 }
             result as ConnectResult.Connected
             assertEquals(tailnet, redeem.redeemedOn?.trimEnd('/'))
-            assertEquals("100.64.0.3", result.host)
+            assertEquals(ServerName.of("example-macbook"), result.name)
+            assertEquals("Example-MacBook.local", result.hostname)
+            assertEquals("Example-MacBook.local", result.profile.name)
             assertEquals("2.2.5", result.version)
             assertEquals(ServerProtocol.V2, result.profile.serverProtocol)
             assertEquals("test-password", result.profile.password)
             assertEquals(2, result.profile.serverUrls.size)
-            assertTrue(hosts.isNotEmpty())
+            assertEquals(1, progress)
         }
 
     @Test
@@ -156,6 +159,14 @@ class PairingConnectorTest {
             val tunnel = "https://example.opentunnel.xyz"
             val result = connector(FakeServer(setOf(tunnel))).connect("$tunnel/auth/connect/7Q4K9M")
             assertTrue(result is ConnectResult.Connected)
+        }
+
+    @Test
+    fun withoutAHostnameTheNameComesFromTheCodesFirstAddress() =
+        runTest {
+            val result = connector(FakeServer(setOf(lan, tailnet))).connect(code) as ConnectResult.Connected
+            assertEquals(ServerName.of(lan), result.name)
+            assertEquals(null, result.hostname)
         }
 
     @Test

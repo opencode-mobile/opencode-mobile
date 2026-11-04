@@ -1,110 +1,105 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Hex Code's English text. Keys follow the iOS app's (`welcome.connect.step1` here is `welcome_connect_step1`);
+  scripts/check-string-keys.mjs compares the two. Text in `backticks` is a command, set in mono.
+-->
 <resources>
     <string name="app_name">Hex Code</string>
 
     <!-- shared -->
     <string name="common_back">Back</string>
     <string name="common_close">Close</string>
-    <string name="common_try_again">Try again</string>
+    <string name="common_retry">Retry</string>
+    <string name="common_undo">Undo</string>
     <string name="common_tag_git">git</string>
     <string name="common_home">Home</string>
 
     <!-- first run: welcome -->
-    <string name="first_run_welcome_badge">experiment</string>
-    <string name="first_run_welcome_tagline">Talk to the coding agent on your computer, from your phone.</string>
-    <string name="first_run_welcome_rule_title">There are no rules.</string>
-    <string name="first_run_welcome_rule_body">Talk to it however you like. Try things, see where it goes.</string>
-    <string name="first_run_welcome_how_title">To connect</string>
-    <string name="first_run_welcome_step_run">On your computer, run</string>
-    <string name="first_run_welcome_step_scan">Scan the code it shows</string>
-    <string name="first_run_welcome_pair_command">opencode pair</string>
-    <string name="first_run_welcome_pair_remote_command">opencode pair --remote</string>
-    <string name="first_run_welcome_away">Away from home? %1$s</string>
-    <string name="first_run_welcome_scan">Scan the code</string>
-    <string name="first_run_welcome_footer">Speech is turned into text on this phone · Needs OpenCode 2.2.5+</string>
+    <string name="welcome_title">Hex Code</string>
+    <string name="welcome_badge">experiment</string>
+    <string name="welcome_tagline">Talk to the coding agent on your computer, from your phone.</string>
+    <string name="welcome_rule_title">There are no rules.</string>
+    <string name="welcome_rule_body">Talk to it however you like. Try things, see where it goes.</string>
+    <string name="welcome_connect_title">To connect</string>
+    <string name="welcome_connect_step1">On your computer, run</string>
+    <string name="welcome_connect_step2">Scan the code it shows</string>
+    <string name="welcome_connect_remote">Not on the same network? `opencode pair --remote` connects through the internet.</string>
+    <string name="welcome_pair_command" translatable="false">opencode pair</string>
+    <string name="welcome_scan">Scan the code</string>
+    <string name="welcome_footer">Needs OpenCode 2.2.5+</string>
 
     <!-- first run: scan and connect -->
-    <string name="first_run_scan_point_title">Point at the code</string>
-    <string name="first_run_scan_point_body">It’s on your computer after %1$s. It works once.</string>
-    <string name="first_run_scan_connecting">Connecting to %1$s</string>
-    <string name="first_run_scan_connecting_unnamed">Connecting</string>
-    <string name="first_run_scan_connecting_body">Checking the server can run this app.</string>
-    <string name="first_run_scan_connected">Connected</string>
-    <string name="first_run_scan_connected_body">OpenCode %1$s on %2$s</string>
-    <string name="first_run_scan_connected_body_unversioned">OpenCode on %1$s</string>
-    <string name="first_run_scan_again">Scan again</string>
-    <string name="first_run_scan_camera_denied_title">Hex Code needs the camera</string>
-    <string name="first_run_scan_camera_denied_body">It reads the pairing code once. Allow the camera in Settings, then come back.</string>
-    <string name="first_run_scan_camera_settings">Open Settings</string>
-    <string name="first_run_scan_camera_unavailable_title">The camera didn’t start</string>
-    <string name="first_run_scan_camera_unavailable_body">Close other apps that use it, then try again.</string>
-    <string name="first_run_scan_failed_title">Couldn’t connect</string>
-    <string name="first_run_scan_failed_title_host">Couldn’t connect to %1$s</string>
-    <string name="first_run_check_code">Pairing code</string>
-    <string name="first_run_check_reach">Computer reachable</string>
-    <string name="first_run_check_pair">Code accepted</string>
-    <string name="first_run_check_version">OpenCode 2.2.5 or later</string>
-    <string name="first_run_check_routes">Routes this app uses</string>
-    <string name="pairing_failure_not_a_pairing_code">This isn’t a pairing code. Scan the one %1$s shows.</string>
-    <string name="pairing_failure_only_local_addresses">The code only lists addresses on the computer itself. Make sure it’s on your network or Tailscale.</string>
-    <string name="pairing_failure_not_encrypted">%1$s isn’t encrypted and isn’t on your network or Tailscale. Pair with %2$s for an encrypted link.</string>
-    <string name="pairing_failure_unreachable">%1$s didn’t answer. Check the phone is on the same network or Tailscale.</string>
-    <string name="pairing_failure_code_expired">This code was already used or is older than 5 minutes. Run %1$s again.</string>
-    <string name="pairing_failure_rejected">%1$s turned the phone away. Run %2$s again.</string>
-    <string name="pairing_failure_not_opencode_2">That server isn’t OpenCode 2. Update OpenCode on your computer.</string>
-    <string name="pairing_failure_too_old">OpenCode %1$s is too old. Hex Code needs 2.2.5 or later.</string>
-    <string name="pairing_failure_too_old_unversioned">This OpenCode is too old. Hex Code needs 2.2.5 or later.</string>
+    <string name="scan_point_title">Point at the code</string>
+    <string name="scan_point_body">It’s on your computer after `opencode pair`. It works once.</string>
+    <string name="scan_connecting">Connecting to your computer</string>
+    <string name="scan_checking">Checking the server can run this app.</string>
+    <string name="scan_connected">Connected to %1$s</string>
+    <string name="scan_connected_detail">OpenCode %1$s</string>
+    <string name="scan_again">Scan again</string>
+    <string name="scan_no_camera">The camera isn’t available. Allow it in Settings › Hex Code.</string>
+    <string name="scan_open_settings">Open Settings</string>
+    <string name="pairing_not_a_code_title">That isn’t a pairing code</string>
+    <string name="pairing_not_a_code_body">Scan the code `opencode pair` prints on your computer.</string>
+    <string name="pairing_local_only_title">Your computer isn’t reachable yet</string>
+    <string name="pairing_local_only_body">Run `opencode service set hostname 0.0.0.0` on your computer, then `opencode pair` again.</string>
+    <string name="pairing_not_encrypted_title">This address isn’t encrypted</string>
+    <string name="pairing_not_encrypted_body">It isn’t on your network or Tailscale. Use `opencode pair --remote` for an encrypted link.</string>
+    <string name="pairing_unreachable_title">Can’t reach your computer</string>
+    <string name="pairing_unreachable_body">Check the phone is on the same network or Tailscale as your computer, or use `opencode pair --remote`.</string>
+    <string name="pairing_expired_title">This code was used or expired</string>
+    <string name="pairing_expired_body">Codes work once, for 5 minutes. Run `opencode pair` again.</string>
+    <string name="pairing_not_v2_title">This server isn’t OpenCode 2</string>
+    <string name="pairing_not_v2_body">Hex Code needs OpenCode 2.2.5 or newer. Run `opencode upgrade`.</string>
+    <string name="pairing_too_old_title">OpenCode needs an update</string>
+    <string name="pairing_too_old_body">It runs OpenCode %1$s; Hex Code needs 2.2.5 or newer. Run `opencode upgrade`.</string>
+    <string name="pairing_missing_routes_title">This OpenCode can’t run Hex Code</string>
+    <string name="pairing_missing_routes_body">Its API has no session generate route. Run `opencode upgrade`.</string>
     <string name="first_run_start_save_failed">Couldn’t save the setup on this phone. Try again.</string>
-    <string name="pairing_failure_missing_routes">This OpenCode lacks routes Hex Code uses. Update it to 2.2.5 or later.</string>
 
     <!-- first run: pick a project -->
-    <string name="first_run_project_title">Pick a project</string>
-    <string name="first_run_project_browse">Browse folders</string>
-    <string name="first_run_project_browse_subtitle">Pick any folder on this computer</string>
-    <string name="first_run_project_on_this_computer">On this computer</string>
-    <string name="first_run_project_none">No repositories yet. Browse folders to pick one.</string>
-    <string name="first_run_project_load_failed">Couldn’t list the projects on %1$s.</string>
-    <string name="first_run_project_note">A new session starts there each day.</string>
-    <string name="ago_now">now</string>
-    <string name="ago_minutes">%1$dm ago</string>
-    <string name="ago_hours">%1$dh ago</string>
-    <string name="ago_yesterday">Yesterday</string>
-    <string name="ago_days">%1$dd ago</string>
-    <string name="ago_weeks">%1$dw ago</string>
+    <string name="project_title">Pick a project</string>
+    <string name="project_browse">Browse folders</string>
+    <string name="project_browse_subtitle">Pick any folder on this computer</string>
+    <string name="project_on_this_computer">On this computer</string>
+    <string name="project_none">No repositories yet. Browse folders to pick one.</string>
+    <string name="project_failed">Couldn’t load the projects from OpenCode.</string>
+    <string name="project_note">A new session starts there each day.</string>
+    <string name="project_ago_now">now</string>
+    <string name="project_ago_minutes">%1$dm ago</string>
+    <string name="project_ago_hours">%1$dh ago</string>
+    <string name="project_ago_yesterday">Yesterday</string>
+    <string name="project_ago_days">%1$dd ago</string>
+    <string name="project_ago_weeks">%1$dw ago</string>
 
     <!-- first run: browse folders -->
-    <string name="first_run_browse_title">Pick a folder</string>
-    <string name="first_run_browse_up">Up one folder</string>
-    <string name="first_run_browse_no_subfolders">No subfolders</string>
-    <string name="first_run_browse_not_found">Path not found</string>
-    <string name="first_run_browse_failed">Couldn’t list this folder.</string>
-    <string name="first_run_browse_use">Use this folder</string>
-    <string name="first_run_browse_pick">Pick a folder</string>
-    <plurals name="first_run_browse_folder_count">
+    <string name="browse_title">Pick a folder</string>
+    <string name="browse_up">Up one folder</string>
+    <string name="browse_no_subfolders">No subfolders</string>
+    <string name="browse_not_found">Path not found</string>
+    <string name="browse_failed">Couldn’t list this folder.</string>
+    <string name="browse_use">Use this folder</string>
+    <string name="browse_pick">Pick a folder</string>
+    <plurals name="browse_folder_count">
         <item quantity="one">%1$d folder</item>
         <item quantity="other">%1$d folders</item>
     </plurals>
 
     <!-- first run: pick a model -->
-    <string name="first_run_model_title">Pick a model</string>
-    <plurals name="first_run_model_count">
-        <item quantity="one">%2$s · %1$d model from OpenCode</item>
-        <item quantity="other">%2$s · %1$d models from OpenCode</item>
-    </plurals>
-    <string name="first_run_model_search">Search models</string>
-    <string name="first_run_model_no_match">No models match “%1$s”</string>
-    <string name="first_run_model_load_failed">Couldn’t get the models from %1$s.</string>
-    <string name="first_run_model_default_tag">default</string>
-    <string name="first_run_model_reasoning">Reasoning</string>
-    <string name="first_run_model_no_levels">This model has no reasoning levels</string>
-    <string name="first_run_model_level_default">Default</string>
-    <string name="first_run_model_test_hint">A one-line test prompt checks it works</string>
-    <string name="first_run_model_testing">Asking %1$s to reply…</string>
-    <string name="first_run_model_works">Works · replied in %1$s s</string>
-    <string name="first_run_model_test">Test model</string>
-    <string name="first_run_model_test_running">Testing…</string>
-    <string name="first_run_model_test_again">Test again</string>
-    <string name="first_run_start">Start</string>
+    <string name="model_title">Pick a model</string>
+    <string name="model_subtitle">%1$s · %2$d models from OpenCode</string>
+    <string name="model_search">Search models</string>
+    <string name="model_no_match">No models match “%1$s”</string>
+    <string name="model_failed">Couldn’t load the models from OpenCode.</string>
+    <string name="model_default_tag">default</string>
+    <string name="model_reasoning">Reasoning</string>
+    <string name="model_no_levels">This model has no reasoning levels</string>
+    <string name="model_test_hint">A one-line test prompt checks it works</string>
+    <string name="model_test_running">Asking %1$s to reply…</string>
+    <string name="model_test_passed">Works · replied in %1$s s</string>
+    <string name="model_test_button">Test model</string>
+    <string name="model_test_button_testing">Testing…</string>
+    <string name="model_test_button_again">Test again</string>
+    <string name="model_start">Start</string>
     <string name="model_test_unreachable">Couldn’t reach your computer. Check it’s on and try again.</string>
     <string name="model_test_empty_reply">The model answered with nothing. Try again or pick another model.</string>
     <string name="model_test_signed_out">Your computer turned the phone away. Pair again.</string>
@@ -113,64 +108,67 @@
     <!-- home: dictation, not connected to the agent yet -->
     <string name="home_state_idle">Idle</string>
     <string name="home_settings">Settings</string>
-    <string name="home_talk_hold">Hold to talk</string>
-    <string name="home_talk_keep_talking">Hold to keep talking</string>
-    <string name="home_talk_rerecord">Hold to re-record</string>
-    <string name="home_talk_pause">Recording, tap to pause</string>
-    <string name="home_talk_getting_ready">Getting speech ready · %1$d%%</string>
-    <string name="home_talk_loading">Getting speech ready</string>
-    <string name="home_talk_speech_failed">Speech isn’t ready on this phone</string>
-    <string name="home_recording">Recording</string>
-    <string name="home_rerecording">Re-recording chunk %1$d</string>
-    <string name="home_listening">Listening…</string>
-    <string name="home_first_take_hint">Text appears when you pause</string>
-    <string name="home_transcribing">Transcribing on this phone…</string>
-    <string name="home_transcribing_chunk">Transcribing…</string>
-    <plurals name="home_draft_summary">
-        <item quantity="one">Draft · %1$d chunk · %2$s</item>
-        <item quantity="other">Draft · %1$d chunks · %2$s</item>
-    </plurals>
-    <plurals name="home_chunks_earlier">
-        <item quantity="one">↑ %1$d earlier · %2$s</item>
-        <item quantity="other">↑ %1$d earlier · %2$s</item>
-    </plurals>
-    <string name="home_chunk_number">Chunk %1$d</string>
-    <string name="home_chunk_delete">Delete</string>
-    <string name="home_chunk_rerecord">Re-record</string>
-    <string name="home_chunk_deselect">Deselect</string>
-    <string name="home_clear">Clear the draft</string>
+    <string name="home_empty_title">Say what you want done</string>
+    <string name="home_empty_body">Hold the button and talk. Text appears when you pause, and stays here: sending comes next.</string>
     <string name="home_chunk_deleted">Chunk deleted</string>
     <string name="home_take_dropped">Take dropped</string>
-    <string name="home_undo">Undo</string>
+    <string name="home_mic_off">Microphone access is off</string>
+    <string name="talk_hold">Hold to talk</string>
+    <string name="talk_more">Hold to keep talking</string>
+    <string name="talk_rerecord">Hold to re-record</string>
+    <string name="talk_a11y_locked">Recording, locked. Tap to pause.</string>
+    <string name="talk_a11y_recording">Recording. Release to pause.</string>
+    <string name="talk_preparing">Getting speech ready · %1$d%%</string>
+    <string name="talk_waiting">Getting speech ready</string>
+    <string name="talk_failed">Speech isn’t available</string>
+    <string name="draft_title">Draft</string>
+    <string name="draft_one_chunk">1 chunk</string>
+    <string name="draft_chunks">%1$d chunks</string>
+    <string name="draft_recording">Recording · %1$s</string>
+    <string name="draft_rerecording">Re-recording chunk %1$d · %2$s</string>
+    <string name="draft_listening">Listening…</string>
+    <string name="draft_first_take_hint">Text appears when you pause</string>
+    <string name="draft_transcribing">Transcribing on this phone…</string>
+    <string name="draft_transcribing_chunk">Transcribing…</string>
+    <string name="draft_earlier">↑ %1$d earlier · %2$s</string>
+    <string name="draft_chunk_label">Chunk %1$d</string>
+    <string name="draft_delete">Delete</string>
+    <string name="draft_rerecord">Re-record</string>
+    <string name="draft_deselect">Deselect</string>
+    <string name="draft_clear">Clear the draft</string>
 
     <!-- settings -->
     <string name="settings_title">Settings</string>
     <string name="settings_server_status">%1$s · OpenCode %2$s</string>
-    <string name="settings_section_session">Session</string>
+    <string name="settings_session">Session</string>
     <string name="settings_project">Project</string>
     <string name="settings_new_session">Start a new session</string>
-    <string name="settings_new_session_subtitle">Today’s session stays on your computer</string>
-    <string name="settings_section_agent">Agent</string>
+    <string name="settings_new_session_sub">Today’s session stays on your computer</string>
+    <string name="settings_agent">Agent</string>
     <string name="settings_model">Model</string>
     <string name="settings_reasoning">Reasoning</string>
+    <string name="settings_reasoning_default">Default</string>
     <string name="settings_reasoning_none">None</string>
-    <string name="settings_section_dictation">Dictation · on this phone</string>
+    <string name="settings_dictation">Dictation · on this phone</string>
     <string name="settings_speech_model">Speech model</string>
-    <string name="settings_speech_model_subtitle">Runs on this phone</string>
-    <string name="settings_speech_model_value">Parakeet V2</string>
+    <string name="settings_speech_model_sub">Runs on this phone</string>
+    <string name="settings_speech_model_value" translatable="false">Parakeet V2</string>
     <string name="settings_language">Language</string>
-    <string name="settings_language_value">English</string>
+    <string name="settings_language_english">English</string>
     <string name="settings_text_style">Text style</string>
-    <string name="settings_text_style_value">Plain</string>
-    <string name="settings_section_app">App</string>
+    <string name="settings_text_style_plain">Plain</string>
+    <string name="settings_app">App</string>
     <string name="settings_appearance">Appearance</string>
     <string name="settings_appearance_auto">Auto</string>
     <string name="settings_appearance_light">Light</string>
     <string name="settings_appearance_dark">Dark</string>
     <string name="settings_server">Server</string>
-    <string name="settings_server_subtitle">Paired · unpair or pair another</string>
-    <string name="settings_not_yet">Not in this version yet</string>
-    <string name="settings_change_project">Change project</string>
-    <string name="settings_change_project_note">Picking one starts a new session there.</string>
+    <string name="settings_server_details">%1$s · OpenCode %2$s</string>
+    <string name="settings_server_version">OpenCode %1$s</string>
+    <string name="settings_soon">Not in this version yet</string>
+    <string name="settings_project_title">Change project</string>
+    <string name="settings_project_note">The next session starts there.</string>
+    <string name="settings_project_changed">Now in %1$s</string>
+    <string name="settings_model_title">Model</string>
     <string name="settings_model_save">Save</string>
 </resources>

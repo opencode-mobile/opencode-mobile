@@ -3,6 +3,7 @@ package dev.opencode.hexcode.firstrun
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.opencode.hexcode.app.HexServices
+import dev.opencode.mobile.domain.filesystem.DirectoryListing
 import dev.opencode.mobile.domain.filesystem.DirectoryNotFoundException
 import dev.opencode.mobile.domain.filesystem.FilesystemRepository
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import java.util.concurrent.ConcurrentHashMap
 
 enum class FirstRunStep { Welcome, Scan, Project, Browse, Model, Done }
 
@@ -26,12 +28,10 @@ enum class FirstRunStep { Welcome, Scan, Project, Browse, Model, Done }
 sealed interface ScanUi {
     data object Scanning : ScanUi
 
-    data class Connecting(
-        val host: String,
-    ) : ScanUi
+    data object Connecting : ScanUi
 
     data class Connected(
-        val host: String,
+        val name: String,
         val version: String?,
     ) : ScanUi
 
@@ -54,9 +54,11 @@ sealed interface Loadable<out T> {
     data object Failed : Loadable<Nothing>
 }
 
+/** How the paired computer is shown: its friendly name, and its own hostname and OpenCode version for details. */
 data class ServerLabel(
-    val host: String,
-    val version: String?,
+    val name: String,
+    val hostname: String? = null,
+    val version: String? = null,
 )
 
 data class FirstRunUiState(
@@ -109,6 +111,8 @@ class FirstRunViewModel(
     private val env: FirstRunEnvironment,
     private val connectedPause: Long = CONNECTED_PAUSE_MS,
     private val mode: PickerMode = PickerMode.FirstRun,
+    /** Folder listings for the whole app session, so a folder visited once isn't listed again. */
+    private val listingCache: MutableMap<String, DirectoryListing> = ConcurrentHashMap(),
 ) : ViewModel() {
     private val state = MutableStateFlow(FirstRunUiState())
     val uiState: StateFlow<FirstRunUiState> = state.asStateFlow()
@@ -120,6 +124,10 @@ class FirstRunViewModel(
     private var home = ""
     private val summaries = Semaphore(FolderBrowserState.SUMMARY_CONCURRENCY)
     private val summaryRequested = mutableSetOf<String>()
+
+    /** Row summaries that arrived since the last redraw; they are applied together, at most every [SUMMARY_BATCH_MS]. */
+    private val pendingSummaries = mutableMapOf<String, FolderListing>()
+    private var summaryFlush: Job? = null
 
     /** Settings › Project: the project page on its own. */
     fun openProjects(server: ServerLabel?) {
@@ -147,11 +155,8 @@ class FirstRunViewModel(
         if (state.value.scan !is ScanUi.Scanning) return
         connectJob =
             viewModelScope.launch {
-                state.update { it.copy(scan = ScanUi.Connecting(host = "")) }
-                val result =
-                    env.pairing.connect(raw) { progress ->
-                        if (progress is ConnectProgress.Connecting) state.update { it.copy(scan = ScanUi.Connecting(progress.host)) }
-                    }
+                state.update { it.copy(scan = ScanUi.Connecting) }
+                val result = env.pairing.connect(raw)
                 when (result) {
                     is ConnectResult.Failed -> state.update { it.copy(scan = ScanUi.Failed(result.failure)) }
                     is ConnectResult.Connected -> {
@@ -163,8 +168,8 @@ class FirstRunViewModel(
                             state.update { it.copy(scan = ScanUi.Failed(ConnectFailure.NotSaved)) }
                             return@launch
                         }
-                        val server = ServerLabel(result.host, result.version)
-                        state.update { it.copy(scan = ScanUi.Connected(result.host, result.version), server = server) }
+                        val server = ServerLabel(result.name, result.hostname, result.version)
+                        state.update { it.copy(scan = ScanUi.Connected(result.name, result.version), server = server) }
                         delay(connectedPause)
                         state.update { it.copy(step = FirstRunStep.Project) }
                         loadProjects()
@@ -239,7 +244,9 @@ class FirstRunViewModel(
     }
 
     fun browseFolders() {
-        val start = state.value.browser ?: FolderBrowserState(home = home)
+        val start =
+            state.value.browser
+                ?: FolderBrowserState(home = home, listings = listingCache.mapValues { FolderListing.Loaded(it.value) })
         state.update { it.copy(step = FirstRunStep.Browse, browser = start) }
         list(start.directory)
         if (!ServerPathPolicy.isWindows(home)) listVolumes()
@@ -262,7 +269,7 @@ class FirstRunViewModel(
         if (!summaryRequested.add(key)) return
         viewModelScope.launch {
             summaries.withPermit {
-                if (state.value.browser?.needsListing(path) == true) fetchListing(path)
+                if (state.value.browser?.needsListing(path) == true) fetchListing(path, batched = true)
             }
         }
     }
@@ -278,18 +285,41 @@ class FirstRunViewModel(
         browseJob = viewModelScope.launch { fetchListing(path) }
     }
 
-    private suspend fun fetchListing(path: String) {
+    /** Lists [path], from the session cache when it can. A row summary ([batched]) waits for the next batch. */
+    private suspend fun fetchListing(
+        path: String,
+        batched: Boolean = false,
+    ) {
+        val key = ServerPathPolicy.canonical(path)
         val listing =
-            try {
-                FolderListing.Loaded(env.filesystem.listDirectory(path))
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: DirectoryNotFoundException) {
-                FolderListing.NotFound
-            } catch (_: Exception) {
-                FolderListing.Failed
+            listingCache[key]?.let { FolderListing.Loaded(it) }
+                ?: try {
+                    env.filesystem
+                        .listDirectory(path)
+                        .also { listingCache[key] = it }
+                        .let { FolderListing.Loaded(it) }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: DirectoryNotFoundException) {
+                    FolderListing.NotFound
+                } catch (_: Exception) {
+                    FolderListing.Failed
+                }
+        if (!batched) {
+            state.update { it.copy(browser = it.browser?.withListing(path, listing)) }
+            return
+        }
+        pendingSummaries[path] = listing
+        if (summaryFlush?.isActive == true) return
+        summaryFlush =
+            viewModelScope.launch {
+                delay(SUMMARY_BATCH_MS)
+                val arrived = pendingSummaries.toMap()
+                pendingSummaries.clear()
+                state.update { current ->
+                    current.copy(browser = arrived.entries.fold(current.browser) { browser, (at, l) -> browser?.withListing(at, l) })
+                }
             }
-        state.update { it.copy(browser = it.browser?.withListing(path, listing)) }
     }
 
     private fun listVolumes() {
@@ -370,5 +400,8 @@ class FirstRunViewModel(
     companion object {
         /** How long "Connected" stays before the project page. */
         const val CONNECTED_PAUSE_MS = 900L
+
+        /** Folder summaries arriving within this window are drawn together. */
+        const val SUMMARY_BATCH_MS = 100L
     }
 }

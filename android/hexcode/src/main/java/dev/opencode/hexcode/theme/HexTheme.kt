@@ -12,6 +12,7 @@ object HexTheme {
 
     /** Loads the Hex preset into the shared theme once per process. */
     fun install(context: Context) {
+        ThemeManager.appId = "hexcode"
         ThemeManager.initialize(context)
         if (ThemeManager.currentTheme.id != PRESET_ID) ThemeManager.applyPreset(PRESET_ID)
     }

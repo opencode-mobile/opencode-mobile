@@ -25,18 +25,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import dev.opencode.hexcode.R
 import dev.opencode.hexcode.ui.HexEdge
 import dev.opencode.hexcode.ui.HexMark
+import dev.opencode.hexcode.ui.codeText
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.OpenCodeButton
 import dev.opencode.mobile.ui.components.OpenCodeButtonSize
@@ -71,15 +69,15 @@ fun WelcomeScreen(onScan: () -> Unit) {
                 modifier = Modifier.padding(top = 22.dp),
             ) {
                 Text(
-                    stringResource(R.string.app_name),
+                    stringResource(R.string.welcome_title),
                     style = MaterialTheme.typography.headlineLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.03).em),
                     color = strong,
                     modifier = Modifier.semantics { heading() },
                 )
-                OpenCodeTag(stringResource(R.string.first_run_welcome_badge))
+                OpenCodeTag(stringResource(R.string.welcome_badge))
             }
             Text(
-                stringResource(R.string.first_run_welcome_tagline),
+                stringResource(R.string.welcome_tagline),
                 style = MaterialTheme.typography.bodyLarge,
                 color = base,
                 modifier = Modifier.padding(top = 10.dp),
@@ -87,13 +85,13 @@ fun WelcomeScreen(onScan: () -> Unit) {
             Column(Modifier.padding(top = 30.dp)) {
                 HorizontalDivider(color = openCodeColor("border-weaker-base"))
                 Text(
-                    stringResource(R.string.first_run_welcome_rule_title),
+                    stringResource(R.string.welcome_rule_title),
                     style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em),
                     color = strong,
                     modifier = Modifier.padding(top = 16.dp),
                 )
                 Text(
-                    stringResource(R.string.first_run_welcome_rule_body),
+                    stringResource(R.string.welcome_rule_body),
                     style = MaterialTheme.typography.bodyLarge,
                     color = base,
                     modifier = Modifier.padding(top = 6.dp),
@@ -102,39 +100,32 @@ fun WelcomeScreen(onScan: () -> Unit) {
         }
         Column(Modifier.padding(bottom = 16.dp)) {
             Text(
-                stringResource(R.string.first_run_welcome_how_title),
+                stringResource(R.string.welcome_connect_title),
                 style = MaterialTheme.typography.labelMedium,
                 color = weak,
                 modifier = Modifier.padding(bottom = 10.dp),
             )
             HowStep(1) {
-                Text(stringResource(R.string.first_run_welcome_step_run), style = MaterialTheme.typography.bodyLarge, color = strong)
-                OpenCodeCodeSnippet(stringResource(R.string.first_run_welcome_pair_command), Modifier.padding(top = 6.dp))
+                Text(stringResource(R.string.welcome_connect_step1), style = MaterialTheme.typography.bodyLarge, color = strong)
+                OpenCodeCodeSnippet(stringResource(R.string.welcome_pair_command), Modifier.padding(top = 6.dp))
             }
             HowStep(2) {
-                Text(stringResource(R.string.first_run_welcome_step_scan), style = MaterialTheme.typography.bodyLarge, color = strong)
+                Text(stringResource(R.string.welcome_connect_step2), style = MaterialTheme.typography.bodyLarge, color = strong)
             }
-            val remote = stringResource(R.string.first_run_welcome_pair_remote_command)
-            val away = stringResource(R.string.first_run_welcome_away, remote)
             Text(
-                buildAnnotatedString {
-                    val at = away.indexOf(remote)
-                    append(away.substring(0, at.coerceAtLeast(0)))
-                    withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append(if (at >= 0) remote else "") }
-                    if (at >= 0) append(away.substring(at + remote.length)) else append(away)
-                },
+                codeText(stringResource(R.string.welcome_connect_remote)),
                 style = MaterialTheme.typography.bodySmall,
                 color = weak,
                 modifier = Modifier.padding(start = 34.dp, top = 4.dp),
             )
         }
         OpenCodeButton(
-            OpenCodeButtonVariant.FullWidthText(stringResource(R.string.first_run_welcome_scan)),
+            OpenCodeButtonVariant.FullWidthText(stringResource(R.string.welcome_scan)),
             onClick = onScan,
             size = OpenCodeButtonSize.Large,
         )
         Text(
-            stringResource(R.string.first_run_welcome_footer),
+            stringResource(R.string.welcome_footer),
             style = MaterialTheme.typography.bodySmall,
             color = weak,
             textAlign = TextAlign.Center,

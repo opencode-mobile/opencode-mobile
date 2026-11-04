@@ -52,16 +52,12 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import dev.opencode.hexcode.R
 import dev.opencode.hexcode.ui.HexSpinner
+import dev.opencode.hexcode.ui.codeText
 import dev.opencode.mobile.theme.OpenCodeMediumShape
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
@@ -235,76 +231,37 @@ private fun ScanPanel(
             Column {
                 when (state) {
                     ScanUi.Scanning -> {
-                        PanelTitle(stringResource(R.string.first_run_scan_point_title)) {}
-                        PanelBody(withCommand(R.string.first_run_scan_point_body))
+                        PanelTitle(stringResource(R.string.scan_point_title)) {}
+                        PanelBody(codeText(stringResource(R.string.scan_point_body)))
                     }
-                    is ScanUi.Connecting -> {
-                        PanelTitle(
-                            if (state.host.isEmpty()) {
-                                stringResource(R.string.first_run_scan_connecting_unnamed)
-                            } else {
-                                stringResource(R.string.first_run_scan_connecting, state.host)
-                            },
-                        ) { HexSpinner() }
-                        PanelBody(stringResource(R.string.first_run_scan_connecting_body))
+                    ScanUi.Connecting -> {
+                        PanelTitle(stringResource(R.string.scan_connecting)) { HexSpinner() }
+                        PanelBody(stringResource(R.string.scan_checking))
                     }
                     is ScanUi.Connected -> {
-                        PanelTitle(stringResource(R.string.first_run_scan_connected)) {
+                        PanelTitle(stringResource(R.string.scan_connected, state.name)) {
                             Icon(OpenCodeIcons.Check, null, tint = openCodeColor("success"), modifier = Modifier.size(17.dp))
                         }
-                        PanelBody(
-                            state.version?.let { stringResource(R.string.first_run_scan_connected_body, it, state.host) }
-                                ?: stringResource(R.string.first_run_scan_connected_body_unversioned, state.host),
-                        )
+                        state.version?.let { PanelBody(stringResource(R.string.scan_connected_detail, it)) }
                     }
-                    is ScanUi.Failed -> FailedPanel(state.failure, onScanAgain)
+                    is ScanUi.Failed -> {
+                        val (title, body) = failureText(state.failure)
+                        PanelTitle(title) {}
+                        if (body != null) PanelBody(codeText(body))
+                        PanelButton(stringResource(R.string.scan_again), onScanAgain)
+                    }
                     ScanUi.CameraDenied -> {
-                        PanelTitle(stringResource(R.string.first_run_scan_camera_denied_title)) {}
-                        PanelBody(stringResource(R.string.first_run_scan_camera_denied_body))
-                        PanelButton(stringResource(R.string.first_run_scan_camera_settings), onScanAgain)
+                        PanelBody(stringResource(R.string.scan_no_camera))
+                        PanelButton(stringResource(R.string.scan_open_settings), onScanAgain)
                     }
                     ScanUi.CameraUnavailable -> {
-                        PanelTitle(stringResource(R.string.first_run_scan_camera_unavailable_title)) {
-                        }
-                        PanelBody(stringResource(R.string.first_run_scan_camera_unavailable_body))
-                        PanelButton(stringResource(R.string.common_try_again), onScanAgain)
+                        PanelBody(stringResource(R.string.scan_no_camera))
+                        PanelButton(stringResource(R.string.common_retry), onScanAgain)
                     }
                 }
             }
         }
     }
-}
-
-/** The checks that ran, up to the one that failed. They are only ever shown here. */
-@Composable
-private fun FailedPanel(
-    failure: ConnectFailure,
-    onScanAgain: () -> Unit,
-) {
-    val host = failure.host()
-    PanelTitle(
-        host?.let { stringResource(R.string.first_run_scan_failed_title_host, it) } ?: stringResource(R.string.first_run_scan_failed_title),
-    ) {}
-    PanelBody(failureMessage(failure))
-    Column(Modifier.padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        ServerCheck.entries.takeWhile { it <= failure.check }.forEach { check ->
-            val failed = check == failure.check
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Icon(
-                    if (failed) OpenCodeIcons.Close else OpenCodeIcons.Check,
-                    null,
-                    tint = if (failed) openCodeColor("error") else openCodeColor("success"),
-                    modifier = Modifier.size(13.dp),
-                )
-                Text(
-                    checkLabel(check),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (failed) openCodeColor("text-strong") else openCodeColor("text-base"),
-                )
-            }
-        }
-    }
-    PanelButton(stringResource(R.string.first_run_scan_again), onScanAgain)
 }
 
 @Composable
@@ -342,63 +299,27 @@ private fun PanelBody(text: CharSequence) {
     }
 }
 
-/** A sentence with the pair command set in mono, as the prototype writes it. */
+/** Each failure's own title, and what to do about it. */
 @Composable
-private fun withCommand(sentence: Int): androidx.compose.ui.text.AnnotatedString {
-    val command = stringResource(R.string.first_run_welcome_pair_command)
-    val full = stringResource(sentence, command)
-    val start = full.indexOf(command)
-    val strong = openCodeColor("text-strong")
-    return buildAnnotatedString {
-        if (start < 0) {
-            append(full)
-        } else {
-            append(full.substring(0, start))
-            withStyle(SpanStyle(fontFamily = FontFamily.Monospace, fontSize = 12.sp, color = strong)) { append(command) }
-            append(full.substring(start + command.length))
-        }
-    }
-}
-
-private fun ConnectFailure.host(): String? =
-    when (this) {
-        is ConnectFailure.Unreachable -> host
-        is ConnectFailure.Rejected -> host
-        else -> null
-    }
-
-@Composable
-private fun checkLabel(check: ServerCheck): String =
-    stringResource(
-        when (check) {
-            ServerCheck.Code -> R.string.first_run_check_code
-            ServerCheck.Reach -> R.string.first_run_check_reach
-            ServerCheck.Pair -> R.string.first_run_check_pair
-            ServerCheck.Version -> R.string.first_run_check_version
-            ServerCheck.Routes -> R.string.first_run_check_routes
-        },
-    )
-
-@Composable
-private fun failureMessage(failure: ConnectFailure): CharSequence {
-    val command = stringResource(R.string.first_run_welcome_pair_command)
-    return when (failure) {
-        ConnectFailure.NotAPairingCode -> stringResource(R.string.pairing_failure_not_a_pairing_code, command)
-        ConnectFailure.OnlyLoopback -> stringResource(R.string.pairing_failure_only_local_addresses)
+private fun failureText(failure: ConnectFailure): Pair<String, String?> =
+    when (failure) {
+        ConnectFailure.NotAPairingCode ->
+            stringResource(R.string.pairing_not_a_code_title) to
+                stringResource(R.string.pairing_not_a_code_body)
+        ConnectFailure.OnlyLoopback -> stringResource(R.string.pairing_local_only_title) to stringResource(R.string.pairing_local_only_body)
         is ConnectFailure.NotEncrypted ->
-            stringResource(
-                R.string.pairing_failure_not_encrypted,
-                failure.host,
-                stringResource(R.string.first_run_welcome_pair_remote_command),
-            )
-        is ConnectFailure.Unreachable -> stringResource(R.string.pairing_failure_unreachable, failure.host)
-        ConnectFailure.CodeUsed -> stringResource(R.string.pairing_failure_code_expired, command)
-        is ConnectFailure.Rejected -> stringResource(R.string.pairing_failure_rejected, failure.host, command)
-        ConnectFailure.NotOpenCode2 -> stringResource(R.string.pairing_failure_not_opencode_2)
+            stringResource(R.string.pairing_not_encrypted_title) to stringResource(R.string.pairing_not_encrypted_body)
+        is ConnectFailure.Unreachable ->
+            stringResource(R.string.pairing_unreachable_title) to
+                stringResource(R.string.pairing_unreachable_body)
+        // A code the server turned away was used or ran out, as far as the phone can tell.
+        ConnectFailure.CodeUsed, is ConnectFailure.Rejected ->
+            stringResource(R.string.pairing_expired_title) to stringResource(R.string.pairing_expired_body)
+        ConnectFailure.NotOpenCode2 -> stringResource(R.string.pairing_not_v2_title) to stringResource(R.string.pairing_not_v2_body)
         is ConnectFailure.TooOld ->
-            failure.version?.let { stringResource(R.string.pairing_failure_too_old, it) }
-                ?: stringResource(R.string.pairing_failure_too_old_unversioned)
-        is ConnectFailure.MissingRoutes -> stringResource(R.string.pairing_failure_missing_routes)
-        ConnectFailure.NotSaved -> stringResource(R.string.first_run_start_save_failed)
+            stringResource(R.string.pairing_too_old_title) to
+                (failure.version?.let { stringResource(R.string.pairing_too_old_body, it) } ?: stringResource(R.string.pairing_not_v2_body))
+        is ConnectFailure.MissingRoutes ->
+            stringResource(R.string.pairing_missing_routes_title) to stringResource(R.string.pairing_missing_routes_body)
+        ConnectFailure.NotSaved -> stringResource(R.string.first_run_start_save_failed) to null
     }
-}

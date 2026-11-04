@@ -25,7 +25,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
@@ -69,8 +68,8 @@ fun ModelScreen(
     onStart: () -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit,
-    title: String = stringResource(R.string.first_run_model_title),
-    startLabel: String = stringResource(R.string.first_run_start),
+    title: String = stringResource(R.string.model_title),
+    startLabel: String = stringResource(R.string.model_start),
 ) {
     BackHandler(onBack = onBack)
     val picker = (model as? Loadable.Loaded)?.value
@@ -83,7 +82,7 @@ fun ModelScreen(
         val status =
             when {
                 picker != null && host != null ->
-                    pluralStringResource(R.plurals.first_run_model_count, picker.catalog.options.size, picker.catalog.options.size, host)
+                    stringResource(R.string.model_subtitle, host, picker.catalog.options.size)
                 else -> host
             }
         PageTop(title, status, onBack)
@@ -92,8 +91,8 @@ fun ModelScreen(
             Loadable.Failed ->
                 Box(Modifier.weight(1f)) {
                     Notice(
-                        stringResource(R.string.first_run_model_load_failed, host.orEmpty()),
-                        stringResource(R.string.common_try_again),
+                        stringResource(R.string.model_failed, host.orEmpty()),
+                        stringResource(R.string.common_retry),
                         onRetry,
                     )
                 }
@@ -101,7 +100,7 @@ fun ModelScreen(
                 OpenCodeTextInput(
                     value = model.value.query,
                     onValueChange = onSearch,
-                    hint = stringResource(R.string.first_run_model_search),
+                    hint = stringResource(R.string.model_search),
                     kind = OpenCodeTextInputKind.Search,
                     modifier = Modifier.padding(start = HexEdge, end = HexEdge, top = 6.dp, bottom = 2.dp),
                 )
@@ -135,7 +134,7 @@ private fun ModelList(
     }
     LazyColumn(modifier = modifier, state = list, contentPadding = PaddingValues(bottom = 8.dp)) {
         if (sections.isEmpty()) {
-            item { Notice(stringResource(R.string.first_run_model_no_match, picker.query.trim())) }
+            item { Notice(stringResource(R.string.model_no_match, picker.query.trim())) }
         }
         sections.forEach { section ->
             section.title?.let { title ->
@@ -144,7 +143,7 @@ private fun ModelList(
             items(section.rows, key = { it.option.id }) { row ->
                 OpenCodeListItem(
                     title = row.option.modelLabel,
-                    titleTag = if (row.isServerDefault) stringResource(R.string.first_run_model_default_tag) else null,
+                    titleTag = if (row.isServerDefault) stringResource(R.string.model_default_tag) else null,
                     subtitle = row.providerCaption,
                     selected = row.isSelected,
                     onClick = { onSelect(row.option) },
@@ -178,7 +177,7 @@ private fun ModelBar(
         Column(Modifier.padding(start = HexEdge, end = HexEdge, top = 10.dp, bottom = 4.dp)) {
             Row {
                 Text(
-                    stringResource(R.string.first_run_model_reasoning),
+                    stringResource(R.string.model_reasoning),
                     style = MaterialTheme.typography.bodySmall,
                     color = openCodeColor("text-base"),
                 )
@@ -195,13 +194,13 @@ private fun ModelBar(
             Box(Modifier.padding(top = 8.dp)) {
                 if (picker.reasoningLevels.isEmpty()) {
                     Text(
-                        stringResource(R.string.first_run_model_no_levels),
+                        stringResource(R.string.model_no_levels),
                         style = MaterialTheme.typography.bodySmall,
                         color = openCodeColor("text-weak"),
                         modifier = Modifier.heightIn(min = 36.dp).padding(vertical = 8.dp),
                     )
                 } else {
-                    val defaultLabel = stringResource(R.string.first_run_model_level_default)
+                    val defaultLabel = stringResource(R.string.settings_reasoning_default)
                     OpenCodeFilterTabs(
                         tabs =
                             picker.reasoningLevels.map { level ->
@@ -229,9 +228,9 @@ private fun ModelBar(
                 OpenCodeButtonVariant.FullWidthText(
                     when {
                         picker.canStart -> startLabel
-                        test == ModelTestState.Testing -> stringResource(R.string.first_run_model_test_running)
-                        test is ModelTestState.Failed -> stringResource(R.string.first_run_model_test_again)
-                        else -> stringResource(R.string.first_run_model_test)
+                        test == ModelTestState.Testing -> stringResource(R.string.model_test_button_testing)
+                        test is ModelTestState.Failed -> stringResource(R.string.model_test_button_again)
+                        else -> stringResource(R.string.model_test_button)
                     },
                 ),
                 onClick = if (picker.canStart) onStart else onTest,
@@ -261,14 +260,14 @@ private fun TestStatus(
         when (val test = picker.currentTest) {
             ModelTestState.NotRun ->
                 Text(
-                    stringResource(R.string.first_run_model_test_hint),
+                    stringResource(R.string.model_test_hint),
                     style = style,
                     color = openCodeColor("text-base"),
                 )
             ModelTestState.Testing -> {
                 HexSpinner(Modifier.padding(top = 1.dp), size = 14.dp)
                 Text(
-                    stringResource(R.string.first_run_model_testing, option?.modelLabel.orEmpty()),
+                    stringResource(R.string.model_test_running, option?.modelLabel.orEmpty()),
                     style = style,
                     color = openCodeColor("text-base"),
                 )
@@ -276,7 +275,7 @@ private fun TestStatus(
             is ModelTestState.Passed -> {
                 Icon(OpenCodeIcons.Check, null, tint = openCodeColor("success"), modifier = Modifier.size(15.dp))
                 Text(
-                    stringResource(R.string.first_run_model_works, String.format(Locale.US, "%.1f", test.seconds)),
+                    stringResource(R.string.model_test_passed, String.format(Locale.US, "%.1f", test.seconds)),
                     style = style,
                     color = openCodeColor("success"),
                 )

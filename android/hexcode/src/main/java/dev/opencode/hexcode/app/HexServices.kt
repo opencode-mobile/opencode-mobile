@@ -4,6 +4,7 @@ import android.content.Context
 import dev.opencode.hexcode.firstrun.ModelTester
 import dev.opencode.hexcode.firstrun.PairingConnector
 import dev.opencode.hexcode.firstrun.ServerLabel
+import dev.opencode.hexcode.firstrun.ServerName
 import dev.opencode.hexcode.firstrun.ServerNaming
 import dev.opencode.hexcode.firstrun.ServerRouteCheck
 import dev.opencode.mobile.data.local.DataStoreConnectionProfileStore
@@ -16,6 +17,7 @@ import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.connection.PairingCodeRedeemService
 import dev.opencode.mobile.domain.connection.V2ServerContract
 import dev.opencode.mobile.domain.filesystem.DefaultFilesystemRepository
+import dev.opencode.mobile.domain.filesystem.DirectoryListing
 import dev.opencode.mobile.domain.filesystem.FilesystemDomainAdapter
 import dev.opencode.mobile.domain.model.DefaultModelRepository
 import dev.opencode.mobile.domain.model.ModelDomainAdapter
@@ -36,6 +38,7 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Hex Code's objects, built once per process from OpenCode Kit the way OpenCode Mobile's Hilt modules build them.
@@ -70,6 +73,9 @@ class HexServices(
     val pairing = PairingConnector(probing, PairingCodeRedeemService(json), OpenApiRouteCheck(json), ApiInfoNaming(json))
     val voice = VoiceEngine(appContext)
 
+    /** Folder listings Browse folders has seen this session, shared by first run and Settings. */
+    val folderListings = ConcurrentHashMap<String, DirectoryListing>()
+
     init {
         // Models of engines Hex Code no longer ships (the transcribe.cpp GGUF files) only take up space.
         appScope.launch(Dispatchers.IO) { voice.store.removeUnlisted(voice.models) }
@@ -79,9 +85,12 @@ class HexServices(
     suspend fun serverLabel(): ServerLabel? {
         connectionLoaded.await()
         val profile = profiles.activeProfile() ?: return null
+        // The profile keeps the computer's hostname; its friendly name is worked out from it each time.
+        val hostname = profile.name.takeIf { it.isNotBlank() }
         return ServerLabel(
-            profile.name.ifBlank { PairingConnector.hostLabel(profile.baseUrl) }.lowercase(),
-            connection.currentServerVersion(),
+            name = ServerName.of(hostname, profile.serverUrls.firstOrNull() ?: profile.baseUrl),
+            hostname = hostname?.lowercase()?.removeSuffix(".local"),
+            version = connection.currentServerVersion(),
         )
     }
 

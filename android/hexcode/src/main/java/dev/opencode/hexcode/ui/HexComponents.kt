@@ -10,9 +10,22 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.PathParser
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.opencode.mobile.theme.openCodeColor
+
+/** Text with its `backticked` commands set in mono, as the strings write them (and iOS renders them). */
+fun codeText(text: String): AnnotatedString =
+    buildAnnotatedString {
+        text.split('`').forEachIndexed { index, part ->
+            if (index % 2 == 1) withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append(part) } else append(part)
+        }
+    }
 
 /** The page edge every Hex Code screen sits on (the prototype's 18 pt). */
 val HexEdge: Dp = 18.dp

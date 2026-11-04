@@ -1,6 +1,8 @@
 package dev.opencode.hexcode.firstrun
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -58,8 +60,8 @@ fun ProjectScreen(
     onBrowse: () -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit,
-    title: String = stringResource(R.string.first_run_project_title),
-    note: String = stringResource(R.string.first_run_project_note),
+    title: String = stringResource(R.string.project_title),
+    note: String = stringResource(R.string.project_note),
 ) {
     BackHandler(onBack = onBack)
     Column(
@@ -74,27 +76,27 @@ fun ProjectScreen(
         ) {
             item {
                 OpenCodeListItem(
-                    title = stringResource(R.string.first_run_project_browse),
-                    subtitle = stringResource(R.string.first_run_project_browse_subtitle),
+                    title = stringResource(R.string.project_browse),
+                    subtitle = stringResource(R.string.project_browse_subtitle),
                     startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, null),
                     accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = onBrowse,
                 )
             }
-            item { OpenCodeSectionHeader(stringResource(R.string.first_run_project_on_this_computer)) }
+            item { OpenCodeSectionHeader(stringResource(R.string.project_on_this_computer)) }
             when (projects) {
                 Loadable.Loading -> item { Loading() }
                 Loadable.Failed ->
                     item {
                         Notice(
-                            stringResource(R.string.first_run_project_load_failed, host.orEmpty()),
-                            stringResource(R.string.common_try_again),
+                            stringResource(R.string.project_failed, host.orEmpty()),
+                            stringResource(R.string.common_retry),
                             onRetry,
                         )
                     }
                 is Loadable.Loaded -> {
                     if (projects.value.isEmpty()) {
-                        item { Notice(stringResource(R.string.first_run_project_none)) }
+                        item { Notice(stringResource(R.string.project_none)) }
                     }
                     items(projects.value, key = { it.choice.path }) { row ->
                         OpenCodeListItem(
@@ -138,7 +140,7 @@ fun BrowseScreen(
             .fillMaxSize()
             .systemBarsPadding(),
     ) {
-        PageTop(stringResource(R.string.first_run_browse_title), subtitle = null, onBack = onBack)
+        PageTop(stringResource(R.string.browse_title), subtitle = null, onBack = onBack)
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -164,7 +166,7 @@ fun BrowseScreen(
                 )
             }
             OpenCodeButton(
-                OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, stringResource(R.string.first_run_browse_up)),
+                OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, stringResource(R.string.browse_up)),
                 onClick = onUp,
                 enabled = browser.upTarget != null,
             )
@@ -185,30 +187,38 @@ fun BrowseScreen(
         ) {
             when (browser.listing) {
                 FolderListing.Loading -> item { Loading() }
-                FolderListing.NotFound -> item { Notice(stringResource(R.string.first_run_browse_not_found)) }
+                FolderListing.NotFound -> item { Notice(stringResource(R.string.browse_not_found)) }
                 FolderListing.Failed ->
                     item {
-                        Notice(stringResource(R.string.first_run_browse_failed), stringResource(R.string.common_try_again)) {
+                        Notice(stringResource(R.string.browse_failed), stringResource(R.string.common_retry)) {
                             onOpen(browser.directory)
                         }
                     }
                 is FolderListing.Loaded -> {
-                    if (browser.rows.isEmpty()) item { Notice(stringResource(R.string.first_run_browse_no_subfolders)) }
+                    if (browser.rows.isEmpty()) item { Notice(stringResource(R.string.browse_no_subfolders)) }
                     items(browser.rows, key = { it.path }) { row ->
                         LaunchedEffect(row.path) { onRowAppeared(row.path) }
-                        OpenCodeListItem(
-                            title = row.name,
-                            titleTag = if (row.isGitRepository) stringResource(R.string.common_tag_git) else null,
-                            subtitle =
-                                when (val count = row.folderCount) {
-                                    null -> " "
-                                    0 -> stringResource(R.string.first_run_browse_no_subfolders)
-                                    else -> pluralStringResource(R.plurals.first_run_browse_folder_count, count, count)
-                                },
-                            startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, null),
-                            accessory = OpenCodeListItemAccessory.Disclosure,
-                            onClick = { onOpen(row.path) },
-                        )
+                        // The row keeps its height throughout: its count line is reserved until the count arrives, and the
+                        // count and `git` tag fade in where they will stay.
+                        Crossfade(
+                            targetState = row.folderCount != null,
+                            animationSpec = tween(220),
+                            label = "folder-summary",
+                        ) { summarized ->
+                            OpenCodeListItem(
+                                title = row.name,
+                                titleTag = if (summarized && row.isGitRepository) stringResource(R.string.common_tag_git) else null,
+                                subtitle =
+                                    when (val count = row.folderCount?.takeIf { summarized }) {
+                                        null -> " "
+                                        0 -> stringResource(R.string.browse_no_subfolders)
+                                        else -> pluralStringResource(R.plurals.browse_folder_count, count, count)
+                                    },
+                                startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, null),
+                                accessory = OpenCodeListItemAccessory.Disclosure,
+                                onClick = { onOpen(row.path) },
+                            )
+                        }
                     }
                 }
             }
@@ -228,7 +238,7 @@ fun BrowseScreen(
             )
             OpenCodeButton(
                 OpenCodeButtonVariant.FullWidthText(
-                    stringResource(if (browser.canUse) R.string.first_run_browse_use else R.string.first_run_browse_pick),
+                    stringResource(if (browser.canUse) R.string.browse_use else R.string.browse_pick),
                 ),
                 onClick = onUse,
                 enabled = browser.canUse,
@@ -281,10 +291,10 @@ internal fun Notice(
 @Composable
 fun agoText(ago: Ago): String =
     when (ago) {
-        Ago.Now -> stringResource(R.string.ago_now)
-        is Ago.Minutes -> stringResource(R.string.ago_minutes, ago.count)
-        is Ago.Hours -> stringResource(R.string.ago_hours, ago.count)
-        Ago.Yesterday -> stringResource(R.string.ago_yesterday)
-        is Ago.Days -> stringResource(R.string.ago_days, ago.count)
-        is Ago.Weeks -> stringResource(R.string.ago_weeks, ago.count)
+        Ago.Now -> stringResource(R.string.project_ago_now)
+        is Ago.Minutes -> stringResource(R.string.project_ago_minutes, ago.count)
+        is Ago.Hours -> stringResource(R.string.project_ago_hours, ago.count)
+        Ago.Yesterday -> stringResource(R.string.project_ago_yesterday)
+        is Ago.Days -> stringResource(R.string.project_ago_days, ago.count)
+        is Ago.Weeks -> stringResource(R.string.project_ago_weeks, ago.count)
     }

@@ -96,7 +96,10 @@ sealed interface ConnectFailure {
 sealed interface ConnectResult {
     data class Connected(
         val profile: ConnectionProfile,
-        val host: String,
+        /** The computer's friendly name ([ServerName]). */
+        val name: String,
+        /** Its own hostname from `/api/info`, when it gave one. */
+        val hostname: String?,
         val version: String?,
     ) : ConnectResult
 
@@ -105,11 +108,9 @@ sealed interface ConnectResult {
     ) : ConnectResult
 }
 
-/** What the scan screen shows while connecting. */
+/** What the scan screen shows while connecting: the computer has no name until its hostname is known. */
 sealed interface ConnectProgress {
-    data class Connecting(
-        val host: String,
-    ) : ConnectProgress
+    data object Connecting : ConnectProgress
 }
 
 /** Reads the server's API contract for the routes Hex Code needs; returns the missing ones. */
@@ -157,7 +158,7 @@ class PairingConnector(
         val urls = candidates.filterNot { CleartextPolicy.verdict(it) == CleartextPolicy.Verdict.UntrustedCleartext }
         if (urls.isEmpty()) return failed(ConnectFailure.NotEncrypted(hostLabel(candidates.firstOrNull() ?: credentials.baseUrl)))
         val shownHost = hostLabel(PairingQRPayload.preferredDisplayUrl(urls))
-        onProgress(ConnectProgress.Connecting(shownHost))
+        onProgress(ConnectProgress.Connecting)
         val username = credentials.username
         val code = credentials.code
         try {
@@ -167,7 +168,6 @@ class PairingConnector(
                 // No password yet: the sweep is unauthenticated and the code is redeemed on one host only.
                 val sweep = ServerAddressProbe.resolve(urls, username, password = "", currentBaseUrl = null, probing = probing)
                 winner = sweep.chosen ?: return failed(ConnectFailure.Unreachable(shownHost))
-                onProgress(ConnectProgress.Connecting(hostLabel(winner)))
                 password =
                     try {
                         redeeming.redeem(winner, code)
@@ -201,22 +201,19 @@ class PairingConnector(
             if (!ServerVersion.isSupported(server.version)) return failed(ConnectFailure.TooOld(server.version))
             val missing = routes.missingRoutes(connection.withProtocol(ServerProtocol.V2))
             if (missing.isNotEmpty()) return failed(ConnectFailure.MissingRoutes(missing))
-            val name =
-                runCatching {
-                    naming.name(
-                        connection.withProtocol(ServerProtocol.V2),
-                    )
-                }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+            val hostname =
+                runCatching { naming.name(connection.withProtocol(ServerProtocol.V2)) }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+            // The profile keeps the hostname, so the friendly name can be worked out again later.
             val profile =
                 ConnectionProfile(
                     baseUrl = winner,
                     username = username,
                     password = password,
                     serverProtocol = ServerProtocol.V2,
-                    name = name.orEmpty(),
+                    name = hostname.orEmpty(),
                     serverUrls = urls,
                 )
-            return ConnectResult.Connected(profile, name?.lowercase() ?: hostLabel(winner), server.version)
+            return ConnectResult.Connected(profile, ServerName.of(hostname, credentials.urls.first()), hostname, server.version)
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {

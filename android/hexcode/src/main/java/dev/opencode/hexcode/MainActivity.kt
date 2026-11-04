@@ -7,6 +7,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
@@ -24,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.stringResource
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -32,11 +38,15 @@ import dev.opencode.hexcode.app.Appearance
 import dev.opencode.hexcode.app.HexFirstRunEnvironment
 import dev.opencode.hexcode.app.HexPrefs
 import dev.opencode.hexcode.app.HexServices
+import dev.opencode.hexcode.firstrun.BrowseScreen
 import dev.opencode.hexcode.firstrun.FirstRunFlow
 import dev.opencode.hexcode.firstrun.FirstRunStep
+import dev.opencode.hexcode.firstrun.FirstRunUiState
 import dev.opencode.hexcode.firstrun.FirstRunViewModel
+import dev.opencode.hexcode.firstrun.ModelScreen
 import dev.opencode.hexcode.firstrun.PickerMode
 import dev.opencode.hexcode.firstrun.ProjectPicker
+import dev.opencode.hexcode.firstrun.ProjectScreen
 import dev.opencode.hexcode.firstrun.ServerLabel
 import dev.opencode.hexcode.home.ClipDictation
 import dev.opencode.hexcode.home.HomeScreen
@@ -124,8 +134,19 @@ class MainActivity : ComponentActivity() {
     private enum class Tool { Dictation, Lab }
 }
 
-/** What is on screen once first run is over. */
-private enum class Page { Home, Settings, SettingsProject, SettingsModel }
+/**
+ * What is on screen once first run is over: home at the root, Settings on top of it, and Settings' project (with
+ * Browse folders) and model pages on top of Settings. [depth] orders them on that back stack.
+ */
+private enum class Page(
+    val depth: Int,
+) {
+    Home(0),
+    Settings(1),
+    SettingsProject(2),
+    SettingsBrowse(3),
+    SettingsModel(2),
+}
 
 /** First run until Start, then Home, with Settings and its project and model pages over it. */
 @Composable
@@ -147,7 +168,7 @@ private fun HexCodeRoot(
         if (prefs.firstRunDone) {
             AfterFirstRun(services, prefs, clips)
         } else {
-            val vm = viewModel { FirstRunViewModel(HexFirstRunEnvironment(services)) }
+            val vm = viewModel { FirstRunViewModel(HexFirstRunEnvironment(services), listingCache = services.folderListings) }
             val state by vm.uiState.collectAsStateWithLifecycle()
             LaunchedEffect(pairLink) {
                 if (pairLink != null) {
@@ -172,6 +193,7 @@ private fun AfterFirstRun(
     var page by remember { mutableStateOf(Page.Home) }
     // Each visit to a settings page starts it afresh.
     var visit by remember { mutableIntStateOf(0) }
+    var notice by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     SystemBarIcons(darkScreen = LocalOpenCodeDarkTheme.current)
     LaunchedEffect(Unit) { services.voice.prepare() }
@@ -184,50 +206,137 @@ private fun AfterFirstRun(
             value = runCatching { services.filesystem.getPaths().home }.getOrNull()
         }
     }
-    when (page) {
-        Page.Home -> {
-            val home =
-                viewModel {
-                    HomeViewModel(if (clips) ClipDictation(context, services.voice) else VoiceEngineDictation(services.voice))
-                }
-            val speech by services.voice.modelState.collectAsStateWithLifecycle()
-            HomeScreen(home, speech, onSettings = { page = Page.Settings })
+    val homeModel =
+        viewModel {
+            HomeViewModel(if (clips) ClipDictation(context, services.voice) else VoiceEngineDictation(services.voice))
         }
-        Page.Settings ->
-            SettingsScreen(
-                prefs = prefs,
-                server = server,
-                modelName = prefs.modelName ?: prefs.model?.let { TitleCaseIdentifier.displayName(it.modelId) },
-                projectPath = prefs.project?.path?.let { ProjectPicker.shortPath(it, home.orEmpty()) },
-                onProject = {
-                    visit += 1
-                    page = Page.SettingsProject
-                },
-                onModel = {
-                    visit += 1
-                    page = Page.SettingsModel
-                },
-                onAppearance = {
-                    val next = Appearance.entries[(prefs.appearance.ordinal + 1) % Appearance.entries.size]
-                    scope.launch { services.settings.setAppearance(next) }
-                },
-                onBack = { page = Page.Home },
+    val pages =
+        viewModel(key = "settings-$visit") {
+            FirstRunViewModel(
+                HexFirstRunEnvironment(services, forSettings = true),
+                mode = PickerMode.Settings,
+                listingCache = services.folderListings,
             )
-        Page.SettingsProject, Page.SettingsModel -> {
-            val vm =
-                viewModel(key = "settings-$visit") {
-                    FirstRunViewModel(HexFirstRunEnvironment(services, forSettings = true), mode = PickerMode.Settings)
+        }
+    val pageState by pages.uiState.collectAsStateWithLifecycle()
+    // A visit opens its page once; the pages on the stack recompose as they slide, so this stays out of them.
+    LaunchedEffect(pages) {
+        when (page) {
+            Page.SettingsProject -> pages.openProjects(server)
+            Page.SettingsModel -> pages.openModels(server, prefs.project)
+            else -> Unit
+        }
+    }
+    // Settings' project page shows Browse folders as a page of its own on the stack.
+    val shown =
+        when {
+            page == Page.SettingsProject && pageState.step == FirstRunStep.Browse -> Page.SettingsBrowse
+            else -> page
+        }
+    val projectChanged = pageState.project?.let { stringResource(R.string.settings_project_changed, it.name) }
+    LaunchedEffect(pageState.step) {
+        if (pageState.step == FirstRunStep.Done && (page == Page.SettingsProject || page == Page.SettingsModel)) {
+            if (page == Page.SettingsProject) notice = projectChanged
+            page = Page.Settings
+        }
+    }
+    AnimatedContent(
+        targetState = shown,
+        transitionSpec = {
+            // Deeper pages push in from the side, as a navigation stack does; going back slides them out again.
+            // The deeper page is always on top: pushing slides it in over the page below, which drifts a little to the
+            // left; going back slides it off to the right, uncovering the page below.
+            val forward = targetState.depth >= initialState.depth
+            val motion =
+                if (forward) {
+                    slideInHorizontally(tween(280)) { width -> width } togetherWith slideOutHorizontally(tween(280)) { width -> -width / 4 }
+                } else {
+                    slideInHorizontally(tween(280)) { width -> -width / 4 } togetherWith slideOutHorizontally(tween(280)) { width -> width }
                 }
-            val state by vm.uiState.collectAsStateWithLifecycle()
-            LaunchedEffect(vm) {
-                if (page == Page.SettingsProject) vm.openProjects(server) else vm.openModels(server, prefs.project)
-            }
-            if (state.step == FirstRunStep.Done) {
-                LaunchedEffect(Unit) { page = Page.Settings }
-            } else {
-                FirstRunFlow(vm, inSettings = true)
+            motion.apply { targetContentZIndex = targetState.depth.toFloat() }
+        },
+        label = "pages",
+        modifier = Modifier.background(openCodeColor("background-base")),
+    ) { current ->
+        Box(Modifier.fillMaxSize().background(openCodeColor("background-base"))) {
+            when (current) {
+                Page.Home -> {
+                    val speech by services.voice.modelState.collectAsStateWithLifecycle()
+                    HomeScreen(homeModel, speech, onSettings = { page = Page.Settings })
+                }
+                Page.Settings ->
+                    SettingsScreen(
+                        prefs = prefs,
+                        server = server,
+                        modelName = prefs.modelName ?: prefs.model?.let { TitleCaseIdentifier.displayName(it.modelId) },
+                        projectPath = prefs.project?.path?.let { ProjectPicker.shortPath(it, home.orEmpty()) },
+                        notice = notice,
+                        onNoticeShown = { notice = null },
+                        onProject = {
+                            visit += 1
+                            page = Page.SettingsProject
+                        },
+                        onModel = {
+                            visit += 1
+                            page = Page.SettingsModel
+                        },
+                        onAppearance = {
+                            val next = Appearance.entries[(prefs.appearance.ordinal + 1) % Appearance.entries.size]
+                            scope.launch { services.settings.setAppearance(next) }
+                        },
+                        onBack = { page = Page.Home },
+                    )
+                Page.SettingsProject, Page.SettingsBrowse, Page.SettingsModel -> SettingsPage(pages, pageState, current)
             }
         }
+    }
+}
+
+/** One of Settings' pages, the first-run screens reused as destinations on Settings' back stack. */
+@Composable
+private fun SettingsPage(
+    vm: FirstRunViewModel,
+    state: FirstRunUiState,
+    page: Page,
+) {
+    when (page) {
+        Page.SettingsProject ->
+            ProjectScreen(
+                host = state.server?.name,
+                projects = state.projects,
+                onPick = vm::pickProject,
+                onBrowse = vm::browseFolders,
+                onRetry = vm::retryProjects,
+                onBack = vm::back,
+                title = stringResource(R.string.settings_project_title),
+                note = stringResource(R.string.settings_project_note),
+            )
+        Page.SettingsBrowse ->
+            state.browser?.let { browser ->
+                BrowseScreen(
+                    browser = browser,
+                    onOpen = vm::openFolder,
+                    onUp = vm::folderUp,
+                    onRowAppeared = vm::folderRowAppeared,
+                    onUse = vm::useFolder,
+                    onBack = vm::back,
+                )
+            }
+        Page.SettingsModel ->
+            ModelScreen(
+                host = state.server?.name,
+                model = state.model,
+                onSearch = vm::searchModels,
+                onSelect = vm::selectModel,
+                onLevel = vm::selectLevel,
+                onTest = vm::testModel,
+                onStart = vm::start,
+                onRetry = vm::retryModels,
+                onBack = vm::back,
+                title = stringResource(R.string.settings_model_title),
+                startLabel = stringResource(R.string.settings_model_save),
+            )
+        else -> Unit
     }
 }
 

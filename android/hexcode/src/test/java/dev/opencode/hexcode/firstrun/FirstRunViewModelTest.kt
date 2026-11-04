@@ -136,7 +136,7 @@ class FirstRunViewModelTest {
             advanceUntilIdle()
             val state = vm.uiState.value
             assertEquals(FirstRunStep.Project, state.step)
-            assertEquals("192.168.1.2", state.server?.host)
+            assertEquals(ServerName.of(null, "http://192.168.1.2:4096"), state.server?.name)
             assertEquals(1, env.servers.size)
             val rows = (state.projects as Loadable.Loaded).value
             assertEquals("~/Projects/app", rows.single().shownPath)
