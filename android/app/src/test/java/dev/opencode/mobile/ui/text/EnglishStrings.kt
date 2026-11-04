@@ -4,23 +4,29 @@ import dev.opencode.mobile.R
 import org.w3c.dom.Element
 import java.io.File
 import javax.xml.parsers.DocumentBuilderFactory
+import dev.opencode.kit.R as KitR
 
 /**
- * Resolves [UiText] against the English `res/values/strings.xml`, so JVM unit tests can
- * assert on the text users read without Robolectric.
+ * Resolves [UiText] against the English `res/values/strings.xml` of the app and of OpenCode Kit, so JVM unit tests
+ * can assert on the text users read without Robolectric.
  */
 object EnglishStrings : UiTextLookup {
-    private val stringNames: Map<Int, String> by lazy { resourceNames(R.string::class.java) }
-    private val pluralNames: Map<Int, String> by lazy { resourceNames(R.plurals::class.java) }
+    private val stringNames: Map<Int, String> by lazy { resourceNames(R.string::class.java) + resourceNames(KitR.string::class.java) }
+    private val pluralNames: Map<Int, String> by lazy { resourceNames(R.plurals::class.java) + resourceNames(KitR.plurals::class.java) }
 
     private val strings = mutableMapOf<String, String>()
     private val plurals = mutableMapOf<String, Map<String, String>>()
 
     init {
-        val file =
+        val app =
             listOf("src/main/res/values/strings.xml", "app/src/main/res/values/strings.xml")
                 .map(::File)
                 .first { it.isFile }
+        val kit = File(app.parentFile, "../../../../../opencode-kit/src/main/res/values/strings.xml")
+        listOf(app, kit).forEach(::read)
+    }
+
+    private fun read(file: File) {
         val document = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(file)
         val root = document.documentElement
         val stringNodes = root.getElementsByTagName("string")

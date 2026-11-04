@@ -56,7 +56,7 @@ fun Modifier.openCodeSecondaryClick(
     }
 
 /** Pointer rules shared by design-system controls. */
-internal object OpenCodePointerRules {
+object OpenCodePointerRules {
     /**
      * Whether a control swallows a press: a secondary button (right-click, two-finger click)
      * without the primary one. Controls act on primary clicks, taps and keys only; touch never
@@ -74,7 +74,7 @@ internal object OpenCodePointerRules {
  * For handlers that read downs whether or not they are consumed, which
  * [openCodeSwallowSecondaryPress] cannot stop.
  */
-internal fun AwaitPointerEventScope.isSecondaryPress(): Boolean =
+fun AwaitPointerEventScope.isSecondaryPress(): Boolean =
     OpenCodePointerRules.controlSwallowsPress(
         primaryPressed = currentEvent.buttons.isPrimaryPressed,
         secondaryPressed = currentEvent.buttons.isSecondaryPressed,
@@ -85,7 +85,7 @@ internal fun AwaitPointerEventScope.isSecondaryPress(): Boolean =
  * initial pass, so the control's click handler after this modifier never sees it.
  * [openCodeSecondaryClick] still fires wherever it sits, since it does not skip consumed events.
  */
-internal fun Modifier.openCodeSwallowSecondaryPress(): Modifier =
+fun Modifier.openCodeSwallowSecondaryPress(): Modifier =
     pointerInput(Unit) {
         awaitPointerEventScope {
             while (true) {

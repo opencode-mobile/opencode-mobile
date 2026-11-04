@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.Dp
  * after it, followed by `padding(horizontal = amount)`, draws a highlight
  * with breathing room around the content while the layout stays put.
  */
-internal fun Modifier.bleedHorizontally(amount: Dp): Modifier =
+fun Modifier.bleedHorizontally(amount: Dp): Modifier =
     layout { measurable, constraints ->
         val extra = (amount * 2).roundToPx()
         val placeable =

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Strings of the theme and components shared through OpenCode Kit. -->
+    <string name="bottom_sheet_close">Close</string>
+    <string name="top_bar_back">Back</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_retry">Retry</string>
+    <string name="common_selected">Selected</string>
+    <string name="session_search_clear">Clear search</string>
+    <string name="component_filter_tabs_unseen">new</string>
+    <string name="theme_error_preset_not_found">Theme preset not found</string>
+    <string name="component_top_bar_project_subtitle">Project %1$s %2$s</string>
+    <string name="dictation_model_downloading_detail">This is a system download. It keeps going if you close this card.</string>
+    <string name="dictation_insert">Insert</string>
+    <string name="dictation_status_line">%1$s · %2$s</string>
+    <string name="dictation_action_check_again">Check Again</string>
+    <string name="live_updates_status_connecting">connecting</string>
+    <string name="component_list_item_show_actions">Show actions</string>
+    <string name="dictation_model_queued_detail">%1$s queued the download. It may wait for Wi-Fi, charging, or free storage. Check again in a few minutes.</string>
+    <string name="dictation_model_not_installed_detail">Dictation runs on this device, so your voice is never uploaded. %1$s downloads the model once and keeps it for every app.</string>
+    <string name="dictation_action_try_again">Try Again</string>
+    <string name="dictation_stopped">Dictation stopped</string>
+    <string name="dictation_model_queued_title">%1$s will download the %2$s later</string>
+    <string name="component_top_bar_worktree_subtitle">Worktree %1$s</string>
+    <string name="component_worktree">Worktree</string>
+    <string name="dictation_action_downloading">Downloading…</string>
+    <string name="dictation_action_open_settings">Open Settings</string>
+    <string name="dictation_status_listening">Listening</string>
+    <string name="live_updates_status_offline">offline</string>
+    <string name="dictation_downloading_model">Downloading speech model</string>
+    <string name="theme_error_apply_failed">Failed to apply theme preset</string>
+    <string name="live_updates_accessibility_label">Live updates %1$s</string>
+    <string name="theme_error_syntax_preset_not_found">Syntax highlight preset not found</string>
+    <string name="dictation_speech_model">speech model</string>
+    <string name="live_updates_status_live">live</string>
+    <string name="dictation_action_download">Download</string>
+    <string name="dictation_model_download_failed_detail">Check the connection and free storage on this device, then try again.</string>
+    <string name="dictation_model_download_failed_title">%1$s couldn\'t download the %2$s</string>
+    <string name="live_updates_status_auth_failed">Authentication failed</string>
+    <string name="dictation_downloading_model_progress">Downloading speech model, %1$s</string>
+    <string name="dictation_cancel_description">Cancel dictation</string>
+    <string name="dictation_microphone_off">Microphone access is off</string>
+    <string name="dictation_model_not_installed_title">%1$s needs its %2$s</string>
+    <string name="component_close">Close</string>
+    <string name="dictation_status_ready">Ready to insert</string>
+    <string name="dictation_starting">Starting…</string>
+    <string name="dictation_model_downloading_title">%1$s is downloading the %2$s</string>
+    <string name="dictation_status_line_on_device">%1$s · %2$s · on-device</string>
+    <string name="dictation_listening_placeholder">Listening…</string>
+    <string name="dictation_language_speech_model">%1$s speech model</string>
+    <string name="dictation_insert_description">Insert transcript</string>
+    <plurals name="component_section_header_item_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <string name="component_skeleton_illustration_connect">Connect</string>
+    <string name="component_skeleton_illustration_unofficial">Unofficial</string>
+    <string name="session_list_status_running">Running</string>
+</resources>

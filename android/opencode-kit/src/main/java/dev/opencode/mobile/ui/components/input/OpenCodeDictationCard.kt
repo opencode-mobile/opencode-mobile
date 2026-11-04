@@ -44,7 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import dev.opencode.mobile.R
+import dev.opencode.kit.R
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.UiText
@@ -491,7 +491,7 @@ private fun DictationDownloadProgress(progress: Float?) {
     }
 }
 
-internal data class DictationUnavailableCopy(
+data class DictationUnavailableCopy(
     val title: UiText,
     val detail: UiText?,
 )
@@ -509,7 +509,7 @@ private fun DictationUnavailableCopy.resolved(): DictationUnavailableText = Dict
 private const val SPEECH_SYSTEM_NAME = "Android"
 
 /** Model copy names Android, so a slow or deferred system download is not read as an app fault. */
-internal fun unavailableCopy(
+fun unavailableCopy(
     reason: OpenCodeDictationUnavailableReason?,
     errorMessage: String?,
     languageLabel: String,

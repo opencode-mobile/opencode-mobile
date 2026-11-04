@@ -59,7 +59,7 @@ fun OpenCodeCodeSnippet(
  * and a syntax preset's editor background replaces the [surface] fill.
  */
 @Composable
-internal fun OpenCodeCodeSnippet(
+fun OpenCodeCodeSnippet(
     code: AnnotatedString,
     colors: CodeColors,
     modifier: Modifier = Modifier,

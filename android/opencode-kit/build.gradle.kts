@@ -38,6 +38,14 @@ kotlin {
     jvmToolchain(17)
 }
 
+ktlint {
+    android.set(true)
+    ignoreFailures.set(false)
+    filter {
+        exclude("**/OpenCodeIcons.kt")
+    }
+}
+
 dependencies {
     // Hilt annotations only (`@ApplicationContext`); :app runs the Hilt processor.
     compileOnly(libs.hilt.android)
@@ -55,10 +63,16 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
 
-    // The pairing QR camera preview and decoder.
+    // Theme and components, and the pairing QR camera preview and decoder.
     val composeBom = platform(libs.androidx.compose.bom)
-    implementation(composeBom)
-    implementation(libs.androidx.compose.ui)
+    api(composeBom)
+    api(libs.androidx.compose.ui)
+    api(libs.androidx.compose.material3)
+    // Code colours follow the Markdown highlighter's token roles.
+    implementation(project(":markdown-core"))
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    debugImplementation(libs.androidx.compose.ui.tooling)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.camera.camera2)
     implementation(libs.androidx.camera.lifecycle)

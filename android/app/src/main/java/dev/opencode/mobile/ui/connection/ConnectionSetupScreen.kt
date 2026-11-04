@@ -44,6 +44,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarAction
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.resolve
+import dev.opencode.kit.R as KitR
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -233,7 +234,7 @@ fun ConnectionSetupScreen(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = stringResource(R.string.common_cancel),
+                title = stringResource(KitR.string.common_cancel),
                 onClick = { showRemoveConfirm = false },
             ),
         onDismissRequest = { showRemoveConfirm = false },
@@ -248,7 +249,7 @@ fun ConnectionSetupScreen(
                 title = stringResource(R.string.connection_cleartext_connect_anyway),
                 onClick = onConfirmCleartext,
             ),
-        secondaryOption = OpenCodeDialogOption(title = stringResource(R.string.common_cancel), onClick = onDismissCleartext),
+        secondaryOption = OpenCodeDialogOption(title = stringResource(KitR.string.common_cancel), onClick = onDismissCleartext),
         onDismissRequest = onDismissCleartext,
     )
 }

@@ -133,7 +133,7 @@ import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.offset
 import androidx.core.view.ViewCompat
-import dev.opencode.mobile.R
+import dev.opencode.kit.R
 import dev.opencode.mobile.theme.OpenCodeTheme
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
@@ -1206,7 +1206,7 @@ private class BottomSheetKeyFocus {
 
 /** Window-level surface so a sheet or full-screen cover is not clipped to a split pane. */
 @Composable
-internal fun BottomSheetWindowOverlay(
+fun BottomSheetWindowOverlay(
     paneTitle: String,
     /**
      * Keeps Tab and Shift+Tab inside the overlay: the window content behind cannot take focus

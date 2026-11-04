@@ -18,7 +18,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import dev.opencode.mobile.R
+import dev.opencode.kit.R
 import dev.opencode.mobile.theme.openCodeColor
 
 private val ConnectionStatusDotSize = 6.dp

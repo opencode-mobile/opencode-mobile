@@ -70,7 +70,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import dev.opencode.mobile.R
+import dev.opencode.kit.R
 import dev.opencode.mobile.theme.LetterAccent
 import dev.opencode.mobile.theme.OpenCodePillShape
 import dev.opencode.mobile.theme.OpenCodeRadius

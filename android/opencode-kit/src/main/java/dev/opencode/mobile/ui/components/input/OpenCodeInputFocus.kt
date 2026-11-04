@@ -143,7 +143,7 @@ val LocalOpenCodeInputFocusRegistry = staticCompositionLocalOf<OpenCodeInputFocu
  * the report is withdrawn when the input leaves composition, even if it never reported blur.
  */
 @Composable
-internal fun rememberOpenCodeTextInputFocusReport(input: OpenCodeFocusedTextInput): (Boolean) -> Unit {
+fun rememberOpenCodeTextInputFocusReport(input: OpenCodeFocusedTextInput): (Boolean) -> Unit {
     val registry = LocalOpenCodeInputFocusRegistry.current
     val owner = remember { Any() }
     DisposableEffect(registry, owner) {
@@ -170,7 +170,7 @@ internal fun OpenCodeModalSurfaceEffect(shown: Boolean) {
  * through [enter]. [enter] returns whether focus moved.
  */
 @Composable
-internal fun OpenCodePromptKeyboardEntryEffect(enter: () -> Boolean) {
+fun OpenCodePromptKeyboardEntryEffect(enter: () -> Boolean) {
     val registry = LocalOpenCodeInputFocusRegistry.current
     val owner = remember { Any() }
     val currentEnter by rememberUpdatedState(enter)
@@ -191,7 +191,7 @@ fun rememberOpenCodeHardwareKeyboardConnected(): Boolean {
  * Hardware Tab and Shift+Tab move focus out of a multi-line text field instead of typing a tab.
  * Handled before the IME, which would otherwise take the key. Returns whether it handled [event].
  */
-internal fun FocusManager.moveFocusOnHardwareTab(
+fun FocusManager.moveFocusOnHardwareTab(
     event: KeyEvent,
     hardwareKeyboard: Boolean,
 ): Boolean {
@@ -217,7 +217,7 @@ internal fun FocusManager.moveFocusOnHardwareTab(
  * control on screen.
  */
 @Composable
-internal fun rememberOpenCodeLeaveTextInput(): () -> Unit {
+fun rememberOpenCodeLeaveTextInput(): () -> Unit {
     val registry = LocalOpenCodeInputFocusRegistry.current
     val focusManager = LocalFocusManager.current
     val hardwareKeyboard = rememberOpenCodeHardwareKeyboardConnected()

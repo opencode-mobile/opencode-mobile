@@ -60,13 +60,13 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import dev.opencode.mobile.R
+import dev.opencode.kit.R
 import dev.opencode.mobile.theme.OpenCodeRadius
 import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
-internal val OpenCodeTextInputMinHeight = 48.dp
-internal val OpenCodeTextInputCornerRadius = OpenCodeRadius.small
+val OpenCodeTextInputMinHeight = 48.dp
+val OpenCodeTextInputCornerRadius = OpenCodeRadius.small
 internal val OpenCodeTextInputPaddingHorizontal = 12.dp
 internal val OpenCodeTextInputMultilinePaddingVertical = 12.dp
 private val OpenCodeSearchInputIconSize = 18.dp
@@ -398,7 +398,7 @@ internal fun openCodeTextInputLengthLabel(
 ): String? =
     if (maxLength != null && length * 10 >= maxLength * 9) "$length/$maxLength" else null
 
-internal fun resolveOpenCodeTextInputAccessibilityLabel(
+fun resolveOpenCodeTextInputAccessibilityLabel(
     hint: String?,
     accessibilityLabel: String?,
 ): String? = accessibilityLabel?.takeIf { it.isNotBlank() } ?: hint?.takeIf { it.isNotBlank() }

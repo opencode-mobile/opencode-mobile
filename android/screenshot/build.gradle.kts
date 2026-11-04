@@ -24,10 +24,7 @@ android {
     }
     sourceSets {
         getByName("main") {
-            java.srcDir("../app/src/main/java/dev/opencode/mobile/theme")
-            java.srcDir("../app/src/main/java/dev/opencode/mobile/ui/icons")
             java.srcDir("../app/src/main/java/dev/opencode/mobile/ui/sessionchat/failure")
-            java.srcDir("../app/src/main/java/dev/opencode/mobile/ui/components/layout")
             assets.srcDir("../app/src/main/assets")
             res.srcDir("../app/src/main/res")
         }
@@ -53,6 +50,8 @@ tasks.matching { it.name.startsWith("test") && it.name.contains("UnitTest") }.co
 }
 
 dependencies {
+    // The theme, icons and components moved there from :app.
+    implementation(project(":opencode-kit"))
     val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)
     implementation(libs.androidx.compose.ui)

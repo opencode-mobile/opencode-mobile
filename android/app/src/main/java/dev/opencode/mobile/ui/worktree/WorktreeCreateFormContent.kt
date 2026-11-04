@@ -28,6 +28,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTextInput
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.resolve
+import dev.opencode.kit.R as KitR
 
 /** User actions of the New worktree form. */
 data class WorktreeCreateFormCallbacks(
@@ -64,7 +65,7 @@ fun worktreeCreateBackAction(
     callbacks: WorktreeCreateFormCallbacks,
 ): OpenCodeBottomSheetHeaderTextAction =
     OpenCodeBottomSheetHeaderTextAction(
-        title = stringResource(R.string.top_bar_back),
+        title = stringResource(KitR.string.top_bar_back),
         onClick = if (state.basePickerVisible) callbacks.onHideBasePicker else callbacks.onBack,
         testTag = WorktreeCreateTags.BACK,
     )
@@ -154,7 +155,7 @@ private fun WorktreeBaseList(
                     {
                         Icon(
                             imageVector = OpenCodeIcons.Check,
-                            contentDescription = stringResource(R.string.common_selected),
+                            contentDescription = stringResource(KitR.string.common_selected),
                             tint = openCodeColor("icon-strong-base"),
                             modifier = Modifier.size(20.dp),
                         )

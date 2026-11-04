@@ -54,7 +54,7 @@ object CodeRoleTokens {
  * syntax preset's editor background when it has one.
  */
 @Immutable
-internal data class CodeColors(
+data class CodeColors(
     /** Plain code text: the preset's [CodeRoleTokens.FOREGROUND], else [CodeRoleTokens.FALLBACK_TEXT]. */
     val plain: Color,
     /** The preset's [CodeRoleTokens.BACKGROUND]; null keeps the surface's own UI-theme background. */
@@ -86,7 +86,7 @@ internal data class CodeColors(
 
 /** Code colors of the active theme and syntax preset. */
 @Composable
-internal fun codeColors(): CodeColors {
+fun codeColors(): CodeColors {
     val tokens = if (LocalOpenCodeDarkTheme.current) ThemeManager.resolvedDark else ThemeManager.resolvedLight
     return remember(tokens) { CodeColors.from(tokens.tokens) }
 }

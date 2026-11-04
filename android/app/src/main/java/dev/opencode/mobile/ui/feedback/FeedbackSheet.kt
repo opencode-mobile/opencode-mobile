@@ -122,6 +122,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import dev.opencode.kit.R as KitR
 
 /** Opens the feedback sheet. Hoist with [rememberFeedbackSheetState] next to the entry point. */
 @Stable
@@ -205,7 +206,7 @@ fun FeedbackSheet(
             if (page == FeedbackPage.HideParts || page == FeedbackPage.LogPreview) {
                 OpenCodeBottomSheetHeaderAction(
                     OpenCodeIcons.ArrowBack,
-                    stringResource(R.string.top_bar_back),
+                    stringResource(KitR.string.top_bar_back),
                     viewModel::closePage,
                 )
             } else {

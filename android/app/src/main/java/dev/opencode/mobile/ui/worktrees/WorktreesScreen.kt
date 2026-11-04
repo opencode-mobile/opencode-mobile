@@ -57,6 +57,7 @@ import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.kit.R as KitR
 
 object WorktreesTags {
     const val LIST = "worktreesList"
@@ -189,7 +190,8 @@ private fun WorktreeRow(
         status =
             when {
                 row.isRemoving -> OpenCodeListItemStatus(stringResource(R.string.worktrees_removing), OpenCodeListItemStatusTone.Stale)
-                row.isRunning -> OpenCodeListItemStatus(stringResource(R.string.session_list_status_running), OpenCodeListItemStatusTone.Interactive)
+                row.isRunning ->
+                    OpenCodeListItemStatus(stringResource(KitR.string.session_list_status_running), OpenCodeListItemStatusTone.Interactive)
                 else -> null
             },
         enabled = !row.isRemoving,
@@ -345,7 +347,7 @@ private fun WorktreeRemoveDialog(
                     ),
                 secondaryOption =
                     OpenCodeDialogOption(
-                        title = stringResource(R.string.common_cancel),
+                        title = stringResource(KitR.string.common_cancel),
                         onClick = viewModel::dismissDialog,
                     ),
                 onDismissRequest = viewModel::dismissDialog,
@@ -376,7 +378,7 @@ private fun WorktreesSnackbar(
                         snackbar.message?.let { resources.getString(R.string.worktrees_remove_failed, snackbar.name, it) }
                             ?: resources.getString(R.string.worktrees_remove_failed_connection, snackbar.name),
                     variant = OpenCodeSnackbarVariant.Error,
-                    actionLabel = resources.getString(R.string.common_retry),
+                    actionLabel = resources.getString(KitR.string.common_retry),
                     id = snackbar.id,
                 )
         }

@@ -50,6 +50,7 @@ import dev.opencode.mobile.ui.components.SessionListRow
 import dev.opencode.mobile.ui.components.openCodeBottomSheetContentInset
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.resolve
+import dev.opencode.kit.R as KitR
 
 /** Test tags of the Archived sessions screen. */
 internal object ArchivedSessionsTags {
@@ -97,7 +98,7 @@ fun ArchivedSessionsScreen(
                                 message = content.message.resolve(),
                                 icon = OpenCodeIcons.Archive,
                                 primaryAction =
-                                    OpenCodeEmptyStateAction(stringResource(R.string.common_retry), viewModel::retry),
+                                    OpenCodeEmptyStateAction(stringResource(KitR.string.common_retry), viewModel::retry),
                             )
                         }
                     is ArchivedSessionsContent.Loaded ->
@@ -304,7 +305,7 @@ private fun ArchivedSessionActions(
             ),
         secondaryOption =
             OpenCodeDialogOption(
-                title = stringResource(R.string.common_cancel),
+                title = stringResource(KitR.string.common_cancel),
                 onClick = onDismissDelete,
             ),
         onDismissRequest = onDismissDelete,
