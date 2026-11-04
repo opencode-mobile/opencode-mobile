@@ -1,7 +1,7 @@
 package dev.opencode.mobile.domain.connection
 
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -32,7 +32,7 @@ sealed interface PairingQRParseResult {
 }
 
 object PairingQRPayload {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = serverPayloadJson()
     private val pairingCode = Regex("^[A-Za-z0-9_-]+$")
     private val connectPath = Regex("^/auth/connect/([^/]+)$")
 

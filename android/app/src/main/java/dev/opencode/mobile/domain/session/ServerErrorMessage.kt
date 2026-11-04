@@ -1,6 +1,6 @@
 package dev.opencode.mobile.domain.session
 
-import kotlinx.serialization.json.Json
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -13,7 +13,7 @@ import kotlinx.serialization.json.contentOrNull
  */
 object ServerErrorMessage {
     private const val MAX_LENGTH = 200
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = serverPayloadJson()
 
     fun from(error: Throwable): String? = (error as? SessionError.Http)?.body?.let(::userFacing)
 

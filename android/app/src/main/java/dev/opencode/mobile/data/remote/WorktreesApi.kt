@@ -1,5 +1,6 @@
 package dev.opencode.mobile.data.remote
 
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.applyLocationDirectory
@@ -16,7 +17,6 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -245,7 +245,7 @@ class WorktreesApi private constructor(
     }
 }
 
-private val lenientJson = Json { ignoreUnknownKeys = true }
+private val lenientJson = serverPayloadJson()
 
 private fun JsonElement.branchName(): String? =
     (this as? JsonPrimitive)

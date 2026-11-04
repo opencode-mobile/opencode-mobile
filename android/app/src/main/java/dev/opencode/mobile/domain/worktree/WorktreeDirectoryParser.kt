@@ -1,6 +1,6 @@
 package dev.opencode.mobile.domain.worktree
 
-import kotlinx.serialization.json.Json
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -13,7 +13,7 @@ import kotlinx.serialization.json.contentOrNull
  * `{ "directory": "..." }`. Null means the body is not that shape.
  */
 object WorktreeDirectoryParser {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = serverPayloadJson()
 
     fun parse(body: String): List<String>? {
         val element = runCatching { json.parseToJsonElement(body) }.getOrNull() ?: return null

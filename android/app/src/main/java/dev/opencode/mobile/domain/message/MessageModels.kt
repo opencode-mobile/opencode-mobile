@@ -3,7 +3,7 @@ package dev.opencode.mobile.domain.message
 import dev.opencode.mobile.domain.agent.AgentMention
 import dev.opencode.mobile.domain.agent.FileMention
 import dev.opencode.mobile.domain.agent.SkillMention
-import kotlinx.serialization.json.Json
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -364,7 +364,7 @@ data class SessionFailure(
     companion object {
         private const val MAX_BODY = 4_000
         private const val SECONDS_LIMIT_MS = 90_000L
-        private val json = Json { ignoreUnknownKeys = true }
+        private val json = serverPayloadJson()
 
         /** "Try again in N s", minutes above 90 s; null once the wait is over. */
         fun retryAfterLabel(remainingMs: Long): String? {

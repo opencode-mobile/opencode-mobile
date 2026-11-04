@@ -31,10 +31,10 @@ import dev.opencode.mobile.data.remote.dto.V2UnknownErrorDto
 import dev.opencode.mobile.domain.agent.ComposerMentionRouting
 import dev.opencode.mobile.domain.agent.SkillMention
 import dev.opencode.mobile.domain.filesystem.ProjectFileReference
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.domain.session.ServerErrorMessage
 import io.ktor.client.plugins.ResponseException
 import io.ktor.serialization.JsonConvertException
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -51,7 +51,7 @@ class MessageDomainAdapter(
     /** Receive time for a failure whose message has no completed time yet. */
     private val nowEpochMs: () -> Long = System::currentTimeMillis,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = serverPayloadJson()
 
     fun toMessage(dto: MessageDto): Message {
         val info = dto.info

@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import dev.opencode.mobile.domain.connection.ConnectionSessionCoordinator
 import dev.opencode.mobile.domain.event.EventDomainAdapter
 import dev.opencode.mobile.domain.event.SilentWorldSignals
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.domain.message.DisplayMessagePreparing
 import dev.opencode.mobile.domain.model.ModelCatalogStore
 import dev.opencode.mobile.domain.model.NewSessionModelSelectionResolver
@@ -31,7 +32,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 
 /**
  * One opened scenario: its world, the real [SessionChatViewModel] reading it through the
@@ -99,7 +99,7 @@ class PlaygroundSession(
     }
 
     private fun createChatViewModel(preparing: DisplayMessagePreparing): SessionChatViewModel {
-        val json = Json { ignoreUnknownKeys = true }
+        val json = serverPayloadJson()
         val eventStream = PlaygroundEventStream()
         val modelSelectionStore = PlaygroundModelSelectionStore()
         val draftStore = PlaygroundDraftStore()

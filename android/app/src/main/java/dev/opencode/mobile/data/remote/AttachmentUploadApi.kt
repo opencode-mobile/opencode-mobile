@@ -1,5 +1,6 @@
 package dev.opencode.mobile.data.remote
 
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.network.OpencodeHttpClient
 import dev.opencode.mobile.network.applyLocationDirectory
 import io.ktor.client.HttpClient
@@ -16,7 +17,6 @@ import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.ByteWriteChannel
 import io.ktor.utils.io.writeFully
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -96,7 +96,7 @@ class AttachmentUploadApi private constructor(
     }
 
     private companion object {
-        val json = Json { ignoreUnknownKeys = true }
+        val json = serverPayloadJson()
         const val UPLOAD_TIMEOUT_MS = 30L * 60L * 1_000L
         val SOCKET_TIMEOUT_MS = 60_000L
     }
