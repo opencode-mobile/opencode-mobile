@@ -180,6 +180,22 @@ struct ArchivedSessionsViewModelTests {
         #expect(rowIDs(viewModel).isEmpty)
     }
 
+    @Test func unarchivingAnUndoneRowAgainStaysGoneWhileTheListLags() async {
+        let repository = ArchivedSessionRepository(["/work/alpha": [archived("a1", "/work/alpha", now - day)]])
+        repository.unarchiveLags = true
+        let viewModel = makeViewModel(repository)
+        await viewModel.appear(scopeID: "all", projects: [alpha], worktreesEnabled: true)
+        await viewModel.unarchive(sessionID: "a1")
+
+        // Undo, then unarchive again before the list refreshes: the app never saw the
+        // server's new archive time for the restored row.
+        await viewModel.undoUnarchive(sessionID: "a1")
+        await viewModel.unarchive(sessionID: "a1")
+        await viewModel.retry()
+
+        #expect(rowIDs(viewModel).isEmpty)
+    }
+
     @Test func aFailingProjectKeepsTheOthersListed() async {
         let repository = ArchivedSessionRepository(["/work/alpha": [archived("a1", "/work/alpha", now - day)], "/work/beta": []])
         repository.failingDirectories = ["/work/beta"]

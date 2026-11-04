@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -241,6 +242,30 @@ class ArchivedSessionsModelTest {
 
             model.unarchive("a1")
             advanceUntilIdle()
+            events.emit(OpencodeEvent(type = "session.unarchived", sessionId = "a1"))
+            advanceUntilIdle()
+
+            assertTrue(rows(model).isEmpty())
+        }
+
+    @Test
+    fun unarchivingAnUndoneRowAgainStaysGoneWhileTheListLags() =
+        runTest {
+            val repository = FakeArchivedRepository("/work/alpha" to listOf(archived("a1", "/work/alpha", now - day)))
+            repository.unarchiveLags = true
+            val events = MutableSharedFlow<OpencodeEvent>()
+            val model = model(repository, listOf(alpha), events)
+            model.bind("all")
+            advanceUntilIdle()
+            model.unarchive("a1")
+            advanceUntilIdle()
+
+            // Undo, then unarchive again before the list refreshes: the app never saw the
+            // server's new archive time for the restored row.
+            model.undoUnarchive("a1")
+            runCurrent()
+            model.unarchive("a1")
+            runCurrent()
             events.emit(OpencodeEvent(type = "session.unarchived", sessionId = "a1"))
             advanceUntilIdle()
 
