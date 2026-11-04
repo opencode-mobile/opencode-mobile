@@ -33,6 +33,7 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
     var entriesEnabled by rememberSaveable { mutableStateOf(true) }
     var selectionRowsEnabled by rememberSaveable { mutableStateOf(false) }
     var showDestructive by rememberSaveable { mutableStateOf(false) }
+    var showDivider by rememberSaveable { mutableStateOf(false) }
     var itemCount by rememberSaveable { mutableStateOf(2) }
 
     val entries =
@@ -60,6 +61,7 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
                     title = "Copy session ID",
                     icon = if (selectionRowsEnabled) null else OpenCodeIcons.ContentCopy,
                     enabled = entriesEnabled,
+                    dividerAbove = showDivider,
                     onClick = { menuExpanded = false },
                 ),
             )
@@ -125,6 +127,11 @@ fun OverflowMenuGalleryScreen(modifier: Modifier = Modifier) {
                     label = "Destructive",
                     selected = showDestructive,
                     onClick = { showDestructive = !showDestructive },
+                )
+                OpenCodeChoiceBadge(
+                    label = "Divider",
+                    selected = showDivider,
+                    onClick = { showDivider = !showDivider },
                 )
             }
 

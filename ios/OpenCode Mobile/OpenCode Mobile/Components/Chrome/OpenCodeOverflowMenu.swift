@@ -10,6 +10,7 @@ private let overflowMenuEntryIconSize: CGFloat = 20
 private let overflowMenuEntryIconSpacing: CGFloat = 12
 private let overflowMenuEntrySubtitleSpacing: CGFloat = 2
 private let overflowMenuEntrySubtitlePaddingVertical: CGFloat = 6
+private let overflowMenuDividerPaddingVertical: CGFloat = 4
 private let overflowMenuAnchorEndInset: CGFloat = 4
 private let overflowMenuAnchorTopOffset: CGFloat = 8
 /// Gap between an iPhone Duo rail item and the menu that opens beside it.
@@ -23,6 +24,8 @@ struct OpenCodeOverflowMenuEntry: Identifiable {
     let icon: OpenCodeIcon?
     let enabled: Bool
     let destructive: Bool
+    /// Draws a divider above the entry, starting a new group.
+    let dividerAbove: Bool
     let accessibilityLabel: OpenCodeText?
     let accessibilityIdentifier: String?
     let action: () -> Void
@@ -34,6 +37,7 @@ struct OpenCodeOverflowMenuEntry: Identifiable {
         icon: OpenCodeIcon?,
         enabled: Bool = true,
         destructive: Bool = false,
+        dividerAbove: Bool = false,
         accessibilityLabel: OpenCodeText? = nil,
         accessibilityIdentifier: String? = nil,
         action: @escaping () -> Void
@@ -44,6 +48,7 @@ struct OpenCodeOverflowMenuEntry: Identifiable {
         self.icon = icon
         self.enabled = enabled
         self.destructive = destructive
+        self.dividerAbove = dividerAbove
         self.accessibilityLabel = accessibilityLabel
         self.accessibilityIdentifier = accessibilityIdentifier
         self.action = action
@@ -321,6 +326,13 @@ private struct OpenCodeOverflowMenuPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(entries) { entry in
+                if entry.dividerAbove {
+                    Rectangle()
+                        .fill(OpenCodeColors.borderWeakBase)
+                        .frame(height: 1)
+                        .padding(.vertical, overflowMenuDividerPaddingVertical)
+                        .accessibilityHidden(true)
+                }
                 Button {
                     guard entry.enabled else { return }
                     entry.action()
@@ -357,8 +369,15 @@ private struct OpenCodeOverflowMenuPanel: View {
                         }
                         .padding(.vertical, entry.subtitle == nil ? 0 : overflowMenuEntrySubtitlePaddingVertical)
                     }
-                    .frame(minWidth: overflowMenuMinWidth, minHeight: overflowMenuEntryMinHeight, alignment: .leading)
+                    .frame(
+                        minWidth: overflowMenuMinWidth,
+                        maxWidth: .infinity,
+                        minHeight: overflowMenuEntryMinHeight,
+                        alignment: .leading
+                    )
                     .padding(.horizontal, overflowMenuEntryPaddingHorizontal)
+                    // The whole row takes the tap, not just the icon and text.
+                    .contentShape(Rectangle())
                     .opacity(entry.enabled ? 1 : 0.7)
                 }
                 .buttonStyle(.plain)
@@ -416,6 +435,32 @@ private struct OpenCodeOverflowMenuPanel: View {
     }
     .openCodeTheme()
     .preferredColorScheme(.dark)
+}
+
+/// Grouped entries with subtitles: the panel keeps its content width with a divider.
+#Preview("Grouped") {
+    OpenCodeTopBarOverflowHost(
+        isPresented: .constant(true),
+        entries: [
+            OpenCodeOverflowMenuEntry(title: "Search sessions", icon: .search, action: {}),
+            OpenCodeOverflowMenuEntry(
+                title: "Archived sessions",
+                subtitle: "4 in All projects",
+                icon: .archive,
+                action: {}
+            ),
+            OpenCodeOverflowMenuEntry(
+                title: "Worktrees",
+                subtitle: "3 across 2 projects",
+                icon: .callSplit,
+                action: {}
+            ),
+            OpenCodeOverflowMenuEntry(title: "Settings", icon: .settings, dividerAbove: true, action: {}),
+        ]
+    ) {
+        OpenCodeTopBar(title: "Sessions", showDivider: true)
+    }
+    .openCodeTheme()
 }
 
 private struct OverflowEntryIdentifier: ViewModifier {
@@ -476,6 +521,7 @@ private func previewOverflowMenuEntries() -> [OpenCodeOverflowMenuEntry] {
             title: "Delete",
             icon: .close,
             destructive: true,
+            dividerAbove: true,
             action: {}
         ),
     ]

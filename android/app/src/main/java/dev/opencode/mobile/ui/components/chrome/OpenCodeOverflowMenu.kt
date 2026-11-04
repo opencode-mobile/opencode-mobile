@@ -6,14 +6,17 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -57,6 +60,7 @@ private val OverflowMenuEntryMinHeight = 48.dp
 private val OverflowMenuEntryPaddingHorizontal = 12.dp
 private val OverflowMenuEntryIconSize = 20.dp
 private val OverflowMenuEntryIconSpacing = 12.dp
+private val OverflowMenuDividerPaddingVertical = 4.dp
 private val OverflowMenuAnchorEndInset = 4.dp
 private val OverflowMenuAnchorTopOffset = 8.dp
 private val OverflowMenuEntryTextMaxWidth = 240.dp
@@ -72,6 +76,8 @@ data class OpenCodeOverflowMenuEntry(
     /** Secondary line under the title, such as why the entry is disabled. */
     val subtitle: String? = null,
     val testTag: String? = null,
+    /** Draws a divider above the entry, starting a new group. */
+    val dividerAbove: Boolean = false,
 )
 
 @Composable
@@ -249,14 +255,21 @@ private fun OpenCodeOverflowMenuPanel(
         border = BorderStroke(1.dp, openCodeColor("border-weak-base")),
         shadowElevation = 0.dp,
     ) {
+        // As wide as the widest row: dividers and rows fill that width, not the popup window's.
         Column(
             modifier =
                 Modifier
-                    .wrapContentWidth(Alignment.Start)
-                    .widthIn(min = OverflowMenuMinWidth)
+                    .width(IntrinsicSize.Max)
                     .padding(vertical = OverflowMenuPaddingVertical),
         ) {
             entries.forEach { entry ->
+                if (entry.dividerAbove) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = OverflowMenuDividerPaddingVertical),
+                        thickness = 1.dp,
+                        color = openCodeColor("border-weak-base"),
+                    )
+                }
                 OverflowMenuEntryRow(
                     entry = entry,
                     reservesIconColumn = reservesIconColumn,
@@ -290,6 +303,7 @@ private fun OverflowMenuEntryRow(
     Row(
         modifier =
             Modifier
+                .fillMaxWidth()
                 .widthIn(min = OverflowMenuMinWidth)
                 .defaultMinSize(minHeight = OverflowMenuEntryMinHeight)
                 .openCodeFocusRing(OpenCodeSmallShape, entry.enabled)
@@ -397,6 +411,44 @@ private fun OpenCodeOverflowMenuDarkPreview() {
     }
 }
 
+/** Grouped entries with subtitles: the panel keeps its content width with a divider. */
+@Preview(showBackground = true, widthDp = 411)
+@Composable
+private fun OpenCodeOverflowMenuGroupedPreview() {
+    OpenCodeTheme(darkTheme = false) {
+        OpenCodeTopBarOverflowHost(
+            expanded = true,
+            onDismissRequest = {},
+            entries = previewGroupedOverflowMenuEntries(),
+        ) {
+            OpenCodeTopBar(title = "Sessions", showDivider = true)
+        }
+    }
+}
+
+private fun previewGroupedOverflowMenuEntries(): List<OpenCodeOverflowMenuEntry> =
+    listOf(
+        OpenCodeOverflowMenuEntry(title = "Search sessions", icon = OpenCodeIcons.Search, onClick = {}),
+        OpenCodeOverflowMenuEntry(
+            title = "Archived sessions",
+            icon = OpenCodeIcons.Archive,
+            subtitle = "4 in All projects",
+            onClick = {},
+        ),
+        OpenCodeOverflowMenuEntry(
+            title = "Worktrees",
+            icon = OpenCodeIcons.CallSplit,
+            subtitle = "3 across 2 projects",
+            onClick = {},
+        ),
+        OpenCodeOverflowMenuEntry(
+            title = "Settings",
+            icon = OpenCodeIcons.Settings,
+            dividerAbove = true,
+            onClick = {},
+        ),
+    )
+
 private fun previewOverflowMenuEntries(): List<OpenCodeOverflowMenuEntry> =
     listOf(
         OpenCodeOverflowMenuEntry(
@@ -421,6 +473,7 @@ private fun previewOverflowMenuEntries(): List<OpenCodeOverflowMenuEntry> =
             title = "Delete",
             icon = OpenCodeIcons.Close,
             destructive = true,
+            dividerAbove = true,
             onClick = {},
         ),
     )
