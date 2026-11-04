@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		OCK000000000000000000003 /* OpenCodeKit in Frameworks */ = {isa = PBXBuildFile; productRef = OCK000000000000000000002 /* OpenCodeKit */; };
+		OCK000000000000000000004 /* OpenCodeKit in Frameworks */ = {isa = PBXBuildFile; productRef = OCK000000000000000000005 /* OpenCodeKit */; };
 		HXC000000000000000000013 /* VoiceEngineKit in Frameworks */ = {isa = PBXBuildFile; productRef = HXC000000000000000000012 /* VoiceEngineKit */; };
 		638DA94C2FCB348E0055985D /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 63OC00022FA93400002BDFFC /* Factory */; };
 		638DA94D2FCB348E0055985D /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 63OC00022FA93400002BDFFC /* Factory */; };
@@ -69,6 +71,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				HXC000000000000000000013 /* VoiceEngineKit in Frameworks */,
+				OCK000000000000000000004 /* OpenCodeKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -77,6 +80,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				638DA94C2FCB348E0055985D /* Factory in Frameworks */,
+				OCK000000000000000000003 /* OpenCodeKit in Frameworks */,
 				63OCFIREBF00100002BDFFC /* FirebaseAnalyticsCore in Frameworks */,
 				63OCFIREBF00200002BDFFC /* FirebaseCrashlytics in Frameworks */,
 				63OCFIREBF00300002BDFFC /* FirebaseRemoteConfig in Frameworks */,
@@ -145,6 +149,7 @@
 			name = "Hex Code";
 			packageProductDependencies = (
 				HXC000000000000000000012 /* VoiceEngineKit */,
+				OCK000000000000000000005 /* OpenCodeKit */,
 			);
 			productName = "Hex Code";
 			productReference = HXC000000000000000000001 /* Hex Code.app */;
@@ -176,6 +181,7 @@
 				63OCFIREPROD002002BDFFC /* FirebaseCrashlytics */,
 				63OCFIREPROD003002BDFFC /* FirebaseRemoteConfig */,
 				63OCFIREPROD004002BDFFC /* FirebaseAppCheck */,
+				OCK000000000000000000002 /* OpenCodeKit */,
 			);
 			productName = "OpenCode Mobile";
 			productReference = 63369C0F2FA933AE002BDFFC /* OpenCode Mobile.app */;
@@ -267,6 +273,7 @@
 				63OC00012FA93400002BDFFC /* XCRemoteSwiftPackageReference "Factory" */,
 				63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
 				HXC000000000000000000011 /* XCLocalSwiftPackageReference "../../shared/voice-engine" */,
+				OCK000000000000000000001 /* XCLocalSwiftPackageReference "../OpenCodeKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 63369C102FA933AE002BDFFC /* Products */;
@@ -1048,6 +1055,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ../../shared/voice-engine;
 		};
+		OCK000000000000000000001 /* XCLocalSwiftPackageReference "../OpenCodeKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../OpenCodeKit;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
@@ -1098,6 +1109,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseAppCheck;
+		};
+		OCK000000000000000000002 /* OpenCodeKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = OCK000000000000000000001 /* XCLocalSwiftPackageReference "../OpenCodeKit" */;
+			productName = OpenCodeKit;
+		};
+		OCK000000000000000000005 /* OpenCodeKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = OCK000000000000000000001 /* XCLocalSwiftPackageReference "../OpenCodeKit" */;
+			productName = OpenCodeKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
