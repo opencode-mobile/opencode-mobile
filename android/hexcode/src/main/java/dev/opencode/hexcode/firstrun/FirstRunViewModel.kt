@@ -83,7 +83,10 @@ interface FirstRunEnvironment {
 
     suspend fun saveProject(project: ProjectChoice)
 
-    suspend fun finish(model: ModelChoice)
+    suspend fun finish(
+        model: ModelChoice,
+        name: String,
+    )
 
     /** Starts the speech model download in the background, once. */
     fun getSpeechModel()
@@ -341,8 +344,9 @@ class FirstRunViewModel(
         val picker = (state.value.model as? Loadable.Loaded)?.value ?: return
         val choice = picker.choice ?: return
         if (!picker.canStart) return
+        val name = picker.selectedOption?.modelLabel ?: choice.modelId
         viewModelScope.launch {
-            env.finish(choice)
+            env.finish(choice, name)
             state.update { it.copy(step = FirstRunStep.Done) }
         }
     }

@@ -44,6 +44,7 @@ fun SettingsScreen(
     prefs: HexPrefs,
     server: ServerLabel?,
     modelName: String?,
+    projectPath: String?,
     onProject: () -> Unit,
     onModel: () -> Unit,
     onAppearance: () -> Unit,
@@ -64,7 +65,7 @@ fun SettingsScreen(
             )
             Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
                 OpenCodeSectionHeader(stringResource(R.string.settings_section_session))
-                Row(OpenCodeIcons.Folder, stringResource(R.string.settings_project), prefs.project?.name, prefs.project?.path, onProject)
+                Row(OpenCodeIcons.Folder, stringResource(R.string.settings_project), prefs.project?.name, projectPath, onProject)
                 Row(
                     OpenCodeIcons.Restart,
                     stringResource(R.string.settings_new_session),

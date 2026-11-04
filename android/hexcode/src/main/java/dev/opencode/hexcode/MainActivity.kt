@@ -22,6 +22,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
@@ -35,7 +36,9 @@ import dev.opencode.hexcode.firstrun.FirstRunFlow
 import dev.opencode.hexcode.firstrun.FirstRunStep
 import dev.opencode.hexcode.firstrun.FirstRunViewModel
 import dev.opencode.hexcode.firstrun.PickerMode
+import dev.opencode.hexcode.firstrun.ProjectPicker
 import dev.opencode.hexcode.firstrun.ServerLabel
+import dev.opencode.hexcode.home.ClipDictation
 import dev.opencode.hexcode.home.HomeScreen
 import dev.opencode.hexcode.home.HomeViewModel
 import dev.opencode.hexcode.home.VoiceEngineDictation
@@ -76,6 +79,8 @@ class MainActivity : ComponentActivity() {
         val pairLink = if (BuildConfig.DEBUG) intent.getStringExtra("HexCodePair") else null
         // debug builds: `--es HexCodeTheme dark|light` pins the theme instead of following the system
         val pinnedTheme = if (BuildConfig.DEBUG) intent.getStringExtra("HexCodeTheme") else null
+        // debug builds: `--ez HexCodeClips true` makes each take the next bundled lab clip (an emulator has no voice)
+        val clips = BuildConfig.DEBUG && intent.getBooleanExtra("HexCodeClips", false)
         setContent {
             val prefs by services.settings.prefs.collectAsStateWithLifecycle(initialValue = null)
             val dark =
@@ -110,7 +115,7 @@ class MainActivity : ComponentActivity() {
                         SystemBarIcons(darkScreen = true)
                         DictationScreen(services.voice, sampleFile = sample, onOpenLab = { tool = Tool.Lab })
                     }
-                    null -> prefs?.let { HexCodeRoot(services, it, pairLink) }
+                    null -> prefs?.let { HexCodeRoot(services, it, pairLink, clips) }
                 }
             }
         }
@@ -128,6 +133,7 @@ private fun HexCodeRoot(
     services: HexServices,
     prefs: HexPrefs,
     pairLink: String?,
+    clips: Boolean,
 ) {
     LaunchedEffect(Unit) {
         // The saved server's address check can take seconds; nothing on screen waits for it.
@@ -139,7 +145,7 @@ private fun HexCodeRoot(
             .background(openCodeColor("background-base")),
     ) {
         if (prefs.firstRunDone) {
-            AfterFirstRun(services, prefs)
+            AfterFirstRun(services, prefs, clips)
         } else {
             val vm = viewModel { FirstRunViewModel(HexFirstRunEnvironment(services)) }
             val state by vm.uiState.collectAsStateWithLifecycle()
@@ -160,17 +166,30 @@ private fun HexCodeRoot(
 private fun AfterFirstRun(
     services: HexServices,
     prefs: HexPrefs,
+    clips: Boolean,
 ) {
+    val context = LocalContext.current
     var page by remember { mutableStateOf(Page.Home) }
     // Each visit to a settings page starts it afresh.
     var visit by remember { mutableIntStateOf(0) }
     val scope = rememberCoroutineScope()
     SystemBarIcons(darkScreen = LocalOpenCodeDarkTheme.current)
     LaunchedEffect(Unit) { services.voice.prepare() }
-    val server by produceState<ServerLabel?>(null, page) { value = services.serverLabel() }
+    val server by produceState<ServerLabel?>(null, page) {
+        value = services.serverLabel()?.let { it.copy(version = it.version ?: prefs.serverVersion) }
+    }
+    val home by produceState<String?>(prefs.serverHome) {
+        if (value == null) {
+            services.connectionLoaded.await()
+            value = runCatching { services.filesystem.getPaths().home }.getOrNull()
+        }
+    }
     when (page) {
         Page.Home -> {
-            val home = viewModel { HomeViewModel(VoiceEngineDictation(services.voice)) }
+            val home =
+                viewModel {
+                    HomeViewModel(if (clips) ClipDictation(context, services.voice) else VoiceEngineDictation(services.voice))
+                }
             val speech by services.voice.modelState.collectAsStateWithLifecycle()
             HomeScreen(home, speech, onSettings = { page = Page.Settings })
         }
@@ -178,7 +197,8 @@ private fun AfterFirstRun(
             SettingsScreen(
                 prefs = prefs,
                 server = server,
-                modelName = prefs.model?.let { TitleCaseIdentifier.displayName(it.modelId) },
+                modelName = prefs.modelName ?: prefs.model?.let { TitleCaseIdentifier.displayName(it.modelId) },
+                projectPath = prefs.project?.path?.let { ProjectPicker.shortPath(it, home.orEmpty()) },
                 onProject = {
                     visit += 1
                     page = Page.SettingsProject

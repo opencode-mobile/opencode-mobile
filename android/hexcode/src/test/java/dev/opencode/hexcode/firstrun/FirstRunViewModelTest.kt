@@ -102,7 +102,10 @@ class FirstRunViewModelTest {
             savedProjects += project
         }
 
-        override suspend fun finish(model: ModelChoice) {
+        override suspend fun finish(
+            model: ModelChoice,
+            name: String,
+        ) {
             finished += model
         }
 

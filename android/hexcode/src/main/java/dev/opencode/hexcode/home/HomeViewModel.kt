@@ -1,7 +1,9 @@
 package dev.opencode.hexcode.home
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.opencode.voiceengine.SpeechModels
 import dev.opencode.voiceengine.VoiceEngine
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -179,4 +181,33 @@ enum class TalkRelease {
 
     /** A quick tap: the take goes on hands-free, like a lock. */
     Tap,
+}
+
+/** Debug builds on an emulator, which has no voice: each take is the next of the speech lab's bundled clips. */
+class ClipDictation(
+    private val context: Context,
+    private val engine: VoiceEngine,
+) : Dictation {
+    private val clips = SpeechModels.clips(context)
+    private var next = 0
+    private var recording = false
+
+    override val level: Float get() = if (recording) 0.5f else 0f
+
+    override fun start() {
+        recording = true
+    }
+
+    override fun end(): FloatArray? {
+        if (!recording) return null
+        recording = false
+        val clip = clips[next++ % clips.size]
+        return SpeechModels.clipAudio(context, clip)
+    }
+
+    override fun drop() {
+        recording = false
+    }
+
+    override suspend fun transcribe(samples: FloatArray): String = engine.transcribe(samples)
 }

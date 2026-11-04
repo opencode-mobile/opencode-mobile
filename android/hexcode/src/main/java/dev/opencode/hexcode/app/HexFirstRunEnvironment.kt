@@ -22,12 +22,18 @@ class HexFirstRunEnvironment(
     override val models: ModelRepository get() = services.models
     override val modelTester: ModelTesting get() = services.modelTester
 
-    override suspend fun useServer(result: ConnectResult.Connected) = services.useServer(result.profile)
+    override suspend fun useServer(result: ConnectResult.Connected) {
+        services.useServer(result.profile)
+        val home = runCatching { services.filesystem.getPaths().home }.getOrNull()
+        services.settings.setServer(home = home, version = result.version)
+    }
 
     override suspend fun saveProject(project: ProjectChoice) = services.settings.setProject(project)
 
-    override suspend fun finish(model: ModelChoice) =
-        if (forSettings) services.settings.setModel(model) else services.settings.finishFirstRun(model)
+    override suspend fun finish(
+        model: ModelChoice,
+        name: String,
+    ) = if (forSettings) services.settings.setModel(model, name) else services.settings.finishFirstRun(model, name)
 
     override suspend fun savedModel(): ModelChoice? = services.settings.current().model
 

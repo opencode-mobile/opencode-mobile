@@ -25,9 +25,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -111,8 +114,15 @@ fun WelcomeScreen(onScan: () -> Unit) {
             HowStep(2) {
                 Text(stringResource(R.string.first_run_welcome_step_scan), style = MaterialTheme.typography.bodyLarge, color = strong)
             }
+            val remote = stringResource(R.string.first_run_welcome_pair_remote_command)
+            val away = stringResource(R.string.first_run_welcome_away, remote)
             Text(
-                stringResource(R.string.first_run_welcome_away, stringResource(R.string.first_run_welcome_pair_remote_command)),
+                buildAnnotatedString {
+                    val at = away.indexOf(remote)
+                    append(away.substring(0, at.coerceAtLeast(0)))
+                    withStyle(SpanStyle(fontFamily = FontFamily.Monospace)) { append(if (at >= 0) remote else "") }
+                    if (at >= 0) append(away.substring(at + remote.length)) else append(away)
+                },
                 style = MaterialTheme.typography.bodySmall,
                 color = weak,
                 modifier = Modifier.padding(start = 34.dp, top = 4.dp),

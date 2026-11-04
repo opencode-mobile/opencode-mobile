@@ -28,6 +28,7 @@ import dev.opencode.mobile.network.ServerConnection
 import dev.opencode.voiceengine.VoiceEngine
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -76,6 +77,7 @@ class HexServices(
 
     /** The paired computer's name and OpenCode version, for Settings. */
     suspend fun serverLabel(): ServerLabel? {
+        connectionLoaded.await()
         val profile = profiles.activeProfile() ?: return null
         return ServerLabel(
             profile.name.ifBlank { PairingConnector.hostLabel(profile.baseUrl) }.lowercase(),
@@ -83,10 +85,17 @@ class HexServices(
         )
     }
 
+    /** Completes once the saved server is bound (or there is none), so calls made at startup reach it. */
+    val connectionLoaded = CompletableDeferred<Unit>()
+
     /** Binds the saved server, if there is one. */
     suspend fun loadConnection() {
-        connection.ensureLoaded()
-        httpClient.rebuild()
+        try {
+            connection.ensureLoaded()
+            httpClient.rebuild()
+        } finally {
+            connectionLoaded.complete(Unit)
+        }
     }
 
     /**
