@@ -6,8 +6,9 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
-// Hex's speech engine for Hex Code on Android: transcribe.cpp (the engine Hex desktop runs), pinned in
-// hex-upstream.json by scripts/sync-hex.mjs. The models it can run are listed in src/main/assets/lab/models.json.
+// Hex Code's on-device speech engines on Android: sherpa-onnx (the default), Google's LiteRT, Android's own
+// recognizer, and transcribe.cpp as the lab's reference (built from src/main/cpp/). The models they run are
+// listed in src/main/assets/lab/models.json.
 
 // sherpa-onnx (Apache-2.0, ONNX Runtime inside), the second engine the speech model lab compares. Its Android
 // release is fetched once, checked against this checksum and unpacked into the build folder, so its native

@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		HXC000000000000000000013 /* HexVoiceEngine in Frameworks */ = {isa = PBXBuildFile; productRef = HXC000000000000000000012 /* HexVoiceEngine */; };
+		HXC000000000000000000013 /* VoiceEngineKit in Frameworks */ = {isa = PBXBuildFile; productRef = HXC000000000000000000012 /* VoiceEngineKit */; };
 		638DA94C2FCB348E0055985D /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 63OC00022FA93400002BDFFC /* Factory */; };
 		638DA94D2FCB348E0055985D /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 63OC00022FA93400002BDFFC /* Factory */; };
 		63OCFIREBF00100002BDFFC /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD001002BDFFC /* FirebaseAnalyticsCore */; };
@@ -68,7 +68,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				HXC000000000000000000013 /* HexVoiceEngine in Frameworks */,
+				HXC000000000000000000013 /* VoiceEngineKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -144,7 +144,7 @@
 			);
 			name = "Hex Code";
 			packageProductDependencies = (
-				HXC000000000000000000012 /* HexVoiceEngine */,
+				HXC000000000000000000012 /* VoiceEngineKit */,
 			);
 			productName = "Hex Code";
 			productReference = HXC000000000000000000001 /* Hex Code.app */;
@@ -1070,9 +1070,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		HXC000000000000000000012 /* HexVoiceEngine */ = {
+		HXC000000000000000000012 /* VoiceEngineKit */ = {
 			isa = XCSwiftPackageProductDependency;
-			productName = HexVoiceEngine;
+			productName = VoiceEngineKit;
 		};
 		63OC00022FA93400002BDFFC /* FactoryKit */ = {
 			isa = XCSwiftPackageProductDependency;

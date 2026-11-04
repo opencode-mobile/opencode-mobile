@@ -1,27 +1,27 @@
 # Hex Code voice engine
 
 On-device dictation for Hex Code: record a take and turn it into text on the phone. Speech never leaves the
-device. The engine follows [Hex](https://github.com/anomalyco/hex): same model, and on iOS the same code, mirrored
-by `scripts/sync-hex.mjs` (see `hex-upstream.json`).
+device. Both platforms run NVIDIA's Parakeet TDT 0.6B v2, each on the fastest runtime measured for it.
 
 ## What runs where
 
 | Platform | Model | Runtime | Where it's set |
 |---|---|---|---|
-| iOS | Parakeet TDT 0.6B v2 | FluidAudio (CoreML, Apple Neural Engine), Hex's own iOS code | `upstream/ios/`, `adapter/ios/VoiceEngine.swift` |
+| iOS | Parakeet TDT 0.6B v2 | FluidAudio 0.15.5 (CoreML, Apple Neural Engine) | `adapter/ios/` (Swift package `VoiceEngineKit`) |
 | Android | Parakeet TDT 0.6B v2, int8 ONNX export | sherpa-onnx (ONNX Runtime) with the XNNPACK provider, on the fast cores only | `SpeechModels.DICTATION_DEFAULT` and `EngineOptions` in `adapter/android/` |
 
-Both platforms run the same model as Hex. Android doesn't use Hex's own engine (transcribe.cpp), because the
-same model runs about twice as fast on ONNX Runtime with XNNPACK and gives nearly the same text. Measured with
-the speech model lab, per 10 s of speech:
+The quality reference is Parakeet V2 on transcribe.cpp, the setup the [Hex](https://github.com/anomalyco/hex)
+dictation app uses on the desktop; "Hex" in the lab means that reference. Android doesn't run transcribe.cpp for
+dictation, because the same model runs about twice as fast on ONNX Runtime with XNNPACK and gives nearly the same
+text. Measured with the speech model lab, per 10 s of speech:
 
 | Phone | Runtime | Wait, technical clips | Wait, real speech | Word errors, technical | Word errors, real speech |
 |---|---|---:|---:|---:|---:|
 | iPhone 16e | FluidAudio (CoreML) | 0.16 s | 0.14 s | 3.1% | 12.1% |
 | Pixel 9 (Tensor G4) | sherpa-onnx + XNNPACK | 0.67 s | 0.97 s | 3.5% | 12.9% |
-| Pixel 9 | transcribe.cpp (Hex's engine) | 1.33 s | 1.57 s | 2.7% | 12.1% |
+| Pixel 9 | transcribe.cpp (reference) | 1.33 s | 1.57 s | 2.7% | 12.1% |
 | Galaxy A15 (Helio G99) | sherpa-onnx + XNNPACK | 1.57 s | 1.53 s | 3.5% | 12.9% |
-| Galaxy A15 | transcribe.cpp (Hex's engine) | 3.68 s | 3.32 s | 2.7% | 12.1% |
+| Galaxy A15 | transcribe.cpp (reference) | 3.68 s | 3.32 s | 2.7% | 12.1% |
 
 The two test sets are described under [Clip sets](#clip-sets).
 
@@ -37,23 +37,26 @@ The two test sets are described under [Clip sets](#clip-sets).
 ### When to choose again
 
 Run the lab and compare against the tables above when one of these happens:
-- a Hex sync changes the model or transcribe.cpp;
-- a new model or runtime looks promising;
-- a phone class is added.
+- a FluidAudio, sherpa-onnx or LiteRT update, or a new model or runtime, looks promising;
+- a phone class is added;
+- Hex Code adds languages.
 
-The first two rows are the bar: an Android option has to keep the same words as Hex for at least 95% of words on
-real speech, with no more word errors than Hex's engine plus 1 point. Among those, the shortest wait on both
-phones wins.
+**The bar:** an Android option has to keep the reference's words (transcribe.cpp) for at least 95% of words on
+real speech, with no more word errors than the reference plus 1 point. Among the options that pass, the shortest
+wait on both phones wins.
 
 ## Layout
 
-- `upstream/`: files mirrored from Hex (MIT). Don't edit them; change `scripts/sync-hex.mjs` or `patches/` instead.
-- `adapter/ios/`: the Swift package `HexVoiceEngine` around Hex's iOS code.
+- `Package.swift` and `adapter/ios/`: the Swift package `VoiceEngineKit`.
+  - **Public surface:** `VoiceEngine.swift`.
+  - **Transcriber:** `ParakeetTranscriber.swift` (FluidAudio).
+  - **Recorder:** `TakeRecorder.swift` (16 kHz WAV takes).
+  - The transcriber and recorder are adapted from Hex's iOS app (MIT; see `THIRD_PARTY_NOTICES.md`).
 - `adapter/android/`: the Gradle module `:voice-engine`.
   - **Engines:** `Engines.kt` (transcribe.cpp, sherpa-onnx, Android's recognizer) and `LiteRtEngine.kt`.
   - **Models:** `SpeechModels.kt` (the model list, downloads and storage).
   - **Lab:** `SpeechLab.kt` (the speech model lab and its word error rate).
-  - **Native code:** `src/main/cpp/` (transcribe.cpp and CPU pinning).
+  - **Native code:** `src/main/cpp/` (transcribe.cpp at a pinned revision, and CPU pinning).
 - `lab/`: scripts that make test clips and model lists, run lab runs and score results.
 
 ## The speech model lab (Android)
@@ -104,7 +107,7 @@ phone too, so give it a few minutes between big runs, and repeat any close call.
 ## The lab on iOS
 
 Debug builds take `-HexCodeLab <set>`. It runs the clips of `Documents/<set>/` (the same `clips.json` and WAVs as
-on Android) through the engine after one warm-up run, and writes `Documents/lab/<set>.jsonl` in the Android
+on Android) through FluidAudio after one warm-up run, and writes `Documents/lab/<set>.jsonl` in the Android
 result format:
 
 ```bash
@@ -146,7 +149,7 @@ It prints one table per phone and clip set from the latest run of each model and
 - **Longest clip:** the wait on the longest clip.
 - **Word errors:** words wrong against the reference. Case, punctuation, camelCase, digits against words and
   "uh"/"um" don't count.
-- **Differs from Hex:** words that differ from Parakeet V2 Q8 on transcribe.cpp.
+- **Differs from Hex:** words that differ from the reference, Parakeet V2 Q8 on transcribe.cpp.
 - **Load time** and **memory**.
 
 The app uses the same word rules (`Wer` in `SpeechLab.kt`).

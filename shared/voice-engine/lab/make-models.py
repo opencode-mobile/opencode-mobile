@@ -2,7 +2,7 @@
 """Writes the speech model lab's model list, adapter/android/src/main/assets/lab/models.json.
 
 Every file is pinned to the Hugging Face revision current when this runs, with its size and SHA-256. Published
-accuracy comes from transcribe.cpp's catalog (the revision in hex-upstream.json).
+accuracy comes from transcribe.cpp's catalog (the revision pinned in adapter/android/src/main/cpp/CMakeLists.txt).
 
   python3 make-models.py <transcribe.cpp checkout>/catalog
 """

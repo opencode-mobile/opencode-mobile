@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// The voice engine as Hex Code sees it: get the speech model ready, record one take, turn it into text.
-/// Everything Hex-specific (Parakeet through FluidAudio, the 16 kHz recorder) stays behind this type.
+/// Parakeet through FluidAudio and the 16 kHz recorder stay behind this type.
 @MainActor
 @Observable
 public final class VoiceEngine {
@@ -31,9 +31,8 @@ public final class VoiceEngine {
     public private(set) var isRecording = false
     public nonisolated let modelName = "Parakeet V2"
 
-    private let audio = SystemAudioManager()
     private let transcriber = ParakeetTranscriber()
-    private var capture: (any ActiveAudioCapture)?
+    private var capture: TakeRecorder?
 
     public init() {}
 
@@ -58,29 +57,29 @@ public final class VoiceEngine {
     }
 
     /// Loudness of the current take, 0 to 1, for a meter.
-    public var level: Float { capture?.normalizedPowerLevel() ?? 0 }
+    public var level: Float { capture?.level ?? 0 }
 
     public func startRecording() async throws {
-        guard await audio.requestPermission() else { throw EngineError.microphoneDenied }
+        guard await TakeRecorder.requestPermission() else { throw EngineError.microphoneDenied }
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("take-\(UUID().uuidString).wav")
         do {
-            capture = try audio.beginCapture(at: url, maxDuration: 600, allowBluetooth: false)
+            capture = try TakeRecorder.start(at: url, maxDuration: 600)
         } catch {
-            audio.deactivateSession()
+            TakeRecorder.deactivateSession()
             throw EngineError.microphoneUnavailable
         }
         isRecording = true
     }
 
-    /// Ends the take and returns its text. Hex transcribes after the take, not while you talk.
+    /// Ends the take and returns its text. Parakeet transcribes after the take, not while you talk.
     public func stopAndTranscribe() async throws -> String {
         guard let capture else { throw EngineError.notRecording }
         let url = capture.url
         capture.stop()
         self.capture = nil
         isRecording = false
-        audio.deactivateSession()
+        TakeRecorder.deactivateSession()
         defer { try? FileManager.default.removeItem(at: url) }
         return try await transcriber.transcribe(url)
     }
@@ -97,6 +96,6 @@ public final class VoiceEngine {
         try? FileManager.default.removeItem(at: capture.url)
         self.capture = nil
         isRecording = false
-        audio.deactivateSession()
+        TakeRecorder.deactivateSession()
     }
 }

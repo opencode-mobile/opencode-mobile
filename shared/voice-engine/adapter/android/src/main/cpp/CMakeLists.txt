@@ -5,11 +5,10 @@ project(hexvoice C CXX)
 # for judging dictation. Only this library's own JNI file follows the app's debug setting.
 set(CMAKE_BUILD_TYPE Release)
 
-# transcribe.cpp at the revision Hex desktop pins in its Cargo.toml. scripts/sync-hex.mjs copies that
-# revision into hex-upstream.json; this reads it from there, so a Hex sync moves Android along with it.
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../hex-upstream.json" HEX_PIN)
-string(JSON TRANSCRIBE_REPO GET "${HEX_PIN}" transcribeCpp repository)
-string(JSON TRANSCRIBE_REV GET "${HEX_PIN}" transcribeCpp rev)
+# transcribe.cpp, the speech model lab's reference engine (the one Hex desktop runs), at a pinned revision.
+# Its catalog/ is also where lab/make-models.py reads published accuracy.
+set(TRANSCRIBE_REPO "https://github.com/anomalyco/transcribe.cpp")
+set(TRANSCRIBE_REV "7045d1c0fe7cee37747b2792977421d435e75fca")
 
 set(TRANSCRIBE_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(TRANSCRIBE_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
