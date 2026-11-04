@@ -114,6 +114,10 @@ struct ProjectListHomeView: View {
                         projectTitle: terminal.projectTitle,
                         ptyId: terminal.ptyId
                     )
+                case let .archivedSessions(scopeID):
+                    ArchivedSessionsView(scopeID: scopeID) { session in
+                        openSession(session)
+                    }
                 }
             }
             .task {
@@ -884,6 +888,12 @@ struct ProjectListHomeView: View {
                     screenId: ProductAnalytics.Screen.home,
                     actionId: ProductAnalytics.Action.homeOpenMenu
                 )
+                // Before presenting, so the Archived sessions entry is in the menu from its first frame.
+                viewModel.archivedMenu.refresh(
+                    scopeID: selectedSessionFilterId,
+                    projects: viewModel.homeProjects,
+                    worktreesEnabled: homeDisplayPreferences.showsWorktrees
+                )
                 homeMenuPresented = true
             })
         )
@@ -892,7 +902,27 @@ struct ProjectListHomeView: View {
 
     /// Feature entries go in `features`, top to bottom; `HomeMenu` adds Settings last.
     private var homeMenuEntries: [OpenCodeOverflowMenuEntry] {
-        HomeMenu.entries(features: [], openSettings: openSettings)
+        HomeMenu.entries(features: [archivedMenuEntry].compactMap { $0 }, openSettings: openSettings)
+    }
+
+    private var archivedMenuEntry: OpenCodeOverflowMenuEntry? {
+        guard let entry = viewModel.archivedMenu.entry else { return nil }
+        return OpenCodeOverflowMenuEntry(
+            id: HomeMenu.archivedSessionsID,
+            title: "archived_sessions.title",
+            subtitle: entry.count.map { count in
+                OpenCodeText(LocalizedStringResource(
+                    "home.menu.archived_count",
+                    defaultValue: "\(count) in \(entry.scopeTitle)"
+                ))
+            } ?? .verbatim(entry.scopeTitle),
+            icon: .archive,
+            accessibilityIdentifier: HomeMenu.archivedSessionsID,
+            action: {
+                homeMenuPresented = false
+                homeRoutes.append(.archivedSessions(scopeID: selectedSessionFilterId))
+            }
+        )
     }
 
     private func handleTerminalTap() {

@@ -354,6 +354,12 @@ final class SessionChatViewModel {
         sessionInfo.archiveSession()
     }
 
+    /// The archived banner's Unarchive.
+    func unarchiveSession() {
+        guard hasCreatedSession else { return }
+        sessionInfo.unarchiveSession()
+    }
+
     func deleteSession() {
         guard hasCreatedSession else { return }
         sessionInfo.deleteSession()
@@ -2167,6 +2173,8 @@ final class SessionChatViewModel {
             reviewChangesSummary: reviewChangesState.summary,
             supportsSessionMessageDiff: activeConnectionManager.capabilities.supportsSessionMessageDiff,
             supportsSessionArchive: activeConnectionManager.capabilities.supportsSessionArchive,
+            archivedAtEpochMs: infoState.archivedAtEpochMs,
+            supportsArchivedSessions: activeConnectionManager.capabilities.supportsArchivedSessions,
             supportsSessionMove: activeConnectionManager.capabilities.supportsSessionMove,
             moveSheetVisible: moveSheetVisible,
             moveInFlight: moveInFlight,

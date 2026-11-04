@@ -44,6 +44,10 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
     /// Session Chat can list the shells the agent runs. v1 reads them from the transcript's
     /// bash calls; v2 needs a release whose contract declares `GET /api/shell`.
     var supportsAgentShells: Bool = false
+    /// Archived sessions can be listed and restored (`GET /api/session?archived=true`,
+    /// `PATCH /api/session/{id}` with `archived: false`; v2 releases with archive). v1 archives
+    /// through `time.archived` but has no way to clear it.
+    var supportsArchivedSessions: Bool = false
 
     static func forProtocol(_ serverProtocol: ServerProtocol, v2Features: V2ServerFeatures = V2ServerFeatures()) -> ServerCapabilities {
         switch serverProtocol {
@@ -67,7 +71,8 @@ nonisolated struct ServerCapabilities: Sendable, Equatable {
                 supportsSideQuestion: v2Features.sessionGenerate,
                 supportsStreamedUpload: v2Features.streamedUpload,
                 recordsTimelineChangeNotices: true,
-                supportsAgentShells: v2Features.agentShells
+                supportsAgentShells: v2Features.agentShells,
+                supportsArchivedSessions: v2Features.sessionArchive
             )
         }
     }

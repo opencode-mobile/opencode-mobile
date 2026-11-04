@@ -4,6 +4,7 @@ import dev.opencode.mobile.data.remote.SessionsApi
 import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2LocationInfoDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
+import kotlinx.coroutines.CancellationException
 
 internal class V2SessionRemote(
     private val api: SessionsApi,
@@ -15,16 +16,30 @@ internal class V2SessionRemote(
     override suspend fun listPendingQuestions(directory: String?): List<QuestionRequest> =
         api.listPendingFormsV2(directory).map(adapter::toQuestionRequest)
 
-    override suspend fun listSessions(directory: String?): List<Session> {
+    override suspend fun listSessions(directory: String?): List<Session> = listSessions(directory, archived = false)
+
+    /** Callers gate on `supportsArchivedSessions`. */
+    override suspend fun listArchivedSessions(directory: String?): List<Session> = listSessions(directory, archived = true)
+
+    private suspend fun listSessions(
+        directory: String?,
+        archived: Boolean,
+    ): List<Session> {
         val projectId =
             directory?.let { path ->
-                runCatching { listableProjectId(api.locationForSessionList(path)) }.getOrNull()
+                try {
+                    listableProjectId(api.locationForSessionList(path))
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (_: Throwable) {
+                    null
+                }
             }
         return api
             .listSessionsV2(
                 directory = if (projectId == null) directory else null,
                 projectId = projectId,
-                archived = false,
+                archived = archived,
             ).map(adapter::toSession)
     }
 
@@ -68,6 +83,17 @@ internal class V2SessionRemote(
         api.setSessionArchivedV2(id, archived = true)
         return adapter.toSession(api.getSessionV2(id)).let { session ->
             if (session.isArchived) session else session.copy(archivedAtEpochMs = System.currentTimeMillis())
+        }
+    }
+
+    /** Callers gate on `supportsArchivedSessions`. */
+    override suspend fun unarchiveSession(
+        id: String,
+        directory: String?,
+    ): Session {
+        api.setSessionArchivedV2(id, archived = false)
+        return adapter.toSession(api.getSessionV2(id)).let { session ->
+            if (session.isArchived) session.copy(archivedAtEpochMs = null) else session
         }
     }
 

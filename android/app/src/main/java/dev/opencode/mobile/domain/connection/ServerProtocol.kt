@@ -56,6 +56,12 @@ data class ServerCapabilities(
     val supportsAgentShells: Boolean = false,
     /** A running agent shell can be stopped from the app (`DELETE /api/shell/{id}`, v2). */
     val supportsAgentShellStop: Boolean = false,
+    /**
+     * Archived sessions can be listed and restored (`GET /api/session?archived=true`,
+     * `PATCH /api/session/{id}` with `archived: false`; v2 releases with archive). v1 archives
+     * through `time.archived` but has no way to clear it.
+     */
+    val supportsArchivedSessions: Boolean = false,
 ) {
     companion object {
         fun forProtocol(
@@ -84,6 +90,7 @@ data class ServerCapabilities(
                         recordsTimelineChangeNotices = true,
                         supportsAgentShells = v2Features.agentShells,
                         supportsAgentShellStop = v2Features.agentShells,
+                        supportsArchivedSessions = v2Features.sessionArchive,
                     )
             }
     }

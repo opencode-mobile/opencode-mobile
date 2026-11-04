@@ -865,6 +865,12 @@ class SessionChatViewModel
             sessionInfo.archiveSession()
         }
 
+        /** The archived banner's Unarchive. */
+        fun unarchiveSession() {
+            if (!hasCreatedSession()) return
+            sessionInfo.unarchiveSession()
+        }
+
         fun deleteSession() {
             if (!hasCreatedSession()) return
             logAction(
@@ -2229,6 +2235,7 @@ class SessionChatViewModel
                 } else {
                     // Other regions still report plain strings; they are shown as is.
                     when {
+                        infoState.unarchiveFailed -> UiText.resource(R.string.archived_sessions_unarchive_failed)
                         infoState.lifecycleErrorMessage != null -> UiText.verbatim(infoState.lifecycleErrorMessage)
                         worktreeMove.state.value.errorMessage != null -> TimelineText.verbatim(worktreeMove.state.value.errorMessage)
                         composerState.errorMessage != null -> UiText.verbatim(composerState.errorMessage)
@@ -2409,6 +2416,8 @@ class SessionChatViewModel
                 sessionParentId = infoState.parentId,
                 supportsSessionMessageDiff = activeConnectionManager.currentCapabilities().supportsSessionMessageDiff,
                 supportsSessionArchive = activeConnectionManager.currentCapabilities().supportsSessionArchive,
+                archivedAtEpochMs = infoState.archivedAtEpochMs,
+                supportsArchivedSessions = activeConnectionManager.currentCapabilities().supportsArchivedSessions,
                 rename = infoState.rename,
                 slashSuggestionsVisible = composerState.slashSuggestionsVisible,
                 slashSuggestions = composerState.slashSuggestions,

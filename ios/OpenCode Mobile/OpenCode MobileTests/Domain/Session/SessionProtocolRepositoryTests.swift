@@ -245,6 +245,47 @@ struct SessionProtocolRepositoryTests {
         #expect(requests[1].url?.path.hasSuffix("/api/session/ses_1") == true)
     }
 
+    @Test func v2ListArchivedSessionsListsTheProjectWithArchivedTrue() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .json(#"{"directory":"/repo","project":{"id":"proj","directory":"/repo","canonical":"/repo"}}"#),
+            .json("{\"data\":[\(sessionEnvelope(id: "ses_old", title: "Old", archived: 5, wrapInData: false))],\"cursor\":{\"previous\":null,\"next\":null}}"),
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let sessions = try await repository.listArchivedSessions(directory: "/repo")
+
+        #expect(sessions.map(\.archivedAtEpochMs) == [5])
+        let listed = try #require(ProtocolRoutingURLProtocol.requests.first { $0.url?.path.hasSuffix("/api/session") == true }?.url)
+        #expect(queryValue(listed, "project") == "proj")
+        #expect(queryValue(listed, "archived") == "true")
+    }
+
+    @Test func v2UnarchiveSessionPatchesArchivedFalseAndClearsLaggingReload() async throws {
+        ProtocolRoutingURLProtocol.reset(responses: [
+            .noContent,
+            .json(sessionEnvelope(id: "ses_1", title: "Done", archived: 7)),
+        ])
+        let repository = makeSessionRepository(serverProtocol: .v2)
+
+        let session = try await repository.unarchiveSession(id: "ses_1", directory: "/repo")
+
+        #expect(!session.isArchived)
+        let requests = ProtocolRoutingURLProtocol.requests
+        #expect(requests[0].httpMethod == "PATCH")
+        #expect(requests[0].url?.path.hasSuffix("/api/session/ses_1") == true)
+        let body = try #require(ProtocolRoutingURLProtocol.bodies[0])
+        #expect(jsonObject(body)?["archived"] as? Bool == false)
+    }
+
+    @Test func v1ArchivedSessionsAreUnavailableWithoutARequest() async {
+        ProtocolRoutingURLProtocol.reset(responses: [.json("[]")])
+        let repository = makeSessionRepository(serverProtocol: .v1)
+
+        await #expect(throws: (any Error).self) { try await repository.listArchivedSessions(directory: "/repo") }
+        await #expect(throws: (any Error).self) { try await repository.unarchiveSession(id: "ses_1", directory: "/repo") }
+        #expect(ProtocolRoutingURLProtocol.requests.isEmpty)
+    }
+
     @Test func v2ArchiveSessionMarksArchivedWhenReloadLagsBehind() async throws {
         ProtocolRoutingURLProtocol.reset(responses: [
             .noContent,

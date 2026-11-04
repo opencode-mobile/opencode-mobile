@@ -304,6 +304,25 @@ struct SessionChatView: View {
                 )
             }
 
+            if let archivedAt = viewModel.uiState.archivedAtEpochMs {
+                OpenCodeInlineNotice(
+                    message: OpenCodeText(LocalizedStringResource(
+                        "session_chat.archived_banner",
+                        defaultValue: "Archived \(RelativeTimeFormatting.format(epochMs: archivedAt))"
+                    )),
+                    variant: .banner,
+                    action: viewModel.uiState.supportsArchivedSessions
+                        ? OpenCodeInlineNoticeAction(title: "archived_sessions.unarchive") {
+                            viewModel.unarchiveSession()
+                        }
+                        : nil
+                )
+                .accessibilityIdentifier("sessionChatArchivedBanner")
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
+                .openCodeReadableColumn()
+            }
+
             if let notice = viewModel.uiState.composer.modelNotice {
                 OpenCodeInlineNotice(message: .unlocalized(notice))
                     .padding(.horizontal, 16)

@@ -158,6 +158,7 @@ import dev.opencode.mobile.ui.onboarding.AppOnboardingScreen
 import dev.opencode.mobile.ui.playground.SessionChatPlaygroundScreen
 import dev.opencode.mobile.ui.root.AppRootState
 import dev.opencode.mobile.ui.root.AppRootViewModel
+import dev.opencode.mobile.ui.archived.ArchivedSessionsScreen
 import dev.opencode.mobile.ui.settings.AppearanceSettingsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsScreen
 import dev.opencode.mobile.ui.settings.DiagnosticLogsViewModel
@@ -427,6 +428,7 @@ fun MainNavigation() {
                                                 MainScreen(
                                                     onSettingsClick = { backStack.add(SettingsHome) },
                                                     onTerminalClick = { backStack.add(TerminalsCatalog) },
+                                                    onArchivedSessionsClick = { scopeId -> backStack.add(ArchivedSessions(scopeId)) },
                                                     onSessionClick = { target ->
                                                         if (useSplitLayout) {
                                                             paneStack.selectPaneSession(target.toSessionChatRoute())
@@ -835,6 +837,20 @@ fun MainNavigation() {
                                                             ptyId = ptyId,
                                                         ),
                                                     )
+                                                },
+                                            )
+                                        }
+                                    }
+                                    entry<ArchivedSessions> { key ->
+                                        RouteSurface {
+                                            ProductRouteScreenViewEffect(
+                                                screenId = ProductAnalytics.Screen.ARCHIVED_SESSIONS,
+                                            )
+                                            ArchivedSessionsScreen(
+                                                scopeId = key.scopeId,
+                                                onNavigateBack = { backStack.popRouteUnlessRoot() },
+                                                onOpenSession = { directory, sessionId, title ->
+                                                    backStack.add(SessionChat(sessionId = sessionId, sessionTitle = title, worktree = directory))
                                                 },
                                             )
                                         }

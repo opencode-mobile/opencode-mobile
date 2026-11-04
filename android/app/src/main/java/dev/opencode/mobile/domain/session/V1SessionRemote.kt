@@ -60,6 +60,15 @@ internal class V1SessionRemote(
             ),
         )
 
+    /** v1 sets `time.archived` but cannot clear it; the UI hides archived sessions there. */
+    override suspend fun listArchivedSessions(directory: String?): List<Session> =
+        throw SessionError.Http(404, ARCHIVED_SESSIONS_UNAVAILABLE)
+
+    override suspend fun unarchiveSession(
+        id: String,
+        directory: String?,
+    ): Session = throw SessionError.Http(404, ARCHIVED_SESSIONS_UNAVAILABLE)
+
     override suspend fun deleteSession(
         id: String,
         directory: String?,
