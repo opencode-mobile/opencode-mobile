@@ -281,7 +281,7 @@ private fun TestStatus(
                 )
             }
             is ModelTestState.Failed ->
-                OpenCodeInlineNotice(message = failureText(test.reason), tone = OpenCodeInlineNoticeTone.Error)
+                OpenCodeInlineNotice(message = failureText(test.reason), tone = OpenCodeInlineNoticeTone.Warning)
         }
     }
 }

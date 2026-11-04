@@ -231,7 +231,9 @@ private fun ScanPanel(
             Column {
                 when (state) {
                     ScanUi.Scanning -> {
-                        PanelTitle(stringResource(R.string.scan_point_title)) {}
+                        PanelTitle(stringResource(R.string.scan_point_title)) {
+                            Icon(OpenCodeIcons.QrCodeScanner, null, tint = openCodeColor("text-base"), modifier = Modifier.size(17.dp))
+                        }
                         PanelBody(codeText(stringResource(R.string.scan_point_body)))
                     }
                     ScanUi.Connecting -> {
@@ -246,7 +248,9 @@ private fun ScanPanel(
                     }
                     is ScanUi.Failed -> {
                         val (title, body) = failureText(state.failure)
-                        PanelTitle(title) {}
+                        PanelTitle(title) {
+                            Icon(OpenCodeIcons.Warning, null, tint = openCodeColor("warning"), modifier = Modifier.size(17.dp))
+                        }
                         if (body != null) PanelBody(codeText(body))
                         PanelButton(stringResource(R.string.scan_again), onScanAgain)
                     }

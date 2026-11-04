@@ -46,8 +46,10 @@ import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeAction
 import dev.opencode.mobile.ui.components.OpenCodeListItem
 import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
 import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
+import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
 import dev.opencode.mobile.ui.components.OpenCodeTopBar
 import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleLeading
 import dev.opencode.mobile.ui.components.StartDecorator
 import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
@@ -259,6 +261,7 @@ internal fun PageTop(
     OpenCodeTopBar(
         title = title,
         subtitle = subtitle,
+        subtitleLeading = subtitle?.let { OpenCodeTopBarSubtitleLeading.StatusDot(OpenCodeSessionConnectionStatus.Live) },
         leading = OpenCodeTopBarLeading.Back(onBack, stringResource(R.string.common_back)),
     )
 }

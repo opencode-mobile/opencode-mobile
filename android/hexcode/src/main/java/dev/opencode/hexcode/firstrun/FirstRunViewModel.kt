@@ -183,9 +183,10 @@ class FirstRunViewModel(
         state.update { it.copy(scan = ScanUi.Scanning, scanAttempt = it.scanAttempt + 1) }
     }
 
-    fun cameraDenied() = state.update { it.copy(scan = ScanUi.CameraDenied) }
+    // The camera only stands in for the scanning panel; a connection under way or its result stays on screen.
+    fun cameraDenied() = state.update { if (it.scan == ScanUi.Scanning) it.copy(scan = ScanUi.CameraDenied) else it }
 
-    fun cameraUnavailable() = state.update { it.copy(scan = ScanUi.CameraUnavailable) }
+    fun cameraUnavailable() = state.update { if (it.scan == ScanUi.Scanning) it.copy(scan = ScanUi.CameraUnavailable) else it }
 
     fun back() {
         val step = state.value.step
@@ -364,7 +365,7 @@ class FirstRunViewModel(
         state.update { it.copy(model = Loadable.Loaded(testing)) }
         testJob =
             viewModelScope.launch {
-                val result = env.modelTester.test(choice)
+                val result = env.modelTester.test(choice, state.value.project?.path)
                 updatePicker { it.finishTest(choice, result) }
             }
     }

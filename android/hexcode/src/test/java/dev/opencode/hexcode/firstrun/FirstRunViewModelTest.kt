@@ -89,7 +89,7 @@ class FirstRunViewModelTest {
                 }
             }
         override val modelTester =
-            ModelTesting { choice ->
+            ModelTesting { choice, _ ->
                 testGate?.await()
                 testResults(choice)
             }
@@ -314,6 +314,20 @@ class FirstRunViewModelTest {
             advanceUntilIdle()
             again.back()
             assertEquals(FirstRunStep.Done, again.uiState.value.step)
+        }
+
+    @Test
+    fun aCameraFailureDoesNotHideAPairingResult() =
+        runTest(dispatcher) {
+            val vm = viewModel(env())
+            vm.openScanner()
+            vm.scanned("not a code")
+            advanceUntilIdle()
+            vm.cameraUnavailable()
+            assertEquals(ScanUi.Failed(ConnectFailure.NotAPairingCode), vm.uiState.value.scan)
+            vm.scanAgain()
+            vm.cameraUnavailable()
+            assertEquals(ScanUi.CameraUnavailable, vm.uiState.value.scan)
         }
 
     private fun picker(vm: FirstRunViewModel) = (vm.uiState.value.model as Loadable.Loaded).value
