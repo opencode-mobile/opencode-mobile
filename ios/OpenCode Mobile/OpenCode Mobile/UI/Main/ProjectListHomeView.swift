@@ -885,7 +885,8 @@ struct ProjectListHomeView: View {
             ),
             projects: filter.projects,
             sections: homeSections,
-            worktreesEnabled: filter.worktreesEnabled
+            worktreesEnabled: filter.worktreesEnabled,
+            extraDirectories: viewModel.homeExtraDirectories
         )
     }
 

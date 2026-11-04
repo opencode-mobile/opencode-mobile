@@ -492,6 +492,8 @@ final class ProjectListHomeViewModel {
     private var projectResolutions: [String: HomeProjectResolution] = [:]
     /// Worktree directories the server listed, per added path.
     private var worktreeDirectories: [String: [String]] = [:]
+    /// v1: non-added worktree directories whose sessions each added path's section folds in.
+    private(set) var homeExtraDirectories: [String: [String]] = [:]
     /// Current branch by canonical worktree directory.
     private var worktreeBranches: [String: String] = [:]
     /// Name and VCS from the server's project list, by project id.
@@ -711,6 +713,7 @@ final class ProjectListHomeViewModel {
         worktreeMarks.retain(removedDirectories: [])
         projectResolutions.removeAll()
         worktreeDirectories.removeAll()
+        homeExtraDirectories.removeAll()
         worktreeBranches.removeAll()
         serverProjectInfo.removeAll()
         branchLookups.clear()
@@ -1311,6 +1314,7 @@ final class ProjectListHomeViewModel {
             clearProjectLoad(path)
             projectResolutions[path] = nil
             worktreeDirectories[path] = nil
+            homeExtraDirectories[path] = nil
         }
         pendingProjectRemoval = nil
         await runHomeLoad(skipProbe: true)
@@ -2110,6 +2114,9 @@ final class ProjectListHomeViewModel {
         if let resolution = update.resolution, projectResolutions[update.addedPath] != resolution {
             projectResolutions[update.addedPath] = resolution
             sessionCache.rememberProjectResolution(worktree: update.addedPath, resolution: resolution)
+        }
+        if homeExtraDirectories[update.addedPath] ?? [] != update.extraDirectories {
+            homeExtraDirectories[update.addedPath] = update.extraDirectories.isEmpty ? nil : update.extraDirectories
         }
         // A failed reload keeps the worktrees Home already knows.
         if update.inventory != .failed, worktreeDirectories[update.addedPath] != update.directories {
