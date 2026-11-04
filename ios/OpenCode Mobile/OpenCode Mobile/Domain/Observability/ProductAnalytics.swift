@@ -85,6 +85,7 @@ enum ProductAnalytics {
         static let archivedSessions = "archived_sessions"
         static let archivedSessionActions = "archived_session_actions"
         static let archivedDeleteSessionConfirm = "archived_delete_session_confirm"
+        static let worktrees = "worktrees"
         static let sessionChat = "session_chat"
         static let sessionOverflow = "session_overflow"
         static let sessionCommands = "session_commands"
@@ -132,6 +133,7 @@ enum ProductAnalytics {
 
         static let homeOpenSettings = "home_open_settings"
         static let homeOpenMenu = "home_open_menu"
+        static let homeOpenWorktrees = "home_open_worktrees"
         static let homeOpenTerminal = "home_open_terminal"
         static let homePullToRefresh = "home_pull_to_refresh"
         static let homeOpenSession = "home_open_session"

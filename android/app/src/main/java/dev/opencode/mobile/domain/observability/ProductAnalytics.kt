@@ -80,6 +80,7 @@ object ProductAnalytics {
         const val ARCHIVED_DELETE_SESSION_CONFIRM = "archived_delete_session_confirm"
         const val TERMINAL = "terminal"
         const val TERMINALS_CATALOG = "terminals_catalog"
+        const val WORKTREES = "worktrees"
         const val SESSION_CHAT = "session_chat"
         const val SESSION_OVERFLOW = "session_overflow"
         const val SESSION_COMMANDS = "session_commands"
@@ -128,6 +129,7 @@ object ProductAnalytics {
         // Home
         const val HOME_OPEN_SETTINGS = "home_open_settings"
         const val HOME_OPEN_MENU = "home_open_menu"
+        const val HOME_OPEN_WORKTREES = "home_open_worktrees"
         const val HOME_OPEN_TERMINAL = "home_open_terminal"
         const val HOME_PULL_TO_REFRESH = "home_pull_to_refresh"
         const val HOME_OPEN_SESSION = "home_open_session"

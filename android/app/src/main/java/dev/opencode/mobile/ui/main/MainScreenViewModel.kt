@@ -27,6 +27,10 @@ import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeProjectGrouping
 import dev.opencode.mobile.domain.home.HomeProjectsSnapshot
+import dev.opencode.mobile.domain.home.HomeScope
+import dev.opencode.mobile.domain.home.HomeWorktreeRequest
+import dev.opencode.mobile.domain.home.HomeWorktreesFeed
+import dev.opencode.mobile.domain.home.HomeWorktreesSnapshot
 import dev.opencode.mobile.domain.home.ResolvedHomePath
 import dev.opencode.mobile.domain.live.LiveStoreRefreshPolicy
 import dev.opencode.mobile.domain.live.SessionListSnapshot
@@ -109,6 +113,7 @@ class MainScreenViewModel
         projectFirstLoadTiming: ProjectFirstLoadTiming = ProjectFirstLoadTiming(),
         private val homeProjectsSnapshot: HomeProjectsSnapshot = HomeProjectsSnapshot(),
         private val worktreeInventoryCache: WorktreeInventoryCache = WorktreeInventoryCache(),
+        private val homeWorktreesFeed: HomeWorktreesFeed = HomeWorktreesFeed(),
     ) : ViewModel() {
         private val _uiState = MutableStateFlow<MainScreenUiState>(MainScreenUiState.Probing)
         val uiState: StateFlow<MainScreenUiState> = _uiState.asStateFlow()
@@ -263,6 +268,19 @@ class MainScreenViewModel
             viewModelScope.launch {
                 // A checkout created in Session Chat (Move to worktree) lists here at once.
                 homeProjectsSnapshot.worktreeRefreshRequests.collect(::refreshProjectWorktrees)
+            }
+            viewModelScope.launch {
+                // The Worktrees screen lists Home's projects and sessions and asks Home to act.
+                _uiState
+                    .map { (it as? MainScreenUiState.Loaded)?.worktreesSnapshot() ?: HomeWorktreesSnapshot() }
+                    .distinctUntilChanged()
+                    .collect(homeWorktreesFeed::publish)
+            }
+            viewModelScope.launch { homeWorktreesFeed.requests.collect(::onWorktreeRequest) }
+            viewModelScope.launch {
+                homeWorktreesFeed.removed.collect { removed ->
+                    updateHomeIndex { it.copy(removedWorktrees = removed) }
+                }
             }
             viewModelScope.launch {
                 connectionSessionCoordinator.profileSaved.collect {
@@ -1613,7 +1631,23 @@ class MainScreenViewModel
             }
         }
 
+        private fun onWorktreeRequest(request: HomeWorktreeRequest) {
+            when (request) {
+                is HomeWorktreeRequest.ShowSessions ->
+                    _pendingScopeRequest.value =
+                        HomeScopeRequest(HomeScope.worktreeId(request.projectKey, request.directory), evenFromAll = true)
+                is HomeWorktreeRequest.NewSession -> createSession(request.directory)
+                is HomeWorktreeRequest.Removed -> {
+                    // Before the reload, so the v1 extra-session sync already keeps its sessions.
+                    val removed = homeWorktreesFeed.removed.value
+                    updateHomeIndex { it.copy(removedWorktrees = removed) }
+                    refreshProjectWorktrees(request.directory)
+                }
+            }
+        }
+
         private fun resetHomeIndex() {
+            homeWorktreesFeed.clear()
             worktreeLoader.onDisconnected()
             worktreeInventoryCache.clear()
             listsSessionsPaths.clear()
@@ -1689,7 +1723,12 @@ class MainScreenViewModel
                     }
                 }
             extraObservationJobs = kept + started
-            updateHomeIndex { it.copy(extraSessions = it.extraSessions.filterKeys { directory -> directory in wanted }) }
+            // Sessions of a worktree removed from this app stay on Home (v1 cannot list them again).
+            updateHomeIndex { index ->
+                index.copy(
+                    extraSessions = index.extraSessions.filterKeys { it in wanted || it in index.removedWorktrees },
+                )
+            }
         }
 
         private fun stopLiveObservations() {

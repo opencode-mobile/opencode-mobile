@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -39,12 +40,15 @@ import dev.opencode.mobile.ProductAnalytics
 import dev.opencode.mobile.ProductPresentedScreenViewEffect
 import dev.opencode.mobile.R
 import dev.opencode.mobile.domain.connection.ConnectionProfileIdentity
+import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
 import dev.opencode.mobile.domain.home.HomeCompactRowPath
 import dev.opencode.mobile.domain.home.HomeProject
 import dev.opencode.mobile.domain.home.HomeProjectGrouping
 import dev.opencode.mobile.domain.home.HomeProjectPickerState
 import dev.opencode.mobile.domain.home.HomeScope
 import dev.opencode.mobile.domain.home.HomeSessionLocation
+import dev.opencode.mobile.domain.home.HomeWorktreeSession
+import dev.opencode.mobile.domain.home.HomeWorktreesSnapshot
 import dev.opencode.mobile.domain.preferences.HomeDisplayPreferences
 import dev.opencode.mobile.domain.session.SessionIdleOutcome
 import dev.opencode.mobile.domain.session.SessionSummary
@@ -110,6 +114,7 @@ import dev.opencode.mobile.ui.worktree.WorktreeCreateFormState
 import dev.opencode.mobile.ui.worktree.WorktreeCreateOrigin
 import dev.opencode.mobile.ui.worktree.WorktreeCreateTags
 import dev.opencode.mobile.ui.worktree.worktreeCreateBackAction
+import dev.opencode.mobile.ui.worktrees.WorktreesTags
 
 /** Long-press session actions on home: sheet, rename/fork dialogs, delete confirm. */
 data class HomeSessionActionsCallbacks(
@@ -136,6 +141,7 @@ fun MainScreen(
     onSettingsClick: () -> Unit,
     onTerminalClick: () -> Unit = {},
     onArchivedSessionsClick: (scopeId: String) -> Unit = {},
+    onWorktreesClick: () -> Unit = {},
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnectionClick: (dev.opencode.mobile.domain.connection.ConnectionProfile?) -> Unit,
     onConnectClick: () -> Unit,
@@ -206,6 +212,7 @@ fun MainScreen(
         archivedMenu = archivedMenu,
         onHomeMenuOpen = viewModel::refreshArchivedMenu,
         onArchivedSessionsClick = onArchivedSessionsClick,
+        onWorktreesClick = onWorktreesClick,
         onSessionClick = onSessionClick,
         onRetryProbe = viewModel::retryProbe,
         onEditConnection = { viewModel.requestEditConnection(onEditConnectionClick) },
@@ -288,6 +295,7 @@ internal fun MainScreen(
     removalSnackbar: OpenCodeSnackbarMessage?,
     onSettingsClick: () -> Unit,
     onTerminalClick: () -> Unit = {},
+    onWorktreesClick: () -> Unit = {},
     onSessionClick: (SessionOpenTarget) -> Unit,
     onEditConnection: () -> Unit,
     onConnectClick: () -> Unit,
@@ -356,6 +364,17 @@ internal fun MainScreen(
 
     var selectedFilterId by rememberSaveable { mutableStateOf(SessionListFilterTab.ALL_ID) }
     var homeMenuExpanded by rememberSaveable { mutableStateOf(false) }
+    // Counts only: the menu subtitle needs no session list.
+    val loadedWorktrees =
+        (uiState as? MainScreenUiState.Loaded)?.let { state ->
+            remember(state.projects, state.home.inventories) {
+                HomeWorktreesSnapshot(
+                    projects = state.projects,
+                    removableDirectories = state.home.removableWorktreeDirectories(state.projects),
+                    worktreesLoaded = state.home.inventories.isNotEmpty(),
+                )
+            }
+        }
     val archivedMenuEntry =
         archivedMenu?.let { entry ->
             val scopeTitle = entry.scopeTitle.resolve()
@@ -410,6 +429,20 @@ internal fun MainScreen(
                         testTag = SessionSearchTags.MENU_ENTRY,
                     ).takeIf { loaded != null },
                     archivedMenuEntry,
+                    OpenCodeOverflowMenuEntry(
+                        title = stringResource(R.string.worktrees_title),
+                        icon = OpenCodeIcons.CallSplit,
+                        subtitle = loadedWorktrees?.let { worktreesMenuSubtitle(it) },
+                        onClick = {
+                            homeMenuExpanded = false
+                            ProductAnalytics.logUserAction(
+                                screenId = ProductAnalytics.Screen.HOME,
+                                actionId = ProductAnalytics.Action.HOME_OPEN_WORKTREES,
+                            )
+                            onWorktreesClick()
+                        },
+                        testTag = WorktreesTags.MENU_ENTRY,
+                    ),
                 ),
             settingsTitle = stringResource(R.string.common_settings),
             onSettingsClick = {
@@ -1306,7 +1339,37 @@ internal fun homeScopeId(
 
 /** Rows for every Home project, one per session id. */
 internal fun MainScreenUiState.Loaded.homeSessions(worktreesEnabled: Boolean = true): List<SessionListSession> =
-    homeSessionListSessions(projects, sections, home.extraSessions, worktreesEnabled)
+    homeSessionListSessions(projects, sections, home.extraSessions, worktreesEnabled, home.removedWorktrees)
+
+/** ⋯ menu subtitle of Worktrees: "N across M projects", None, or nothing before Home listed them. */
+@Composable
+private fun worktreesMenuSubtitle(snapshot: HomeWorktreesSnapshot): String? {
+    if (!snapshot.worktreesLoaded) return null
+    val count = snapshot.worktreeCount
+    if (count == 0) return stringResource(R.string.worktrees_menu_none)
+    val projects = snapshot.projectsWithWorktrees
+    return stringResource(
+        R.string.worktrees_menu_subtitle,
+        count,
+        pluralStringResource(R.plurals.home_project_count, projects, projects),
+    )
+}
+
+/** Home's projects and sessions for the Worktrees screen. */
+internal fun MainScreenUiState.Loaded.worktreesSnapshot(): HomeWorktreesSnapshot =
+    HomeWorktreesSnapshot(
+        projects = projects,
+        removableDirectories = home.removableWorktreeDirectories(projects),
+        sessions =
+            homeSessions().map { session ->
+                HomeWorktreeSession(
+                    id = session.id,
+                    title = session.title,
+                    directory = ServerPathPolicy.canonical(session.directory.trim()),
+                    isRunning = session.status == SessionListStatus.Running || session.status == SessionListStatus.Retrying,
+                )
+            },
+    )
 
 /** Without project data, each section is its own project (tests and previews). */
 internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<SessionListSession> =
@@ -1314,23 +1377,27 @@ internal fun List<ProjectSectionUi>.toCrossProjectSessionListSessions(): List<Se
 
 /**
  * Home rows: each project's sessions from its added paths' lists and (v1) its other
- * worktrees' lists. A session listed more than once keeps its newest copy (the earlier
- * source on a tie); rows are newest first.
+ * worktrees' lists, including worktrees removed from this app ([removedWorktrees], directory to
+ * project key). A session listed more than once keeps its newest copy (the earlier source on a
+ * tie); rows are newest first.
  */
 internal fun homeSessionListSessions(
     projects: List<HomeProject>,
     sections: List<ProjectSectionUi>,
     extraSessions: Map<String, List<SessionSummary>> = emptyMap(),
     worktreesEnabled: Boolean = true,
+    removedWorktrees: Map<String, String> = emptyMap(),
 ): List<SessionListSession> {
     val sectionsByPath = sections.associateBy { it.worktree }
+    val removed = removedWorktrees.keys
     val flattened =
         projects.flatMap { project ->
+            val removedHere = removedWorktrees.filterValues { it == project.key }.keys
             project.memberPaths.flatMap { path ->
-                sectionsByPath[path]?.allSessions.orEmpty().map { HomeRowSource(project, path, it) }
+                sectionsByPath[path]?.allSessions.orEmpty().map { HomeRowSource(project, path, it, removed) }
             } +
-                project.worktrees.flatMap { worktree ->
-                    extraSessions[worktree.directory].orEmpty().map { HomeRowSource(project, worktree.directory, it) }
+                (project.worktrees.map { it.directory } + removedHere).distinct().flatMap { directory ->
+                    extraSessions[directory].orEmpty().map { HomeRowSource(project, directory, it, removed) }
                 }
         }
     val chosenIndexById = mutableMapOf<String, Int>()
@@ -1355,6 +1422,8 @@ private data class HomeRowSource(
     /** The added path or worktree whose list carried the session. */
     val listedIn: String,
     val session: SessionSummary,
+    /** Worktree directories removed from this app. */
+    val removedDirectories: Set<String> = emptySet(),
 ) {
     fun toSessionListSession(worktreesEnabled: Boolean = true): SessionListSession {
         val directory = session.directory?.takeIf { it.isNotEmpty() } ?: listedIn
@@ -1375,10 +1444,11 @@ private data class HomeRowSource(
             worktreeScopeId = worktree?.let { HomeScope.worktreeId(project.key, it.directory) },
             location =
                 HomeSessionLocation
-                    .parts(project, directory, includeProjectName = false, worktreesEnabled = worktreesEnabled)
-                    ?.map { SessionListLocationPart(it.text, isBranch = it.isBranch) },
+                    .parts(project, directory, includeProjectName = false, worktreesEnabled, removedDirectories)
+                    ?.map { SessionListLocationPart(it.text, isBranch = it.isBranch, isRemoved = it.isRemoved) },
             projectName = project.displayName,
             compactWorktree = HomeCompactRowPath.worktreeLabel(project, directory, worktreesEnabled),
+            compactWorktreeRemoved = HomeSessionLocation.isRemovedWorktree(project, directory, removedDirectories),
         )
     }
 }

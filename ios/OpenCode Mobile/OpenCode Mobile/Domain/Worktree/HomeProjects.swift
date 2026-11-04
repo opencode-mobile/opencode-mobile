@@ -337,10 +337,12 @@ nonisolated struct HomeRowLocation: Hashable, Sendable {
     enum Part: Hashable, Sendable {
         case text(String)
         case branch(String)
+        /// The folder of a worktree removed from the server.
+        case removed(String)
 
         var text: String {
             switch self {
-            case let .text(value), let .branch(value): value
+            case let .text(value), let .branch(value), let .removed(value): value
             }
         }
     }
@@ -352,12 +354,14 @@ nonisolated struct HomeRowLocation: Hashable, Sendable {
     var text: String { parts.map(\.text).joined(separator: Self.separator) }
 
     /// Nil for a non-repository project, which keeps the path subtitle, and for every project
-    /// while worktrees are off.
+    /// while worktrees are off. A directory in `removedDirectories` that the project no longer
+    /// lists is a removed worktree: its folder part is `.removed`.
     static func make(
         project: HomeProject,
         sessionDirectory: String?,
         includesProjectName: Bool,
-        worktreesEnabled: Bool = true
+        worktreesEnabled: Bool = true,
+        removedDirectories: Set<String> = []
     ) -> HomeRowLocation? {
         guard worktreesEnabled, project.isRepository else { return nil }
         let raw = sessionDirectory?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -369,9 +373,17 @@ nonisolated struct HomeRowLocation: Hashable, Sendable {
         if includesProjectName { parts.append(.text(project.displayName)) }
         if let branch { parts.append(.branch(branch)) }
         if !isMain || branch == nil {
-            parts.append(.text(worktree?.folderName ?? ServerPathPolicy.name(directory)))
+            let folder = worktree?.folderName ?? ServerPathPolicy.name(directory)
+            parts.append(worktree == nil && Self.isRemoved(directory, in: removedDirectories) ? .removed(folder) : .text(folder))
         }
         return HomeRowLocation(parts: parts)
+    }
+
+    /// `directory` is a worktree removed from this app, under either spelling of the folder.
+    static func isRemoved(_ directory: String, in removedDirectories: Set<String>) -> Bool {
+        guard !removedDirectories.isEmpty else { return false }
+        let key = worktreePathKey(directory)
+        return removedDirectories.contains { worktreePathKey($0) == key }
     }
 }
 

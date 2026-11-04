@@ -25,6 +25,19 @@ struct OpenCodeDialogOption {
     }
 }
 
+enum OpenCodeDialogNoteTone {
+    /// What else happens, such as sessions that stay.
+    case info
+    /// What is lost, such as uncommitted changes.
+    case warning
+}
+
+/// A callout under the subtitle of a confirmation.
+struct OpenCodeDialogNote: Hashable {
+    let text: OpenCodeText
+    var tone: OpenCodeDialogNoteTone = .info
+}
+
 struct OpenCodeDialogTextField {
     var text: Binding<String>
     var hint: OpenCodeText = .empty
@@ -57,6 +70,7 @@ struct OpenCodeDialog: ViewModifier {
     let primaryOption: OpenCodeDialogOption
     let secondaryOption: OpenCodeDialogOption
     let textField: OpenCodeDialogTextField?
+    var notes: [OpenCodeDialogNote] = []
 
     func body(content: Content) -> some View {
         content.background {
@@ -67,7 +81,8 @@ struct OpenCodeDialog: ViewModifier {
                     subtitle: subtitle,
                     primaryOption: primaryOption,
                     secondaryOption: secondaryOption,
-                    textField: textField
+                    textField: textField,
+                    notes: notes
                 ),
                 onDismiss: { isPresented = false }
             )
@@ -208,6 +223,7 @@ private struct OpenCodeDialogCard: View {
     let primaryOption: OpenCodeDialogOption
     let secondaryOption: OpenCodeDialogOption
     let textField: OpenCodeDialogTextField?
+    let notes: [OpenCodeDialogNote]
 
     var body: some View {
         VStack(alignment: .leading, spacing: dialogContentSpacing) {
@@ -222,6 +238,19 @@ private struct OpenCodeDialogCard: View {
                         .font(OpenCodeTypography.bodySecondary)
                         .foregroundStyle(OpenCodeColors.textBase)
                         .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+
+            if !notes.isEmpty {
+                VStack(alignment: .leading, spacing: dialogOptionSpacing) {
+                    ForEach(notes, id: \.self) { note in
+                        OpenCodeInlineNotice(
+                            message: note.text,
+                            tone: note.tone == .warning ? .error : .neutral,
+                            variant: .banner
+                        )
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
 
@@ -271,7 +300,8 @@ extension View {
         subtitle: OpenCodeText? = nil,
         primaryOption: OpenCodeDialogOption,
         secondaryOption: OpenCodeDialogOption,
-        textField: OpenCodeDialogTextField? = nil
+        textField: OpenCodeDialogTextField? = nil,
+        notes: [OpenCodeDialogNote] = []
     ) -> some View {
         modifier(
             OpenCodeDialog(
@@ -280,10 +310,28 @@ extension View {
                 subtitle: subtitle,
                 primaryOption: primaryOption,
                 secondaryOption: secondaryOption,
-                textField: textField
+                textField: textField,
+                notes: notes
             )
         )
     }
+}
+
+#Preview("Notes") {
+    Color.clear
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .openCodeDialog(
+            isPresented: .constant(true),
+            title: "Remove worktree?",
+            subtitle: "Deletes the folder on the server.",
+            primaryOption: OpenCodeDialogOption(title: "Remove anyway", destructive: true, action: {}),
+            secondaryOption: OpenCodeDialogOption(title: "Cancel", action: {}),
+            notes: [
+                OpenCodeDialogNote(text: "3 uncommitted changes will be lost.", tone: .warning),
+                OpenCodeDialogNote(text: "1 session uses this worktree. It stays on Home but can't run here again."),
+            ]
+        )
+        .openCodeTheme()
 }
 
 #Preview("Confirmation") {

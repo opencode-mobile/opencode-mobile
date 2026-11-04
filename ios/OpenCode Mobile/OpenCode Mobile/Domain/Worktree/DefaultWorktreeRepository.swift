@@ -108,6 +108,46 @@ struct DefaultWorktreeRepository: WorktreeRepository {
         return try await remote.branchesV2(directory: ServerPathPolicy.canonical(directory))
     }
 
+    func remove(_ request: RemoveWorktreeRequest) async throws {
+        let directory = ServerPathPolicy.canonical(request.directory.trimmingCharacters(in: .whitespacesAndNewlines))
+        if await protocolProvider() == .v2 {
+            let projectID = request.projectID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !projectID.isEmpty, projectID != HomeProjectGrouping.globalProjectID else {
+                throw WorktreeRemoveError.unsupported
+            }
+            try await removeCall(notFoundMeansUnsupported: false) {
+                try await remote.removeV2(projectID: projectID, directory: directory, force: request.force)
+            }
+            return
+        }
+        let projectDirectory = ServerPathPolicy.canonical(
+            request.projectDirectory.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+        try await removeCall(notFoundMeansUnsupported: true) {
+            try await remote.removeV1(projectDirectory: projectDirectory, directory: directory)
+        }
+    }
+
+    private func removeCall(notFoundMeansUnsupported: Bool, _ call: () async throws -> Void) async throws {
+        do {
+            try await call()
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let WorktreeRemoteError.http(statusCode, body) {
+            if statusCode == 404, notFoundMeansUnsupported { throw WorktreeRemoveError.unsupported }
+            let message = (Self.createError(WorktreeRemoteError.http(statusCode: statusCode, body: body))
+                as? WorktreeCreateError)?.message ?? WorktreeCreateCopy.requestFailed(statusCode)
+            if WorktreeErrorBody.forceRequired(body) { throw WorktreeRemoveError.forceRequired(message: message) }
+            throw WorktreeRemoveError.failed(message: message)
+        } catch let error as WorktreeRemoveError {
+            throw error
+        } catch {
+            // No HTTP answer: the transport failed. Its text can name the server, so it is for
+            // logs, not for the snackbar.
+            throw WorktreeRemoveError.unreachable(message: error.localizedDescription)
+        }
+    }
+
     /// The server's own words, else its raw body, else the status.
     static func createError(_ error: Error) -> Error {
         if error is CancellationError || error is WorktreeCreateError { return error }

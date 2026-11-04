@@ -55,10 +55,14 @@ enum OpenCodeListItemVariant {
 struct OpenCodeListItemPath: Equatable {
     let primary: String
     let secondary: String?
+    /// Set when the secondary no longer exists: it is struck through and VoiceOver hears this
+    /// note after it (for example "worktree removed").
+    let secondaryRemovedNote: String?
 
-    init(primary: String, secondary: String? = nil) {
+    init(primary: String, secondary: String? = nil, secondaryRemovedNote: String? = nil) {
         self.primary = primary
         self.secondary = secondary?.isEmpty == true ? nil : secondary
+        self.secondaryRemovedNote = secondaryRemovedNote
     }
 }
 
@@ -83,6 +87,8 @@ enum OpenCodeListItemSubtitleTone {
     case tertiary
     case addition
     case deletion
+    /// Something that no longer exists (a removed worktree): weaker and struck through.
+    case removed
 }
 
 struct OpenCodeListItemSubtitleSegment: Equatable {
@@ -493,7 +499,7 @@ struct OpenCodeListItem<Trailing: View>: View {
             if let icon = segment.icon, let image = OpenCodeInlineIcon.image(icon, pointSize: listItemSubtitleIconSize) {
                 text = text + Text(image).foregroundColor(color).baselineOffset(-1) + Text("\u{2009}")
             }
-            return text + Text(segment.text).foregroundColor(color)
+            return text + Text(segment.text).foregroundColor(color).strikethrough(segment.tone == .removed)
         }
     }
 
@@ -508,6 +514,8 @@ struct OpenCodeListItem<Trailing: View>: View {
             return OpenCodeColors.diffAdd
         case .deletion:
             return OpenCodeColors.diffDelete
+        case .removed:
+            return OpenCodeColors.textWeaker
         }
     }
 
@@ -696,13 +704,18 @@ private struct OpenCodeListItemPathLine: View {
                     .lineLimit(1)
                     .fixedSize()
                 Text(secondary)
-                    .foregroundStyle(enabled ? OpenCodeColors.textBase : OpenCodeColors.textWeaker)
+                    .strikethrough(path.secondaryRemovedNote != nil)
+                    .foregroundStyle(
+                        enabled && path.secondaryRemovedNote == nil ? OpenCodeColors.textBase : OpenCodeColors.textWeaker
+                    )
                     .lineLimit(1)
                     .truncationMode(.middle)
             }
             .font(listItemCompactPathFont)
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(path.primary), \(secondary)")
+            .accessibilityLabel(
+                [path.primary, secondary, path.secondaryRemovedNote].compactMap { $0 }.joined(separator: ", ")
+            )
         } else {
             primaryText
                 .font(listItemCompactPathFont)

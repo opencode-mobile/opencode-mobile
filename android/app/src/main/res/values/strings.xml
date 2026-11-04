@@ -1522,4 +1522,53 @@
     <string name="dictation_status_line_on_device">%1$s · %2$s · on-device</string>
     <string name="component_composer_select_at_least">Select at least %1$d</string>
     <string name="dictation_insert_description">Insert transcript</string>
+    <!-- Worktrees screen (#833). -->
+    <string name="worktrees_title">Worktrees</string>
+    <string name="worktrees_subtitle">%1$s · %2$s</string>
+    <plurals name="worktrees_count">
+        <item quantity="one">%1$d worktree</item>
+        <item quantity="other">%1$d worktrees</item>
+    </plurals>
+    <string name="worktrees_main_checkout">Main checkout</string>
+    <string name="worktrees_cannot_remove">Can’t be removed</string>
+    <plurals name="worktrees_changed">
+        <item quantity="one">%1$d changed</item>
+        <item quantity="other">%1$d changed</item>
+    </plurals>
+    <plurals name="worktrees_session_count">
+        <item quantity="one">%1$d session</item>
+        <item quantity="other">%1$d sessions</item>
+    </plurals>
+    <string name="worktrees_no_sessions">no sessions</string>
+    <string name="worktrees_none_in_project">No worktrees. New session → Choose project or worktree creates one.</string>
+    <string name="worktrees_footer">Removing a worktree deletes its folder on the server. Its sessions stay, but can’t run in it again.</string>
+    <string name="worktrees_more">More actions for %1$s</string>
+    <string name="worktrees_removing">Removing…</string>
+    <string name="worktrees_actions_subtitle">%1$s · %2$s</string>
+    <string name="worktrees_actions_show_on_home">Show sessions on Home</string>
+    <string name="worktrees_actions_new_session">New session here</string>
+    <string name="worktrees_actions_remove">Remove worktree…</string>
+    <string name="worktrees_remove_title">Remove worktree “%1$s”?</string>
+    <string name="worktrees_remove_message">Deletes %1$s on the server.</string>
+    <plurals name="worktrees_remove_changes">
+        <item quantity="one">%1$d uncommitted change will be lost.</item>
+        <item quantity="other">%1$d uncommitted changes will be lost.</item>
+    </plurals>
+    <string name="worktrees_remove_changes_unknown">Uncommitted changes will be lost.</string>
+    <string name="worktrees_remove_changes_unchecked">Couldn’t check for uncommitted changes. Any there will be lost.</string>
+    <plurals name="worktrees_remove_sessions">
+        <item quantity="one">%1$d session uses this worktree. It stays on Home but can’t run here again.</item>
+        <item quantity="other">%1$d sessions use this worktree. They stay on Home but can’t run here again.</item>
+    </plurals>
+    <string name="worktrees_remove_confirm_anyway">Remove anyway</string>
+    <string name="worktrees_blocked_title">Can’t remove “%1$s” yet</string>
+    <string name="worktrees_blocked_message">A session is running in this worktree. Stop it, then remove the worktree.</string>
+    <string name="worktrees_blocked_ok">OK</string>
+    <string name="worktrees_blocked_show_session">Show session</string>
+    <string name="worktrees_removed">Removed worktree “%1$s”</string>
+    <string name="worktrees_remove_failed">Couldn’t remove “%1$s”. %2$s</string>
+    <string name="worktrees_remove_failed_connection">Couldn’t remove “%1$s”. Check the connection and try again.</string>
+    <string name="worktrees_menu_subtitle">%1$d across %2$s</string>
+    <string name="worktrees_menu_none">None</string>
+    <string name="session_list_worktree_removed">worktree removed</string>
 </resources>

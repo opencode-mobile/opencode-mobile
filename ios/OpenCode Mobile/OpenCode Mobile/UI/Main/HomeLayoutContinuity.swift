@@ -8,6 +8,7 @@ enum HomeRoute: Hashable {
     case terminal(TerminalRoute)
     /// Archived sessions of a Home scope id.
     case archivedSessions(scopeID: String)
+    case worktrees
 
     var session: SessionListItem? {
         if case let .session(session) = self { return session }

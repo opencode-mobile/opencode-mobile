@@ -5,6 +5,7 @@ import dev.opencode.mobile.network.applyDirectory
 import dev.opencode.mobile.network.applyLocationDirectory
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
@@ -64,6 +65,7 @@ internal data class V1CreatedWorktreeDto(
 )
 
 interface WorktreeRemote {
+    /** V2 `GET /api/worktree?projectID=`: worktrees with a strategy, never the project's own directory. */
     suspend fun listV2(projectId: String): List<String>
 
     suspend fun refreshV2(projectId: String)
@@ -90,6 +92,22 @@ interface WorktreeRemote {
 
     /** V2 `GET /api/vcs/branch` at [directory]: local and remote branch names. */
     suspend fun branchesV2(directory: String): List<String>
+
+    /** V2 `DELETE /api/worktree` with `{projectID, directory, force}`. Throws [WorktreeHttpException] outside 2xx. */
+    suspend fun removeV2(
+        projectId: String,
+        directory: String,
+        force: Boolean,
+    )
+
+    /**
+     * V1 `DELETE /experimental/worktree?directory=` with `{"directory"}`; the server always forces.
+     * Throws [WorktreeHttpException] outside 2xx.
+     */
+    suspend fun removeV1(
+        projectDirectory: String,
+        directory: String,
+    )
 }
 
 class WorktreesApi private constructor(
@@ -105,6 +123,9 @@ class WorktreesApi private constructor(
             .get("api/worktree") {
                 parameter("projectID", projectId)
             }.body<List<WorktreeDirectoryDto>>()
+            // The project's own directory comes without a strategy; the server cannot remove it,
+            // and Home adds the main checkout itself.
+            .filter { !it.strategy.isNullOrBlank() }
             .map { it.directory }
 
     override suspend fun refreshV2(projectId: String) {
@@ -179,6 +200,38 @@ class WorktreesApi private constructor(
                 else -> null
             } ?: error("unrecognized branch list")
         return list.mapNotNull(JsonElement::branchName).distinct()
+    }
+
+    override suspend fun removeV2(
+        projectId: String,
+        directory: String,
+        force: Boolean,
+    ) {
+        httpClient
+            .get()
+            .delete("api/worktree") {
+                contentType(ContentType.Application.Json)
+                setBody(
+                    buildJsonObject {
+                        put("projectID", projectId)
+                        put("directory", directory)
+                        put("force", force)
+                    }.toString(),
+                )
+            }.successText()
+    }
+
+    override suspend fun removeV1(
+        projectDirectory: String,
+        directory: String,
+    ) {
+        httpClient
+            .get()
+            .delete("experimental/worktree") {
+                applyDirectory(projectDirectory)
+                contentType(ContentType.Application.Json)
+                setBody(buildJsonObject { put("directory", directory) }.toString())
+            }.successText()
     }
 
     private suspend fun HttpResponse.successText(): String {

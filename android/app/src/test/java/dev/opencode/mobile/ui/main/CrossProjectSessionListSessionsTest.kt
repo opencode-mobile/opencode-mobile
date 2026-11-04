@@ -15,6 +15,7 @@ import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import dev.opencode.mobile.ui.text.UiText
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CrossProjectSessionListSessionsTest {
@@ -276,6 +277,54 @@ class CrossProjectSessionListSessionsTest {
         assertEquals(listOf("extra", "main"), sessions.map { it.id })
         assertEquals("/wt-unadded", sessions.first().directory)
         assertEquals(HomeScope.worktreeId("proj", "/wt-unadded"), sessions.first().worktreeScopeId)
+    }
+
+    @Test
+    fun removedWorktreeSessions_stayWithTheirFolderStruckThrough() {
+        // After the remove the inventory no longer lists /wt-gone; v1 still holds its last list.
+        val projects =
+            HomeProjectGrouping.group(
+                addedPaths = listOf("/repo"),
+                resolved = mapOf("/repo" to ResolvedHomePath("proj", "/repo", isRepository = true)),
+                inventories = mapOf("/repo" to setOf("/repo")),
+                branches = mapOf("/repo" to "main"),
+            )
+        val sessions =
+            homeSessionListSessions(
+                projects,
+                listOf(section(worktree = "/repo", session(id = "main", title = "Main", updatedAtEpochMs = 1L))),
+                extraSessions = mapOf("/wt-gone" to listOf(session(id = "gone", title = "Gone", updatedAtEpochMs = 2L))),
+                removedWorktrees = mapOf("/wt-gone" to "proj"),
+            )
+
+        assertEquals(listOf("gone", "main"), sessions.map { it.id })
+        assertEquals(listOf(SessionListLocationPart("wt-gone", isRemoved = true)), sessions.first().location)
+        assertEquals(listOf(SessionListLocationPart("main", isBranch = true)), sessions.last().location)
+        val detail = sessions.first().locationLines(removedNote = "worktree removed")!!.detail!!
+        assertEquals(listOf("wt-gone", " · ", "worktree removed"), detail.map { it.text })
+        assertEquals(OpenCodeListItemSubtitleTone.Removed, detail.first().tone)
+        // Compact rows strike the worktree through and tell screen readers why.
+        assertEquals("worktree removed", sessions.first().compactPath(removedNote = "worktree removed").worktreeRemovedNote)
+        assertNull(sessions.last().compactPath(removedNote = "worktree removed").worktreeRemovedNote)
+    }
+
+    @Test
+    fun removedWorktreeMarks_matchEitherSpellingOfTheFolder() {
+        val projects =
+            HomeProjectGrouping.group(
+                addedPaths = listOf("/private/tmp/repo"),
+                resolved = mapOf("/private/tmp/repo" to ResolvedHomePath("proj", "/private/tmp/repo", isRepository = true)),
+                inventories = mapOf("/private/tmp/repo" to setOf("/private/tmp/repo")),
+            )
+        val sessions =
+            homeSessionListSessions(
+                projects,
+                listOf(section(worktree = "/private/tmp/repo", session(id = "gone", title = "Gone", updatedAtEpochMs = 2L, directory = "/private/tmp/wt/gone"))),
+                removedWorktrees = mapOf("/tmp/wt/gone" to "proj"),
+            )
+
+        assertEquals(listOf(SessionListLocationPart("gone", isRemoved = true)), sessions.single().location)
+        assertTrue(sessions.single().compactWorktreeRemoved)
     }
 
     @Test

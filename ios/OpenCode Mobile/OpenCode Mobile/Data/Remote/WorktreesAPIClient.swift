@@ -29,7 +29,9 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         }
         let data = try await data(for: request)
         let listed = try decoder.decode([WorktreeDirectoryDTO].self, from: data)
-        return listed.map(\.directory)
+        // The project's own directory comes without a strategy; the server cannot remove it,
+        // and Home adds the main checkout itself.
+        return listed.filter { $0.strategy?.isEmpty == false }.map(\.directory)
     }
 
     func refreshV2(projectID: String) async throws {
@@ -94,6 +96,26 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
         throw WorktreeRemoteError.invalidResponse
     }
 
+    func removeV2(projectID: String, directory: String, force: Bool) async throws {
+        guard let connection = connectionProvider() else { throw WorktreeRemoteError.noActiveConnection }
+        var request = connection.authorizedRequest(path: "api/worktree", method: "DELETE")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(WorktreeRemoveV2Body(projectID: projectID, directory: directory, force: force))
+        _ = try await bodyData(for: request)
+    }
+
+    func removeV1(projectDirectory: String, directory: String) async throws {
+        guard let connection = connectionProvider() else { throw WorktreeRemoteError.noActiveConnection }
+        var request = connection.authorizedRequest(
+            path: "experimental/worktree",
+            method: "DELETE",
+            directory: projectDirectory
+        )
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try encoder.encode(WorktreeRemoveV1Body(directory: directory))
+        _ = try await bodyData(for: request)
+    }
+
     /// Like `data(for:)`, keeping the error body so the server's words reach the user.
     private func bodyData(for request: URLRequest) async throws -> Data {
         let (data, response) = try await resolveURLSession().data(for: request)
@@ -116,6 +138,7 @@ nonisolated struct WorktreesAPIClient: WorktreeRemote, Sendable {
 
 private nonisolated struct WorktreeDirectoryDTO: Decodable {
     let directory: String
+    let strategy: String?
 }
 
 private nonisolated struct WorktreeCreateV2Body: Encodable {
@@ -133,6 +156,16 @@ private nonisolated struct WorktreeCreateV1Body: Encodable {
 private nonisolated struct WorktreeCreatedV1DTO: Decodable {
     let name: String?
     let branch: String?
+    let directory: String
+}
+
+private nonisolated struct WorktreeRemoveV2Body: Encodable {
+    let projectID: String
+    let directory: String
+    let force: Bool
+}
+
+private nonisolated struct WorktreeRemoveV1Body: Encodable {
     let directory: String
 }
 

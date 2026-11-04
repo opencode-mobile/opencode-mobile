@@ -68,6 +68,13 @@ interface WorktreeRepository {
 
     /** Branch names a V2 checkout can be created from at [directory]; V1 has none. */
     suspend fun baseBranches(directory: String): List<String> = emptyList()
+
+    /**
+     * Deletes a checkout on the server: V2 `DELETE /api/worktree` (needs
+     * [RemoveWorktreeRequest.projectId]), V1 `DELETE /experimental/worktree`. Throws
+     * [WorktreeRemoveError]; [WorktreeRemoveError.ForceRequired] when V2 found uncommitted changes.
+     */
+    suspend fun remove(request: RemoveWorktreeRequest): Unit = throw WorktreeRemoveError.Unsupported()
 }
 
 private val AlwaysCreatable: StateFlow<Boolean> = MutableStateFlow(true).asStateFlow()

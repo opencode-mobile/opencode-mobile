@@ -34,6 +34,20 @@ data class OpenCodeDialogOption(
     val onClick: () -> Unit,
 )
 
+enum class OpenCodeDialogNoteTone {
+    /** What else happens, such as sessions that stay. */
+    Info,
+
+    /** What is lost, such as uncommitted changes. */
+    Warning,
+}
+
+/** A callout under the subtitle of a confirmation. */
+data class OpenCodeDialogNote(
+    val text: String,
+    val tone: OpenCodeDialogNoteTone = OpenCodeDialogNoteTone.Info,
+)
+
 data class OpenCodeDialogTextField(
     val value: String,
     val onValueChange: (String) -> Unit,
@@ -54,6 +68,7 @@ fun OpenCodeDialog(
     modifier: Modifier = Modifier,
     subtitle: String? = null,
     textField: OpenCodeDialogTextField? = null,
+    notes: List<OpenCodeDialogNote> = emptyList(),
 ) {
     if (!visible) return
 
@@ -104,6 +119,25 @@ fun OpenCodeDialog(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                }
+
+                if (notes.isNotEmpty()) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(DialogOptionSpacing),
+                    ) {
+                        notes.forEach { note ->
+                            OpenCodeInlineNotice(
+                                message = note.text,
+                                tone =
+                                    when (note.tone) {
+                                        OpenCodeDialogNoteTone.Info -> OpenCodeInlineNoticeTone.Neutral
+                                        OpenCodeDialogNoteTone.Warning -> OpenCodeInlineNoticeTone.Error
+                                    },
+                                variant = OpenCodeInlineNoticeVariant.Banner,
+                            )
+                        }
                     }
                 }
 
@@ -166,6 +200,26 @@ private fun OpenCodeDialogConfirmationPreview() {
                     title = "Cancel",
                     onClick = {},
                 ),
+            onDismissRequest = {},
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun OpenCodeDialogNotesPreview() {
+    OpenCodeTheme {
+        OpenCodeDialog(
+            visible = true,
+            title = "Remove worktree?",
+            subtitle = "Deletes the folder on the server.",
+            notes =
+                listOf(
+                    OpenCodeDialogNote("3 uncommitted changes will be lost.", OpenCodeDialogNoteTone.Warning),
+                    OpenCodeDialogNote("1 session uses this worktree. It stays on Home but can't run here again."),
+                ),
+            primaryOption = OpenCodeDialogOption(title = "Remove anyway", destructive = true, onClick = {}),
+            secondaryOption = OpenCodeDialogOption(title = "Cancel", onClick = {}),
             onDismissRequest = {},
         )
     }

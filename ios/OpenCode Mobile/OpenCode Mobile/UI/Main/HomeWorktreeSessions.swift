@@ -19,10 +19,20 @@ func mergeHomeSessions(primary: [SessionListItem], extra: [SessionListItem]) -> 
 final class HomeWorktreeSessionFold {
     private var extras: [String: [SessionListItem]] = [:]
     private var extraIDs: [String: Set<String>] = [:]
+    /// Worktrees removed from this app. v1 no longer lists them, so their last sessions stay.
+    var retainedDirectories: Set<String> = []
 
     func apply(addedPath: String, current: [SessionListItem], nextExtras: [SessionListItem]) -> [SessionListItem] {
         let previous = extraIDs[addedPath] ?? []
         let primary = current.filter { !previous.contains($0.id) }
+        let nextIDs = Set(nextExtras.map(\.id))
+        let kept = (extras[addedPath] ?? []).filter { session in
+            guard !nextIDs.contains(session.id) else { return false }
+            // An extra lists under its worktree directory when the server gave no session directory.
+            let directory = session.directory?.isEmpty == false ? session.directory! : session.worktree
+            return retainedDirectories.contains(ServerPathPolicy.canonical(directory))
+        }
+        let nextExtras = nextExtras + kept
         extras[addedPath] = nextExtras
         extraIDs[addedPath] = Set(nextExtras.map(\.id))
         return mergeHomeSessions(primary: primary, extra: nextExtras)
@@ -193,6 +203,11 @@ final class HomeWorktreeMarks {
 
     func withLive(addedPath: String, primary: [SessionListItem]) -> [SessionListItem] {
         fold.withLive(addedPath: addedPath, primary: primary)
+    }
+
+    /// Worktrees removed from this app whose v1 sessions stay on Home.
+    func retain(removedDirectories: Set<String>) {
+        fold.retainedDirectories = removedDirectories
     }
 
     func applyExtras(addedPath: String, current: [SessionListItem], extras: [SessionListItem]) -> [SessionListItem] {

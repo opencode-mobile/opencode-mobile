@@ -283,6 +283,103 @@ class DefaultWorktreeRepositoryTest {
         val branch: String?,
     )
 
+    @Test
+    fun v2RemoveSendsProjectDirectoryAndForce() =
+        runTest {
+            val remote = FakeWorktreeRemote()
+            val repository = repository(remote, ServerProtocol.V2)
+
+            repository.remove(RemoveWorktreeRequest("proj", "/repo", "/wt/a/", force = true))
+
+            assertEquals(listOf(Triple("proj", "/wt/a", true)), remote.v2Removes)
+            assertTrue(remote.v1Removes.isEmpty())
+        }
+
+    @Test
+    fun v2RemoveWithoutAProjectIdIsUnsupported() =
+        runTest {
+            val remote = FakeWorktreeRemote()
+            val repository = repository(remote, ServerProtocol.V2)
+
+            for (projectId in listOf(null, " ", "global")) {
+                try {
+                    repository.remove(RemoveWorktreeRequest(projectId, "/repo", "/wt/a", force = false))
+                    fail("expected Unsupported")
+                } catch (_: WorktreeRemoveError.Unsupported) {
+                }
+            }
+            assertTrue(remote.v2Removes.isEmpty())
+        }
+
+    @Test
+    fun v2DirtyCheckoutAsksForForce() =
+        runTest {
+            val body =
+                """{"_tag":"WorktreeError","name":"WorktreeError","data":{"message":"contains modified or untracked files","forceRequired":true}}"""
+            val remote = FakeWorktreeRemote(removeError = WorktreeHttpException(400, body))
+            val repository = repository(remote, ServerProtocol.V2)
+
+            try {
+                repository.remove(RemoveWorktreeRequest("proj", "/repo", "/wt/a", force = false))
+                fail("expected ForceRequired")
+            } catch (error: WorktreeRemoveError.ForceRequired) {
+                assertEquals("contains modified or untracked files", error.message)
+            }
+        }
+
+    @Test
+    fun v2OtherFailureKeepsTheServerMessage() =
+        runTest {
+            val body = """{"name":"WorktreeError","data":{"message":"Invalid worktree directory: /wt/a"}}"""
+            val remote = FakeWorktreeRemote(removeError = WorktreeHttpException(400, body))
+            val repository = repository(remote, ServerProtocol.V2)
+
+            try {
+                repository.remove(RemoveWorktreeRequest("proj", "/repo", "/wt/a", force = true))
+                fail("expected Failed")
+            } catch (error: WorktreeRemoveError.Failed) {
+                assertEquals("Invalid worktree directory: /wt/a", error.message)
+            }
+        }
+
+    @Test
+    fun aTransportFailureIsUnreachable() =
+        runTest {
+            val remote = FakeWorktreeRemote(removeError = java.io.IOException("unexpected end of stream on http://10.0.2.2:4096/"))
+            val repository = repository(remote, ServerProtocol.V2)
+
+            try {
+                repository.remove(RemoveWorktreeRequest("proj", "/repo", "/wt/a", force = false))
+                fail("expected Unreachable")
+            } catch (_: WorktreeRemoveError.Unreachable) {
+            }
+        }
+
+    @Test
+    fun v1RemoveAsksInTheMainCheckout() =
+        runTest {
+            val remote = FakeWorktreeRemote()
+            val repository = repository(remote, ServerProtocol.V1)
+
+            repository.remove(RemoveWorktreeRequest(null, "/repo/", "/wt/a", force = false))
+
+            assertEquals(listOf("/repo" to "/wt/a"), remote.v1Removes)
+            assertTrue(remote.v2Removes.isEmpty())
+        }
+
+    @Test
+    fun v1RemoveA404IsUnsupported() =
+        runTest {
+            val remote = FakeWorktreeRemote(removeError = WorktreeHttpException(404, "Not Found"))
+            val repository = repository(remote, ServerProtocol.V1)
+
+            try {
+                repository.remove(RemoveWorktreeRequest(null, "/repo", "/wt/a", force = false))
+                fail("expected Unsupported")
+            } catch (_: WorktreeRemoveError.Unsupported) {
+            }
+        }
+
     private fun repository(
         remote: FakeWorktreeRemote,
         protocol: ServerProtocol,
@@ -294,7 +391,10 @@ class DefaultWorktreeRepositoryTest {
         private val v2Created: String = "/wt/created",
         private val v1Created: V1CreatedWorktree = V1CreatedWorktree("created", "opencode/created", "/wt/created"),
         private val createError: Exception? = null,
+        private val removeError: Exception? = null,
     ) : WorktreeRemote {
+        val v2Removes = mutableListOf<Triple<String, String, Boolean>>()
+        val v1Removes = mutableListOf<Pair<String, String>>()
         val v2Creates = mutableListOf<V2Create>()
         val v1Creates = mutableListOf<Pair<String, String>>()
         val branchLists = mutableListOf<String>()
@@ -340,6 +440,23 @@ class DefaultWorktreeRepositoryTest {
         override suspend fun branchesV2(directory: String): List<String> {
             branchLists += directory
             return listOf("main", "feature/x")
+        }
+
+        override suspend fun removeV2(
+            projectId: String,
+            directory: String,
+            force: Boolean,
+        ) {
+            v2Removes += Triple(projectId, directory, force)
+            removeError?.let { throw it }
+        }
+
+        override suspend fun removeV1(
+            projectDirectory: String,
+            directory: String,
+        ) {
+            v1Removes += projectDirectory to directory
+            removeError?.let { throw it }
         }
     }
 }
