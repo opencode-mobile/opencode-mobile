@@ -4,7 +4,7 @@ import dev.opencode.mobile.data.remote.dto.MessageInfoDto
 import dev.opencode.mobile.data.remote.dto.MessagePartDto
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
-import kotlinx.serialization.json.Json
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -23,7 +23,7 @@ class InMemoryMessageStore
     constructor(
         private val adapter: MessageDomainAdapter,
     ) : MessageStore {
-        private val json = Json { ignoreUnknownKeys = true }
+        private val json = serverPayloadJson()
 
         private val infoCaches = ConcurrentHashMap<String, MutableMap<String, JsonObject>>()
         private val partsCaches = ConcurrentHashMap<String, MutableMap<String, MutableMap<String, MessagePart>>>()

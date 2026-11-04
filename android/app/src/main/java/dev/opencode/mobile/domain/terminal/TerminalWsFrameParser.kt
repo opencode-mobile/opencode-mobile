@@ -1,6 +1,6 @@
 package dev.opencode.mobile.domain.terminal
 
-import kotlinx.serialization.json.Json
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -18,7 +18,7 @@ sealed interface TerminalWsFrame {
 }
 
 object TerminalWsFrameParser {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = serverPayloadJson()
 
     fun parseText(text: String): TerminalWsFrame = TerminalWsFrame.Output(text)
 

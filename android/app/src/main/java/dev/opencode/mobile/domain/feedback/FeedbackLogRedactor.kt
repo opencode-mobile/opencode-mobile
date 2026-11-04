@@ -3,7 +3,7 @@ package dev.opencode.mobile.domain.feedback
 import dev.opencode.mobile.data.local.ServerConnectionDefaults
 import dev.opencode.mobile.domain.connection.ConnectionProfile
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogRedactor
-import kotlinx.serialization.json.Json
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -39,7 +39,7 @@ object FeedbackLogRedactor {
             Regex("""(?i)\b(port\s*[=:]?\s*)\d{1,5}\b""") to "$1$VALUE",
         )
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = serverPayloadJson()
 
     /** Profile values to hide wherever they appear. The default username is too common to strip. */
     fun knownValues(profile: ConnectionProfile?): List<String> {

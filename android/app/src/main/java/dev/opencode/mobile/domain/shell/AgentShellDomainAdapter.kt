@@ -4,6 +4,7 @@ import dev.opencode.mobile.data.remote.dto.ShellInfoDto
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.message.Message
 import dev.opencode.mobile.domain.message.MessagePart
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.domain.message.ToolStartTime
 import dev.opencode.mobile.domain.message.ToolStatus
 import kotlinx.serialization.json.Json
@@ -32,7 +33,7 @@ internal sealed interface AgentShellEvent {
 
 /** Maps wire shapes of both protocols to [AgentShell] and [AgentShellOutput]. */
 class AgentShellDomainAdapter(
-    private val json: Json = Json { ignoreUnknownKeys = true },
+    private val json: Json = serverPayloadJson(),
 ) {
     // v1: bash tool parts
 

@@ -1,5 +1,6 @@
 package dev.opencode.mobile.domain.feedback
 
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import io.ktor.client.HttpClient
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.header
@@ -12,7 +13,6 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -64,7 +64,7 @@ class FirebaseRestFeedbackSubmitter(
     private val cooldownStore: FeedbackCooldownStore,
     private val nowMs: () -> Long = { System.currentTimeMillis() },
 ) : FeedbackSubmitter {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = serverPayloadJson()
 
     override suspend fun submit(report: FeedbackReport): FeedbackSubmitResult {
         val appCheckToken =

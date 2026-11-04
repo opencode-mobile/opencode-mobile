@@ -9,6 +9,7 @@ import dev.opencode.mobile.domain.event.ForegroundEventStream
 import dev.opencode.mobile.domain.event.OpencodeEvent
 import dev.opencode.mobile.domain.event.ResumeTiming
 import dev.opencode.mobile.domain.event.SessionViewedUpdate
+import dev.opencode.mobile.domain.json.serverPayloadJson
 import dev.opencode.mobile.domain.session.Session
 import dev.opencode.mobile.domain.session.SessionRepository
 import dev.opencode.mobile.domain.sessioncache.SessionCache
@@ -38,7 +39,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-import kotlinx.serialization.json.Json
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -52,7 +52,7 @@ class DefaultSessionLiveStore
         private val liveStoreScope: LiveStoreScope,
         private val sessionCache: SessionCache,
         private val syncCoordinator: SyncCoordinator,
-        private val eventDomainAdapter: EventDomainAdapter = EventDomainAdapter(Json { ignoreUnknownKeys = true }),
+        private val eventDomainAdapter: EventDomainAdapter = EventDomainAdapter(serverPayloadJson()),
         private val capabilities: () -> ServerCapabilities = { ServerCapabilities.forProtocol(ServerProtocol.V1) },
     ) : SessionLiveStore {
         @Inject
