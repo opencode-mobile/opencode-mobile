@@ -19,7 +19,7 @@ const LEGACY_IOS_XCASSETS = join(
   REPO_ROOT,
   "ios/OpenCode Mobile/OpenCode Mobile/MaterialIcons.xcassets",
 );
-const IOS_ENUM_OUTPUT = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Icons/OpenCodeIcon.swift");
+const IOS_ENUM_OUTPUT = join(REPO_ROOT, "ios/OpenCodeKit/Sources/OpenCodeKit/Icons/OpenCodeIcon.swift");
 const MANIFEST_HASH_FILE = join(REPO_ROOT, "icons/.manifest-hash");
 
 function copyIconsToCache(icons) {

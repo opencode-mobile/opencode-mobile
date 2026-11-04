@@ -8,7 +8,7 @@ const ANDROID_OUTPUT = join(
   REPO_ROOT,
   "android/app/src/main/java/dev/opencode/mobile/ui/icons/OpenCodeIcons.kt",
 );
-const IOS_ENUM_OUTPUT = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Icons/OpenCodeIcon.swift");
+const IOS_ENUM_OUTPUT = join(REPO_ROOT, "ios/OpenCodeKit/Sources/OpenCodeKit/Icons/OpenCodeIcon.swift");
 
 function expectedHash(icons) {
   return icons.map((i) => `${i.source}/${i.lucide}/${i.name}:${i.iosAssetName}`).join("\n") + "\n";
