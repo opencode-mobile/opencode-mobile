@@ -9,7 +9,7 @@ import { REPO_ROOT } from "./lib/utils.mjs";
 
 const SHARED_DIR = join(REPO_ROOT, "shared/theme-presets");
 const IOS_DIR = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Resources/ThemePresets");
-const ANDROID_DIR = join(REPO_ROOT, "android/app/src/main/assets/theme-presets");
+const ANDROID_DIR = join(REPO_ROOT, "android/opencode-kit/src/main/assets/theme-presets");
 
 function sha256(path) {
   return createHash("sha256").update(readFileSync(path)).digest("hex");
@@ -115,7 +115,7 @@ function main() {
 function checkSyntaxPresets() {
   const sharedDir = join(REPO_ROOT, "shared/syntax-presets");
   const iosDir = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Resources/SyntaxPresets");
-  const androidDir = join(REPO_ROOT, "android/app/src/main/assets/syntax-presets");
+  const androidDir = join(REPO_ROOT, "android/opencode-kit/src/main/assets/syntax-presets");
   const manifestPath = join(sharedDir, "syntax-manifest.json");
   requireFile(manifestPath, "shared syntax manifest");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));

@@ -3,6 +3,7 @@
 //
 // Sources:
 //   Android  android/app/src/main/res/values/strings.xml   (<string> and <plurals> names)
+//            android/opencode-kit/src/main/res/values/strings.xml   (the shared theme and components)
 //   iOS      ios/OpenCode Mobile/OpenCode Mobile/Localizable.xcstrings   (catalog keys)
 //
 // Key rule:
@@ -30,7 +31,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const ANDROID_STRINGS = join(REPO_ROOT, "android/app/src/main/res/values/strings.xml");
+const ANDROID_STRINGS = [
+  join(REPO_ROOT, "android/app/src/main/res/values/strings.xml"),
+  join(REPO_ROOT, "android/opencode-kit/src/main/res/values/strings.xml"),
+];
 const IOS_CATALOG = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/Localizable.xcstrings");
 
 const STRUCTURED_KEY = /^[a-z][a-z0-9_]*(\.[a-z0-9_]+)+$/;
@@ -61,7 +65,9 @@ function decodeXml(text) {
 }
 
 function readAndroid() {
-  const xml = readFileSync(ANDROID_STRINGS, "utf8").replace(/<!--[\s\S]*?-->/g, "");
+  const xml = ANDROID_STRINGS.map((file) => readFileSync(file, "utf8"))
+    .join("\n")
+    .replace(/<!--[\s\S]*?-->/g, "");
   const entries = new Map();
   for (const m of xml.matchAll(/<string\s+[^>]*name="([^"]+)"[^>]*>([\s\S]*?)<\/string>/g)) {
     entries.set(m[1], { plural: false, values: [decodeXml(m[2])] });

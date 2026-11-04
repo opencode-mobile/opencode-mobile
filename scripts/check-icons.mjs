@@ -6,7 +6,7 @@ import { loadManifest, REPO_ROOT } from "./lib/utils.mjs";
 const MANIFEST_HASH_FILE = join(REPO_ROOT, "icons/.manifest-hash");
 const ANDROID_OUTPUT = join(
   REPO_ROOT,
-  "android/app/src/main/java/dev/opencode/mobile/ui/icons/OpenCodeIcons.kt",
+  "android/opencode-kit/src/main/java/dev/opencode/mobile/ui/icons/OpenCodeIcons.kt",
 );
 const IOS_ENUM_OUTPUT = join(REPO_ROOT, "ios/OpenCodeKit/Sources/OpenCodeKit/Icons/OpenCodeIcon.swift");
 

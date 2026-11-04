@@ -4,6 +4,7 @@
 //
 // Scanned:
 //   Android  android/app/src/main/java/dev/opencode/mobile/ui/**/*.kt
+//            android/opencode-kit/src/main/java/dev/opencode/mobile/ui/**/*.kt
 //            (feature UI and the design-system components in ui/components)
 //   iOS      ios/OpenCode Mobile/OpenCode Mobile/UI/**/*.swift
 //            ios/OpenCode Mobile/OpenCode Mobile/Components/**/*.swift
@@ -46,7 +47,7 @@ const TEXT_PARAMS =
 const PLATFORMS = [
   {
     name: "Android",
-    roots: ["android/app/src/main/java/dev/opencode/mobile/ui"],
+    roots: ["android/app/src/main/java/dev/opencode/mobile/ui", "android/opencode-kit/src/main/java/dev/opencode/mobile/ui"],
     extension: ".kt",
     skipDirs: ["componentgallery", "playground", "snapshot", "icons", "diagnostic"],
     preview: /^\s*@Preview\b/,

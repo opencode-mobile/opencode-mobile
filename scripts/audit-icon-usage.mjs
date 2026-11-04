@@ -10,8 +10,12 @@ const EXCLUDE_PATH_SUFFIXES = [
   "IconsGalleryView.swift",
 ];
 
-const ANDROID_ROOT = join(REPO_ROOT, "android/app/src/main/java");
-const IOS_ROOT = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile");
+const ANDROID_ROOTS = [
+  join(REPO_ROOT, "android/app/src/main/java"),
+  join(REPO_ROOT, "android/opencode-kit/src/main/java"),
+];
+const IOS_ROOTS = [join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile"), join(REPO_ROOT, "ios/OpenCodeKit/Sources/OpenCodeKit")];
+const IOS_ENUM = join(REPO_ROOT, "ios/OpenCodeKit/Sources/OpenCodeKit/Icons/OpenCodeIcon.swift");
 
 function camelToSnake(camel) {
   return camel.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase();
@@ -43,7 +47,7 @@ function collectAndroidUsage() {
   const used = new Set();
   const androidIconPattern = /OpenCodeIcons\.([A-Z][A-Za-z0-9]*)/g;
 
-  for (const file of walkFiles(ANDROID_ROOT, ".kt")) {
+  for (const file of ANDROID_ROOTS.flatMap((root) => walkFiles(root, ".kt"))) {
     const rel = relative(REPO_ROOT, file);
     if (shouldExclude(rel)) continue;
 
@@ -58,7 +62,7 @@ function collectAndroidUsage() {
 
 function collectIosUsage() {
   const used = new Set();
-  const enumPath = join(IOS_ROOT, "Icons/OpenCodeIcon.swift");
+  const enumPath = IOS_ENUM;
   const enumCases = [
     ...readFileSync(enumPath, "utf8").matchAll(/case\s+([a-z][a-zA-Z0-9]*)\s*=/g),
   ].map((match) => match[1]);
@@ -66,7 +70,7 @@ function collectIosUsage() {
 
   const dottedCasePattern = /\.([a-z][a-zA-Z0-9]*)\b/g;
 
-  for (const file of walkFiles(IOS_ROOT, ".swift")) {
+  for (const file of IOS_ROOTS.flatMap((root) => walkFiles(root, ".swift"))) {
     const rel = relative(REPO_ROOT, file);
     if (shouldExclude(rel)) continue;
 

@@ -12,7 +12,7 @@ const svgPackageRoot = dirname(require.resolve("lucide-static/package.json"));
 const CACHE_DIR = join(REPO_ROOT, "icons/cache/lucide");
 const ANDROID_OUTPUT = join(
   REPO_ROOT,
-  "android/app/src/main/java/dev/opencode/mobile/ui/icons/OpenCodeIcons.kt",
+  "android/opencode-kit/src/main/java/dev/opencode/mobile/ui/icons/OpenCodeIcons.kt",
 );
 const IOS_XCASSETS = join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile/LucideIcons.xcassets");
 const LEGACY_IOS_XCASSETS = join(
