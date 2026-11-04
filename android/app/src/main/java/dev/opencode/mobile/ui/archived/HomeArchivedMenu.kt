@@ -39,11 +39,15 @@ class HomeArchivedMenu(
     val state: StateFlow<HomeArchivedMenuEntry?> = _state.asStateFlow()
     private var job: Job? = null
 
+    /** The last scope Home asked about, so [recheck] can count it again. */
+    private var lastRequest: Pair<String, Boolean>? = null
+
     /** Recounts for Home scope [scopeId]; Home calls it as the menu opens. */
     fun refresh(
         scopeId: String,
         worktreesEnabled: Boolean,
     ) {
+        lastRequest = scopeId to worktreesEnabled
         job?.cancel()
         if (!supported()) {
             _state.value = null
@@ -66,6 +70,16 @@ class HomeArchivedMenu(
                     }
                 _state.value = HomeArchivedMenuEntry(scopeId, title, count)
             }
+    }
+
+    /**
+     * Recounts the last scope after the server's capabilities may have changed (a probe that
+     * finished after the menu first opened), so the entry appears without reopening the menu.
+     */
+    fun recheck() {
+        val (scopeId, worktreesEnabled) = lastRequest ?: return
+        if (supported() == (_state.value != null)) return
+        refresh(scopeId, worktreesEnabled)
     }
 
     private suspend fun count(

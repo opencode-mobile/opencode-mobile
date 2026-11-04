@@ -1552,7 +1552,7 @@ final class ProjectListHomeViewModel {
             )
             if !skipProbe {
                 do {
-                    try await projectRepository.probeServer()
+                    try await probeServer()
                 } catch {
                     // Keep cached home; connection chrome reflects reachability.
                 }
@@ -1568,7 +1568,7 @@ final class ProjectListHomeViewModel {
             if !skipProbe {
                 let probedBaseURL = serverBaseURL
                 do {
-                    try await projectRepository.probeServer()
+                    try await probeServer()
                 } catch {
                     guard probeFailureIsFinal(probedBaseURL: probedBaseURL) else { return }
                     state = .probeFailed(error.localizedDescription)
@@ -1582,7 +1582,7 @@ final class ProjectListHomeViewModel {
                 state = .probing
             }
             do {
-                try await projectRepository.probeServer()
+                try await probeServer()
             } catch let error as ServerProbeError {
                 if preserveContent { return }
                 stopLiveObservations()
@@ -1687,6 +1687,12 @@ final class ProjectListHomeViewModel {
 
     /// False while another saved address may still answer: the address check's result reloads
     /// Home. Also false when the address moved during the probe, since a newer load is running.
+    /// Probes the server; its answer can turn on capabilities the menu entry was waiting for.
+    private func probeServer() async throws {
+        try await projectRepository.probeServer()
+        archivedMenu.recheck()
+    }
+
     private func probeFailureIsFinal(probedBaseURL: String) -> Bool {
         guard serverBaseURL == probedBaseURL else { return false }
         if connectionSessionCoordinator.addressCheck.state == .running {

@@ -295,7 +295,7 @@ private fun ArchivedSessionActions(
     OpenCodeDialog(
         visible = uiState.deleteConfirmVisible,
         title = stringResource(R.string.home_delete_title),
-        subtitle = stringResource(R.string.home_delete_message, target?.title.orEmpty()),
+        subtitle = stringResource(R.string.archived_sessions_delete_dialog_message, uiState.deleteTarget?.title.orEmpty()),
         primaryOption =
             OpenCodeDialogOption(
                 title = stringResource(R.string.common_delete),

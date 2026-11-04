@@ -73,7 +73,12 @@ struct ArchivedSessionsView: View {
                 set: { if !$0 { viewModel.dismissDeleteConfirm() } }
             ),
             title: "home.delete.title",
-            subtitle: viewModel.actionTarget.map { ProjectListHomeView.deleteSessionMessage($0.title) },
+            subtitle: viewModel.deleteTarget.map { target in
+                OpenCodeText(LocalizedStringResource(
+                    "archived_sessions.delete_dialog.message",
+                    defaultValue: "\u{201C}\(target.title)\u{201D} is deleted from the server. This can\u{2019}t be undone."
+                ))
+            },
             primaryOption: OpenCodeDialogOption(title: "common.delete", destructive: true) {
                 Task { await viewModel.confirmDelete() }
             },
@@ -128,8 +133,9 @@ struct ArchivedSessionsView: View {
                             session: row.row,
                             rowStyle: homeDisplayPreferences.sessionRowStyle,
                             showsStatus: false,
+                            // No long-press: the row's long-press overlay would cover the Unarchive
+                            // button, and a tap already opens the actions.
                             action: { viewModel.openActions(row) },
-                            onLongPress: { viewModel.openActions(row) },
                             trailing: {
                                 OpenCodeButton(
                                     variant: .iconCircle(.unarchive, accessibilityLabel: "archived_sessions.unarchive"),

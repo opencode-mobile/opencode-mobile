@@ -225,6 +225,8 @@
     <string name="archived_sessions_section_earlier">Earlier</string>
     <string name="archived_sessions_unarchive">Unarchive</string>
     <string name="archived_sessions_delete">Delete…</string>
+    <!-- %1$s is the session title. -->
+    <string name="archived_sessions_delete_dialog_message">“%1$s” is deleted from the server. This can’t be undone.</string>
     <!-- %1$s is when the session was archived, such as 2d ago. -->
     <string name="archived_sessions_archived_at">Archived %1$s</string>
     <!-- %1$s is the session title. -->

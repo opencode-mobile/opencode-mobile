@@ -53,6 +53,9 @@ class SessionInfo(
     private var observationJob: Job? = null
     private var renameJob: Job? = null
 
+    /** Bumped by every archive change, so a session read that started earlier cannot undo it. */
+    private var archiveStateGeneration = 0
+
     fun bindCreating(
         sessionTitle: String,
         worktree: String,
@@ -261,6 +264,7 @@ class SessionInfo(
                 .onSuccess {
                     if (!isCurrentBinding(sessionId, worktree)) return@onSuccess
                     logI("unarchive success session=$sessionId")
+                    archiveStateGeneration++
                     _state.update { it.copy(isLifecycleActionInFlight = false, archivedAtEpochMs = null) }
                 }.onFailure { error ->
                     if (!isCurrentBinding(sessionId, worktree)) return@onFailure
@@ -411,9 +415,18 @@ class SessionInfo(
                                 _state.update { it.copy(errorMessage = sessionErrorMessage(event.rawProperties)) }
                             }
                             applySessionUpdatedTitle(event, sessionId)
-                            // Archived or restored anywhere: the banner follows the server's answer.
-                            if (event.sessionId == sessionId && event.type in ARCHIVE_STATE_EVENTS) {
-                                launch { loadParent(sessionId, worktree) }
+                            // Archived or restored anywhere: the event decides; a read right after it can lag.
+                            if (event.sessionId == sessionId) {
+                                when (event.type) {
+                                    SESSION_UNARCHIVED -> {
+                                        archiveStateGeneration++
+                                        _state.update { it.copy(archivedAtEpochMs = null) }
+                                    }
+                                    SESSION_ARCHIVED -> {
+                                        archiveStateGeneration++
+                                        launch { loadArchivedAt(sessionId, worktree) }
+                                    }
+                                }
                             }
                             // Another client deleted the open session: leave instead of showing a dead chat.
                             if (eventDomainAdapter.sessionDeletedId(event) == sessionId) {
@@ -434,6 +447,7 @@ class SessionInfo(
         sessionId: String,
         worktree: String,
     ) {
+        val generation = archiveStateGeneration
         val session =
             try {
                 sessionRepository.getSession(sessionId, worktree)
@@ -444,7 +458,31 @@ class SessionInfo(
                 return
             }
         if (!isCurrentBinding(sessionId, worktree)) return
-        _state.update { it.copy(parentId = session.parentId ?: it.parentId, archivedAtEpochMs = session.archivedAtEpochMs) }
+        _state.update {
+            it.copy(
+                parentId = session.parentId ?: it.parentId,
+                // An archive change since the read started wins over what the read saw.
+                archivedAtEpochMs = if (generation == archiveStateGeneration) session.archivedAtEpochMs else it.archivedAtEpochMs,
+            )
+        }
+    }
+
+    /** After `session.archived`: the banner's time, or now while the read still lags. */
+    private suspend fun loadArchivedAt(
+        sessionId: String,
+        worktree: String,
+    ) {
+        val generation = archiveStateGeneration
+        val archivedAt =
+            try {
+                sessionRepository.getSession(sessionId, worktree).archivedAtEpochMs
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Throwable) {
+                null
+            } ?: System.currentTimeMillis()
+        if (!isCurrentBinding(sessionId, worktree) || generation != archiveStateGeneration) return
+        _state.update { it.copy(archivedAtEpochMs = archivedAt) }
     }
 
     private fun applySessionUpdatedTitle(
@@ -526,6 +564,7 @@ class SessionInfo(
         private const val EMPTY_TITLE_ERROR = "Enter a session title"
         const val ARCHIVE_ERROR = "Couldn't archive session."
         const val DELETE_ERROR = "Couldn't delete session."
-        private val ARCHIVE_STATE_EVENTS = setOf("session.archived", "session.unarchived")
+        private const val SESSION_ARCHIVED = "session.archived"
+        private const val SESSION_UNARCHIVED = "session.unarchived"
     }
 }
