@@ -67,6 +67,7 @@ final class ArchivedSessionsViewModel {
     private var hiddenIDs = Set<String>()
     /// Sessions this screen unarchived or deleted, with the archive time they had. A list that
     /// still carries that archive time lags behind the server; a newer one is a fresh archive.
+    /// Nil: a row Undo put back, whose server archive time the app never saw, matches any time.
     private var settled: [String: Int64?] = [:]
     /// Sessions shown again by Undo before the server has archived them, with their project.
     private var restoredSessions: [String: (projectKey: String?, session: Session)] = [:]
@@ -303,7 +304,7 @@ final class ArchivedSessionsViewModel {
 
     /// The server unarchived or deleted `session`; a lagging list must not bring its row back.
     private func settle(_ session: Session) {
-        settled[session.id] = .some(session.archivedAtEpochMs)
+        settled[session.id] = .some(restoredSessions[session.id] == nil ? session.archivedAtEpochMs : nil)
         hiddenIDs.remove(session.id)
         restoredSessions[session.id] = nil
         archivedByProject = archivedByProject.mapValues { $0.filter { $0.id != session.id } }
@@ -312,7 +313,7 @@ final class ArchivedSessionsViewModel {
 
     private func isSettled(_ session: Session) -> Bool {
         guard let archivedAt = settled[session.id] else { return false }
-        return archivedAt == session.archivedAtEpochMs
+        return archivedAt == nil || archivedAt == session.archivedAtEpochMs
     }
 
     private func session(for sessionID: String) -> Session? {

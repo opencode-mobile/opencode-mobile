@@ -224,7 +224,7 @@ struct ArchivedSessionsViewModelTests {
 
         // Capabilities that arrive after the menu opened bring the entry back without reopening it.
         supported = true
-        menu.recheck()
+        menu.recheck(projects: [alpha, beta])
         await menu.settle()
         #expect(menu.entry?.count == 3)
     }

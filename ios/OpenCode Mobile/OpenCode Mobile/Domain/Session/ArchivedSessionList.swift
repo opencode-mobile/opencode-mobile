@@ -44,13 +44,15 @@ nonisolated enum ArchivedSessionList {
     /// Root sessions that are archived, one per id, most recently archived first.
     static func sorted(_ sessions: [Session]) -> [Session] {
         var seen = Set<String>()
+        // Dedupe after sorting, so a session listed twice keeps its newest copy.
         return sessions
-            .filter { $0.isArchived && $0.parentID == nil && seen.insert($0.id).inserted }
+            .filter { $0.isArchived && $0.parentID == nil }
             .sorted { lhs, rhs in
                 let left = lhs.archivedAtEpochMs ?? 0
                 let right = rhs.archivedAtEpochMs ?? 0
                 return left != right ? left > right : lhs.id < rhs.id
             }
+            .filter { seen.insert($0.id).inserted }
     }
 
     static func period(archivedAtEpochMs: Int64, nowEpochMs: Int64) -> ArchivedSessionPeriod {

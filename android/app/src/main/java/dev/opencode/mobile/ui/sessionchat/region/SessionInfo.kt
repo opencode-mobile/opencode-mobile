@@ -423,8 +423,8 @@ class SessionInfo(
                                         _state.update { it.copy(archivedAtEpochMs = null) }
                                     }
                                     SESSION_ARCHIVED -> {
-                                        archiveStateGeneration++
-                                        launch { loadArchivedAt(sessionId, worktree) }
+                                        val generation = ++archiveStateGeneration
+                                        launch { loadArchivedAt(sessionId, worktree, generation) }
                                     }
                                 }
                             }
@@ -471,8 +471,8 @@ class SessionInfo(
     private suspend fun loadArchivedAt(
         sessionId: String,
         worktree: String,
+        generation: Int,
     ) {
-        val generation = archiveStateGeneration
         val archivedAt =
             try {
                 sessionRepository.getSession(sessionId, worktree).archivedAtEpochMs
