@@ -300,6 +300,36 @@ struct SessionSearchModelTests {
         #expect(resultIDs(model) == ["b-server"])
     }
 
+    @Test func v1WorktreeLists_areSearchedAndFiledUnderTheirAddedPath() async throws {
+        let (model, repository, sleeper) = makeModel()
+        let alphaWorktree = "/work/alpha-feature"
+        model.homeChanged(makeHome(paths: [alpha, beta], extraDirectories: [alpha: [alphaWorktree]]))
+        repository.results[alphaWorktree] = [session("a-wt", title: "Login in a worktree", directory: alphaWorktree, updated: 70)]
+        model.open(homeScopeId: HomeProjectGrouping.pathKey(alpha))
+
+        await search(model, "login", sleeper)
+
+        #expect(Set(repository.calls) == [.init(query: "login", directory: alpha), .init(query: "login", directory: alphaWorktree)])
+        #expect(resultIDs(model) == ["a-wt", "a-login"])
+        guard case let .results(results, _) = model.content else {
+            Issue.record("expected results")
+            return
+        }
+        let row = try #require(results.first { $0.id == "a-wt" }?.row)
+        #expect(row.worktree == HomeProjectGrouping.pathKey(alpha))
+        #expect(row.directory == alphaWorktree)
+    }
+
+    @Test func v1WorktreeLists_ofAnotherProjectAreLeftOutOfAProjectScope() async {
+        let (model, repository, sleeper) = makeModel()
+        model.homeChanged(makeHome(paths: [alpha, beta], extraDirectories: [beta: ["/work/beta-feature"]]))
+        model.open(homeScopeId: HomeProjectGrouping.pathKey(alpha))
+
+        await search(model, "login", sleeper)
+
+        #expect(repository.calls == [.init(query: "login", directory: alpha)])
+    }
+
     // MARK: Include archived
 
     private var archivedFixture: [String: [Session]] {
@@ -480,7 +510,7 @@ struct SessionSearchModelTests {
         return (model, repository, sleeper)
     }
 
-    private func makeHome(paths: [String]) -> SessionSearchHome {
+    private func makeHome(paths: [String], extraDirectories: [String: [String]] = [:]) -> SessionSearchHome {
         let adapter = SessionDomainAdapter()
         let sessions: [String: [SessionListItem]] = [
             alpha: [
@@ -513,7 +543,8 @@ struct SessionSearchModelTests {
             rows: sections.crossProjectSessionListSessions(projects: projects),
             projects: projects,
             sections: sections,
-            worktreesEnabled: true
+            worktreesEnabled: true,
+            extraDirectories: extraDirectories
         )
     }
 

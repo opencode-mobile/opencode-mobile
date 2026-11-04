@@ -10,6 +10,9 @@ struct SessionSearchHome: Equatable {
     /// builder from these.
     var sections: [ProjectSectionItem] = []
     var worktreesEnabled = true
+    /// v1: non-added worktree directories whose sessions an added path's section folds in, by
+    /// added path. Search asks them too, so a server match there is found like Home shows it.
+    var extraDirectories: [String: [String]] = [:]
 }
 
 /// A choice in the scope menu: All projects, or one Home project.
@@ -289,10 +292,26 @@ final class SessionSearchModel {
         scope == HomeScope.allID || row.worktree == scope
     }
 
-    /// Added paths searched for `scope`, one request each.
+    /// Every list Home loads for `scope`, one request each: the added paths, then (v1) the
+    /// worktrees each added path folds in.
     private func pathsInScope(_ scope: String) -> [String] {
-        if scope == HomeScope.allID { return home.sections.map(\.worktree) }
-        return home.projects.first { $0.key == scope }?.memberPaths ?? []
+        let added = scope == HomeScope.allID
+            ? home.sections.map(\.worktree)
+            : home.projects.first { $0.key == scope }?.memberPaths ?? []
+        var paths = added
+        for path in added {
+            for directory in home.extraDirectories[path] ?? [] where !paths.contains(directory) {
+                paths.append(directory)
+            }
+        }
+        return paths
+    }
+
+    /// The added path whose Home section shows `directory`'s sessions: itself, or the added path
+    /// that folds that worktree in.
+    private func sectionPath(for directory: String) -> String? {
+        if home.sections.contains(where: { $0.worktree == directory }) { return directory }
+        return home.extraDirectories.first { $0.value.contains(directory) }?.key
     }
 
     // MARK: Server search
@@ -339,10 +358,26 @@ final class SessionSearchModel {
         serverRows = rows
     }
 
-    /// Home's row builder applied to sessions the server returned for one added path.
+    /// Home's row builder applied to sessions the server returned for one list, filed in the
+    /// section that shows that list on Home. A list no section shows any more (Home changed while
+    /// the request ran) adds nothing; Home's change has already started a new search.
     private func serverRowsFor(path: String, sessions: [Session]) -> [SessionListSession] {
-        guard let section = home.sections.first(where: { $0.worktree == path }), !sessions.isEmpty else { return [] }
-        let items = sessions.map { adapter.listItem(from: $0, worktree: path) }
+        guard !sessions.isEmpty,
+              let owner = sectionPath(for: path),
+              let section = home.sections.first(where: { $0.worktree == owner })
+        else { return [] }
+        let items = sessions.map { session in
+            let item = adapter.listItem(from: session, worktree: path)
+            if item.directory?.isEmpty == false { return item }
+            return SessionListItem(
+                id: item.id,
+                title: item.title,
+                worktree: item.worktree,
+                updatedAtEpochMs: item.updatedAtEpochMs,
+                parentID: item.parentID,
+                directory: path
+            )
+        }
         let serverSection = ProjectSectionItem(
             id: section.id,
             worktree: section.worktree,
