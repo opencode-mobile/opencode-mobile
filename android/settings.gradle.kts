@@ -32,6 +32,7 @@ plugins {
 
 rootProject.name = "OpenCode Mobile"
 include(":app")
+include(":hexcode")
 include(":markdown-core")
 project(":markdown-core").projectDir = file("../shared/markdown-core")
 include(":highlight-bench")
