@@ -5,20 +5,21 @@ import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import java.security.MessageDigest
 import kotlin.math.sqrt
 
 /**
- * The voice engine as Hex Code sees it: get the speech model ready, record one take, turn it into text.
- * Same engine and model as Hex desktop (transcribe.cpp, Parakeet V2); speech never leaves the phone.
+ * The voice engine as Hex Code sees it: get the chosen speech model ready, record one take, turn it into text.
+ * By default that is Hex's model, Parakeet V2, on sherpa-onnx ([SpeechModels.DICTATION_DEFAULT]); the speech model
+ * lab can switch to others. Speech never leaves the phone.
  */
 class VoiceEngine(
     context: Context,
@@ -38,20 +39,38 @@ class VoiceEngine(
         ) : ModelState
     }
 
-    val modelName = "Parakeet V2"
-
     private val appContext = context.applicationContext
-    private val modelFile = File(appContext.filesDir, "models/${BuildConfig.MODEL_FILE}")
+    private val prefs = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+    val models: List<SpeechModel> = SpeechModels.load(appContext)
+    val store = ModelStore(appContext)
+
+    private val active =
+        MutableStateFlow(
+            models.firstOrNull { it.id == prefs.getString("model", null) } ?: models.first { it.id == SpeechModels.DICTATION_DEFAULT },
+        )
+    val activeModel: StateFlow<SpeechModel> = active.asStateFlow()
+    val modelName: String get() = active.value.title
+
+    var options: EngineOptions =
+        EngineOptions(
+            allCores = prefs.getBoolean("allCores", false),
+            provider =
+                prefs.getString("provider", null) ?: EngineOptions().provider,
+        )
+        private set
+
     private val state = MutableStateFlow<ModelState>(ModelState.NotLoaded)
     val modelState: StateFlow<ModelState> = state.asStateFlow()
 
-    private var session = 0L
+    private var engine: SpeechEngine? = null
+    private val lock = Mutex()
 
     // Phones mix fast and slow cores, and ggml splits each step evenly across its threads, so one thread on a
     // little core holds everything up. Runs use one thread per fast core and stay on those cores.
-    private val cores = Cores.read()
+    internal val cores = Cores.read()
     private var recorder: AudioRecord? = null
     private var reader: Thread? = null
+    private var stream: SpeechStream? = null
     private val samples = FloatBuffer()
 
     /** Loudness of the current take, 0 to 1, for a meter. */
@@ -60,48 +79,89 @@ class VoiceEngine(
 
     val isRecording: Boolean get() = recorder != null
 
-    /** Downloads (once, about 730 MB) and loads the speech model. Safe to call again. */
+    /** "8 cores, 4 fast" and the chip, for showing next to results. */
+    val deviceDetail: String
+        get() =
+            listOfNotNull(
+                if (Build.VERSION.SDK_INT >=
+                    31
+                ) {
+                    Build.SOC_MODEL
+                } else {
+                    null
+                },
+                "${cores.count} cores, ${cores.fastCount} fast",
+            ).joinToString(" · ")
+
+    /** Downloads the chosen model if needed and loads it. Safe to call again. */
     suspend fun prepare() {
-        if (state.value == ModelState.Ready) return
-        withContext(Dispatchers.IO) {
-            try {
-                if (!modelFile.isFile || modelFile.length() != BuildConfig.MODEL_BYTES) download()
-                state.value = ModelState.Preparing(1.0, "Loading the model")
-                session = Native.open(modelFile.absolutePath, cores.fastCount)
-                state.value = ModelState.Ready
-            } catch (e: Exception) {
-                state.value = ModelState.Failed(e.message ?: "Could not get speech ready")
+        lock.withLock {
+            if (engine != null) return
+            val model = active.value
+            withContext(Dispatchers.IO) {
+                try {
+                    if (!store.isInstalled(model)) {
+                        store.download(model) { done, all ->
+                            state.value = ModelState.Preparing(done.toDouble() / all, "Downloading · ${done / 1_000_000} MB")
+                        }
+                    }
+                    state.value = ModelState.Preparing(1.0, "Loading the model")
+                    engine = openEngine(appContext, store, model, options, cores)
+                    state.value = ModelState.Ready
+                } catch (e: Exception) {
+                    state.value = ModelState.Failed(e.message ?: "Could not get speech ready")
+                }
             }
         }
     }
 
-    private fun download() {
-        modelFile.parentFile?.mkdirs()
-        val part = File(modelFile.path + ".part")
-        val connection = URL(BuildConfig.MODEL_URL).openConnection() as HttpURLConnection
-        val digest = MessageDigest.getInstance("SHA-256")
-        connection.inputStream.use { input ->
-            part.outputStream().use { output ->
-                val buffer = ByteArray(1 shl 16)
-                var done = 0L
-                var lastReport = 0L
-                while (true) {
-                    val n = input.read(buffer)
-                    if (n < 0) break
-                    output.write(buffer, 0, n)
-                    digest.update(buffer, 0, n)
-                    done += n
-                    if (done - lastReport > 4_000_000) {
-                        lastReport = done
-                        val mb = done / 1_000_000
-                        state.value = ModelState.Preparing(done.toDouble() / BuildConfig.MODEL_BYTES, "Downloading · $mb MB")
-                    }
-                }
+    /** Switches dictation to [model] with [options] and gets it ready. */
+    suspend fun use(
+        model: SpeechModel,
+        options: EngineOptions = this.options,
+    ) {
+        unload()
+        active.value = model
+        this.options = options
+        prefs
+            .edit()
+            .putString("model", model.id)
+            .putBoolean("allCores", options.allCores)
+            .putString("provider", options.provider)
+            .apply()
+        prepare()
+    }
+
+    /**
+     * Loads [model] on its own (dictation's model is unloaded first, so two big models never share memory),
+     * hands it to [block] with the time loading took, then brings dictation's model back.
+     */
+    suspend fun <T> withModel(
+        model: SpeechModel,
+        options: EngineOptions,
+        block: suspend (SpeechEngine, Double) -> T,
+    ): T {
+        unload()
+        try {
+            var opened: SpeechEngine? = null
+            val loadMs = withContext(Dispatchers.IO) { SpeechLab.timed { opened = openEngine(appContext, store, model, options, cores) } }
+            val e = opened!!
+            try {
+                return block(e, loadMs)
+            } finally {
+                e.close()
             }
+        } finally {
+            prepare()
         }
-        val sha = digest.digest().joinToString("") { "%02x".format(it) }
-        check(sha == BuildConfig.MODEL_SHA256) { "The downloaded model is damaged. Try again." }
-        check(part.renameTo(modelFile)) { "Could not save the model" }
+    }
+
+    private suspend fun unload() {
+        lock.withLock {
+            engine?.close()
+            engine = null
+            state.value = ModelState.NotLoaded
+        }
     }
 
     /** Starts a take. The caller must hold RECORD_AUDIO. */
@@ -118,6 +178,9 @@ class VoiceEngine(
                 maxOf(minBuffer, SAMPLE_RATE / 5 * 2),
             )
         samples.clear()
+        // engines that listen while you talk get the take as it records
+        val live = engine?.startStream()
+        stream = live
         record.startRecording()
         recorder = record
         reader =
@@ -127,31 +190,38 @@ class VoiceEngine(
                     val n = record.read(chunk, 0, chunk.size)
                     if (n <= 0) continue
                     var sum = 0.0
+                    val floats = FloatArray(n)
                     for (i in 0 until n) {
                         val v = chunk[i] / 32768f
+                        floats[i] = v
                         samples.add(v)
                         sum += v * v
                     }
+                    live?.accept(floats)
                     level = (sqrt(sum / n) * 6).toFloat().coerceIn(0f, 1f)
                 }
             }.apply { start() }
     }
 
-    /** Ends the take and returns its text. Hex transcribes after the take, not while you talk. */
+    /** Ends the take and returns its text. Most engines transcribe after the take, not while you talk. */
     suspend fun stopAndTranscribe(): String {
+        val live = stream
         val pcm = stop() ?: error("Nothing is being recorded.")
+        stream = null
+        if (live != null) return live.finish().trim().ifEmpty { error("No speech was detected.") }
         return transcribe(pcm)
     }
 
     /** Transcribes 16 kHz mono samples, for takes, checks and tests. */
-    suspend fun transcribe(pcm: FloatArray): String =
-        withContext(Dispatchers.Default) {
-            check(session != 0L) { "Parakeet V2 is not ready." }
-            Native.transcribe(session, pcm, cores.fastMask).trim().ifEmpty { error("No speech was detected.") }
-        }
+    suspend fun transcribe(pcm: FloatArray): String {
+        val e = engine ?: error("${active.value.title} is not ready.")
+        return e.transcribe(pcm).trim().ifEmpty { error("No speech was detected.") }
+    }
 
     /** Drops the take without transcribing it. */
     fun cancelRecording() {
+        stream?.cancel()
+        stream = null
         stop()
     }
 
@@ -166,46 +236,10 @@ class VoiceEngine(
         return samples.toArray()
     }
 
-    /**
-     * Times transcription of [pcm] across thread counts and core choices, opening one session at a time.
-     * Each line: setup, first run, then the best of two warm runs.
-     */
-    suspend fun benchmark(pcm: FloatArray): String =
-        withContext(Dispatchers.Default) {
-            val all = (1L shl cores.count) - 1
-            val configs =
-                buildList {
-                    add(Triple("4 threads, any core (current)", 4, 0L))
-                    add(Triple("${cores.count} threads, any core", cores.count, 0L))
-                    add(Triple("${cores.fastCount} threads, any core", cores.fastCount, 0L))
-                    add(Triple("${cores.fastCount} threads, fast cores", cores.fastCount, cores.fastMask))
-                    if (cores.fastCount > 1) add(Triple("${cores.fastCount - 1} threads, fast cores", cores.fastCount - 1, cores.fastMask))
-                    add(Triple("${cores.count} threads, all cores", cores.count, all))
-                }.distinctBy { it.second to it.third }
-            val lines = mutableListOf("cores: capacities ${cores.capacities}, fast ${cores.fastCount}")
-            for ((label, threads, mask) in configs) {
-                val s = Native.open(modelFile.absolutePath, threads)
-                try {
-                    val first = timed { Native.transcribe(s, pcm, mask) }
-                    val warm = minOf(timed { Native.transcribe(s, pcm, mask) }, timed { Native.transcribe(s, pcm, mask) })
-                    lines += "%-32s first %.2f s · warm %.2f s".format(label, first, warm)
-                } finally {
-                    Native.close(s)
-                }
-            }
-            lines.joinToString("\n")
-        }
-
-    private inline fun timed(block: () -> Unit): Double {
-        val t0 = System.nanoTime()
-        block()
-        return (System.nanoTime() - t0) / 1e9
-    }
-
     fun close() {
         cancelRecording()
-        if (session != 0L) Native.close(session)
-        session = 0L
+        engine?.close()
+        engine = null
         state.value = ModelState.NotLoaded
     }
 
@@ -213,8 +247,9 @@ class VoiceEngine(
         const val SAMPLE_RATE = 16_000
 
         /** Reads a 16-bit mono WAV into samples (debug samples and tests). */
-        fun readWav(file: File): FloatArray {
-            val bytes = file.readBytes()
+        fun readWav(file: File): FloatArray = readWav(file.readBytes())
+
+        fun readWav(bytes: ByteArray): FloatArray {
             var offset = 12
             while (offset + 8 <= bytes.size) {
                 val id = String(bytes, offset, 4)
@@ -232,7 +267,7 @@ class VoiceEngine(
                 }
                 offset += 8 + size + (size and 1)
             }
-            error("No audio data in ${file.name}")
+            error("No audio data in the file")
         }
     }
 }
@@ -297,4 +332,7 @@ internal object Native {
     ): String
 
     external fun close(session: Long)
+
+    /** Moves the calling thread to the CPUs in [mask] and returns its previous mask (0 if that failed). */
+    external fun setAffinity(mask: Long): Long
 }

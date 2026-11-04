@@ -120,6 +120,21 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Hex Code's voice engine
+
+- `shared/voice-engine/upstream/` mirrors files from
+  [Hex](https://github.com/anomalyco/hex), MIT License; its license is in
+  `shared/voice-engine/upstream/LICENSE`.
+- `shared/voice-engine/adapter/android/src/main/java/dev/opencode/voiceengine/LiteRtEngine.kt`
+  is adapted from `BucketedTdtRunner.kt` in
+  [google-ai-edge/litert-samples](https://github.com/google-ai-edge/litert-samples),
+  Copyright 2026 Google LLC, Apache License 2.0
+  (<https://www.apache.org/licenses/LICENSE-2.0>).
+- sherpa-onnx (Apache License 2.0, with ONNX Runtime, MIT License) is
+  downloaded at build time from its GitHub release and checked against a
+  pinned checksum. Speech models are downloaded by the app under their own
+  licenses, listed in `shared/voice-engine/adapter/android/src/main/assets/lab/models.json`.
+
 ## Libraries resolved by Gradle and Swift Package Manager
 
 Android and iOS dependencies, including the Firebase SDKs, are fetched at

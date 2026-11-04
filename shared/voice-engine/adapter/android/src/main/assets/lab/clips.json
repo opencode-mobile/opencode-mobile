@@ -1,0 +1,89 @@
+{
+  "note": "Technical English test clips, spoken by macOS text-to-speech voices (clean audio, not real speech).",
+  "clips": [
+    {
+      "id": "hook",
+      "file": "hook.wav",
+      "seconds": 5.87,
+      "voice": "Samantha",
+      "reference": "Refactor the useEffect hook in App.tsx so the fetch call is debounced by 300 milliseconds."
+    },
+    {
+      "id": "tests",
+      "file": "tests.wav",
+      "seconds": 4.66,
+      "voice": "Daniel",
+      "reference": "Run the unit tests with pnpm test and show me any failures in the auth module."
+    },
+    {
+      "id": "migration",
+      "file": "migration.wav",
+      "seconds": 5.1,
+      "voice": "Karen",
+      "reference": "Add a nullable timestamp column called archived at to the sessions table, and write the migration."
+    },
+    {
+      "id": "coroutine",
+      "file": "coroutine.wav",
+      "seconds": 5.34,
+      "voice": "Moira",
+      "reference": "Why does the Kotlin coroutine leak when the ViewModel is cleared? Check the viewModelScope usage."
+    },
+    {
+      "id": "graphql",
+      "file": "graphql.wav",
+      "seconds": 5.73,
+      "voice": "Reed (English (US))",
+      "reference": "Rename the GraphQL resolver getUserById to fetchUser, and update every call site."
+    },
+    {
+      "id": "pr",
+      "file": "pr.wav",
+      "seconds": 5.22,
+      "voice": "Aman",
+      "reference": "Open a pull request against main with a short description, and request a review from the backend team."
+    },
+    {
+      "id": "docker",
+      "file": "docker.wav",
+      "seconds": 6.06,
+      "voice": "Samantha",
+      "reference": "The Docker build fails on the arm64 runner because the base image only ships amd64 binaries."
+    },
+    {
+      "id": "redis",
+      "file": "redis.wav",
+      "seconds": 6.06,
+      "voice": "Daniel",
+      "reference": "Set the Redis cache TTL to 15 minutes, and log a warning when the hit rate drops below 80 percent."
+    },
+    {
+      "id": "search",
+      "file": "search.wav",
+      "seconds": 5.48,
+      "voice": "Karen",
+      "reference": "Use a binary search instead of the linear scan in findIndex, and keep the function signature the same."
+    },
+    {
+      "id": "ios",
+      "file": "ios.wav",
+      "seconds": 5.68,
+      "voice": "Moira",
+      "reference": "Bump the iOS deployment target to 18, and fix the deprecation warnings in SwiftUI."
+    },
+    {
+      "id": "webpack",
+      "file": "webpack.wav",
+      "seconds": 6.83,
+      "voice": "Reed (English (US))",
+      "reference": "Stop. Undo the last change to the webpack config, and explain what the splitChunks option does."
+    },
+    {
+      "id": "long",
+      "file": "long.wav",
+      "seconds": 19.19,
+      "voice": "Samantha",
+      "reference": "Okay, here's the plan. First, read the README and the contributing guide. Then look at how the session store is wired into the API client, and find out why the WebSocket reconnects every 30 seconds. If it's the keep-alive timeout, raise it to 2 minutes and add a test. Don't touch the database schema, and don't push anything until I've had a look."
+    }
+  ]
+}

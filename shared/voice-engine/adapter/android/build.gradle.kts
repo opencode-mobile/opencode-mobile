@@ -1,4 +1,4 @@
-import groovy.json.JsonSlurper
+import java.security.MessageDigest
 
 plugins {
     alias(libs.plugins.android.library)
@@ -6,13 +6,38 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
-// Hex's speech engine for Hex Code on Android: transcribe.cpp (the engine Hex desktop runs) and the same
-// Parakeet V2 model file, both pinned in hex-upstream.json by scripts/sync-hex.mjs.
-@Suppress("UNCHECKED_CAST")
-val hexPin = JsonSlurper().parse(file("../../hex-upstream.json")) as Map<String, Any>
+// Hex's speech engine for Hex Code on Android: transcribe.cpp (the engine Hex desktop runs), pinned in
+// hex-upstream.json by scripts/sync-hex.mjs. The models it can run are listed in src/main/assets/lab/models.json.
 
-@Suppress("UNCHECKED_CAST")
-val model = hexPin.getValue("androidModel") as Map<String, Any>
+// sherpa-onnx (Apache-2.0, ONNX Runtime inside), the second engine the speech model lab compares. Its Android
+// release is fetched once, checked against this checksum and unpacked into the build folder, so its native
+// libraries stay out of the repo.
+val sherpaVersion = "2.0.1"
+val sherpaSha256 = "a8d09d1d32f3eb8520482c6d3d43fae674681c5b050385967c70a3c2c9bf0ee7"
+val sherpaDir =
+    layout.buildDirectory
+        .dir("sherpa-onnx-$sherpaVersion")
+        .get()
+        .asFile
+if (!File(sherpaDir, "classes.jar").isFile) {
+    sherpaDir.mkdirs()
+    val aar = File(sherpaDir, "sherpa-onnx.aar")
+    uri("https://github.com/k2-fsa/sherpa-onnx/releases/download/v$sherpaVersion/sherpa-onnx-$sherpaVersion.aar")
+        .toURL()
+        .openStream()
+        .use { input -> aar.outputStream().use { input.copyTo(it) } }
+    val sha =
+        MessageDigest
+            .getInstance("SHA-256")
+            .digest(aar.readBytes())
+            .joinToString("") { "%02x".format(it) }
+    check(sha == sherpaSha256) { "The sherpa-onnx download does not match its pinned checksum" }
+    copy {
+        from(zipTree(aar)) { include("classes.jar", "jni/arm64-v8a/**") }
+        into(sherpaDir)
+    }
+    aar.delete()
+}
 
 android {
     namespace = "dev.opencode.voiceengine"
@@ -23,17 +48,9 @@ android {
         minSdk = 26
         ndk { abiFilters += "arm64-v8a" }
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
-        buildConfigField(
-            "String",
-            "MODEL_URL",
-            "\"https://huggingface.co/${model["repository"]}/resolve/${model["revision"]}/${model["filename"]}\"",
-        )
-        buildConfigField("String", "MODEL_FILE", "\"${model["filename"]}\"")
-        buildConfigField("long", "MODEL_BYTES", "${model["bytes"]}L")
-        buildConfigField("String", "MODEL_SHA256", "\"${model["sha256"]}\"")
     }
 
-    buildFeatures { buildConfig = true }
+    sourceSets["main"].jniLibs.srcDir(File(sherpaDir, "jni"))
 
     externalNativeBuild {
         cmake {
@@ -54,4 +71,8 @@ kotlin {
 
 dependencies {
     api(libs.kotlinx.coroutines.android)
+    implementation(files(File(sherpaDir, "classes.jar")))
+    // Google's LiteRT (Apache-2.0), the third engine the lab compares, with its GPU accelerator
+    implementation(libs.litert)
+    implementation(libs.litert.gpu)
 }

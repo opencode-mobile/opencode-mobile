@@ -75,7 +75,7 @@ private enum class Phase { Idle, Listening, Transcribing }
 fun DictationScreen(
     engine: VoiceEngine,
     sampleFile: String? = null,
-    benchFile: String? = null,
+    onOpenLab: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -90,20 +90,8 @@ fun DictationScreen(
             if (!granted) errorText = "Microphone access is off. Turn it on in Settings."
         }
 
+    val active by engine.activeModel.collectAsState()
     LaunchedEffect(Unit) {
-        if (benchFile != null) {
-            phase = Phase.Transcribing
-            val report =
-                runCatching {
-                    engine.benchmark(
-                        VoiceEngine.readWav(File(context.filesDir, benchFile)),
-                    )
-                }.getOrElse { "failed: ${it.message}" }
-            File(context.filesDir, "bench.txt").writeText(report)
-            errorText = report
-            phase = Phase.Idle
-            return@LaunchedEffect
-        }
         engine.prepare()
         if (sampleFile != null && engine.modelState.value == VoiceEngine.ModelState.Ready) {
             phase = Phase.Transcribing
@@ -125,7 +113,7 @@ fun DictationScreen(
                     when (val s = modelState) {
                         is VoiceEngine.ModelState.Preparing -> "Getting speech ready · ${(s.fraction * 100).toInt()}% · ${s.detail}"
                         is VoiceEngine.ModelState.Failed -> s.message
-                        else -> "${engine.modelName} · on this phone"
+                        else -> "${active.title} · on this phone"
                     }
                 Text(status, color = if (modelState is VoiceEngine.ModelState.Failed) Amber else Dim, fontSize = 12.5.sp, maxLines = 1)
             }
@@ -142,6 +130,9 @@ fun DictationScreen(
             } else if (takes.isNotEmpty()) {
                 Text("Clear", color = Dim, fontSize = 15.sp, modifier = Modifier.pointerInput(Unit) { detectTapGestures { takes.clear() } })
             }
+            Spacer(Modifier.size(18.dp))
+            // the speech model lab: try other models and engines, and pick the one dictation uses
+            Text("Models", color = Dim, fontSize = 15.sp, modifier = Modifier.pointerInput(Unit) { detectTapGestures { onOpenLab() } })
         }
 
         val listState = rememberLazyListState()

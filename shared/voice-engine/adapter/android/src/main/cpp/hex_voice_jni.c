@@ -1,4 +1,4 @@
-// JNI bridge from Kotlin to transcribe.cpp: open a model, transcribe 16 kHz mono float PCM, close.
+// JNI bridge from Kotlin to transcribe.cpp: open a model, transcribe 16 kHz mono float PCM, close; and CPU pinning.
 #define _GNU_SOURCE
 #include <jni.h>
 #include <sched.h>
@@ -61,4 +61,24 @@ JNIEXPORT void JNICALL Java_dev_opencode_voiceengine_Native_close(JNIEnv * env, 
     (void) env;
     (void) self;
     transcribe_close((struct transcribe_session *) (intptr_t) handle);
+}
+
+// For engines that start their own threads (ONNX Runtime): pins the calling thread to mask's CPUs, so threads
+// it starts inherit them. Returns the previous mask (first 64 CPUs), or 0 if either call failed.
+JNIEXPORT jlong JNICALL Java_dev_opencode_voiceengine_Native_setAffinity(JNIEnv * env, jobject self, jlong mask) {
+    (void) env;
+    (void) self;
+    cpu_set_t previous;
+    if (sched_getaffinity(0, sizeof previous, &previous) != 0) return 0;
+    cpu_set_t wanted;
+    CPU_ZERO(&wanted);
+    for (int cpu = 0; cpu < 64; cpu++) {
+        if (mask & (1LL << cpu)) CPU_SET(cpu, &wanted);
+    }
+    if (sched_setaffinity(0, sizeof wanted, &wanted) != 0) return 0;
+    jlong old = 0;
+    for (int cpu = 0; cpu < 64; cpu++) {
+        if (CPU_ISSET(cpu, &previous)) old |= 1LL << cpu;
+    }
+    return old;
 }
