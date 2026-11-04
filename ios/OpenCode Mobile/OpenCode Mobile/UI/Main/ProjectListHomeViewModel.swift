@@ -1693,7 +1693,7 @@ final class ProjectListHomeViewModel {
     /// Probes the server; its answer can turn on capabilities the menu entry was waiting for.
     private func probeServer() async throws {
         try await projectRepository.probeServer()
-        archivedMenu.recheck()
+        archivedMenu.recheck(projects: homeProjects)
     }
 
     private func probeFailureIsFinal(probedBaseURL: String) -> Bool {
