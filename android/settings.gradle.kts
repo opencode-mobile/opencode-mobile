@@ -33,6 +33,8 @@ plugins {
 rootProject.name = "OpenCode Mobile"
 include(":app")
 include(":hexcode")
+include(":voice-engine")
+project(":voice-engine").projectDir = file("../shared/voice-engine/adapter/android")
 include(":markdown-core")
 project(":markdown-core").projectDir = file("../shared/markdown-core")
 include(":highlight-bench")

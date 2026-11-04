@@ -16,6 +16,7 @@
     "api:fetch": "node scripts/fetch-openapi.mjs",
     "api:generate": "node scripts/generate-api-clients.mjs",
     "api:sync": "npm run api:fetch && npm run api:generate",
+    "hex:sync": "node scripts/sync-hex.mjs",
     "sse:capture": "node scripts/capture-sse.mjs",
     "store:screenshots": "node scripts/store-screenshots.mjs",
     "store:push": "node scripts/store-screenshots/push-store-shots.mjs",

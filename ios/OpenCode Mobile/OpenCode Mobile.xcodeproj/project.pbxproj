@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		HXC000000000000000000013 /* HexVoiceEngine in Frameworks */ = {isa = PBXBuildFile; productRef = HXC000000000000000000012 /* HexVoiceEngine */; };
 		638DA94C2FCB348E0055985D /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 63OC00022FA93400002BDFFC /* Factory */; };
 		638DA94D2FCB348E0055985D /* Factory in Frameworks */ = {isa = PBXBuildFile; productRef = 63OC00022FA93400002BDFFC /* Factory */; };
 		63OCFIREBF00100002BDFFC /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 63OCFIREPROD001002BDFFC /* FirebaseAnalyticsCore */; };
@@ -67,6 +68,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				HXC000000000000000000013 /* HexVoiceEngine in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -142,6 +144,7 @@
 			);
 			name = "Hex Code";
 			packageProductDependencies = (
+				HXC000000000000000000012 /* HexVoiceEngine */,
 			);
 			productName = "Hex Code";
 			productReference = HXC000000000000000000001 /* Hex Code.app */;
@@ -263,6 +266,7 @@
 			packageReferences = (
 				63OC00012FA93400002BDFFC /* XCRemoteSwiftPackageReference "Factory" */,
 				63OCFIREPKG00100002BDFFC /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				HXC000000000000000000011 /* XCLocalSwiftPackageReference "../../shared/voice-engine" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 63369C102FA933AE002BDFFC /* Products */;
@@ -449,12 +453,13 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Hex Code";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hex Code turns what you say into text on this phone. Audio never leaves it.";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -483,12 +488,13 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Hex Code";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hex Code turns what you say into text on this phone. Audio never leaves it.";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -517,12 +523,13 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Hex Code";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Hex Code turns what you say into text on this phone. Audio never leaves it.";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -1036,6 +1043,13 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCLocalSwiftPackageReference section */
+		HXC000000000000000000011 /* XCLocalSwiftPackageReference "../../shared/voice-engine" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../shared/voice-engine;
+		};
+/* End XCLocalSwiftPackageReference section */
+
 /* Begin XCRemoteSwiftPackageReference section */
 		63OC00012FA93400002BDFFC /* XCRemoteSwiftPackageReference "Factory" */ = {
 			isa = XCRemoteSwiftPackageReference;
@@ -1056,6 +1070,10 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		HXC000000000000000000012 /* HexVoiceEngine */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = HexVoiceEngine;
+		};
 		63OC00022FA93400002BDFFC /* FactoryKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 63OC00012FA93400002BDFFC /* XCRemoteSwiftPackageReference "Factory" */;

@@ -26,6 +26,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -34,6 +35,7 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":voice-engine"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
