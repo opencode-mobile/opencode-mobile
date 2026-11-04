@@ -167,19 +167,28 @@ struct DictationScreen: View {
     }
 
     #if DEBUG
-    /// `-HexCodeSample <file>` runs a recorded WAV through the engine as if it were a take (simulators have no voice).
+    /// `-HexCodeSample <file>` runs a recorded WAV through the engine twice, as if it were a take (simulators have no
+    /// voice). The first run includes the model's warm-up. Results also go to Documents/HexCodeSampleResult.txt, so
+    /// they can be read back from a device.
     private func transcribeLaunchSample() async {
         guard engine.modelState == .ready, let path = UserDefaults.standard.string(forKey: "HexCodeSample") else { return }
         let url = path.hasPrefix("/") ? URL(fileURLWithPath: path) : URL.documentsDirectory.appending(path: path)
-        phase = .transcribing
-        let started = Date()
-        do {
-            let text = try await engine.transcribe(fileAt: url)
-            takes.append(Take(text: text, seconds: 0, latency: Date().timeIntervalSince(started)))
-        } catch {
-            errorText = error.localizedDescription
+        var report: [String] = []
+        for run in 1 ... 2 {
+            phase = .transcribing
+            let started = Date()
+            do {
+                let text = try await engine.transcribe(fileAt: url)
+                let latency = Date().timeIntervalSince(started)
+                takes.append(Take(text: text, seconds: 0, latency: latency))
+                report.append(String(format: "run %d: %.2f s · %@", run, latency, text))
+            } catch {
+                errorText = error.localizedDescription
+                report.append("run \(run): failed · \(error.localizedDescription)")
+            }
         }
         phase = .idle
+        try? report.joined(separator: "\n").write(to: URL.documentsDirectory.appending(path: "HexCodeSampleResult.txt"), atomically: true, encoding: .utf8)
     }
     #endif
 
