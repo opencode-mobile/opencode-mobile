@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalTextStyle
@@ -44,6 +45,7 @@ private val MenuChipPaddingEnd = 8.dp
 private val MenuChipSpacing = 6.dp
 private val MenuChipIconSize = 16.dp
 private val MenuChipLetterSize = 18.dp
+private val MenuChipTitleMaxWidth = 240.dp
 private val MenuChipLetterGlyphSize = 10.sp
 private val MenuChipLetterTextStyle =
     TextStyle(
@@ -159,7 +161,9 @@ fun OpenCodeMenuChip(
                 style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
+                // A cap, not a weight: chips often sit in a row that scrolls sideways, where a
+                // weight has no width to share and the title would collapse to nothing.
+                modifier = Modifier.widthIn(max = MenuChipTitleMaxWidth),
             )
             if (variant == OpenCodeMenuChipVariant.Menu) {
                 Icon(imageVector = OpenCodeIcons.KeyboardArrowDown, contentDescription = null, modifier = Modifier.size(MenuChipIconSize))
