@@ -63,7 +63,10 @@ object ThemeManager {
         resolvedDark = ThemeResolver.overlaySyntax(dark, currentSyntaxPreset.dark)
     }
 
-    fun availablePresets(): List<ThemePreset> = manifestPresets()
+    /** The app asking: presets whose manifest entry lists `apps` are offered only to those apps. */
+    var appId: String = "opencode-mobile"
+
+    fun availablePresets(): List<ThemePreset> = manifestPresets().filter { it.apps == null || appId in it.apps }
 
     fun availableSyntaxPresets(): List<SyntaxHighlightPreset> = syntaxPresets()
 

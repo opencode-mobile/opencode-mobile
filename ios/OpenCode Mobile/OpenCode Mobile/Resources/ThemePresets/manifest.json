@@ -27,6 +27,9 @@
   {
     "id": "hex",
     "name": "Hex",
-    "blurb": "Hex Code's quiet graphite"
+    "blurb": "Hex Code's quiet graphite",
+    "apps": [
+      "hexcode"
+    ]
   }
 ]
