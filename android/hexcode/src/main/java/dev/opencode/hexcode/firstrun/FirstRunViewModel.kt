@@ -88,16 +88,24 @@ interface FirstRunEnvironment {
     /** Starts the speech model download in the background, once. */
     fun getSpeechModel()
 
+    /** The model and level saved earlier, to start the model page on. */
+    suspend fun savedModel(): ModelChoice? = null
+
     fun now(): Long = System.currentTimeMillis()
 }
 
+/** First run walks every step; Settings opens one page (project or model) and closes it once a choice is saved. */
+enum class PickerMode { FirstRun, Settings }
+
 /**
  * First run, the prototype's six steps: the rule and how to connect, scan and connect, pick a project (or browse
- * folders), and pick a model, which must pass a one-line test before Start.
+ * folders), and pick a model, which must pass a one-line test before Start. Settings reuses the project and model pages
+ * ([PickerMode.Settings]): there the model page ends in Save, and [FirstRunStep.Done] means the page closed.
  */
 class FirstRunViewModel(
     private val env: FirstRunEnvironment,
     private val connectedPause: Long = CONNECTED_PAUSE_MS,
+    private val mode: PickerMode = PickerMode.FirstRun,
 ) : ViewModel() {
     private val state = MutableStateFlow(FirstRunUiState())
     val uiState: StateFlow<FirstRunUiState> = state.asStateFlow()
@@ -109,6 +117,21 @@ class FirstRunViewModel(
     private var home = ""
     private val summaries = Semaphore(FolderBrowserState.SUMMARY_CONCURRENCY)
     private val summaryRequested = mutableSetOf<String>()
+
+    /** Settings › Project: the project page on its own. */
+    fun openProjects(server: ServerLabel?) {
+        state.update { it.copy(step = FirstRunStep.Project, server = server) }
+        loadProjects()
+    }
+
+    /** Settings › Model: the model page on its own, starting on the saved model. */
+    fun openModels(
+        server: ServerLabel?,
+        project: ProjectChoice?,
+    ) {
+        state.update { it.copy(step = FirstRunStep.Model, server = server, project = project) }
+        loadModels(project)
+    }
 
     fun openScanner() {
         connectJob?.cancel()
@@ -157,7 +180,10 @@ class FirstRunViewModel(
     fun cameraUnavailable() = state.update { it.copy(scan = ScanUi.CameraUnavailable) }
 
     fun back() {
-        when (state.value.step) {
+        val step = state.value.step
+        // In Settings, back from the project or model page closes it.
+        if (mode == PickerMode.Settings && (step == FirstRunStep.Project || step == FirstRunStep.Model)) return close()
+        when (step) {
             FirstRunStep.Welcome, FirstRunStep.Done -> Unit
             FirstRunStep.Scan -> {
                 connectJob?.cancel()
@@ -177,6 +203,12 @@ class FirstRunViewModel(
         }
     }
 
+    private fun close() {
+        modelJob?.cancel()
+        testJob?.cancel()
+        state.update { it.copy(step = FirstRunStep.Done) }
+    }
+
     fun retryProjects() = loadProjects()
 
     private fun loadProjects() {
@@ -194,6 +226,10 @@ class FirstRunViewModel(
     fun pickProject(project: ProjectChoice) {
         viewModelScope.launch {
             env.saveProject(project)
+            if (mode == PickerMode.Settings) {
+                state.update { it.copy(project = project, step = FirstRunStep.Done) }
+                return@launch
+            }
             state.update { it.copy(project = project, step = FirstRunStep.Model) }
             loadModels(project)
         }
@@ -260,16 +296,14 @@ class FirstRunViewModel(
         }
     }
 
-    fun retryModels() {
-        state.value.project?.let(::loadModels)
-    }
+    fun retryModels() = loadModels(state.value.project)
 
-    private fun loadModels(project: ProjectChoice) {
+    private fun loadModels(project: ProjectChoice?) {
         modelJob?.cancel()
         modelJob =
             viewModelScope.launch {
                 state.update { it.copy(model = Loadable.Loading) }
-                val loaded = attempt { ModelPickerState.create(env.models.listModelOptions(project.path)) }
+                val loaded = attempt { ModelPickerState.create(env.models.listModelOptions(project?.path), saved = env.savedModel()) }
                 val usable =
                     if ((loaded as? Loadable.Loaded)
                             ?.value
@@ -302,7 +336,7 @@ class FirstRunViewModel(
             }
     }
 
-    /** Start: only after the current model and level passed their test. */
+    /** Start (Save in Settings): only after the current model and level passed their test. */
     fun start() {
         val picker = (state.value.model as? Loadable.Loaded)?.value ?: return
         val choice = picker.choice ?: return

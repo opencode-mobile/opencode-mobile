@@ -3,6 +3,7 @@ package dev.opencode.hexcode.app
 import android.content.Context
 import dev.opencode.hexcode.firstrun.ModelTester
 import dev.opencode.hexcode.firstrun.PairingConnector
+import dev.opencode.hexcode.firstrun.ServerLabel
 import dev.opencode.hexcode.firstrun.ServerNaming
 import dev.opencode.hexcode.firstrun.ServerRouteCheck
 import dev.opencode.mobile.data.local.DataStoreConnectionProfileStore
@@ -71,6 +72,15 @@ class HexServices(
     init {
         // Models of engines Hex Code no longer ships (the transcribe.cpp GGUF files) only take up space.
         appScope.launch(Dispatchers.IO) { voice.store.removeUnlisted(voice.models) }
+    }
+
+    /** The paired computer's name and OpenCode version, for Settings. */
+    suspend fun serverLabel(): ServerLabel? {
+        val profile = profiles.activeProfile() ?: return null
+        return ServerLabel(
+            profile.name.ifBlank { PairingConnector.hostLabel(profile.baseUrl) }.lowercase(),
+            connection.currentServerVersion(),
+        )
     }
 
     /** Binds the saved server, if there is one. */

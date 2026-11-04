@@ -274,5 +274,44 @@ class FirstRunViewModelTest {
             assertEquals(Loadable.Failed, vm.uiState.value.model)
         }
 
+    @Test
+    fun inSettingsPickingAProjectSavesItAndClosesThePage() =
+        runTest(dispatcher) {
+            val env = env()
+            val vm = FirstRunViewModel(env, connectedPause = 0L, mode = PickerMode.Settings)
+            vm.openProjects(ServerLabel("example.local", "2.2.5"))
+            advanceUntilIdle()
+            assertEquals(FirstRunStep.Project, vm.uiState.value.step)
+            vm.pickProject(ProjectChoice("app", "$home/Projects/app"))
+            advanceUntilIdle()
+            assertEquals(FirstRunStep.Done, vm.uiState.value.step)
+            assertEquals(listOf(ProjectChoice("app", "$home/Projects/app")), env.savedProjects)
+            assertTrue(env.modelDirectories.isEmpty())
+        }
+
+    @Test
+    fun inSettingsTheModelPageSavesOnlyAfterAPassAndBackCloses() =
+        runTest(dispatcher) {
+            val env = env()
+            val vm = FirstRunViewModel(env, connectedPause = 0L, mode = PickerMode.Settings)
+            vm.openModels(null, ProjectChoice("app", "$home/Projects/app"))
+            advanceUntilIdle()
+            vm.start()
+            advanceUntilIdle()
+            assertTrue(env.finished.isEmpty())
+            vm.testModel()
+            advanceUntilIdle()
+            vm.start()
+            advanceUntilIdle()
+            assertEquals(listOf(ModelChoice("anthropic", "claude-opus-5-5")), env.finished)
+            assertEquals(FirstRunStep.Done, vm.uiState.value.step)
+
+            val again = FirstRunViewModel(env, connectedPause = 0L, mode = PickerMode.Settings)
+            again.openModels(null, null)
+            advanceUntilIdle()
+            again.back()
+            assertEquals(FirstRunStep.Done, again.uiState.value.step)
+        }
+
     private fun picker(vm: FirstRunViewModel) = (vm.uiState.value.model as Loadable.Loaded).value
 }

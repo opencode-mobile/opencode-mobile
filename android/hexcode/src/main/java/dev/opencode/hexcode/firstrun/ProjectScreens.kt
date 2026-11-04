@@ -3,8 +3,6 @@ package dev.opencode.hexcode.firstrun
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,41 +12,44 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import dev.opencode.hexcode.R
-import dev.opencode.hexcode.theme.HexTheme
-import dev.opencode.hexcode.ui.HexChevron
 import dev.opencode.hexcode.ui.HexEdge
-import dev.opencode.hexcode.ui.HexIcons
-import dev.opencode.hexcode.ui.HexPageTop
-import dev.opencode.hexcode.ui.HexPrimaryButton
-import dev.opencode.hexcode.ui.HexRow
-import dev.opencode.hexcode.ui.HexSectionLabel
 import dev.opencode.hexcode.ui.HexSpinner
-import dev.opencode.hexcode.ui.HexTag
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
+import dev.opencode.mobile.theme.OpenCodeMediumShape
+import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.mobile.ui.components.OpenCodeButton
+import dev.opencode.mobile.ui.components.OpenCodeButtonSize
+import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
+import dev.opencode.mobile.ui.components.OpenCodeFilterTab
+import dev.opencode.mobile.ui.components.OpenCodeFilterTabs
+import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
+import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeAction
+import dev.opencode.mobile.ui.components.OpenCodeListItem
+import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
+import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
+import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
+import dev.opencode.mobile.ui.components.OpenCodeTopBar
+import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
+import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleAccessory
+import dev.opencode.mobile.ui.components.StartDecorator
+import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 /** "Pick a project": Browse folders, then up to five repositories on the computer, newest activity first. */
 @Composable
@@ -59,28 +60,30 @@ fun ProjectScreen(
     onBrowse: () -> Unit,
     onRetry: () -> Unit,
     onBack: () -> Unit,
+    title: String = stringResource(R.string.first_run_project_title),
+    note: String = stringResource(R.string.first_run_project_note),
 ) {
-    val colors = HexTheme.colors
     BackHandler(onBack = onBack)
     Column(
         Modifier
             .fillMaxSize()
             .systemBarsPadding(),
     ) {
-        HexPageTop(stringResource(R.string.first_run_project_title), onBack, stringResource(R.string.common_back), status = host)
+        PageTop(title, host, onBack)
         LazyColumn(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(horizontal = HexEdge - 12.dp, vertical = 4.dp),
+            contentPadding = PaddingValues(vertical = 4.dp),
         ) {
             item {
-                HexRow(
+                OpenCodeListItem(
                     title = stringResource(R.string.first_run_project_browse),
                     subtitle = stringResource(R.string.first_run_project_browse_subtitle),
-                    icon = HexIcons.Folder,
+                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, null),
+                    accessory = OpenCodeListItemAccessory.Disclosure,
                     onClick = onBrowse,
-                ) { HexChevron() }
+                )
             }
-            item { HexSectionLabel(stringResource(R.string.first_run_project_on_this_computer)) }
+            item { OpenCodeSectionHeader(stringResource(R.string.first_run_project_on_this_computer)) }
             when (projects) {
                 Loadable.Loading -> item { Loading() }
                 Loadable.Failed ->
@@ -96,32 +99,21 @@ fun ProjectScreen(
                         item { Notice(stringResource(R.string.first_run_project_none)) }
                     }
                     items(projects.value, key = { it.choice.path }) { row ->
-                        HexRow(
+                        OpenCodeListItem(
                             title = row.choice.name,
                             subtitle = row.shownPath,
-                            icon = HexIcons.Folder,
+                            caption = row.activity?.let { agoText(it) },
+                            startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, null),
                             onClick = { onPick(row.choice) },
-                        ) {
-                            row.activity?.let {
-                                Text(
-                                    agoText(it),
-                                    style = HexTheme.type.caption,
-                                    color = colors.text2,
-                                    modifier =
-                                        Modifier
-                                            .align(Alignment.Top)
-                                            .padding(top = 4.dp),
-                                )
-                            }
-                        }
+                        )
                     }
                 }
             }
         }
         Text(
-            stringResource(R.string.first_run_project_note),
-            fontSize = 13.sp,
-            color = colors.text3,
+            note,
+            style = MaterialTheme.typography.bodySmall,
+            color = openCodeColor("text-weak"),
             textAlign = TextAlign.Center,
             modifier =
                 Modifier
@@ -141,14 +133,14 @@ fun BrowseScreen(
     onUse: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val colors = HexTheme.colors
     BackHandler(onBack = onBack)
+    val homeLabel = stringResource(R.string.common_home)
     Column(
         Modifier
             .fillMaxSize()
             .systemBarsPadding(),
     ) {
-        HexPageTop(stringResource(R.string.first_run_browse_title), onBack, stringResource(R.string.common_back))
+        PageTop(stringResource(R.string.first_run_browse_title), subtitle = null, onBack = onBack)
         Row(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -160,53 +152,38 @@ fun BrowseScreen(
                     Modifier
                         .weight(1f)
                         .height(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.panel)
-                        .border(1.dp, colors.line2, RoundedCornerShape(12.dp))
+                        .background(openCodeColor("surface-raised-base"), OpenCodeMediumShape)
+                        .border(1.dp, openCodeColor("border-weak-base"), OpenCodeMediumShape)
                         .padding(horizontal = 14.dp),
             ) {
                 Text(
                     ProjectPicker.shortPath(browser.directory, browser.home).trimEnd('/') + "/",
-                    style = HexTheme.type.mono.copy(fontSize = 14.sp),
-                    color = colors.text1,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontFamily = FontFamily.Monospace,
+                    color = openCodeColor("text-strong"),
                     maxLines = 1,
                     overflow = TextOverflow.StartEllipsis,
                 )
             }
-            val upEnabled = browser.upTarget != null
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier =
-                    Modifier
-                        .size(44.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(colors.wash(0.04f))
-                        .border(1.dp, colors.line2, RoundedCornerShape(12.dp))
-                        .alpha(if (upEnabled) 1f else 0.35f)
-                        .clickable(
-                            enabled = upEnabled,
-                            role = Role.Button,
-                            onClickLabel = stringResource(R.string.first_run_browse_up),
-                            onClick = onUp,
-                        ),
-            ) {
-                Icon(HexIcons.ArrowUp, stringResource(R.string.first_run_browse_up), tint = colors.text1, modifier = Modifier.size(17.dp))
-            }
+            OpenCodeButton(
+                OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, stringResource(R.string.first_run_browse_up)),
+                onClick = onUp,
+                enabled = browser.upTarget != null,
+            )
         }
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier =
-                Modifier
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = HexEdge, vertical = 4.dp),
-        ) {
-            browser.roots.forEach { root ->
-                RootChip(root.label ?: stringResource(R.string.common_home), root.selected) { onOpen(root.path) }
-            }
-        }
+        OpenCodeFilterTabs(
+            tabs = browser.roots.map { OpenCodeFilterTab(id = it.path, title = it.label ?: homeLabel) },
+            selectedTabId =
+                browser.roots
+                    .firstOrNull { it.selected }
+                    ?.path
+                    .orEmpty(),
+            onTabSelected = onOpen,
+            modifier = Modifier.padding(vertical = 4.dp),
+        )
         LazyColumn(
             modifier = Modifier.weight(1f),
-            contentPadding = PaddingValues(horizontal = HexEdge - 12.dp, vertical = 6.dp),
+            contentPadding = PaddingValues(vertical = 6.dp),
         ) {
             when (browser.listing) {
                 FolderListing.Loading -> item { Loading() }
@@ -221,18 +198,19 @@ fun BrowseScreen(
                     if (browser.rows.isEmpty()) item { Notice(stringResource(R.string.first_run_browse_no_subfolders)) }
                     items(browser.rows, key = { it.path }) { row ->
                         LaunchedEffect(row.path) { onRowAppeared(row.path) }
-                        HexRow(
+                        OpenCodeListItem(
                             title = row.name,
-                            tag = if (row.isGitRepository) stringResource(R.string.common_tag_git) else null,
+                            titleTag = if (row.isGitRepository) stringResource(R.string.common_tag_git) else null,
                             subtitle =
                                 when (val count = row.folderCount) {
                                     null -> " "
                                     0 -> stringResource(R.string.first_run_browse_no_subfolders)
                                     else -> pluralStringResource(R.plurals.first_run_browse_folder_count, count, count)
                                 },
-                            icon = HexIcons.Folder,
+                            startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, null),
+                            accessory = OpenCodeListItemAccessory.Disclosure,
                             onClick = { onOpen(row.path) },
-                        ) { HexChevron() }
+                        )
                     }
                 }
             }
@@ -240,74 +218,42 @@ fun BrowseScreen(
         Column(
             Modifier
                 .fillMaxWidth()
-                .background(colors.background),
+                .background(openCodeColor("background-base")),
         ) {
-            HorizontalDivider(color = colors.line)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.padding(start = HexEdge, end = HexEdge, top = 12.dp, bottom = 10.dp),
-            ) {
-                Icon(HexIcons.Folder, null, tint = colors.text1, modifier = Modifier.size(20.dp))
-                Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-                        Text(
-                            if (ServerPathPolicy.canonical(browser.directory) == ServerPathPolicy.canonical(browser.home)) {
-                                stringResource(R.string.common_home)
-                            } else {
-                                ServerPathPolicy.name(browser.directory)
-                            },
-                            style = HexTheme.type.rowTitle,
-                            color = colors.text1,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        if (browser.isGitRepository) HexTag(stringResource(R.string.common_tag_git))
-                    }
-                    Text(
-                        ProjectPicker.shortPath(browser.directory, browser.home),
-                        style = HexTheme.type.mono.copy(fontSize = 12.5.sp),
-                        color = colors.text2,
-                        maxLines = 1,
-                        overflow = TextOverflow.StartEllipsis,
-                    )
-                }
-            }
-            HexPrimaryButton(
-                stringResource(if (browser.canUse) R.string.first_run_browse_use else R.string.first_run_browse_pick),
-                onUse,
+            HorizontalDivider(color = openCodeColor("border-weaker-base"))
+            val atHome = ServerPathPolicy.canonical(browser.directory) == ServerPathPolicy.canonical(browser.home)
+            OpenCodeListItem(
+                title = if (atHome) homeLabel else ServerPathPolicy.name(browser.directory),
+                titleTag = if (browser.isGitRepository) stringResource(R.string.common_tag_git) else null,
+                subtitle = ProjectPicker.shortPath(browser.directory, browser.home),
+                startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, null),
+            )
+            OpenCodeButton(
+                OpenCodeButtonVariant.FullWidthText(
+                    stringResource(if (browser.canUse) R.string.first_run_browse_use else R.string.first_run_browse_pick),
+                ),
+                onClick = onUse,
                 enabled = browser.canUse,
+                size = OpenCodeButtonSize.Large,
                 modifier = Modifier.padding(start = HexEdge, end = HexEdge, bottom = 4.dp),
             )
         }
     }
 }
 
+/** A picker page's top bar: back, the title, and the computer it's looking at. */
 @Composable
-private fun RootChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
+internal fun PageTop(
+    title: String,
+    subtitle: String?,
+    onBack: () -> Unit,
 ) {
-    val colors = HexTheme.colors
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier =
-            Modifier
-                .height(36.dp)
-                .clip(RoundedCornerShape(18.dp))
-                .background(if (selected) colors.solid else colors.background)
-                .border(1.dp, if (selected) colors.solid else colors.line2, RoundedCornerShape(18.dp))
-                .clickable(role = Role.Tab, onClick = onClick)
-                .padding(horizontal = 16.dp),
-    ) {
-        Text(
-            label,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = if (selected) colors.onSolid else colors.text2,
-        )
-    }
+    OpenCodeTopBar(
+        title = title,
+        subtitle = subtitle,
+        subtitleAccessory = subtitle?.let { OpenCodeTopBarSubtitleAccessory.StatusDot(OpenCodeSessionConnectionStatus.Live) },
+        leading = OpenCodeTopBarLeading.Back(onBack, stringResource(R.string.common_back)),
+    )
 }
 
 @Composable
@@ -328,30 +274,11 @@ internal fun Notice(
     action: String? = null,
     onAction: () -> Unit = {},
 ) {
-    val colors = HexTheme.colors
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 24.dp),
-    ) {
-        Text(text, fontSize = 14.sp, color = colors.text2, textAlign = TextAlign.Center)
-        if (action != null) {
-            Text(
-                action,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = colors.text1,
-                modifier =
-                    Modifier
-                        .padding(top = 10.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable(role = Role.Button, onClick = onAction)
-                        .padding(horizontal = 10.dp, vertical = 6.dp),
-            )
-        }
-    }
+    OpenCodeInlineNotice(
+        message = text,
+        action = action?.let { OpenCodeInlineNoticeAction(it, onAction) },
+        modifier = Modifier.padding(horizontal = HexEdge, vertical = 24.dp),
+    )
 }
 
 @Composable

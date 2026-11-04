@@ -15,23 +15,35 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.opencode.hexcode.app.Appearance
 import dev.opencode.hexcode.app.HexFirstRunEnvironment
 import dev.opencode.hexcode.app.HexPrefs
+import dev.opencode.hexcode.app.HexServices
 import dev.opencode.hexcode.firstrun.FirstRunFlow
 import dev.opencode.hexcode.firstrun.FirstRunStep
 import dev.opencode.hexcode.firstrun.FirstRunViewModel
+import dev.opencode.hexcode.firstrun.PickerMode
+import dev.opencode.hexcode.firstrun.ServerLabel
+import dev.opencode.hexcode.home.HomeScreen
+import dev.opencode.hexcode.home.HomeViewModel
+import dev.opencode.hexcode.home.VoiceEngineDictation
+import dev.opencode.hexcode.settings.SettingsScreen
 import dev.opencode.hexcode.theme.HexTheme
+import dev.opencode.mobile.domain.text.TitleCaseIdentifier
+import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
+import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.voiceengine.EngineOptions
 import dev.opencode.voiceengine.SpeechLab
 import kotlinx.coroutines.launch
@@ -65,7 +77,14 @@ class MainActivity : ComponentActivity() {
         // debug builds: `--es HexCodeTheme dark|light` pins the theme instead of following the system
         val pinnedTheme = if (BuildConfig.DEBUG) intent.getStringExtra("HexCodeTheme") else null
         setContent {
-            HexTheme(dark = pinnedTheme?.let { it == "dark" } ?: isSystemInDarkTheme()) {
+            val prefs by services.settings.prefs.collectAsStateWithLifecycle(initialValue = null)
+            val dark =
+                when (pinnedTheme ?: prefs?.appearance?.name?.lowercase()) {
+                    "dark" -> true
+                    "light" -> false
+                    else -> isSystemInDarkTheme()
+                }
+            HexTheme(dark = dark) {
                 var tool by remember {
                     mutableStateOf(
                         if (labRun != null) {
@@ -91,7 +110,7 @@ class MainActivity : ComponentActivity() {
                         SystemBarIcons(darkScreen = true)
                         DictationScreen(services.voice, sampleFile = sample, onOpenLab = { tool = Tool.Lab })
                     }
-                    null -> HexCodeRoot(pairLink = pairLink, onOpenDictation = { tool = Tool.Dictation })
+                    null -> prefs?.let { HexCodeRoot(services, it, pairLink) }
                 }
             }
         }
@@ -100,29 +119,27 @@ class MainActivity : ComponentActivity() {
     private enum class Tool { Dictation, Lab }
 }
 
-/** First run until Start, then the main screen. */
+/** What is on screen once first run is over. */
+private enum class Page { Home, Settings, SettingsProject, SettingsModel }
+
+/** First run until Start, then Home, with Settings and its project and model pages over it. */
 @Composable
 private fun HexCodeRoot(
+    services: HexServices,
+    prefs: HexPrefs,
     pairLink: String?,
-    onOpenDictation: () -> Unit,
 ) {
-    val services = (LocalContext.current.applicationContext as HexCodeApplication).services
-    val loaded by produceState<HexPrefs?>(null) {
-        value = services.settings.current()
+    LaunchedEffect(Unit) {
         // The saved server's address check can take seconds; nothing on screen waits for it.
         services.appScope.launch { services.loadConnection() }
     }
-    val prefs by services.settings.prefs.collectAsStateWithLifecycle(initialValue = loaded ?: HexPrefs())
     Box(
         Modifier
             .fillMaxSize()
-            .background(HexTheme.colors.background),
+            .background(openCodeColor("background-base")),
     ) {
-        val start = loaded ?: return@Box
-        if (start.firstRunDone && prefs.firstRunDone) {
-            SystemBarIcons(darkScreen = HexTheme.colors.isDark)
-            LaunchedEffect(Unit) { services.voice.prepare() }
-            MainPlaceholderScreen(prefs, services.voice, onOpenDictation)
+        if (prefs.firstRunDone) {
+            AfterFirstRun(services, prefs)
         } else {
             val vm = viewModel { FirstRunViewModel(HexFirstRunEnvironment(services)) }
             val state by vm.uiState.collectAsStateWithLifecycle()
@@ -133,11 +150,62 @@ private fun HexCodeRoot(
                 }
             }
             // The camera view is dark in both themes.
-            SystemBarIcons(darkScreen = HexTheme.colors.isDark || state.step == FirstRunStep.Scan)
+            SystemBarIcons(darkScreen = LocalOpenCodeDarkTheme.current || state.step == FirstRunStep.Scan)
+            if (state.step != FirstRunStep.Done) FirstRunFlow(vm)
+        }
+    }
+}
+
+@Composable
+private fun AfterFirstRun(
+    services: HexServices,
+    prefs: HexPrefs,
+) {
+    var page by remember { mutableStateOf(Page.Home) }
+    // Each visit to a settings page starts it afresh.
+    var visit by remember { mutableIntStateOf(0) }
+    val scope = rememberCoroutineScope()
+    SystemBarIcons(darkScreen = LocalOpenCodeDarkTheme.current)
+    LaunchedEffect(Unit) { services.voice.prepare() }
+    val server by produceState<ServerLabel?>(null, page) { value = services.serverLabel() }
+    when (page) {
+        Page.Home -> {
+            val home = viewModel { HomeViewModel(VoiceEngineDictation(services.voice)) }
+            val speech by services.voice.modelState.collectAsStateWithLifecycle()
+            HomeScreen(home, speech, onSettings = { page = Page.Settings })
+        }
+        Page.Settings ->
+            SettingsScreen(
+                prefs = prefs,
+                server = server,
+                modelName = prefs.model?.let { TitleCaseIdentifier.displayName(it.modelId) },
+                onProject = {
+                    visit += 1
+                    page = Page.SettingsProject
+                },
+                onModel = {
+                    visit += 1
+                    page = Page.SettingsModel
+                },
+                onAppearance = {
+                    val next = Appearance.entries[(prefs.appearance.ordinal + 1) % Appearance.entries.size]
+                    scope.launch { services.settings.setAppearance(next) }
+                },
+                onBack = { page = Page.Home },
+            )
+        Page.SettingsProject, Page.SettingsModel -> {
+            val vm =
+                viewModel(key = "settings-$visit") {
+                    FirstRunViewModel(HexFirstRunEnvironment(services, forSettings = true), mode = PickerMode.Settings)
+                }
+            val state by vm.uiState.collectAsStateWithLifecycle()
+            LaunchedEffect(vm) {
+                if (page == Page.SettingsProject) vm.openProjects(server) else vm.openModels(server, prefs.project)
+            }
             if (state.step == FirstRunStep.Done) {
-                MainPlaceholderScreen(prefs, services.voice, onOpenDictation)
+                LaunchedEffect(Unit) { page = Page.Settings }
             } else {
-                FirstRunFlow(vm)
+                FirstRunFlow(vm, inSettings = true)
             }
         }
     }

@@ -17,7 +17,9 @@
     <string name="first_run_welcome_how_title">To connect</string>
     <string name="first_run_welcome_step_run">On your computer, run</string>
     <string name="first_run_welcome_step_scan">Scan the code it shows</string>
-    <string name="first_run_welcome_pair_command">opencode pair --remote</string>
+    <string name="first_run_welcome_pair_command">opencode pair</string>
+    <string name="first_run_welcome_pair_remote_command">opencode pair --remote</string>
+    <string name="first_run_welcome_away">Away from home? %1$s</string>
     <string name="first_run_welcome_scan">Scan the code</string>
     <string name="first_run_welcome_footer">Speech is turned into text on this phone · Needs OpenCode 2.2.5+</string>
 
@@ -108,12 +110,67 @@
     <string name="model_test_signed_out">Your computer turned the phone away. Pair again.</string>
     <string name="model_test_http_status">The test failed (HTTP %1$d). Try again or pick another model.</string>
 
-    <!-- main screen (placeholder until M2) -->
-    <string name="main_placeholder_title">Today’s session</string>
-    <string name="main_placeholder_body">Set up for %1$s with %2$s. The main screen comes next.</string>
-    <string name="main_speech_getting_ready">Getting speech ready · %1$d%%</string>
-    <string name="main_speech_loading">Loading speech</string>
-    <string name="main_speech_ready">Speech ready on this phone</string>
-    <string name="main_speech_failed">Speech isn’t ready: %1$s</string>
-    <string name="main_open_dictation">Try dictation</string>
+    <!-- home: dictation, not connected to the agent yet -->
+    <string name="home_state_idle">Idle</string>
+    <string name="home_settings">Settings</string>
+    <string name="home_talk_hold">Hold to talk</string>
+    <string name="home_talk_keep_talking">Hold to keep talking</string>
+    <string name="home_talk_rerecord">Hold to re-record</string>
+    <string name="home_talk_pause">Recording, tap to pause</string>
+    <string name="home_talk_getting_ready">Getting speech ready · %1$d%%</string>
+    <string name="home_talk_loading">Getting speech ready</string>
+    <string name="home_talk_speech_failed">Speech isn’t ready on this phone</string>
+    <string name="home_recording">Recording</string>
+    <string name="home_rerecording">Re-recording chunk %1$d</string>
+    <string name="home_listening">Listening…</string>
+    <string name="home_first_take_hint">Text appears when you pause</string>
+    <string name="home_transcribing">Transcribing on this phone…</string>
+    <string name="home_transcribing_chunk">Transcribing…</string>
+    <plurals name="home_draft_summary">
+        <item quantity="one">Draft · %1$d chunk · %2$s</item>
+        <item quantity="other">Draft · %1$d chunks · %2$s</item>
+    </plurals>
+    <plurals name="home_chunks_earlier">
+        <item quantity="one">↑ %1$d earlier · %2$s</item>
+        <item quantity="other">↑ %1$d earlier · %2$s</item>
+    </plurals>
+    <string name="home_chunk_number">Chunk %1$d</string>
+    <string name="home_chunk_delete">Delete</string>
+    <string name="home_chunk_rerecord">Re-record</string>
+    <string name="home_chunk_deselect">Deselect</string>
+    <string name="home_clear">Clear the draft</string>
+    <string name="home_chunk_deleted">Chunk deleted</string>
+    <string name="home_take_dropped">Take dropped</string>
+    <string name="home_undo">Undo</string>
+
+    <!-- settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_server_status">%1$s · OpenCode %2$s</string>
+    <string name="settings_section_session">Session</string>
+    <string name="settings_project">Project</string>
+    <string name="settings_new_session">Start a new session</string>
+    <string name="settings_new_session_subtitle">Today’s session stays on your computer</string>
+    <string name="settings_section_agent">Agent</string>
+    <string name="settings_model">Model</string>
+    <string name="settings_reasoning">Reasoning</string>
+    <string name="settings_reasoning_none">None</string>
+    <string name="settings_section_dictation">Dictation · on this phone</string>
+    <string name="settings_speech_model">Speech model</string>
+    <string name="settings_speech_model_subtitle">Runs on this phone</string>
+    <string name="settings_speech_model_value">Parakeet V2</string>
+    <string name="settings_language">Language</string>
+    <string name="settings_language_value">English</string>
+    <string name="settings_text_style">Text style</string>
+    <string name="settings_text_style_value">Plain</string>
+    <string name="settings_section_app">App</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_appearance_auto">Auto</string>
+    <string name="settings_appearance_light">Light</string>
+    <string name="settings_appearance_dark">Dark</string>
+    <string name="settings_server">Server</string>
+    <string name="settings_server_subtitle">Paired · unpair or pair another</string>
+    <string name="settings_not_yet">Not in this version yet</string>
+    <string name="settings_change_project">Change project</string>
+    <string name="settings_change_project_note">Picking one starts a new session there.</string>
+    <string name="settings_model_save">Save</string>
 </resources>

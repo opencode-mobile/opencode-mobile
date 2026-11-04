@@ -11,9 +11,10 @@ import dev.opencode.mobile.domain.model.ModelRepository
 import dev.opencode.mobile.domain.project.ProjectRepository
 import kotlinx.coroutines.launch
 
-/** First run on the app's real services. */
+/** First run on the app's real services. In Settings ([forSettings]) the model page saves the model and nothing else. */
 class HexFirstRunEnvironment(
     private val services: HexServices,
+    private val forSettings: Boolean = false,
 ) : FirstRunEnvironment {
     override val pairing: PairingConnector get() = services.pairing
     override val projects: ProjectRepository get() = services.projects
@@ -25,7 +26,10 @@ class HexFirstRunEnvironment(
 
     override suspend fun saveProject(project: ProjectChoice) = services.settings.setProject(project)
 
-    override suspend fun finish(model: ModelChoice) = services.settings.finishFirstRun(model)
+    override suspend fun finish(model: ModelChoice) =
+        if (forSettings) services.settings.setModel(model) else services.settings.finishFirstRun(model)
+
+    override suspend fun savedModel(): ModelChoice? = services.settings.current().model
 
     override fun getSpeechModel() {
         services.appScope.launch { services.voice.prepare() }

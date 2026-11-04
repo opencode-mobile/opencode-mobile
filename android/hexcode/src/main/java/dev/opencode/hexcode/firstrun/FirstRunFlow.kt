@@ -11,17 +11,22 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.opencode.hexcode.theme.HexTheme
+import dev.opencode.hexcode.R
+import dev.opencode.mobile.theme.openCodeColor
 
-/** The first-run steps, one at a time, with a short cross-fade between them. */
+/** The first-run steps, one at a time, with a short cross-fade between them. [inSettings] retitles the pages. */
 @Composable
-fun FirstRunFlow(vm: FirstRunViewModel) {
+fun FirstRunFlow(
+    vm: FirstRunViewModel,
+    inSettings: Boolean = false,
+) {
     val state by vm.uiState.collectAsStateWithLifecycle()
     Box(
         Modifier
             .fillMaxSize()
-            .background(HexTheme.colors.background),
+            .background(openCodeColor("background-base")),
     ) {
         AnimatedContent(
             targetState = state.step,
@@ -48,6 +53,8 @@ fun FirstRunFlow(vm: FirstRunViewModel) {
                         onBrowse = vm::browseFolders,
                         onRetry = vm::retryProjects,
                         onBack = vm::back,
+                        title = stringResource(if (inSettings) R.string.settings_change_project else R.string.first_run_project_title),
+                        note = stringResource(if (inSettings) R.string.settings_change_project_note else R.string.first_run_project_note),
                     )
                 FirstRunStep.Browse ->
                     state.browser?.let { browser ->
@@ -71,6 +78,8 @@ fun FirstRunFlow(vm: FirstRunViewModel) {
                         onStart = vm::start,
                         onRetry = vm::retryModels,
                         onBack = vm::back,
+                        title = stringResource(if (inSettings) R.string.settings_model else R.string.first_run_model_title),
+                        startLabel = stringResource(if (inSettings) R.string.settings_model_save else R.string.first_run_start),
                     )
                 FirstRunStep.Done -> Unit
             }

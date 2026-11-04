@@ -14,11 +14,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.json.Json
 
+/** Light and dark follow the system unless one is pinned in Settings. */
+enum class Appearance { Auto, Light, Dark }
+
 /** What first run decides: the project, the model and its level. The server itself is a saved Connection Profile. */
 data class HexPrefs(
     val project: ProjectChoice? = null,
     val model: ModelChoice? = null,
     val firstRunDone: Boolean = false,
+    val appearance: Appearance = Appearance.Auto,
 )
 
 private val Context.hexDataStore: DataStore<Preferences> by preferencesDataStore(name = "hexcode")
@@ -35,6 +39,7 @@ class HexSettings(
                 project = p[PROJECT]?.let { runCatching { json.decodeFromString(ProjectChoice.serializer(), it) }.getOrNull() },
                 model = p[MODEL]?.let { runCatching { json.decodeFromString(ModelChoice.serializer(), it) }.getOrNull() },
                 firstRunDone = p[FIRST_RUN_DONE] ?: false,
+                appearance = Appearance.entries.firstOrNull { it.name == p[APPEARANCE] } ?: Appearance.Auto,
             )
         }
 
@@ -52,9 +57,18 @@ class HexSettings(
         }
     }
 
+    suspend fun setModel(model: ModelChoice) {
+        store.edit { it[MODEL] = json.encodeToString(ModelChoice.serializer(), model) }
+    }
+
+    suspend fun setAppearance(appearance: Appearance) {
+        store.edit { it[APPEARANCE] = appearance.name }
+    }
+
     private companion object {
         val PROJECT = stringPreferencesKey("project")
         val MODEL = stringPreferencesKey("model")
         val FIRST_RUN_DONE = booleanPreferencesKey("first_run_done")
+        val APPEARANCE = stringPreferencesKey("appearance")
     }
 }

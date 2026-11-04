@@ -218,6 +218,16 @@ class VoiceEngine(
         return e.transcribe(pcm).trim().ifEmpty { error("No speech was detected.") }
     }
 
+    /**
+     * Ends the take now and returns its samples, so the next take can record while [transcribe] turns these into text.
+     * Null when nothing is recording. Only for engines that transcribe after the take (a live stream is dropped).
+     */
+    fun endTake(): FloatArray? {
+        stream?.cancel()
+        stream = null
+        return stop()
+    }
+
     /** Drops the take without transcribing it. */
     fun cancelRecording() {
         stream?.cancel()
