@@ -51,3 +51,5 @@ lucide/skip-forward/skip_next:lucide_skip_next
 lucide/rotate-ccw/restart:lucide_restart
 lucide/minimize-2/minimize:lucide_minimize
 lucide/grip-vertical/drag_handle:lucide_drag_handle
+lucide/triangle-alert/warning:lucide_warning
+lucide/scan-qr-code/qr_code_scanner:lucide_qr_code_scanner

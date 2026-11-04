@@ -55,6 +55,8 @@ public enum OpenCodeIcon: String, CaseIterable, Hashable {
     case restart = "lucide_restart"
     case minimize = "lucide_minimize"
     case dragHandle = "lucide_drag_handle"
+    case warning = "lucide_warning"
+    case qrCodeScanner = "lucide_qr_code_scanner"
 
     public var accessibilityIdentifier: String { rawValue }
 }

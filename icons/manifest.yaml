@@ -152,3 +152,9 @@ icons:
   - name: drag_handle
     lucide: grip-vertical
     notes: Drag grip of a floating capsule
+  - name: warning
+    lucide: triangle-alert
+    notes: Warning mark; Hex Code's failed model test and pairing failures
+  - name: qr_code_scanner
+    lucide: scan-qr-code
+    notes: Point at the pairing code (Hex Code scan panel)

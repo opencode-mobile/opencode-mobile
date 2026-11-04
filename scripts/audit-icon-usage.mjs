@@ -13,8 +13,13 @@ const EXCLUDE_PATH_SUFFIXES = [
 const ANDROID_ROOTS = [
   join(REPO_ROOT, "android/app/src/main/java"),
   join(REPO_ROOT, "android/opencode-kit/src/main/java"),
+  join(REPO_ROOT, "android/hexcode/src/main/java"),
 ];
-const IOS_ROOTS = [join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile"), join(REPO_ROOT, "ios/OpenCodeKit/Sources/OpenCodeKit")];
+const IOS_ROOTS = [
+  join(REPO_ROOT, "ios/OpenCode Mobile/OpenCode Mobile"),
+  join(REPO_ROOT, "ios/OpenCode Mobile/Hex Code"),
+  join(REPO_ROOT, "ios/OpenCodeKit/Sources/OpenCodeKit"),
+];
 const IOS_ENUM = join(REPO_ROOT, "ios/OpenCodeKit/Sources/OpenCodeKit/Icons/OpenCodeIcon.swift");
 
 function camelToSnake(camel) {
