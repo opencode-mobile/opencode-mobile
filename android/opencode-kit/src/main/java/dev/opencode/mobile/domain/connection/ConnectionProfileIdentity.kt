@@ -15,8 +15,7 @@ object ConnectionProfileIdentity {
 
     fun normalizeUsername(username: String): String = username.trim().ifBlank { "opencode" }
 
-    fun normalizeServerUrls(urls: List<String>): List<String> =
-        urls.map(::normalizeBaseUrl).filter { it.isNotBlank() }.distinct()
+    fun normalizeServerUrls(urls: List<String>): List<String> = urls.map(::normalizeBaseUrl).filter { it.isNotBlank() }.distinct()
 
     /** Manual profiles contribute only [ConnectionProfile.baseUrl]. QR profiles contribute every saved address. */
     fun addressesOf(profile: ConnectionProfile): Set<String> {

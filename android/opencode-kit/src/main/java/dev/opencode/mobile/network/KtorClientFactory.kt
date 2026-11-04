@@ -1,6 +1,6 @@
 package dev.opencode.mobile.network
 
-import dev.opencode.mobile.BuildConfig
+import dev.opencode.kit.BuildConfig
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLog
 import dev.opencode.mobile.domain.diagnostic.DiagnosticLogArea
 import io.ktor.client.HttpClient

@@ -213,6 +213,7 @@ dependencies {
     androidTestImplementation(composeBom)
 
     implementation(project(":markdown-core"))
+    implementation(project(":opencode-kit"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.core.splashscreen)

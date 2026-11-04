@@ -1,7 +1,7 @@
 package dev.opencode.mobile.domain.diagnostic
 
 import android.util.Log
-import dev.opencode.mobile.BuildConfig
+import dev.opencode.kit.BuildConfig
 
 /**
  * Dual-writes redacted diagnostic lines without requiring DI.

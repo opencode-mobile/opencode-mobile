@@ -99,15 +99,6 @@ enum class ToolStatus {
     Error,
 }
 
-enum class AttachmentKind {
-    Image,
-    Pdf,
-    Text,
-
-    /** Any other file. Only streamed uploads carry it; the data-URL path never sends one. */
-    File,
-}
-
 /** Where an attachment's bytes go: inline in the prompt, or streamed to the server first. */
 sealed interface AttachmentUpload {
     /** Sent inline as a `data:` URL, as before uploads existed. */

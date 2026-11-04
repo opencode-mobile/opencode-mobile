@@ -19,7 +19,7 @@ class ModelsApi private constructor(
 ) {
     constructor(httpClient: OpencodeHttpClient, json: Json) : this(ClientProvider(httpClient::get), json)
 
-    internal constructor(httpClient: HttpClient, json: Json) : this(ClientProvider { httpClient }, json)
+    constructor(httpClient: HttpClient, json: Json) : this(ClientProvider { httpClient }, json)
 
     suspend fun listProviders(directory: String? = null): ConfigProvidersResponseDto =
         httpClient

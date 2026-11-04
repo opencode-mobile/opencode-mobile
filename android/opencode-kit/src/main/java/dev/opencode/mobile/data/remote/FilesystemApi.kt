@@ -32,7 +32,7 @@ class FilesystemApi private constructor(
 ) {
     constructor(httpClient: OpencodeHttpClient) : this(ClientProvider(httpClient::get))
 
-    internal constructor(httpClient: HttpClient) : this(ClientProvider { httpClient })
+    constructor(httpClient: HttpClient) : this(ClientProvider { httpClient })
 
     suspend fun getPaths(): PathDto = httpClient.get().get("path").body()
 
@@ -239,7 +239,7 @@ class FilesystemApi private constructor(
             }
 
         /** `bytes 0-1048575/4000000` → 4000000; `*` or malformed → null. */
-        internal fun contentRangeTotal(header: String): Long? = header.substringAfterLast('/', "").trim().toLongOrNull()
+        fun contentRangeTotal(header: String): Long? = header.substringAfterLast('/', "").trim().toLongOrNull()
 
         private const val HEX = "0123456789ABCDEF"
     }

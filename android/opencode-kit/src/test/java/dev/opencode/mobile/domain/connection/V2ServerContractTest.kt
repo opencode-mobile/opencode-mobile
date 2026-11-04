@@ -139,7 +139,11 @@ class V2ServerContractTest {
             )
         assertTrue(V2ServerContract.declaresAttachmentUpload(parse(nested)))
         // A 200 that is not JSON cannot carry data.path.
-        assertFalse(V2ServerContract.declaresAttachmentUpload(parse(UPLOAD_DOCUMENT.replace("\"application/json\":{\"schema\"", "\"text/plain\":{\"schema\""))))
+        assertFalse(
+            V2ServerContract.declaresAttachmentUpload(
+                parse(UPLOAD_DOCUMENT.replace("\"application/json\":{\"schema\"", "\"text/plain\":{\"schema\"")),
+            ),
+        )
     }
 
     @Test

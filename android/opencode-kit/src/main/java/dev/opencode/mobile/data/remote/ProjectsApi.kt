@@ -16,7 +16,7 @@ class ProjectsApi private constructor(
 ) {
     constructor(httpClient: OpencodeHttpClient) : this(ClientProvider(httpClient::get))
 
-    internal constructor(httpClient: HttpClient) : this(ClientProvider { httpClient })
+    constructor(httpClient: HttpClient) : this(ClientProvider { httpClient })
 
     suspend fun listProjects(): List<ProjectDto> = httpClient.get().get("project").body()
 

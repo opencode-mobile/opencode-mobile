@@ -12,7 +12,7 @@ data class ApiDataEnvelope<T>(
     val data: T,
 )
 
-internal inline fun <reified T> Json.decodeDataEnvelope(element: JsonElement): T {
+inline fun <reified T> Json.decodeDataEnvelope(element: JsonElement): T {
     val payload = (element as? JsonObject)?.get("data") ?: element
     return decodeFromJsonElement(payload)
 }

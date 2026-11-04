@@ -14,6 +14,5 @@ object UnavailableProjectRepository : ProjectRepository {
 
     override suspend fun listProjects(): List<Project> = emptyList()
 
-    override suspend fun getCurrentProject(directory: String?): Project =
-        Project(id = "", worktree = directory.orEmpty(), displayName = "")
+    override suspend fun getCurrentProject(directory: String?): Project = Project(id = "", worktree = directory.orEmpty(), displayName = "")
 }

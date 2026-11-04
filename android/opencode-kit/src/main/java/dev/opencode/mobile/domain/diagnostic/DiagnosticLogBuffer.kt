@@ -357,7 +357,7 @@ class DiagnosticLogBuffer(
         }
 
         /** Test-only: clear the process-wide shared handle between cases. */
-        internal fun resetSharedForTests() {
+        fun resetSharedForTests() {
             synchronized(sharedLock) {
                 sharedInstance = null
             }

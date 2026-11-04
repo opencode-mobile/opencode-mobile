@@ -13,7 +13,5 @@ internal fun ConnectionProfile.listStatus(
 ): OpenCodeListItemStatus? =
     when {
         isActive -> OpenCodeListItemStatus(activeLabel, OpenCodeListItemStatusTone.Interactive)
-        serverProtocol != null ->
-            OpenCodeListItemStatus(serverProtocol.shortLabel, OpenCodeListItemStatusTone.Info)
-        else -> null
+        else -> serverProtocol?.let { OpenCodeListItemStatus(it.shortLabel, OpenCodeListItemStatusTone.Info) }
     }
