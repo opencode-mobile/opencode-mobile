@@ -21,7 +21,9 @@ class MainActivity : ComponentActivity() {
         engine = VoiceEngine(this)
         // debug builds: `--es HexCodeSample <file in filesDir>` runs a recorded WAV as a take (emulators have no voice)
         val sample = if (BuildConfig.DEBUG) intent.getStringExtra("HexCodeSample") else null
-        setContent { DictationScreen(engine, sampleFile = sample) }
+        // debug builds: `--es HexCodeBench <file in filesDir>` times that WAV across thread and core settings
+        val bench = if (BuildConfig.DEBUG) intent.getStringExtra("HexCodeBench") else null
+        setContent { DictationScreen(engine, sampleFile = sample, benchFile = bench) }
     }
 
     override fun onDestroy() {

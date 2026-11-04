@@ -46,6 +46,10 @@ class VoiceEngine(
     val modelState: StateFlow<ModelState> = state.asStateFlow()
 
     private var session = 0L
+
+    // Phones mix fast and slow cores, and ggml splits each step evenly across its threads, so one thread on a
+    // little core holds everything up. Runs use one thread per fast core and stay on those cores.
+    private val cores = Cores.read()
     private var recorder: AudioRecord? = null
     private var reader: Thread? = null
     private val samples = FloatBuffer()
@@ -63,8 +67,7 @@ class VoiceEngine(
             try {
                 if (!modelFile.isFile || modelFile.length() != BuildConfig.MODEL_BYTES) download()
                 state.value = ModelState.Preparing(1.0, "Loading the model")
-                val threads = Runtime.getRuntime().availableProcessors().coerceIn(1, 4)
-                session = Native.open(modelFile.absolutePath, threads)
+                session = Native.open(modelFile.absolutePath, cores.fastCount)
                 state.value = ModelState.Ready
             } catch (e: Exception) {
                 state.value = ModelState.Failed(e.message ?: "Could not get speech ready")
@@ -144,7 +147,7 @@ class VoiceEngine(
     suspend fun transcribe(pcm: FloatArray): String =
         withContext(Dispatchers.Default) {
             check(session != 0L) { "Parakeet V2 is not ready." }
-            Native.transcribe(session, pcm).trim().ifEmpty { error("No speech was detected.") }
+            Native.transcribe(session, pcm, cores.fastMask).trim().ifEmpty { error("No speech was detected.") }
         }
 
     /** Drops the take without transcribing it. */
@@ -161,6 +164,42 @@ class VoiceEngine(
         record.release()
         level = 0f
         return samples.toArray()
+    }
+
+    /**
+     * Times transcription of [pcm] across thread counts and core choices, opening one session at a time.
+     * Each line: setup, first run, then the best of two warm runs.
+     */
+    suspend fun benchmark(pcm: FloatArray): String =
+        withContext(Dispatchers.Default) {
+            val all = (1L shl cores.count) - 1
+            val configs =
+                buildList {
+                    add(Triple("4 threads, any core (current)", 4, 0L))
+                    add(Triple("${cores.count} threads, any core", cores.count, 0L))
+                    add(Triple("${cores.fastCount} threads, any core", cores.fastCount, 0L))
+                    add(Triple("${cores.fastCount} threads, fast cores", cores.fastCount, cores.fastMask))
+                    if (cores.fastCount > 1) add(Triple("${cores.fastCount - 1} threads, fast cores", cores.fastCount - 1, cores.fastMask))
+                    add(Triple("${cores.count} threads, all cores", cores.count, all))
+                }.distinctBy { it.second to it.third }
+            val lines = mutableListOf("cores: capacities ${cores.capacities}, fast ${cores.fastCount}")
+            for ((label, threads, mask) in configs) {
+                val s = Native.open(modelFile.absolutePath, threads)
+                try {
+                    val first = timed { Native.transcribe(s, pcm, mask) }
+                    val warm = minOf(timed { Native.transcribe(s, pcm, mask) }, timed { Native.transcribe(s, pcm, mask) })
+                    lines += "%-32s first %.2f s · warm %.2f s".format(label, first, warm)
+                } finally {
+                    Native.close(s)
+                }
+            }
+            lines.joinToString("\n")
+        }
+
+    private inline fun timed(block: () -> Unit): Double {
+        val t0 = System.nanoTime()
+        block()
+        return (System.nanoTime() - t0) / 1e9
     }
 
     fun close() {
@@ -198,6 +237,32 @@ class VoiceEngine(
     }
 }
 
+/** The phone's cores and which of them are fast, from the kernel's per-core capacity (big.LITTLE aware). */
+internal class Cores(
+    val capacities: List<Int>,
+) {
+    val count = capacities.size
+    private val top = capacities.maxOrNull() ?: 0
+
+    /** Cores with at least half the capacity of the strongest one. */
+    val fastMask = capacities.foldIndexed(0L) { i, mask, c -> if (top > 0 && c * 2 >= top) mask or (1L shl i) else mask }
+    val fastCount =
+        java.lang.Long
+            .bitCount(fastMask)
+            .coerceAtLeast(1)
+
+    companion object {
+        fun read(): Cores {
+            val n = Runtime.getRuntime().availableProcessors()
+            val caps =
+                (0 until n).map { cpu ->
+                    runCatching { File("/sys/devices/system/cpu/cpu$cpu/cpu_capacity").readText().trim().toInt() }.getOrDefault(1024)
+                }
+            return Cores(caps)
+        }
+    }
+}
+
 /** A growable float array the recording thread fills. */
 private class FloatBuffer {
     private var data = FloatArray(VoiceEngine.SAMPLE_RATE * 10)
@@ -228,6 +293,7 @@ internal object Native {
     external fun transcribe(
         session: Long,
         pcm: FloatArray,
+        cpuMask: Long,
     ): String
 
     external fun close(session: Long)

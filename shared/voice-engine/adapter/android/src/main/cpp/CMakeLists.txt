@@ -20,7 +20,9 @@ set(TRANSCRIBE_USE_SYSTEM_BLAS OFF CACHE BOOL "" FORCE)
 set(TRANSCRIBE_USE_OPENMP OFF CACHE BOOL "" FORCE)
 set(TRANSCRIBE_METAL OFF CACHE BOOL "" FORCE)
 set(TRANSCRIBE_VULKAN OFF CACHE BOOL "" FORCE)
-# every arm64 phone from about 2018 on has dot-product instructions; ggml uses them for Q8_0
+# Every arm64 phone from about 2018 on has dot-product instructions; ggml uses them for Q8_0.
+# Measured on a Pixel 9 and a Galaxy A15 (10 s of speech, Parakeet V2 Q8_0): adding fp16 changed nothing,
+# i8mm was 50% slower on the Pixel (it switches off ggml's tinyBLAS kernels), and KleidiAI was no faster.
 set(GGML_NATIVE OFF CACHE BOOL "" FORCE)
 set(GGML_CPU_ARM_ARCH "armv8.2-a+dotprod" CACHE STRING "" FORCE)
 

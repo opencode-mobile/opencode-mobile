@@ -1,5 +1,7 @@
 // JNI bridge from Kotlin to transcribe.cpp: open a model, transcribe 16 kHz mono float PCM, close.
+#define _GNU_SOURCE
 #include <jni.h>
+#include <sched.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -28,12 +30,25 @@ JNIEXPORT jlong JNICALL Java_dev_opencode_voiceengine_Native_open(JNIEnv * env, 
     return (jlong) (intptr_t) session;
 }
 
-JNIEXPORT jstring JNICALL Java_dev_opencode_voiceengine_Native_transcribe(JNIEnv * env, jobject self, jlong handle, jfloatArray pcm) {
+// cpu_mask: CPUs (bit n = cpu n) the run may use, 0 for any. ggml starts its worker threads from the calling
+// thread during the run, so they inherit this mask; the caller's own mask is restored afterwards.
+JNIEXPORT jstring JNICALL Java_dev_opencode_voiceengine_Native_transcribe(JNIEnv * env, jobject self, jlong handle, jfloatArray pcm, jlong cpu_mask) {
     (void) self;
     struct transcribe_session * session = (struct transcribe_session *) (intptr_t) handle;
     jsize n = (*env)->GetArrayLength(env, pcm);
     jfloat * samples = (*env)->GetFloatArrayElements(env, pcm, NULL);
+    cpu_set_t previous;
+    int pinned = 0;
+    if (cpu_mask != 0 && sched_getaffinity(0, sizeof previous, &previous) == 0) {
+        cpu_set_t wanted;
+        CPU_ZERO(&wanted);
+        for (int cpu = 0; cpu < 64; cpu++) {
+            if (cpu_mask & (1LL << cpu)) CPU_SET(cpu, &wanted);
+        }
+        pinned = sched_setaffinity(0, sizeof wanted, &wanted) == 0;
+    }
     transcribe_status st = transcribe_run(session, samples, n, NULL);
+    if (pinned) sched_setaffinity(0, sizeof previous, &previous);
     (*env)->ReleaseFloatArrayElements(env, pcm, samples, JNI_ABORT);
     if (st != TRANSCRIBE_OK) {
         throw_status(env, "Transcription failed", st);

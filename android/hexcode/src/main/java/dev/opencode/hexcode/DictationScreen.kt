@@ -75,6 +75,7 @@ private enum class Phase { Idle, Listening, Transcribing }
 fun DictationScreen(
     engine: VoiceEngine,
     sampleFile: String? = null,
+    benchFile: String? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -90,6 +91,19 @@ fun DictationScreen(
         }
 
     LaunchedEffect(Unit) {
+        if (benchFile != null) {
+            phase = Phase.Transcribing
+            val report =
+                runCatching {
+                    engine.benchmark(
+                        VoiceEngine.readWav(File(context.filesDir, benchFile)),
+                    )
+                }.getOrElse { "failed: ${it.message}" }
+            File(context.filesDir, "bench.txt").writeText(report)
+            errorText = report
+            phase = Phase.Idle
+            return@LaunchedEffect
+        }
         engine.prepare()
         if (sampleFile != null && engine.modelState.value == VoiceEngine.ModelState.Ready) {
             phase = Phase.Transcribing
