@@ -32,9 +32,6 @@ import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.mobile.ui.components.BottomSheetEntryDecorator
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheet
 import dev.opencode.mobile.ui.components.OpenCodeBottomSheetEntry
-import dev.opencode.mobile.ui.components.OpenCodeButton
-import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
-import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
 import dev.opencode.mobile.ui.components.OpenCodeDialog
 import dev.opencode.mobile.ui.components.OpenCodeDialogOption
 import dev.opencode.mobile.ui.components.OpenCodeEmptyState
@@ -54,8 +51,6 @@ import dev.opencode.mobile.ui.text.resolve
 /** Test tags of the Archived sessions screen. */
 internal object ArchivedSessionsTags {
     fun row(sessionId: String): String = "archivedSessionRow:$sessionId"
-
-    fun unarchiveButton(sessionId: String): String = "archivedSessionUnarchive:$sessionId"
 }
 
 /**
@@ -122,7 +117,6 @@ fun ArchivedSessionsScreen(
                             ArchivedSessionsList(
                                 sections = content.sections,
                                 onRowClick = viewModel::openActions,
-                                onUnarchive = { viewModel.unarchive(it.id) },
                             )
                         }
                 }
@@ -183,10 +177,8 @@ private fun CenteredEmptyState(content: @Composable () -> Unit) {
 private fun ArchivedSessionsList(
     sections: List<ArchivedSessionSection>,
     onRowClick: (ArchivedSessionRow) -> Unit,
-    onUnarchive: (ArchivedSessionRow) -> Unit,
 ) {
     val rowStyle = HomeDisplayPreferences.sessionRowStyle
-    val unarchiveLabel = stringResource(R.string.archived_sessions_unarchive)
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(bottom = 88.dp),
@@ -213,14 +205,6 @@ private fun ArchivedSessionsList(
                         onSessionLongPress = { onRowClick(row) },
                         rowStyle = rowStyle,
                         showsStatus = false,
-                        trailing = {
-                            OpenCodeButton(
-                                variant = OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Unarchive, unarchiveLabel),
-                                contrast = OpenCodeButtonContrast.Low,
-                                onClick = { onUnarchive(row) },
-                                modifier = Modifier.testTag(ArchivedSessionsTags.unarchiveButton(row.id)),
-                            )
-                        },
                     )
                 }
             }
