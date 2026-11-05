@@ -97,6 +97,7 @@ class TodaySession(
             SummarySource { prompt -> api.summarise(sessionId ?: error("No session open"), prompt) },
             clock,
             summaryTimeoutMs,
+            busy = { live?.busySince != null },
         )
 
     private val stream = transport?.let { LiveEventStream(scope, it) }

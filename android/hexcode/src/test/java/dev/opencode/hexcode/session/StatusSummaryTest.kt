@@ -4,6 +4,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
+import java.util.Locale
 
 /** app-plan.md, Testing, M2 cases: "Summary: the full shape; no steps; no Next:; code fences; text before the title; no Now: → fallback". */
 class StatusSummaryTest {
@@ -159,5 +160,18 @@ class StatusSummaryTest {
                 .single()
                 .text.length <= 40,
         )
+    }
+
+    @Test
+    fun theLongDateIsEnglishDayBeforeMonthWhateverTheRegion() {
+        val before = Locale.getDefault()
+        try {
+            for (region in listOf(Locale.US, Locale.GERMANY, Locale.JAPAN, Locale("ar", "EG"), Locale.FRANCE)) {
+                Locale.setDefault(region)
+                assertEquals("Thursday 5 November", StatusSummary.longDate(LocalDate.of(2026, 11, 5)))
+            }
+        } finally {
+            Locale.setDefault(before)
+        }
     }
 }

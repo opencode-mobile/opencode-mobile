@@ -123,4 +123,25 @@ class OpenCodeTodayApiTest {
                 requests,
             )
         }
+
+    @Test
+    fun pendingItemsComeOldestFirstWhateverSessionTheyBelongTo() =
+        runTest {
+            val today =
+                api { path ->
+                    when (path) {
+                        "/api/session/active" -> """{"data":{"ses_1":{"type":"running"},"ses_c1":{"type":"running"}}}"""
+                        "/api/session/ses_1" -> """{"data":{"id":"ses_1","time":{"created":1,"updated":2,"busy":5}}}"""
+                        "/api/session?parentID" -> """{"data":[{"id":"ses_c1","parentID":"ses_1"}],"cursor":{"next":null}}"""
+                        "/api/session/ses_1/permission" ->
+                            """{"data":[{"id":"per_1addc0000001aaaa","sessionID":"ses_1","action":"edit","resources":[],"message":"Edit the config"}]}"""
+                        "/api/session/ses_c1/form" ->
+                            """{"data":[{"id":"frm_1addb0000001bbbb","sessionID":"ses_c1","title":"Questions","fields":[{"key":"q0","title":"Database"}]}]}"""
+                        else -> """{"data":[]}"""
+                    }
+                }
+            val pending = today.snapshot("ses_1").pending
+            assertEquals(listOf("frm_1addb0000001bbbb", "per_1addc0000001aaaa"), pending.map { it.id })
+            assertEquals(listOf("Database", "Edit the config"), pending.map { it.text })
+        }
 }

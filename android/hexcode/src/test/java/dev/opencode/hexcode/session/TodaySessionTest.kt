@@ -347,7 +347,7 @@ class TodaySessionTest {
         }
 
     @Test
-    fun droppingTheStreamHoldsItDownFor5s() =
+    fun droppingTheStreamHoldsItDownFor10s() =
         runTest {
             val transport = Transport()
             val today = session(Api(), transport)
@@ -358,11 +358,65 @@ class TodaySessionTest {
             today.dropStream()
             runCurrent()
             assertEquals(AgentStatus.Reconnecting, today.state.value.agent)
-            advanceTimeBy(4_900)
+            advanceTimeBy(9_900)
             runCurrent()
             assertEquals(1, transport.attempts)
             advanceTimeBy(200)
             runCurrent()
             assertEquals(2, transport.attempts)
+        }
+
+    @Test
+    fun anotherStartDuringARunDoesNotRestartTheClock() =
+        runTest {
+            val transport = Transport()
+            val today = session(Api(), transport)
+            today.open()
+            runCurrent()
+            transport.connected()
+            transport.send(event("session.execution.started", """{"sessionID":"new1"}""", created = 1_000))
+            runCurrent()
+            // A queued message delivered inside the run, or a second start event, keeps the first start.
+            transport.send(event("session.inbox.delivered", """{"sessionID":"new1","inboxID":"m1"}"""))
+            transport.send(event("session.execution.started", """{"sessionID":"new1"}""", created = 9_000))
+            runCurrent()
+            assertEquals(AgentStatus.Working(1_000), today.state.value.agent)
+        }
+
+    @Test
+    fun anEmptyReplyWhileWorkingKeepsTheCardWithoutTheNoteAndTheRunsEndRefreshesIt() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val transport = Transport()
+            val today = session(api, transport, Memory(date))
+            today.open()
+            runCurrent()
+            transport.connected()
+            transport.send(event("session.execution.started", """{"sessionID":"s1"}""", created = 60))
+            runCurrent()
+            val card = today.state.value.summary.summary
+            api.reply = ""
+            today.refresh()
+            runCurrent()
+            assertEquals(card, today.state.value.summary.summary)
+            assertFalse(today.state.value.summary.failed)
+            assertFalse(today.state.value.summary.loading)
+            api.reply = "## Task\nNow: Done."
+            transport.send(event("session.execution.succeeded", """{"sessionID":"s1"}"""))
+            runCurrent()
+            assertEquals("Done.", (today.state.value.summary.summary as StatusSummary.Card).now)
+        }
+
+    @Test
+    fun anEmptyReplyWhileIdleShowsCouldntUpdate() =
+        runTest {
+            val api = Api(mutableListOf(SessionListing("s1", "2026-11-05", project, 1, busySince = 50)))
+            val today = session(api, Transport(), Memory(date))
+            today.open()
+            runCurrent()
+            api.reply = ""
+            today.refresh()
+            runCurrent()
+            assertTrue(today.state.value.summary.failed)
         }
 }

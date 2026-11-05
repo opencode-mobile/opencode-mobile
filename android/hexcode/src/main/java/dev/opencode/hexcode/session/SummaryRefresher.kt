@@ -63,7 +63,7 @@ data class SummaryState(
  * Keeps the status summary: asks [source] with [SessionPrompts.SUMMARY] and reads the reply with
  * [StatusSummary.parse]. Never two requests at once: a refresh while one runs is dropped, as the prototype's
  * `refreshCard`. A failed request, an empty reply or no reply within [TIMEOUT_MS] keeps the last card and marks it
- * [SummaryState.failed].
+ * [SummaryState.failed]; an empty reply while the agent is [busy] keeps it without the mark.
  *
  * The caller decides when (app-plan.md: on open and reconnect, when the turn ends, on ↻; never on a timer).
  */
@@ -72,6 +72,8 @@ class SummaryRefresher(
     private val source: SummarySource,
     private val clock: () -> Long = System::currentTimeMillis,
     private val timeoutMs: Long = TIMEOUT_MS,
+    /** The agent is working: the server often answers with no text then, which isn't a failure. */
+    private val busy: () -> Boolean = { false },
 ) {
     private val mutable = MutableStateFlow(SummaryState())
     val state: StateFlow<SummaryState> = mutable.asStateFlow()
@@ -102,6 +104,12 @@ class SummaryRefresher(
                 try {
                     // A timeout counts as a failed request, not as a cancellation.
                     val reply = withTimeoutOrNull(timeoutMs) { source.summarise(SessionPrompts.SUMMARY) }
+                    if (reply != null && reply.isBlank() && busy()) {
+                        // Empty while the agent works: the last card stays, without "Couldn't update"; the run's end
+                        // refreshes it.
+                        mutable.update { it.copy(loading = false, failed = false) }
+                        return@launch
+                    }
                     if (reply.isNullOrBlank()) throw IllegalStateException("The summary timed out or came back empty.")
                     val summary = StatusSummary.parse(reply)
                     mutable.value = SummaryState(summary, updatedAt = clock())

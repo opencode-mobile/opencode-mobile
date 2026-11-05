@@ -56,8 +56,8 @@ class OpenCodeTodayApi(
 
     /**
      * Busy from `/api/session/active` (never from comparing `time.busy` with `time.idle`), since when from
-     * `time.busy`, the subagents, the pending approvals and questions of the session and each running subagent, and
-     * the inbox.
+     * `time.busy`, the subagents, the pending approvals and questions of the session and each running subagent (oldest
+     * first: OpenCode's ids grow with time), and the inbox.
      */
     override suspend fun snapshot(rootId: String): LiveSnapshot =
         coroutineScope {
@@ -78,6 +78,7 @@ class OpenCodeTodayApi(
                         }
                     }.awaitAll()
                     .flatten()
+                    .sortedBy { it.id.substringAfter('_') }
             val busy = root.await().time?.busy
             LiveSnapshot(
                 busySince = if (rootId in running) busy ?: clock() else null,
@@ -114,7 +115,7 @@ class OpenCodeTodayApi(
         )
 
     private fun V2PermissionRequestDto.pending() =
-        PendingItem(id, sessionId, PendingItem.Kind.Approval, PendingItem.approvalText(action, resources, message = null))
+        PendingItem(id, sessionId, PendingItem.Kind.Approval, PendingItem.approvalText(action, resources, message))
 
     private fun V2FormInfoDto.pending() =
         PendingItem(

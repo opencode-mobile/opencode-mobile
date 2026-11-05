@@ -115,4 +115,28 @@ class SessionEventTest {
         assertNull(SessionEvent.decode("not json"))
         assertNull(SessionEvent.decode("""[1,2]"""))
     }
+
+    @Test
+    fun theHintTextRulesFromThePlan() {
+        // Approval: resources joined with ", ", else its message, else its action.
+        assertEquals("ls, cat a.txt", PendingItem.approvalText("shell", listOf("ls", "cat a.txt"), "Run commands"))
+        assertEquals("Run commands", PendingItem.approvalText("shell", emptyList(), "Run commands"))
+        assertEquals("shell", PendingItem.approvalText("shell", emptyList(), null))
+        assertEquals("shell", PendingItem.approvalText("shell", emptyList(), ""))
+        // Question: the first field's description, else that field's title, else the form's title.
+        assertEquals("Which database?", PendingItem.questionText("Questions", "Database", "Which database?"))
+        assertEquals("Database", PendingItem.questionText("Questions", "Database", null))
+        assertEquals("Questions", PendingItem.questionText("Questions", null, null))
+        assertEquals("", PendingItem.questionText(null, null, null))
+    }
+
+    @Test
+    fun anApprovalWithoutResourcesUsesItsMessage() {
+        assertEquals(
+            SessionEvent.PermissionAsked(PendingItem("per_2", "ses_1", PendingItem.Kind.Approval, "Edit the config")),
+            SessionEvent.decode(
+                """{"type":"permission.asked","data":{"id":"per_2","sessionID":"ses_1","action":"edit","resources":[],"message":"Edit the config"}}""",
+            ),
+        )
+    }
 }

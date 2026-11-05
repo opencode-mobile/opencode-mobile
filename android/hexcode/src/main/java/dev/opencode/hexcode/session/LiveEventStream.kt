@@ -156,7 +156,7 @@ class LiveEventStream(
         const val STALL_MS = 35_000L
 
         /** How long "Drop event stream" holds the stream down. */
-        const val DROP_HOLD_MS = 5_000L
+        const val DROP_HOLD_MS = 10_000L
 
         private const val STALLED = "No data from the event stream for 35 s"
         private const val DROPPED = "Event stream dropped from developer settings"

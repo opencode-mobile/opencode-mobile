@@ -220,7 +220,7 @@ private object DeveloperCopy {
     const val SAMPLE_SESSION = "Sample session"
     const val SAMPLE_SESSION_SUBTITLE = "Home with a fake session, or Off for the real one. Tap for the next."
     const val DROP_STREAM = "Drop event stream"
-    const val DROP_STREAM_SUBTITLE = "As if the network dropped, for 5 s. Debug builds only."
+    const val DROP_STREAM_SUBTITLE = "As if the network dropped, for 10 s. Debug builds only."
     const val BUILD = "Build"
     const val BUILD_COPIED = "Build copied"
     const val HIDE = "Hide developer settings"
