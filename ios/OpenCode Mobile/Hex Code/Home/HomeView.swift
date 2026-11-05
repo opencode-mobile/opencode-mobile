@@ -8,6 +8,8 @@ struct HomeView: View {
     let session: TodaySession
     let voice: VoiceEngine
     let onSettings: () -> Void
+    /// Attach (M3) and Stop (M4) aren't built yet: the "Not in this version yet" notice.
+    var onNotYet: () -> Void = {}
 
     private var drafting: Bool { home.isRecording || !home.draft.isEmpty }
 
@@ -33,13 +35,36 @@ struct HomeView: View {
             } else {
                 Spacer().frame(height: 12)
             }
-            TalkButton(home: home, voice: voice)
+            dock
                 .padding(.bottom, 6)
         }
         .padding(.horizontal, HexSpacing.screenHome)
         .hexScreenBackground()
         .animation(HexMotion.ease(HexMotion.fade), value: drafting)
         .animation(HexMotion.ease(HexMotion.fade), value: session.waitingCount)
+    }
+
+    /// The prototype's `.fx-dock`: attach, the talk button filling the rest, stop. Stop is dimmed
+    /// unless the agent is working or needs input.
+    private var dock: some View {
+        HStack(spacing: 8) {
+            HexIconButton(.clip, label: LocalizedStringResource("home.attach", defaultValue: "Attach"), action: onNotYet)
+            TalkButton(home: home, voice: voice)
+            HexIconButton(
+                .stop,
+                label: LocalizedStringResource("home.stop", defaultValue: "Stop"),
+                tone: .stop,
+                enabled: stopEnabled,
+                action: onNotYet
+            )
+        }
+    }
+
+    private var stopEnabled: Bool {
+        switch session.agentState {
+        case .working?, .needsInput?: true
+        default: false
+        }
     }
 }
 

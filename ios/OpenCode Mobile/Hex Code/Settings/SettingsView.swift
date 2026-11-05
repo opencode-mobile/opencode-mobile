@@ -166,7 +166,13 @@ struct HexMainView: View {
 
     var body: some View {
         NavigationStack(path: $main.path) {
-            HomeView(home: main.home, session: main.session, voice: voice, onSettings: { main.openSettings() })
+            HomeView(
+                home: main.home,
+                session: main.session,
+                voice: voice,
+                onSettings: { main.openSettings() },
+                onNotYet: { main.showPlaceholder() }
+            )
                 .hexPage()
                 .navigationDestination(for: HexMainModel.Route.self) { route in
                     page(route).hexPage()
