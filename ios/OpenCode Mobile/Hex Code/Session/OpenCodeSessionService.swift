@@ -77,7 +77,7 @@ struct OpenCodeSessionService: DailySessionService, LiveSessionAPI {
             busySince: busy,
             hasRun: session.busyMs != nil,
             children: childIDs,
-            pending: pending,
+            pending: PendingItem.oldestFirst(pending),
             inbox: try await inbox.map { ($0.id, $0.delivery ?? "queue") }
         )
     }

@@ -172,7 +172,7 @@ final class HexMainModel {
         path = [.settings]
         toasts.show(HexToastItem(
             tone: .steer,
-            title: String(localized: "settings.project_changed", defaultValue: "Now in \(project.name)")
+            title: String(localized: "settings.project.changed", defaultValue: "Now in \(project.name)")
         ))
         await realSession.projectChanged()
     }

@@ -199,7 +199,7 @@ struct HexMainView: View {
                 ProjectPickerView(
                     picker: picker,
                     title: LocalizedStringResource("settings.project.title", defaultValue: "Change project"),
-                    note: LocalizedStringResource("settings.project.note", defaultValue: "The next session starts there."),
+                    note: LocalizedStringResource("settings.project.note", defaultValue: "Picking one opens today’s session there."),
                     serverLabel: main.serverLabel,
                     onBack: { main.back() },
                     onPick: { project in Task { await main.pickProject(project) } },

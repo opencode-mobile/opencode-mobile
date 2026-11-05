@@ -29,6 +29,11 @@ final class HexAppModel {
     func launch() async {
         guard phase == .launching else { return }
         #if DEBUG
+        // `-HexCodeLastDate yyyy-MM-dd` sets the date of the last session the app opened, to try the
+        // new-day notice.
+        if let lastDate = UserDefaults.standard.string(forKey: "HexCodeLastDate") {
+            UserDefaults.standard.set(lastDate, forKey: DailySessionDefaults.key)
+        }
         // `-HexCodeDemoSetup YES` skips first run with placeholder values, for simulator checks of home.
         if UserDefaults.standard.bool(forKey: "HexCodeDemoSetup") {
             showMain(HexSetup(

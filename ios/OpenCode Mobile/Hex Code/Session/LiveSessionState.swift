@@ -14,6 +14,19 @@ struct PendingItem: Equatable, Sendable {
     var text: String
 }
 
+extension PendingItem {
+    /// Oldest first. Neither list has a time, but ids grow with time: compare the part after the
+    /// first `_` (`per_…`, `frm_…`), across approvals and questions alike.
+    static func oldestFirst(_ items: [PendingItem]) -> [PendingItem] {
+        items.sorted { $0.idOrder < $1.idOrder }
+    }
+
+    private var idOrder: Substring {
+        guard let underscore = id.firstIndex(of: "_") else { return id[...] }
+        return id[id.index(after: underscore)...]
+    }
+}
+
 /// One event from `GET /api/event`, with what home needs from it.
 enum SessionEvent: Equatable, Sendable {
     /// The first frame of every stream.

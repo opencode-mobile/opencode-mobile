@@ -180,6 +180,15 @@ struct LiveSessionStateTests {
         #expect(state.shells == ["sh_1"])
     }
 
+    @Test func theReadBackListsPendingItemsOldestFirstById() {
+        let items = [
+            PendingItem(id: "per_e52b", sessionID: "ses_a", kind: .approval, text: "ls"),
+            PendingItem(id: "frm_e52a", sessionID: "ses_c", kind: .question, text: "Which one?"),
+            PendingItem(id: "per_e529", sessionID: "ses_a", kind: .approval, text: "rm"),
+        ]
+        #expect(PendingItem.oldestFirst(items).map(\.id) == ["per_e529", "frm_e52a", "per_e52b"])
+    }
+
     @Test func pendingTexts() {
         #expect(PendingPermissionText(action: "shell", resources: ["bun run db:reset"], message: nil).text == "bun run db:reset")
         #expect(PendingPermissionText(action: "edit", resources: [], message: "Edit src/app.ts").text == "Edit src/app.ts")
