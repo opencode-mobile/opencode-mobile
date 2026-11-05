@@ -3,7 +3,9 @@ package dev.opencode.hexcode.session
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -30,7 +32,7 @@ class SummaryRefresherTest {
 
     private var now = 1_000_000L
 
-    private fun TestScope.refresher(source: SummarySource) = SummaryRefresher(this, source) { now }
+    private fun TestScope.refresher(source: SummarySource) = SummaryRefresher(this, source, clock = { now })
 
     @Test
     fun twoRefreshesAtOnceMakeOneRequest() =
@@ -65,7 +67,7 @@ class SummaryRefresherTest {
             val source = FakeSource().apply { replies += "## Task\nNow: Working." }.also { it.gate = gate }
             val summary = refresher(source)
             summary.refresh()
-            advanceUntilIdle()
+            runCurrent()
             assertTrue(summary.state.value.loading)
             assertEquals(RefreshLabel.Updating, summary.state.value.label(now))
             gate.complete(Unit)
@@ -142,4 +144,23 @@ class SummaryRefresherTest {
         assertEquals(RefreshLabel.Failed, state.copy(loading = false).label(600_000))
         assertNull(SummaryState().label(0))
     }
+
+    @Test
+    fun noReplyWithin60sCountsAsAFailure() =
+        runTest {
+            val source = FakeSource().apply { replies += "## Task\nNow: Working." }
+            val summary = refresher(source)
+            summary.refresh()
+            advanceUntilIdle()
+            val card = summary.state.value.summary
+            source.gate = CompletableDeferred()
+            summary.refresh()
+            advanceTimeBy(59_000)
+            assertTrue(summary.state.value.loading)
+            advanceTimeBy(2_000)
+            assertFalse(summary.state.value.loading)
+            assertTrue(summary.state.value.failed)
+            assertEquals(card, summary.state.value.summary)
+            source.gate?.complete(Unit)
+        }
 }

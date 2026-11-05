@@ -137,4 +137,27 @@ class StatusSummaryTest {
         assertEquals(StatusSummary.Empty("Thursday 5 November"), StatusSummary.empty(LocalDate.of(2026, 11, 5)))
         assertEquals("Tuesday 3 November", StatusSummary.longDate(LocalDate.of(2026, 11, 3)))
     }
+
+    @Test
+    fun clippingCountsWhatTheUserSeesAsOneCharacter() {
+        // "é" written as e + a combining accent is one character; so is an emoji outside the basic plane.
+        val accented = "e\u0301".repeat(12)
+        assertEquals(accented, StatusSummary.clip(accented, 12))
+        assertEquals("e\u0301".repeat(9) + "…", StatusSummary.clip(accented, 10))
+        val rockets = "\uD83D\uDE80".repeat(5)
+        assertEquals(rockets, StatusSummary.clip(rockets, 5))
+        assertEquals("\uD83D\uDE80".repeat(3) + "…", StatusSummary.clip(rockets, 4))
+    }
+
+    @Test
+    fun stepsAreClippedTo40() {
+        val long = "Rewrite every test that leans on the old session helper"
+        val card = StatusSummary.parse("## Task\nNow: Working.\n- [ ] $long") as StatusSummary.Card
+        assertEquals("Rewrite every test that leans on the…", card.steps.single().text)
+        assertTrue(
+            card.steps
+                .single()
+                .text.length <= 40,
+        )
+    }
 }

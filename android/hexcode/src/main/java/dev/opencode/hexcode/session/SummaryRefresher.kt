@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
@@ -61,7 +62,8 @@ data class SummaryState(
 /**
  * Keeps the status summary: asks [source] with [SessionPrompts.SUMMARY] and reads the reply with
  * [StatusSummary.parse]. Never two requests at once: a refresh while one runs is dropped, as the prototype's
- * `refreshCard`. A failed request (or an empty reply) keeps the last card and marks it [SummaryState.failed].
+ * `refreshCard`. A failed request, an empty reply or no reply within [TIMEOUT_MS] keeps the last card and marks it
+ * [SummaryState.failed].
  *
  * The caller decides when (app-plan.md: on open and reconnect, when the turn ends, on ↻; never on a timer).
  */
@@ -69,11 +71,18 @@ class SummaryRefresher(
     private val scope: CoroutineScope,
     private val source: SummarySource,
     private val clock: () -> Long = System::currentTimeMillis,
+    private val timeoutMs: Long = TIMEOUT_MS,
 ) {
     private val mutable = MutableStateFlow(SummaryState())
     val state: StateFlow<SummaryState> = mutable.asStateFlow()
 
     private var job: Job? = null
+
+    /** No card, before a session opens or when another session takes its place. A request still running is dropped. */
+    fun clear() {
+        job?.cancel()
+        mutable.value = SummaryState()
+    }
 
     /** A new session's card, without a request. A request still running is dropped. */
     fun showEmpty(date: LocalDate) {
@@ -91,8 +100,9 @@ class SummaryRefresher(
         job =
             scope.launch {
                 try {
-                    val reply = source.summarise(SessionPrompts.SUMMARY)
-                    if (reply.isBlank()) throw IllegalStateException("The summary came back empty.")
+                    // A timeout counts as a failed request, not as a cancellation.
+                    val reply = withTimeoutOrNull(timeoutMs) { source.summarise(SessionPrompts.SUMMARY) }
+                    if (reply.isNullOrBlank()) throw IllegalStateException("The summary timed out or came back empty.")
                     val summary = StatusSummary.parse(reply)
                     mutable.value = SummaryState(summary, updatedAt = clock())
                 } catch (error: CancellationException) {
@@ -103,5 +113,10 @@ class SummaryRefresher(
                 }
             }
         return true
+    }
+
+    companion object {
+        /** A request that takes longer fails (app-plan.md, The status summary). */
+        const val TIMEOUT_MS = 60_000L
     }
 }

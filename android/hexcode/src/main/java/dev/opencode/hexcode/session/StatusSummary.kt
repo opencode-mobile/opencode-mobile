@@ -1,5 +1,6 @@
 package dev.opencode.hexcode.session
 
+import java.text.BreakIterator
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -16,7 +17,7 @@ data class SummaryStep(
  * ([Empty]), which needs no request.
  */
 sealed interface StatusSummary {
-    /** The reply in the card's shape, clipped to fit: [title] 40, [now] 90, [next] 60 characters. */
+    /** The reply in the card's shape, clipped to fit: [title] 40, [now] 90, [next] 60 and each step 40 characters. */
     data class Card(
         val title: String,
         val now: String,
@@ -40,6 +41,7 @@ sealed interface StatusSummary {
         const val NOW_MAX = 90
         const val NEXT_MAX = 60
         const val FALLBACK_MAX = 300
+        const val STEP_MAX = 40
 
         /** The prompt asks for at most this many steps; more are left out, so the progress segments fit. */
         const val STEPS_MAX = 8
@@ -72,7 +74,7 @@ sealed interface StatusSummary {
                     NEXT.matches(line) -> next = next ?: NEXT.value(line)
                     step != null -> {
                         val text = step.groupValues[2].trim()
-                        if (text.isNotEmpty()) steps += SummaryStep(text, done = step.groupValues[1] != " ")
+                        if (text.isNotEmpty()) steps += SummaryStep(clip(text, STEP_MAX), done = step.groupValues[1] != " ")
                     }
                 }
             }
@@ -105,17 +107,37 @@ sealed interface StatusSummary {
 
         /**
          * [text] cut to at most [max] characters, as the prototype's `clip`: at the last space past half way when
-         * there is one, without trailing spaces or `,.;:`, and ending in "…".
+         * there is one, without trailing spaces or `,.;:`, and ending in "…". A character is what the user sees as one
+         * (a grapheme cluster), so an emoji or an accented letter is never split.
          */
         fun clip(
             text: String,
             max: Int,
         ): String {
-            if (text.length <= max) return text
-            val cut = text.substring(0, max - 1)
-            val space = cut.lastIndexOf(' ')
-            val kept = if (space > max * 0.5) cut.substring(0, space) else cut
-            return kept.trimEnd { it.isWhitespace() || it in ",.;:" } + "…"
+            val graphemes = graphemes(text)
+            if (graphemes.size <= max) return text
+            var cut = graphemes.take(max - 1)
+            val space = cut.lastIndexOf(" ")
+            if (space > max * 0.5) cut = cut.take(space)
+            cut = cut.dropLastWhile { it.isBlank() || it in TRAILING }
+            return cut.joinToString("") + "…"
+        }
+
+        private val TRAILING = setOf(",", ".", ";", ":")
+
+        /** [text] split into what the user sees as single characters. */
+        private fun graphemes(text: String): List<String> {
+            val breaks = BreakIterator.getCharacterInstance(Locale.ROOT)
+            breaks.setText(text)
+            val parts = mutableListOf<String>()
+            var start = breaks.first()
+            var end = breaks.next()
+            while (end != BreakIterator.DONE) {
+                parts += text.substring(start, end)
+                start = end
+                end = breaks.next()
+            }
+            return parts
         }
     }
 }
