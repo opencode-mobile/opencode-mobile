@@ -193,7 +193,7 @@
     <string name="settings_developer_on">Developer settings on</string>
     <string name="settings_soon">Not in this version yet</string>
     <string name="settings_project_title">Change project</string>
-    <string name="settings_project_note">The next session starts there.</string>
+    <string name="settings_project_note">Picking one opens today’s session there.</string>
     <string name="settings_project_changed">Now in %1$s</string>
     <string name="settings_model_title">Model</string>
     <string name="settings_model_save">Save</string>
