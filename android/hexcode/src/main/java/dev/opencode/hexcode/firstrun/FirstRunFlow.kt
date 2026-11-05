@@ -12,7 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.opencode.mobile.theme.openCodeColor
+import dev.opencode.hexcode.designsystem.HexTheme
 
 /** The first-run steps, one at a time, with a short cross-fade between them. */
 @Composable
@@ -21,7 +21,7 @@ fun FirstRunFlow(vm: FirstRunViewModel) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(openCodeColor("background-base")),
+            .background(HexTheme.colors.background),
     ) {
         AnimatedContent(
             targetState = state.step,

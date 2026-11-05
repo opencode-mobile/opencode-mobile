@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,17 +21,15 @@ import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.R
 import dev.opencode.hexcode.app.Appearance
 import dev.opencode.hexcode.app.HexPrefs
+import dev.opencode.hexcode.app.NoticeHost
+import dev.opencode.hexcode.app.NoticeMessage
+import dev.opencode.hexcode.designsystem.HexIcons
+import dev.opencode.hexcode.designsystem.components.HexRow
+import dev.opencode.hexcode.designsystem.components.HexRowTrailing
+import dev.opencode.hexcode.designsystem.components.HexSectionLabel
 import dev.opencode.hexcode.firstrun.PageTop
 import dev.opencode.hexcode.firstrun.ServerLabel
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
-import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.components.OpenCodeListItem
-import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
-import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
-import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
-import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
-import dev.opencode.mobile.ui.components.StartDecorator
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 /**
  * Settings, the prototype's plain list. Project, Model, Reasoning and Appearance work; Start a new session, Server
@@ -53,9 +49,9 @@ fun SettingsScreen(
     onBack: () -> Unit,
 ) {
     BackHandler(onBack = onBack)
-    var notYet by remember { mutableStateOf<OpenCodeSnackbarMessage?>(null) }
+    var notYet by remember { mutableStateOf<NoticeMessage?>(null) }
     val notYetText = stringResource(R.string.settings_soon)
-    val placeholder = { notYet = OpenCodeSnackbarMessage(notYetText) }
+    val placeholder = { notYet = NoticeMessage(notYetText) }
     Box(Modifier.fillMaxSize().systemBarsPadding()) {
         Column(Modifier.fillMaxSize()) {
             PageTop(
@@ -66,50 +62,50 @@ fun SettingsScreen(
                 onBack,
             )
             Column(Modifier.verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-                OpenCodeSectionHeader(stringResource(R.string.settings_session))
-                Row(OpenCodeIcons.Folder, stringResource(R.string.settings_project), prefs.project?.name, projectPath, onProject)
+                HexSectionLabel(stringResource(R.string.settings_session))
+                Row(HexIcons.folder, stringResource(R.string.settings_project), prefs.project?.name, projectPath, onProject)
                 Row(
-                    OpenCodeIcons.Restart,
+                    HexIcons.refresh,
                     stringResource(R.string.settings_new_session),
                     null,
                     stringResource(R.string.settings_new_session_sub),
                     placeholder,
                 )
-                OpenCodeSectionHeader(stringResource(R.string.settings_agent))
-                Row(OpenCodeIcons.Agent, stringResource(R.string.settings_model), modelName, null, onModel)
-                Row(OpenCodeIcons.Architecture, stringResource(R.string.settings_reasoning), reasoningValue(prefs), null, onModel)
-                OpenCodeSectionHeader(stringResource(R.string.settings_dictation))
+                HexSectionLabel(stringResource(R.string.settings_agent))
+                Row(HexIcons.cpu, stringResource(R.string.settings_model), modelName, null, onModel)
+                Row(HexIcons.spark, stringResource(R.string.settings_reasoning), reasoningValue(prefs), null, onModel)
+                HexSectionLabel(stringResource(R.string.settings_dictation))
                 Row(
-                    OpenCodeIcons.Mic,
+                    HexIcons.mic,
                     stringResource(R.string.settings_speech_model),
                     stringResource(R.string.settings_speech_model_value),
                     stringResource(R.string.settings_speech_model_sub),
                     placeholder,
                 )
                 Row(
-                    OpenCodeIcons.Description,
+                    HexIcons.book,
                     stringResource(R.string.settings_language),
                     stringResource(R.string.settings_language_english),
                     null,
                     placeholder,
                 )
                 Row(
-                    OpenCodeIcons.Edit,
+                    HexIcons.pencil,
                     stringResource(R.string.settings_text_style),
                     stringResource(R.string.settings_text_style_plain),
                     null,
                     placeholder,
                 )
-                OpenCodeSectionHeader(stringResource(R.string.settings_app))
+                HexSectionLabel(stringResource(R.string.settings_app))
                 Row(
-                    OpenCodeIcons.Widgets,
+                    HexIcons.sun,
                     stringResource(R.string.settings_appearance),
                     appearanceName(prefs.appearance),
                     null,
                     onAppearance,
                 )
                 Row(
-                    OpenCodeIcons.Cloud,
+                    HexIcons.server,
                     stringResource(R.string.settings_server),
                     server?.name,
                     server?.let { serverDetails(it) },
@@ -117,13 +113,14 @@ fun SettingsScreen(
                 )
             }
         }
-        OpenCodeSnackbarHost(
-            message = notYet ?: notice?.let { OpenCodeSnackbarMessage(it) },
+        val changed = remember(notice) { notice?.let { NoticeMessage(it) } }
+        NoticeHost(
+            message = notYet ?: changed,
             onDismissed = {
                 notYet = null
                 onNoticeShown()
             },
-            modifier = Modifier.align(Alignment.BottomCenter),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp),
         )
     }
 }
@@ -137,22 +134,17 @@ private fun Row(
     subtitle: String?,
     onClick: () -> Unit,
 ) {
-    OpenCodeListItem(
+    HexRow(
         title = title,
+        icon = icon,
         subtitle = subtitle,
-        startDecorator = StartDecorator.Icon(icon, null),
-        accessory = OpenCodeListItemAccessory.Disclosure,
+        value = value,
+        trailing = HexRowTrailing.Chevron,
         onClick = onClick,
-        trailing =
-            value?.let {
-                {
-                    Text(it, style = MaterialTheme.typography.bodyMedium, color = openCodeColor("text-base"), maxLines = 1)
-                }
-            },
     )
 }
 
-/** "ivans-macbook-pro · OpenCode 2.2.5": the computer's own hostname and its OpenCode version, as far as known. */
+/** "my-computer · OpenCode 2.2.5": the computer's own hostname and its OpenCode version, as far as known. */
 @Composable
 private fun serverDetails(server: ServerLabel): String? {
     val hostname = server.hostname

@@ -2,7 +2,6 @@ package dev.opencode.hexcode.firstrun
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -12,48 +11,36 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.liveRegion
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.R
-import dev.opencode.hexcode.ui.HexEdge
-import dev.opencode.hexcode.ui.HexSpinner
+import dev.opencode.hexcode.designsystem.HexTheme
+import dev.opencode.hexcode.designsystem.components.HexPrimaryButton
+import dev.opencode.hexcode.designsystem.components.HexRow
+import dev.opencode.hexcode.designsystem.components.HexRowTrailing
+import dev.opencode.hexcode.designsystem.components.HexSearchField
+import dev.opencode.hexcode.designsystem.components.HexSectionLabel
+import dev.opencode.hexcode.designsystem.components.HexSegment
+import dev.opencode.hexcode.designsystem.components.HexSegmented
+import dev.opencode.hexcode.designsystem.components.HexStatusLine
+import dev.opencode.hexcode.designsystem.components.HexStatusTone
 import dev.opencode.mobile.domain.model.ModelSelectionOption
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
-import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.components.OpenCodeButton
-import dev.opencode.mobile.ui.components.OpenCodeButtonSize
-import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
-import dev.opencode.mobile.ui.components.OpenCodeFilterTab
-import dev.opencode.mobile.ui.components.OpenCodeFilterTabs
-import dev.opencode.mobile.ui.components.OpenCodeFilterTabsStyle
-import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
-import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeTone
-import dev.opencode.mobile.ui.components.OpenCodeListItem
-import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
-import dev.opencode.mobile.ui.components.OpenCodeTextInput
-import dev.opencode.mobile.ui.components.OpenCodeTextInputKind
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
 import java.util.Locale
 
 /**
- * "Pick a model": everything on one 18 pt edge. Search filters by name, id and provider; the list is the server's
+ * "Pick a model": everything on the screen's 18 pt edge. Search filters by name, id and provider; the list is the server's
  * catalog grouped by provider; the pinned bar names the pick, offers its reasoning levels, and tests it. The action
  * (Start in first run, Save in Settings) only appears after a pass, and changing the model or level clears the result.
  */
@@ -97,12 +84,11 @@ fun ModelScreen(
                     )
                 }
             is Loadable.Loaded -> {
-                OpenCodeTextInput(
+                HexSearchField(
                     value = model.value.query,
                     onValueChange = onSearch,
-                    hint = stringResource(R.string.model_search),
-                    kind = OpenCodeTextInputKind.Search,
-                    modifier = Modifier.padding(start = HexEdge, end = HexEdge, top = 6.dp, bottom = 2.dp),
+                    placeholder = stringResource(R.string.model_search),
+                    modifier = Modifier.padding(start = HexTheme.space.screen, end = HexTheme.space.screen, top = 6.dp, bottom = 2.dp),
                 )
                 ModelList(model.value, onSelect, Modifier.weight(1f))
                 ModelBar(model.value, onLevel, onTest, onStart, startLabel)
@@ -138,21 +124,17 @@ private fun ModelList(
         }
         sections.forEach { section ->
             section.title?.let { title ->
-                item(key = "section:$title") { OpenCodeSectionHeader(title) }
+                item(key = "section:$title") { HexSectionLabel(title) }
             }
             items(section.rows, key = { it.option.id }) { row ->
-                OpenCodeListItem(
+                HexRow(
                     title = row.option.modelLabel,
-                    titleTag = if (row.isServerDefault) stringResource(R.string.model_default_tag) else null,
+                    badge = if (row.isServerDefault) stringResource(R.string.model_default_tag) else null,
                     subtitle = row.providerCaption,
                     selected = row.isSelected,
+                    trailing = if (row.isSelected) HexRowTrailing.Check else HexRowTrailing.None,
+                    minHeight = HexTheme.size.modelRow,
                     onClick = { onSelect(row.option) },
-                    trailing =
-                        if (row.isSelected) {
-                            { Icon(OpenCodeIcons.Check, null, tint = openCodeColor("text-strong"), modifier = Modifier.size(18.dp)) }
-                        } else {
-                            null
-                        },
                 )
             }
         }
@@ -168,74 +150,52 @@ private fun ModelBar(
     startLabel: String,
 ) {
     val option = picker.selectedOption
+    val colors = HexTheme.colors
     Column(
         Modifier
             .fillMaxWidth()
-            .background(openCodeColor("background-base")),
+            .background(colors.background),
     ) {
-        HorizontalDivider(color = openCodeColor("border-weaker-base"))
-        Column(Modifier.padding(start = HexEdge, end = HexEdge, top = 10.dp, bottom = 4.dp)) {
+        HorizontalDivider(color = colors.line)
+        Column(Modifier.padding(start = HexTheme.space.screen, end = HexTheme.space.screen, top = 14.dp, bottom = 4.dp)) {
             Row {
-                Text(
-                    stringResource(R.string.model_reasoning),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = openCodeColor("text-base"),
-                )
+                Text(stringResource(R.string.model_reasoning), style = HexTheme.type.caption, color = colors.text2)
                 if (option != null) {
                     Text(
                         " · ${option.modelLabel}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = openCodeColor("text-weak"),
+                        style = HexTheme.type.caption,
+                        color = colors.text3,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
-            Box(Modifier.padding(top = 8.dp)) {
-                if (picker.reasoningLevels.isEmpty()) {
-                    Text(
-                        stringResource(R.string.model_no_levels),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = openCodeColor("text-weak"),
-                        modifier = Modifier.heightIn(min = 36.dp).padding(vertical = 8.dp),
-                    )
-                } else {
-                    val defaultLabel = stringResource(R.string.settings_reasoning_default)
-                    OpenCodeFilterTabs(
-                        tabs =
-                            picker.reasoningLevels.map { level ->
-                                OpenCodeFilterTab(
-                                    id = level,
-                                    title =
-                                        if (level ==
-                                            ModelPickerState.DEFAULT_LEVEL
-                                        ) {
-                                            defaultLabel
-                                        } else {
-                                            TitleCaseIdentifier.displayName(level)
-                                        },
-                                )
-                            },
-                        selectedTabId = picker.selectedLevel,
-                        onTabSelected = onLevel,
-                        style = OpenCodeFilterTabsStyle.Segmented,
-                    )
-                }
-            }
+            val defaultLabel = stringResource(R.string.settings_reasoning_default)
+            HexSegmented(
+                segments =
+                    picker.reasoningLevels.map { level ->
+                        HexSegment(
+                            id = level,
+                            label = if (level == ModelPickerState.DEFAULT_LEVEL) defaultLabel else TitleCaseIdentifier.displayName(level),
+                        )
+                    },
+                selectedId = picker.selectedLevel,
+                onSelect = onLevel,
+                emptyText = stringResource(R.string.model_no_levels),
+                modifier = Modifier.padding(top = 8.dp),
+            )
             TestStatus(picker, option)
             val test = picker.currentTest
-            OpenCodeButton(
-                OpenCodeButtonVariant.FullWidthText(
-                    when {
-                        picker.canStart -> startLabel
-                        test == ModelTestState.Testing -> stringResource(R.string.model_test_button_testing)
-                        test is ModelTestState.Failed -> stringResource(R.string.model_test_button_again)
-                        else -> stringResource(R.string.model_test_button)
-                    },
-                ),
+            HexPrimaryButton(
+                when {
+                    picker.canStart -> startLabel
+                    test == ModelTestState.Testing -> stringResource(R.string.model_test_button_testing)
+                    test is ModelTestState.Failed -> stringResource(R.string.model_test_button_again)
+                    else -> stringResource(R.string.model_test_button)
+                },
                 onClick = if (picker.canStart) onStart else onTest,
                 enabled = option != null && test != ModelTestState.Testing,
-                size = OpenCodeButtonSize.Large,
+                loading = test == ModelTestState.Testing,
             )
         }
     }
@@ -246,42 +206,24 @@ private fun TestStatus(
     picker: ModelPickerState,
     option: ModelSelectionOption?,
 ) {
-    Row(
-        verticalAlignment = Alignment.Top,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    Box(
+        contentAlignment = Alignment.CenterStart,
         modifier =
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = 40.dp)
-                .padding(vertical = 10.dp)
-                .semantics { liveRegion = LiveRegionMode.Polite },
+                .padding(vertical = 10.dp),
     ) {
-        val style = MaterialTheme.typography.bodySmall
         when (val test = picker.currentTest) {
-            ModelTestState.NotRun ->
-                Text(
-                    stringResource(R.string.model_test_hint),
-                    style = style,
-                    color = openCodeColor("text-base"),
-                )
-            ModelTestState.Testing -> {
-                HexSpinner(Modifier.padding(top = 1.dp), size = 14.dp)
-                Text(
-                    stringResource(R.string.model_test_running, option?.modelLabel.orEmpty()),
-                    style = style,
-                    color = openCodeColor("text-base"),
-                )
-            }
-            is ModelTestState.Passed -> {
-                Icon(OpenCodeIcons.Check, null, tint = openCodeColor("success"), modifier = Modifier.size(15.dp))
-                Text(
+            ModelTestState.NotRun -> HexStatusLine(stringResource(R.string.model_test_hint), HexStatusTone.Hint)
+            ModelTestState.Testing ->
+                HexStatusLine(stringResource(R.string.model_test_running, option?.modelLabel.orEmpty()), HexStatusTone.Waiting)
+            is ModelTestState.Passed ->
+                HexStatusLine(
                     stringResource(R.string.model_test_passed, String.format(Locale.US, "%.1f", test.seconds)),
-                    style = style,
-                    color = openCodeColor("success"),
+                    HexStatusTone.Ok,
                 )
-            }
-            is ModelTestState.Failed ->
-                OpenCodeInlineNotice(message = failureText(test.reason), tone = OpenCodeInlineNoticeTone.Warning)
+            is ModelTestState.Failed -> HexStatusLine(failureText(test.reason), HexStatusTone.Warning)
         }
     }
 }

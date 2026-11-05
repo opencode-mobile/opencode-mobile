@@ -20,13 +20,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,35 +34,38 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.LinkAnnotation
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextLinkStyles
-import androidx.compose.ui.text.buildAnnotatedString
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withLink
-import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.em
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.opencode.hexcode.R
-import dev.opencode.hexcode.ui.HexEdge
-import dev.opencode.hexcode.ui.HexSpinner
-import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.components.OpenCodeButton
-import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
-import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
-import dev.opencode.mobile.ui.components.OpenCodeSnackbarHost
-import dev.opencode.mobile.ui.components.OpenCodeSnackbarMessage
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.hexcode.app.NoticeHost
+import dev.opencode.hexcode.app.NoticeMessage
+import dev.opencode.hexcode.designsystem.HexIcons
+import dev.opencode.hexcode.designsystem.HexTheme
+import dev.opencode.hexcode.designsystem.components.HexAgentState
+import dev.opencode.hexcode.designsystem.components.HexButton
+import dev.opencode.hexcode.designsystem.components.HexButtonStyle
+import dev.opencode.hexcode.designsystem.components.HexChunk
+import dev.opencode.hexcode.designsystem.components.HexChunkKind
+import dev.opencode.hexcode.designsystem.components.HexChunkRow
+import dev.opencode.hexcode.designsystem.components.HexChunkRowState
+import dev.opencode.hexcode.designsystem.components.HexChunkText
+import dev.opencode.hexcode.designsystem.components.HexDot
+import dev.opencode.hexcode.designsystem.components.HexDotTone
+import dev.opencode.hexcode.designsystem.components.HexRoundButton
+import dev.opencode.hexcode.designsystem.components.HexSpinner
+import dev.opencode.hexcode.designsystem.components.HexTalkButton
+import dev.opencode.hexcode.designsystem.components.HexTalkRelease
+import dev.opencode.hexcode.designsystem.components.HexTalkState
+import dev.opencode.hexcode.designsystem.components.HexTopBar
 import dev.opencode.voiceengine.VoiceEngine
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
@@ -93,18 +92,26 @@ fun HomeScreen(
             micOff = !it
         }
     val ready = speech == VoiceEngine.ModelState.Ready
+    val edge = HexTheme.space.screenHome
     Box(
         Modifier
             .fillMaxSize()
-            .background(openCodeColor("background-base"))
+            .background(HexTheme.colors.background)
             .systemBarsPadding(),
     ) {
-        Column(Modifier.fillMaxSize()) {
-            TopBar(onSettings)
+        Column(Modifier.fillMaxSize().padding(top = 10.dp, bottom = 6.dp)) {
+            // The state slot shows Idle until the session is connected.
+            HexTopBar(
+                state = HexAgentState.Idle,
+                label = stringResource(R.string.home_state_idle),
+                modifier = Modifier.padding(start = edge, end = edge - 6.dp),
+            ) {
+                HexRoundButton(HexIcons.gear, stringResource(R.string.home_settings), onClick = onSettings)
+            }
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                 val hang = maxHeight * 0.26f
                 // The draft hangs from a fixed line about a third down and grows downward, so nothing above it moves.
-                Column(Modifier.padding(horizontal = HexEdge)) {
+                Column(Modifier.padding(horizontal = edge)) {
                     Spacer(Modifier.height(hang))
                     if (state.draft.isEmpty) EmptyHome() else DraftView(state, vm)
                 }
@@ -119,8 +126,13 @@ fun HomeScreen(
                     !state.draft.isEmpty -> stringResource(R.string.talk_more)
                     else -> stringResource(R.string.talk_hold)
                 }
-            TalkButton(
-                mode = state.talk,
+            HexTalkButton(
+                state =
+                    when (state.talk) {
+                        TalkMode.Holding -> HexTalkState.Holding
+                        TalkMode.Locked -> HexTalkState.Locked
+                        TalkMode.Idle -> if (state.draft.isEmpty) HexTalkState.Idle else HexTalkState.Draft
+                    },
                 label = label,
                 accessibilityLabel =
                     when (state.talk) {
@@ -131,78 +143,53 @@ fun HomeScreen(
                 enabled = ready,
                 level = { vm.level },
                 onPress = { if (micAllowed) vm.press() else askMic.launch(Manifest.permission.RECORD_AUDIO) },
-                onRelease = vm::release,
+                onRelease = { how -> vm.release(how.toTalkRelease()) },
                 onTapLocked = vm::tapLocked,
-                modifier = Modifier.padding(start = HexEdge, end = HexEdge, top = 8.dp, bottom = 10.dp),
+                modifier = Modifier.padding(start = edge, end = edge, top = 12.dp),
             )
         }
         val micOffText = stringResource(R.string.home_mic_off)
         val deleted = stringResource(R.string.home_chunk_deleted)
         val dropped = stringResource(R.string.home_take_dropped)
         val undo = stringResource(R.string.common_undo)
-        OpenCodeSnackbarHost(
-            message =
+        val notice =
+            remember(state.notice, micOff) {
                 when (state.notice) {
-                    HomeNotice.ChunkDeleted -> OpenCodeSnackbarMessage(deleted, actionLabel = undo)
-                    HomeNotice.TakeDropped -> OpenCodeSnackbarMessage(dropped)
-                    null -> if (micOff) OpenCodeSnackbarMessage(micOffText) else null
-                },
+                    HomeNotice.ChunkDeleted -> NoticeMessage(deleted, actionLabel = undo)
+                    HomeNotice.TakeDropped -> NoticeMessage(dropped)
+                    null -> if (micOff) NoticeMessage(micOffText) else null
+                }
+            }
+        NoticeHost(
+            message = notice,
             onDismissed = {
                 vm.noticeShown()
                 micOff = false
             },
             onAction = { vm.undoDelete() },
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp),
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 2.dp),
         )
     }
 }
+
+private fun HexTalkRelease.toTalkRelease(): TalkRelease =
+    when (this) {
+        HexTalkRelease.Lock -> TalkRelease.Lock
+        HexTalkRelease.Drop -> TalkRelease.Drop
+        HexTalkRelease.End -> TalkRelease.End
+        HexTalkRelease.Tap -> TalkRelease.Tap
+    }
 
 /** Before the first take: what to do, in two lines. */
 @Composable
 private fun EmptyHome() {
-    Text(
-        stringResource(R.string.home_empty_title),
-        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-        color = openCodeColor("text-strong"),
-    )
+    Text(stringResource(R.string.home_empty_title), style = HexTheme.type.display, color = HexTheme.colors.text1)
     Text(
         stringResource(R.string.home_empty_body),
-        style = MaterialTheme.typography.bodyLarge,
-        color = openCodeColor("text-base"),
-        modifier = Modifier.padding(top = 8.dp),
+        style = HexTheme.type.body,
+        color = HexTheme.colors.text2,
+        modifier = Modifier.padding(top = 14.dp),
     )
-}
-
-/** The agent's state on the left (Idle until the session is connected), settings on the right. */
-@Composable
-private fun TopBar(onSettings: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(56.dp)
-                .padding(start = HexEdge + 4.dp, end = HexEdge - 4.dp),
-    ) {
-        Box(
-            Modifier
-                .size(8.dp)
-                .clip(CircleShape)
-                .background(openCodeColor("text-weaker")),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            stringResource(R.string.home_state_idle),
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-            color = openCodeColor("text-strong"),
-        )
-        Spacer(Modifier.weight(1f))
-        OpenCodeButton(
-            OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Settings, stringResource(R.string.home_settings)),
-            onClick = onSettings,
-            contrast = OpenCodeButtonContrast.Low,
-        )
-    }
 }
 
 @Composable
@@ -212,7 +199,7 @@ private fun DraftView(
 ) {
     val draft = state.draft
     DraftLabel(state)
-    Box(Modifier.padding(top = 8.dp)) {
+    Box(Modifier.padding(top = 14.dp)) {
         if (draft.isLong) ChunkList(draft, vm::selectChunk) else DraftText(draft, vm::selectChunk)
     }
     if (!draft.isListening) DraftActions(draft, vm)
@@ -222,7 +209,8 @@ private fun DraftView(
 @Composable
 private fun DraftLabel(state: HomeUiState) {
     val draft = state.draft
-    val weak = openCodeColor("text-weak")
+    val color = HexTheme.colors.text3
+    val style = HexTheme.type.caption
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(draft.isListening) {
         while (draft.isListening) {
@@ -247,21 +235,20 @@ private fun DraftLabel(state: HomeUiState) {
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             modifier = Modifier.height(18.dp).semantics { liveRegion = LiveRegionMode.Polite },
         ) {
-            val style = MaterialTheme.typography.labelMedium
             when (kind) {
                 0 -> {
-                    Box(Modifier.size(6.dp).clip(CircleShape).background(openCodeColor("error")))
+                    HexDot(HexDotTone.Red)
                     val elapsed = clock(now - state.takeStartedAt)
                     Text(
                         draft.rerecording?.let { stringResource(R.string.draft_rerecording, it + 1, elapsed) }
                             ?: stringResource(R.string.draft_recording, elapsed),
                         style = style,
-                        color = weak,
+                        color = color,
                     )
                 }
                 1 -> {
-                    HexSpinner(size = 12.dp)
-                    Text(stringResource(R.string.draft_transcribing), style = style, color = weak)
+                    HexSpinner(size = HexTheme.size.iconSmall)
+                    Text(stringResource(R.string.draft_transcribing), style = style, color = color)
                 }
                 else ->
                     Text(
@@ -275,7 +262,7 @@ private fun DraftLabel(state: HomeUiState) {
                             clock(draft.durationMs),
                         ).joinToString(" · "),
                         style = style,
-                        color = weak,
+                        color = color,
                     )
             }
         }
@@ -288,55 +275,21 @@ private fun DraftText(
     draft: Draft,
     onSelect: (Int) -> Unit,
 ) {
-    val strong = openCodeColor("text-strong")
-    val weak = openCodeColor("text-weak")
-    val selectedFill = openCodeColor("surface-raised-base")
     val listening = stringResource(R.string.draft_listening)
     val transcribing = stringResource(R.string.draft_transcribing_chunk)
-    val firstTakeHint = stringResource(R.string.draft_first_take_hint)
-    val text =
-        buildAnnotatedString {
-            draft.shown.forEachIndexed { index, chunk ->
-                if (index > 0) append(" ")
+    HexChunkText(
+        chunks =
+            draft.shown.map { chunk ->
                 when (val s = chunk.state) {
-                    ChunkState.Listening -> withStyle(SpanStyle(color = weak)) { append(listening) }
-                    ChunkState.Transcribing -> withStyle(SpanStyle(color = weak.copy(alpha = 0.6f))) { append(transcribing) }
-                    is ChunkState.Text -> {
-                        val dim = draft.isListening || (draft.selected != null && draft.selected != index)
-                        val span =
-                            SpanStyle(
-                                color = if (dim) weak else strong,
-                                background =
-                                    if (draft.selected ==
-                                        index
-                                    ) {
-                                        selectedFill
-                                    } else {
-                                        androidx.compose.ui.graphics.Color.Unspecified
-                                    },
-                            )
-                        withLink(LinkAnnotation.Clickable("chunk-$index", TextLinkStyles(span)) { onSelect(index) }) { append(s.text) }
-                    }
+                    ChunkState.Listening -> HexChunk(listening, HexChunkKind.Listening)
+                    ChunkState.Transcribing -> HexChunk(transcribing, HexChunkKind.Transcribing)
+                    is ChunkState.Text -> HexChunk(s.text, HexChunkKind.Text)
                 }
-            }
-            if (draft.isListening && draft.chunks.isEmpty()) {
-                withStyle(SpanStyle(color = weak, fontSize = 14.sp, fontWeight = FontWeight.Normal)) { append("\n" + firstTakeHint) }
-            }
-        }
-    Text(
-        text,
-        style =
-            MaterialTheme.typography.headlineSmall.copy(
-                fontSize = 24.sp,
-                lineHeight = 31.sp,
-                fontWeight = FontWeight.Medium,
-                letterSpacing = (-0.015).em,
-            ),
-        color = strong,
-        maxLines = 8,
-        overflow = TextOverflow.Ellipsis,
-        // Three lines of room, so the draft never jumps as it fills.
-        modifier = Modifier.heightIn(min = 101.dp),
+            },
+        selected = draft.selected,
+        recording = draft.isListening,
+        onSelect = onSelect,
+        hint = if (draft.isListening && draft.chunks.isEmpty()) stringResource(R.string.draft_first_take_hint) else null,
     )
 }
 
@@ -349,51 +302,43 @@ private fun ChunkList(
     val shown = draft.shown
     var showEarlier by remember { mutableStateOf(false) }
     val start = if (showEarlier) 0 else (shown.size - Draft.MAX_ROWS).coerceAtLeast(0)
-    val weak = openCodeColor("text-weak")
-    Column {
+    // The rows reach 6 pt past the text edge on each side, so their text lines up with the label above.
+    Column(Modifier.bleed(6.dp)) {
         if (start > 0) {
             Text(
                 stringResource(R.string.draft_earlier, start, clock(shown.take(start).sumOf { it.durationMs })),
-                style = MaterialTheme.typography.labelMedium,
-                color = weak,
+                style = HexTheme.type.footnote,
+                color = HexTheme.colors.text3,
+                textAlign = TextAlign.Center,
                 modifier =
                     Modifier
                         .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.small)
+                        .clip(RoundedCornerShape(HexTheme.radius.s))
                         .clickable { showEarlier = true }
-                        .padding(6.dp),
+                        .padding(4.dp),
             )
         }
         shown.drop(start).forEachIndexed { offset, chunk ->
             val index = start + offset
-            val selected = draft.selected == index
-            Row(
-                verticalAlignment = Alignment.Top,
-                horizontalArrangement = Arrangement.spacedBy(9.dp),
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(MaterialTheme.shapes.small)
-                        .background(if (selected) openCodeColor("surface-raised-base") else androidx.compose.ui.graphics.Color.Transparent)
-                        .clickable(enabled = chunk.text != null && !draft.isListening) { onSelect(index) }
-                        .padding(6.dp),
-            ) {
-                val mono = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace)
-                Text("${index + 1}", style = mono, color = weak, modifier = Modifier.width(16.dp).padding(top = 2.dp))
-                Text(
+            val tappable = chunk.text != null && !draft.isListening
+            HexChunkRow(
+                number = index + 1,
+                text =
                     when (chunk.state) {
                         ChunkState.Listening -> stringResource(R.string.draft_listening)
                         ChunkState.Transcribing -> stringResource(R.string.draft_transcribing_chunk)
                         is ChunkState.Text -> chunk.state.text
                     },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = if (chunk.text == null || (draft.selected != null && !selected)) weak else openCodeColor("text-strong"),
-                    maxLines = if (selected) 4 else 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
-                Text(clock(chunk.durationMs), style = mono, color = weak, modifier = Modifier.padding(top = 2.dp))
-            }
+                duration = clock(chunk.durationMs),
+                state =
+                    when {
+                        draft.selected == index -> HexChunkRowState.Selected
+                        draft.isListening || chunk.text == null -> HexChunkRowState.Past
+                        draft.selected != null -> HexChunkRowState.Dim
+                        else -> HexChunkRowState.Normal
+                    },
+                onClick = if (tappable) ({ onSelect(index) }) else null,
+            )
         }
     }
 }
@@ -414,37 +359,40 @@ private fun DraftActions(
     ) {
         val selected = draft.selected
         if (selected != null) {
-            Text(
-                stringResource(R.string.draft_chunk_label, selected + 1),
-                style = MaterialTheme.typography.labelMedium,
-                color = openCodeColor("text-weak"),
-            )
+            Text(stringResource(R.string.draft_chunk_label, selected + 1), style = HexTheme.type.caption, color = HexTheme.colors.text2)
             Spacer(Modifier.weight(1f))
-            OpenCodeButton(
-                OpenCodeButtonVariant.CompactText(stringResource(R.string.draft_delete)),
+            HexButton(
                 onClick = vm::deleteChunk,
-                contrast = OpenCodeButtonContrast.Destructive,
+                text = stringResource(R.string.draft_delete),
+                icon = HexIcons.trash,
+                style = HexButtonStyle.Danger,
             )
-            OpenCodeButton(
-                OpenCodeButtonVariant.CompactText(stringResource(R.string.draft_rerecord)),
-                onClick = vm::rerecord,
-                contrast = OpenCodeButtonContrast.Low,
-            )
-            OpenCodeButton(
-                OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, stringResource(R.string.draft_deselect)),
-                onClick = vm::deselectChunk,
-                contrast = OpenCodeButtonContrast.Low,
-            )
+            HexButton(onClick = vm::rerecord, text = stringResource(R.string.draft_rerecord), icon = HexIcons.mic)
+            HexButton(onClick = vm::deselectChunk, icon = HexIcons.x, contentDescription = stringResource(R.string.draft_deselect))
         } else {
-            OpenCodeButton(
-                OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, stringResource(R.string.draft_clear)),
+            HexButton(
                 onClick = vm::clearDraft,
+                icon = HexIcons.x,
+                contentDescription = stringResource(R.string.draft_clear),
                 enabled = draft.isSettled,
-                contrast = OpenCodeButtonContrast.Low,
             )
         }
     }
 }
+
+/** Widens what it modifies by [each] on both sides, past its parent's padding. */
+private fun Modifier.bleed(each: Dp): Modifier =
+    layout { measurable, constraints ->
+        val extra = each.roundToPx() * 2
+        val placeable =
+            measurable.measure(
+                constraints.copy(
+                    minWidth = (constraints.minWidth + extra).coerceAtMost(constraints.maxWidth + extra),
+                    maxWidth = constraints.maxWidth + extra,
+                ),
+            )
+        layout(placeable.width - extra, placeable.height) { placeable.place(-extra / 2, 0) }
+    }
 
 /** 0:04, 1:12. */
 private fun clock(ms: Long): String {

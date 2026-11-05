@@ -16,7 +16,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -30,7 +29,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,19 +54,15 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import dev.opencode.hexcode.R
-import dev.opencode.hexcode.ui.HexSpinner
-import dev.opencode.hexcode.ui.codeText
-import dev.opencode.mobile.theme.OpenCodeMediumShape
-import dev.opencode.mobile.theme.OpenCodeTheme
-import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.components.OpenCodeButton
-import dev.opencode.mobile.ui.components.OpenCodeButtonContrast
-import dev.opencode.mobile.ui.components.OpenCodeButtonSize
-import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
-import dev.opencode.mobile.ui.connection.PairingQRCameraPreview
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
+import dev.opencode.hexcode.designsystem.HexIcons
+import dev.opencode.hexcode.designsystem.HexTheme
+import dev.opencode.hexcode.designsystem.components.HexPanel
+import dev.opencode.hexcode.designsystem.components.HexPrimaryButton
+import dev.opencode.hexcode.designsystem.components.HexRoundButton
+import dev.opencode.hexcode.designsystem.components.HexSpinner
+import dev.opencode.hexcode.designsystem.hexCodeText
 
-/** Scan the pairing code. The camera view stays dark in both themes; the panel follows the theme. */
+/** Scan the pairing code. The whole screen, camera view and panel, is dark in both themes, as in the prototype. */
 @Composable
 fun ScanScreen(
     scan: ScanUi,
@@ -95,31 +89,47 @@ fun ScanScreen(
         onPauseOrDispose {}
     }
     BackHandler(onBack = onClose)
+    HexTheme(dark = true) {
+        ScanContent(scan, scanAttempt, hasCamera, onScanned, onScanAgain, onCameraUnavailable, onClose) {
+            permission.launch(Manifest.permission.CAMERA)
+        }
+    }
+}
+
+@Composable
+private fun ScanContent(
+    scan: ScanUi,
+    scanAttempt: Int,
+    hasCamera: Boolean,
+    onScanned: (String) -> Unit,
+    onScanAgain: () -> Unit,
+    onCameraUnavailable: () -> Unit,
+    onClose: () -> Unit,
+    askCamera: () -> Unit,
+) {
+    val context = LocalContext.current
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xFF08090A)),
+            .background(HexTheme.colors.background),
     ) {
         if (hasCamera && scan != ScanUi.CameraDenied && scan != ScanUi.CameraUnavailable) {
             // A new attempt starts a fresh camera, which reads the next code.
             key(scanAttempt) {
-                PairingQRCameraPreview(onScanned = onScanned, onBindFailed = onCameraUnavailable, modifier = Modifier.fillMaxSize())
+                PairingCamera(onScanned = onScanned, onBindFailed = onCameraUnavailable, modifier = Modifier.fillMaxSize())
             }
         }
         Vignette()
         Reticle(found = scan is ScanUi.Connecting || scan is ScanUi.Connected)
-        // The camera view is dark in both themes, so its close button is drawn in the dark theme's colours.
-        OpenCodeTheme(darkTheme = true) {
-            OpenCodeButton(
-                OpenCodeButtonVariant.IconCircle(OpenCodeIcons.Close, stringResource(R.string.common_close)),
-                onClick = onClose,
-                contrast = OpenCodeButtonContrast.Low,
-                modifier =
-                    Modifier
-                        .statusBarsPadding()
-                        .padding(start = 18.dp, top = 12.dp),
-            )
-        }
+        HexRoundButton(
+            HexIcons.x,
+            stringResource(R.string.common_close),
+            onClick = onClose,
+            modifier =
+                Modifier
+                    .statusBarsPadding()
+                    .padding(start = HexTheme.space.screen, top = 12.dp),
+        )
         ScanPanel(
             scan = scan,
             onScanAgain = {
@@ -128,7 +138,7 @@ fun ScanScreen(
                         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
                     )
                 } else if (!hasCamera) {
-                    permission.launch(Manifest.permission.CAMERA)
+                    askCamera()
                 } else {
                     onScanAgain()
                 }
@@ -151,7 +161,7 @@ private fun Vignette() {
             .background(
                 Brush.radialGradient(
                     0.3f to Color.Transparent,
-                    1f to Color.Black.copy(alpha = 0.55f),
+                    1f to HexTheme.colors.shadow,
                 ),
             ),
     )
@@ -160,8 +170,9 @@ private fun Vignette() {
 /** Four corner brackets round the spot the code should sit in; green once a code is read. */
 @Composable
 private fun Reticle(found: Boolean) {
-    val green = openCodeColor("success")
-    val color by animateColorAsState(if (found) green else Color.White.copy(alpha = 0.9f), tween(250), label = "reticle")
+    val colors = HexTheme.colors
+    val color by animateColorAsState(if (found) colors.green else colors.tint(90f), tween(250), label = "reticle")
+    val faint = colors.tint(4f)
     BoxWithConstraints(Modifier.fillMaxSize().semantics { hideFromAccessibility() }) {
         val side = minOf(maxWidth, maxHeight) * 0.62f
         Canvas(
@@ -197,7 +208,7 @@ private fun Reticle(found: Boolean) {
             corner(w, h, -1f, -1f)
             if (!found) {
                 drawRoundRect(
-                    color = Color.White.copy(alpha = 0.04f),
+                    color = faint,
                     topLeft = Offset(stroke, stroke),
                     size = Size(w - stroke * 2, h - stroke * 2),
                     cornerRadius = CornerRadius(radius),
@@ -213,13 +224,11 @@ private fun ScanPanel(
     onScanAgain: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
+    HexPanel(
+        translucent = true,
         modifier =
             modifier
                 .fillMaxWidth()
-                .background(openCodeColor("surface-raised-base").copy(alpha = 0.94f), OpenCodeMediumShape)
-                .border(1.dp, openCodeColor("border-weaker-base"), OpenCodeMediumShape)
-                .padding(16.dp)
                 .semantics { liveRegion = LiveRegionMode.Polite },
     ) {
         AnimatedContent(
@@ -227,14 +236,15 @@ private fun ScanPanel(
             transitionSpec = { fadeIn(tween(180)) togetherWith fadeOut(tween(120)) },
             contentKey = { it::class },
             label = "scan-panel",
+            modifier = Modifier.padding(16.dp),
         ) { state ->
             Column {
                 when (state) {
                     ScanUi.Scanning -> {
                         PanelTitle(stringResource(R.string.scan_point_title)) {
-                            Icon(OpenCodeIcons.QrCodeScanner, null, tint = openCodeColor("text-base"), modifier = Modifier.size(17.dp))
+                            Icon(HexIcons.scan, null, tint = HexTheme.colors.text2, modifier = Modifier.size(HexTheme.size.icon))
                         }
-                        PanelBody(codeText(stringResource(R.string.scan_point_body)))
+                        PanelBody(hexCodeText(stringResource(R.string.scan_point_body)))
                     }
                     ScanUi.Connecting -> {
                         PanelTitle(stringResource(R.string.scan_connecting)) { HexSpinner() }
@@ -242,16 +252,16 @@ private fun ScanPanel(
                     }
                     is ScanUi.Connected -> {
                         PanelTitle(stringResource(R.string.scan_connected, state.name)) {
-                            Icon(OpenCodeIcons.Check, null, tint = openCodeColor("success"), modifier = Modifier.size(17.dp))
+                            Icon(HexIcons.check, null, tint = HexTheme.colors.green, modifier = Modifier.size(HexTheme.size.icon))
                         }
                         state.version?.let { PanelBody(stringResource(R.string.scan_connected_detail, it)) }
                     }
                     is ScanUi.Failed -> {
                         val (title, body) = failureText(state.failure)
                         PanelTitle(title) {
-                            Icon(OpenCodeIcons.Warning, null, tint = openCodeColor("warning"), modifier = Modifier.size(17.dp))
+                            Icon(HexIcons.alert, null, tint = HexTheme.colors.amber, modifier = Modifier.size(HexTheme.size.icon))
                         }
-                        if (body != null) PanelBody(codeText(body))
+                        if (body != null) PanelBody(hexCodeText(body))
                         PanelButton(stringResource(R.string.scan_again), onScanAgain)
                     }
                     ScanUi.CameraDenied -> {
@@ -273,12 +283,7 @@ private fun PanelButton(
     title: String,
     onClick: () -> Unit,
 ) {
-    OpenCodeButton(
-        OpenCodeButtonVariant.FullWidthText(title),
-        onClick = onClick,
-        size = OpenCodeButtonSize.Large,
-        modifier = Modifier.padding(top = 14.dp),
-    )
+    HexPrimaryButton(title, onClick = onClick, modifier = Modifier.padding(top = 14.dp))
 }
 
 @Composable
@@ -288,14 +293,14 @@ private fun PanelTitle(
 ) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         icon()
-        Text(text, style = MaterialTheme.typography.titleMedium, color = openCodeColor("text-strong"))
+        Text(text, style = HexTheme.type.bodyStrong, color = HexTheme.colors.text1)
     }
 }
 
 @Composable
 private fun PanelBody(text: CharSequence) {
-    val style = MaterialTheme.typography.bodyMedium
-    val color = openCodeColor("text-base")
+    val style = HexTheme.type.body
+    val color = HexTheme.colors.text2
     val modifier = Modifier.padding(top = 6.dp)
     when (text) {
         is androidx.compose.ui.text.AnnotatedString -> Text(text, style = style, color = color, modifier = modifier)

@@ -4,7 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,13 +12,13 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,32 +26,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.opencode.hexcode.R
-import dev.opencode.hexcode.ui.HexEdge
-import dev.opencode.hexcode.ui.HexSpinner
+import dev.opencode.hexcode.designsystem.HexIcons
+import dev.opencode.hexcode.designsystem.HexTheme
+import dev.opencode.hexcode.designsystem.components.HexButton
+import dev.opencode.hexcode.designsystem.components.HexButtonStyle
+import dev.opencode.hexcode.designsystem.components.HexPickerRow
+import dev.opencode.hexcode.designsystem.components.HexPrimaryButton
+import dev.opencode.hexcode.designsystem.components.HexSectionLabel
+import dev.opencode.hexcode.designsystem.components.HexSpinner
+import dev.opencode.hexcode.designsystem.components.HexTextField
+import dev.opencode.hexcode.designsystem.components.HexTopBar
 import dev.opencode.mobile.domain.filesystem.ServerPathPolicy
-import dev.opencode.mobile.theme.OpenCodeMediumShape
-import dev.opencode.mobile.theme.openCodeColor
-import dev.opencode.mobile.ui.components.OpenCodeButton
-import dev.opencode.mobile.ui.components.OpenCodeButtonSize
-import dev.opencode.mobile.ui.components.OpenCodeButtonVariant
-import dev.opencode.mobile.ui.components.OpenCodeFilterTab
-import dev.opencode.mobile.ui.components.OpenCodeFilterTabs
-import dev.opencode.mobile.ui.components.OpenCodeInlineNotice
-import dev.opencode.mobile.ui.components.OpenCodeInlineNoticeAction
-import dev.opencode.mobile.ui.components.OpenCodeListItem
-import dev.opencode.mobile.ui.components.OpenCodeListItemAccessory
-import dev.opencode.mobile.ui.components.OpenCodeSectionHeader
-import dev.opencode.mobile.ui.components.OpenCodeSessionConnectionStatus
-import dev.opencode.mobile.ui.components.OpenCodeTopBar
-import dev.opencode.mobile.ui.components.OpenCodeTopBarLeading
-import dev.opencode.mobile.ui.components.OpenCodeTopBarSubtitleLeading
-import dev.opencode.mobile.ui.components.StartDecorator
-import dev.opencode.mobile.ui.icons.OpenCodeIcons
 
 /** "Pick a project": Browse folders, then up to five repositories on the computer, newest activity first. */
 @Composable
@@ -77,15 +67,14 @@ fun ProjectScreen(
             contentPadding = PaddingValues(vertical = 4.dp),
         ) {
             item {
-                OpenCodeListItem(
+                HexPickerRow(
                     title = stringResource(R.string.project_browse),
                     subtitle = stringResource(R.string.project_browse_subtitle),
-                    startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, null),
-                    accessory = OpenCodeListItemAccessory.Disclosure,
+                    chevron = true,
                     onClick = onBrowse,
                 )
             }
-            item { OpenCodeSectionHeader(stringResource(R.string.project_on_this_computer)) }
+            item { HexSectionLabel(stringResource(R.string.project_on_this_computer)) }
             when (projects) {
                 Loadable.Loading -> item { Loading() }
                 Loadable.Failed ->
@@ -101,11 +90,10 @@ fun ProjectScreen(
                         item { Notice(stringResource(R.string.project_none)) }
                     }
                     items(projects.value, key = { it.choice.path }) { row ->
-                        OpenCodeListItem(
+                        HexPickerRow(
                             title = row.choice.name,
                             subtitle = row.shownPath,
                             caption = row.activity?.let { agoText(it) },
-                            startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, null),
                             onClick = { onPick(row.choice) },
                         )
                     }
@@ -114,13 +102,13 @@ fun ProjectScreen(
         }
         Text(
             note,
-            style = MaterialTheme.typography.bodySmall,
-            color = openCodeColor("text-weak"),
+            style = HexTheme.type.caption,
+            color = HexTheme.colors.text3,
             textAlign = TextAlign.Center,
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = HexEdge, vertical = 12.dp),
+                    .padding(horizontal = HexTheme.space.screen, vertical = 12.dp),
         )
     }
 }
@@ -144,45 +132,40 @@ fun BrowseScreen(
     ) {
         PageTop(stringResource(R.string.browse_title), subtitle = null, onBack = onBack)
         Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = HexEdge, vertical = 6.dp),
+            modifier = Modifier.padding(start = HexTheme.space.screen, end = HexTheme.space.screen, top = 4.dp),
         ) {
-            Box(
-                contentAlignment = Alignment.CenterStart,
-                modifier =
-                    Modifier
-                        .weight(1f)
-                        .height(44.dp)
-                        .background(openCodeColor("surface-raised-base"), OpenCodeMediumShape)
-                        .border(1.dp, openCodeColor("border-weak-base"), OpenCodeMediumShape)
-                        .padding(horizontal = 14.dp),
-            ) {
-                Text(
-                    ProjectPicker.shortPath(browser.directory, browser.home).trimEnd('/') + "/",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontFamily = FontFamily.Monospace,
-                    color = openCodeColor("text-strong"),
-                    maxLines = 1,
-                    overflow = TextOverflow.StartEllipsis,
-                )
-            }
-            OpenCodeButton(
-                OpenCodeButtonVariant.IconSquare(OpenCodeIcons.ArrowUpward, stringResource(R.string.browse_up)),
+            HexTextField(
+                ProjectPicker.shortPath(browser.directory, browser.home).trimEnd('/') + "/",
+                mono = true,
+                modifier = Modifier.weight(1f),
+            )
+            HexButton(
                 onClick = onUp,
+                icon = HexIcons.send,
+                contentDescription = stringResource(R.string.browse_up),
                 enabled = browser.upTarget != null,
+                modifier = Modifier.size(HexTheme.size.touch),
             )
         }
-        OpenCodeFilterTabs(
-            tabs = browser.roots.map { OpenCodeFilterTab(id = it.path, title = it.label ?: homeLabel) },
-            selectedTabId =
-                browser.roots
-                    .firstOrNull { it.selected }
-                    ?.path
-                    .orEmpty(),
-            onTabSelected = onOpen,
-            modifier = Modifier.padding(vertical = 4.dp),
-        )
+        // The roots (Home and the like): the one being browsed is filled.
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier =
+                Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(start = HexTheme.space.screen, end = HexTheme.space.screen, top = 12.dp, bottom = 6.dp),
+        ) {
+            browser.roots.forEach { root ->
+                HexButton(
+                    onClick = { onOpen(root.path) },
+                    text = root.label ?: homeLabel,
+                    style = if (root.selected) HexButtonStyle.Primary else HexButtonStyle.Secondary,
+                    modifier = Modifier.semantics { selected = root.selected },
+                )
+            }
+        }
         LazyColumn(
             modifier = Modifier.weight(1f),
             contentPadding = PaddingValues(vertical = 6.dp),
@@ -207,17 +190,16 @@ fun BrowseScreen(
                             animationSpec = tween(220),
                             label = "folder-summary",
                         ) { summarized ->
-                            OpenCodeListItem(
+                            HexPickerRow(
                                 title = row.name,
-                                titleTag = if (summarized && row.isGitRepository) stringResource(R.string.common_tag_git) else null,
+                                badge = if (summarized && row.isGitRepository) stringResource(R.string.common_tag_git) else null,
                                 subtitle =
                                     when (val count = row.folderCount?.takeIf { summarized }) {
                                         null -> " "
                                         0 -> stringResource(R.string.browse_no_subfolders)
                                         else -> pluralStringResource(R.plurals.browse_folder_count, count, count)
                                     },
-                                startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, null),
-                                accessory = OpenCodeListItemAccessory.Disclosure,
+                                chevron = true,
                                 onClick = { onOpen(row.path) },
                             )
                         }
@@ -228,24 +210,22 @@ fun BrowseScreen(
         Column(
             Modifier
                 .fillMaxWidth()
-                .background(openCodeColor("background-base")),
+                .background(HexTheme.colors.background),
         ) {
-            HorizontalDivider(color = openCodeColor("border-weaker-base"))
+            HorizontalDivider(color = HexTheme.colors.line)
             val atHome = ServerPathPolicy.canonical(browser.directory) == ServerPathPolicy.canonical(browser.home)
-            OpenCodeListItem(
+            HexPickerRow(
                 title = if (atHome) homeLabel else ServerPathPolicy.name(browser.directory),
-                titleTag = if (browser.isGitRepository) stringResource(R.string.common_tag_git) else null,
+                badge = if (browser.isGitRepository) stringResource(R.string.common_tag_git) else null,
                 subtitle = ProjectPicker.shortPath(browser.directory, browser.home),
-                startDecorator = StartDecorator.Icon(OpenCodeIcons.Folder, null),
+                subtitleMono = true,
+                modifier = Modifier.padding(top = 4.dp),
             )
-            OpenCodeButton(
-                OpenCodeButtonVariant.FullWidthText(
-                    stringResource(if (browser.canUse) R.string.browse_use else R.string.browse_pick),
-                ),
+            HexPrimaryButton(
+                stringResource(if (browser.canUse) R.string.browse_use else R.string.browse_pick),
                 onClick = onUse,
                 enabled = browser.canUse,
-                size = OpenCodeButtonSize.Large,
-                modifier = Modifier.padding(start = HexEdge, end = HexEdge, bottom = 4.dp),
+                modifier = Modifier.padding(start = HexTheme.space.screen, end = HexTheme.space.screen, bottom = 4.dp),
             )
         }
     }
@@ -258,12 +238,7 @@ internal fun PageTop(
     subtitle: String?,
     onBack: () -> Unit,
 ) {
-    OpenCodeTopBar(
-        title = title,
-        subtitle = subtitle,
-        subtitleLeading = subtitle?.let { OpenCodeTopBarSubtitleLeading.StatusDot(OpenCodeSessionConnectionStatus.Live) },
-        leading = OpenCodeTopBarLeading.Back(onBack, stringResource(R.string.common_back)),
-    )
+    HexTopBar(title = title, subtitle = subtitle, onBack = onBack, backDescription = stringResource(R.string.common_back))
 }
 
 @Composable
@@ -274,21 +249,23 @@ internal fun Loading() {
             Modifier
                 .fillMaxWidth()
                 .padding(vertical = 28.dp),
-    ) { HexSpinner(size = 20.dp) }
+    ) { HexSpinner(size = HexTheme.size.iconButton) }
 }
 
-/** A quiet line in place of rows, with an optional action. */
+/** A quiet line in place of rows (`.pk-empty`), with an optional action. */
 @Composable
 internal fun Notice(
     text: String,
     action: String? = null,
     onAction: () -> Unit = {},
 ) {
-    OpenCodeInlineNotice(
-        message = text,
-        action = action?.let { OpenCodeInlineNoticeAction(it, onAction) },
-        modifier = Modifier.padding(horizontal = HexEdge, vertical = 24.dp),
-    )
+    Column(
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        modifier = Modifier.padding(horizontal = HexTheme.space.screen, vertical = 14.dp),
+    ) {
+        Text(text, style = HexTheme.type.row, color = HexTheme.colors.text2)
+        if (action != null) HexButton(onClick = onAction, text = action)
+    }
 }
 
 @Composable

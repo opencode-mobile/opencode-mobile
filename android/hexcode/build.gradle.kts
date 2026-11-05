@@ -6,7 +6,8 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
-// Hex Code: the voice-first OpenCode app. It shares OpenCode Mobile's plumbing through :opencode-kit.
+// Hex Code: the voice-first OpenCode app. It shares OpenCode Mobile's data and domain code through :opencode-kit, and
+// has its own UI kit (designsystem/).
 android {
     namespace = "dev.opencode.hexcode"
     compileSdk = 37
@@ -53,6 +54,10 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.compose.ui.tooling.preview)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    // The pairing camera; :opencode-kit decodes its frames.
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -38,6 +38,7 @@ import dev.opencode.hexcode.app.Appearance
 import dev.opencode.hexcode.app.HexFirstRunEnvironment
 import dev.opencode.hexcode.app.HexPrefs
 import dev.opencode.hexcode.app.HexServices
+import dev.opencode.hexcode.designsystem.HexTheme
 import dev.opencode.hexcode.firstrun.BrowseScreen
 import dev.opencode.hexcode.firstrun.FirstRunFlow
 import dev.opencode.hexcode.firstrun.FirstRunStep
@@ -53,10 +54,7 @@ import dev.opencode.hexcode.home.HomeScreen
 import dev.opencode.hexcode.home.HomeViewModel
 import dev.opencode.hexcode.home.VoiceEngineDictation
 import dev.opencode.hexcode.settings.SettingsScreen
-import dev.opencode.hexcode.theme.HexTheme
 import dev.opencode.mobile.domain.text.TitleCaseIdentifier
-import dev.opencode.mobile.theme.LocalOpenCodeDarkTheme
-import dev.opencode.mobile.theme.openCodeColor
 import dev.opencode.voiceengine.EngineOptions
 import dev.opencode.voiceengine.SpeechLab
 import kotlinx.coroutines.launch
@@ -163,7 +161,7 @@ private fun HexCodeRoot(
     Box(
         Modifier
             .fillMaxSize()
-            .background(openCodeColor("background-base")),
+            .background(HexTheme.colors.background),
     ) {
         if (prefs.firstRunDone) {
             AfterFirstRun(services, prefs, clips)
@@ -177,7 +175,7 @@ private fun HexCodeRoot(
                 }
             }
             // The camera view is dark in both themes.
-            SystemBarIcons(darkScreen = LocalOpenCodeDarkTheme.current || state.step == FirstRunStep.Scan)
+            SystemBarIcons(darkScreen = HexTheme.isDark || state.step == FirstRunStep.Scan)
             if (state.step != FirstRunStep.Done) FirstRunFlow(vm)
         }
     }
@@ -195,7 +193,7 @@ private fun AfterFirstRun(
     var visit by remember { mutableIntStateOf(0) }
     var notice by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
-    SystemBarIcons(darkScreen = LocalOpenCodeDarkTheme.current)
+    SystemBarIcons(darkScreen = HexTheme.isDark)
     LaunchedEffect(Unit) { services.voice.prepare() }
     val server by produceState<ServerLabel?>(null, page) {
         value = services.serverLabel()?.let { it.copy(version = it.version ?: prefs.serverVersion) }
@@ -256,9 +254,9 @@ private fun AfterFirstRun(
             motion.apply { targetContentZIndex = targetState.depth.toFloat() }
         },
         label = "pages",
-        modifier = Modifier.background(openCodeColor("background-base")),
+        modifier = Modifier.background(HexTheme.colors.background),
     ) { current ->
-        Box(Modifier.fillMaxSize().background(openCodeColor("background-base"))) {
+        Box(Modifier.fillMaxSize().background(HexTheme.colors.background)) {
             when (current) {
                 Page.Home -> {
                     val speech by services.voice.modelState.collectAsStateWithLifecycle()
