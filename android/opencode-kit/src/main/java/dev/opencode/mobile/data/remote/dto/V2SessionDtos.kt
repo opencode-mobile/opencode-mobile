@@ -102,6 +102,8 @@ data class V2PermissionRequestDto(
     val save: List<String> = emptyList(),
     val metadata: JsonObject = JsonObject(emptyMap()),
     val source: V2PermissionSourceDto? = null,
+    /** What the approval is for, when the request has no resources to show. */
+    val message: String? = null,
 )
 
 @Serializable
