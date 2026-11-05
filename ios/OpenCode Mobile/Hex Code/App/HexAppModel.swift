@@ -65,7 +65,7 @@ final class HexAppModel {
     }
 
     private func beginFirstRun() {
-        firstRun = FirstRunModel(
+        let firstRun = FirstRunModel(
             store: store,
             onScanStarted: { [weak self] in self?.prepareSpeech() },
             onFinished: { [weak self] setup in
@@ -73,21 +73,26 @@ final class HexAppModel {
                 self?.showMain(setup)
             }
         )
+        self.firstRun = firstRun
         phase = .firstRun
+        #if DEBUG
+        // `-HexCodePair <pairing link>` pairs as if the camera had read that code (simulators have
+        // no camera).
+        if let link = UserDefaults.standard.string(forKey: "HexCodePair") {
+            firstRun.startScan()
+            firstRun.scanned(link)
+        }
+        #endif
     }
 
     private func showMain(_ setup: HexSetup) {
-        let toasts = HexToaster()
-        var session: TodaySession?
-        #if DEBUG
-        // `-HexCodeDemoSession <preset>` fills home with a fake session (see `TodaySessionDemo`).
-        if let preset = TodaySessionDemo.launchPreset {
-            let demo = preset.make(toasts: toasts)
-            session = demo
-            Task { await preset.start(demo) }
-        }
-        #endif
-        main = HexMainModel(setup: setup, home: HomeModel(recorder: voice, toasts: toasts), session: session, store: store)
+        // `-HexCodeDemoSession <preset>` starts on a sample session (debug builds; see `TodaySessionDemo`).
+        main = HexMainModel(
+            setup: setup,
+            home: HomeModel(recorder: voice),
+            samplePreset: TodaySessionDemo.launchPreset,
+            store: store
+        )
         phase = .main
     }
 }

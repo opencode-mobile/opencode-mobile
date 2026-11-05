@@ -53,24 +53,32 @@ final class HexMainModel {
 
     /// The navigation stack over home. Back and the edge swipe pop it directly.
     var path: [Route] = []
-    private(set) var setup: HexSetup
+    private(set) var setup: HexSetup {
+        didSet { current.setup = setup }
+    }
     private(set) var projectPicker: ProjectPickerModel?
     private(set) var modelPage: ModelPageModel?
     private(set) var isSaving = false
     private(set) var saveError: String?
     let home: HomeModel
-    /// Today's session on home; nil until round 2 wires OpenCode in (and with no demo preset).
-    let session: TodaySession?
+    /// Today's session on the paired server.
+    let realSession: TodaySession
+    /// Developer settings' Sample session: a fake session shown on home instead of the real one.
+    /// Not saved, so the app always starts on the real session.
+    private(set) var samplePreset: TodaySessionDemo?
+    private(set) var sampleSession: TodaySession?
     let developer: DeveloperSettings
     let build: HexBuildInfo
 
     @ObservationIgnored private let services: any FirstRunServices
     @ObservationIgnored private let store: any HexSetupStoring
+    @ObservationIgnored private let current: CurrentSetup
 
     init(
         setup: HexSetup,
         home: HomeModel,
         session: TodaySession? = nil,
+        samplePreset: TodaySessionDemo? = nil,
         services: any FirstRunServices = LiveFirstRunServices(),
         store: any HexSetupStoring = HexSetupStore(),
         developer: DeveloperSettings? = nil,
@@ -78,11 +86,50 @@ final class HexMainModel {
     ) {
         self.setup = setup
         self.home = home
-        self.session = session
+        let current = CurrentSetup(setup: setup)
+        self.current = current
+        realSession = session ?? Self.liveSession(current, toasts: home.toasts)
         self.developer = developer ?? DeveloperSettings()
         self.build = build ?? .current
         self.services = services
         self.store = store
+        if let samplePreset { showSample(samplePreset) }
+    }
+
+    /// What home shows: the sample session when one is on, else the real one.
+    var session: TodaySession { sampleSession ?? realSession }
+
+    /// Today's session on the paired server, following the project and model chosen now.
+    private static func liveSession(_ current: CurrentSetup, toasts: HexToaster) -> TodaySession {
+        let connection = ServerConnection(profile: current.setup.profile, serverProtocol: .v2)
+        let service = connection.map(OpenCodeSessionService.init(connection:))
+        let stream = connection.map { LiveEventStream(transport: OpenCodeEventTransport(connection: $0)) }
+        stream?.watchNetwork()
+        return TodaySession(
+            setup: DailySessionSetup(service: service ?? UnpairedSessionService(), memory: DailySessionDefaults()),
+            summary: StatusSummaryModel(),
+            directory: { current.setup.project.path },
+            model: { current.setup.model },
+            toasts: toasts,
+            api: service,
+            stream: stream
+        )
+    }
+
+    /// The Sample session row: the next preset, then Off.
+    func cycleSampleSession() {
+        showSample(TodaySessionDemo.next(after: samplePreset))
+    }
+
+    private func showSample(_ preset: TodaySessionDemo?) {
+        samplePreset = preset
+        guard let preset else {
+            sampleSession = nil
+            return
+        }
+        let sample = preset.make(toasts: toasts)
+        sampleSession = sample
+        Task { await preset.start(sample) }
     }
 
     private var connection: ServerConnection? { ServerConnection(profile: setup.profile, serverProtocol: .v2) }
@@ -154,6 +201,7 @@ final class HexMainModel {
         next.modelName = modelPage?.selectedModelName
         guard await save(next) else { return }
         path = [.settings]
+        await realSession.switchModel(choice)
     }
 
     // MARK: Version and developer settings
@@ -194,5 +242,32 @@ final class HexMainModel {
             saveError = String(localized: "settings.save_failed", defaultValue: "Couldn’t save this on the phone. Try again.")
             return false
         }
+    }
+}
+
+/// The setup the real session reads when it opens: the project and model can change in Settings.
+@MainActor
+private final class CurrentSetup {
+    var setup: HexSetup
+
+    init(setup: HexSetup) {
+        self.setup = setup
+    }
+}
+
+/// A saved server that no longer makes a connection: setup fails, with Try again.
+private struct UnpairedSessionService: DailySessionService {
+    struct Unpaired: Error {}
+
+    func sessionsPage(directory: String, search: String, limit: Int, cursor: String?) async throws -> SessionListingPage {
+        throw Unpaired()
+    }
+
+    func createSession(title: String, directory: String, model: ModelChoice) async throws -> SessionListing {
+        throw Unpaired()
+    }
+
+    func putMessageRules(sessionID: String) async throws {
+        throw Unpaired()
     }
 }

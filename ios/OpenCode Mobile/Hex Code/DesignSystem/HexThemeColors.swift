@@ -32,7 +32,7 @@ enum HexColor {
     static let amber = pair(dark: 0xF2994A, light: 0xD9771C)
     /// Needs-you background.
     static let amberSoft = pair(dark: 0xF2994A, light: 0xD9771C, darkAlpha: 0.10, lightAlpha: 0.09)
-    /// The border of a needs-you card (`.needs-hint`: amber 30 %). Not in the spec yet: proposed.
+    /// Needs-you border (`.needs-hint`): amber 30 %.
     static let amberLine = pair(dark: 0xF2994A, light: 0xD9771C, darkAlpha: 0.30, lightAlpha: 0.30)
     /// Stop, errors, drop a take.
     static let red = pair(dark: 0xEB5757, light: 0xD94848)

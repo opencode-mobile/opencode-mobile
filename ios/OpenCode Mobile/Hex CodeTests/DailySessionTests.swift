@@ -26,12 +26,13 @@ struct DailySessionDecisionTests {
         #expect(decision == .init(action: .reuse(id: "ses_a"), showsNewDayNotice: false))
     }
 
-    @Test func twoTodayTakesTheNewest() {
+    @Test func twoTodayTakesTheFirstWhichIsTheNewest() {
+        // The server lists newest update first.
         let decision = DailySession.decide(
             today: "2026-11-05",
             directory: project,
             lastOpenedDay: "2026-11-05",
-            sessions: [session("ses_old", "2026-11-05", minutesAgo: 30), session("ses_new", "2026-11-05", minutesAgo: 2)]
+            sessions: [session("ses_new", "2026-11-05", minutesAgo: 2), session("ses_old", "2026-11-05", minutesAgo: 30)]
         )
         #expect(decision.action == .reuse(id: "ses_new"))
     }
@@ -48,6 +49,11 @@ struct DailySessionDecisionTests {
 
     @Test func theFirstDayAfterFirstRunHasNoNotice() {
         let decision = DailySession.decide(today: "2026-11-05", directory: project, lastOpenedDay: nil, sessions: [])
+        #expect(decision.showsNewDayNotice == false)
+    }
+
+    @Test func todaysSessionGoneMissingIsCreatedAgainWithoutTheNotice() {
+        let decision = DailySession.decide(today: "2026-11-05", directory: project, lastOpenedDay: "2026-11-05", sessions: [])
         #expect(decision == .init(action: .create(title: "2026-11-05"), showsNewDayNotice: false))
     }
 
@@ -61,13 +67,14 @@ struct DailySessionDecisionTests {
         #expect(decision == .init(action: .reuse(id: "ses_a"), showsNewDayNotice: false))
     }
 
-    @Test func onlyTheChosenProjectAndExactTitleCount() {
+    @Test func onlyTheExactTitleAndDirectoryCount() {
         let decision = DailySession.decide(
             today: "2026-11-05",
-            directory: project + "/",
+            directory: project,
             lastOpenedDay: "2026-11-05",
             sessions: [
                 session("ses_other", "2026-11-05", directory: "/Users/example/notes"),
+                session("ses_slash", "2026-11-05", directory: project + "/"),
                 session("ses_named", "2026-11-05 login"),
                 session("ses_mine", "2026-11-05", minutesAgo: 60),
             ]
@@ -83,122 +90,202 @@ struct DailySessionDecisionTests {
     }
 }
 
+/// A fake server for the daily session and the live view, recording every call in order.
+@MainActor
+final class FakeSessionServer: DailySessionService, LiveSessionAPI, @unchecked Sendable {
+    enum Call: Equatable {
+        case list(search: String, cursor: String?)
+        case create(title: String, model: ModelChoice)
+        case rules(String)
+        case snapshot(String)
+        case generate(String)
+        case model(String, ModelChoice)
+    }
+
+    struct Failure: Error {}
+
+    var listed: [SessionListing] = []
+    /// Pages to return in turn, instead of `listed`.
+    var pages: [SessionListingPage] = []
+    var calls: [Call] = []
+    var failsList = false
+    var failsCreate = false
+    var failsRules = false
+    var snapshot = LiveSnapshot(busySince: nil, hasRun: false, children: [], pending: [], inbox: [])
+    var reply = "## Task\nNow: Doing it."
+    private var created = 0
+
+    init() {}
+
+    var callsWithoutGenerate: [Call] {
+        calls.filter { if case .generate = $0 { false } else { true } }
+    }
+
+    func sessionsPage(directory: String, search: String, limit: Int, cursor: String?) async throws -> SessionListingPage {
+        calls.append(.list(search: search, cursor: cursor))
+        if failsList { throw Failure() }
+        if !pages.isEmpty { return pages.removeFirst() }
+        return SessionListingPage(sessions: listed, next: listed.isEmpty ? nil : "next")
+    }
+
+    func createSession(title: String, directory: String, model: ModelChoice) async throws -> SessionListing {
+        calls.append(.create(title: title, model: model))
+        if failsCreate { throw Failure() }
+        created += 1
+        let session = SessionListing(id: "ses_new\(created)", title: title, directory: directory, updatedAt: Date())
+        listed.insert(session, at: 0)
+        return session
+    }
+
+    func putMessageRules(sessionID: String) async throws {
+        calls.append(.rules(sessionID))
+        if failsRules { throw Failure() }
+    }
+
+    func snapshot(rootID: String) async throws -> LiveSnapshot {
+        calls.append(.snapshot(rootID))
+        return snapshot
+    }
+
+    func generate(sessionID: String, prompt: String) async throws -> String {
+        calls.append(.generate(sessionID))
+        return reply
+    }
+
+    func switchModel(sessionID: String, model: ModelChoice) async throws {
+        calls.append(.model(sessionID, model))
+    }
+}
+
+@MainActor
+final class FakeMemory: DailySessionMemory {
+    var lastOpenedDay: String?
+    init(_ day: String?) { lastOpenedDay = day }
+}
+
 /// The setup steps, in order, against a fake server.
 @MainActor
 struct DailySessionSetupTests {
-    final class FakeService: DailySessionService, @unchecked Sendable {
-        enum Call: Equatable {
-            case list
-            case create(String)
-            case rules(String)
-            case stream(String)
-        }
-
-        var listed: [SessionListing] = []
-        var calls: [Call] = []
-        var failsList = false
-        var failsRules = false
-        private var created = 0
-
-        struct Failure: Error {}
-
-        func sessions(directory: String) async throws -> [SessionListing] {
-            calls.append(.list)
-            if failsList { throw Failure() }
-            return listed
-        }
-
-        func createSession(title: String, directory: String) async throws -> String {
-            created += 1
-            let id = "ses_new\(created)"
-            calls.append(.create(title))
-            listed.append(SessionListing(id: id, title: title, directory: directory, updatedAt: Date()))
-            return id
-        }
-
-        func addMessageRules(sessionID: String) async throws {
-            calls.append(.rules(sessionID))
-            if failsRules { throw Failure() }
-        }
-
-        func openStream(sessionID: String) async {
-            calls.append(.stream(sessionID))
-        }
-    }
-
-    final class Memory: DailySessionMemory {
-        var lastOpenedDay: String?
-        init(_ day: String?) { lastOpenedDay = day }
-    }
-
     private let project = "/Users/example/Projects/hexcode"
+    private let model = ModelChoice(providerID: "opencode", modelID: "big-pickle", variant: "high")
 
-    @Test func noSessionTodayIsCreatedRulesAddedThenTheStreamOpens() async {
-        let service = FakeService()
-        let memory = Memory("2026-11-05")
-        let setup = DailySessionSetup(service: service, memory: memory)
-        let outcome = await setup.open(today: "2026-11-05", directory: project)
-        #expect(outcome == .opened(sessionID: "ses_new1", created: true, showsNewDayNotice: false))
-        #expect(service.calls == [.list, .create("2026-11-05"), .rules("ses_new1"), .stream("ses_new1")])
+    private func today(_ id: String, title: String = "2026-11-05") -> SessionListing {
+        SessionListing(id: id, title: title, directory: project, updatedAt: Date())
     }
 
-    @Test func oneTodayIsReusedAndNothingIsCreated() async {
-        let service = FakeService()
-        service.listed = [SessionListing(id: "ses_a", title: "2026-11-05", directory: project, updatedAt: Date())]
-        let setup = DailySessionSetup(service: service, memory: Memory("2026-11-05"))
-        let outcome = await setup.open(today: "2026-11-05", directory: project)
-        #expect(outcome == .opened(sessionID: "ses_a", created: false, showsNewDayNotice: false))
-        #expect(service.calls == [.list, .stream("ses_a")])
+    @Test func noSessionTodayIsCreatedWithTheModelThenTheRulesArePut() async {
+        let server = FakeSessionServer()
+        let setup = DailySessionSetup(service: server, memory: FakeMemory("2026-11-05"))
+        let outcome = await setup.open(today: "2026-11-05", directory: project, model: model)
+        guard case let .opened(session, created, notice) = outcome else {
+            Issue.record("expected opened")
+            return
+        }
+        #expect(session.id == "ses_new1" && created && !notice)
+        #expect(server.calls == [.list(search: "2026-11-05", cursor: nil), .create(title: "2026-11-05", model: model), .rules("ses_new1")])
+    }
+
+    @Test func oneTodayIsReusedNothingCreatedAndTheRulesPutAgain() async {
+        let server = FakeSessionServer()
+        server.listed = [today("ses_a")]
+        let setup = DailySessionSetup(service: server, memory: FakeMemory("2026-11-05"))
+        guard case let .opened(session, false, false) = await setup.open(today: "2026-11-05", directory: project, model: model) else {
+            Issue.record("expected a reuse")
+            return
+        }
+        #expect(session.id == "ses_a")
+        #expect(server.calls == [.list(search: "2026-11-05", cursor: nil), .rules("ses_a")])
     }
 
     @Test func aNewDayLeavesYesterdayAndShowsTheNotice() async {
-        let service = FakeService()
-        service.listed = [SessionListing(id: "ses_y", title: "2026-11-04", directory: project, updatedAt: Date())]
-        let memory = Memory("2026-11-04")
-        let setup = DailySessionSetup(service: service, memory: memory)
-        let outcome = await setup.open(today: "2026-11-05", directory: project)
-        #expect(outcome == .opened(sessionID: "ses_new1", created: true, showsNewDayNotice: true))
-        #expect(!service.calls.contains(.rules("ses_y")))
+        let server = FakeSessionServer()
+        server.listed = [today("ses_y", title: "2026-11-04")]
+        let memory = FakeMemory("2026-11-04")
+        let setup = DailySessionSetup(service: server, memory: memory)
+        guard case let .opened(session, true, true) = await setup.open(today: "2026-11-05", directory: project, model: model) else {
+            Issue.record("expected a new session with the notice")
+            return
+        }
+        #expect(session.id == "ses_new1")
+        #expect(!server.calls.contains(.rules("ses_y")))
         #expect(memory.lastOpenedDay == "2026-11-05")
     }
 
     @Test func theDateChangingInTheBackgroundMakesANewSessionOnReturn() async {
-        let service = FakeService()
-        let memory = Memory(nil)
-        let setup = DailySessionSetup(service: service, memory: memory)
+        let server = FakeSessionServer()
+        let memory = FakeMemory(nil)
+        let setup = DailySessionSetup(service: server, memory: memory)
         // First open after first run: no notice.
-        #expect(await setup.open(today: "2026-11-05", directory: project) == .opened(sessionID: "ses_new1", created: true, showsNewDayNotice: false))
+        guard case .opened(_, true, false) = await setup.open(today: "2026-11-05", directory: project, model: model) else {
+            Issue.record("first open")
+            return
+        }
         // Back in front the same day: reused.
-        #expect(await setup.open(today: "2026-11-05", directory: project) == .opened(sessionID: "ses_new1", created: false, showsNewDayNotice: false))
+        guard case let .opened(again, false, false) = await setup.open(today: "2026-11-05", directory: project, model: model) else {
+            Issue.record("same day")
+            return
+        }
+        #expect(again.id == "ses_new1")
         // Back in front after midnight: a new one, with the notice.
-        #expect(await setup.open(today: "2026-11-06", directory: project) == .opened(sessionID: "ses_new2", created: true, showsNewDayNotice: true))
+        guard case let .opened(next, true, true) = await setup.open(today: "2026-11-06", directory: project, model: model) else {
+            Issue.record("next day")
+            return
+        }
+        #expect(next.id == "ses_new2")
     }
 
     @Test func aFailedListIsAFailureAndNothingIsSaved() async {
-        let service = FakeService()
-        service.failsList = true
-        let memory = Memory("2026-11-04")
-        let setup = DailySessionSetup(service: service, memory: memory)
-        #expect(await setup.open(today: "2026-11-05", directory: project) == .failed)
+        let server = FakeSessionServer()
+        server.failsList = true
+        let memory = FakeMemory("2026-11-04")
+        let setup = DailySessionSetup(service: server, memory: memory)
+        #expect(await setup.open(today: "2026-11-05", directory: project, model: model) == .failed)
         #expect(memory.lastOpenedDay == "2026-11-04")
-        #expect(service.calls == [.list])
     }
 
-    @Test func failedRulesAreAddedOnTryAgainWithoutASecondSession() async {
-        let service = FakeService()
-        service.failsRules = true
-        let memory = Memory("2026-11-04")
-        let setup = DailySessionSetup(service: service, memory: memory)
-        #expect(await setup.open(today: "2026-11-05", directory: project) == .failed)
+    @Test func tryAgainAfterFailedRulesFindsTheSessionPutsTheRulesAndStillShowsTheNotice() async {
+        let server = FakeSessionServer()
+        server.failsRules = true
+        let memory = FakeMemory("2026-11-04")
+        let setup = DailySessionSetup(service: server, memory: memory)
+        #expect(await setup.open(today: "2026-11-05", directory: project, model: model) == .failed)
         #expect(memory.lastOpenedDay == "2026-11-04")
 
-        service.failsRules = false
-        let outcome = await setup.open(today: "2026-11-05", directory: project)
-        #expect(outcome == .opened(sessionID: "ses_new1", created: true, showsNewDayNotice: true))
-        #expect(service.calls == [
-            .list, .create("2026-11-05"), .rules("ses_new1"),
-            .list, .rules("ses_new1"), .stream("ses_new1"),
-        ])
+        server.failsRules = false
+        guard case let .opened(session, false, true) = await setup.open(today: "2026-11-05", directory: project, model: model) else {
+            Issue.record("expected the same session with the notice")
+            return
+        }
+        #expect(session.id == "ses_new1")
+        #expect(server.calls.filter { if case .create = $0 { true } else { false } }.count == 1)
+        #expect(server.calls.last == .rules("ses_new1"))
+    }
+
+    @Test func pagingFollowsTheCursorOnlyWhileFullPagesHaveNoMatch() async {
+        let server = FakeSessionServer()
+        let noise = (0 ..< DailySessionSetup.pageSize).map { today("ses_x\($0)", title: "2026-11-05 notes") }
+        server.pages = [
+            SessionListingPage(sessions: noise, next: "c1"),
+            SessionListingPage(sessions: [today("ses_b")], next: "c2"),
+        ]
+        let setup = DailySessionSetup(service: server, memory: FakeMemory("2026-11-05"))
+        guard case let .opened(session, false, _) = await setup.open(today: "2026-11-05", directory: project, model: model) else {
+            Issue.record("expected a reuse")
+            return
+        }
+        #expect(session.id == "ses_b")
+        #expect(server.calls.prefix(2) == [.list(search: "2026-11-05", cursor: nil), .list(search: "2026-11-05", cursor: "c1")])
+    }
+
+    @Test func aShortPageWithoutAMatchIsTheEnd() async {
+        let server = FakeSessionServer()
+        server.pages = [SessionListingPage(sessions: [today("ses_x", title: "2026-11-05 notes")], next: "c1")]
+        let setup = DailySessionSetup(service: server, memory: FakeMemory("2026-11-05"))
+        guard case .opened(_, true, _) = await setup.open(today: "2026-11-05", directory: project, model: model) else {
+            Issue.record("expected a new session")
+            return
+        }
+        #expect(server.calls.filter { if case .list = $0 { true } else { false } }.count == 1)
     }
 }
 
@@ -220,7 +307,7 @@ struct AgentStateTests {
         #expect(AgentState.resolve(streamUp: true, pendingInput: false, busySince: nil) == .idle)
     }
 
-    @Test func workingIsTimedFromTheTurnsStart() {
+    @Test func workingIsTimedFromTheRunsStart() {
         let state = AgentState.working(since: start).topBar(at: start + 252.9)
         #expect(state == HexTopBarState(tone: .working, label: "Working", timer: "4:12"))
         #expect(AgentState.clock(7) == "0:07")
@@ -232,61 +319,5 @@ struct AgentStateTests {
         #expect(AgentState.reconnecting.topBar(at: start) == HexTopBarState(tone: .reconnecting, label: "Reconnecting…"))
         #expect(AgentState.needsInput.topBar(at: start) == HexTopBarState(tone: .needsYou, label: "Needs input"))
         #expect(AgentState.idle.topBar(at: start) == HexTopBarState(tone: .idle, label: "Idle"))
-    }
-}
-
-/// Today's session on home: setup, the empty card and the new-day notice.
-@MainActor
-struct TodaySessionTests {
-    private struct Generator: SummaryGenerating {
-        func generateSummary(prompt: String) async throws -> String { "## Task\nNow: Doing it." }
-    }
-
-    private func make(_ service: DailySessionSetupTests.FakeService, lastDay: String?) -> (TodaySession, HexToaster) {
-        let toasts = HexToaster()
-        let session = TodaySession(
-            setup: DailySessionSetup(service: service, memory: DailySessionSetupTests.Memory(lastDay)),
-            summary: StatusSummaryModel(generator: Generator()),
-            directory: { "/p" },
-            toasts: toasts,
-            now: { Date(timeIntervalSince1970: 1_793_880_000) },
-            timeZone: TimeZone(identifier: "UTC")!
-        )
-        return (session, toasts)
-    }
-
-    @Test func aNewDayShowsTheEmptyCardAndTheNotice() async {
-        let (session, toasts) = make(DailySessionSetupTests.FakeService(), lastDay: "2026-11-04")
-        await session.open()
-        #expect(session.setup == .ready(sessionID: "ses_new1"))
-        #expect(toasts.current?.tone == .sun)
-        #expect(toasts.current?.title == "New day, new session")
-        #expect(toasts.current?.detail == "Yesterday’s is kept on your computer.")
-        #expect(toasts.current?.duration == 3.6)
-        guard case let .card(card) = session.summary.summary else {
-            Issue.record("expected the empty card")
-            return
-        }
-        #expect(card.next == "Say what to do.")
-    }
-
-    @Test func anExistingSessionRefreshesTheSummary() async {
-        let service = DailySessionSetupTests.FakeService()
-        service.listed = [SessionListing(id: "ses_a", title: "2026-11-05", directory: "/p", updatedAt: Date())]
-        let (session, toasts) = make(service, lastDay: "2026-11-05")
-        await session.open()
-        #expect(toasts.current == nil)
-        #expect(session.summary.summary == .card(StatusCard(title: "Task", now: "Doing it.")))
-    }
-
-    @Test func aFailedSetupCanBeTriedAgain() async {
-        let service = DailySessionSetupTests.FakeService()
-        service.failsList = true
-        let (session, _) = make(service, lastDay: nil)
-        await session.open()
-        #expect(session.setup == .failed(retrying: false))
-        service.failsList = false
-        await session.retry()
-        #expect(session.setup == .ready(sessionID: "ses_new1"))
     }
 }

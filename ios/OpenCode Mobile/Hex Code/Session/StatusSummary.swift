@@ -40,18 +40,22 @@ enum StatusSummary: Equatable, Sendable {
     case card(StatusCard)
     case fallback(String)
 
-    /// Clipping, as the prototype: title 40, Now 90, Next 60, fallback 300 characters.
+    /// Clipping, as the prototype: title 40, Now 90, Next 60, steps 40, fallback 300 characters
+    /// (grapheme clusters).
     static let titleLimit = 40
     static let nowLimit = 90
     static let nextLimit = 60
+    static let stepLimit = 40
     static let fallbackLimit = 300
     /// The prompt asks for at most 8 steps; more are dropped from the end.
     static let maxSteps = 8
 
-    /// Reads a reply to `SessionPrompts.Summary`. Code fences and blank lines are ignored, and so is
-    /// any other line (such as text before the title). Each line is trimmed first. The first `## `
-    /// line is the title, the first `Now:` line the sentence, the first `Next:` line what follows,
-    /// and `- [x]` / `- [ ]` lines the steps. Without a title or a `Now:` line it is a fallback.
+    /// Reads a reply to `SessionPrompts.Summary`. Each line is trimmed; code fences and blank lines
+    /// are ignored, and so is any other line (such as text before the title). The first line
+    /// starting `## ` is the title, the first lines starting `Now:` and `Next:` (in any case) the
+    /// sentence and what follows, and lines starting `- [x]`, `- [X]` or `- [ ]` the steps (the
+    /// first 8). A label with nothing after it counts as missing. Without a title or a `Now:` line
+    /// it is a fallback: the lines joined with spaces, runs of spaces collapsed.
     static func parse(_ reply: String) -> StatusSummary {
         var title: String?
         var now: String?
@@ -61,18 +65,19 @@ enum StatusSummary: Equatable, Sendable {
         for line in lines {
             if let value = line.value(after: "## ") {
                 if title == nil, !value.isEmpty { title = value }
-            } else if let value = line.value(after: "Now:") {
+            } else if let value = line.value(afterLabel: "now:") {
                 if now == nil, !value.isEmpty { now = value }
-            } else if let value = line.value(after: "Next:") {
+            } else if let value = line.value(afterLabel: "next:") {
                 if next == nil, !value.isEmpty { next = value }
-            } else if let value = line.value(after: "- [x]") {
-                if !value.isEmpty { steps.append(.init(text: value, done: true)) }
+            } else if let value = line.value(after: "- [x]") ?? line.value(after: "- [X]") {
+                if !value.isEmpty { steps.append(.init(text: clip(value, stepLimit), done: true)) }
             } else if let value = line.value(after: "- [ ]") {
-                if !value.isEmpty { steps.append(.init(text: value, done: false)) }
+                if !value.isEmpty { steps.append(.init(text: clip(value, stepLimit), done: false)) }
             }
         }
         guard let title, let now else {
-            return .fallback(clip(lines.joined(separator: " "), fallbackLimit))
+            let text = lines.joined(separator: " ").split(whereSeparator: \.isWhitespace).joined(separator: " ")
+            return .fallback(clip(text, fallbackLimit))
         }
         return .card(StatusCard(
             title: clip(title, titleLimit),
@@ -110,6 +115,12 @@ private extension String {
     func value(after prefix: String) -> String? {
         guard hasPrefix(prefix) else { return nil }
         return dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
+    }
+
+    /// The same for a label matched in any case, such as `now:`.
+    func value(afterLabel label: String) -> String? {
+        guard lowercased().hasPrefix(label) else { return nil }
+        return dropFirst(label.count).trimmingCharacters(in: .whitespaces)
     }
 }
 

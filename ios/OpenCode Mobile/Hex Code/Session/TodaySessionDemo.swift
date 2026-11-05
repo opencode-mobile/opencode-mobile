@@ -1,8 +1,8 @@
-#if DEBUG
 import Foundation
 
-/// Fake sessions for looking at home without a server: `-HexCodeDemoSession <preset>` together
-/// with `-HexCodeDemoSetup YES`, and the previews. Nothing here talks to OpenCode.
+/// Fake sessions for looking at home without a server: Settings › Developer › Sample session, or
+/// `-HexCodeDemoSession <preset>` at launch (debug builds). Nothing here talks to OpenCode. The
+/// presets are the same on both platforms.
 enum TodaySessionDemo: String, CaseIterable {
     /// Working, with a four-step plan and a message waiting.
     case card
@@ -28,7 +28,18 @@ enum TodaySessionDemo: String, CaseIterable {
     case updatefailed
 
     static var launchPreset: TodaySessionDemo? {
+        #if DEBUG
         UserDefaults.standard.string(forKey: "HexCodeDemoSession").flatMap(TodaySessionDemo.init(rawValue:))
+        #else
+        nil
+        #endif
+    }
+
+    /// The preset after `preset` for the Sample session row, nil (Off) after the last.
+    static func next(after preset: TodaySessionDemo?) -> TodaySessionDemo? {
+        guard let preset else { return allCases.first }
+        let index = allCases.firstIndex(of: preset)! + 1
+        return index < allCases.count ? allCases[index] : nil
     }
 
     static let reply = """
@@ -47,13 +58,13 @@ enum TodaySessionDemo: String, CaseIterable {
     take long, and after that I will run the whole suite again and see what else is left over.
     """
 
-    /// A session in this state; call `open()` (or `start()`) to fill it.
+    /// A session in this state; call `start(_:)` to fill it.
     @MainActor
     func make(toasts: HexToaster, now: Date = Date()) -> TodaySession {
         let today = DailySession.title(for: now)
         let yesterday = DailySession.title(for: now.addingTimeInterval(-86_400))
         let memory = DemoMemory(lastOpenedDay: self == .empty ? nil : yesterday)
-        let existing = [SessionListing(id: "ses_demo", title: today, directory: Self.directory, updatedAt: now)]
+        let existing = [SessionListing(id: "ses_demo", title: today, directory: Self.directory, updatedAt: now, busySince: now.addingTimeInterval(-600))]
         let service = DemoService(
             sessions: [.empty, .newday].contains(self) ? [] : existing,
             fails: self == .failed
@@ -63,16 +74,25 @@ enum TodaySessionDemo: String, CaseIterable {
             setup: DailySessionSetup(service: service, memory: memory),
             summary: summary,
             directory: { Self.directory },
+            model: { ModelChoice(providerID: "opencode", modelID: "big-pickle", variant: nil) },
             toasts: toasts
         )
+        return session
+    }
+
+    /// Opens the session and puts it in this state; `updating` then starts a refresh that never
+    /// ends, and `updatefailed` one that fails.
+    @MainActor
+    func start(_ session: TodaySession, now: Date = Date()) async {
+        await session.open()
         switch self {
         case .card:
             session.busySince = now.addingTimeInterval(-252)
             session.waitingCount = 1
         case .needs:
-            session.pendingInput = .init(kind: .question, text: "2 questions · login length and remember-me")
+            session.pendingInput = PendingItem(id: "frm_demo", sessionID: "ses_demo", kind: .question, text: "2 questions · login length and remember-me")
         case .approval:
-            session.pendingInput = .init(kind: .approval, text: "Run bun run db:reset on the dev database")
+            session.pendingInput = PendingItem(id: "per_demo", sessionID: "ses_demo", kind: .approval, text: "Run bun run db:reset on the dev database")
         case .reconnecting:
             session.streamUp = false
             session.busySince = now.addingTimeInterval(-252)
@@ -81,14 +101,6 @@ enum TodaySessionDemo: String, CaseIterable {
         default:
             break
         }
-        return session
-    }
-
-    /// Opens the session; `updating` then starts a refresh that never ends, and `updatefailed` one
-    /// that fails.
-    @MainActor
-    func start(_ session: TodaySession) async {
-        await session.open()
         switch self {
         case .updating:
             session.summary.generator = DemoGenerator(reply: nil, hangs: true)
@@ -129,17 +141,17 @@ private struct DemoService: DailySessionService {
     let sessions: [SessionListing]
     let fails: Bool
 
-    func sessions(directory: String) async throws -> [SessionListing] {
+    func sessionsPage(directory: String, search: String, limit: Int, cursor: String?) async throws -> SessionListingPage {
         try await Task.sleep(for: .milliseconds(300))
         if fails { throw DemoFailure() }
-        return sessions
+        return SessionListingPage(sessions: sessions, next: nil)
     }
 
-    func createSession(title: String, directory: String) async throws -> String { "ses_new" }
+    func createSession(title: String, directory: String, model: ModelChoice) async throws -> SessionListing {
+        SessionListing(id: "ses_new", title: title, directory: directory, updatedAt: Date())
+    }
 
-    func addMessageRules(sessionID: String) async throws {}
-
-    func openStream(sessionID: String) async {}
+    func putMessageRules(sessionID: String) async throws {}
 }
 
 private struct DemoGenerator: SummaryGenerating {
@@ -153,4 +165,3 @@ private struct DemoGenerator: SummaryGenerating {
         return reply
     }
 }
-#endif

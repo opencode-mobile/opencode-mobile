@@ -20,7 +20,7 @@ struct HomeStatusView: View {
                 case let .fallback(text):
                     FallbackCardView(text: text, summary: session.summary)
                 case nil:
-                    // The first summary of a session that already has work in it: only ↻ "updating…".
+                    // The first summary of a session that ran before: only ↻ "updating…".
                     if session.summary.isUpdating {
                         HStack {
                             Spacer(minLength: 0)
@@ -152,7 +152,7 @@ private struct RefreshMark: View {
 /// The amber card under the status when the agent waits for an answer or an approval
 /// (the prototype's `.needs-hint`).
 struct NeedsHintCard: View {
-    let input: TodaySession.PendingInput
+    let input: PendingItem
     let action: () -> Void
 
     var body: some View {

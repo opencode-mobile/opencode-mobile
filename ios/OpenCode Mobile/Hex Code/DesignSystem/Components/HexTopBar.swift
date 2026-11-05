@@ -25,7 +25,8 @@ struct HexTopBarState: Equatable {
 /// - page (`.pk-top`): a round back button, the page title and a line under it with a dot.
 struct HexTopBar<Trailing: View>: View {
     private enum Title {
-        case state(HexTopBarState)
+        /// Nil leaves the state slot empty (while today's session is set up).
+        case state(HexTopBarState?)
         case page(title: Text, subtitle: String?, dot: HexDot.Tone)
     }
 
@@ -34,8 +35,8 @@ struct HexTopBar<Trailing: View>: View {
     private var onTitle: (() -> Void)?
     private let trailing: Trailing
 
-    /// Home: the agent's state; tapping it runs `onTitle` when set (needs input).
-    init(state: HexTopBarState, onTitle: (() -> Void)? = nil, @ViewBuilder trailing: () -> Trailing) {
+    /// Home: the agent's state, or nothing; tapping it runs `onTitle` when set (needs input).
+    init(state: HexTopBarState?, onTitle: (() -> Void)? = nil, @ViewBuilder trailing: () -> Trailing) {
         title = .state(state)
         self.onTitle = onTitle
         self.trailing = trailing()
@@ -71,7 +72,9 @@ struct HexTopBar<Trailing: View>: View {
         switch title {
         case let .state(state):
             HStack(spacing: 10) {
-                stateTitle(state)
+                if let state {
+                    stateTitle(state)
+                }
                 Spacer(minLength: 0)
                 trailing
             }

@@ -71,6 +71,31 @@ struct StatusSummaryTests {
         #expect(card.now == "Doing it.")
     }
 
+    @Test func nowAndNextMatchInAnyCaseAndCapitalXIsDone() {
+        let reply = "## Task\nNOW: Doing it.\nnext: After that.\n- [X] One\n- [x] Two\n- [ ] Three"
+        guard case let .card(card) = StatusSummary.parse(reply) else {
+            Issue.record("expected a card")
+            return
+        }
+        #expect(card.now == "Doing it.")
+        #expect(card.next == "After that.")
+        #expect(card.steps.map(\.done) == [true, true, false])
+    }
+
+    @Test func stepsAreClippedTo40() {
+        let long = String(repeating: "step ", count: 20)
+        guard case let .card(card) = StatusSummary.parse("## Task\nNow: Doing it.\n- [ ] \(long)") else {
+            Issue.record("expected a card")
+            return
+        }
+        #expect(card.steps[0].text.count <= 40)
+        #expect(card.steps[0].text.hasSuffix("…"))
+    }
+
+    @Test func theFallbackCollapsesRunsOfSpaces() {
+        #expect(StatusSummary.parse("Working   on\tthe\n\n  tests   now") == .fallback("Working on the tests now"))
+    }
+
     @Test func noNowLineIsAFallback() {
         let reply = "## Login screen rewrite\nNext: Run the auth tests.\n- [x] New login form"
         #expect(StatusSummary.parse(reply) == .fallback("## Login screen rewrite Next: Run the auth tests. - [x] New login form"))
@@ -240,17 +265,44 @@ struct StatusSummaryModelTests {
         }
     }
 
+    @Test func aBlankReplyIsAFailedUpdate() async {
+        let generator = HeldGenerator()
+        let model = StatusSummaryModel(generator: generator)
+        async let first: Void = model.refresh()
+        await waitUntil { generator.isWaiting }
+        generator.releaseAll()
+        await first
+        let card = model.summary
+        generator.reply = .success("  \n ")
+        async let second: Void = model.refresh()
+        await waitUntil { generator.isWaiting }
+        generator.releaseAll()
+        await second
+        #expect(model.summary == card)
+        #expect(model.failed)
+    }
+
+    @Test func aRequestPastTheTimeoutFails() async {
+        let generator = HeldGenerator()
+        let model = StatusSummaryModel(generator: generator, timeout: .milliseconds(50))
+        await model.refresh()
+        #expect(model.failed)
+        #expect(!model.isUpdating)
+        generator.releaseAll()
+    }
+
     @Test func twoRefreshesAtOnceMakeOneRequest() async {
         let generator = HeldGenerator()
         let clock = Date(timeIntervalSince1970: 1_000_000)
         let model = StatusSummaryModel(generator: generator, now: { clock })
         async let first: Void = model.refresh()
-        async let second: Void = model.refresh()
         await waitUntil { generator.isWaiting }
+        // Asked for while one runs: dropped at once.
+        await model.refresh()
         #expect(model.isUpdating)
         #expect(model.refreshLabel(at: clock) == .updating)
         generator.releaseAll()
-        _ = await (first, second)
+        await first
         #expect(generator.requests == 1)
         #expect(generator.prompts == [SessionPrompts.Summary.text])
         #expect(!model.isUpdating)

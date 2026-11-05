@@ -15,7 +15,6 @@ struct HexToastItem: Identifiable, Equatable {
         /// Sun in `text2`: a new day or a new session.
         case sun
         /// Undo arrow in `text2`: something was taken away (a dropped take, a deleted chunk).
-        /// Not in the spec yet: proposed (the prototype uses it).
         case undo
     }
 

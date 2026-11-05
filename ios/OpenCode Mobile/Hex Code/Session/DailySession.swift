@@ -6,6 +6,8 @@ struct SessionListing: Equatable, Sendable {
     var title: String
     var directory: String
     var updatedAt: Date
+    /// The start of the latest run (`time.busy`); nil for a session that never ran.
+    var busySince: Date?
 }
 
 /// Today's session: one per local date and project, titled with the date (`2026-11-03`). See "The
@@ -16,13 +18,14 @@ enum DailySession {
         enum Action: Equatable, Sendable {
             /// Today's session exists: open it, nothing is created.
             case reuse(id: String)
-            /// None yet: create one with this title, then add the message rules.
+            /// None yet: create one with this title.
             case create(title: String)
         }
 
         var action: Action
-        /// "New day, new session": only when the session is created because the date changed since
-        /// the last session the app opened. Not on the first day after first run.
+        /// "New day, new session": only when a session is created and the app last opened one on
+        /// an earlier date. Not on the first day after first run, and not when today's session
+        /// went missing and is created again.
         var showsNewDayNotice: Bool
     }
 
@@ -34,39 +37,47 @@ enum DailySession {
         return String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
     }
 
-    /// - Parameters:
-    ///   - today: today's local date, `yyyy-MM-dd`.
-    ///   - directory: the chosen project.
-    ///   - lastOpenedDay: the date of the last session the app opened, nil before the first.
-    ///   - sessions: the server's sessions.
-    static func decide(today: String, directory: String, lastOpenedDay: String?, sessions: [SessionListing]) -> Decision {
-        let project = normalized(directory)
-        let todays = sessions.filter { $0.title == today && normalized($0.directory) == project }
-        if let newest = todays.max(by: { $0.updatedAt < $1.updatedAt }) {
-            return Decision(action: .reuse(id: newest.id), showsNewDayNotice: false)
-        }
-        let dateChanged = lastOpenedDay.map { $0 != today } ?? false
-        return Decision(action: .create(title: today), showsNewDayNotice: dateChanged)
+    /// Today's session among `sessions`, in the server's order (newest update first): the first
+    /// with exactly that title and directory. The server compares directories as exact strings,
+    /// so the phone does too.
+    static func match(today: String, directory: String, in sessions: [SessionListing]) -> SessionListing? {
+        sessions.first { $0.title == today && $0.directory == directory }
     }
 
-    /// The same folder with or without a trailing slash.
-    private static func normalized(_ directory: String) -> String {
-        var path = directory
-        while path.count > 1, path.hasSuffix("/") { path.removeLast() }
-        return path
+    /// True when the app last opened a session on an earlier date than `today`.
+    static func isNewDay(lastOpenedDay: String?, today: String) -> Bool {
+        guard let lastOpenedDay else { return false }
+        return lastOpenedDay < today
+    }
+
+    /// - Parameters:
+    ///   - today: today's local date, `yyyy-MM-dd`.
+    ///   - directory: the chosen project, as saved at first run.
+    ///   - lastOpenedDay: the date of the last session the app opened, nil before the first.
+    ///   - sessions: the server's sessions, newest update first.
+    static func decide(today: String, directory: String, lastOpenedDay: String?, sessions: [SessionListing]) -> Decision {
+        if let found = match(today: today, directory: directory, in: sessions) {
+            return Decision(action: .reuse(id: found.id), showsNewDayNotice: false)
+        }
+        return Decision(action: .create(title: today), showsNewDayNotice: isNewDay(lastOpenedDay: lastOpenedDay, today: today))
     }
 }
 
-/// The server calls the daily session needs. Round 2 implements it with OpenCode's API.
+/// One page of the session list, and the cursor to the next.
+struct SessionListingPage: Equatable, Sendable {
+    var sessions: [SessionListing]
+    var next: String?
+}
+
+/// The server calls the daily session needs.
 protocol DailySessionService: Sendable {
-    /// Sessions in the project.
-    func sessions(directory: String) async throws -> [SessionListing]
-    /// Creates a session and returns its id.
-    func createSession(title: String, directory: String) async throws -> String
-    /// Adds `SessionPrompts.MessageRules` to the session.
-    func addMessageRules(sessionID: String) async throws
-    /// Opens the event stream for the session. It reconnects on its own, so it can't fail here.
-    func openStream(sessionID: String) async
+    /// Root, unarchived sessions in `directory` whose title contains `search`, newest update first;
+    /// or the page after `cursor`.
+    func sessionsPage(directory: String, search: String, limit: Int, cursor: String?) async throws -> SessionListingPage
+    /// Creates a session in `directory` with the chosen model and level.
+    func createSession(title: String, directory: String, model: ModelChoice) async throws -> SessionListing
+    /// Puts `SessionPrompts.MessageRules` on the session. A repeat changes nothing.
+    func putMessageRules(sessionID: String) async throws
 }
 
 /// The date of the last session the app opened, kept on the phone.
@@ -77,7 +88,7 @@ protocol DailySessionMemory: AnyObject {
 
 @MainActor
 final class DailySessionDefaults: DailySessionMemory {
-    private static let key = "hexcode.session.last_day"
+    static let key = "hexcode.session.last_day"
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
@@ -90,71 +101,65 @@ final class DailySessionDefaults: DailySessionMemory {
     }
 }
 
-/// Finds or creates today's session, adds the message rules to a new one, then opens the stream.
-/// Silent: a failure in finding, creating or adding the rules is `.failed`, and Try again runs it
-/// once more.
+/// Finds or creates today's session and puts the message rules on it, every time it opens. Silent:
+/// a failure in finding, creating or putting the rules is `.failed`, and Try again runs it once
+/// more. Try again finds the session again, so it never makes a second one, and still shows the
+/// new-day notice when it was due.
 @MainActor
 final class DailySessionSetup {
     enum Outcome: Equatable, Sendable {
-        case opened(sessionID: String, created: Bool, showsNewDayNotice: Bool)
+        case opened(SessionListing, created: Bool, showsNewDayNotice: Bool)
         case failed
     }
 
+    static let pageSize = 20
+    /// Pages followed at most while looking for today's session.
+    static let maxPages = 25
+
     private let service: any DailySessionService
     private let memory: any DailySessionMemory
-    /// A session created on an earlier try whose rules didn't go in yet, and whether that try was
-    /// the new day's.
-    private var unfinished: (id: String, showsNewDayNotice: Bool)?
+    /// A session created for a new day by an earlier try that failed before it finished.
+    private var noticeDueFor: String?
 
     init(service: any DailySessionService, memory: any DailySessionMemory) {
         self.service = service
         self.memory = memory
     }
 
-    func open(today: String, directory: String) async -> Outcome {
-        let decision: DailySession.Decision
+    func open(today: String, directory: String, model: ModelChoice) async -> Outcome {
+        let session: SessionListing
+        let created: Bool
+        var notice: Bool
         do {
-            let sessions = try await service.sessions(directory: directory)
-            decision = DailySession.decide(today: today, directory: directory, lastOpenedDay: memory.lastOpenedDay, sessions: sessions)
+            if let found = try await find(today: today, directory: directory) {
+                session = found
+                created = false
+                notice = noticeDueFor == found.id && DailySession.isNewDay(lastOpenedDay: memory.lastOpenedDay, today: today)
+            } else {
+                session = try await service.createSession(title: today, directory: directory, model: model)
+                created = true
+                notice = DailySession.isNewDay(lastOpenedDay: memory.lastOpenedDay, today: today)
+                if notice { noticeDueFor = session.id }
+            }
+            try await service.putMessageRules(sessionID: session.id)
         } catch {
             return .failed
         }
-
-        let id: String
-        var created = false
-        var notice = decision.showsNewDayNotice
-        switch decision.action {
-        case let .reuse(existing):
-            id = existing
-            if let unfinished, unfinished.id == existing {
-                // Created on an earlier try that failed before its rules went in.
-                created = true
-                notice = unfinished.showsNewDayNotice
-                guard await addRules(to: id, notice: notice) else { return .failed }
-            }
-        case let .create(title):
-            do {
-                id = try await service.createSession(title: title, directory: directory)
-            } catch {
-                return .failed
-            }
-            created = true
-            guard await addRules(to: id, notice: notice) else { return .failed }
-        }
-
-        unfinished = nil
+        noticeDueFor = nil
         memory.lastOpenedDay = today
-        await service.openStream(sessionID: id)
-        return .opened(sessionID: id, created: created, showsNewDayNotice: notice)
+        return .opened(session, created: created, showsNewDayNotice: notice)
     }
 
-    private func addRules(to id: String, notice: Bool) async -> Bool {
-        do {
-            try await service.addMessageRules(sessionID: id)
-            return true
-        } catch {
-            unfinished = (id, notice)
-            return false
+    /// The first exact match, following `next` only while a full page has none. An empty page is
+    /// the end.
+    private func find(today: String, directory: String) async throws -> SessionListing? {
+        var cursor: String?
+        for _ in 0 ..< Self.maxPages {
+            let page = try await service.sessionsPage(directory: directory, search: today, limit: Self.pageSize, cursor: cursor)
+            if let found = DailySession.match(today: today, directory: directory, in: page.sessions) { return found }
+            guard page.sessions.count >= Self.pageSize, let next = page.next else { return nil }
+            cursor = next
         }
+        return nil
     }
 }

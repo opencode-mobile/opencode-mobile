@@ -2,11 +2,10 @@ import SwiftUI
 import VoiceEngineKit
 
 /// Where first run lands: the agent's state in the top bar, today's session in the middle (the
-/// status card, or the draft while you talk), and the talk button. Without a session source (until
-/// round 2 wires OpenCode in) the middle shows the M1b hint instead of a status.
+/// status card, or the draft while you talk), and the talk button.
 struct HomeView: View {
     let home: HomeModel
-    var session: TodaySession?
+    let session: TodaySession
     let voice: VoiceEngine
     let onSettings: () -> Void
 
@@ -25,19 +24,12 @@ struct HomeView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .transition(.offset(y: 8).combined(with: .opacity))
-                } else if let session {
+                } else {
                     HomeStatusView(session: session)
                         .transition(.opacity)
-                } else {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Spacer().frame(height: geometry.size.height * 0.22)
-                        emptyHint
-                        Spacer(minLength: 0)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
-            if let session, !drafting, session.waitingCount > 0 {
+            if !drafting, session.waitingCount > 0 {
                 WaitingLine(count: session.waitingCount) { session.openDetails() }
                     .padding(.bottom, 10)
                     .transition(.opacity)
@@ -50,37 +42,22 @@ struct HomeView: View {
         .padding(.horizontal, HexSpacing.screenHome)
         .hexScreenBackground()
         .animation(HexMotion.ease(HexMotion.fade), value: drafting)
-        .animation(HexMotion.ease(HexMotion.fade), value: session?.waitingCount)
-    }
-
-    private var emptyHint: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(LocalizedStringResource("home.empty.title", defaultValue: "Say what you want done"))
-                .hexFont(HexTextStyle.draft.weight(.semibold))
-                .foregroundStyle(HexColor.text1)
-            Text(LocalizedStringResource(
-                "home.empty.body",
-                defaultValue: "Hold the button and talk. Text appears when you pause, and stays here: sending comes next."
-            ))
-            .hexFont(.body)
-            .foregroundStyle(HexColor.text2)
-        }
-        .transition(.opacity)
+        .animation(HexMotion.ease(HexMotion.fade), value: session.waitingCount)
     }
 }
 
-/// The agent's state on the left (Reconnecting…, Needs input, Working m:ss or Idle), ⚙ on the
-/// right. The goal button joins in a later milestone.
+/// The agent's state on the left (Reconnecting…, Needs input, Working m:ss or Idle; empty while
+/// today's session is set up), ⚙ on the right. The goal button joins in a later milestone.
 struct HomeTopBar: View {
-    let session: TodaySession?
+    let session: TodaySession
     let onSettings: () -> Void
 
     var body: some View {
-        let state = session?.agentState ?? .idle
+        let state = session.agentState
         TimelineView(.periodic(from: .now, by: 1)) { context in
             HexTopBar(
-                state: state.topBar(at: context.date),
-                onTitle: state == .needsInput ? { session?.openPendingInput() } : nil
+                state: state?.topBar(at: context.date),
+                onTitle: state == .needsInput ? { session.openPendingInput() } : nil
             ) {
                 HexRoundButton(.gear, label: LocalizedStringResource("home.settings", defaultValue: "Settings"), action: onSettings)
             }

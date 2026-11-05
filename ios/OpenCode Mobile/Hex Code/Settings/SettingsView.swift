@@ -115,6 +115,18 @@ struct SettingsView: View {
             value: main.build.versionLabel,
             trailing: .none
         ) { main.copyBuild() }
+        HexRow(
+            icon: .play,
+            verbatim: "Sample session",
+            subtitle: "Home shows a fake session instead of today's",
+            value: main.samplePreset?.rawValue ?? "Off",
+            trailing: .none
+        ) { main.cycleSampleSession() }
+        #if DEBUG
+        HexRow(icon: .refresh, verbatim: "Drop event stream", subtitle: "Down for 10 s, then it reconnects and reads the state again", trailing: .none) {
+            main.realSession.dropStream()
+        }
+        #endif
         HexRow(icon: .lock, verbatim: "Hide developer settings", trailing: .none) {
             main.developer.hide()
         }
@@ -150,6 +162,8 @@ struct HexMainView: View {
     @Binding var appearance: HexAppearance
     let onForgetServer: () -> Void
 
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some View {
         NavigationStack(path: $main.path) {
             HomeView(home: main.home, session: main.session, voice: voice, onSettings: { main.openSettings() })
@@ -159,6 +173,14 @@ struct HexMainView: View {
                 }
         }
         .hexToastHost(main.toasts)
+        .task { await main.realSession.open() }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active: Task { await main.realSession.enteredForeground() }
+            case .background: main.realSession.enteredBackground()
+            default: break
+            }
+        }
     }
 
     @ViewBuilder
