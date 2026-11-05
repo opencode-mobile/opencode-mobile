@@ -10,7 +10,8 @@ protocol SummaryGenerating: Sendable {
 /// The status summary on home and its ↻. Refreshed when the session opens or reconnects, when a
 /// run ends and on ↻; never on a timer. A refresh asked for while one runs is dropped. A request
 /// that fails, times out (60 s) or answers with no text keeps the last card and shows
-/// "Couldn't update".
+/// "Couldn't update" — except an empty answer while the agent works (the server often gives one
+/// then): the last card stays without the note, and the run's end refreshes it.
 @MainActor
 @Observable
 final class StatusSummaryModel {
@@ -23,6 +24,8 @@ final class StatusSummaryModel {
     private(set) var failed = false
 
     @ObservationIgnored var generator: (any SummaryGenerating)?
+    /// Whether the agent is working now, asked when an empty answer comes back.
+    @ObservationIgnored var isWorking: () -> Bool = { false }
     @ObservationIgnored private let now: () -> Date
     @ObservationIgnored private let timeout: Duration
     @ObservationIgnored private var inFlight: Task<Void, Never>?
@@ -35,11 +38,11 @@ final class StatusSummaryModel {
 
     /// A session that never ran: the long-date card, with no request. A request on its way is
     /// dropped.
-    func showEmpty(locale: Locale = .current, timeZone: TimeZone = .current) {
+    func showEmpty(timeZone: TimeZone = .current) {
         inFlight?.cancel()
         inFlight = nil
         isUpdating = false
-        summary = .card(.empty(on: now(), locale: locale, timeZone: timeZone))
+        summary = .card(.empty(on: now(), timeZone: timeZone))
         updatedAt = now()
         failed = false
     }
@@ -72,7 +75,8 @@ final class StatusSummaryModel {
         isUpdating = false
         inFlight = nil
         guard let reply, !reply.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            failed = true
+            // No text while the agent works keeps the last card as it is; anything else failed.
+            failed = !(reply != nil && isWorking())
             return
         }
         summary = StatusSummary.parse(reply)

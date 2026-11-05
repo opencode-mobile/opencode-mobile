@@ -178,16 +178,17 @@ struct StatusSummaryTests {
 
     // MARK: The empty session
 
-    @Test func theEmptyCardUsesTheLongDateInThePhonesFormat() {
+    @Test func theEmptyCardTitleIsTheLongDateInEnglishDayFirst() {
         let utc = TimeZone(identifier: "UTC")!
         let thursday = Date(timeIntervalSince1970: 1_793_880_000) // 2026-11-05 12:00 UTC
-        let british = StatusCard.empty(on: thursday, locale: Locale(identifier: "en_GB"), timeZone: utc)
-        #expect(british.title == "Thursday 5 November")
-        #expect(british.now == "New session. Nothing running yet.")
-        #expect(british.next == "Say what to do.")
-        #expect(british.steps.isEmpty)
-        let american = StatusCard.empty(on: thursday, locale: Locale(identifier: "en_US"), timeZone: utc)
-        #expect(american.title == "Thursday, November 5")
+        let card = StatusCard.empty(on: thursday, timeZone: utc)
+        #expect(card.title == "Thursday 5 November")
+        #expect(card.now == "New session. Nothing running yet.")
+        #expect(card.next == "Say what to do.")
+        #expect(card.steps.isEmpty)
+        // The phone's region doesn't change it (the formatter ignores Locale.current).
+        #expect(StatusCard.longDate(thursday + 86400 * 3, timeZone: utc) == "Sunday 8 November")
+        #expect(StatusCard.longDate(thursday, timeZone: TimeZone(identifier: "Pacific/Kiritimati")!) == "Friday 6 November")
     }
 
     // MARK: ↻
@@ -282,6 +283,33 @@ struct StatusSummaryModelTests {
         #expect(model.failed)
     }
 
+    @Test func anEmptyReplyWhileWorkingKeepsTheLastCardWithoutTheNote() async {
+        let generator = HeldGenerator()
+        let model = StatusSummaryModel(generator: generator)
+        async let first: Void = model.refresh()
+        await waitUntil { generator.isWaiting }
+        generator.releaseAll()
+        await first
+        let card = model.summary
+        let updated = model.updatedAt
+        model.isWorking = { true }
+        generator.reply = .success("")
+        async let second: Void = model.refresh()
+        await waitUntil { generator.isWaiting }
+        generator.releaseAll()
+        await second
+        #expect(model.summary == card)
+        #expect(model.updatedAt == updated)
+        #expect(!model.failed)
+        // An error while working is still a failed update.
+        generator.reply = .failure(Failure())
+        async let third: Void = model.refresh()
+        await waitUntil { generator.isWaiting }
+        generator.releaseAll()
+        await third
+        #expect(model.failed)
+    }
+
     @Test func aRequestPastTheTimeoutFails() async {
         let generator = HeldGenerator()
         let model = StatusSummaryModel(generator: generator, timeout: .milliseconds(50))
@@ -346,7 +374,7 @@ struct StatusSummaryModelTests {
     @Test func theEmptySessionMakesNoRequest() async {
         let generator = HeldGenerator()
         let model = StatusSummaryModel(generator: generator)
-        model.showEmpty(locale: Locale(identifier: "en_GB"))
+        model.showEmpty()
         #expect(generator.requests == 0)
         guard case let .card(card) = model.summary else {
             Issue.record("expected the empty card")

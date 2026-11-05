@@ -164,7 +164,7 @@ final class HexMainModel {
         await picker.browse()
     }
 
-    /// A new project. Sessions are not wired up yet, so it only changes where the next one starts.
+    /// A new project: today's session there opens at once.
     func pickProject(_ project: ChosenProject) async {
         var next = setup
         next.project = project
@@ -172,9 +172,9 @@ final class HexMainModel {
         path = [.settings]
         toasts.show(HexToastItem(
             tone: .steer,
-            title: String(localized: "settings.project_changed", defaultValue: "Now in \(project.name)"),
-            detail: String(localized: "settings.project_changed.sub", defaultValue: "The next session starts there.")
+            title: String(localized: "settings.project_changed", defaultValue: "Now in \(project.name)")
         ))
+        await realSession.projectChanged()
     }
 
     // MARK: Model

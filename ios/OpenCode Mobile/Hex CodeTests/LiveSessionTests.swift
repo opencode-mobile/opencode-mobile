@@ -414,3 +414,159 @@ struct TodaySessionLiveTests {
         #expect(server.calls.last == .model("ses_new1", next))
     }
 }
+
+/// A wait the test ends by hand.
+@MainActor
+final class Gate: @unchecked Sendable {
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+    private var isOpen = false
+
+    func wait() async {
+        if isOpen { return }
+        await withCheckedContinuation { waiting.append($0) }
+    }
+
+    func open() {
+        isOpen = true
+        waiting.forEach { $0.resume() }
+        waiting = []
+    }
+}
+
+/// The parts of the stream's life that need time: the background grace, the silence watchdog,
+/// the network's return, and a project change.
+@MainActor
+struct LiveSessionTimingTests {
+    final class Clock: @unchecked Sendable {
+        var now = Date(timeIntervalSince1970: 1_793_880_000)
+    }
+
+    private func make(
+        _ server: FakeSessionServer,
+        clock: Clock = Clock(),
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { _ in try await Task.sleep(for: .milliseconds(10)) },
+        watchdog: Duration = .seconds(5),
+        directory: @escaping () -> String = { "/p" }
+    ) -> (TodaySession, LiveEventStream, FakeTransport) {
+        let transport = FakeTransport()
+        let stream = LiveEventStream(transport: transport, now: { clock.now }, sleep: sleep, watchdogInterval: watchdog)
+        let session = TodaySession(
+            setup: DailySessionSetup(service: server, memory: FakeMemory("2026-11-05")),
+            summary: StatusSummaryModel(),
+            directory: directory,
+            model: { ModelChoice(providerID: "opencode", modelID: "big-pickle", variant: nil) },
+            toasts: HexToaster(),
+            api: server,
+            stream: stream,
+            now: { clock.now },
+            timeZone: TimeZone(identifier: "UTC")!
+        )
+        return (session, stream, transport)
+    }
+
+    private func eventually(_ condition: @MainActor () -> Bool) async {
+        for _ in 0 ..< 200 where !condition() {
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+    }
+
+    private func settle() async {
+        try? await Task.sleep(for: .milliseconds(80))
+    }
+
+    @Test func theStreamClosesOnlyAfterTheBackgroundGrace() async {
+        let server = FakeSessionServer()
+        let (session, stream, transport) = make(server)
+        await session.open()
+        await eventually { transport.connections == 1 }
+        let gate = Gate()
+        var asked: [Duration] = []
+        session.sleep = { duration in
+            await MainActor.run { asked.append(duration) }
+            await gate.wait()
+        }
+        session.enteredBackground()
+        await settle()
+        #expect(asked == [.seconds(5)])
+        #expect(stream.isRunning)
+        gate.open()
+        await eventually { !stream.isRunning }
+        #expect(!stream.isRunning)
+    }
+
+    @Test func comingBackWithinTheGraceKeepsTheStream() async {
+        let server = FakeSessionServer()
+        let (session, stream, transport) = make(server)
+        await session.open()
+        await eventually { transport.connections == 1 }
+        let gate = Gate()
+        session.sleep = { _ in await gate.wait() }
+        session.enteredBackground()
+        await settle()
+        await session.enteredForeground()
+        gate.open()
+        await settle()
+        #expect(stream.isRunning)
+        #expect(transport.connections == 1)
+    }
+
+    @Test func thirtyFiveSecondsOfSilenceCountAsDown() async {
+        let server = FakeSessionServer()
+        let clock = Clock()
+        let (session, _, transport) = make(server, clock: clock, watchdog: .milliseconds(10))
+        await session.open()
+        await eventually { transport.connections == 1 }
+        transport.send(EventLines.connected)
+        await eventually { server.calls.contains(.snapshot("ses_new1")) }
+        // A line (a heartbeat would do) inside 35 s keeps it.
+        clock.now += 30
+        transport.send(EventLines.connected)
+        await settle()
+        clock.now += 30
+        await settle()
+        #expect(transport.connections == 1)
+        // More than 35 s without a line: the watchdog drops it and it reconnects.
+        clock.now += 6
+        await eventually { transport.connections == 2 }
+        #expect(transport.connections == 2)
+    }
+
+    @Test func theNetworkComingBackRetriesAtOnce() async {
+        let server = FakeSessionServer()
+        // Backoff waits that only a wake ends.
+        let (session, stream, transport) = make(server, sleep: { _ in try await Task.sleep(for: .seconds(60)) })
+        await session.open()
+        await eventually { transport.connections == 1 }
+        transport.send(EventLines.connected)
+        transport.drop()
+        await eventually { session.agentState == .reconnecting }
+        stream.networkChanged(satisfied: true)
+        await settle()
+        #expect(transport.connections == 1)
+        stream.networkChanged(satisfied: false)
+        stream.networkChanged(satisfied: true)
+        await eventually { transport.connections == 2 }
+        #expect(transport.connections == 2)
+    }
+
+    @Test func aNewProjectOpensTodaysSessionThereAndLeavesTheOldOne() async {
+        let server = FakeSessionServer()
+        var directory = "/p"
+        let (session, _, transport) = make(server, directory: { directory })
+        await session.open()
+        #expect(session.sessionID == "ses_new1")
+        await eventually { transport.connections == 1 }
+        directory = "/q"
+        await session.projectChanged()
+        #expect(session.sessionID == "ses_new2")
+        #expect(server.listed.first { $0.id == "ses_new2" }?.directory == "/q")
+        #expect(server.calls.last(where: { if case .rules = $0 { true } else { false } }) == .rules("ses_new2"))
+        #expect(!server.calls.contains(.rules("ses_new1")) || server.calls.filter { $0 == .rules("ses_new1") }.count == 1)
+        await eventually { transport.connections == 2 }
+        #expect(transport.connections == 2)
+        // Back to the first project: its session is found again, not made again.
+        directory = "/p"
+        await session.projectChanged()
+        #expect(session.sessionID == "ses_new1")
+    }
+}

@@ -23,6 +23,9 @@ final class TodaySession {
     /// The stream closes this long after the app goes to the background.
     static let backgroundGrace: Duration = .seconds(5)
 
+    /// Waits; a test passes its own.
+    @ObservationIgnored var sleep: @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+
     private(set) var setup: Setup = .opening
     var streamUp = true
     var pendingInput: PendingItem?
@@ -70,6 +73,7 @@ final class TodaySession {
         stream?.onConnected = { [weak self] in await self?.connected() }
         stream?.onDisconnected = { [weak self] in self?.streamUp = false }
         stream?.onEvent = { [weak self] in self?.received($0) }
+        summary.isWorking = { [weak self] in self?.busySince != nil }
     }
 
     /// The top bar's state; nil (empty) until today's session is open.
@@ -150,8 +154,9 @@ final class TodaySession {
     func enteredBackground() {
         guard let stream else { return }
         backgroundStop?.cancel()
+        let sleep = sleep
         backgroundStop = Task { [weak self] in
-            try? await Task.sleep(for: Self.backgroundGrace)
+            try? await sleep(Self.backgroundGrace)
             guard !Task.isCancelled else { return }
             stream.stop()
             self?.backgroundStop = nil
@@ -159,6 +164,13 @@ final class TodaySession {
     }
 
     // MARK: Model
+
+    /// Settings › Project changed: open today's session in the new project (found or created, rules
+    /// put, the stream reopened). The old project's session is left as it is.
+    func projectChanged() async {
+        guard api != nil else { return }
+        await open()
+    }
 
     /// Settings › Model changed: the session's model follows (`POST /api/session/{id}/model`).
     func switchModel(_ choice: ModelChoice) async {

@@ -20,6 +20,7 @@ final class LiveEventStream {
     private let transport: any EventStreamTransport
     private let now: () -> Date
     private let sleep: @Sendable (Duration) async throws -> Void
+    private let watchdogInterval: Duration
     private var loop: Task<Void, Never>?
     private var attemptTask: Task<SseAttemptOutcome, Error>?
     private var waitTask: Task<Void, Error>?
@@ -28,16 +29,19 @@ final class LiveEventStream {
     private var lastActivity = Date()
     private var attempt = 0
     private var holdUntil: Date?
+    private var networkSatisfied = true
     private(set) var isUp = false
 
     init(
         transport: any EventStreamTransport,
         now: @escaping () -> Date = Date.init,
-        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) }
+        sleep: @escaping @Sendable (Duration) async throws -> Void = { try await Task.sleep(for: $0) },
+        watchdogInterval: Duration = LiveEventStream.watchdogInterval
     ) {
         self.transport = transport
         self.now = now
         self.sleep = sleep
+        self.watchdogInterval = watchdogInterval
     }
 
     var isRunning: Bool { loop != nil }
@@ -78,15 +82,19 @@ final class LiveEventStream {
     func watchNetwork() {
         guard pathMonitor == nil else { return }
         let monitor = NWPathMonitor()
-        var wasSatisfied = true
         monitor.pathUpdateHandler = { [weak self] path in
             let satisfied = path.status == .satisfied
-            defer { wasSatisfied = satisfied }
-            guard satisfied, !wasSatisfied else { return }
-            Task { @MainActor in self?.wake() }
+            Task { @MainActor in self?.networkChanged(satisfied: satisfied) }
         }
         monitor.start(queue: DispatchQueue(label: "hexcode.event-stream.path"))
         pathMonitor = monitor
+    }
+
+    /// The network path changed; its return wakes the stream at once.
+    func networkChanged(satisfied: Bool) {
+        let returned = satisfied && !networkSatisfied
+        networkSatisfied = satisfied
+        if returned { wake() }
     }
 
     private func run() async {
@@ -129,7 +137,7 @@ final class LiveEventStream {
 
     private func watch() async {
         while !Task.isCancelled {
-            try? await Task.sleep(for: Self.watchdogInterval)
+            try? await Task.sleep(for: watchdogInterval)
             guard let attemptTask, now().timeIntervalSince(lastActivity) > Self.stallTimeout else { continue }
             attemptTask.cancel()
         }

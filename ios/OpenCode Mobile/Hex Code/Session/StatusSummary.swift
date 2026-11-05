@@ -15,22 +15,23 @@ struct StatusCard: Equatable, Sendable {
 
     var doneCount: Int { steps.filter(\.done).count }
 
-    /// A session with nothing in it yet: no request. The title is today's long date in the phone's
-    /// own format ("Thursday 5 November" in en-GB, "Thursday, November 5" in en-US).
-    static func empty(on date: Date, locale: Locale = .current, timeZone: TimeZone = .current) -> StatusCard {
+    /// A session that never ran: no request. The title is today's long date in English, day before
+    /// month, whatever the phone's region ("Thursday 5 November").
+    static func empty(on date: Date, timeZone: TimeZone = .current) -> StatusCard {
         StatusCard(
-            title: longDate(date, locale: locale, timeZone: timeZone),
+            title: longDate(date, timeZone: timeZone),
             now: String(localized: "home.summary.empty.now", defaultValue: "New session. Nothing running yet."),
             next: String(localized: "home.summary.empty.next", defaultValue: "Say what to do.")
         )
     }
 
-    /// Weekday, day and month, without the year, in the locale's order.
-    static func longDate(_ date: Date, locale: Locale, timeZone: TimeZone) -> String {
+    /// "Thursday 5 November": weekday, day and month in English, in that order, on every phone.
+    static func longDate(_ date: Date, timeZone: TimeZone) -> String {
         let formatter = DateFormatter()
-        formatter.locale = locale
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.calendar = Calendar(identifier: .gregorian)
         formatter.timeZone = timeZone
-        formatter.setLocalizedDateFormatFromTemplate("EEEEdMMMM")
+        formatter.dateFormat = "EEEE d MMMM"
         return formatter.string(from: date)
     }
 }
