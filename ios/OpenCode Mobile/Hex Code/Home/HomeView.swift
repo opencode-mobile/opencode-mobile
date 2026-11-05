@@ -14,21 +14,18 @@ struct HomeView: View {
     var body: some View {
         VStack(spacing: 0) {
             HomeTopBar(session: session, onSettings: onSettings)
-            GeometryReader { geometry in
+            // The status card, its fallback, the setup failure and the draft all hang from the same
+            // line, 26 % down, so switching between them moves nothing (the prototype's `.fx-sp`).
+            HangingLayout(fraction: 0.26) {
                 if drafting {
-                    // The draft hangs from a fixed line about a quarter down, so nothing jumps between states.
-                    VStack(alignment: .leading, spacing: 14) {
-                        Spacer().frame(height: geometry.size.height * 0.22)
-                        DraftView(home: home)
-                        Spacer(minLength: 0)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .transition(.offset(y: 8).combined(with: .opacity))
+                    DraftView(home: home)
+                        .transition(.opacity)
                 } else {
                     HomeStatusView(session: session)
                         .transition(.opacity)
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             if !drafting, session.waitingCount > 0 {
                 WaitingLine(count: session.waitingCount) { session.openDetails() }
                     .padding(.bottom, 10)
@@ -74,7 +71,7 @@ struct DraftView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             label
-                .frame(height: 18)
+                .frame(height: HomeLabel.height)
             if draft.isLong {
                 ChunkListView(home: home)
             } else {
@@ -271,5 +268,27 @@ enum DraftClock {
     static func format(_ seconds: TimeInterval) -> String {
         let total = max(0, Int(seconds.rounded()))
         return String(format: "%d:%02d", total / 60, total % 60)
+    }
+}
+
+/// Places its content from a line `fraction` of the way down, and higher only when the content
+/// would not fit below it (a long draft), like the prototype's shrinking `.fx-sp` spacer.
+struct HangingLayout: Layout {
+    var fraction: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        for subview in subviews {
+            let height = min(subview.sizeThatFits(ProposedViewSize(width: bounds.width, height: nil)).height, bounds.height)
+            let top = min(bounds.height * fraction, max(0, bounds.height - height))
+            subview.place(
+                at: CGPoint(x: bounds.minX, y: bounds.minY + top),
+                anchor: .topLeading,
+                proposal: ProposedViewSize(width: bounds.width, height: bounds.height - top)
+            )
+        }
     }
 }

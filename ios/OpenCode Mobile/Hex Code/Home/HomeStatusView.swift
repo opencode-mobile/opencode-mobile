@@ -33,7 +33,7 @@ struct HomeStatusView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .animation(HexMotion.ease(HexMotion.fade), value: session.summary.summary)
         .animation(HexMotion.ease(HexMotion.fade), value: session.pendingInput)
     }
@@ -51,6 +51,7 @@ struct StatusCardView: View {
                 .hexFont(HexTextStyle.caption.weight(.medium))
                 .foregroundStyle(HexColor.text3)
                 .lineLimit(1)
+                .frame(height: HomeLabel.height)
             Text(verbatim: card.now)
                 .hexFont(.display)
                 .foregroundStyle(HexColor.text1)
@@ -93,6 +94,7 @@ struct FallbackCardView: View {
             Text(LocalizedStringResource("home.summary.fallback.title", defaultValue: "Status"))
                 .hexFont(HexTextStyle.caption.weight(.medium))
                 .foregroundStyle(HexColor.text3)
+                .frame(height: HomeLabel.height)
             Text(verbatim: text)
                 .hexFont(.body)
                 .foregroundStyle(HexColor.text2)
@@ -241,4 +243,10 @@ struct WaitingLine: View {
         }
         .buttonStyle(HexPressStyle())
     }
+}
+
+/// The small label every home body starts with (card title, "Status", the draft's line): one
+/// height, so it sits on the same line in each.
+enum HomeLabel {
+    static let height: CGFloat = 18
 }
