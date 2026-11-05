@@ -36,7 +36,7 @@ class ModelTesterTest {
                 }
             val client = HttpClient(engine) { defaultRequest { url("http://192.168.1.2:4096/") } }
             val result = ModelTester(json, { client }).test(ModelChoice("anthropic", "claude-opus-5-5", "high"), "/Users/example/project")
-            assertEquals("/api/experimental/generate", path)
+            assertEquals("/api/experimental/generate/text", path)
             assertEquals(HttpMethod.Post, method)
             assertEquals(
                 """{"prompt":"Reply with OK","model":{"id":"claude-opus-5-5","providerID":"anthropic","variant":"high"}}""",
@@ -106,7 +106,7 @@ class ModelTesterTest {
             calls += "${request.method.value} ${request.url.encodedPath} $body".trim()
             val (status, text) =
                 when (request.url.encodedPath) {
-                    "/api/experimental/generate" -> HttpStatusCode.BadGateway to freeLimit
+                    "/api/experimental/generate/text" -> HttpStatusCode.BadGateway to freeLimit
                     "/api/session" -> create()
                     "/api/session/ses_test/generate" -> generate()
                     else -> HttpStatusCode.NoContent to ""
@@ -183,7 +183,7 @@ class ModelTesterTest {
                     client
                 }).test(ModelChoice("google", "gemini"), null),
             )
-            assertEquals(listOf("/api/experimental/generate"), calls)
+            assertEquals(listOf("/api/experimental/generate/text"), calls)
         }
 
     @Test

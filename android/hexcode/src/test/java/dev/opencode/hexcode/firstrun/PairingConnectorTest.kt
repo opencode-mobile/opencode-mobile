@@ -125,8 +125,8 @@ class PairingConnectorTest {
     @Test
     fun missingRoutesStopPairing() =
         runTest {
-            val result = connector(FakeServer(setOf(lan, tailnet)), missing = listOf("/api/experimental/generate")).connect(code)
-            assertEquals(ConnectResult.Failed(ConnectFailure.MissingRoutes(listOf("/api/experimental/generate"))), result)
+            val result = connector(FakeServer(setOf(lan, tailnet)), missing = listOf("/api/experimental/generate/text")).connect(code)
+            assertEquals(ConnectResult.Failed(ConnectFailure.MissingRoutes(listOf("/api/experimental/generate/text"))), result)
         }
 
     @Test

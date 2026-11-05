@@ -79,7 +79,7 @@ class ModelTester(
         val started = clock()
         return try {
             val response =
-                client().post("api/experimental/generate") {
+                client().post("api/experimental/generate/text") {
                     contentType(ContentType.Application.Json)
                     setBody(json.encodeToString(Body.serializer(), body(choice)))
                 }
