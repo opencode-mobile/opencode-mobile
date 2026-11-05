@@ -96,8 +96,8 @@ private fun Lists() {
 @Composable
 private fun Talk() {
     Column(Modifier.padding(horizontal = 22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        HexChunkText(
-            listOf(HexChunk("Rename the login screen", HexChunkKind.Text), HexChunk("and add a test.", HexChunkKind.Text)),
+        HexChunk(
+            listOf(HexChunkItem("Rename the login screen", HexChunkKind.Text), HexChunkItem("and add a test.", HexChunkKind.Text)),
             selected = 1,
             recording = false,
             onSelect = {},

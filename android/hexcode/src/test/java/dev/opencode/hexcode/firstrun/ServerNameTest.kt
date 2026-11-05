@@ -7,14 +7,14 @@ import org.junit.Test
 class ServerNameTest {
     @Test
     fun namesFromThePlan() {
-        assertEquals("Rapid Bison", ServerName.of("Ivans-MacBook-Pro.local", "http://192.168.1.2:4096"))
+        assertEquals("Bold Quokka", ServerName.of("Example-MacBook-Pro.local", "http://192.168.1.2:4096"))
         assertEquals("Spry Seal", ServerName.of("mbp", "http://192.168.1.2:4096"))
         assertEquals("Quiet Lynx", ServerName.of("opencode-dev", "http://192.168.1.2:4096"))
     }
 
     @Test
     fun theHostnameIsLowercasedWithoutLocal() {
-        assertEquals("ivans-macbook-pro", ServerName.seed("Ivans-MacBook-Pro.local", "http://192.168.1.2:4096"))
+        assertEquals("example-macbook-pro", ServerName.seed("Example-MacBook-Pro.local", "http://192.168.1.2:4096"))
         assertEquals(ServerName.of("mbp"), ServerName.of("MBP.local", "http://192.168.1.2:4096"))
     }
 

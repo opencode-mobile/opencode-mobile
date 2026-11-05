@@ -54,10 +54,10 @@ import dev.opencode.hexcode.designsystem.components.HexAgentState
 import dev.opencode.hexcode.designsystem.components.HexButton
 import dev.opencode.hexcode.designsystem.components.HexButtonStyle
 import dev.opencode.hexcode.designsystem.components.HexChunk
+import dev.opencode.hexcode.designsystem.components.HexChunkItem
 import dev.opencode.hexcode.designsystem.components.HexChunkKind
 import dev.opencode.hexcode.designsystem.components.HexChunkRow
 import dev.opencode.hexcode.designsystem.components.HexChunkRowState
-import dev.opencode.hexcode.designsystem.components.HexChunkText
 import dev.opencode.hexcode.designsystem.components.HexDot
 import dev.opencode.hexcode.designsystem.components.HexDotTone
 import dev.opencode.hexcode.designsystem.components.HexRoundButton
@@ -277,13 +277,13 @@ private fun DraftText(
 ) {
     val listening = stringResource(R.string.draft_listening)
     val transcribing = stringResource(R.string.draft_transcribing_chunk)
-    HexChunkText(
+    HexChunk(
         chunks =
             draft.shown.map { chunk ->
                 when (val s = chunk.state) {
-                    ChunkState.Listening -> HexChunk(listening, HexChunkKind.Listening)
-                    ChunkState.Transcribing -> HexChunk(transcribing, HexChunkKind.Transcribing)
-                    is ChunkState.Text -> HexChunk(s.text, HexChunkKind.Text)
+                    ChunkState.Listening -> HexChunkItem(listening, HexChunkKind.Listening)
+                    ChunkState.Transcribing -> HexChunkItem(transcribing, HexChunkKind.Transcribing)
+                    is ChunkState.Text -> HexChunkItem(s.text, HexChunkKind.Text)
                 }
             },
         selected = draft.selected,

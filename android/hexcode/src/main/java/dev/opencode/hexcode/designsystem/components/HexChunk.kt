@@ -45,8 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.opencode.hexcode.designsystem.HexTheme
 
-/** One chunk of a draft, as [HexChunkText] and [HexChunkRow] show it. */
-data class HexChunk(
+/** One chunk of a draft, as [HexChunk] and [HexChunkRow] show it. */
+data class HexChunkItem(
     val text: String,
     val kind: HexChunkKind,
 )
@@ -73,8 +73,8 @@ enum class HexChunkRowState { Normal, Selected, Dim, Past }
  * kept, so the draft never jumps as it fills.
  */
 @Composable
-fun HexChunkText(
-    chunks: List<HexChunk>,
+fun HexChunk(
+    chunks: List<HexChunkItem>,
     selected: Int?,
     recording: Boolean,
     onSelect: (Int) -> Unit,

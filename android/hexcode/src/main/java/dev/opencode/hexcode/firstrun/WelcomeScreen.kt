@@ -78,7 +78,7 @@ fun WelcomeScreen(onScan: () -> Unit) {
                 HorizontalDivider(color = colors.line)
                 Text(
                     stringResource(R.string.welcome_rule_title),
-                    style = type.headline,
+                    style = type.pageTitle,
                     color = colors.text1,
                     modifier = Modifier.padding(top = 16.dp),
                 )

@@ -62,7 +62,7 @@ fun HexTopBar(
         Column(Modifier.weight(1f)) {
             Text(
                 title,
-                style = HexTheme.type.headline,
+                style = HexTheme.type.pageTitle,
                 color = colors.text1,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,

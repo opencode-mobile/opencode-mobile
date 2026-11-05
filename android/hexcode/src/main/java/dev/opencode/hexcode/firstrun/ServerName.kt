@@ -88,7 +88,7 @@ object ServerName {
         return if (host.isNullOrEmpty()) firstAddress.trim().trimEnd('/') else host
     }
 
-    /** `Rapid Bison` for `ivans-macbook-pro`: an adjective and an animal picked by a 32-bit FNV-1a hash of [seed]. */
+    /** `Bold Quokka` for `example-macbook-pro`: an adjective and an animal picked by a 32-bit FNV-1a hash of [seed]. */
     fun of(seed: String): String {
         val h = fnv1a(seed)
         return adjectives[(h % 32u).toInt()] + " " + animals[((h shr 8) % 32u).toInt()]

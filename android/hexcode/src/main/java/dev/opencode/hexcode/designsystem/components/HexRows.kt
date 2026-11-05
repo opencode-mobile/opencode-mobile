@@ -230,7 +230,7 @@ fun HexBadge(
     ) {
         Text(
             text,
-            style = if (mono) HexTheme.type.monoSmall else HexTheme.type.footnote.copy(fontWeight = FontWeight.Medium),
+            style = if (mono) HexTheme.type.monoSmall else HexTheme.type.badge,
             color = HexTheme.colors.text2,
             maxLines = 1,
         )

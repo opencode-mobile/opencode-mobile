@@ -23,6 +23,8 @@ class HexTypography(
     val display: TextStyle,
     /** 26 / semibold, −0.025 em: first-run headings. */
     val title: TextStyle,
+    /** 20 / semibold, −0.02 em: page titles (pickers, Settings), the welcome rule. */
+    val pageTitle: TextStyle,
     /** 24 / medium, line 1.3, −0.015 em: the dictation draft. */
     val draft: TextStyle,
     /** 17 / semibold, −0.015 em: the top bar. */
@@ -45,6 +47,8 @@ class HexTypography(
     val footnote: TextStyle,
     /** 12 / semibold, +0.06 em, upper case: section headings. */
     val sectionLabel: TextStyle,
+    /** 11 / medium: bordered badges. */
+    val badge: TextStyle,
     /** 11.5 / regular, monospace: timers, counts. */
     val mono: TextStyle,
     /** 10.5 / regular, monospace: the `git` badge. */
@@ -72,6 +76,7 @@ class HexTypography(
             HexTypography(
                 display = style(30f, FontWeight.SemiBold, (-0.028).em, 1.18.em),
                 title = style(26f, FontWeight.SemiBold, (-0.025).em),
+                pageTitle = style(20f, FontWeight.SemiBold, (-0.02).em),
                 draft = style(24f, FontWeight.Medium, (-0.015).em, 1.3.em),
                 headline = style(17f, FontWeight.SemiBold, (-0.015).em),
                 body = style(15f, line = 1.45.em),
@@ -83,6 +88,7 @@ class HexTypography(
                 caption = style(12.5f),
                 footnote = style(12f),
                 sectionLabel = style(12f, FontWeight.SemiBold, 0.06.em),
+                badge = style(11f, FontWeight.Medium),
                 mono = style(11.5f, family = FontFamily.Monospace),
                 monoSmall = style(10.5f, family = FontFamily.Monospace),
             )
