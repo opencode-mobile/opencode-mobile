@@ -160,6 +160,7 @@
 				HXC000000000000000000005 /* Sources */,
 				HXC000000000000000000003 /* Frameworks */,
 				HXC000000000000000000004 /* Resources */,
+				HXC000000000000000000020 /* Stamp git commit */,
 			);
 			buildRules = (
 			);
@@ -377,6 +378,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		HXC000000000000000000020 /* Stamp git commit */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Stamp git commit";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "INFO=\"${TARGET_BUILD_DIR}/${INFOPLIST_PATH}\"\nCOMMIT=\"$(git -C \"${SRCROOT}\" rev-parse --short=12 HEAD 2>/dev/null || true)\"\n[ -f \"$INFO\" ] || exit 0\n/usr/libexec/PlistBuddy -c \"Delete :HexGitCommit\" \"$INFO\" >/dev/null 2>&1 || true\n[ -n \"$COMMIT\" ] || exit 0\n/usr/libexec/PlistBuddy -c \"Add :HexGitCommit string ${COMMIT}\" \"$INFO\"\n";
+		};
 		63OCVER001FCB5000002BDFFC /* Set marketing version from VERSION */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;

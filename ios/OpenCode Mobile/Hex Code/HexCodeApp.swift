@@ -11,9 +11,7 @@ struct HexCodeApp: App {
                 if Self.runsSpeechLab {
                     DictationScreen()
                 } else if Self.showsGallery {
-                    #if DEBUG
                     HexGallery().hexTheme(appearance.colorScheme)
-                    #endif
                 } else {
                     HexRootView(app: app, appearance: $appearance)
                         .hexTheme(appearance.colorScheme)
@@ -22,7 +20,8 @@ struct HexCodeApp: App {
         }
     }
 
-    /// `-HexCodeGallery YES` opens the design system gallery.
+    /// `-HexCodeGallery YES` opens the design system gallery on its own. Developer settings open it in
+    /// every build.
     private static var showsGallery: Bool {
         #if DEBUG
         return UserDefaults.standard.bool(forKey: "HexCodeGallery")
@@ -32,7 +31,8 @@ struct HexCodeApp: App {
     }
 
     /// `-HexCodeLab <folder>` and `-HexCodeSample <file>` open the dictation lab screen, which runs
-    /// the speech model lab clip sets on the phone.
+    /// the speech model lab clip sets on the phone. Developer settings open it in every build as the
+    /// Speech lab.
     private static var runsSpeechLab: Bool {
         #if DEBUG
         let defaults = UserDefaults.standard

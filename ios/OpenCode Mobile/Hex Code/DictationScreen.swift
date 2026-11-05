@@ -2,13 +2,22 @@ import VoiceEngineKit
 import SwiftUI
 
 /// First working piece of Hex Code: hold to talk, let go, and Hex's engine turns the take into text on the phone.
-/// Each take shows how long the text took to appear, to measure the engine on real devices.
+/// Each take shows how long the text took to appear, to measure the engine on real devices. Developer settings open
+/// it as the Speech lab, in every build; the lab launch arguments below are debug-only.
 struct DictationScreen: View {
-    @State private var engine = VoiceEngine()
+    @State private var engine: VoiceEngine
+    /// Set when opened from Settings: shows a close button.
+    private let onClose: (() -> Void)?
     @State private var takes: [Take] = []
     @State private var phase: Phase = .idle
     @State private var recordingStarted = Date()
     @State private var errorText: String?
+
+    /// The app's engine when opened from Settings, so the speech model is loaded once.
+    init(engine: VoiceEngine? = nil, onClose: (() -> Void)? = nil) {
+        _engine = State(initialValue: engine ?? VoiceEngine())
+        self.onClose = onClose
+    }
 
     private enum Phase: Equatable { case idle, listening, transcribing }
 
@@ -50,6 +59,8 @@ struct DictationScreen: View {
         .foregroundStyle(.white)
         .preferredColorScheme(.dark)
         .task {
+            // The app's engine may already be getting ready in the background; preparing again would load it twice.
+            if case .preparing = engine.modelState { return }
             await engine.prepare()
             #if DEBUG
             await transcribeLaunchSample()
@@ -70,6 +81,15 @@ struct DictationScreen: View {
                 Button("Clear") { takes.removeAll() }
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Palette.dim)
+            }
+            if let onClose {
+                Button(action: onClose) {
+                    HexIconView(.x, size: HexIconSize.regular)
+                        .foregroundStyle(Palette.dim)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityLabel(Text(verbatim: "Close"))
             }
         }
         .padding(.horizontal, 22)

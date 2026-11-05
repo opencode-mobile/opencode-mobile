@@ -3,6 +3,7 @@ import SwiftUI
 import VoiceEngineKit
 
 /// Settings: a plain list for now. Project, model and appearance work; the rest are placeholders.
+/// Version ends App; ten quick taps on it show the Developer section after it.
 struct SettingsView: View {
     let main: HexMainModel
     let voice: VoiceEngine
@@ -10,6 +11,7 @@ struct SettingsView: View {
     let onForgetServer: () -> Void
 
     @State private var showsServer = false
+    @State private var showsSpeechLab = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -69,7 +71,18 @@ struct SettingsView: View {
                         subtitle: serverDetail,
                         value: main.serverLabel
                     ) { showsServer = true }
+                    HexRow(
+                        icon: .info,
+                        LocalizedStringResource("settings.version", defaultValue: "Version"),
+                        value: main.build.versionLabel,
+                        trailing: .none
+                    ) { main.tapVersion() }
+
+                    if main.developer.isUnlocked {
+                        developerSection
+                    }
                 }
+                .padding(.bottom, 24)
             }
             if let note = main.note {
                 HomeToastView(toast: note, onUndo: {})
@@ -85,6 +98,32 @@ struct SettingsView: View {
                 showsServer = false
                 onForgetServer()
             })
+        }
+        .fullScreenCover(isPresented: $showsSpeechLab) {
+            DictationScreen(engine: voice, onClose: { showsSpeechLab = false })
+        }
+    }
+
+    /// For whoever builds and tests the app. Developer-only, so English and written here, like
+    /// OpenCode Mobile's Developer Tools.
+    @ViewBuilder
+    private var developerSection: some View {
+        HexSectionLabel(verbatim: "Developer")
+        HexRow(icon: .card, verbatim: "Component gallery", subtitle: "Every Hex component, light and dark") {
+            main.openGallery()
+        }
+        HexRow(icon: .mic, verbatim: "Speech lab", subtitle: "Dictation on its own, with timings") {
+            showsSpeechLab = true
+        }
+        HexRow(
+            icon: .term,
+            verbatim: "Build",
+            subtitle: main.build.commit.map { "Commit \($0)" } ?? "No commit in this build",
+            value: main.build.versionLabel,
+            trailing: .none
+        ) { main.copyBuild() }
+        HexRow(icon: .lock, verbatim: "Hide developer settings", trailing: .none) {
+            main.developer.hide()
         }
     }
 
@@ -154,6 +193,8 @@ struct HexMainView: View {
                 )
                 .onDisappear { picker.closeBrowser() }
             }
+        case .gallery:
+            HexGallery(onBack: { main.back() })
         case .model:
             if let page = main.modelPage {
                 ModelPickerView(

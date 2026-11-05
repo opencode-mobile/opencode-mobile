@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import OpenCodeKit
 import SwiftUI
+import UIKit
 
 /// Light, dark, or the system's.
 enum HexAppearance: String, CaseIterable, Sendable {
@@ -46,6 +47,8 @@ final class HexMainModel {
         case project
         case browse
         case model
+        /// Developer settings' component gallery.
+        case gallery
     }
 
     /// The navigation stack over home. Back and the edge swipe pop it directly.
@@ -57,14 +60,25 @@ final class HexMainModel {
     private(set) var saveError: String?
     private(set) var note: HomeToast?
     let home: HomeModel
+    let developer: DeveloperSettings
+    let build: HexBuildInfo
 
     @ObservationIgnored private let services: any FirstRunServices
     @ObservationIgnored private let store: any HexSetupStoring
     @ObservationIgnored private var noteTask: Task<Void, Never>?
 
-    init(setup: HexSetup, home: HomeModel, services: any FirstRunServices = LiveFirstRunServices(), store: any HexSetupStoring = HexSetupStore()) {
+    init(
+        setup: HexSetup,
+        home: HomeModel,
+        services: any FirstRunServices = LiveFirstRunServices(),
+        store: any HexSetupStoring = HexSetupStore(),
+        developer: DeveloperSettings? = nil,
+        build: HexBuildInfo? = nil
+    ) {
         self.setup = setup
         self.home = home
+        self.developer = developer ?? DeveloperSettings()
+        self.build = build ?? .current
         self.services = services
         self.store = store
     }
@@ -134,6 +148,22 @@ final class HexMainModel {
         next.modelName = modelPage?.selectedModelName
         guard await save(next) else { return }
         path = [.settings]
+    }
+
+    // MARK: Version and developer settings
+
+    /// A tap on the Version row; the tenth quick one turns developer settings on.
+    func tapVersion() {
+        guard developer.tapVersion() else { return }
+        show(HomeToast(title: String(localized: "settings.developer.on", defaultValue: "Developer settings on")))
+    }
+
+    func openGallery() { path.append(.gallery) }
+
+    /// Copies the build line, for a bug report. Developer copy: English only.
+    func copyBuild() {
+        UIPasteboard.general.string = build.summary
+        show(HomeToast(title: "Build copied", subtitle: build.summary))
     }
 
     // MARK: Placeholders
