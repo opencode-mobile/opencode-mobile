@@ -107,22 +107,26 @@ fun HomeScreen(
             HomeTopBar(today.agent, now, Modifier.padding(start = edge, end = edge - 6.dp)) {
                 HexRoundButton(HexIcons.gear, stringResource(R.string.home_settings), onClick = onSettings)
             }
-            Crossfade(state.draft.isEmpty, Modifier.weight(1f).fillMaxWidth(), HexTheme.motion.fade(), label = "status-draft") { empty ->
-                if (empty) {
-                    StatusArea(today, now, vm, Modifier.padding(horizontal = edge))
-                } else {
-                    BoxWithConstraints(Modifier.fillMaxSize()) {
-                        val hang = maxHeight * 0.26f
-                        // The draft hangs from a fixed line about a third down and grows downward, so nothing above it moves.
-                        Column(Modifier.padding(horizontal = edge)) {
+            // Status and draft start at the same line, 26 % down the space between the top bar and the dock (the
+            // prototype's `.fx-sp`), so switching between them, or the waiting line appearing, moves nothing.
+            BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+                val hang = maxHeight * 0.26f
+                Column(Modifier.fillMaxSize()) {
+                    Crossfade(
+                        state.draft.isEmpty,
+                        Modifier.weight(1f).fillMaxWidth(),
+                        HexTheme.motion.fade(),
+                        label = "status-draft",
+                    ) { empty ->
+                        Column(Modifier.fillMaxSize().padding(horizontal = edge)) {
                             Spacer(Modifier.height(hang))
-                            DraftView(state, vm)
+                            if (empty) StatusArea(today, now, vm) else DraftView(state, vm)
                         }
                     }
+                    if (state.draft.isEmpty && today.waiting > 0) {
+                        WaitingLine(today.waiting, onClick = {}, modifier = Modifier.padding(start = edge, end = edge, top = 10.dp))
+                    }
                 }
-            }
-            if (state.draft.isEmpty && today.waiting > 0) {
-                WaitingLine(today.waiting, onClick = {}, modifier = Modifier.padding(start = edge, end = edge, top = 10.dp))
             }
             val label =
                 when {

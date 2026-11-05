@@ -13,12 +13,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -104,8 +105,8 @@ internal fun HomeTopBar(
 }
 
 /**
- * The status area (`.fx-body`), centred in the space above the talk button: the status card, the fallback, or
- * "Couldn't open today's session" with Try again, and the Needs-you hint under the card.
+ * The status area (`.fx-body`): the status card, the fallback, or "Couldn't open today's session" with Try again, and
+ * the Needs-you hint under the card. Home starts it at the same line as the draft.
  */
 @Composable
 internal fun StatusArea(
@@ -114,10 +115,8 @@ internal fun StatusArea(
     vm: HomeViewModel,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
-    ) {
+    // Starts at the top of what it's given: home puts it at the same line as the draft.
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         when (today.setup) {
             SessionSetup.Opening -> Unit
             is SessionSetup.Failed -> SetupFailed(today.setup.retrying, vm::retrySetup)
@@ -155,6 +154,12 @@ internal fun StatusArea(
     }
 }
 
+/** The small label over the card, in an 18 dp line like the draft's, so the two sit at exactly the same place. */
+@Composable
+private fun Label(content: @Composable () -> Unit) {
+    Box(Modifier.height(18.dp), contentAlignment = Alignment.CenterStart) { content() }
+}
+
 /** The card: the task as a label, what it's doing now in large type, what's next, and the plan's progress. */
 @Composable
 private fun Card(
@@ -167,7 +172,7 @@ private fun Card(
     onRefresh: () -> Unit,
 ) {
     val colors = HexTheme.colors
-    Text(title, style = HexTheme.type.caption, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Label { Text(title, style = HexTheme.type.caption, color = colors.text3, maxLines = 1, overflow = TextOverflow.Ellipsis) }
     Text(
         now,
         style = HexTheme.type.display,
@@ -201,7 +206,7 @@ private fun Fallback(
     onRefresh: () -> Unit,
 ) {
     val colors = HexTheme.colors
-    Text(stringResource(R.string.home_summary_fallback_title), style = HexTheme.type.caption, color = colors.text3)
+    Label { Text(stringResource(R.string.home_summary_fallback_title), style = HexTheme.type.caption, color = colors.text3) }
     Text(
         text,
         style = HexTheme.type.body,
