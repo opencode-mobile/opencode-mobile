@@ -48,13 +48,6 @@ data class V2MessageTimeDto(
 )
 
 @Serializable
-data class V2ModelRefDto(
-    val id: String? = null,
-    @SerialName("providerID") val providerId: String? = null,
-    val variant: String? = null,
-)
-
-@Serializable
 data class V2UnknownErrorDto(
     val type: String? = null,
     val message: String? = null,

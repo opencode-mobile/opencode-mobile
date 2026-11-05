@@ -230,8 +230,3 @@ data class V2ShellRequestDto(
 data class V2SwitchAgentRequestDto(
     val agent: String,
 )
-
-@Serializable
-data class V2SwitchModelRequestDto(
-    val model: V2ModelRefDto,
-)
