@@ -133,8 +133,13 @@ class MainScreenViewModel
         /** Scope id whose load-more runs, for the list's loading footer; null when none runs. */
         val loadingMoreScopeId: StateFlow<String?> = _loadingMoreScopeId.asStateFlow()
 
-        /** Observed directories whose latest window says older sessions may follow. */
-        private val moreSessionDirectories = mutableSetOf<String>()
+        private val _moreSessionDirectories = MutableStateFlow<Set<String>>(emptySet())
+
+        /**
+         * Observed directories whose latest window says older sessions may follow. A window whose
+         * refresh failed stays out until a refresh succeeds, so paging never retries in a loop.
+         */
+        val moreSessionDirectories: StateFlow<Set<String>> = _moreSessionDirectories.asStateFlow()
         private var loadMoreJob: Job? = null
         private val _isRefreshing = MutableStateFlow(false)
         val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
@@ -1729,9 +1734,7 @@ class MainScreenViewModel
                         }
                     }
                 }
-            extraObservationJobs.keys
-                .filter { it !in wanted }
-                .forEach(moreSessionDirectories::remove)
+            _moreSessionDirectories.update { more -> more - extraObservationJobs.keys.filter { it !in wanted }.toSet() }
             extraObservationJobs = kept + started
             // Sessions of a worktree removed from this app stay on Home (v1 cannot list them again).
             updateHomeIndex { index ->
@@ -1745,7 +1748,7 @@ class MainScreenViewModel
             loadMoreJob?.cancel()
             loadMoreJob = null
             _loadingMoreScopeId.value = null
-            moreSessionDirectories.clear()
+            _moreSessionDirectories.value = emptySet()
             liveObservationJobs.forEach { it.cancel() }
             liveObservationJobs = emptyList()
             extraObservationJobs.values.forEach { it.cancel() }
@@ -1852,8 +1855,19 @@ class MainScreenViewModel
             directory: String,
             snapshot: SessionListSnapshot,
         ) {
-            if (snapshot.hasMore) moreSessionDirectories += directory else moreSessionDirectories -= directory
+            _moreSessionDirectories.update { more ->
+                if (snapshot.hasMore && !snapshot.loadFailed) more + directory else more - directory
+            }
         }
+
+        /** Whether a directory of [scopeId] in [moreSessionDirectories] has older sessions to load. */
+        fun canLoadMoreSessions(
+            moreSessionDirectories: Set<String>,
+            scopeId: String,
+            worktreesEnabled: Boolean = true,
+        ): Boolean =
+            moreSessionDirectories.isNotEmpty() &&
+                scopeDirectories(scopeId, worktreesEnabled).any { it in moreSessionDirectories }
 
         /**
          * The Home list scrolled near its end in [scopeId]: every observed directory of that scope
@@ -1865,7 +1879,7 @@ class MainScreenViewModel
             worktreesEnabled: Boolean = true,
         ) {
             if (loadMoreJob?.isActive == true) return
-            val directories = scopeDirectories(scopeId, worktreesEnabled).filter { it in moreSessionDirectories }
+            val directories = scopeDirectories(scopeId, worktreesEnabled).filter { it in _moreSessionDirectories.value }
             if (directories.isEmpty()) return
             _loadingMoreScopeId.value = scopeId
             loadMoreJob =

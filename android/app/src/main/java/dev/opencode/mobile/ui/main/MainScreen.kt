@@ -166,6 +166,7 @@ fun MainScreen(
     val worktreeServerCanCreate by viewModel.worktreeServerCanCreate.collectAsStateWithLifecycle()
     val archivedMenu by viewModel.archivedMenu.collectAsStateWithLifecycle()
     val loadingMoreScopeId by viewModel.loadingMoreScopeId.collectAsStateWithLifecycle()
+    val moreSessionDirectories by viewModel.moreSessionDirectories.collectAsStateWithLifecycle()
     LifecycleEventEffect(Lifecycle.Event.ON_START) {
         viewModel.onHomeRevealed()
     }
@@ -184,6 +185,9 @@ fun MainScreen(
         onRetryProjectLoad = viewModel::retryProjectLoad,
         loadingMoreScopeId = loadingMoreScopeId,
         onLoadMoreSessions = viewModel::loadMoreSessions,
+        canLoadMoreSessions = { scopeId, worktreesEnabled ->
+            viewModel.canLoadMoreSessions(moreSessionDirectories, scopeId, worktreesEnabled)
+        },
         serversChrome = serversChrome,
         sessionActionsCallbacks =
             HomeSessionActionsCallbacks(
@@ -325,6 +329,8 @@ internal fun MainScreen(
     /** Scope whose older sessions are loading; its list shows a spinner at the end. */
     loadingMoreScopeId: String? = null,
     onLoadMoreSessions: (scopeId: String, worktreesEnabled: Boolean) -> Unit = { _, _ -> },
+    /** Whether a scope has older sessions to load; an empty scope keeps loading until it shows rows. */
+    canLoadMoreSessions: (scopeId: String, worktreesEnabled: Boolean) -> Boolean = { _, _ -> false },
     serversChrome: HomeServersChrome = HomeServersChrome(),
     onTitleClick: () -> Unit = {},
     onDismissServersSheet: () -> Unit = {},
@@ -649,6 +655,7 @@ internal fun MainScreen(
                         onSelectedFilterIdChange = { selectedFilterId = it },
                         loadingMoreScopeId = loadingMoreScopeId,
                         onLoadMoreSessions = onLoadMoreSessions,
+                        canLoadMoreSessions = canLoadMoreSessions,
                         selectedSessionId = selectedSessionId,
                         sessionKeyboardNavigationEnabled = sessionKeyboardNavigationEnabled,
                         modifier = Modifier.fillMaxSize(),
@@ -1113,6 +1120,8 @@ private fun HomeProjectsContent(
     onSelectedFilterIdChange: (String) -> Unit,
     loadingMoreScopeId: String? = null,
     onLoadMoreSessions: (scopeId: String, worktreesEnabled: Boolean) -> Unit = { _, _ -> },
+    /** Whether a scope has older sessions to load; an empty scope keeps loading until it shows rows. */
+    canLoadMoreSessions: (scopeId: String, worktreesEnabled: Boolean) -> Boolean = { _, _ -> false },
     selectedSessionId: String? = null,
     sessionKeyboardNavigationEnabled: Boolean = false,
     worktreesEnabled: Boolean = true,
@@ -1274,6 +1283,7 @@ private fun HomeProjectsContent(
             onRetryScopeLoad = onRetryProjectLoad,
             scopeTabs = worktreeTabs,
             loadingMore = loadingMoreScopeId == resolvedFilterId,
+            canLoadMore = canLoadMoreSessions(resolvedFilterId, worktreesEnabled),
             onNearEnd = { onLoadMoreSessions(resolvedFilterId, worktreesEnabled) },
             modifier = Modifier.fillMaxSize(),
             emptyContent =

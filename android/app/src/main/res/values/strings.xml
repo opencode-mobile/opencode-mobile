@@ -1546,7 +1546,7 @@
     </plurals>
     <string name="worktrees_remove_changes_unknown">Uncommitted changes will be lost.</string>
     <string name="worktrees_remove_changes_unchecked">Couldn’t check for uncommitted changes. Any there will be lost.</string>
-    <string name="worktrees_remove_sessions">Sessions that use this worktree stay on Home but can’t run here again.</string>
+    <string name="worktrees_remove_sessions_stay">Sessions that use this worktree stay on Home but can’t run here again.</string>
     <string name="worktrees_remove_confirm_anyway">Remove anyway</string>
     <string name="worktrees_blocked_title">Can’t remove “%1$s” yet</string>
     <string name="worktrees_blocked_message">A session is running in this worktree. Stop it, then remove the worktree.</string>

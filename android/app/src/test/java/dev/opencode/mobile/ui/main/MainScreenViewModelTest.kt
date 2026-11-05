@@ -300,9 +300,12 @@ class MainScreenViewModelTest {
                     .single()
                     .allSessions
 
+            fun canLoadMore() = viewModel.canLoadMoreSessions(viewModel.moreSessionDirectories.value, SessionListFilterTab.ALL_ID)
+
             assertEquals(50, rows().size)
             assertEquals("120", rows().first().id)
             assertTrue(repository.windowLimits.all { (_, limit) -> limit == 50 })
+            assertTrue(canLoadMore())
 
             viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
             assertEquals(SessionListFilterTab.ALL_ID, viewModel.loadingMoreScopeId.value)
@@ -317,10 +320,48 @@ class MainScreenViewModelTest {
             viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
             advanceUntilIdle()
             assertEquals(120, rows().size)
+            assertFalse(canLoadMore())
             viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
             advanceUntilIdle()
             assertNull(viewModel.loadingMoreScopeId.value)
             assertEquals(requests + 1, repository.windowLimits.size)
+        }
+
+    @Test
+    fun loadMoreSessions_stopsWhileTheWindowFailsToRefresh() =
+        runTest(testDispatcher) {
+            val sessions =
+                (1..120).map { index ->
+                    Session(id = "$index", title = "Session $index", updatedAtEpochMs = index.toLong())
+                }
+            val repository = FakeSessionRepository(mutableMapOf("/repo" to sessions))
+            val viewModel =
+                createViewModel(
+                    connectionProfileStore = FakeConnectionProfileStore(initial = listOf("/repo")),
+                    sessionRepository = repository,
+                )
+            advanceUntilIdle()
+
+            fun canLoadMore() = viewModel.canLoadMoreSessions(viewModel.moreSessionDirectories.value, SessionListFilterTab.ALL_ID)
+
+            assertTrue(canLoadMore())
+            repository.listErrors["/repo"] = IllegalStateException("down")
+            viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
+            advanceTimeBy(100)
+            runCurrent()
+
+            // A failed window must not page again on its own: the list would retry in a loop.
+            assertFalse(canLoadMore())
+            val requests = repository.windowLimits.size
+            viewModel.loadMoreSessions(SessionListFilterTab.ALL_ID)
+            advanceTimeBy(100)
+            runCurrent()
+            assertEquals(requests, repository.windowLimits.size)
+
+            // The store's retry succeeds: paging comes back.
+            repository.listErrors.remove("/repo")
+            advanceUntilIdle()
+            assertTrue(canLoadMore())
         }
 
     @Test

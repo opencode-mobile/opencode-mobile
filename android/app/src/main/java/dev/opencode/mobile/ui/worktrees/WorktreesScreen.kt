@@ -314,7 +314,7 @@ private fun WorktreeRemoveDialog(
                             add(OpenCodeDialogNote(stringResource(R.string.worktrees_remove_changes_unchecked), OpenCodeDialogNoteTone.Warning))
                     }
                     if (dialog.hasSessions) {
-                        add(OpenCodeDialogNote(stringResource(R.string.worktrees_remove_sessions)))
+                        add(OpenCodeDialogNote(stringResource(R.string.worktrees_remove_sessions_stay)))
                     }
                 }
             OpenCodeDialog(

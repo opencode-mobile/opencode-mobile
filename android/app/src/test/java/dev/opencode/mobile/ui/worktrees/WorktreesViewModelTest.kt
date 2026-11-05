@@ -93,7 +93,7 @@ class WorktreesViewModelTest {
             model.requestRemove("/wt/typo")
             assertFalse((model.state.value.dialog as WorktreeRemoveDialogUi.Confirm).hasSessions)
             // Home lists a window of sessions (#981), so the copy names no number.
-            val note = EnglishStrings.string(R.string.worktrees_remove_sessions, emptyArray())
+            val note = EnglishStrings.string(R.string.worktrees_remove_sessions_stay, emptyArray())
             assertFalse(note.any { it.isDigit() } || note.contains("%"))
         }
 

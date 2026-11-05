@@ -324,7 +324,12 @@ fun SessionList(
     rowStyle: HomeSessionRowStyle = HomeDisplayPreferences.sessionRowStyle,
     /** Older sessions are loading for [selectedFilterId]: a spinner closes the list. */
     loadingMore: Boolean = false,
-    /** The list scrolled within [SessionListPaging.NEAR_END_ITEMS] of its end (#981). */
+    /** [selectedFilterId] has older sessions to load; [onNearEnd] fires only while true. */
+    canLoadMore: Boolean = false,
+    /**
+     * The list scrolled within [SessionListPaging.NEAR_END_ITEMS] of its end, or shows no rows,
+     * while [canLoadMore] (#981).
+     */
     onNearEnd: (() -> Unit)? = null,
 ) {
     val background = openCodeColor("background-base")
@@ -373,6 +378,7 @@ fun SessionList(
                         onDisplayedSessionsChange.takeIf { filterId == selectedFilterId },
                     rowStyle = rowStyle,
                     loadingMore = loadingMore && filterId == selectedFilterId,
+                    canLoadMore = canLoadMore && filterId == selectedFilterId,
                     onNearEnd = onNearEnd.takeIf { filterId == selectedFilterId },
                 )
             }
@@ -425,6 +431,7 @@ private fun SessionListFeedPage(
     onDisplayedSessionsChange: ((List<SessionListSession>) -> Unit)?,
     rowStyle: HomeSessionRowStyle,
     loadingMore: Boolean,
+    canLoadMore: Boolean,
     onNearEnd: (() -> Unit)?,
 ) {
     val recentWindowHours = HomeDisplayPreferences.recentWindowHours
@@ -481,17 +488,27 @@ private fun SessionListFeedPage(
         }
     }
     val currentOnNearEnd by rememberUpdatedState(onNearEnd)
+    val showsNoRows by rememberUpdatedState(visibleSessions.isEmpty())
+    val currentCanLoadMore by rememberUpdatedState(canLoadMore)
+    val currentLoadingMore by rememberUpdatedState(loadingMore)
     LaunchedEffect(listState) {
-        // Again whenever the list grows while still near its end, so a short scope fills up.
+        // Again whenever the list grows, a load ends, or more becomes available while still near
+        // the end, so a short scope fills up and an empty worktree filter keeps looking.
         snapshotFlow {
             val layout = listState.layoutInfo
             val lastVisible = layout.visibleItemsInfo.lastOrNull()?.index
             val nearEnd =
-                lastVisible != null &&
+                showsNoRows ||
+                    lastVisible != null &&
                     SessionListPaging.isNearEnd(lastVisibleIndex = lastVisible, totalItemCount = layout.totalItemsCount)
-            nearEnd to layout.totalItemsCount
+            SessionListPaging.Trigger(
+                nearEnd = nearEnd,
+                totalItemCount = layout.totalItemsCount,
+                canLoadMore = currentCanLoadMore,
+                loadingMore = currentLoadingMore,
+            )
         }.distinctUntilChanged()
-            .collect { (nearEnd, _) -> if (nearEnd) currentOnNearEnd?.invoke() }
+            .collect { trigger -> if (trigger.loadsMore) currentOnNearEnd?.invoke() }
     }
     LaunchedEffect(newcomerId) {
         if (newcomerId != null &&
@@ -549,6 +566,7 @@ private fun SessionListFeedPage(
         onSessionLongPress = onSessionLongPress,
         rowStyle = rowStyle,
         loadingMore = loadingMore,
+        canLoadMore = canLoadMore,
         modifier =
             Modifier
                 .fillMaxSize()
@@ -572,10 +590,14 @@ private fun SessionListFeed(
     onSessionLongPress: ((SessionListSession) -> Unit)?,
     rowStyle: HomeSessionRowStyle,
     loadingMore: Boolean,
+    canLoadMore: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    // A loading or failed scope shows its placeholder only while it has no rows to show.
-    val placeholder = scopeTab?.load?.takeIf { visibleSessions.isEmpty() }
+    // A loading or failed scope shows its placeholder only while it has no rows to show. A
+    // scope with no rows yet but older sessions to load is still loading.
+    val placeholder =
+        (scopeTab?.load ?: SessionListScopeLoad.Loading().takeIf { scopeTab != null && canLoadMore })
+            ?.takeIf { visibleSessions.isEmpty() }
     Crossfade(
         targetState = placeholder?.let { it::class },
         animationSpec = tween(durationMillis = SCOPE_LOAD_CROSSFADE_MS, easing = EaseInOut),
@@ -747,6 +769,19 @@ object SessionListPaging {
         lastVisibleIndex: Int,
         totalItemCount: Int,
     ): Boolean = totalItemCount > 0 && lastVisibleIndex >= totalItemCount - 1 - NEAR_END_ITEMS
+
+    /**
+     * What the list samples to decide on a load-more. A change in any field samples again, so a
+     * load that ends or a window that gains more while near the end asks once more.
+     */
+    data class Trigger(
+        val nearEnd: Boolean,
+        val totalItemCount: Int,
+        val canLoadMore: Boolean,
+        val loadingMore: Boolean,
+    ) {
+        val loadsMore: Boolean get() = nearEnd && canLoadMore && !loadingMore
+    }
 }
 
 /**

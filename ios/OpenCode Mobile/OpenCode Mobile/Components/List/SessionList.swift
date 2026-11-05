@@ -126,6 +126,26 @@ struct SessionListSession: Identifiable, Hashable {
     }
 }
 
+/// When Home's list asks for older sessions (#981).
+enum SessionListPaging {
+    /// What the list samples to decide on a load more. A change in any field samples again, so a
+    /// load that ends or a window that gains more while near the end asks once more.
+    struct Trigger: Equatable {
+        let nearEnd: Bool
+        let rowCount: Int
+        let canLoadMore: Bool
+        let loadingMore: Bool
+
+        var loadsMore: Bool { nearEnd && canLoadMore && !loadingMore }
+    }
+}
+
+/// A near-end row on screen under one filter.
+private struct SessionListNearEndRow: Hashable {
+    let filterId: String
+    let sessionId: String
+}
+
 /// A project scope whose first server load has not landed yet.
 enum SessionListScopeLoad: Hashable {
     case loading(isSlow: Bool)
@@ -363,10 +383,14 @@ struct SessionList<EmptyContent: View>: View {
     /// Rendered sessions under the selected filter, top to bottom, whenever the
     /// rendered order changes. Empty while nothing is rendered.
     let onDisplayedSessionsChange: (([SessionListSession]) -> Void)?
-    /// A row within ``nearEndRowCount`` of the end of the list appeared: load older sessions.
+    /// A row within ``nearEndRowCount`` of the end of the list appeared, or the list shows no
+    /// rows, while `canLoadMore`: load older sessions.
     let onNearEnd: (() -> Void)?
     /// Older sessions are loading: a skeleton row closes the list.
     let showsLoadingFooter: Bool
+    /// The selected filter has older sessions to load. A filter with no rows yet shows its
+    /// loading placeholder and keeps loading (#981).
+    let canLoadMore: Bool
     let showsEmptyContent: Bool
     /// Row style override, such as in the gallery. Nil follows the Session rows setting.
     let rowStyle: HomeSessionRowStyle?
@@ -386,6 +410,8 @@ struct SessionList<EmptyContent: View>: View {
     @State private var incomingOpacity: CGFloat = 1
     @State private var outgoingOpacity: CGFloat = 0
     @State private var listCrossfadeTask: Task<Void, Never>?
+    /// Near-end rows on screen, by filter id and session id.
+    @State private var shownNearEndRows: Set<SessionListNearEndRow> = []
 
     init(
         sessions: [SessionListSession],
@@ -408,6 +434,7 @@ struct SessionList<EmptyContent: View>: View {
         onDisplayedSessionsChange: (([SessionListSession]) -> Void)? = nil,
         onNearEnd: (() -> Void)? = nil,
         showsLoadingFooter: Bool = false,
+        canLoadMore: Bool = false,
         showsEmptyContent: Bool = false,
         rowStyle: HomeSessionRowStyle? = nil,
         @ViewBuilder emptyContent: () -> EmptyContent = { EmptyView() }
@@ -432,6 +459,7 @@ struct SessionList<EmptyContent: View>: View {
         self.onDisplayedSessionsChange = onDisplayedSessionsChange
         self.onNearEnd = onNearEnd
         self.showsLoadingFooter = showsLoadingFooter
+        self.canLoadMore = canLoadMore
         self.showsEmptyContent = showsEmptyContent
         self.rowStyle = rowStyle
         self.emptyContent = emptyContent()
@@ -514,14 +542,17 @@ struct SessionList<EmptyContent: View>: View {
         let scopeTab = filterTabs.first { $0.id == filterId }
             ?? layer.scopeTab
             ?? (selectedScopeTab?.id == filterId ? selectedScopeTab : nil)
-        let loadingTab = visible.isEmpty ? scopeTab.flatMap { $0.load == nil ? nil : $0 } : nil
+        // A filter with no rows yet but older sessions to load is still loading.
+        let pagingLoad: SessionListScopeLoad? = isCurrent && canLoadMore && onNearEnd != nil ? .loading(isSlow: false) : nil
+        let placeholderLoad = visible.isEmpty ? scopeTab?.load ?? pagingLoad : nil
+        let loadingTab = placeholderLoad == nil ? nil : scopeTab
         let worktreeClear = scopeTab?.worktreeFilterClear(
             broaderTabs: filterTabs,
             visibleIsEmpty: visible.isEmpty,
             scopeHasSessions: { !sessions.visibleForFilter($0).isEmpty }
         )
         Group {
-            if let loadingTab, let load = loadingTab.load {
+            if let loadingTab, let load = placeholderLoad {
                 ScrollView {
                     scopeLoadContent(tab: loadingTab, load: load)
                         .padding(.bottom, max(dockHeight, sessionListFallbackBottomSpacer))
@@ -583,16 +614,31 @@ struct SessionList<EmptyContent: View>: View {
                 ) { section in
                     switch section.kind {
                     case .recent:
-                        recentStack(section, nearEnd: nearEnd)
+                        recentStack(section, filterId: filterId, nearEnd: nearEnd)
                     case .day, .week:
-                        dayOrWeekSection(section, nearEnd: nearEnd)
+                        dayOrWeekSection(section, filterId: filterId, nearEnd: nearEnd)
                     }
                 }
                 .id(filterId)
                 .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.25), value: loadingTab?.load)
+        .animation(.easeInOut(duration: 0.25), value: placeholderLoad)
+        .task(id: isCurrent ? nearEndTrigger(filterId: filterId, visible: visible) : nil) {
+            // Again when a load ends or the window gains more while still near the end, which
+            // row appearance alone misses.
+            if isCurrent, nearEndTrigger(filterId: filterId, visible: visible).loadsMore { onNearEnd?() }
+        }
+    }
+
+    private func nearEndTrigger(filterId: String, visible: [SessionListSession]) -> SessionListPaging.Trigger {
+        let nearEndIDs = visible.suffix(Self.nearEndRowCount).map(\.id)
+        return SessionListPaging.Trigger(
+            nearEnd: visible.isEmpty || nearEndIDs.contains { shownNearEndRows.contains(SessionListNearEndRow(filterId: filterId, sessionId: $0)) },
+            rowCount: visible.count,
+            canLoadMore: canLoadMore && onNearEnd != nil,
+            loadingMore: showsLoadingFooter
+        )
     }
 
     @ViewBuilder
@@ -621,20 +667,20 @@ struct SessionList<EmptyContent: View>: View {
     }
 
     @ViewBuilder
-    private func recentStack(_ section: HomeSessionLadderSection<SessionListSession>, nearEnd: Set<String>) -> some View {
+    private func recentStack(_ section: HomeSessionLadderSection<SessionListSession>, filterId: String, nearEnd: Set<String>) -> some View {
         OpenCodeSectionHeader(title: .localized(section.title))
 
         ForEach(section.items, id: \.id) { session in
-            sessionRow(session, showStatusDot: true, nearEnd: nearEnd)
+            sessionRow(session, showStatusDot: true, filterId: filterId, nearEnd: nearEnd)
         }
     }
 
     @ViewBuilder
-    private func dayOrWeekSection(_ section: HomeSessionLadderSection<SessionListSession>, nearEnd: Set<String>) -> some View {
+    private func dayOrWeekSection(_ section: HomeSessionLadderSection<SessionListSession>, filterId: String, nearEnd: Set<String>) -> some View {
         OpenCodeSectionHeader(title: .localized(section.title))
 
         ForEach(section.items, id: \.id) { session in
-            sessionRow(session, showStatusDot: false, nearEnd: nearEnd)
+            sessionRow(session, showStatusDot: false, filterId: filterId, nearEnd: nearEnd)
         }
     }
 
@@ -643,7 +689,7 @@ struct SessionList<EmptyContent: View>: View {
     }
 
     @ViewBuilder
-    private func sessionRow(_ session: SessionListSession, showStatusDot: Bool, nearEnd: Set<String>) -> some View {
+    private func sessionRow(_ session: SessionListSession, showStatusDot: Bool, filterId: String, nearEnd: Set<String>) -> some View {
         SessionListRow(
             session: session,
             rowStyle: effectiveRowStyle,
@@ -653,7 +699,12 @@ struct SessionList<EmptyContent: View>: View {
             onLongPress: onSessionLongPress.map { handler in { handler(session) } }
         )
         .onAppear {
-            if nearEnd.contains(session.id) { onNearEnd?() }
+            guard nearEnd.contains(session.id) else { return }
+            shownNearEndRows.insert(SessionListNearEndRow(filterId: filterId, sessionId: session.id))
+            if canLoadMore { onNearEnd?() }
+        }
+        .onDisappear {
+            shownNearEndRows.remove(SessionListNearEndRow(filterId: filterId, sessionId: session.id))
         }
         .background {
             if selectedSessionId == session.id {

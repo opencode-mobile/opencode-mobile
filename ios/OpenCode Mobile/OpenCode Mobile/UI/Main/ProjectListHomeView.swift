@@ -1455,6 +1455,7 @@ struct ProjectListHomeView: View {
             },
             onNearEnd: { viewModel.loadMoreSessions(scopeId: selectedFilterId) },
             showsLoadingFooter: viewModel.showsLoadMoreFooter(scopeId: selectedFilterId),
+            canLoadMore: viewModel.canLoadMoreSessions(scopeId: selectedFilterId),
             showsEmptyContent: sections.isEmpty,
             emptyContent: { NoProjectsEmptyState() }
         )

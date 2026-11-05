@@ -2156,6 +2156,41 @@ struct ProjectListHomeViewModelTests {
         #expect(sessionLive.loadMoreDirectories.count == 3)
     }
 
+    @Test func canLoadMoreSessions_followsTheWindowAndSkipsFailedRefreshes() async {
+        let sessionLive = ControllableSessionLiveStore()
+        let statusLive = ControllableStatusLiveStore()
+        let readyLive = ControllableReadyStore()
+        let session = Session(
+            id: "s", title: "Alpha", slug: nil, projectID: nil,
+            directory: "/repo", parentID: nil, updatedAtEpochMs: 1
+        )
+        // A cache seed never says more follow.
+        sessionLive.emit(directory: "/repo", sessions: [session], isFromCache: true)
+        readyLive.emit(directory: "/repo", ids: [])
+        statusLive.emit(directory: "/repo", statuses: [:])
+        let viewModel = makeViewModel(
+            projectRepository: FakeProjectRepository(),
+            connectionProfileStore: FakeConnectionProfileStore(initial: ["/repo"]),
+            sessionLiveStoreOverride: sessionLive,
+            sessionStatusLiveStoreOverride: statusLive,
+            sessionReadyStoreOverride: readyLive
+        )
+        await viewModel.refresh()
+        #expect(await waitUntil { homeSession(viewModel, id: "s") != nil })
+        #expect(!viewModel.canLoadMoreSessions(scopeId: SessionListFilterTab.allId))
+
+        // The live window with the same rows says more follow: the list can page again.
+        sessionLive.emit(directory: "/repo", sessions: [session], hasMore: true)
+        #expect(await waitUntil { viewModel.canLoadMoreSessions(scopeId: SessionListFilterTab.allId) })
+
+        // A failed refresh keeps the rows but stops paging, so the list never retries in a loop.
+        sessionLive.emit(directory: "/repo", sessions: [session], loadFailed: true, hasMore: true)
+        #expect(await waitUntil { !viewModel.canLoadMoreSessions(scopeId: SessionListFilterTab.allId) })
+        viewModel.loadMoreSessions(scopeId: SessionListFilterTab.allId)
+        #expect(!viewModel.isLoadingMoreSessions)
+        #expect(sessionLive.loadMoreDirectories.isEmpty)
+    }
+
     @Test func liveStatus_mapsRetryingAndHidesUntilSeeded() async {
         let sessions = [
             Session(id: "ses-1", title: "Alpha", slug: nil, projectID: nil, directory: "/repo", parentID: nil, updatedAtEpochMs: 1),

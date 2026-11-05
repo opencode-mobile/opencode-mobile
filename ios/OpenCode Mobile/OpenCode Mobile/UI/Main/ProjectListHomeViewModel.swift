@@ -2428,7 +2428,7 @@ final class ProjectListHomeViewModel {
     /// more. `scopeId` is the selected filter (All, a project, or a worktree scope).
     func loadMoreSessions(scopeId: String) {
         guard loadMoreTask == nil else { return }
-        let directories = observedDirectories(inScope: scopeId).filter { liveSessionsByWorktree[$0]?.hasMore == true }
+        let directories = observedDirectories(inScope: scopeId).filter(windowCanLoadMore)
         guard !directories.isEmpty else { return }
         isLoadingMoreSessions = true
         let store = sessionLiveStore
@@ -2448,6 +2448,17 @@ final class ProjectListHomeViewModel {
     func showsLoadMoreFooter(scopeId: String) -> Bool {
         guard isLoadingMoreSessions else { return false }
         return observedDirectories(inScope: scopeId).contains { liveSessionsByWorktree[$0]?.hasMore == true }
+    }
+
+    /// Whether a directory of the scope has older sessions to load. A window whose refresh failed
+    /// stays out until a refresh succeeds, so paging never retries in a loop.
+    func canLoadMoreSessions(scopeId: String) -> Bool {
+        observedDirectories(inScope: scopeId).contains(where: windowCanLoadMore)
+    }
+
+    private func windowCanLoadMore(_ directory: String) -> Bool {
+        guard let snapshot = liveSessionsByWorktree[directory] else { return false }
+        return snapshot.hasMore && !snapshot.loadFailed
     }
 
     private func observedDirectories(inScope scopeId: String) -> [String] {
