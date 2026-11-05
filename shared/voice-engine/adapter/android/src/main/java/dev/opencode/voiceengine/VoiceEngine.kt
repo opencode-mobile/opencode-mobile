@@ -110,6 +110,10 @@ class VoiceEngine(
                     state.value = ModelState.Ready
                 } catch (e: Exception) {
                     state.value = ModelState.Failed(e.message ?: "Could not get speech ready")
+                } catch (e: Error) {
+                    // An OutOfMemoryError or a missing native library while loading: speech isn't available, rather
+                    // than "Getting speech ready" for good.
+                    state.value = ModelState.Failed(e.message ?: "Could not get speech ready")
                 }
             }
         }
