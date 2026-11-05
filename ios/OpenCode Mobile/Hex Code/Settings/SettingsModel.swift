@@ -225,8 +225,7 @@ final class HexMainModel {
     func showPlaceholder() {
         toasts.show(HexToastItem(
             tone: .info,
-            title: String(localized: "settings.soon", defaultValue: "Not in this version yet"),
-            detail: String(localized: "settings.soon.sub", defaultValue: "It comes with the session screen.")
+            title: String(localized: "settings.soon", defaultValue: "Not in this version yet")
         ))
     }
 
