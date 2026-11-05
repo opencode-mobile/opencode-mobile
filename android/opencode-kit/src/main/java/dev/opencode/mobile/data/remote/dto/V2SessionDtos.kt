@@ -31,6 +31,8 @@ data class V2SessionDto(
     val outcome: String? = null,
     /** The agent a subagent session runs (`general`, `explore`). */
     val agent: String? = null,
+    /** The session's own model and level; prompts and generate use it. */
+    val model: V2ModelRefDto? = null,
 )
 
 @Serializable
@@ -43,6 +45,8 @@ data class V2CreateSessionRequestDto(
     @SerialName("parentID") val parentId: String? = null,
     val title: String? = null,
     val location: V2LocationDto? = null,
+    /** Left out when null, so the server picks its default as before. */
+    val model: V2ModelRefDto? = null,
 )
 
 @Serializable
@@ -70,6 +74,12 @@ data class V2ForkSessionRequestDto(
 @Serializable
 data class V2MoveSessionRequestDto(
     val directory: String,
+)
+
+/** `PUT /api/experimental/session/{id}/instructions/entries/{key}`: a string value is used as it is. */
+@Serializable
+data class V2InstructionEntryRequestDto(
+    val value: String,
 )
 
 /** `POST /api/session/{id}/generate`: the prompt answered from the session's context. */

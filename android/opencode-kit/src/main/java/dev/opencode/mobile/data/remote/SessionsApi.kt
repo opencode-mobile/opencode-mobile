@@ -26,8 +26,10 @@ import dev.opencode.mobile.data.remote.dto.V2FormInfoDto
 import dev.opencode.mobile.data.remote.dto.V2FormReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2InboxDeliveryRequestDto
 import dev.opencode.mobile.data.remote.dto.V2InboxItemDto
+import dev.opencode.mobile.data.remote.dto.V2InstructionEntryRequestDto
 import dev.opencode.mobile.data.remote.dto.V2LocationDto
 import dev.opencode.mobile.data.remote.dto.V2LocationInfoDto
+import dev.opencode.mobile.data.remote.dto.V2ModelRefDto
 import dev.opencode.mobile.data.remote.dto.V2MoveSessionRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionReplyRequestDto
 import dev.opencode.mobile.data.remote.dto.V2PermissionRequestDto
@@ -37,6 +39,7 @@ import dev.opencode.mobile.data.remote.dto.V2SessionDto
 import dev.opencode.mobile.data.remote.dto.V2SessionGenerateRequestDto
 import dev.opencode.mobile.data.remote.dto.V2SessionGenerateResponseDto
 import dev.opencode.mobile.data.remote.dto.V2SessionViewRequestDto
+import dev.opencode.mobile.data.remote.dto.V2SwitchModelRequestDto
 import dev.opencode.mobile.data.remote.dto.V2VcsInfoDto
 import dev.opencode.mobile.data.remote.dto.VcsFileStatusDto
 import dev.opencode.mobile.data.remote.dto.VcsInfoDto
@@ -55,6 +58,7 @@ import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.patch
 import io.ktor.client.request.post
+import io.ktor.client.request.put
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
@@ -496,6 +500,8 @@ class SessionsApi private constructor(
         directory: String? = null,
         title: String? = null,
         parentId: String? = null,
+        /** The session's model and level; null leaves it to the server. */
+        model: V2ModelRefDto? = null,
     ): V2SessionDto =
         httpClient
             .get()
@@ -506,9 +512,79 @@ class SessionsApi private constructor(
                         parentId = parentId,
                         title = title?.takeIf { it.isNotBlank() },
                         location = if (parentId == null) directory?.let { V2LocationDto(directory = it) } else null,
+                        model = model,
                     ),
                 )
             }.decodeV2Session()
+
+    /**
+     * One page of `GET /api/session`, newest first (by last update). A [cursor] from an earlier page carries that
+     * page's filters, so it is sent alone. The server keeps `cursor.next` set even on the last page; a page that
+     * comes back empty is the end.
+     */
+    suspend fun listSessionsPageV2(
+        directory: String? = null,
+        search: String? = null,
+        rootsOnly: Boolean = false,
+        archived: Boolean? = null,
+        limit: Int? = null,
+        cursor: String? = null,
+    ): ApiListEnvelope<V2SessionDto> =
+        httpClient
+            .get()
+            .get("api/session") {
+                if (cursor != null) {
+                    parameter("cursor", cursor)
+                } else {
+                    applyDirectory(directory)
+                    search?.let { parameter("search", it) }
+                    if (rootsOnly) parameter("parentID", "null")
+                    archived?.let { parameter("archived", it.toString()) }
+                    limit?.let { parameter("limit", it) }
+                }
+            }.bodyOnSuccess()
+
+    /** `POST /api/session/{id}/model`: the model and level the session's prompts and generate use from now on. */
+    suspend fun switchSessionModelV2(
+        id: String,
+        model: V2ModelRefDto,
+    ): Boolean =
+        httpClient
+            .get()
+            .post("api/session/$id/model") {
+                setJsonBody(json, V2SwitchModelRequestDto(model = model))
+            }.ensureSuccess()
+
+    /** Pending approvals owned by session [id] (not its subagents, which have their own sessions). */
+    suspend fun listSessionPermissionsV2(id: String): List<V2PermissionRequestDto> =
+        httpClient
+            .get()
+            .get("api/session/$id/permission")
+            .bodyOnSuccess<ApiListEnvelope<V2PermissionRequestDto>>()
+            .data
+
+    /** Pending questions (forms) owned by session [id]. */
+    suspend fun listSessionFormsV2(id: String): List<V2FormInfoDto> =
+        httpClient
+            .get()
+            .get("api/session/$id/form")
+            .bodyOnSuccess<ApiListEnvelope<V2FormInfoDto>>()
+            .data
+
+    /**
+     * `PUT /api/experimental/session/{id}/instructions/entries/{key}`: adds or replaces one instruction entry. The
+     * same value again changes nothing on the server. 204 with no body.
+     */
+    suspend fun putInstructionEntryV2(
+        id: String,
+        key: String,
+        value: String,
+    ): Boolean =
+        httpClient
+            .get()
+            .put("api/experimental/session/$id/instructions/entries/$key") {
+                setJsonBody(json, V2InstructionEntryRequestDto(value = value))
+            }.ensureSuccess()
 
     suspend fun getActiveSessionsV2(): Map<String, ApiSessionActiveDto> =
         httpClient
@@ -589,13 +665,14 @@ class SessionsApi private constructor(
     suspend fun generateSessionTextV2(
         id: String,
         prompt: String,
+        timeoutMs: Long = SIDE_QUESTION_TIMEOUT_MS,
     ): String =
         httpClient
             .get()
             .post("api/session/$id/generate") {
                 timeout {
-                    requestTimeoutMillis = SIDE_QUESTION_TIMEOUT_MS
-                    socketTimeoutMillis = SIDE_QUESTION_TIMEOUT_MS
+                    requestTimeoutMillis = timeoutMs
+                    socketTimeoutMillis = timeoutMs
                 }
                 setJsonBody(json, V2SessionGenerateRequestDto(prompt = prompt))
             }.bodyOnSuccess<ApiDataEnvelope<V2SessionGenerateResponseDto>>()

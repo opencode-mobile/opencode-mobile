@@ -1,5 +1,6 @@
 package dev.opencode.mobile.data.remote
 
+import dev.opencode.mobile.domain.connection.ServerProtocol
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -227,5 +228,42 @@ class EventsApiTest {
             } finally {
                 client.close()
             }
+        }
+
+    @Test
+    fun streamGlobalEvents_sendsEachTypeAsItsOwnParameter() =
+        runBlocking {
+            var query: List<String>? = null
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        query = request.url.parameters.getAll("types")
+                        respond(
+                            content = "data: {\"id\":\"evt_1\",\"type\":\"server.connected\",\"data\":{}}\n\n",
+                            status = HttpStatusCode.OK,
+                            headers = headersOf(HttpHeaders.ContentType, "text/event-stream"),
+                        )
+                    },
+                )
+            EventsApi(client).streamGlobalEvents(
+                protocol = ServerProtocol.V2,
+                types = listOf("session.execution.started", "permission.asked"),
+            ) { }
+            assertEquals(listOf("session.execution.started", "permission.asked"), query)
+        }
+
+    @Test
+    fun streamGlobalEvents_withoutTypesSendsNone() =
+        runBlocking {
+            var names: Set<String>? = null
+            val client =
+                HttpClient(
+                    MockEngine { request ->
+                        names = request.url.parameters.names()
+                        respond("", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "text/event-stream"))
+                    },
+                )
+            EventsApi(client).streamGlobalEvents(protocol = ServerProtocol.V2) { }
+            assertEquals(emptySet<String>(), names)
         }
 }

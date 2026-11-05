@@ -8,6 +8,7 @@ import dev.opencode.mobile.network.applyDirectory
 import io.ktor.client.HttpClient
 import io.ktor.client.request.accept
 import io.ktor.client.request.header
+import io.ktor.client.request.parameter
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
@@ -56,11 +57,14 @@ class EventsApi private constructor(
         protocol: ServerProtocol = ServerProtocol.V1,
         onHTTPResponse: suspend (Int) -> Unit = {},
         onActivity: suspend () -> Unit = {},
+        /** v2 only: exact event type names, each sent as its own `types=` parameter. Empty asks for every event. */
+        types: List<String> = emptyList(),
         onDataLine: suspend (String) -> Unit,
     ): SseAttemptOutcome =
         streamEvents(
             path = if (protocol == ServerProtocol.V2) "api/event" else "global/event",
             directory = null,
+            types = types,
             onHTTPResponse = onHTTPResponse,
             onActivity = onActivity,
             onDataLine = onDataLine,
@@ -70,6 +74,7 @@ class EventsApi private constructor(
         path: String,
         directory: String? = null,
         generation: Long = 0L,
+        types: List<String> = emptyList(),
         onHTTPResponse: suspend (Int) -> Unit = {},
         onActivity: suspend () -> Unit = {},
         onDataLine: suspend (String) -> Unit,
@@ -99,6 +104,7 @@ class EventsApi private constructor(
                             header(HttpHeaders.CacheControl, "no-cache")
                             header(HttpHeaders.AcceptEncoding, "identity")
                             applyDirectory(directory)
+                            types.forEach { parameter("types", it) }
                         }.execute { response ->
                             if (!connectRace.markHeaders()) {
                                 throw CancellationException(CONNECT_BUDGET_EXCEEDED)

@@ -40,6 +40,8 @@ data class SessionTimeDto(
     val created: Long? = null,
     val updated: Long? = null,
     val archived: Long? = null,
+    /** v2 only: when the latest run started (epoch ms). Busy-or-idle comes from `/api/session/active`, not from this. */
+    val busy: Long? = null,
     /** v2 only: when the latest run ended (epoch ms). */
     val idle: Long? = null,
     /** v2 only: read watermark (epoch ms). */
