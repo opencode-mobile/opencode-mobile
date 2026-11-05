@@ -1,9 +1,15 @@
 package dev.opencode.mobile.ui.main
 
 import dev.opencode.mobile.ui.main.HomeBranchLookups.Outcome
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -128,6 +134,36 @@ class HomeBranchLookupsTest {
             lookups.lookUp(listOf("/repo"))
             advanceUntilIdle()
             assertEquals(2, calls)
+        }
+
+    @Test
+    fun clearingWhileALookupTurnsItsCancellationIntoAnAnswerDoesNotCrash() =
+        runTest {
+            // Like a repository that wraps the cancelled request in a transport error, on an
+            // immediate dispatcher where the cancelled job resumes inside cancel().
+            val immediate = CoroutineScope(UnconfinedTestDispatcher(testScheduler) + Job())
+            var changes = 0
+            val lookups =
+                HomeBranchLookups(
+                    scope = immediate,
+                    fetch = {
+                        try {
+                            awaitCancellation()
+                        } catch (_: CancellationException) {
+                            Outcome.Unknown
+                        }
+                    },
+                    onChange = { changes += 1 },
+                    retryDelaysMs = emptyList(),
+                )
+
+            lookups.lookUp(listOf("/a", "/b", "/c"))
+            lookups.clear()
+            advanceUntilIdle()
+
+            assertEquals(emptyMap<String, String>(), lookups.branches)
+            assertEquals(0, changes)
+            immediate.cancel()
         }
 
     private fun TestScope.lookups(fetch: suspend (String) -> Outcome): HomeBranchLookups =
