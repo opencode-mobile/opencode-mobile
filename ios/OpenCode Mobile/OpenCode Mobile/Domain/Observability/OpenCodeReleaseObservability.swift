@@ -74,8 +74,11 @@ private enum ReleaseFirebaseBootstrap {
             AppCheck.setAppCheckProviderFactory(ReleaseAppAttestProviderFactory())
             FirebaseApp.configure()
         }
-        // Collection is off in the plist; the consent setting turns it on (or keeps it off)
-        // before anything else runs, so an opted-out user sends no crash or analytics data.
+        // Analytics collection starts off in the plist and follows consent from here.
+        // Crashlytics must already be allowed at configure: the iOS SDK latches
+        // FirebaseCrashlyticsCollectionEnabled then, and the runtime override only
+        // applies on the next launch (#988). setCrashlyticsCollectionEnabled still
+        // records an opt-out so the following launch sends nothing.
         applyCollectionConsent(OpenCodeReleaseObservability.isProductAnalyticsConsented())
         activateFeatureFlags()
 

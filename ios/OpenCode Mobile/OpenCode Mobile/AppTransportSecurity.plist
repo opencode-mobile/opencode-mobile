@@ -4,10 +4,14 @@
 <dict>
 	<key>FirebaseAutomaticScreenReportingEnabled</key>
 	<false/>
-	<!-- Collection starts disabled; OpenCodeReleaseObservability enables it per the
-	     analytics consent setting right after FirebaseApp.configure() (#755). -->
-	<key>FirebaseCrashlyticsCollectionEnabled</key>
-	<false/>
+	<!-- Analytics collection starts disabled and is enabled per the consent
+	     setting right after FirebaseApp.configure() (#755). Do not add
+	     FirebaseCrashlyticsCollectionEnabled=false. The iOS SDK latches that
+	     flag during configure, and setCrashlyticsCollectionEnabled applies on
+	     the next launch only, so builds 36–40 sent no sessions (#988).
+	     Consent still calls setCrashlyticsCollectionEnabled after configure
+	     so an opt-out sticks. Android keeps its manifest flag because that
+	     setter applies immediately. -->
 	<key>FIREBASE_ANALYTICS_COLLECTION_ENABLED</key>
 	<false/>
 	<key>GOOGLE_ANALYTICS_DEFAULT_ALLOW_AD_PERSONALIZATION_SIGNALS</key>
